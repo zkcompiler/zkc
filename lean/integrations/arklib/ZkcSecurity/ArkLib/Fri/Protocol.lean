@@ -6,7 +6,7 @@ public import ZkcSecurity.ArkLib.Fri.Domain
 
 /-! # `fri::LowDegree` at the ideal interpretation
 
-This module transcribes the verifier of `fri::LowDegree` (`libraries/fri/lib.zkc`) as a
+This module transcribes the verifier of `fri::LowDegree` (`libraries/protocols/polynomial/fri/lib.zkc`) as a
 public-coin interactive oracle proof, reading every commitment as the vector it commits to.
 `lean/docs/spec/fri-security.md` relates each definition to its source lines.
 

@@ -862,13 +862,14 @@ theorem concrete_le (simulation : Simulation primitive family R concreteFailure 
 end Simulation
 
 section TypedEngine
-variable {I : PIR.Signature} {E P A : Type} {R : List E → Type} [DecidableEq E]
-  [∀ key, SampleableType (R key)]
+variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} {R : List E → Type} [DecidableEq E]
+  [Typed.ReadsByOccurrence R Raw] [∀ key, SampleableType (R key)]
+  [∀ event, SampleableType (Raw event)]
 
 /-- The typed engine's fixed-statement bound for a mixture of provers with at
 most `queries` TranscriptQueries on every path of every prover in its support:
 `(queries + budget) * bound` when every site's error is at most `bound`. -/
-theorem randomized_soundness_of_queryBound {absorb : Typed.Interface I E P R} {accepts : A → Prop}
+theorem randomized_soundness_of_queryBound {absorb : Typed.Interface I E P Raw} {accepts : A → Prop}
     {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
     (bounded : ∀ event, error event ≤ bound) (validator : PIR.Proc I A)
     (doomedValidator : certificate.doomed validator) (budget : ℕ)
@@ -897,7 +898,7 @@ its statement after at most `queries` TranscriptQueries on every path:
 simulation whose ideal failure is this experiment's, it is the ideal bound that
 `Simulation.concrete_le` takes, at `queries = cost q`. -/
 theorem randomized_adaptive_soundness_of_queryBound {Stmt : Type}
-    {absorb : Typed.Interface I E P R} {accepts : A → Prop} {error : E → ENNReal}
+    {absorb : Typed.Interface I E P Raw} {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
     (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)

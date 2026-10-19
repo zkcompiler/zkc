@@ -1,5 +1,6 @@
 import ZkcExamples.Executable.SumcheckProof
 import Zkc.Executable.Cleanup
+import Zkc.Executable.Helpers
 import Mathlib.Algebra.Field.ZMod
 
 /-! Controls for the lowering rule on the actual executable Sumcheck validator.
@@ -9,10 +10,14 @@ return; the rule must refuse each with the named reason. A helper whose body
 observes the transcript is refused, while a changed constant in the terminal
 check's body is accepted: the rule reads helper bodies only for their sorts and
 their freedom from transcript operations, and what a body computes is the
-preparation proof of the committed program. Semantic controls run the executable
-meaning on a small concrete instance (values in `ZMod 5`, every message a
-one-byte frame, a constant challenge) and fix observations the runtime reports
-for the same situations: the honest run returns from 190 instructions, a round
+preparation proof of the committed program. The helper rule reads what a body
+computes: it accepts the empty point and the point extension, refuses the
+terminal check as outside its recipe table (the check iterates), and refuses
+the changed constant, an installed operation that implements another structured
+operation and a rebound name, each with its named reason. Semantic controls run
+the executable meaning on a small concrete instance (values in `ZMod 5`, every
+message a one-byte frame, a constant challenge) and fix observations the runtime
+reports for the same situations: the honest run returns from 190 instructions, a round
 message that fails the round check stops at the check's explicit rejection inside
 its local call after 21 instructions, and a stop inside a loop iteration leaves
 the call's frame, the iteration's frame and the participant's frame, innermost
@@ -86,14 +91,14 @@ theorem countRetargeted_refused :
 /-- The empty point helper observes the transcript: its body is the first
 round's observation. -/
 def helperObserves : Validator :=
-  withFunction actual "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46" fun function =>
+  withFunction actual "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" fun function =>
     { function with body := match actual.function? "_transcript_1" with
         | some observation => observation.body
         | none => [] }
 
 theorem helperObserves_refused :
     refusal (checkLowering installed constructed helperObserves) =
-      some (.helper "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46") := by
+      some (.helper "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") := by
   decide +kernel
 
 /-- The terminal check reads its first constant as 2: the rule still accepts,
@@ -107,6 +112,53 @@ def checkConstantChanged : Validator :=
 
 theorem checkConstantChanged_accepted :
     refusal (checkLowering installed constructed checkConstantChanged) = none := by
+  decide +kernel
+
+/-! ## Helper rule -/
+
+abbrev program := SumcheckProof.program
+abbrev emptyName := ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name
+abbrev appendName := ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name
+abbrev checkName := ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name
+
+def helperRefusal (validator : Validator) (name : String) : Option HelperRefusal :=
+  match checkHelper installed validator program.payload.definitions name with
+  | .error refusal => some refusal
+  | .ok () => none
+
+/-- The rule accepts the empty point and the point extension. -/
+theorem rule_accepts : helperRefusal actual emptyName = none ∧ helperRefusal actual appendName = none := by
+  decide +kernel
+
+/-- The terminal check iterates, which the recipe table does not cover: it keeps
+a preparation proof of its own. -/
+theorem check_outside_table : helperRefusal actual checkName = some (.recipe "loop") := by
+  decide +kernel
+
+/-- The changed constant of the terminal check, which the lowering rule accepts,
+is refused at its step: the installed constant is not the structured one. -/
+theorem checkConstantChanged_refused :
+    helperRefusal checkConstantChanged checkName = some (.step "lc_2_s2") := by
+  decide +kernel
+
+/-- The point extension applies the empty vector's binding: the installed
+operation implements another structured operation. -/
+def appendWrongOperation : Validator :=
+  withFunction actual appendName fun function =>
+    { function with body := function.body.map fun
+        | .operation site _ parameters inputs outputs => .operation site "zkl_binding_7" parameters inputs outputs
+        | step => step }
+
+theorem appendWrongOperation_refused : helperRefusal appendWrongOperation appendName = some (.step "s0") := by
+  decide +kernel
+
+/-- The point extension binds its result to the name of its first formal: a
+rebound name could change what the formal denotes. -/
+def appendRebound : Validator :=
+  withFunction actual appendName fun function =>
+    { function with body := [.operation "s0" "zkl_binding_11" [] ["v116", "v117"] ["v116"], .ret ["v116"]] }
+
+theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
   decide +kernel
 
 /-! ## Semantic controls on a concrete instance -/

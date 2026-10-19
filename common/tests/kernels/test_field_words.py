@@ -9,7 +9,7 @@ import random
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 P = 2130706433
 FIELDS = {'koala-bear': 1, 'koala-bear.ext8-binomial3': 8, 'koala-bear.ext4-binomial3': 4}
@@ -60,7 +60,7 @@ run Demo=Run;
 def test_coordinate_words(toolchain, journal, directory, field, flags):
     degree = FIELDS[field]
     entry = Entry(toolchain, journal, directory, SOURCE.format(field=field),
-                  (*library_modules('zkc'), *flags))
+                  (*library_modules(*core_packages()), *flags))
     rng = random.Random(4099 + degree)
 
     def element():

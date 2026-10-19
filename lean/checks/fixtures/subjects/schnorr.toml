@@ -1,0 +1,43 @@
+# A sample subject manifest in the zkc.subject/0 schema, used by
+# check_records.py until the subject pipeline's manifests exist under
+# lean/subjects. The report generator reads it tolerantly: fields it does not
+# use are ignored.
+schema = "zkc.subject/0"
+name = "schnorr"
+
+[source]
+modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/protocols/sigma/schnorr/lib.zkc" }
+project = "examples/projects/schnorr"
+compiler_options = []
+
+[entries]
+proof = "example::Proof"
+interactive = "example::Interactive"
+instantiation = "Schnorr<Fr>"
+
+[profiles]
+structured = true
+construction = true
+executable = true
+scalar = false
+
+[generated]
+data = "lean/ZkcExamples/Construction/SchnorrProofData.lean"
+glue = "lean/ZkcExamples/Construction/SchnorrProof.lean"
+
+[family]
+module = "ZkcSecurity.Families.Schnorr"
+instance = "ZkcSecurity.Examples.Schnorr.evidence"
+kind = "sigma"
+
+[claims]
+endpoint = "executable-bytes"
+properties = ["knowledge-soundness"]
+statement = "fixed"
+regime = "exact-uniform challenges"
+
+[assumptions]
+requested = ["model.exact-uniform-challenges", "runtime.acceptance-inclusion"]
+
+[mutations]
+kinds = ["challenge-as-message", "domain-separator", "drop-guard", "swap-operands", "constant"]

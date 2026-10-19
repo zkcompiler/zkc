@@ -6,8 +6,8 @@ public import ZkcExamples.Structured.OkamotoBodies
 
 @[expose] public section
 
-/-! Checked payload and admission phases of the retained original-stage
-Okamoto unit, emitted by `structured_views` from its literal typed bodies. -/
+/-! Checked payload and admission phases of the retained original-stage unit,
+emitted by `structured_views` from its literal typed bodies. -/
 namespace ZkcExamples.Structured.OkamotoViews
 open Zkc.Source Zkc.Source.Structured
 

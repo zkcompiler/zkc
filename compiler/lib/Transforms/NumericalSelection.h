@@ -17,7 +17,7 @@ struct MathematicalRecipes;
 /// catalog and discarded work remain cumulative across attempts.
 class RecipeConstructionWork {
   unsigned helpers, expressions;
-  uint64_t slots, polynomial;
+  uint64_t slots, polynomial, requiredMaps;
 
 public:
   explicit RecipeConstructionWork(const RealizationWork &);

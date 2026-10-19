@@ -46,7 +46,7 @@ The installed interactive sampler and native transcript suites admit only powers
 of two from 1 through 2^63, rejecting other bounds before consuming their root.
 An explicit construction handler may implement another positive u64 range;
 admission checks its result range, not its claimed probability distribution.
-The ordinary [sampling library](../../../libraries/zkc/README.md#bounded-sampling)
+The ordinary [sampling library](../../../libraries/core/README.md#bounded-sampling)
 provides bounded threshold rejection with explicit exhaustion.
 
 The installed power-of-two sampler obtains 64 provider bytes, reads the first eight as a

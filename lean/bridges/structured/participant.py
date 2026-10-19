@@ -246,11 +246,11 @@ class Suite(structured.Suite):
         if source is None:
             flags = ["--source-format=zkc", "--entry=example::Interactive",
                      f"--module=example={ROOT}/examples/projects/schnorr/main.zkc",
-                     f"--module=schnorr={ROOT}/libraries/schnorr/lib.zkc"]
+                     f"--module=schnorr={ROOT}/libraries/protocols/sigma/schnorr/lib.zkc"]
             source = self.command(name+":frontend", [self.tools["compiler"], "language-emit", *flags])
             interface = json.loads(self.command(name+":interface", [self.tools["compiler"], "language-interface", *flags]))
             self.evidence.atomic_json(folder / "interface.json", interface); root = interface["protocol"]
-            for part in ("examples/projects/schnorr/main.zkc", "libraries/schnorr/lib.zkc"):
+            for part in ("examples/projects/schnorr/main.zkc", "libraries/protocols/sigma/schnorr/lib.zkc"):
                 (folder / ("example.zkc" if part.startswith("examples") else "library.zkc")).write_bytes((ROOT / part).read_bytes())
         original = folder / "source.mlir"; original.write_text(source, encoding="utf-8")
         exported = folder / "source.json"

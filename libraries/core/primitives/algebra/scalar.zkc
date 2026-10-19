@@ -1,0 +1,5 @@
+module zkc::primitives::scalar;
+
+pub fn inverse<F: Field>(value: F) -> F = primitive("field.inverse");
+
+pub fn from_index<F: Field>(value: index) -> F = primitive("field.from_index");

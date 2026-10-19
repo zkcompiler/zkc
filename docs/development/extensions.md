@@ -39,7 +39,7 @@ The [ring arena](../spec/domains/ring-expressions.md) owns typed arithmetic and
 substitution. Its reusable bulk operations have domain contracts, ordered
 Algebra dialect operations and backend implementations. Their inputs contain no
 protocol rounds, roles, commitments or acceptance decisions. The
-[Sumcheck library](../../libraries/sumcheck/expression.zkc) composes those
+[Sumcheck library](../../libraries/protocols/polynomial/sumcheck/expression.zkc) composes those
 operations with messages, challenges and checks in ordinary source. The Entry
 package carries their expression bodies and the Host independently admits them
 against the program's digest references. The compiler admits the captured bodies,

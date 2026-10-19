@@ -1,7 +1,8 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
-table_claims = "main.zkc"
+["modules"]
+"table_claims" = "main.zkc"
 
-[dependencies]
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"collections" = "../../../../../libraries/core/collections"
+"traversal" = "../../../../../libraries/core/traversal"

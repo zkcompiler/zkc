@@ -29,9 +29,11 @@ comparison.
 every owned declaration with `ZkcTools.DeclarationAudit`, whose dependency rule
 keeps `ZkcClean` free of tests, tools, examples and the ArkLib package and keeps
 the main library free of this package and Clean ([rule controls](TestsClean/AuditRules.lean)).
-[TestsClean.UpstreamStatus](TestsClean/UpstreamStatus.lean) records the axioms of
-the selected bridge and upstream declarations. Only `propext`,
-`Classical.choice` and `Quot.sound` are permitted in their transitive proof cones.
+[TestsClean.UpstreamStatus](TestsClean/UpstreamStatus.lean) audits the upstream
+Clean declarations the bridge consumes, a computed boundary of every Clean
+declaration the bridge and its controls name directly; the package audit covers
+the bridge theorems. Only `propext`, `Classical.choice` and `Quot.sound` are
+permitted in their transitive proof cones.
 
 ## Pins
 

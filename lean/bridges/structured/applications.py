@@ -7,12 +7,12 @@ import json
 from pathlib import Path
 import sys
 
-from check import FIELD, ROOT, definition, write_json
+from check import FIELD, ROOT, definition, fixture, write_json
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
 
-def authored(suite, label, path, stem, namespace):
-    return suite.authored(label, "sample::Demo", {"sample": ROOT / path}, (stem, namespace))
+def authored(suite, label, stem):
+    return suite.authored(label, *fixture(stem))
 
 
 def roles(subject):
@@ -20,8 +20,7 @@ def roles(subject):
 
 
 def applications(suite):
-    subject = authored(suite, "application", "compiler/test/fixtures/language/application.zkc",
-                       "application", "Application")
+    subject = authored(suite, "application", "application")
     for role_index, inputs, outputs in [
         (0, ["2", "3"], ["6", None]), (1, ["5", "7"], [None, "12"]),
         (0, ["0", "9"], ["0", None]), (1, ["0", "9"], [None, "9"]),
@@ -48,14 +47,12 @@ def applications(suite):
 
 def service_subject(suite, nested):
     if nested:
-        subject = authored(suite, "nested-service", "compiler/test/fixtures/structured-source/application-wrapper.zkc",
-                           "application-wrapper", "ApplicationWrapper")
+        subject = authored(suite, "nested-service", "application-wrapper")
         return (subject, *roles(subject), [
                              "apply_2_s0_s0", "apply_13_apply_2_s0_s3_s0",
                              "apply_13_apply_2_s0_s3_s2", "apply_13_apply_2_s0_s3_s5_0",
                              "apply_2_s0_s6"], "apply_2_s0_s2")
-    subject = authored(suite, "service-order", "compiler/test/fixtures/language/service_order.zkc",
-                       "service-order", "ServiceOrder")
+    subject = authored(suite, "service-order", "service-order")
     return (subject, *roles(subject), [
                          "s0", "apply_2_s3_s0", "apply_2_s3_s2", "apply_2_s3_s5_0", "s6"], "s2")
 

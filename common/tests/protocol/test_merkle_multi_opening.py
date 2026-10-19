@@ -13,7 +13,7 @@ import hashlib
 import pytest
 
 from input_files import input_files
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 SOURCE = '''module sample;
 use zkc::oracle as oracle;
@@ -74,7 +74,7 @@ class Case:
         self.package = directory / 'opening.zkpkg'
         report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=sample={source}', 'sample::Demo',
-                               f'--output={self.package}', *library_modules('zkc')])
+                               f'--output={self.package}', *library_modules(*core_packages())])
         self.pin = report['package_sha256']
         assert self.pin == hashlib.sha256(self.package.read_bytes()).hexdigest()
         self.runs = 0

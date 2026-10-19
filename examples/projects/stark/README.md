@@ -2,11 +2,11 @@
 
 Prove the eight-row Fibonacci AIR of the [Fibonacci project](../fibonacci/README.md)
 with the parameterized single-table STARK library,
-[`stark::argument::TableArgument`](../../../libraries/stark/README.md#parameterized-single-table-argument).
+[`stark::single_table::TableArgument`](../../../libraries/arguments/stark/README.md#parameterized-single-table-argument).
 `CleanProof` imports the Clean table and `Plonky3Proof` the Plonky3 AIR; the
 inputs are the Fibonacci project's.
 
-Both Entries select the configuration `stark::koala_bear::quartic::Poseidon2`:
+Both Entries select the configuration `stark::configurations::koala_bear_quartic::Poseidon2`:
 KoalaBear trace rows, quartic-extension challenges, quotient and FRI, width-16
 Poseidon2 Merkle trees with pruned multi-openings, natural-order rows with both
 FRI fold siblings in one leaf, and the Merlin KoalaBear transcript suite. The
@@ -36,3 +36,26 @@ prove these Entries under several compilation modes, alter every proof message,
 change public inputs, open wrong rows, run two dishonest provers, and repeat
 the protocol with bit-reversed rows and with one FRI value per leaf.
 Commitments are nonhiding and the proof format is zkc's own, not Plonky3's.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+zkc check
+zkc prove CleanProof
+zkc verify CleanProof
+zkc prove Plonky3Proof
+zkc verify Plonky3Proof
+```
+
+Inputs: inputs/ contains the public boundaries and witnesses for both selected relations.
+
+Profile: The generic single-table argument selects quartic extension values, Poseidon2 Merkle trees and challenges mapped from the octic Merlin suite.
+
+Expected negative control: A wrong trace row, quotient value, FRI sibling or public boundary refuses verification.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

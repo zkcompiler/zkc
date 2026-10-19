@@ -28,8 +28,9 @@ struct RealizationWork {
   // restored only after transferring its debit to the discard account.
   uint64_t discardedRecipeCopy = 1000000;
   uint64_t discardedRecipeSiteBytes = 16 * 1024 * 1024;
-  // Aggregate helper operations, helper slots, polynomial work and finite
-  // expressions from rejected recipes. Separate from required construction.
+  // Aggregate helper operations/slots, polynomial work, finite expressions
+  // and required map construction from rejected recipes. Transfer these
+  // debits here before restoring the selected candidate's required reserve.
   uint64_t discardedRecipeExpansion = 16 * 1024 * 1024;
   // One late numerical transaction shares these checking balances across
   // declarations and retries. Optional native interpretation cannot consume

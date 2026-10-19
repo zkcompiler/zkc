@@ -152,7 +152,8 @@ def challengeKey (guess : Fin 4) : List (Event pSpec Unit) :=
 /-- With the proof `[guess]`, the transform asks the oracle once, at the history
 ending with the challenge occurrence, and accepts when the answer is the guess. -/
 theorem experiment_guess (guess : Fin 4) :
-    Typed.fixedExperiment (absorb pSpec Unit) (validator (guardedVerdict guarded) ())
+    Typed.fixedExperiment (R := ByLast (Raw pSpec Unit)) (absorb pSpec Unit)
+        (validator (guardedVerdict guarded) ())
         (initial pSpec Unit ()) (pure [⟨0, guess⟩]) =
       answer (challengeKey guess) >>= fun raw =>
         pure (PIR.Outcome.returned (some (decide ((raw : Fin 4) = guess))), []) :=
@@ -161,7 +162,8 @@ theorem experiment_guess (guess : Fin 4) :
 /-- A prover that sends a guess without querying is accepted with probability
 exactly `1 / 4`: the soundness bound at zero queries is attained. -/
 theorem guess_accepted (guess : Fin 4) :
-    Pr{let result ← (simulateQ randomOracle (Typed.fixedExperiment (absorb pSpec Unit)
+    Pr{let result ← (simulateQ randomOracle (Typed.fixedExperiment (R := ByLast (Raw pSpec Unit))
+        (absorb pSpec Unit)
         (validator (guardedVerdict guarded) ()) (initial pSpec Unit ())
         (pure [⟨0, guess⟩]))).run' ∅}[Accepted (Accepts ({true} : Set Bool)) result.1] = 4⁻¹ := by
   rw [experiment_guess, answer, simulateQ_bind, simulateQ_spec_query, StateT.run'_eq,
@@ -334,7 +336,8 @@ def secondKey (first second : Fin 4) : List (Event eitherSpec Unit) :=
 /-- With the proof `[first, second]`, the transform asks the oracle at the two
 challenge occurrences and passes the guard when either check holds. -/
 theorem experiment_either (first second : Fin 4) :
-    Typed.fixedExperiment (absorb eitherSpec Unit) (validator (guardedVerdict eitherGuarded) ())
+    Typed.fixedExperiment (R := ByLast (Raw eitherSpec Unit))
+        (absorb eitherSpec Unit) (validator (guardedVerdict eitherGuarded) ())
         (initial eitherSpec Unit ()) (pure [⟨0, first⟩, ⟨2, second⟩]) =
       answer (firstKey first) >>= fun firstRaw =>
         answer (secondKey first second) >>= fun secondRaw =>
@@ -346,7 +349,8 @@ theorem experiment_either (first second : Fin 4) :
 probability at least `1 / 2`: the experiment accepts through all four rounds,
 below the weighted bound `3 / 4`. -/
 theorem either_accepted (first second : Fin 4) :
-    2⁻¹ ≤ Pr{let result ← (simulateQ randomOracle (Typed.fixedExperiment (absorb eitherSpec Unit)
+    2⁻¹ ≤ Pr{let result ← (simulateQ randomOracle (Typed.fixedExperiment
+        (R := ByLast (Raw eitherSpec Unit)) (absorb eitherSpec Unit)
         (validator (guardedVerdict eitherGuarded) ()) (initial eitherSpec Unit ())
         (pure [⟨0, first⟩, ⟨2, second⟩]))).run' ∅}[
       Accepted (Accepts (Set.univ : Set Unit)) result.1] := by

@@ -10,28 +10,16 @@ import argparse
 import copy
 import json
 from pathlib import Path
-import re
 import sys
 
-from check import MODULUS, ROOT, definition, returned as closed_returned
+from check import MODULUS, ROOT, definition, fixture, returned as closed_returned
 from open_protocol import OpenSuite, returned
 
 FIXTURES = ROOT / "compiler/test/fixtures/structured-source"
 
 
-def modules():
-    sources = [FIXTURES / "primitive-callers.zkc", *sorted((ROOT / "libraries/zkc").glob("*.zkc"))]
-    result = {}
-    for source in sources:
-        match = re.search(r"^module\s+([\w:]+)\s*;", source.read_text(encoding="utf-8"), re.M)
-        if match is None or match[1] in result:
-            raise ValueError(f"invalid or duplicate module declaration: {source}")
-        result[match[1]] = source
-    return result
-
-
-def authored(suite, label, entry, stem, module):
-    subject = suite.authored(label, "primitive_examples::" + entry, modules(), (stem, module))
+def authored(suite, label, stem):
+    subject = suite.authored(label, *fixture(stem))
     interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
     assert interface["original"] == subject[2][2].removeprefix("sha256:")
     assert interface["protocol"] == subject[2][3]
@@ -44,9 +32,9 @@ def role(subject, index=0):
 
 def table_cases(suite):
     subjects = {
-        "shape": authored(suite, "shape", "ShapeEntry", "primitive-shape", "PrimitiveShape"),
-        "table": authored(suite, "table", "TableEntry", "primitive-table", "PrimitiveTable"),
-        "halves": authored(suite, "halves", "HalvesEntry", "primitive-halves", "PrimitiveHalves"),
+        "shape": authored(suite, "shape", "primitive-shape"),
+        "table": authored(suite, "table", "primitive-table"),
+        "halves": authored(suite, "halves", "primitive-halves"),
     }
     cases = [
         ([], 0, 1), ([7], 0, 1), ([1, 7], 1, 1), ([1, 7, 2, 9], 1, 2),
@@ -88,7 +76,7 @@ def table_cases(suite):
 
 
 def sequence_cases(suite):
-    subject = authored(suite, "sequence", "SequenceEntry", "primitive-sequence", "PrimitiveSequence")
+    subject = authored(suite, "sequence", "primitive-sequence")
     for index, (items, value, divisor) in enumerate([
         ([], 5, 1), ([3, 8], 5, 2), ([MODULUS - 1, 2], 7, 3),
         ([3, 3], 8, 5), ([0, 0], 0, 1), ([9], 4, 0),
@@ -108,7 +96,7 @@ def sequence_cases(suite):
 
 
 def pure_index_cases(suite):
-    subject = authored(suite, "pure-index", "PureIndexEntry", "primitive-pure-index", "PrimitivePureIndex")
+    subject = authored(suite, "pure-index", "primitive-pure-index")
     for value in (0, 1, 2**63, 2**64 - 1):
         suite.case(f"pure-index-{value}", lambda v=value: suite.compare_open(
             subject, f"pure-index-{v}", role(subject), [str(v)], [], returned([v == 0])))

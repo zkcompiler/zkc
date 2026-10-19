@@ -11,7 +11,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
 | [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcSecurity.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
-| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
+| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings, normal forms of roots that apply other protocols (the callee's generated normal form substituted at the application's child context), each role's invocation at any caller context, and named positions of carried repeat slots | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
 | [Structured primitives](#library-primitive-subjects) | Conditional u64 index arithmetic, list length/sum/split/append/equality laws and strict exec sequencing; complete library Shape/Table/Halves wrappers, an arithmetic/vector Sequence caller and a two-role pure-index caller | Library equations state their representation premises; logical lists, without host allocation or native resource correspondence; no observed Shape/Table/Halves site law |
 | [Retained protocol applications](#protocol-application-subjects) | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
@@ -26,8 +26,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | VCVio Schnorr | Equality for every public-view event under fixed challenge and uniform nonce/response sampling; Interactive source-derived messages and actual verifier outcome transfer to the VCVio simulator | Generic and verifier-only consumers use a handwritten strategy; the Interactive consumer derives it from checked source sends. No native prover/RNG correspondence, malicious-verifier, concurrent or Fiat–Shamir theorem |
 | Structured Schnorr Sigma | Actual source commit prefix, response and selected verifier decision implement the pinned VCVio Sigma interface; upstream completeness, special soundness and fresh-challenge HVZK transfer to the retained relation and public view | Field/module interpretation and explicit SampleableType laws; finite field for HVZK; component target at a run root, without an efficient extractor, malicious-verifier, native-provider or scheduler theorem. Its Fiat–Shamir transform is covered by the next row |
 | [Compiled Schnorr Fiat–Shamir](spec/fiat-shamir.md) | The checked transcript-construction and [participant projection](spec/participant-projection.md) rules accept the compiled `example::Proof` validator, and their composed soundness, applied to the admitted original, proves its ideal meaning equals the Fiat–Shamir transform of the original Proof Entry's validator for every challenge function, with no Entry-specific equation about the compiled program; with a random oracle on all transcript histories, injective routing makes the experiment VCVio's Fiat–Shamir Schnorr run, and replay extraction yields the relation retained by the Proof Entry's export with `acc * (acc / (Q + 1) - 1 / \|F\|)`. VCVio's transform of the imported interactive Sigma instance, with its random oracle on the context message and commitment, has the same bound for a fixed statement and context (`StructuredSchnorrFiatShamir.knowledge_soundness`) | Named random-oracle (on all typed histories, with exactly uniform field challenges), host binding of the checked public values, canonical transport and native correctness assumptions; fixed statement; native construction with one replaced service; the projection rule matches calculations by operation, not algebra, and reads helper calls with the original's checked helpers, whose prepared candidate bodies are the native check's obligation; exporter and bridge rendering are tested boundaries; no running-time, adaptive-statement, zero-knowledge or concrete Merlin/BLS claim |
-| [Executable lowering and the Schnorr verifier](spec/executable.md) | The checked lowering rule reads a `zkc.program/0` validator back as constructed instructions, including counted loops, transparent local calls with Boolean guards and calls of the constructed validator's named helpers. For every validator it reads and every helper table its called helpers are prepared for, the executable meaning (length-framed proof, any decoder, instruction budget, loop and call frames with cleanup, affine transcript) has the metered ideal meaning's outcome class, whole-proof consumption and challenge interaction at every budget, the metered meaning prunes the ideal meaning by stops at every budget, readings with static charges have the ideal meaning's at budgets of at least the total charge, readings with loops or helper calls have it at every budget sufficient for every run of the reading on the decoded proof (`metered_sufficient`, `validate_sufficient`), and every run leaves its frames in nesting order. The rule also accepts a reading that differs from the constructed instructions only in the schedule of pure total calculations: checked normalization compares the two anchor by anchor through a shared table of terms, and accepted programs have equal ideal meanings in every monad and for every challenge function (`checkNormalized_sound`). The rule accepts the validator the runtime admits for the Schnorr `example::Proof` against the constructed validator above (25 instructions, no helper calls), for the same entry and validator role. Composed with the composed construction and projection rules (`Zkc.Construction.compiled_transform` applied to the admitted original, with no Entry-specific equation about the compiled program), the executable at budgets of at least 25, under the Entry's checked occurrence context, is the Fiat–Shamir transform of the original verifier on the decoded proof, and the extraction bound holds for provers of proof bytes for every decoder, budget and expected binding; the executable bridge checks that this theorem's proof reaches the general rules and the admitted original and not `SchnorrProof.spec_equation`, and that no Entry-specific equation between processes it reaches names a compiled meaning; the Entry-specific equations about a program's meaning are on the original side: kernel-evaluated `SchnorrProof.process_equation` (the admitted original's validator is the common Schnorr experiment) and `SchnorrProofBinding.formula_process` (the retained DLog formula's process), and `original_verifier` and `verifier_correspondence` derived from them; the other Entry-specific facts are wiring (context, input relation, acceptance position) | Assumes the runtime accepts only proof bytes that the executable meaning accepts under the Entry's checked occurrence context `SchnorrProof.context`, installed kernels implement the vocabulary's meanings, the codec is a function of bytes and type, and the program renderer is exact; keeps the compiled theorem's random-oracle, binding and fixed-statement assumptions. Known runtime differences are refusals the meaning classifies otherwise or omits: a decoded value of another type and codec resource or backend errors cancel the runner without a charge (the meaning stops on the contract for the first and charges a decoding stop for the second), a message over the proof limit is reported as a limit (truncation in the meaning), a proof over the limit is refused before execution, and the iteration, logical-byte, value-byte, live-value, frame, transcript and external-work ledgers are not modelled. A helper body is read for its sorts and its freedom from transcript operations only; what it computes is a per-program preparation proof. The reading must equal the constructed instructions or have their normal form: pure total calculations may be rescheduled, shared or dropped, while the anchors (receives, transcript operations, guards, helper calls, calculations that can stop and loops) must come in the same order with operands that denote the same terms, and work moved into or out of a loop body is refused. Normalization relates ideal meanings only, not charges, frames or stop sites. No services or sends. The runtime comparison covers control and observations for budgets 0–26 and eight proof mutations, none of which reaches these differences, and not values |
-| [Executable Sumcheck verifier](spec/executable.md#the-compiled-sumcheck-proof-verifier) | The checked lowering rule accepts the validator the runtime admits for the Sumcheck `example::Proof` against its constructed validator: the empty point as a helper call, a loop of at most two rounds over the round count receiving two messages, checking the round sum, drawing and delivering the challenge and extending the point by a helper call, and the terminal check as a helper call. The program's three helper functions are proved to implement the admitted source's checked helpers (`SumcheckHelpers.prepared`; the terminal check by evaluating its authored shape check and its table fold, `restrictPrefixValues`, against the source contracts, including the stops for out-of-range lengths). Host validation of proof bytes prunes the acceptance of the Fiat–Shamir transform of the original Sumcheck validator on the decoded proof at every budget and with every framing header; through `Prunes.prEvent_le` the executable accepts a false claim with probability at most `(Q + count) / \|F\|` for a fixed well-formed statement and `(Q + 2) * (1 / \|F\| + loss)` for well-formed statements chosen after the queries, for every decoder, budget and expected binding, from a binding of the table values, claim and round count that determines the statement (`initial_determined`). The executable bridge compares the runtime's outcome, stop site, local call, charged instructions, transitions and messages with the meaning at every budget 0–191 (acceptance from 190) and on the honest proof and eight proof mutations, including round checks failing in the first and the second iteration, refuses eight program mutations with named reasons, and checks that a changed helper body passes the rule, its obligation being the preparation proof. Honest-prover completeness: for every challenge function, codec whose decoder inverts its encoder on round messages of bounded length, expected binding of 32 bytes, initial transcript and table of `2 ^ rounds` values with at most two rounds, host validation accepts the honest proof bytes of the table's sum at every budget of at least `68 + 61 · rounds` instructions (`SumcheckCompleteness.honest_accepted`, from the charge bound `SumcheckCharges.sufficient` and the general `validate_sufficient`) | Same runtime, kernel, codec, renderer and random-oracle assumptions as the previous row, with the challenge decoding's loss; the binding `initial` is one typed public-value binding event of the table, the claim and the round count, and it stands for the invocation root's public rows rather than being derived from them; soundness, not knowledge soundness; at most two rounds, the compiled loop's maximum; the runtime comparison reads values in `ZMod 5`, every value zero except a changed message read as one, so it covers control and observations, not field arithmetic; executable Sumcheck completeness covers the Entry's static maximum of two rounds, and the instruction budget but not the runtime's other resource limits |
+| [Executable lowering and the Schnorr verifier](spec/executable.md) | The checked lowering rule reads a `zkc.program/0` validator back as constructed instructions, including counted loops, transparent local calls with Boolean guards and calls of the constructed validator's named helpers. For every validator it reads and every helper table its called helpers are prepared for, the executable meaning (length-framed proof, any decoder, instruction budget, loop and call frames with cleanup, affine transcript) has the metered ideal meaning's outcome class, whole-proof consumption and challenge interaction at every budget, the metered meaning prunes the ideal meaning by stops at every budget, readings with static charges have the ideal meaning's at budgets of at least the total charge, readings with loops or helper calls have it at every budget sufficient for every run of the reading on the decoded proof (`metered_sufficient`, `validate_sufficient`), and every run leaves its frames in nesting order. The rule also accepts a reading that differs from the constructed instructions only in the schedule of pure total calculations: checked normalization compares the two anchor by anchor through a shared table of terms, and accepted programs have equal ideal meanings in every monad and for every challenge function (`checkNormalized_sound`). The rule accepts the validator the runtime admits for the Schnorr `example::Proof` against the constructed validator above (25 instructions, no helper calls), for the same entry and validator role. Composed with the composed construction and projection rules (`Zkc.Construction.compiled_transform` applied to the admitted original, with no Entry-specific equation about the compiled program), the executable at budgets of at least 25, under the Entry's checked occurrence context, is the Fiat–Shamir transform of the original verifier on the decoded proof, and the extraction bound holds for provers of proof bytes for every decoder, budget and expected binding; the executable bridge checks that this theorem's proof reaches the general rules and the admitted original and not `SchnorrProof.spec_equation`, and that no Entry-specific equation between processes it reaches names a compiled meaning; the Entry-specific equations about a program's meaning are on the original side: kernel-evaluated `SchnorrProof.process_equation` (the admitted original's validator is the common Schnorr experiment) and `SchnorrProofBinding.formula_process` (the retained DLog formula's process), and `original_verifier` and `verifier_correspondence` derived from them; the other Entry-specific facts are wiring (context, input relation, acceptance position) | Assumes the runtime accepts only proof bytes that the executable meaning accepts under the Entry's checked occurrence context `SchnorrProof.context`, installed kernels implement the vocabulary's meanings, the codec is a function of bytes and type, and the program renderer is exact; keeps the compiled theorem's random-oracle, binding and fixed-statement assumptions. Known runtime differences are refusals the meaning classifies otherwise or omits: a decoded value of another type and codec resource or backend errors cancel the runner without a charge (the meaning stops on the contract for the first and charges a decoding stop for the second), a message over the proof limit is reported as a limit (truncation in the meaning), a proof over the limit is refused before execution, and the iteration, logical-byte, value-byte, live-value, frame, transcript and external-work ledgers are not modelled. The lowering rule reads a helper body for its sorts and its freedom from transcript operations only; what the body computes is checked by the helper rule (`Zkc.Executable.checkHelpers`, proved to establish the full preparation obligation by `checkHelpers_sound`) when the body is inside its recipe table, and is otherwise a per-helper preparation proof: loops, folds, maps and binds have no recipe. The reading must equal the constructed instructions or have their normal form: pure total calculations may be rescheduled, shared or dropped, while the anchors (receives, transcript operations, guards, helper calls, calculations that can stop and loops) must come in the same order with operands that denote the same terms, and work moved into or out of a loop body is refused. Normalization relates ideal meanings only, not charges, frames or stop sites. No services or sends. The runtime comparison covers control and observations for budgets 0–26 and eight proof mutations, none of which reaches these differences, and not values |
+| [Executable Sumcheck verifier](spec/executable.md#the-compiled-sumcheck-proof-verifier) | The checked lowering rule accepts the validator the runtime admits for the Sumcheck `example::Proof` against its constructed validator: the empty point as a helper call, a loop over the round count bounded by the Entry's static maximum (two rounds) receiving two messages, checking the round sum, drawing and delivering the challenge and extending the point by a helper call, and the terminal check as a helper call. The program's three helper functions are proved to implement the admitted source's checked helpers (`SumcheckHelpers.prepared`): the empty point and the point extension by the helper rule (`SumcheckHelpers.rule_accepted`); the terminal check iterates, is outside the rule's recipe table (`SumcheckHelpers.check_outside`) and is prepared by its own proof (`SumcheckHelpers.check_prepared`), evaluating its authored shape check and its table fold, `restrictPrefixValues`, against the source contracts, including the stops for out-of-range lengths. Host validation of proof bytes prunes the acceptance of the Fiat–Shamir transform of the original Sumcheck validator on the decoded proof at every budget and with every framing header; through `Prunes.prEvent_le` the executable accepts a false claim with probability at most `(Q + count) / \|F\|` for a fixed well-formed statement and `(Q + 2) * (1 / \|F\| + loss)` for well-formed statements chosen after the queries, for every decoder, budget and expected binding, from a binding of the table values, claim and round count that determines the statement (`initial_determined`). The executable bridge compares the runtime's outcome, stop site, local call, charged instructions, transitions and messages with the meaning at every budget 0–191 (acceptance from 190) and on the honest proof and eight proof mutations, including round checks failing in the first and the second iteration, refuses eight program mutations with named reasons, and checks that a changed helper body passes the rule, its obligation being the preparation proof. Honest-prover completeness: for every challenge function, codec whose decoder inverts its encoder on round messages of bounded length, expected binding of 32 bytes, initial transcript and table of `2 ^ rounds` values with at most the Entry's static maximum of rounds, host validation accepts the honest proof bytes of the table's sum at every budget of at least `68 + 61 · rounds` instructions (`SumcheckCompleteness.honest_accepted`, from the charge bound `SumcheckCharges.sufficient` and the general `validate_sufficient`). The charge is derived from the reading (`SumcheckCharges.charge_eq`), and both theorems are instances of the Sumcheck family's (`ZkcExamples.Executable.SumcheckFamily`): one statement per round gives the loop's charge through a loop invariant (`Zkc.Executable.FitsK.loop_invariant`) and the honest run through the fold invariant, with proofs that do not depend on the value of the maximum | Same runtime, kernel, codec, renderer and random-oracle assumptions as the previous row, with the challenge decoding's loss; the binding `initial` is one typed public-value binding event of the table, the claim and the round count, and it stands for the invocation root's public rows rather than being derived from them; soundness, not knowledge soundness; at most the compiled loop's maximum of rounds, two for this Entry; the runtime comparison reads values in `ZMod 5`, every value zero except a changed message read as one, so it covers control and observations, not field arithmetic; executable Sumcheck completeness covers every round count up to the Entry's static maximum, which the family requires below 64: the library's terminal check bounds the point at 64 coordinates, so honest proofs of 64 or more rounds are rejected although the compiler accepts larger maxima; it covers the instruction budget but not the runtime's other resource limits |
 | [Compiled Sumcheck Fiat–Shamir transform](spec/participant-projection.md#the-compiled-sumcheck-proof-entry) | The composed transcript-construction and projection check accepts the compiled Sumcheck `example::Proof` validator, whose original has a protocol application with a repeat, guards and helper calls; its ideal meaning equals the Fiat–Shamir transform of the original Sumcheck validator for every challenge function and, for an admitted round count (at most two), a decoded table and a value vector below the index limit, of the source rounds followed by the multilinear terminal check. The composed example's validator, with two applications sharing one service and an inlined Math helper, is accepted with a kernel-evaluated admission and the generic composition theorem | Security is the next row's, for the `example::Proof` Entry only; the composed example has no security theorem; the original is the admitted Sumcheck source; helper calls are read with its checked helpers, a Math helper invoked on absent operands only when its body preserves absence; the same random-oracle, transport and native correctness boundaries as Schnorr, plus the coordinate determinacy stated there; the vector and count public inputs are bound by the typed public-value binding of the next row (`publicInitial`, `adaptive_soundness_public`), which establishes statement determination only; native absorption of the encoded rows remains assumed |
 | [Compiled Sumcheck Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry) | The compiled Sumcheck `example::Proof` verifier's ideal interpretation (`compiledVerifier`: the exported validator's ideal meaning under its checked occurrence context, helper calls read by the original's checked helpers, read through the selected acceptance output) is, for every challenge function, the transform of the imported verifier (`construction`, from the composed check and the definitional `verifier_imported`); with a random oracle on all typed histories it accepts a false claim on the raw table values with probability at most `(Q + count) / \|F\|` for a fixed well-formed statement (the raw values decode to a table at the count) and initial transcript (`soundness`), and at most `(Q + 2) * (1 / \|F\| + loss)`, two being the Entry's round maximum, for adaptively chosen well-formed statements under a binding whose initial transcripts determine them (`adaptive_soundness`; `reduced_soundness` with `loss = \|F\| / N`). On a `ZMod 5` instance the bound is attained on the compiled program (exactly `1 / 5`), the compiled program evaluated in the kernel accepts the cheating proof exactly at one challenge and the honest proof for a true claim at every challenge, and without a determining binding a one-query prover is accepted with probability `4 / 5`, above the adaptive bound | Ideal interpretation of the constructed validator: the random-oracle idealization, encoding and transcript-state correspondence, exporter and rendering boundaries and native correctness of the compiled Schnorr row, and the helper and coordinate boundaries of the previous row; the adaptive premise is discharged by the typed public-value binding of the statement (`adaptive_soundness_public`), which the executable Sumcheck row uses; that binding establishes statement determination only, and native absorption of the encoded rows remains assumed; well-formed statements only, fixed or adaptive; soundness, not knowledge soundness; the executable program the runtime admits is covered by the executable Sumcheck row; no running-time claim |
 | [GKR Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-plain-gkr-verifier) | The plain GKR verifier of a decoded statement (output and input tables of the width, each layer's add and mul wiring) has a round-by-round certificate composed per phase with `Reduction.bind`, `repeatN`, `union` and `receive`: output point `1 / \|F\|`, each degree-two round `2 / \|F\|` (ArkLib's `uniform_successor_soundness` on the layer's gate polynomial, whose Boolean sum is the layer's extension), the line challenge `width / \|F\|` (Schwartz–Zippel for the restriction of a multilinear extension to a line), and the input check. Its transform accepts claimed outputs other than the circuit's outputs with probability at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|` | Finite field; fixed statement and initial transcript; the random-oracle experiment and obligations of the multi-round row; soundness, not knowledge soundness; uniform width and dense public wiring; no adaptive statement choice |
@@ -43,7 +43,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [FRI with committed words](spec/fri-security.md#committed-words) | The FRI verifier that receives the root of each round's word and reads the two entries of each query's pair from every round's word (`CommittedFri.verifier`) is, with every read answered from the words in the clear, the transfer's verifier after the initial word (`withTables_verifier`). In the joint random oracle of transcript keys and hash calls, with words committed by Merkle trees with hashed leaves of one field element, it accepts while the initial word extracted at the checkpoint of one of its transcript queries, with zero at the entries the extraction misses, is at relative distance at least `δ` with probability at most the prover's charge plus `∑ r < R, foldError r`, the query block's error and `2 s R (n + 1) · hashError`, with `hashError = (R + 3) (Q + R + 1 + 2 s R (n + 1)) / \|Digest\|` for a prover with at most `Q` oracle calls (`CommittedFri.soundness`) | The proximity premise as a hypothesis, as in the transfer; transcript keys are pairs of a history and an occurrence, and the hash calls are a separate family of the same oracle, with no namespace term; one leaf call per field element, not the installed schemes' leaf encoding with tag, codec, width and height; the transfer's single block key and fixed block shape; the event is acceptance with the zero-completed extraction at a checkpoint far from the code, and that an application's bad event implies it is a separate obligation; the verifier model is a transcription of the library verifier, not the compiled library, its Entry or native execution |
 | [Imported Sumcheck Fiat–Shamir](spec/fiat-shamir-security.md#the-imported-sumcheck-verifier) | The actual imported `example::Interactive` verifier, projected to the common participant actions, is the plain round process on every admitted count (at most two, the exported maximum) and refuses above it; its transform accepts a false claim on the raw public vector with probability at most `(Q + count) / \|F\|`, and for adaptively chosen well-formed statements at most `(Q + 2) * (1 / \|F\| + loss)`, `loss = \|F\| / N` for challenges reduced from samples below `N`. The per-round bound is ArkLib's `uniform_successor_soundness` at degree one through the multilinear bridge. The composed `example::Reduction` root's transform, for a fixed external table of dimension `remaining + count`, returns a true residual evaluation claim from a false initial claim with probability at most `(Q + count) / \|F\|`; the root admits at most four rounds and refuses above, and only this fixed-statement form is stated. Composition theorems transfer the fixed-statement and adaptive bounds to a compiled verifier, with its construction equality as the only premise about it: equality with the transform of the imported verifier, the original validator of the compiled `example::Proof` Entry, or with the transform of the imported participant process followed by a final reading of its outputs (with an accepted reading implying the Boolean output `some true`) | Finite field; the experiments and named obligations of the previous row; verifier role 1 and the root context. Adaptive statements are well-formed (the raw vector decodes to a table at the chosen count); a prover choosing a malformed vector is not covered. For the compiled `example::Proof` Entry the construction equality is discharged by the Compiled Sumcheck Fiat–Shamir soundness row |
 | [Sigma compositions](#sigma-compositions) | Actual Schnorr AND and Chaum–Pedersen Interactive units; their retained targets at actual verifier boundaries, proved equivalent there to shared and independent logical contexts over the retained Schnorr `DLog` relation; a generic shared-challenge composition of VCVio Σ-protocols with composed completeness, special soundness and special HVZK; the imported verifiers implement the composition of two VCVio Schnorr instances and VCVio Schnorr over `G × G`, with fixed-statement random-oracle Fiat–Shamir knowledge soundness of their transforms, `acc * (acc / (Q + 1) - 1 / \|F\|)`, extracting the retained `DLogPair` and `DLogEquality` formulas; the composed construction and projection check accepts both compiled proof Entries (`AndProof`, `EqualityProof`), and the generic theorem, instantiated at each Entry's public inputs and acceptance output, equates their ideal meanings with the transforms of their original verifiers | Field/module interpretation and explicit SampleableType laws; VCVio's prover algorithms, of which the admitted provers' sent values are shown to be possible outputs; finite challenge space for HVZK; the Fiat–Shamir theorems are about the transforms of the imported interactive verifiers; the compiled proof Entries' transform equations are not composed with them, so no security theorem covers the compiled Entries; no native, provider or scheduler correspondence |
-| [Okamoto representation proof](#okamoto-representation-proof) | The original-stage `okamoto::Interactive` unit of a structured bridge fixture, kernel-admitted from printed typed bodies, with both participants' processes and runs and the `knowledge` clause's binding generated by the normal-form generator; two accepting runs of the actual verifier with one commitment and distinct challenges give a representation of the point at both bases for which the retained target holds (`extracted_target`), and the actual verifier accepts what the actual prover sends whenever the prover's witnesses represent the point (`honest_accepts`) | Field/module interpretation; extraction and honest acceptance only: no Σ-protocol instance, zero-knowledge or Fiat–Shamir theorem and no compiled Proof Entry; no bridge driver regenerates the retained export from the fixture; no native, provider or scheduler correspondence |
+| [Okamoto representation proof](#okamoto-representation-proof) | The original-stage `okamoto::Interactive` unit of a structured bridge fixture, kernel-admitted from printed typed bodies, with both participants' processes and runs and the `knowledge` clause's binding generated by the normal-form generator; two accepting runs of the actual verifier with one commitment and distinct challenges give a representation of the point at both bases for which the retained target holds (`extracted_target`), and the actual verifier accepts what the actual prover sends whenever the prover's witnesses represent the point (`honest_accepts`) | Field/module interpretation; extraction and honest acceptance only: no Σ-protocol instance, zero-knowledge or Fiat–Shamir theorem; the compiled Okamoto proof Entry has only its transform equation (`ZkcExamples.Construction.OkamotoProof.compiled_transform`); no native, provider or scheduler correspondence |
 | Local VCVio coupling | Per-action RelTriple premises lift through the same finite reply-adaptive process, preserving exact paired replies/outcomes and related provider state/event views | Same-process theorem; local laws hold at all required related states; demonstrated on typed-region controls, not a generic security theorem for differently transformed programs |
 | Probabilistic call composition | A child's residual-event bound transfers to caller acceptance through an all-state continuation implication; the actual Sumcheck caller reuses this rule for arbitrary returned tuples and a replacement child | Returned-value events; explicit terminal implication and child bound; both prefix and continuation stops are nonaccepting; no losslessness premise or automatic invariant discovery |
 | [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, or cryptographic security claim; honest P completeness is the next row |
@@ -92,6 +92,25 @@ The [structured bridge](../bridges/structured/README.md) separately compares
 full-size BLS12-381 scalar values with direct SSA execution and selected production
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
+
+## Compiled subjects
+
+One row per subject manifest, from its generated [assurance report](spec/assurance-report.md).
+
+<!-- BEGIN GENERATED subject-rows: lean/checks/check_records.py --write -->
+| Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
+|---|---|---|---|---|---|---|
+| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge-soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states knowledge-soundness for ideal-meaning with a fixed statement |
+| composed-sumcheck | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
+| deferred-rounds | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
+| gkr | `example::Proof` | ideal-meaning | soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states soundness for ideal-meaning with a fixed statement |
+| guess | `example::Proof` | ideal-meaning | soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states soundness for ideal-meaning with a fixed statement |
+| okamoto-proof | `example::Proof` | ideal-meaning | knowledge-soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states knowledge-soundness for ideal-meaning with a fixed statement |
+| okamoto | `` |  |  |  |  | unresolved: the manifest claims no property |
+| schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states knowledge-soundness for ideal-meaning with a fixed statement |
+| schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states knowledge-soundness for executable-bytes with a fixed statement |
+| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: unsupported endpoint claim: no registered endpoint states soundness for executable-bytes with a adaptive statement |
+<!-- END GENERATED subject-rows -->
 
 ## Finite fold subjects
 
@@ -401,7 +420,12 @@ all-present component equations for arbitrary values. The retained relation
 record names it through an explicit checked formula symbol, and the contract
 table retains every protocol's clauses. `ZkcExamples.Structured.SchnorrBinding`
 uses this metadata to select the actual target's ports, roles, decision and
-formula body; no association is inferred from names.
+formula body; no association is inferred from names. The binding, selectors,
+formula process and target are the generated declarations of
+`SchnorrInteractiveNormalForms` (from
+[`schnorr-interactive.toml`](../bridges/structured/normal-forms/schnorr-interactive.toml)),
+which also states both participants' processes and runs; `SchnorrBinding` keeps
+them under the names its consumers use.
 
 ## Sigma compositions
 
@@ -415,17 +439,21 @@ commits one nonce at both bases and sends one response. A
 site, which observes the verifier's actual returned decision for one
 transcript and the prover's actual ordered sends.
 
-For Chaum–Pedersen, these processes, the reply scripts and runs, and the
-binding below are generated (`ChaumPedersenNormalForms`, from
-`bridges/structured/normal-forms/chaum-pedersen.toml`); the authored modules
-keep their statements as consequences of the generated ones.
+For both protocols, these processes, the reply scripts and runs, and the
+binding below are generated (`SchnorrAndNormalForms` and
+`ChaumPedersenNormalForms`, from `bridges/structured/normal-forms/schnorr-and.toml`
+and `chaum-pedersen.toml`). `SchnorrAnd` and `ChaumPedersen` keep the prover-side
+names (sites, inputs, reply scripts and runs) that the Σ-protocol instantiations
+state their theorems with.
 
-`SchnorrAndBinding` and `ChaumPedersenBinding` bind the retained `knowledge`
-targets with `bind_contract`. The `DLogPair` target has two witness selectors on
-different prover ports; the `DLogEquality` target has one. Each module proves
-that its formula process is the conjunction of the two Schnorr equations, that
-the selected decision at the actual verifier boundary is the conjunction of the
-two verification equations, and that two accepting transcripts with common
+The generated modules bind the retained `knowledge` targets with
+`bind_contract`. The `DLogPair` target has two witness selectors on different
+prover ports; the `DLogEquality` target has one. Each proves that its formula
+process is the conjunction of the two Schnorr equations and that the selected
+decision at the actual verifier boundary is the conjunction of the two
+verification equations. `SchnorrAndBinding` and `ChaumPedersenBinding` restate
+the observed boundary and decision over a transcript given as its commitments,
+challenge and responses, and prove that two accepting transcripts with common
 commitments and distinct challenges make the target hold at the first run's
 boundary for a new extracted assignment: two witnesses for AND, one for
 Chaum–Pedersen.
@@ -512,9 +540,15 @@ Over them, for every field `F` and `F`-module `G`:
   accepts the commitment and the two responses it sends whenever the prover's
   witnesses represent the point.
 
-The declaration audit covers these modules. There is no VCVio Σ-protocol
-instance, zero-knowledge or Fiat–Shamir theorem and no compiled Proof Entry for
-Okamoto, and no bridge driver regenerates its retained export from the fixture.
+The declaration audit covers these modules. The subject driver regenerates the
+retained export, constructor data, printed bodies and Views from the fixture
+([`okamoto.toml`](../subjects/okamoto.toml)). A compiled Okamoto proof Entry,
+[`okamoto-proof.zkc`](../subjects/fixtures/okamoto-proof.zkc), is generated from
+its manifest alone: the composed construction and projection check and the
+selection check accept it, so its ideal interpretation is the Fiat–Shamir
+transform of its original verifier
+(`ZkcExamples.Construction.OkamotoProof.compiled_transform`). There is no VCVio
+Σ-protocol instance, zero-knowledge or Fiat–Shamir theorem for Okamoto.
 
 ## Source-only Sumcheck verifier
 
@@ -531,7 +565,18 @@ P dimension, P width, P point, V point and V claim; the verifier embedding
 leaves the first four absent. The shared typed body (`SumcheckVerifierBodies`)
 and the verifier's round and whole-body normal forms with their process
 equations (`SumcheckRoundNormalForms`) are generated from the retained
-Reduction unit by `bridges/structured/normal_forms.py`.
+Reduction unit by `bridges/structured/normal_forms.py`, which also names each
+role's carried slots (`verifierPointSlot`, `proverEntriesPosition`, ...) and the
+return order (`reduceReturnIndices`). The roots' own normal forms are generated
+too (`SumcheckSourceNormalForms`, `SumcheckReductionNormalForms` and
+`SumcheckRepackedNormalForms`): at each role, the generated `Reduce` normal form
+is substituted at the application's child context (`reduceContext`), between
+the callee's input and output masks, and each role's invocation at any caller
+context and participant follow. The verifier equations of
+`SumcheckSourceVerifier`, `SumcheckReduceVerifier` and `SumcheckRepackedVerifier`
+are derived from these and the admitted repeat
+(`SumcheckVerifierPrelude.verifierReduce_rounds`); statements about each unit's
+maximum use the maximum read from its export (`reduceMaximum`).
 
 `Zkc.Source.DenotationLaws` provides operation-step proof rules for the
 Region interpreter. Its general bind rule retains an arbitrary operation process;
@@ -613,7 +658,29 @@ and dimension guards, the empty point and the six-slot return.
 `SumcheckProverRoots` gives the root equations of both complete units at the
 prover (`source_prover`, `reduction_prover`), including the checked table
 constructor, the masked verifier inputs and, for Reduction, the residual
-projection. Only present prover inputs are covered.
+projection, from the generated root normal forms at the prover and
+`SumcheckProverPrelude.proverReduce_honest`. Only present prover inputs are
+covered.
+
+The layer Sumcheck of the original GKR Entry (`gkr::Rounds`) has generated
+normal forms at both roles over the admitted unit (`GkrRoundsNormalForms`, from
+[`gkr-rounds.toml`](../bridges/structured/normal-forms/gkr-rounds.toml) and the
+retained export [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json)):
+its typed body with the admitted declaration's raw equation, one round (with its
+repeat as a fold of the round's normal form) and the whole body, and each role's
+invocation at any caller context. The GKR root (`gkr::Gkr`) has generated
+normal forms too (`GkrSourceNormalForms`, from
+[`gkr-source.toml`](../bridges/structured/normal-forms/gkr-source.toml)): its
+typed body with the output-point, layer and line-coefficient callbacks named
+and the admitted declaration's raw equation (`gkrBody_raw`); each callback at
+both roles, the layer callback with both layer Sumcheck applications
+substituted, and each callback's repeat as a fold; and the whole root at both
+roles, with `verifier_participant` and `prover_participant` stating
+`program.participant` itself. Owned helper calls stay as the helpers' own
+invocations on present arguments, so the admitted unit's helper laws
+(`GkrSourceLaws`) rewrite them; no helper law is assumed. The compiled GKR
+theorems still read the constructed instructions; they do not use these forms
+yet.
 
 `SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
 interaction phase records the challenges the prover receives at the delivery
@@ -737,10 +804,13 @@ runtime reports. `Tests.ExecutableSumcheckControls` refuses mutations of the
 executable Sumcheck validator's round loop, a helper function and the
 participant's return, and a helper that observes the transcript, and accepts a
 changed constant in the terminal check's body, whose computation is the
-preparation proof's obligation; on values in `ZMod 5` it fixes the runtime's
-observations: the honest run returns from 190 instructions, a failing round
-check stops inside its local call after 21 instructions, and a stop inside an
-iteration leaves the call, iteration and participant frames innermost first.
+preparation proof's obligation. The helper rule accepts the empty point and the
+point extension, and refuses the terminal check as outside its recipe table, a
+changed constant, an operation implementing another structured operation and a
+rebound name, each with its named reason. On values in `ZMod 5` it fixes the
+runtime's observations: the honest run returns from 190 instructions, a failing
+round check stops inside its local call after 21 instructions, and a stop inside
+an iteration leaves the call, iteration and participant frames innermost first.
 `Tests.ExecutableNormalization` runs `checkNormalized` on small programs. It
 accepts a calculation deferred past the transcript operations before its first
 consumer, the schedule calculation batching produces, with the export's ideal
@@ -890,6 +960,67 @@ axiom closures of its `typedCertificate`, `fiatShamir_soundness`,
 `koalaBear_queryPhase` are `propext`, `Classical.choice` and `Quot.sound`;
 `initial_determined` uses `propext` and `Quot.sound`.
 
+## Shared interface controls
+
+`TestsSecurity.HeterogeneousRequests` runs a validator whose three requests have
+different reply sorts, a field element, an index below a bound and a block of
+two field elements, through the transcript interface, the uniform-sort
+certificate, its lifting and the typed theorem. The index request reads a raw
+answer below twice its range modulo the range, an exact law. The validator's
+queries charge at most `1 / 5 + 1 / 3 + 1 / 5`, and the query-free prover that
+claims `0` is accepted with probability exactly `43 / 75`, below the bound
+`11 / 15`: every request contributes, and the bound is not vacuous.
+
+`TestsSecurity.StageComposition` checks that stage composition transports
+budgets. A game that counts its budget per family over two families is a
+zero-loss stage over a guessing game charged `a / 8` for `a` guesses; the
+composed loss at budget `b` is `2 · b / 8`, two guesses at budget one attain it,
+and the bound `b / 8` at the untransported budget is false
+(`untransported_fails`). The committed verifier that reads one row at one drawn
+index gives the commitment stage of its joint game, and with any frame the
+joint-stage contract composes (`frame_composes`); no compiled claim is made.
+
+`TestsSecurity.StatementBindings` relates a raw table, bound as one event, to
+its sum. The relation is functional, so equal initial histories determine equal
+sums, while a relation that lets a table denote every bound on its sum is not
+functional and two model statements share one initial history. With the empty
+relation every table is unmapped: a validator that accepts every table accepts
+a table with a nonzero sum that the modeled event cannot see, coverage holds
+only through unmapped statements (`empty_covers`), and the rejection of
+unmapped statements fails (`empty_not_rejected`). Coverage and rejection are
+separate registry entries with separate schemas (`coverage_not_rejection`). A
+reported assumption cites a registry entry of its own category, and the
+statement-determination entry cannot stand for the collision bound.
+
+`TestsSecurity.ChargedCommitment` bounds the committed-opening verifier through
+the charged bridge with an ideal charge that reads the extracted table: the
+draw is charged the smaller of the received table's accepted fraction and
+`1 - δ`, two extractions of one root give different charges
+(`idealCharge_reads_extraction`), the concrete charge `1 - δ` dominates the ideal
+charge through every extraction, and the prover's charge plus
+`(1 - δ) + (depth + 1) · hashError` bounds the verifier (`charged_soundness`).
+
+`TestsSecurity.JointSimulation` constructs a frame from a provider whose
+primitive inputs are the joint oracle's tagged keys. Its simulator is the
+memoizing front end, the simulation is exact at the total budget, every frame
+obligation holds, and composing through the contract bounds the committed
+verifier's concrete false acceptance by the commitment stage's loss at the total
+budget (`tagged_soundness`). Delayed-transfer controls check the frame's state
+obligations: simulators that copy a recorded hash answer into provider state, at
+a private reply or at recording a transcript answer, meet every read obligation
+of a frame at their projection (`transfer_reads`), yet a later private reply
+exposes the hash answer (`transfer_exposes`), and no frame has their
+simulation, whatever its projection (`transfer_no_frame`); the same simulator
+without the copy has one (`keptFrame`).
+
+Each of these modules audits its own declarations, and
+`TestsSecurity.InterfaceAxioms` audits the shared-interface modules with the
+dependency rules: the core transcript interface and path bounds, the keyed
+endpoint and its transformers, charged reductions, stage relations, the
+transport between oracle key forms, binding, memoization and the charged
+commitment bridge. Every declaration's axioms are within `propext`,
+`Classical.choice` and `Quot.sound`.
+
 ## Construction obligation counterexamples
 
 `TestsSecurity.Counterexamples` refutes, for each example, the property it
@@ -953,15 +1084,14 @@ The declaration audit covers `ZkcSecurity.FiatShamir.{Obligations,ProviderSimula
 `TestsSecurity.ProviderSimulation`, and also
 `ZkcSecurity.FiatShamir.{Laws,Lifting,Binding}`, `TestsSecurity.LawRecords` and
 `TestsSecurity.BindingCodecs`.
-`TestsSecurity.CommitmentBridge` prints the axiom closures of the commitment
-bridge: `ZkcSecurity.Commitment.soundness_weighted` and `soundness` with the
-lemmas of their proof, the extractor laws of `MerkleTrees` and `LeafHashing`,
-`CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`, the cost and
-query bounds of the concrete reading (`run_costBound`, `run_queryBound`), and
-`CommittedFri.soundness` with its ideal-reading and budget lemmas. It asserts
-nothing itself; the declaration audit (`TestsSecurity.Audit`), which covers
-every declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed
-axioms.
+`TestsSecurity.CommitmentBridge` audits the commitment bridge's modules with the
+dependency rules: `ZkcSecurity.Commitment.soundness_weighted` and `soundness`
+with the lemmas of their proof, the extractor laws of `MerkleTrees` and
+`LeafHashing`, `CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`,
+the cost and query bounds of the concrete reading (`run_costBound`,
+`run_queryBound`), and `CommittedFri.soundness` with its ideal-reading and budget
+lemmas. The declaration audit (`TestsSecurity.Audit`), which covers every
+declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed axioms.
 The axiom closures of their theorems are subsets of `propext`,
 `Classical.choice` and `Quot.sound`; the counterexamples that compute with
 inverses in `ZMod 5` use `decide +kernel` on four or twenty-five cases.

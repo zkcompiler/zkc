@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import sys
 
-from check import FIELD, MODULUS, ROOT, Suite, definition, write_json
+from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
 import snapshot as constructors
 
 GROUP = "bls12-381.g1"
@@ -251,10 +251,7 @@ def wire_cases(suite):
 
 
 def schnorr_cases(suite):
-    subject = suite.authored("schnorr-interactive", "example::Interactive", {
-        "example": ROOT / "examples/projects/schnorr/main.zkc",
-        "schnorr": ROOT / "libraries/schnorr/lib.zkc",
-    }, ("schnorr-interactive", "SchnorrInteractive"))
+    subject = suite.authored("schnorr-interactive", *fixture("schnorr-interactive"))
     root = definition(subject[2], subject[2][3])
     prover, verifier = root[6][1]
     instructions = root[9][1]
@@ -301,9 +298,7 @@ def schnorr_variant_cases(suite):
     for form in ("Helpers", "Reordered", "EarlyChallenge"):
         stem = {"Helpers": "helpers", "Reordered": "reordered",
                 "EarlyChallenge": "early-challenge"}[form]
-        subject = suite.authored("schnorr-" + form, "schnorr_forms::" + form, {
-            "schnorr_forms": ROOT / "lean/bridges/common/fixtures/schnorr-forms.zkc",
-        }, ("schnorr-" + stem, "Schnorr" + form))
+        subject = suite.authored("schnorr-" + form, *fixture("schnorr-" + stem))
         root = definition(subject[2], subject[2][3])
         prover, verifier = root[6][1]
         instructions = root[9][1]
@@ -324,11 +319,8 @@ def schnorr_variant_cases(suite):
                                       stopped("incomplete", a[1], pending=a)))
 
 
-def sigma_subject(suite, entry, stem, module):
-    subject = suite.authored(stem, "example::" + entry, {
-        "example": ROOT / "examples/projects/sigma/main.zkc",
-        "sigma": ROOT / "libraries/sigma/lib.zkc",
-    }, (stem, module))
+def sigma_subject(suite, stem):
+    subject = suite.authored(stem, *fixture(stem))
     root = definition(subject[2], subject[2][3])
     prover, verifier = root[6][1]
     instructions = root[9][1]
@@ -338,8 +330,7 @@ def sigma_subject(suite, entry, stem, module):
 
 
 def schnorr_and_cases(suite):
-    subject, prover, verifier, draws, exchanges = sigma_subject(
-        suite, "AndInteractive", "schnorr-and", "SchnorrAnd")
+    subject, prover, verifier, draws, exchanges = sigma_subject(suite, "schnorr-and")
     assert len(draws) == 3 and len(exchanges) == 5
     first_nonce, second_nonce, challenge = draws
     first_commitment, second_commitment, delivery, first_response, second_response = exchanges
@@ -382,8 +373,7 @@ def schnorr_and_cases(suite):
 
 
 def chaum_pedersen_cases(suite):
-    subject, prover, verifier, draws, exchanges = sigma_subject(
-        suite, "EqualityInteractive", "chaum-pedersen", "ChaumPedersen")
+    subject, prover, verifier, draws, exchanges = sigma_subject(suite, "chaum-pedersen")
     assert len(draws) == 2 and len(exchanges) == 4
     nonce, challenge = draws
     first_commitment, second_commitment, delivery, response = exchanges

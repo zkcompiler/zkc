@@ -12,7 +12,15 @@ instructions at that role, following the participant rules, and writes:
   * the process equation of each normal form, with its proof;
   * reply scripts and the observed run of each root role;
   * for a selected contract clause, the relation binding, its argument
-    builder, the formula's process and the observed decision.
+    builder, the formula's process and the observed decision;
+  * for a body that applies other protocols, the callee's generated normal
+    form at the application's child context with its input and output masks,
+    and the role's invocation at any caller context;
+  * named positions of carried repeat slots and of the return order;
+  * a typed body whose repeats, nested ones included, run named callbacks
+    (`[bodies]` with `callbacks`: each callback's name and a source label one
+    of its own actions carries), with each repeat's static maximum named and
+    the admitted declaration's raw equation.
 
 The output is ordinary Lean source. Every definition and equation is
 elaborated and checked by the kernel, so a generator error, a stale request or
@@ -20,6 +28,17 @@ a changed program is reported as a failed equation rather than trusted. Root
 equations are definitional. Equations over a shared typed body (for every unit
 whose checked body it is) are proved by explicit operation steps that use the
 helper laws named in the request.
+
+Within a body, a repeat whose callback the request states over (a `[[shared]]`
+entry whose `repeat` names it) may stand anywhere: its returned state is bound
+like an owned call's tuple. Applications may stand inside a repeat callback. A
+strict use of a component read from a bound tuple splits on its presence as on
+an optional input. A role's `strict` list (or `*` for every owned call without
+a law) keeps those owned calls as the helper's own invocation on present
+arguments, so their results are present and later uses need no split; an
+application entry's `results` names the callee's results by position. A
+callback role with `fold = true` also gets `<role>_fold`: the repeat on an
+admitted count is the fold of the role's normal form over the iteration indices.
 
 Usage, from the repository root:
   python3 lean/bridges/structured/normal_forms.py REQUEST.toml [--check]
@@ -174,6 +193,32 @@ def find_repeat(block, site):
     return None
 
 
+def repeat_with_label(block, label):
+    """The repeat whose own callback directly performs an action or application with this
+    source label, so a request can name a loop by what it does rather than by the
+    compiler's positional site."""
+    for instruction in block[1]:
+        if instruction[0][0] != "protocol_repeat":
+            continue
+        callback = instruction[3][0][2]
+        for inner in callback[1]:
+            decoded = decode_label(inner[4]) if inner[4] else None
+            if decoded and decoded[0] == label:
+                return instruction
+        found = repeat_with_label(callback, label)
+        if found:
+            return found
+    return None
+
+
+def locate_repeat(block, key):
+    """A repeat named by its site or by a source label its callback carries."""
+    instruction = find_repeat(block, key) or repeat_with_label(block, key)
+    if instruction is None:
+        raise GeneratorError(f"no repeat has site {key!r} or a callback action labelled {key!r}")
+    return instruction
+
+
 def action_sites(block, sites=None):
     """Sites of actions in source order, including nested callbacks."""
     sites = [] if sites is None else sites
@@ -186,14 +231,44 @@ def action_sites(block, sites=None):
     return sites
 
 
+def application_sites(block, found=None):
+    """The protocol applications of a block in source order, including nested callbacks."""
+    found = [] if found is None else found
+    for instruction in block[1]:
+        head = instruction[0][0]
+        if head == "protocol_apply":
+            found.append(instruction)
+        if head == "protocol_repeat":
+            application_sites(instruction[3][0][2], found)
+    return found
+
+
+def scope_literal(scopes):
+    return "[" + ", ".join(list_literal(scope) for scope in scopes) + "]"
+
+
+def list_literal(items):
+    return "[" + ", ".join(str(item) for item in items) + "]"
+
+
+def binder_names(text):
+    """The names a Lean binder string such as `(a b : T) (c : U)` introduces."""
+    names = []
+    for group in re.findall(r"[({\[]\s*([\w\s']+?)\s*:", text or ""):
+        names.extend(group.split())
+    return names
+
+
 # ---------------------------------------------------------------------------
 # Symbolic values
 
 @dataclass(frozen=True)
 class Sym:
-    kind: str           # "present", "absent" or "optional"
+    kind: str           # "present", "absent", "optional" or "component"
     wire: tuple
-    expr: str = ""      # present: a Lean term; optional: the variable holding it
+    expr: str = ""      # present: a Lean term; optional: the variable holding it;
+                        # component: an `Option` term read from a bound tuple
+    label: str = ""     # a component's stem for the name its present value gets
 
     def component(self):
         if self.kind == "present":
@@ -293,9 +368,10 @@ class Done:
 
 @dataclass
 class Match:
-    variable: str
+    variable: str       # the `Option` variable or term the match scrutinizes
     none: object
     some: object
+    binder: str = ""    # the present value's name, when the scrutinee is a term
 
 
 @dataclass
@@ -323,15 +399,39 @@ def render_process(node, indent):
     if isinstance(node, Done):
         return f"{pad}.done {paren(node.expr)}"
     if isinstance(node, Match):
+        some = render_process(node.some, indent + 2)
+        binder = node.binder or node.variable
+        if node.binder and re.search(rf"(?<![\w.]){re.escape(binder)}(?![\w'])", some) is None:
+            binder = "_"
         return (f"{pad}match {node.variable} with\n{pad}| none =>\n" + render_process(node.none, indent + 2)
-                + f"\n{pad}| some {node.variable} =>\n" + render_process(node.some, indent + 2))
+                + f"\n{pad}| some {binder} =>\n" + some)
     if isinstance(node, Bind):
-        return (f"{pad}({node.process}).bind fun ({node.binder} : {node.binder_type}) =>\n"
-                + render_process(node.next, indent))
+        rest = render_process(node.next, indent)
+        used = re.search(rf"(?<![\w.]){re.escape(node.binder)}(?![\w'])", rest) is not None
+        return (f"{pad}({node.process}).bind fun ({node.binder if used else '_'} : {node.binder_type}) =>\n"
+                + rest)
     if isinstance(node, If):
         return (f"{pad}if {node.prop} then\n" + render_process(node.then, indent + 2)
                 + f"\n{pad}else\n" + render_process(node.otherwise, indent + 2))
     raise GeneratorError(f"unknown process node {node}")
+
+
+def has_bind(node):
+    """Whether a process tree binds an opaque process (a repeat, an application or a kept call)."""
+    if isinstance(node, Bind):
+        return True
+    if isinstance(node, Call):
+        return has_bind(node.next)
+    if isinstance(node, Match):
+        return has_bind(node.none) or has_bind(node.some)
+    if isinstance(node, If):
+        return has_bind(node.then) or has_bind(node.otherwise)
+    return False
+
+
+def associate(node):
+    """Bound processes nested under the role's outer bind need reassociation first."""
+    return ", PIR.Proc.bind_assoc" if has_bind(node) else ""
 
 
 def linear_actions(node):
@@ -447,6 +547,33 @@ class Frame:
     rewrites: list = field(default_factory=list)
     callback: str = ""
     repeat_spec: str = ""
+    repeats: dict = field(default_factory=dict)        # repeat site -> (spec term, callback function)
+    slot_names: dict = field(default_factory=dict)     # repeat site -> slot position -> this role's name
+    outer_bind: bool = False     # the stated process is followed by the role's embedding
+    applications: dict = field(default_factory=dict)   # site -> Application
+    opaque: tuple = ()           # helpers whose owned calls stay as they are
+    strict: tuple = ()           # helpers whose owned calls stay as invocations on present arguments
+    role_name: str = ""
+
+
+@dataclass
+class Application:
+    """A protocol application and the callee's generated normal forms it substitutes."""
+    name: str                    # Lean stem, from the source label
+    site: str
+    roles: list                  # caller role index of each callee role
+    signature: str               # Lean term of the callee signature
+    context: str                 # Lean name of the child-context abbreviation
+    unit: str                    # the admitted unit and the callee's checked declaration
+    definition: str
+    member: str
+    same: str
+    body: str
+    raw: str
+    arguments: dict              # callee normal-form parameters -> Lean terms
+    callee_roles: dict           # callee role index -> callee role information
+    values: dict                 # callee role index -> request table of binder and premise terms
+    results: list = field(default_factory=list)   # names of the callee's results, by position
 
 
 class Evaluator:
@@ -460,6 +587,20 @@ class Evaluator:
         self.names = names
         self.finish = finish
         self.shared = frame.mode == "shared"
+        self.branches = 0
+
+    def after(self):
+        """Whether a bound process here is followed by the role's outer bind. The process
+        equation's initial `simp` reassociates that bind into every bind it reaches; only a
+        match or a conditional stops it, so it stays separate under a branch."""
+        return self.frame.outer_bind and self.branches > 0
+
+    def branch(self, instructions, terminator, env, proof, indent):
+        self.branches += 1
+        try:
+            return self.run(instructions, terminator, env, proof, indent)
+        finally:
+            self.branches -= 1
 
     # -- terms ---------------------------------------------------------
     def role_term(self, index):
@@ -557,10 +698,13 @@ class Evaluator:
         instruction, rest = instructions[0], instructions[1:]
         descriptor, operands, results, _, site = instruction
         args = [env[index] for index in operands]
-        # A strict use of an undetermined optional value splits on its presence first.
-        for position in self.demands(descriptor, args):
+        # A strict use of an undetermined optional value splits on its presence first; a
+        # component read from a bound tuple splits the same way, on the term that reads it.
+        for position in self.demands(descriptor, args, site):
             if args[position].kind == "optional":
                 return self.split(args[position].expr, instructions, terminator, env, proof, indent)
+            if args[position].kind == "component":
+                return self.split_component(args[position], instructions, terminator, env, proof, indent)
         step = Step(self, proof, pad)
         step.mark(site)
         head = descriptor[0]
@@ -594,30 +738,39 @@ class Evaluator:
         if head == "guard":
             return self.guard(descriptor, args, site, rest, terminator, env, proof, indent, step)
         if head == "protocol_repeat":
-            return self.repeat(descriptor, args, results, site, rest, terminator, proof, indent, step)
+            return self.repeat(descriptor, args, results, site, rest, terminator, env, proof, indent, step)
+        if head == "protocol_apply":
+            return self.application(descriptor, args, site, rest, terminator, env, proof, indent)
         raise GeneratorError(f"unsupported instruction {head} at site {site!r}")
 
-    def repeat(self, descriptor, args, results, site, rest, terminator, proof, indent, step):
-        """A repeat at a role in its roster: the actual repeat of the body's own callback, then
-        the retained return of its state."""
+    def repeat(self, descriptor, args, results, site, rest, terminator, env, proof, indent, step):
+        """A repeat at a role in its roster: the actual repeat of its callback, then the
+        retained return of its state or, in the middle of a body, the continuation on the
+        repeat's returned state."""
         _, state_count, _, roles, _ = descriptor
         if self.frame.roles[self.frame.role] not in roles:
             raise GeneratorError("normal forms of a role outside a repeat's roster are not supported")
-        if rest:
-            raise GeneratorError("only the return may follow a repeat")
-        if not self.frame.callback or not self.frame.repeat_spec:
-            raise GeneratorError("a body with a repeat needs `callback` and `repeat_spec` in the request")
+        if site in self.frame.repeats:
+            spec, callback = self.frame.repeats[site]
+        elif self.frame.callback and self.frame.repeat_spec:
+            spec, callback = self.frame.repeat_spec, self.frame.callback
+        else:
+            raise GeneratorError(f"the repeat at site {site!r} needs its callback: name it in the request's "
+                                 f"[bodies] callbacks and give it a [[shared]] entry whose repeat names it")
         count, state, captures = args[0], args[1:1 + state_count], args[1 + state_count:]
         me = self.role_term(self.frame.role)
         typed_state = (f"({values_literal([value.component() for value in state])} : "
                        f"Values (Component (assignment F G)) {ty_list(results, True)})")
         typed_captures = (f"({values_literal([value.component() for value in captures])} : "
                           f"Values (Component (assignment F G)) {ty_list([value.wire for value in captures], True)})")
-        process = (f"denoteRepeat ({self.frame.repeat_spec}) ctx {me} {paren(count.component())} {typed_state}\n"
-                   f"    {typed_captures} ({self.frame.callback} ctx {me})")
+        process = (f"denoteRepeat ({spec}) ctx {me} {paren(count.component())} {typed_state}\n"
+                   f"    {typed_captures} ({callback} ctx {me})")
+        if rest or terminator[0] != "return":
+            return self.repeat_then(spec, callback, process, results, site, rest, terminator, env, proof,
+                                    indent)
         pad = " " * indent
         if self.shared:
-            proof.append(f"{pad}refine (Region.denote_letOp_values m (.repeat ({self.frame.repeat_spec}) "
+            proof.append(f"{pad}refine (Region.denote_letOp_values m (.repeat ({spec}) "
                          f"{json.dumps(site)}) _ _ _ _).trans ?_")
             proof.append(f"{pad}change ({process}).bind _ = _")
             proof.append(f"{pad}congr 1")
@@ -628,29 +781,67 @@ class Evaluator:
         inner = [Sym("component", tuple(wire), f"state.get {variable(position)}")
                  for position, wire in enumerate(results)]
         kind, indices = terminator
-        if kind != "return":
-            raise GeneratorError("a repeat must be followed by the body's return")
         node = self.finish([inner[index] if index < state_count else None for index in indices], None, pad)
         if self.shared:
             proof.append(f"{pad}{'  ' * state_count}rfl")
         return Bind(process, "state", f"Values (Component (assignment F G)) {ty_list(results, True)}", node)
 
-    def demands(self, descriptor, args):
+    def repeat_then(self, spec, callback, process, results, site, rest, terminator, env, proof, indent):
+        """A repeat in the middle of a body: its returned state is bound like an owned call's
+        tuple, and the rest of the body reads the bound components."""
+        stem = callback.removesuffix("Fn") or "repeat"
+        binder = self.names.fresh(stem + "Returned")
+        typed = f"Values (Component (assignment F G)) {ty_list(results, True)}"
+        slots = self.frame.slot_names.get(site, {})
+        values = [Sym("component", tuple(wire), f"{binder}.get {variable(position)}",
+                      slots.get(position, stem if len(results) == 1 else f"{stem}{position}"))
+                  for position, wire in enumerate(results)]
+        if self.shared:
+            pad = " " * indent
+            op = f"(.repeat ({spec}) {json.dumps(site)})"
+            expanded = values_literal([value.expr for value in values])
+            lemma = "denote_letOp_bind_after" if self.after() else "denote_letOp_bind"
+            proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
+            proof.append(f"{pad}  ({process})")
+            proof.append(f"{pad}  (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
+            proof.append(f"{pad}· refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) "
+                         f"(funext fun {binder} => ?_))")
+            cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
+                            for position in range(len(results)))
+            proof.append(f"{pad}  {cases}cases {binder}; rfl")
+            proof.append(f"{pad}intro {binder}")
+        return Bind(process, binder, typed, self.run(rest, terminator, values + env, proof, indent))
+
+    def demands(self, descriptor, args, site=None):
         """Operand positions whose presence decides this operation's behaviour here."""
         head = descriptor[0]
+        if head == "protocol_apply":
+            callee = self.callee_role(descriptor, site)
+            if callee is None:
+                return []
+            index, info, masked = callee
+            return [position for position, item in enumerate(info["inputs"])
+                    if masked[position] and item.get("mode", "present") == "present" and "value" not in item]
+        if head == "local_call" and self.opaque(descriptor[1]):
+            return []
         if head == "call":
             if not self.shared and not any(key in self.frame.laws for key in
                                            (descriptor[1], self.helper_term(descriptor[1]))):
                 return range(len(args))
             return [] if self.law(descriptor[1]).components else range(len(args))
+        # An absent operand already decides a calculation (absent), an owned call or a draw
+        # (both stop), whatever the other operands hold.
+        decided = any(arg.kind == "absent" for arg in args)
         if head in BINARY:
-            return range(len(args))
+            return [] if decided else range(len(args))
         if head == "local_call":
-            return range(len(args)) if self.frame.roles.index(descriptor[2]) == self.frame.role else []
+            return range(len(args)) if self.frame.roles.index(descriptor[2]) == self.frame.role and not decided \
+                else []
         if head == "exchange":
             return [0] if self.frame.roles.index(descriptor[1]) == self.frame.role else []
         if head in ("draw", "guard"):
-            return range(len(args)) if self.frame.roles.index(descriptor[1]) == self.frame.role else []
+            return range(len(args)) if self.frame.roles.index(descriptor[1]) == self.frame.role and not decided \
+                else []
         return []
 
     def split(self, variable, instructions, terminator, env, proof, indent):
@@ -660,8 +851,8 @@ class Evaluator:
         some_env = [present(value.wire, variable) if value.kind == "optional" and value.expr == variable
                     else value for value in env]
         none_proof, some_proof = [], []
-        none_node = self.run(instructions, terminator, none_env, none_proof, indent + 2)
-        some_node = self.run(instructions, terminator, some_env, some_proof, indent + 2)
+        none_node = self.branch(instructions, terminator, none_env, none_proof, indent + 2)
+        some_node = self.branch(instructions, terminator, some_env, some_proof, indent + 2)
         if self.shared:
             proof.append(f"{pad}cases {variable} with")
             proof.append(f"{pad}| none =>")
@@ -669,6 +860,26 @@ class Evaluator:
             proof.append(f"{pad}| some {variable} =>")
             proof.extend(some_proof)
         return Match(variable, none_node, some_node)
+
+    def split_component(self, value, instructions, terminator, env, proof, indent):
+        """Split on a component of a bound tuple: its term is generalized, and each branch
+        continues with that component absent or present under a fresh name."""
+        pad = " " * indent
+        name = self.names.fresh(value.label or "value")
+        none_env = [absent(item.wire) if item.kind == "component" and item.expr == value.expr else item
+                    for item in env]
+        some_env = [present(item.wire, name) if item.kind == "component" and item.expr == value.expr
+                    else item for item in env]
+        none_proof, some_proof = [], []
+        none_node = self.branch(instructions, terminator, none_env, none_proof, indent + 2)
+        some_node = self.branch(instructions, terminator, some_env, some_proof, indent + 2)
+        if self.shared:
+            proof.append(f"{pad}cases {value.expr} with")
+            proof.append(f"{pad}| none =>")
+            proof.extend(none_proof)
+            proof.append(f"{pad}| some {name} =>")
+            proof.extend(some_proof)
+        return Match(value.expr, none_node, some_node, name)
 
     def math_call(self, descriptor, args, results, rest, terminator, env, proof, indent, step):
         if not self.shared and not any(key in self.frame.laws for key in
@@ -704,6 +915,10 @@ class Evaluator:
         if any(arg.kind == "absent" for arg in args):
             step.halt(op, "incomplete", ("missing", helper, args))
             return Halt("incomplete")
+        if self.opaque(descriptor[1]):
+            return self.opaque_call(descriptor, args, results, site, rest, terminator, env, proof, indent, step)
+        if self.strict(descriptor[1]):
+            return self.strict_call(descriptor, args, results, site, rest, terminator, env, proof, indent)
         law = self.law(descriptor[1])
         if law.stop:
             step.halt(op, law.stop, ("owned", law, helper, args))
@@ -789,7 +1004,7 @@ class Evaluator:
         # The proof rewrites the decided proposition to `True` throughout the goal.
         decided_env = [present(value.wire, value.expr.replace(condition.expr, "true"))
                        if value.kind == "present" else value for value in env]
-        then = self.run(rest, terminator, decided_env, holds_proof, indent + 2)
+        then = self.branch(rest, terminator, decided_env, holds_proof, indent + 2)
         Step(self, fails_proof, pad + "  ").halt(op, "reject",
                                                  ("guard", owner, present(condition.wire, "false"), None))
         if self.shared:
@@ -799,6 +1014,209 @@ class Evaluator:
             proof.append(f"{pad}· simp only [eq_false {holds}, decide_false, ↓reduceIte, PIR.Proc.bind]")
             proof.extend(fails_proof)
         return If(prop, then, Halt("reject"))
+
+    # -- protocol applications and opaque owned calls ----------------------
+    def callee_role(self, descriptor, site):
+        """The callee role this participant plays at an application, its generated normal
+        form, and which callee inputs survive the callee's input scopes; None if inactive."""
+        frame = self.frame
+        app = frame.applications.get(site)
+        if app is None:
+            if not self.shared:
+                raise GeneratorError(f"protocol_apply at site {site!r}: a root with applications needs a "
+                                     f"[[shared]] entry naming the callee's normal forms")
+            raise GeneratorError(f"protocol_apply at site {site!r}: name its callee in the request's "
+                                 f"applications table")
+        callee = frame.unit.function(descriptor[1])
+        roles = [frame.roles.index(role) for role in descriptor[2]]
+        if frame.role not in roles:
+            return None
+        index = roles.index(frame.role)
+        info = app.callee_roles.get(index)
+        if info is None:
+            raise GeneratorError(f"application {app.name}: no callee normal form is named for callee role "
+                                 f"{index}")
+        if len(info["inputs"]) != len(callee.inputs):
+            raise GeneratorError(f"application {app.name}: the callee has {len(callee.inputs)} inputs; its "
+                                 f"normal form lists {len(info['inputs'])}")
+        return index, info, [index in scope for scope in callee.input_scopes]
+
+    def application(self, descriptor, args, site, rest, terminator, env, proof, indent):
+        """The callee's generated normal form at its child context, with the caller's masked
+        operands, followed by the caller's continuation on the callee's masked results."""
+        frame = self.frame
+        app = frame.applications[site] if site in frame.applications else None
+        found = self.callee_role(descriptor, site)
+        if found is None:
+            raise GeneratorError(f"application {app.name}: normal forms of a role outside the "
+                                 f"application's roster are not supported")
+        index, info, kept = found
+        callee = frame.unit.function(descriptor[1])
+        roles = [frame.roles.index(role) for role in descriptor[2]]
+        masked = [arg if keep else absent(arg.wire) for arg, keep in zip(args, kept)]
+        values = {}
+        for position, (item, arg) in enumerate(zip(info["inputs"], masked)):
+            mode = item.get("mode", "present")
+            if mode == "absent":
+                if arg.kind != "absent":
+                    raise GeneratorError(f"application {app.name}: callee input {position} is {arg.kind} here; "
+                                         f"the callee's normal form takes it absent")
+            elif "value" in item:
+                if arg.kind != "present" or arg.expr != str(item["value"]):
+                    raise GeneratorError(f"application {app.name}: callee input {position} is "
+                                         f"{arg.expr or arg.kind} here, not the fixed value {item['value']}")
+            elif mode == "optional":
+                values[item["name"]] = arg.component()
+            elif arg.kind != "present":
+                raise GeneratorError(f"application {app.name}: callee input {position} is {arg.kind} here; "
+                                     f"the callee's normal form takes it present")
+            else:
+                values[item["name"]] = arg.expr
+        child = f"({app.context} ctx)"
+        me = self.role_term(frame.role)
+
+        def argument(name):
+            if name == "ctx":
+                return child
+            if name in app.arguments:
+                return app.arguments[name]
+            if name in values:
+                return values[name]
+            raise GeneratorError(f"application {app.name}: no value for the callee's {name}")
+
+        process = " ".join([info["process"]] + [paren(argument(name)) for name in info["process_binders"]])
+        binder = self.names.fresh(app.name + "Returned")
+        def label(position):
+            named = app.results[position] if position < len(app.results) else ""
+            return app.name + (named[0].upper() + named[1:] if named else str(position))
+
+        added = [Sym("component", tuple(wire), f"{binder}.get {variable(position)}", label(position))
+                 if index in scope else absent(wire)
+                 for position, (wire, scope) in enumerate(zip(callee.outputs, callee.output_scopes))]
+        if self.shared:
+            pad = " " * indent
+            other = [role for role in range(len(roles)) if role != index]
+            if len(other) != 1 or len(frame.roles) != 2 or roles[other[0]] == frame.role:
+                raise GeneratorError(f"application {app.name}: only two-role applications are supported")
+            arguments = [info["theorem"]]
+            arguments += [f"({name} := {app.arguments[name]})" for name in info["parameters"]]
+            supplied = app.values.get(index, {})
+            for name in info["binders"] + info["premises"]:
+                if name not in supplied:
+                    raise GeneratorError(f"application {app.name}: give the callee's {name} in the request")
+            arguments += [f"({name} := {supplied[name]})" for name in info["binders"]]
+            arguments += [f"(ctx := {child})", f"(self := {me})", "(role := rfl)"]
+            if info["uses_separate"]:
+                arguments.append(f"(separate := {frame.separate})")
+            arguments += [f"({name} := {value})" for name, value in values.items()]
+            arguments += [f"({name} := {supplied[name]})" for name in info["premises"]]
+            typed = f"Values (Component (assignment F G)) {ty_list(callee.inputs, True)}"
+            before = f"({values_literal([arg.component() for arg in args])} : {typed})"
+            after = f"({values_literal([arg.component() for arg in masked])} : {typed})"
+            returned = values_literal([value.component() for value in added])
+            lemma = "apply_step_after" if self.after() else "apply_step"
+            proof.append(f"{pad}refine NormalFormSteps.{lemma} {app.unit} {app.definition} {app.member} "
+                         f"{app.signature} {app.same} ({app.body}) {app.raw}")
+            proof.append(f"{pad}  [{', '.join(map(str, roles))}] {json.dumps(site)} ctx {me} _ _ _")
+            proof.append(f"{pad}  ((ProtocolContext.contains_iff _ _ _).mpr ⟨{index}, by decide, rfl⟩)")
+            proof.append(f"{pad}  {after} ?_")
+            proof.append(f"{pad}  ({process}) ?_")
+            typed_results = f"Values (Component (assignment F G)) {ty_list(callee.outputs, True)}"
+            # A later presence split generalizes a component of the returned tuple; the tuple's
+            # type is then spelled as the normal form spells it, so every occurrence matches.
+            continuation = []
+            node = self.run(rest, terminator, added + env, continuation, indent)
+            splits = f"cases {binder}.get " in "\n".join(continuation)
+            typed_binder = f"({binder} : {typed_results})" if splits else binder
+            proof.append(f"{pad}  (fun {typed_binder} => {returned}) ?_ _{' _' if self.after() else ''} ?_")
+            proof.append(f"{pad}· change maskValues {me} ((ctx.enter {json.dumps(site)} {list_literal(roles)}).mapScopes "
+                         f"{scope_literal(callee.input_scopes)}) {before} = _")
+            proof.append(f"{pad}  iterate {len(callee.inputs) + 1} unfold maskValues")
+            proof.append(f"{pad}  simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,")
+            proof.append(f"{pad}    Participant.restrict, {frame.separate}, Ne.symm {frame.separate}]")
+            proof.append(f"{pad}· exact {' '.join(arguments)}")
+            hides = any(index not in scope for scope in callee.output_scopes)
+            proof.append(f"{pad}· exact {app.name}_{frame.role_name}_outputs ctx"
+                         f"{' ' + frame.separate if hides else ''}")
+            proof.append(f"{pad}intro {binder}")
+            if splits:
+                proof.append(f"{pad}change {typed_results} at {binder}")
+            proof.extend(continuation)
+            return Bind(process, binder, typed_results, node)
+        typed_results = f"Values (Component (assignment F G)) {ty_list(callee.outputs, True)}"
+        return Bind(process, binder, typed_results, self.run(rest, terminator, added + env, proof, indent))
+
+    def opaque(self, name):
+        term = self.helper_term(name)
+        return any(key in self.frame.opaque for key in (name, term, term.split(".")[-1]))
+
+    def strict(self, name):
+        """Whether an owned call is kept as the helper's own invocation on present arguments:
+        the request lists the helper among its strict calls, or lists `*` there and names no
+        law for it."""
+        term = self.helper_term(name)
+        keys = (name, term, term.split(".")[-1])
+        if any(key in self.frame.strict for key in keys):
+            return True
+        return "*" in self.frame.strict and not any(key in self.frame.laws for key in keys)
+
+    def strict_call(self, descriptor, args, results, site, rest, terminator, env, proof, indent):
+        """An owned Local call on present arguments, kept as the helper's invocation: the
+        participant rule runs it on the arguments and returns its results present, so later
+        uses read present values and need no presence split."""
+        helper = self.helper_term(descriptor[1])
+        typed_args = (f"({values_literal([arg.expr for arg in args])} : Values (assignment F G) "
+                      f"{ty_list([arg.wire for arg in args], True)})")
+        process = f"invoke {self.frame.closed} {helper} {typed_args}"
+        stem = helper.split(".")[-1].removesuffix("Helper") or "helper"
+        binder = self.names.fresh(stem + "Results")
+        typed = f"Values (assignment F G) {ty_list(results, True)}"
+        values = [present(wire, f"{binder}.get {variable(position)}") for position, wire in enumerate(results)]
+        if self.shared:
+            pad = " " * indent
+            me = self.role_term(self.frame.role)
+            op = f"(.localCall {helper} rfl {self.frame.role} {json.dumps(site)})"
+            expanded = values_literal([f"some ({value.expr})" for value in values])
+            lemma = "denote_letOp_bind_after" if self.after() else "denote_letOp_bind"
+            proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
+            proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
+            proof.append(f"{pad}· change Participant.owned {me} {me} (invoke {self.frame.closed} {helper}) "
+                         f"{typed_args}.present = _")
+            proof.append(f"{pad}  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) "
+                         f"(funext fun {binder} => ?_))")
+            cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
+                            for position in range(len(results)))
+            proof.append(f"{pad}  {cases}cases {binder}; rfl")
+            proof.append(f"{pad}intro {binder}")
+        return Bind(process, binder, typed, self.run(rest, terminator, values + env, proof, indent))
+
+    def opaque_call(self, descriptor, args, results, site, rest, terminator, env, proof, indent, step):
+        """An owned Local call kept as the participant rule states it: its returned tuple
+        is bound, and every later use reads the bound tuple."""
+        helper = self.helper_term(descriptor[1])
+        owner = self.role_term(self.frame.role)
+        process = (f"Participant.owned {owner} {owner} (invoke {self.frame.closed} {helper}) "
+                   f"{paren(values_literal([arg.component() for arg in args]))}")
+        stem = helper.split(".")[-1].removesuffix("Helper") or "helper"
+        binder = self.names.fresh(stem + "Returned")
+        typed = f"Values (Component (assignment F G)) {ty_list(results, True)}"
+        values = [Sym("component", tuple(wire), f"{binder}.get {variable(position)}",
+                      stem if len(results) == 1 else f"{stem}{position}")
+                  for position, wire in enumerate(results)]
+        if self.shared:
+            pad = " " * indent
+            op = f"(.localCall {helper} rfl {self.frame.role} {json.dumps(site)})"
+            expanded = values_literal([value.expr for value in values])
+            lemma = "denote_letOp_bind_after" if self.after() else "denote_letOp_bind"
+            proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
+            proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
+            proof.append(f"{pad}· refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) "
+                         f"(funext fun {binder} => ?_))")
+            cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
+                            for position in range(len(results)))
+            proof.append(f"{pad}  {cases}cases {binder}; rfl")
+            proof.append(f"{pad}intro {binder}")
+        return Bind(process, binder, typed, self.run(rest, terminator, values + env, proof, indent))
 
 
 class Step:
@@ -1009,6 +1427,17 @@ def substitute(text, names):
     return text
 
 
+def merge_pairs(*groups):
+    """Concatenate (name, type) pairs, dropping names already present."""
+    seen, out = set(), []
+    for group in groups:
+        for name, kind in group:
+            if name not in seen:
+                seen.add(name)
+                out.append((name, kind))
+    return out
+
+
 def merge_binders(*groups):
     """Concatenate binder groups, dropping binders already present."""
     seen, out = set(), []
@@ -1071,6 +1500,9 @@ class Module:
         self.declared = False
         self.helper_names = None
         self.emitted_sites = set()
+        self.role_infos = {}
+        self.signature_names = None
+        self.applied = set()
 
     # -- shared pieces ---------------------------------------------------
     def variables(self):
@@ -1148,6 +1580,53 @@ class Module:
         self.parts.append("\n".join(out))
         self.root_spec = (entry, sites, names, role_names, program)
 
+    def callback_sites(self):
+        """Repeat site -> callback name for the callbacks `[bodies]` names; each is given by
+        a source label its callback carries, or by the repeat's site."""
+        bodies = self.request.get("bodies", {})
+        if "callbacks" not in bodies:
+            return {}
+        protocol = self.unit.function(bodies.get("protocol", self.unit.entry))
+        return {locate_repeat(protocol.body, key)[4]: name for name, key in bodies["callbacks"].items()}
+
+    def repeat_site(self, spec):
+        """The site of the repeat a `[[shared]]` entry states over: a callback `[bodies]`
+        names, a source label its callback carries, or the repeat's site."""
+        key = spec["repeat"]
+        callbacks = self.request.get("bodies", {}).get("callbacks", {})
+        key = callbacks.get(key, key)
+        protocol = self.unit.function(spec.get("protocol", self.unit.entry))
+        return locate_repeat(protocol.body, key)[4]
+
+    def repeat_terms(self):
+        """Repeat site -> (spec, callback function) for the callbacks this request names in
+        `[bodies]` and states over in a `[[shared]]` entry with that repeat."""
+        callbacks = self.callback_sites()
+        terms = {}
+        for spec in self.request.get("shared", []):
+            if not spec.get("repeat"):
+                continue
+            site = self.repeat_site(spec)
+            if site in callbacks:
+                terms[site] = (f"{callbacks[site]}Spec", spec["function"])
+        return terms
+
+    def slot_names(self, role):
+        """Repeat site -> {slot position: name} for the slots this request names at `role`."""
+        names = {}
+        for spec in self.request.get("shared", []):
+            if not spec.get("repeat"):
+                continue
+            site = self.repeat_site(spec)
+            instruction = find_repeat(self.unit.function(spec.get("protocol", self.unit.entry)).body, site)
+            protocol_roles = self.unit.function(spec.get("protocol", self.unit.entry)).roles
+            scopes = [[protocol_roles.index(owner) for owner in scope] for scope in instruction[0][4]]
+            owned = [index for index, scope in enumerate(scopes) if role in scope]
+            for role_spec in spec.get("roles", []):
+                if role_spec["role"] == role:
+                    names[site] = {index: slot["name"] for index, slot in zip(owned, role_spec["slots"])}
+        return names
+
     def binders(self, pairs):
         if not pairs:
             return ""
@@ -1173,6 +1652,23 @@ class Module:
             names.update(self.request.get("helpers", {}))
             self.helper_names = names
         return self.helper_names
+
+    def signatures(self):
+        """Lean names of retained protocol signatures, declared in the listed body modules."""
+        if self.signature_names is None:
+            names = {}
+            parent = self.request["namespace"].rsplit(".", 1)[0] + "."
+            for module in self.request.get("helper_modules", []):
+                text = (ROOT / module).read_text(encoding="utf-8")
+                namespace = re.search(r"^namespace (\S+)", text, re.MULTILINE).group(1)
+                prefix = namespace.removeprefix(parent) if namespace.startswith(parent) else namespace
+                for local, raw in re.findall(r"def (\w+) : ProtocolSignature where\s+name := \"([^\"]+)\"", text):
+                    names.setdefault(raw, f"{prefix}.{local}")
+                for local, raw in re.findall(r"def (\w+) : ProtocolSignature :=\s*⟨\"([^\"]+)\"", text):
+                    names.setdefault(raw, f"{prefix}.{local}")
+            names.update(self.request.get("signatures", {}))
+            self.signature_names = names
+        return self.signature_names
 
     def run_equation(self, out, program, role, role_name, inputs_name, arguments, binders, node):
         """Reply script and observed run of a branch-free root process."""
@@ -1212,6 +1708,8 @@ class Module:
     def bodies(self, spec):
         """The typed body of one retained protocol, with its repeat callback named and its
         repeat maximum a parameter, so units that differ only in that maximum share it."""
+        if "callbacks" in spec:
+            return self.unit_bodies(spec)
         protocol = self.unit.function(spec["protocol"])
         name = spec["name"]
         callback_name = spec["callback"]
@@ -1237,6 +1735,8 @@ class Module:
         out.append(f"abbrev repeatSpec ({maximum} : Nat) : RepeatSpec :=\n"
                    f"  ⟨repeatState, {ty_list(captures, True)}, {role_indices},\n    {scope_indices}, {maximum}⟩\n")
         returned = values_literal([f"state.get {variable(index)}" for index in terminator[1]])
+        out.append("/-- The state positions the retained return reads, in output order. -/")
+        out.append(f"abbrev {name}ReturnIndices : List Nat := {list_literal(terminator[1])}\n")
         out.append("/-- The retained return permutation of the repeat's state, for any value family. -/")
         out.append(f"def {name}ReturnValues {{Value : Ty → Type}} (state : Values Value repeatState) :\n"
                    f"    Values Value {name}Outputs :=\n  {returned}\n")
@@ -1256,16 +1756,94 @@ class Module:
         out.append(f"def {name}Body ({maximum} : Nat) : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
                    f"    {ty_list(protocol.outputs, True)} :=\n"
                    f"{self.chain(prelude, roles, '  ', last)}\n")
+        if "declaration" in spec:
+            # The admitted declaration's checked tree is this body at its own maximum.
+            views, declaration = spec["views"], spec["declaration"]
+            out.append(f"/-- The admitted `{declaration}` declaration is this body at maximum {spec['value']}. -/")
+            out.append(f"theorem {name}Body_raw : {views}.{declaration}Definition.raw =\n"
+                       f"    ({name}Body {spec['value']}).erase := by\n"
+                       f"  refine {views}.{declaration}_raw.trans ?_\n"
+                       f"  unfold {name}Body {callback_name}Body {name}Return\n  rfl\n")
         self.parts.append("\n".join(out))
 
-    def chain(self, block, roles, pad, last=None):
+    def unit_bodies(self, spec):
+        """The typed body of one retained protocol of this unit with every repeat callback
+        named, nested ones included, and protocol applications through the callee's declared
+        signature. Each repeat's static maximum is read from the export and named, so a
+        statement over the body need not spell it."""
+        protocol = self.unit.function(spec.get("protocol", self.unit.entry))
+        name = spec["name"]
+        callbacks = self.callback_sites()
+        roles = protocol.roles
+        repeats = []
+
+        def collect(block):
+            # Post-order: a nested callback precedes the callback that repeats it.
+            for instruction in block[1]:
+                if instruction[0][0] == "protocol_repeat":
+                    collect(instruction[3][0][2])
+                    repeats.append(instruction)
+
+        collect(protocol.body)
+        sites = [instruction[4] for instruction in repeats]
+        if sorted(sites) != sorted(callbacks):
+            raise GeneratorError(f"the body repeats at sites {sites}; the request names callbacks for "
+                                 f"{sorted(callbacks)}")
+        out = [f"abbrev {name}Inputs : List Ty :=\n  {ty_list(protocol.inputs, True)}\n",
+               f"abbrev {name}Outputs : List Ty :=\n  {ty_list(protocol.outputs, True)}\n"]
+        for instruction in repeats:
+            (_, state_count, maximum, repeat_roles, scopes), site = instruction[0], instruction[4]
+            callback = callbacks[site]
+            callback_inputs, state, block = instruction[3][0]
+            captures = callback_inputs[1 + state_count:]
+            role_indices = list_literal([roles.index(role) for role in repeat_roles])
+            scope_indices = scope_literal([[roles.index(role) for role in scope] for scope in scopes])
+            out.append(f"/-- The slots the `{callback}` repeat carries, which precede its captures. -/")
+            out.append(f"abbrev {callback}State : List Ty :=\n  {ty_list(state, True)}\n")
+            out.append(f"/-- The values the `{callback}` callback captures unchanged. -/")
+            out.append(f"abbrev {callback}Captures : List Ty :=\n  {ty_list(captures, True)}\n")
+            out.append(f"/-- The static maximum of the `{callback}` repeat in this unit. -/")
+            out.append(f"abbrev {callback}Maximum : Nat := {int(maximum)}\n")
+            out.append(f"/-- The `{callback}` repeat: its state, captures, roster, state scopes and maximum. -/")
+            out.append(f"abbrev {callback}Spec : RepeatSpec :=\n"
+                       f"  ⟨{callback}State, {callback}Captures, {role_indices},\n"
+                       f"    {scope_indices}, {callback}Maximum⟩\n")
+            out.append(f"/-- One iteration of the `{callback}` repeat: every retained operation, with its "
+                       f"site mark. -/")
+            out.append(f"def {callback}Body : Region protocolDialect\n"
+                       f"    (.index :: ({callback}State ++ {callback}Captures)) {callback}State :=\n"
+                       f"{self.chain(block, roles, '  ', callbacks=callbacks)}\n")
+        out.append("/-- The whole body, every repeat through its named callback. -/")
+        out.append(f"def {name}Body : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
+                   f"    {ty_list(protocol.outputs, True)} :=\n"
+                   f"{self.chain(protocol.body, roles, '  ', callbacks=callbacks)}\n")
+        if "declaration" in spec:
+            views, declaration = spec["views"], spec["declaration"]
+            unfolds = " ".join([f"{name}Body"] + [f"{callbacks[site]}Body" for site in reversed(sites)])
+            out.append(f"/-- The admitted `{declaration}` declaration is this body. -/")
+            out.append(f"theorem {name}Body_raw : {views}.{declaration}Definition.raw =\n"
+                       f"    {name}Body.erase := by\n"
+                       f"  refine {views}.{declaration}_raw.trans ?_\n"
+                       f"  unfold {unfolds}\n  rfl\n")
+        self.parts.append("\n".join(out))
+
+    def chain(self, block, roles, pad, last=None, callbacks=None):
         lines = []
         frame = Frame(self.unit, roles, 0, "root", {}, self.helpers(), {}, {})
         evaluator = Evaluator(frame, Names(), None)
         for descriptor, operand_list, results, _, site in block[1]:
             lines.append(f"{pad}.letOp (.mark {json.dumps(site)}) .nil .nil <|")
-            op = typed_op(evaluator, descriptor, results, site, roles)
-            lines.append(f"{pad}.letOp {op} {paren(operands(operand_list))} .nil <|")
+            regions = ".nil"
+            if callbacks is not None and descriptor[0] == "protocol_repeat":
+                op = f"(.repeat {callbacks[site]}Spec {json.dumps(site)})"
+                regions = f"(.cons {callbacks[site]}Body .nil)"
+            elif callbacks is not None and descriptor[0] == "protocol_apply":
+                callee = self.unit.function(descriptor[1])
+                op = (f"(.protocolApply {self.signature_term(callee)} "
+                      f"{list_literal([roles.index(role) for role in descriptor[2]])} {json.dumps(site)})")
+            else:
+                op = typed_op(evaluator, descriptor, results, site, roles)
+            lines.append(f"{pad}.letOp {op} {paren(operands(operand_list))} {regions} <|")
         if last is not None:
             lines.append(last)
         else:
@@ -1428,13 +2006,164 @@ class Module:
         self.parts.append("\n".join(part for part in out if part))
 
     # -- a typed body shared by several units ------------------------------
+    def unit_terms(self):
+        """Lean terms of the admitted unit a whole-body entry is stated over (the request's `[unit]`)."""
+        table = self.request.get("unit")
+        if table is None:
+            raise GeneratorError("a body with protocol applications or an invocation theorem needs a "
+                                 "[unit] table naming the admitted unit and its views")
+        name = table.get("name", "unit")
+        return {"name": name, "views": table["views"], "helpers": table["helpers"],
+                "program": table.get("program", "program"),
+                "meaning": (f"participantMeaningWith (.silent _) (participantActions F G) ({table['helpers']}) "
+                            f"self ({name}.plainProtocolTable F G) ctx")}
+
+    def signature_term(self, function):
+        names = self.signatures()
+        if function.name not in names:
+            raise GeneratorError(f"no signature declaration names {function.name}; list its body module in "
+                                 f"helper_modules or name it in the request's signatures table")
+        return names[function.name]
+
+    def omit_line(self):
+        if self.carrier == "Field":
+            return "omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in"
+        return "omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in"
+
+    def view(self, out, name, function, declaration, body, raw=None):
+        """The invocation of one retained protocol in the unit's plain table: its checked body
+        at the given context, between its input and output masks."""
+        terms = self.unit_terms()
+        views = terms["views"]
+        raw = raw or f"{views}.{declaration}_raw"
+        scopes_in = scope_literal(function.input_scopes)
+        scopes_out = scope_literal(function.output_scopes)
+        typed = f"Values (Component (assignment F G)) {ty_list(function.inputs, True)}"
+        out.append(f"/-- The checked body of `{declaration}` at any context, between its input and output\n"
+                   f"masks, with this unit's plain tables. -/")
+        out.append(f"theorem {name}_view (ctx : ProtocolContext) (self : Nat) (args masked : {typed})\n"
+                   f"    (mask : maskValues self (ctx.mapScopes {scopes_in}) args = masked) :\n"
+                   f"    invokeProtocol ({terms['name']}.plainProtocolTable F G) {self.signature_term(function)} "
+                   f"ctx self args =\n"
+                   f"      ({paren(body)}.denote\n        ({terms['meaning']}) masked.get).bind\n"
+                   f"        (fun out => .done (maskValues self (ctx.mapScopes {scopes_out}) out)) := by\n"
+                   f"  rw [← mask]\n"
+                   f"  exact protocol_invoke_body_view (.silent _) (participantActions F G) ({terms['helpers']})\n"
+                   f"    {terms['name']}.protocols {terms['name']}.protocolsLinked {views}.{declaration}Definition\n"
+                   f"    {views}.{declaration}_member ({body}) {raw} ctx self args\n")
+
+    def masked_outputs(self, out, theorem, function, context, role, other, scope_role=None):
+        """The output masks of a returned tuple at caller role `role`, which is the callee's
+        `scope_role`: in-scope components are kept, the others are masked away."""
+        binder = "values"
+        scope_role = role if scope_role is None else scope_role
+        kept = values_literal([f"{binder}.get {variable(position)}" if scope_role in scope else "none"
+                               for position, scope in enumerate(function.output_scopes)])
+        cases = "".join(f"{'  ' * position}cases {binder} with | cons value{position} {binder} =>\n  "
+                        for position in range(len(function.outputs)))
+        cases += "  " * len(function.outputs) + f"cases {binder}\n"
+        pad = "  " * len(function.outputs)
+        out.append("set_option linter.unusedSimpArgs false in")
+        out.append(self.omit_line())
+        out.append(f"/-- The returned components kept at role {role}; the others are masked away. -/")
+        hides = any(scope_role not in scope for scope in function.output_scopes)
+        separate = f" (separate : ctx.roles {other} ≠ ctx.roles {role})" if hides else ""
+        out.append(f"theorem {theorem} (ctx : ProtocolContext){separate}\n"
+                   f"    ({binder} : Values (Component (assignment F G)) {ty_list(function.outputs, True)}) :\n"
+                   f"    maskValues (ctx.roles {role}) ({context}.mapScopes {scope_literal(function.output_scopes)}) "
+                   f"{binder} =\n      {kept} := by\n"
+                   f"  {cases}"
+                   f"  {pad}simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,\n"
+                   f"  {pad}  Participant.restrict{', separate, Ne.symm separate' if hides else ''}, Values.get]\n")
+        return kept, hides
+
+    def callee(self, entry, function):
+        """The generated normal forms of an application's callee, by callee role index."""
+        path = ROOT / entry["callee"]
+        key = (str(path.resolve()), entry["function"])
+        if key not in CALLEES:
+            request = tomllib.loads(path.read_text(encoding="utf-8"))
+            module = Module(request, path.resolve())
+            build(module, request)
+            CALLEES[key] = module
+        module = CALLEES[key]
+        parent = self.request["namespace"].rsplit(".", 1)[0] + "."
+        namespace = module.request["namespace"]
+        prefix = namespace.removeprefix(parent) if namespace.startswith(parent) else namespace
+        by_index, values = {}, {}
+        for role_name, supplied in entry.get("roles", {}).items():
+            info = module.role_infos.get((entry["function"], role_name))
+            if info is None:
+                raise GeneratorError(f"{entry['callee']} has no role {role_name!r} of {entry['function']}")
+            if info["role"] in by_index:
+                raise GeneratorError(f"two callee normal forms are named for callee role {info['role']}")
+            if info["outputs"] != function.outputs or len(info["inputs"]) != len(function.inputs):
+                raise GeneratorError(f"{entry['callee']}: {entry['function']} is not over the applied "
+                                     f"protocol's signature")
+            by_index[info["role"]] = dict(info, process=f"{prefix}.{info['process']}",
+                                          theorem=f"{prefix}.{info['theorem']}")
+            values[info["role"]] = dict(supplied)
+        return by_index, values
+
+    def applications(self, out, spec, protocol, block):
+        """Child contexts, invocation views and output masks of the body's protocol applications."""
+        found = [instruction for instruction in block[1] if instruction[0][0] == "protocol_apply"]
+        entries = spec.get("applications", [])
+        if not found:
+            return {}
+        if len(entries) != len(found):
+            raise GeneratorError(f"the body has {len(found)} protocol applications; the request names "
+                                 f"{len(entries)}")
+        applications = {}
+        out.append("/-! Protocol applications: the child context (application prefix and role mapping)\n"
+                   "and the callee's invocation in this unit. -/")
+        for instruction, entry in zip(found, entries):
+            site = instruction[4]
+            if entry.get("site", site) != site:
+                raise GeneratorError(f"application {entry.get('site')!r} is not the body's next application "
+                                     f"{site!r}")
+            # Named from the callee's declaration, not from the (possibly positional) site.
+            name = entry.get("name") or camel(entry["declaration"])
+            callee = self.unit.function(instruction[0][1])
+            roles = [protocol.roles.index(role) for role in instruction[0][2]]
+            context = f"{name}Context"
+            out.append(f"/-- The child context of the `{name}` application: its sites are qualified by the\n"
+                       f"application site and its roles map to the caller's roles {roles}. -/")
+            out.append(f"abbrev {context} (ctx : ProtocolContext) : ProtocolContext :=\n"
+                       f"  ctx.enter {json.dumps(site)} {list_literal(roles)}\n")
+            # The callee's static repeat maximum in this unit, read from the retained export, so
+            # statements about this unit's application need not spell it.
+            repeats = [row for row in callee.body[1] if row[0][0] == "protocol_repeat"]
+            stem = camel(entry["declaration"])
+            if stem not in self.applied:
+                self.applied.add(stem)
+                if len(repeats) == 1:
+                    out.append(f"/-- The repeat maximum of the applied `{stem}` body in this unit. -/")
+                    out.append(f"abbrev {stem}Maximum : Nat := {int(repeats[0][0][2])}\n")
+                self.view(out, stem, callee, entry["declaration"], entry["body"], entry.get("raw"))
+            callee_roles, values = self.callee(entry, callee)
+            for role_spec in spec.get("roles", []):
+                role = role_spec["role"]
+                if role in roles:
+                    other = [index for index in range(len(protocol.roles)) if index != role]
+                    if len(other) != 1:
+                        raise GeneratorError("protocol applications are supported in two-role bodies")
+                    self.masked_outputs(out, f"{name}_{role_spec['name']}_outputs", callee,
+                                        f"({context} ctx)", role, other[0], roles.index(role))
+            views = self.unit_terms()["views"]
+            declaration = entry["declaration"]
+            applications[site] = Application(
+                name, site, roles, self.signature_term(callee), context, self.unit_terms()["name"],
+                f"{views}.{declaration}Definition", f"{views}.{declaration}_member",
+                f"{views}.{declaration}_signature", entry["body"], entry.get("raw", f"{views}.{declaration}_raw"),
+                dict(entry.get("arguments", {})), callee_roles, values, list(entry.get("results", [])))
+        return applications
+
     def shared(self, spec):
         unit = self.unit
-        protocol = unit.function(spec["protocol"])
+        protocol = unit.function(spec.get("protocol", unit.entry))
         if spec.get("repeat"):
-            instruction = find_repeat(protocol.body, spec["repeat"])
-            if instruction is None:
-                raise GeneratorError(f"no repeat with site {spec['repeat']!r} in {protocol.name}")
+            instruction = find_repeat(protocol.body, self.repeat_site(spec))
             inputs, outputs, block = instruction[3][0]
             state_scopes = [[protocol.roles.index(role) for role in scope] for scope in instruction[0][4]]
             state_count = instruction[0][1]
@@ -1456,6 +2185,13 @@ class Module:
             out.append("")
             out.append("private abbrev one {ty : Ty} (value : Option (assignment F G ty)) :\n"
                        "    Values (Component (assignment F G)) [ty] := .cons value .nil\n")
+        if spec.get("applications") or spec.get("declaration") or "unit" in self.request:
+            terms = self.unit_terms()
+            spec = dict(spec)
+            spec.setdefault("meaning", terms["meaning"])
+            spec.setdefault("closed", f"({terms['helpers']}).closed")
+            spec.setdefault("components", f"({terms['helpers']}).components")
+        applications = self.applications(out, spec, protocol, block)
         function = spec["function"]
         parameters = spec.get("parameters", "")
         parameter_names = " ".join(re.findall(r"\((\w+)\s*:", parameters))
@@ -1465,18 +2201,20 @@ class Module:
                    f"    RegionFunction (Component (assignment F G)) (participantInterface F G)\n"
                    f"      ({ty_list(inputs, True)}, {ty_list(outputs, True)}) :=\n"
                    f"  fun args => {paren(spec['body'])}.denote\n    ({meaning}) args.get\n")
+        if spec.get("declaration"):
+            self.view(out, spec["declaration"], protocol, spec["declaration"], spec["body"], spec.get("raw"))
         captures = inputs[1 + state_count:] if state_count is not None else []
-        for role_spec in spec["roles"]:
+        for role_spec in spec.get("roles", []):
             if state_scopes is None:
                 self.shared_protocol_role(out, spec, role_spec, protocol, block, sites, function,
-                                          parameter_names)
+                                          parameter_names, applications)
             else:
                 self.shared_role(out, spec, role_spec, protocol, inputs, outputs, block, state_scopes,
-                                 captures, sites, function, parameter_names)
+                                 captures, sites, function, parameter_names, applications)
         self.parts.append("\n".join(out))
 
     def shared_role(self, out, spec, role_spec, protocol, inputs, outputs, block, state_scopes, captures,
-                    sites, function, parameter_names):
+                    sites, function, parameter_names, applications=None):
         role = role_spec["role"]
         name = role_spec["name"]
         slots = role_spec["slots"]
@@ -1515,10 +2253,20 @@ class Module:
                        f"/-- Masking the carried state to its declared scopes keeps the {name}'s components. -/")
             out.append(f"theorem {embed}_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
                        f"    {self.binders(pairs)}:\n"
-                       f"    maskValues self (ctx.mapScopes {scopes}) ({embed} (F := F) (G := G) {arguments}) =\n"
+                       f"    maskValues self (ctx.mapScopes {scopes}) ({f'{embed} (F := F) (G := G) {arguments}'.strip()}) =\n"
                        f"      {embed} {arguments} := by\n"
                        f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
                        f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
+            # Stable names for the role's carried slots: statements about the state use
+            # these instead of positions, so a reordered layout changes only this module.
+            out.append(f"/-! Positions of the {name}'s carried slots in the repeat state, named by the request. -/")
+            for slot in slots:
+                stem = slot["name"][0].upper() + slot["name"][1:]
+                index = slot["slot"]
+                out.append(f"abbrev {name}{stem}Position : Nat := {index}")
+                out.append(f"abbrev {name}{stem}Slot : Var ({ty_list(state, True)} : List Ty) {lean_ty(state[index], True)} :=\n"
+                           f"  {variable(index)}")
+            out.append("")
         # Input values: the induction index, the state slots and the captures.
         values_by_slot = {}
         state_args = []
@@ -1541,13 +2289,16 @@ class Module:
         for position, wire in enumerate(captures):
             capture = capture_specs[position] if position < len(capture_specs) else {"name": f"capture{position}"}
             mode = capture.get("mode", "optional")
-            capture_binders.append((capture["name"], f"Option {value_type(wire)}" if mode == "optional"
+            capture_binders.append((capture["name"], f"Option {paren(value_type(wire))}" if mode == "optional"
                                     else value_type(wire)))
             capture_components.append(capture["name"] if mode == "optional" else f"some {capture['name']}")
             env.append(optional(wire, capture["name"]) if mode == "optional" else present(wire, capture["name"]))
         frame = Frame(self.unit, protocol.roles, role, "shared", sites, self.helpers(),
                       load_laws(role_spec.get("laws")), dict(role_spec.get("guards", {})),
-                      separate="separate", closed=spec["closed"], components=spec.get("components", ""))
+                      separate="separate", closed=spec["closed"], components=spec.get("components", ""),
+                      opaque=tuple(role_spec.get("opaque", [])), role_name=name, outer_bind=True,
+                      strict=tuple(role_spec.get("strict", [])), slot_names=self.slot_names(role),
+                      applications=applications or {}, repeats=self.repeat_terms())
         free = [slot for slot in slots if "value" not in slot]
         result_names = [slot["name"] for slot in slots]
         names = Names(result_names + [capture["name"] for capture in capture_specs] + list(sites.values()))
@@ -1567,14 +2318,16 @@ class Module:
                     parts.append(value.expr)
             if proof is not None and frame.mode == "shared":
                 proof.append(f"{pad}rfl")
-            return Done(tuple_literal(parts))
+            # A role that carries no slot of this repeat returns the unit value.
+            return Done(tuple_literal(parts) if parts else "()")
 
         proof = []
         node = Evaluator(frame, names, finish).run(block[1], block[2], env, proof, 2)
         process = role_spec.get("process", f"{name}Process")
         text = render_process(node, 2)
         free_pairs = [(slot["name"], slot_type(slot)) for slot in free]
-        used_pairs = [(variable, kind) for variable, kind in [("ctx", "ProtocolContext")] + capture_binders + free_pairs
+        used_pairs = [(variable, kind) for variable, kind in
+                      [("ctx", "ProtocolContext"), ("index", "Nat")] + capture_binders + free_pairs
                       if re.search(rf"(?<![\w.]){re.escape(variable)}(?![\w'])", text)]
         process_binders = self.binders(used_pairs)
         process_arguments = " ".join(variable for variable, _ in used_pairs)
@@ -1582,14 +2335,14 @@ class Module:
         script = "\n".join(proof)
         uses_separate = re.search(r"(?<![\w.])separate(?![\w'])", script) is not None
         result_type = " × ".join(paren(slot_type(slot)) if " " in slot_type(slot) else slot_type(slot)
-                                 for slot in slots)
+                                 for slot in slots) or "Unit"
         out.append(f"/-- The {name}'s normal form of one body run: its ordered actions, the values it\n"
                    f"computes, guards as conditionals and missing inputs as stops. -/")
         out.append(f"def {process} {process_binders}:\n"
                    f"    PIR.Proc (participantInterface F G) ({result_type}) :=\n{text}\n")
-        projections = self.projections(len(slots))
-        embedded = f"{embed} {' '.join(projections)}"
-        ends = f"(fun result => .done ({embedded}))"
+        projections = self.projections(len(slots)) if slots else []
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        ends = f"(fun {'result' if slots else '_'} => .done ({embedded}))"
         others = [other for other in range(len(protocol.roles)) if other != role]
         if len(others) != 1:
             raise GeneratorError("shared normal forms support two-role protocols")
@@ -1605,15 +2358,68 @@ class Module:
                    f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
                    f"    (index : Nat) {theorem_binders}{premises}{' ' if premises else ''}:\n"
                    f"    {function} (F := F) (G := G) {parameter_names} ctx self (.cons (some index)\n"
-                   f"      (({embed} {' '.join(state_args)}).append {paren(values_literal(capture_components))})) =\n"
+                   f"      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append {paren(values_literal(capture_components))})) =\n"
                    f"      ({application}).bind {ends} := by\n"
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind]\n"
+                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
                    + script + "\n")
+        if role_spec.get("fold"):
+            self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
+                      parameter_names, state, slots, capture_binders, capture_components, used_pairs,
+                      uses_separate, result_type)
 
-    def shared_protocol_role(self, out, spec, role_spec, protocol, block, sites, function, parameter_names):
+    def fold(self, out, spec, role_spec, role, other, name, embed, process, theorem, function,
+             parameter_names, state, slots, capture_binders, capture_components, used_pairs, uses_separate,
+             result_type):
+        """The repeat of a callback at one role of its roster, on an admitted count: the fold
+        of the role's normal form over the iteration indices, by the generic embedding law."""
+        site = self.repeat_site(spec)
+        repeat = self.repeat_terms().get(site, (spec.get("repeat_spec"), None))[0]
+        if not repeat:
+            raise GeneratorError(f"{name}: a fold needs the repeat's spec; name the callback in [bodies] "
+                                 f"callbacks or give the entry a repeat_spec")
+        if role_spec.get("premises") or role_spec.get("binders") or spec.get("parameters"):
+            raise GeneratorError(f"{name}: folds are stated for callbacks without parameters, binders or premises")
+        if any("value" in slot for slot in slots):
+            raise GeneratorError(f"{name}: folds are stated for callbacks whose slots are all free")
+        projections = self.projections(len(slots)) if slots else []
+        initial = [projection.replace("result", "initial", 1) for projection in projections]
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        names = {slot["name"]: projection for slot, projection in zip(slots, projections)}
+        arguments = " ".join(names.get(variable, variable) for variable, _ in used_pairs)
+        me = f"(ctx.roles {role})"
+        typed_state = f"Values (Component (assignment F G)) {ty_list(state, True)}"
+        named = [f"({variable} := {variable})" for variable, _ in capture_binders]
+        named += [f"({slot['name']} := {projection})" for slot, projection in zip(slots, projections)]
+        separate_binder = f" (separate : ctx.roles {other} ≠ ctx.roles {role})" if uses_separate else ""
+        separate_argument = " (separate := separate)" if uses_separate else ""
+        callback = f"{function} {parameter_names} ctx {me}".replace("  ", " ")
+        index = "index" if any(variable == "index" for variable, _ in used_pairs) else "_"
+        value = "result" if slots else "_"
+        out.append(f"/-- The repeat of `{function}` at the {name} on an admitted count: the fold of its normal\n"
+                   f"form over the iteration indices, from any state whose masked slots are `initial`. -/")
+        out.append(f"theorem {name}_fold (ctx : ProtocolContext){separate_binder}\n"
+                   f"    {self.binders(capture_binders)}(count : Nat) (bounded : count ≤ {paren(repeat)}.maximum)\n"
+                   f"    (state : {typed_state}) (initial : {result_type})\n"
+                   f"    (start : maskValues {me} (ctx.mapScopes {paren(repeat)}.stateScopes) state =\n"
+                   f"      {f'{embed} ' + ' '.join(initial) if initial else embed}) :\n"
+                   + f"    denoteRepeat {paren(repeat)} ctx {me} (some count) state\n"
+                   f"      {paren(values_literal(capture_components))} ({callback}) =\n"
+                   f"      (Finite.fold (fun {value} {index} => {process} {arguments}) "
+                   f"(List.range' 0 count) initial).bind\n"
+                   f"        (fun {'result' if slots else '_'} => .done ({embedded})) :=\n"
+                   f"  NormalFormSteps.repeat_embed {paren(repeat)} ctx {me} (by simp) _ _\n"
+                   f"    (fun {'result' if slots else '_'} => {embedded})\n"
+                   f"    (fun {value} => {f'{embed}_masked ctx _ rfl ' + ' '.join(projections) if projections else f'{embed}_masked ctx _ rfl'})\n"
+                   f"    _ (fun {'result' if slots else '_'} index => {theorem} (ctx := ctx) (self := {me}) (role := rfl)"
+                   f"{separate_argument}\n"
+                   f"      (index := index) {' '.join(named)})\n"
+                   f"    count bounded state initial start\n")
+
+    def shared_protocol_role(self, out, spec, role_spec, protocol, block, sites, function, parameter_names,
+                             applications=None):
         """A whole protocol body at one role: input presence as declared, outputs as components."""
         role = role_spec["role"]
         name = role_spec["name"]
@@ -1642,8 +2448,11 @@ class Module:
                       load_laws(role_spec.get("laws")), dict(role_spec.get("guards", {})),
                       separate="separate", closed=spec["closed"], components=spec.get("components", ""),
                       rewrites=list(role_spec.get("rewrites", [])), callback=spec.get("callback", ""),
-                      repeat_spec=spec.get("repeat_spec", ""))
-        names = Names([binder for binder, _ in binders] + list(sites.values()))
+                      repeat_spec=spec.get("repeat_spec", ""), applications=applications or {},
+                      opaque=tuple(role_spec.get("opaque", [])), role_name=name, repeats=self.repeat_terms(),
+                      strict=tuple(role_spec.get("strict", [])), slot_names=self.slot_names(role))
+        names = Names([binder for binder, _ in binders] + list(sites.values())
+                      + binder_names(role_spec.get("binders", "")) + binder_names(role_spec.get("premises", "")))
 
         def finish(values, proof, pad):
             if proof is not None:
@@ -1669,7 +2478,8 @@ class Module:
         out.append(f"def {process} {process_binders}:\n    PIR.Proc (participantInterface F G)\n"
                    f"      (Values (Component (assignment F G)) {ty_list(protocol.outputs, True)}) :=\n{text}\n")
         theorem = role_spec.get("theorem", f"{name}_process")
-        unfolds = " ".join([function, *spec.get("unfold", [])])
+        default_unfold = [spec["body"]] if re.fullmatch(r"[\w.']+", spec["body"]) else []
+        unfolds = " ".join([function, *spec.get("unfold", default_unfold)])
         out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The process equation of `{process}` over the typed body. -/")
         out.append(f"theorem {theorem} {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
@@ -1682,8 +2492,89 @@ class Module:
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind]\n"
+                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
                    + script + "\n")
+        self.role_infos[(function, name)] = {
+            "role": role, "process": process, "process_binders": [variable for variable, _ in used],
+            "theorem": theorem, "parameters": binder_names(spec.get("parameters", "")),
+            "binders": binder_names(role_spec.get("binders", "")),
+            "premises": binder_names(role_spec.get("premises", "")), "uses_separate": uses_separate,
+            "inputs": specs, "outputs": protocol.outputs}
+        if spec.get("declaration"):
+            self.invocation(out, spec, role_spec, protocol, process, used, theorem, binders, components,
+                            uses_separate)
+
+    def invocation(self, out, spec, role_spec, protocol, process, used, theorem, binders, components,
+                   uses_separate):
+        """The role's invocation of the protocol at any caller context and, for the unit's
+        entry, its participant: the input masks, the body's normal form and the output masks."""
+        role = role_spec["role"]
+        name = role_spec["name"]
+        terms = self.unit_terms()
+        others = [other for other in range(len(protocol.roles)) if other != role]
+        if len(others) != 1:
+            raise GeneratorError("invocation theorems are supported for two-role protocols")
+        other = others[0]
+        # Outer inputs: the role's own inputs as its normal form takes them; the others are
+        # arbitrary optional values that the input masks remove.
+        outer, outer_binders = [], []
+        for position, (wire, item, scope) in enumerate(zip(protocol.inputs, role_spec["inputs"],
+                                                            protocol.input_scopes)):
+            if role in scope:
+                outer.append(components[position])
+                continue
+            if item.get("mode", "present") != "absent":
+                raise GeneratorError(f"{name}: input {position} is outside the role's scope; declare it absent")
+            variable = item.get("name", f"input{position}")
+            outer.append(variable)
+            outer_binders.append((variable, f"Option {paren(value_type(wire))}"))
+        all_binders = self.binders(merge_pairs(binders, outer_binders))
+        premises = role_spec.get("premises", "")
+        named = [f"({variable} := {variable})" for variable in
+                 binder_names(spec.get("parameters", "")) + binder_names(role_spec.get("binders", ""))]
+        named += [f"({variable} := {variable})" for variable, _ in binders]
+        named += [f"({variable} := {variable})" for variable in binder_names(premises)]
+        kept, hides = self.masked_outputs(out, f"{name}_outputs", protocol, "ctx", role, other)
+        kept = kept.replace("values.get", "out.get")
+        bound = "out" if "out.get" in kept else "_"
+        signature = self.signature_term(protocol)
+        arguments = " ".join(variable for variable, _ in used)
+        separate = "(separate := separate) " if uses_separate else ""
+        out.append("set_option linter.unusedSimpArgs false in")
+        out.append(f"/-- The {name}'s invocation at any caller context: the input masks, the normal form of\n"
+                   f"the body and the output masks, with this unit's protocol table. -/")
+        out.append(f"theorem {name}_invoke {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
+                   f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
+                   f"    (separate : ctx.roles {other} ≠ self)\n"
+                   f"    {all_binders}{premises}{' ' if premises else ''}:\n"
+                   f"    invokeProtocol ({terms['name']}.plainProtocolTable F G) {signature} ctx self\n"
+                   f"      {paren(values_literal(outer))} =\n"
+                   f"      ({process} {arguments}).bind (fun {bound} => .done {paren(kept)}) := by\n"
+                   f"  refine ({spec['declaration']}_view ctx self _ {paren(values_literal(components))} ?_).trans ?_\n"
+                   f"  · subst self\n"
+                   f"    iterate {len(protocol.inputs) + 1} unfold maskValues\n"
+                   f"    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]\n"
+                   f"  subst self\n"
+                   f"  refine (congrArg (fun process => PIR.Proc.bind process _)\n"
+                   f"    ({theorem} {' '.join(named)} (ctx := ctx) (self := ctx.roles {role}) (role := rfl)\n"
+                   f"      {separate})).trans ?_\n"
+                   f"  apply congrArg (PIR.Proc.bind _)\n"
+                   f"  funext out\n"
+                   f"  exact congrArg PIR.Proc.done ({name}_outputs ctx{' separate' if hides else ''} out)\n")
+        if protocol.name != self.unit.entry:
+            return
+        root_arguments = " ".join("({} : ProtocolContext)" if variable == "ctx" else variable
+                                  for variable, _ in used)
+        named_root = " ".join(named + [f"({variable} := {variable})" for variable, _ in outer_binders])
+        out.append(f"/-- The {name}'s participant of the admitted unit. -/")
+        out.append(f"theorem {name}_participant {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
+                   f"    {all_binders}{premises}{' ' if premises else ''}:\n"
+                   f"    {terms['program']}.participant F G {role} {paren(values_literal(outer))} =\n"
+                   f"      ({process} {root_arguments}).bind (fun {bound} => .done {paren(kept)}) :=\n"
+                   f"  ({terms['name']}.protocolTable_forgetSites (F := F) (G := G) {signature} {{}} {role}\n"
+                   f"    {paren(values_literal(outer))}).trans\n"
+                   f"    ({name}_invoke {named_root} (ctx := {{}}) (self := {role}) (role := rfl)\n"
+                   f"      (separate := by decide))\n")
 
     def projections(self, count):
         """Projections of the components of a right-nested tuple named `result`."""
@@ -1693,12 +2584,15 @@ class Module:
 
     def write(self):
         text = self.header() + "\n".join(self.parts) + f"\nend {self.request['namespace']}\n"
+        text = re.sub(r"(\S)  +(?=\S)", r"\1 ", text)
         return re.sub(r"[ \t]+\n", "\n", text)
 
 
-def generate(path):
-    request = tomllib.loads(path.read_text(encoding="utf-8"))
-    module = Module(request, path.resolve())
+# Generated callee modules, by request path and function, for protocol applications.
+CALLEES = {}
+
+
+def build(module, request):
     if "bodies" in request:
         module.bodies(request["bodies"])
     if "root" in request:
@@ -1707,6 +2601,12 @@ def generate(path):
         module.contract(request["contract"])
     for spec in request.get("shared", []):
         module.shared(spec)
+
+
+def generate(path):
+    request = tomllib.loads(path.read_text(encoding="utf-8"))
+    module = Module(request, path.resolve())
+    build(module, request)
     return module.write(), ROOT / request["output"]
 
 

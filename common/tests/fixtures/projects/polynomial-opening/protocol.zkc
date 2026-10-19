@@ -20,25 +20,30 @@ pub protocol Open<C: Commitment> roles(P,V)
   let root = send P -> V(tree.0);
   let columns @P = opening::same_rotation(1, 0);
   let claimP @P = vector::fill(value, 1);
-  let reduced @P = opening::deep_columns(word, columns.0, columns.1,
-    claimP, 8, shift, 32, point, 1, vector::fill<C::ValueField>(0, 32), 1);
+  let geometryP @P = coset::coset_domain(shift, 32);
+  let inputP @P = opening::bind_openings(geometryP, 1, 8, point,
+    zkc::opening_claims::checked(columns.0, columns.1, claimP));
+  let reduced @P = opening::deep_columns(coset::column_batch(geometryP, 1, word), inputP,
+    opening::vector_accumulator(geometryP, 1, vector::fill<C::ValueField>(0, 32), 1));
   let rounds: index @(P,V) = 2;
   let queries: index @(P,V) = 8;
   let (ok, positionsP, positionsV, valuesV) =
-    LowDegree<C,5,0,2,8>(reduced.0, shift, shift, rounds, queries, coins);
+    LowDegree<C,5,0,2,8>(opening::vector_values(reduced), shift, shift, rounds, queries, coins);
   require @V ok;
   let columnsV @V = opening::same_rotation(1, 0);
   let claimV @V = vector::fill(value, 1);
+  let geometryV @V = coset::coset_domain(shift, 32);
+  let inputV @V = opening::bind_openings(geometryV, 1, 8, point,
+    zkc::opening_claims::checked(columnsV.0, columnsV.1, claimV));
   for query in 0..queries roles(P,V) max 8 {
     let row @P = oracle::open<C>(tree.1, indices::get(positionsP, query));
     let received = send P -> V(row.0);
     let path = send P -> V(row.1);
     let position @V = indices::get(positionsV, query);
     require @V oracle::check<C>(root, 1, 32, position, received, path);
-    let x @V = coset::point(shift, 32, position);
-    let expected @V = opening::deep_column_values(received, columnsV.0,
-      columnsV.1, claimV, 8, x, point, 1, 0, 1);
-    require @V expected.0 == vector::get(valuesV, query);
+    let expected @V = opening::deep_row(opening::query_row(geometryV, 1, position, received),
+      inputV, opening::scalar_accumulator(geometryV, position, 1, 0, 1));
+    require @V opening::scalar_value(expected) == vector::get(valuesV, query);
   }
   return true;
 }

@@ -1,0 +1,44 @@
+module zkc::primitives::curve;
+
+use zkc::primitives::vector::{Vector};
+
+// Total mathematical zero; the native realization retains allocation limits.
+
+pub math fn identity<G: Group>() -> G where zkc::curve::ScalarAction(G)
+  = primitive("curve.identity");
+
+pub type Groups<G: Group> = builtin("groups", G);
+// Bulk operations use the scalar field associated with the selected group.
+
+pub fn msm<G: Group>(scalars: Vector<G::Scalar>, points: Groups<G>) -> G = primitive("curve.msm");
+
+pub fn scale_each<G: Group>(scalars: Vector<G::Scalar>, points: Groups<G>) -> Groups<G> = primitive("curve.scale_each");
+
+pub fn add<G: Group>(left: Groups<G>, right: Groups<G>) -> Groups<G> = primitive("curve.vector_add");
+
+pub fn scale<G: Group>(points: Groups<G>, scalar: G::Scalar) -> Groups<G> = primitive("curve.vector_scale");
+
+pub fn empty<G: Group>() -> Groups<G> = primitive("curve.empty");
+
+pub fn append<G: Group>(points: Groups<G>, point: G) -> Groups<G> = primitive("curve.append");
+
+pub fn length<G: Group>(points: Groups<G>) -> index = primitive("curve.length");
+
+pub fn get<G: Group>(points: Groups<G>, position: index) -> G = primitive("curve.get");
+
+pub fn split<G: Group>(points: Groups<G>) -> (Groups<G>, Groups<G>) = primitive("curve.split");
+
+pub fn concat<G: Group>(left: Groups<G>, right: Groups<G>) -> Groups<G> = primitive("curve.concat");
+
+pub fn generator<G: Group>() -> G = primitive("curve.generator");
+
+pub fn neg<G: Group>(point: G) -> G = primitive("curve.neg");
+
+pub fn nonidentity<G: Group>(point: G) -> bool = primitive("curve.nonidentity");
+
+pub domain fn elements<G: Group>(values: Groups<G>) -> domain<G> = domain("elements");
+
+pub domain fn indices<G: Group>(values: Groups<G>) -> domain<index> = domain("indices");
+
+pub math fn at<G: Group>(values: Groups<G>, position: index) -> G where in_bounds(position, values)
+  = primitive("container.at");

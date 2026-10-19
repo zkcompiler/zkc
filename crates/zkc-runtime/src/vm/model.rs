@@ -19,7 +19,7 @@ impl Limits {
     /// Ordered operation parameters (for example gather indices), not SSA ports.
     /// Still bounded by the artifact byte/node ceilings and per-operation rules.
     pub const OPERATION_ATTRIBUTES: usize = 16_384;
-    pub const STATIC_INSTRUCTIONS: usize = 32_768;
+    pub const STATIC_INSTRUCTIONS: usize = 65_536;
     pub const BLOCK_DEPTH: usize = 64;
     pub const STACK_DEPTH: usize = 64;
     pub const LOOP_COUNT: u64 = 1_048_576;

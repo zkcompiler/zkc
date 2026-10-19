@@ -4,57 +4,37 @@
 The native bridge checks regenerated text byte for byte. Lean separately checks
 admission and semantic theorems. This renderer is a tested serialization edge.
 """
-import argparse
-import json
+from functools import partial
 from pathlib import Path
 import re
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import lean_render  # noqa: E402
 
-def array(value, length=None):
-    if not isinstance(value, list) or (length is not None and len(value) != length):
-        raise ValueError('invalid constructor array or arity')
-    return value
-
-
-def string(value):
-    # Lean accepts these JSON escapes; reject control/non-ASCII identifiers in
-    # this bounded rendering profile instead of silently changing their bytes.
-    if (not isinstance(value, str) or not 1 <= len(value) <= 512 or
-            any(ord(c) < 32 or ord(c) > 126 for c in value)):
-        raise ValueError("renderer requires nonempty printable ASCII strings of at most 512 bytes")
-    return json.dumps(value)
-
-
-def natural(value):
-    if type(value) is not int or not 0 <= value <= 2048:
-        raise ValueError("invalid source reference")
-    return str(value)
+# The scalar profile: nonempty printable ASCII strings of at most 512 bytes,
+# references up to 2048 and arrays of at most 512 items.
+string = partial(lean_render.text, limit=512, printable_ascii=True)
+natural = partial(lean_render.nat, limit=2048)
+array = lean_render.record
 
 
 def seq(values, render=natural):
-    if len(array(values)) > 512:
-        raise ValueError('source array limit')
-    return '[' + ', '.join(map(render, values)) + ']'
+    return lean_render.seq(values, render, limit=512)
 
 
-def ty(value):
-    tag, *args = array(value)
-    if tag == 'bool' and not args:
-        return '.boolean'
-    if tag in ('field', 'group', 'service') and len(args) == 1:
-        return f'.{tag} {string(args[0])}'
-    raise ValueError('unsupported type')
+ty = partial(lean_render.ty, tags=("field", "group", "service"), index=False, string=string)
+
+
+# The scalar profile's operations.
+SCALAR_OPERATIONS = ('field.constant', 'field.add', 'field.subtract', 'field.multiply', 'field.equal',
+                     'group.identity', 'group.add', 'group.scale', 'group.equal', 'bool.constant',
+                     'bool.and', 'bool.or', 'bool.xor', 'bool.equal', 'bool.not_equal')
 
 
 def op(value):
     tag, *args = array(value)
-    names = {'field.constant': 'fieldConstant', 'field.add': 'fieldAdd',
-             'field.subtract': 'fieldSubtract', 'field.multiply': 'fieldMultiply',
-             'field.equal': 'fieldEqual', 'group.identity': 'groupIdentity',
-             'group.add': 'groupAdd', 'group.scale': 'groupScale',
-             'group.equal': 'groupEqual', 'bool.constant': 'booleanConstant',
-             'bool.and': 'booleanAnd', 'bool.or': 'booleanOr', 'bool.xor': 'booleanXor',
-             'bool.equal': 'booleanEqual', 'bool.not_equal': 'booleanNotEqual'}
+    names = {name: lean_render.OPERATIONS[name] for name in SCALAR_OPERATIONS}
     if tag not in names and tag != 'select':
         raise ValueError('unsupported operation')
     arity = (3 if tag in ('field.constant', 'group.scale') else
@@ -122,14 +102,5 @@ def render(data, namespace):
             f'\n\nend {namespace}\n')
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('input', type=Path)
-    parser.add_argument('output', type=Path)
-    parser.add_argument('--namespace', required=True)
-    args = parser.parse_args()
-    args.output.write_text(render(json.loads(args.input.read_text()), args.namespace))
-
-
 if __name__ == '__main__':
-    main()
+    lean_render.render_main(render, __doc__)

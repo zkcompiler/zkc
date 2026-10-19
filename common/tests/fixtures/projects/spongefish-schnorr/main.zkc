@@ -1,13 +1,13 @@
 module example;
-use spongefish::schnorr::{Schnorr};
+use spongefish::bls12_381::schnorr::{Schnorr};
 domain G = group("bls12-381.g1");
 
-construction ExternalWire for Schnorr<G> {
+construction ExternalWire for Schnorr {
   base authored;
   format RawBytes;
 }
 
-proof Proof = Schnorr<G> {
+proof Proof = Schnorr {
   prover P;
   verifier V;
   public { tag, session, base, point };

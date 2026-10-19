@@ -11,7 +11,7 @@ For each tuple `(t_0, ..., t_(k-1))`, an ordered Math fold carries
 `(fingerprint, power)`, initially `(0, 1)`, producing
 `fp = sum(delta^j * t_j)`. The returned record projection and the unfiltered
 fingerprint collect are both read with indices of the original `batch.rows`.
-The public [interaction helpers](../../../../../libraries/air/interaction.zkc) supply:
+The public [interaction helpers](../../../../../libraries/relations/air/interaction.zkc) supply:
 
 - `denominators`: `m * (gamma - fp) + 1 - m`;
 - `reciprocal_residuals`: `m * (reciprocal * (gamma - fp) - 1)`;

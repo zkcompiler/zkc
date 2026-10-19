@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"kzg" = "lib.zkc"
+
+["dependencies"]
+"algebra" = "../../core/algebra"
+"collections" = "../../core/collections"
+"polynomial" = "../../core/polynomial"

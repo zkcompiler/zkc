@@ -1,9 +1,6 @@
 module
 
-public import ZkcExamples.Executable.DeferredRoundsProgramData
-public import ZkcExamples.Construction.DeferredRounds
-public import Zkc.Executable.NormalizationSoundness
-public import Zkc.Executable.Installed
+public import ZkcExamples.Executable.DeferredRoundsFacts
 
 @[expose] public section
 
@@ -21,7 +18,8 @@ Host validation therefore prunes, at every budget and with every framing
 header, the ideal acceptance of the constructed validator on the proof its
 message bytes decode to (`executable_prunes`), and at a budget of at least the
 total charge, with the expected header, it is that acceptance
-(`executable_validate`). The validator calls no helper.
+(`executable_validate`). The validator calls no helper. The lowering facts are
+generated (`DeferredRoundsFacts`, in this namespace).
 -/
 
 set_option autoImplicit false
@@ -30,46 +28,11 @@ namespace ZkcExamples.Executable.DeferredRounds
 open Zkc.Construction Zkc.Executable Zkc.Source
 open ZkcExamples.Construction
 
-abbrev validator : Validator := DeferredRoundsProgramData.validator
-
-set_option maxRecDepth 20000 in
-/-- The reading of the executable validator. -/
-def lowered : Lowered :=
-  (checkLowering installed DeferredRounds.participant validator).toOption.get (by decide +kernel)
-
-/-- The per-compile lowering rule accepts the actual executable validator. -/
-theorem accepted : checkLowering installed DeferredRounds.participant validator = .ok lowered :=
-  ok_of_isSome _ _
-
 set_option maxRecDepth 20000 in
 /-- The reading is not the constructed validator instruction for instruction:
 the rule accepts it through normalization. -/
 theorem rescheduled : Code.instructionList lowered.code ≠ DeferredRounds.participant.instructions := by
   decide +kernel
-
-/-- The constructed validator calls no helper. -/
-theorem helpers : Instruction.helpers DeferredRounds.participant.instructions = [] := by
-  rw [← Instruction.helperList_eq]
-  decide +kernel
-
-theorem calls : Instruction.callList DeferredRounds.participant.instructions = [] := by
-  decide +kernel
-
-set_option maxRecDepth 20000 in
-/-- A complete run charges 35 instructions. -/
-theorem total : lowered.total? = some 35 := by decide +kernel
-
-/-- A round message: a scalar field element. -/
-abbrev coordinate : PhysicalType := ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩
-
-/-- The receive types: one message per round. -/
-abbrev receives : List PhysicalType := [coordinate, coordinate]
-
-set_option maxRecDepth 20000 in
-theorem plan_static : Plan.static lowered.plan = some receives := by decide +kernel
-
-theorem plan_types {F G : Type} (data : List (Value F G)) : Plan.types data lowered.plan = receives :=
-  Plan.types_static data plan_static
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -83,11 +46,6 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem helpersSorted (table : Structured.Evaluation.Meanings F G Structured.closedInterface) :
     ∀ call ∈ Instruction.callList DeferredRounds.participant.instructions, HelperSorted table call.1 call.2 := by
   simp [calls]
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The executable admits the validator's data input. -/
-theorem admitted (x : F) : validator.admits (DeferredRounds.inputs (G := G) x) = true := by
-  rfl
 
 /-- Host validation of proof bytes prunes the ideal acceptance of the constructed
 validator on the decoded proof by rejections, at every budget and with every

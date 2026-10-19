@@ -28,7 +28,15 @@ occurrence.
   occurrence, which is then absorbed.
 - A send is absorbed with its message occurrence and produces no proof data.
 
-The result is the validator's outcome and the unread proof suffix. Occurrence
+The result is the validator's outcome and the unread proof suffix. The
+transform is the core transcript transform (`Zkc.Transcript.transform`) at the
+context's transcript interface (`Context.interface`), in which every query's raw
+answer is a field element decoded as itself and the challenge function is asked
+at the history followed by the occurrence (`transform_eq_transcript`); the
+equations for each operation (`transform_eq_done`, `transform_eq_halt`,
+`transform_eq_receive`, `transform_eq_query`, `transform_eq_send`) unfold it.
+The [typed engine](fiat-shamir-security.md#typed-query-sites) states its
+security over the same core interface. Occurrence
 origins come from a `Context`: original entry, role roster, producer and
 validator positions, the replaced service's original input index and contract,
 and the policy's ordered query/delivery sites. An origin names an occurrence by

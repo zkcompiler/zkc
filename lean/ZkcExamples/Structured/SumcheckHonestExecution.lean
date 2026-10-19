@@ -133,7 +133,7 @@ sum of the table and the verifier's challenges come from any tape with enough
 values. The verifier returns `true`, the prover's residual process has returned
 its own (absent) output, and exactly the used challenges are consumed. -/
 theorem source_complete (raw : List F) (count : Nat) (shape : HasShape raw count 1)
-    (bound : raw.length < indexLimit) (admitted : count ≤ 2) (handle : Nat)
+    (bound : raw.length < indexLimit) (admitted : count ≤ SumcheckSourceNormalForms.reduceMaximum) (handle : Nat)
     (tape : List F) (supply : count ≤ tape.length) :
     (SumcheckSourceViews.program.participant F G 1
         (SumcheckSourceVerifier.sourceRootInputs (some raw) (some raw.sum) (some count)

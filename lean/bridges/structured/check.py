@@ -9,7 +9,6 @@ agreement evidence, not a proof of either compiler boundary.
 import argparse
 import copy
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,10 +17,12 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
+from bridges.common.lean_render import file_digest as digest  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -29,10 +30,41 @@ from reporting import new_directory  # noqa: E402
 
 FIELD = "bls12-381.fr"
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+FIXTURE_TABLE = Path(__file__).parent / "fixtures.toml"
 
 
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def fixture_table():
+    with FIXTURE_TABLE.open("rb") as stream:
+        return tomllib.load(stream)
+
+
+def fixture_stems(suite):
+    """The retained subjects of one suite, in the order `fixtures.toml` lists them."""
+    return [stem for stem, spec in fixture_table().items() if spec["suite"] == suite]
+
+
+def fixture_source(spec):
+    """A fixture's single source module or project manifest, for source inventories."""
+    if "manifest" in spec:
+        return ROOT / spec["manifest"]
+    if "project" in spec:
+        return ROOT / spec["project"] / "zkc.toml"
+    (path,) = spec["modules"].values()
+    return ROOT / path
+
+
+def fixture(stem):
+    """The Entry, source modules and retained name of one structured fixture."""
+    spec = fixture_table()[stem]
+    if "modules" in spec:
+        modules = {name: ROOT / path for name, path in spec["modules"].items()}
+    else:
+        sys.path.append(str(ROOT / "common/tests/support"))
+        from project import project_inputs
+        found, assets = project_inputs(fixture_source(spec))
+        assert not assets
+        modules = dict(sorted(found.items()))
+    return spec["entry"], modules, (stem, spec["data"])
 
 
 def write_json(path, value):

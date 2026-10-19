@@ -1,4 +1,5 @@
 #include "NumericalLowering.h"
+#include "AlgorithmSupport.h"
 #include "ComputationSelection.h"
 #include "RealizationEmission.h"
 #include "RealizationSubject.h"
@@ -187,6 +188,8 @@ LogicalResult materializeRetainedMaps(ModuleOp candidate,
          prepared.helpers.count(
              SymbolTable::getSymbolName(&op).getValue().str())))
       op.erase();
-  return success();
+  // Identity maps can make previously distinct control captures alias. Rewrite
+  // their region ports only after all retained calls have been materialized.
+  return protocol::detail::canonicalizeCaptures(root);
 }
 } // namespace zkc::mathematical

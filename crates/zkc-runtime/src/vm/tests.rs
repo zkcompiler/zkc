@@ -696,6 +696,43 @@ fn exact_tags_arities_names_and_limits() {
     );
 }
 #[test]
+fn static_instruction_limit_is_cumulative_and_includes_returns() {
+    let mut functions = Vec::new();
+    for index in 0..4 {
+        let count = if index == 0 { 16382 } else { 16383 };
+        let mut body: Vec<_> = (0..count)
+            .map(|i| json!(["bool_constant", format!("s{i}"), format!("v{i}"), true]))
+            .collect();
+        body.push(json!(["return", []]));
+        functions.push(json!(["function", format!("work{index}"), [], [], body]));
+    }
+    let mut program = one(
+        json!(functions),
+        json!([]),
+        json!([]),
+        json!([["return", []]]),
+    );
+    assert_eq!(
+        program[2]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f[4].as_array().unwrap().len())
+            .sum::<usize>()
+            + 1,
+        65536
+    );
+    crate::vm::Program::decode(&bytes(&program)).unwrap();
+    program[2][0][4]
+        .as_array_mut()
+        .unwrap()
+        .insert(0, json!(["bool_constant", "extra", "extra", true]));
+    let refusal = crate::vm::Program::decode(&bytes(&program)).unwrap_err();
+    assert_eq!(refusal.code, ErrorCode::Limit);
+    assert_eq!(refusal.detail, "static instruction ceiling");
+}
+
+#[test]
 fn unknown_program_format_and_extra_fields_are_distinct_refusals() {
     let mut unknown_format = identity();
     unknown_format[0] = json!("invalid.program");

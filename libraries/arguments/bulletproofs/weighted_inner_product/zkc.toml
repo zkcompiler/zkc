@@ -1,0 +1,10 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"bulletproofs::weighted_inner_product" = "lib.zkc"
+
+["dependencies"]
+"algebra" = "../../../core/algebra"
+"collections" = "../../../core/collections"
+"encoding" = "../../../core/encoding"
+"services" = "../../../core/services"

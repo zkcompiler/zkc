@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::primitives::scalar" = "scalar.zkc"
+"zkc::primitives::curve" = "curve.zkc"
+"zkc::pairing" = "pairing.zkc"
+
+["dependencies"]
+"primitive-collections" = "../collections"

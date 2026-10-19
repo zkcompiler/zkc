@@ -45,14 +45,14 @@ theorem source_linked (raw : List F) (claim : F) (count handle : Nat) :
 
 set_option backward.isDefEq.respectTransparency false in
 /-- Count refusal belongs to the child interface, including before its terminal. -/
-theorem child_excess (raw : List F) (claim : F) (count handle : Nat) (large : 2 < count) :
+theorem child_excess (raw : List F) (claim : F) (count handle : Nat) (large : SumcheckSourceNormalForms.reduceMaximum < count) :
     childProcess (G := G) raw claim count handle = .halt .refused := by
   change (invokeProtocol (SumcheckSourceViews.unit.protocolTable F G) SumcheckSourceBodies.reduceSignature
     SumcheckSourceVerifier.childContext 1
     (SumcheckSourceVerifier.childInputs (some claim) (some count) (some handle))).interpret forgetSites = _
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites, SumcheckSourceVerifier.reduce_invoke_plain (F := F) (G := G)]
   exact SumcheckVerifierPrelude.reduce_excess (G := G) SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies
-    SumcheckSourceVerifier.childContext 1 rfl (by decide) 2 count large none none none (some claim) (some handle)
+    SumcheckSourceVerifier.childContext 1 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum count large none none none (some claim) (some handle)
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The actual shape guard and fixed-table decoding determine the point length. -/

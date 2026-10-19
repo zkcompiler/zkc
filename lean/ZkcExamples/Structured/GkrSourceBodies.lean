@@ -10,14 +10,14 @@ Views module proves admission of the complete original snapshot from them. -/
 namespace ZkcExamples.Structured.GkrSourceBodies
 open Zkc.Source Zkc.Source.Structured
 
-abbrev emptyHelper : Helper := ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩
+abbrev emptyHelper : Helper := ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩
 
 def emptyBody : Region dialect [] [.vector "bls12-381.fr"] :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.exec (.vectorEmpty "bls12-381.fr")) .nil .nil <|
   .ret (.cons .here .nil)
 
-abbrev appendHelper : Helper := ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
+abbrev appendHelper : Helper := ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
 
 def appendBody : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"] [.vector "bls12-381.fr"] :=
   .letOp (.mark "s0") .nil .nil <|
@@ -802,7 +802,7 @@ def helper70Body : Region dialect [.vector "bls12-381.fr", .index] [.field "bls1
   .letOp (.invoke ⟨"zkl_6ba53ec68a0230031d706e4a93e78f80425c51108d34ecc0a5aa5681eded9c8e", .local, [.vector "bls12-381.fr", .index], [.field "bls12-381.fr"]⟩) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
   .ret (.cons .here .nil)
 
-abbrev sumHelper : Helper := ⟨"zkl_be7976639f3a008cbb8e0434318fcf706bb5fc7884c4737fa9efb008c72e6d91", .local, [.vector "bls12-381.fr"], [.field "bls12-381.fr"]⟩
+abbrev sumHelper : Helper := ⟨"zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216", .local, [.vector "bls12-381.fr"], [.field "bls12-381.fr"]⟩
 
 def sumBody : Region dialect [.vector "bls12-381.fr"] [.field "bls12-381.fr"] :=
   .letOp (.mark "s0") .nil .nil <|
@@ -912,9 +912,9 @@ def roundsSignature : ProtocolSignature := ⟨"zkl_5a80545f362c672054af2a3a1c33e
 
 def roundsBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"] [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .letOp (.mark "s1") .nil .nil <|
-  .letOp (.localCall ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩ rfl 0 "s1") .nil .nil <|
+  .letOp (.localCall ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩ rfl 0 "s1") .nil .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.localCall ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s3") .nil .nil <|
+  .letOp (.localCall ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s3") .nil .nil <|
   .letOp (.mark "s6") .nil .nil <|
   .letOp (.repeat ⟨[.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.service "random.bls12-381.fr/0"], [0, 1], [[0], [0], [0], [0], [0], [1], [1]], 4⟩ "s6") (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there .here) (.cons .here (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil))))))))) (.cons (
     .letOp (.mark "s7") .nil .nil <|
@@ -950,9 +950,9 @@ def roundsBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-
     .letOp (.mark "s23") .nil .nil <|
     .letOp (.localCall ⟨"zkl_36caebca415236dd6aac1763c9a581b89c25a00e62432b484ec92ae08e6a0099", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]⟩ rfl 0 "s23") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons .here .nil))))) .nil <|
     .letOp (.mark "s25") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 0 "s25") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
+    .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 0 "s25") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
     .letOp (.mark "s27") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s27") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
+    .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s27") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
     .letOp (.mark "") .nil .nil <|
     .letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil)) .nil <|
     .letOp (.mark "") .nil .nil <|
@@ -968,9 +968,9 @@ def gkrSignature : ProtocolSignature := ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7da
 
 def gkrBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"] [.boolean] :=
   .letOp (.mark "s0") .nil .nil <|
-  .letOp (.localCall ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s0") .nil .nil <|
+  .letOp (.localCall ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s0") .nil .nil <|
   .letOp (.mark "s2") .nil .nil <|
-  .letOp (.localCall ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩ rfl 0 "s2") .nil .nil <|
+  .letOp (.localCall ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩ rfl 0 "s2") .nil .nil <|
   .letOp (.mark "s4") .nil .nil <|
   .letOp (.repeat ⟨[.vector "bls12-381.fr", .vector "bls12-381.fr"], [.service "random.bls12-381.fr/0"], [0, 1], [[1], [0]], 4⟩ "s4") (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there .here) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) .nil)))) (.cons (
     .letOp (.mark "label_6f7574707574") .nil .nil <|
@@ -980,9 +980,9 @@ def gkrBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381
     .letOp (.mark "") .nil .nil <|
     .letOp (.restrict (.field "bls12-381.fr") [0]) (.cons .here .nil) .nil <|
     .letOp (.mark "s9") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s9") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there .here)) .nil)) .nil <|
+    .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s9") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there .here)) .nil)) .nil <|
     .letOp (.mark "s11") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 0 "s11") (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there .here) .nil)) .nil <|
+    .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 0 "s11") (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there .here) .nil)) .nil <|
     .ret (.cons (.there .here) (.cons .here .nil))) .nil) <|
   .letOp (.mark "s15") .nil .nil <|
   .letOp (.localCall ⟨"zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr"], [.field "bls12-381.fr"]⟩ rfl 1 "s15") (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil)) .nil <|
@@ -1011,9 +1011,9 @@ def gkrBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381
     .letOp (.mark "") .nil .nil <|
     .letOp (.restrict (.field "bls12-381.fr") [1]) (.cons .here .nil) .nil <|
     .letOp (.mark "s44") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s44") .nil .nil <|
+    .letOp (.localCall ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [.vector "bls12-381.fr"]⟩ rfl 1 "s44") .nil .nil <|
     .letOp (.mark "s45") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s45") (.cons .here (.cons (.there .here) .nil)) .nil <|
+    .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s45") (.cons .here (.cons (.there .here) .nil)) .nil <|
     .letOp (.mark "s48") .nil .nil <|
     .letOp (.repeat ⟨[.vector "bls12-381.fr"], [.vector "bls12-381.fr"], [0, 1], [[1]], 4⟩ "s48") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))))))))))))) (.cons .here (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil))) (.cons (
       .letOp (.mark "s49") .nil .nil <|
@@ -1023,10 +1023,10 @@ def gkrBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381
       .letOp (.mark "") .nil .nil <|
       .letOp (.restrict (.field "bls12-381.fr") [1]) (.cons .here .nil) .nil <|
       .letOp (.mark "s52") .nil .nil <|
-      .letOp (.localCall ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s52") (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+      .letOp (.localCall ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩ rfl 1 "s52") (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
       .ret (.cons .here .nil)) .nil) <|
     .letOp (.mark "s56") .nil .nil <|
-    .letOp (.localCall ⟨"zkl_be7976639f3a008cbb8e0434318fcf706bb5fc7884c4737fa9efb008c72e6d91", .local, [.vector "bls12-381.fr"], [.field "bls12-381.fr"]⟩ rfl 1 "s56") (.cons .here .nil) .nil <|
+    .letOp (.localCall ⟨"zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216", .local, [.vector "bls12-381.fr"], [.field "bls12-381.fr"]⟩ rfl 1 "s56") (.cons .here .nil) .nil <|
     .letOp (.mark "s58") .nil .nil <|
     .letOp (.localCall ⟨"zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩ rfl 1 "s58") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))))))))))))))))))) .nil))) .nil <|
     .letOp (.mark "s61") .nil .nil <|

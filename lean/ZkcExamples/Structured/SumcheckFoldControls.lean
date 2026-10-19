@@ -46,7 +46,7 @@ theorem source_complete_instance :
         (SumcheckSourceVerifier.sourceRootInputs (some raw) (some raw.sum) (some 2) (some 7)),
         [2, 3]⟩ =
       ⟨.returned (.cons (some true) .nil), ⟨.done (.cons none .nil), []⟩, []⟩ :=
-  source_complete raw 2 raw_shape raw_bound (Nat.le_refl _) 7 [2, 3] (by decide)
+  source_complete raw 2 raw_shape raw_bound (by decide) 7 [2, 3] (by decide)
 
 /-- Every premise of `reduction_complete` holds, with one of two rounds. -/
 theorem reduction_complete_instance :
@@ -84,7 +84,7 @@ def deliveries : PIR.Handler (participantInterface F F) (List F) Unit
 
 /-- The actual prover loop of the Source unit, delivering the challenges 2 and 3. -/
 theorem loop_reaches_honest_frame :
-    ((Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    ((Repeat.loop (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 2
         (embedP (G := F) (honestState raw 2 []))).run deliveries [2, 3]).outcome =
       .returned (embedP (honestState raw 2 [2, 3])) := by
@@ -99,7 +99,7 @@ theorem invariant_holds_at_reached_frame :
 
 /-- The same run with its received challenges recorded as the phase. -/
 abbrev recordedRun :=
-  (Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+  (Repeat.loop (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
     (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 2
     (embedP (G := F) (honestState raw 2 []))).run
     (PIR.ExecutionPath.handler (receivedChallenges (F := F) (G := F) SumcheckSourceVerifier.childContext)
@@ -131,7 +131,7 @@ theorem source_frames_at_reached_frame :
 /-- The round messages from the initial frame are the endpoints of the correct
 round polynomial: `f(0,0)+f(0,1) = 1` and `f(1,0)+f(1,1) = 6 = 1`. -/
 theorem first_round_messages :
-    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    Repeat.step (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
         (embedP (G := F) (honestState raw 2 [])) 0 =
       .call (.send (ty := .field "bls12-381.fr") (lowSite SumcheckSourceVerifier.childContext)
@@ -149,7 +149,7 @@ theorem first_round_messages :
 /-- Past the table's dimension the actual step stops at the halves of a
 zero-dimensional table, before any send. -/
 theorem step_past_dimension_rejects :
-    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    Repeat.step (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
         (embedP (G := F) (honestState raw 2 [2, 3])) 2 = .halt .reject := by
   rw [step_honest SumcheckSourceViews.unit SumcheckSourceContracts.bodies
@@ -187,10 +187,13 @@ Each refusal is checked against the actual Source body's repeat occurrences. -/
 
 abbrev sourceRepeats := repeatAt SumcheckSourceViews.reduceDefinition.raw.operations
 
+open SumcheckRoundNormalForms (proverEntriesPosition proverDimensionPosition proverPointPosition
+  verifierPointPosition)
+
 /-- The verifier's local role cannot observe the prover's point slot (scope). -/
 theorem verifier_role_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      { frameExport 2 with role := 1 } = .error (.slotScope 3 1) := by
+      { frameExport 2 with role := 1 } = .error (.slotScope proverPointPosition 1) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -199,8 +202,9 @@ theorem verifier_role_refused :
 /-- The verifier's own point slot is hidden from the prover (scope). -/
 theorem hidden_slot_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 4, .carried 0]⟩]⟩ =
-      .error (.slotScope 4 0) := by
+      ⟨"s15", 0, [⟨partialIdentity 2,
+        [.binder 0, .carried verifierPointPosition, .carried proverEntriesPosition]⟩]⟩ =
+      .error (.slotScope verifierPointPosition 0) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -209,8 +213,9 @@ theorem hidden_slot_refused :
 /-- The prover's own dimension slot is an index, not a point vector (type). -/
 theorem wrong_type_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 1, .carried 0]⟩]⟩ =
-      .error (.slotType 1) := by
+      ⟨"s15", 0, [⟨partialIdentity 2,
+        [.binder 0, .carried proverDimensionPosition, .carried proverEntriesPosition]⟩]⟩ =
+      .error (.slotType proverDimensionPosition) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -233,7 +238,7 @@ theorem unknown_role_refused :
 /-- The iteration index is not a vector. -/
 theorem iteration_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried 0]⟩]⟩ =
+      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried proverEntriesPosition]⟩]⟩ =
       .error .iterationMismatch := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,

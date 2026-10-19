@@ -1,0 +1,6 @@
+module zkc::primitives::hash;
+use zkc::primitives::bytes::{Bytes};
+
+pub fn keccak256(value: Bytes) -> Bytes = primitive("hash.keccak256");
+
+pub fn sha256(value: Bytes) -> Bytes = primitive("hash.sha256");

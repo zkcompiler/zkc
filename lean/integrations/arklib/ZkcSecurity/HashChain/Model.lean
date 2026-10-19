@@ -57,8 +57,11 @@ inductive Input (E S X : Type) where
 abbrev Primitive (E S X : Type) : OracleSpec (Input E S X) :=
   OracleSpec.ofFn fun _ : Input E S X => S
 
-/-- The raw answer at every history key: `width` digests. -/
-abbrev Raw (E S : Type) (width : ℕ) : List E → Type := fun _ => Fin width → S
+/-- The raw answer of every query occurrence: `width` digests. -/
+abbrev Raw (E S : Type) (width : ℕ) : E → Type := fun _ => Fin width → S
+
+/-- The ideal history oracle's answer at every history key: `width` digests. -/
+abbrev Answer (E S : Type) (width : ℕ) : List E → Type := fun _ => Fin width → S
 
 variable {E S X : Type}
 
@@ -160,8 +163,7 @@ def collect : (count : ℕ) → (Fin count → m S) → m (Fin count → S)
 
 /-- The validator run with the chain: absorbed events advance the state with one
 `absorb` call each; a query occurrence is answered by the counter blocks at the
-current state, its occurrence is then absorbed, and the site decodes the blocks
-after the absorbed `history`. -/
+current state, its occurrence is then absorbed, and the site decodes the blocks. -/
 def chainTransform (absorb : Typed.Interface I E P (Raw E S width)) (hash : Input E S X → m S) :
     PIR.Proc I A → S → List E → List P → m (PIR.Outcome A × List P)
   | .done value, _, _, proof => pure (.returned value, proof)
@@ -183,7 +185,7 @@ def chainTransform (absorb : Typed.Interface I E P (Raw E S width)) (hash : Inpu
       | .query event decode => do
           let raw ← collect width fun block => hash (.request state event block.val)
           let advanced ← hash (.absorb state event)
-          match decode history raw with
+          match decode raw with
           | some value => chainTransform absorb hash (next value) advanced (history ++ [event]) proof
           | none => pure (.stopped .exhausted, proof)
       | .refuse => pure (.stopped .refused, proof)
@@ -266,7 +268,7 @@ theorem simulateQ_chainTransform (absorb : Typed.Interface I E P (Raw E S width)
         refine bind_congr fun raw => ?_
         simp only [call, simulateQ_spec_query]
         refine bind_congr fun advanced => ?_
-        cases decode history raw with
+        cases decode raw with
         | none => simp
         | some value => exact ih value _ _ _
       · simp [chainTransform, absorbed]

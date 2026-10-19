@@ -150,7 +150,7 @@ Error Checker::run() {
   types.inferNatural = {};
   types.collectUsage = {};
   types.recordAdmission = {};
-  if (!retainNotations() || !retainScopedSources())
+  if (!retainAPI() || !retainNotations() || !retainScopedSources())
     return types.takeError();
   return checkScopedSources(output, work);
 }
@@ -313,7 +313,7 @@ bool Checker::collect() {
     }
     if (parent && !decl.anonymous)
       visible[parent->index].emplace(
-          decl.name, ScopeBinding{id, decl.span, decl.isPublic});
+          decl.name, ScopeBinding{id, decl.span, decl.isPublic, {}});
     output.declarations.push_back(std::move(decl));
     if (parent)
       output.declarations[parent->index].members.push_back(id);
@@ -377,9 +377,12 @@ std::optional<DeclarationId> Checker::member(const Declaration &context,
 }
 std::optional<DeclarationId>
 Checker::resolve(const Declaration &context, StringRef name, Span span,
-                 bool required, std::vector<ModuleLookup> *route) {
+                 bool required, std::vector<ModuleLookup> *route,
+                 std::optional<DeclarationId> *provider) {
   if (!types.charge(1, span))
     return {};
+  const auto written = name;
+  std::optional<DeclarationId> selectedProvider;
   const bool absolute = name.consume_front("::");
   auto [head, tail] = name.split("::");
   std::optional<DeclarationId> root;
@@ -392,6 +395,9 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
       if (types.diagnostic)
         return {};
       if (root) {
+        const auto &binding = visible[scope->index].at(head.str());
+        selectedProvider =
+            binding.provider.value_or(output.declarations[root->index].module);
         if (route)
           route->push_back({*scope, head.str()});
         break;
@@ -407,6 +413,7 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
       if (found != modules.end() &&
           !output.declarations[found->second.index].parent) {
         root = found->second;
+        selectedProvider = *root;
         tail = name.size() == prefix.size()
                    ? StringRef{}
                    : name.drop_front(prefix.size() + 2);
@@ -427,7 +434,44 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   }
   if (!root && required)
     types.fail("source.name", "unknown declaration: " + name, span);
+  if (root && selectedProvider) {
+    if (provider)
+      *provider = selectedProvider;
+    if (checkingVisibility &&
+        !recordReference(context, *selectedProvider, *root, written, span))
+      return {};
+  }
   return root;
+}
+bool Checker::recordReference(const Declaration &owner, DeclarationId provider,
+                              DeclarationId target, StringRef written,
+                              Span span,
+                              std::optional<std::string> abstractModule) {
+  if (!types.charge(written.size() + 1 +
+                        (abstractModule ? abstractModule->size() : 0),
+                    span))
+    return false;
+  output.api.references.push_back({owner.id, provider, target, span,
+                                   written.str(), std::move(abstractModule)});
+  return true;
+}
+bool Checker::retainAPI() {
+  auto &records = output.api;
+  if (!types.charge(sources.size() + visible.size(), Span{{0}, 0, 0}))
+    return false;
+  for (unsigned id = 0; id < sources.size(); ++id) {
+    const auto &source = *sources[id];
+    records.writtenRequirements.push_back(source.explicitRequirements);
+    records.writtenEffects.push_back(source.effects.has_value());
+    for (const auto &[name, binding] : visible[id]) {
+      if (!types.charge(name.size() + 1, binding.span))
+        return false;
+      if (binding.isPublic)
+        records.exports.push_back({DeclarationId{id}, binding.target, name,
+                                   binding.span, binding.provider.has_value()});
+    }
+  }
+  return true;
 }
 std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
                                                     ArrayRef<std::string> names,

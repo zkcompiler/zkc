@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::sequence" = "sequence.zkc"
+"zkc::field_array" = "field_array.zkc"
+"zkc::matrix" = "matrix.zkc"
+"zkc::primitives::vector" = "vector.zkc"
+"zkc::primitives::indices" = "indices.zkc"
+"zkc::primitives::bytes" = "bytes.zkc"

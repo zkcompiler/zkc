@@ -210,7 +210,7 @@ theorem verifier_coupling (absorb : Typed.Interface I E P (Raw E S width))
         chainState trace.cache history = some state) →
       RelTriple ((chainTransform absorb (fun input => traced input) process state history proof).run
           trace)
-        ((Typed.transform absorb (historyAnswer width) process history proof).run tables)
+        ((Typed.transform absorb (historyAsk width) process history proof).run tables)
         (fun one two => one.2.bad = true ∨ one.1 = two.1) := by
   induction process with
   | done value =>
@@ -231,11 +231,11 @@ theorem verifier_coupling (absorb : Typed.Interface I E P (Raw E S width))
         ⟨event, decode⟩ | _
       · cases proof with
         | nil =>
-            rw [Typed.transform_receive_nil absorb _ absorbed]
+            rw [Zkc.Transcript.transform_receive_nil absorb _ absorbed]
             simp only [chainTransform, absorbed, StateT.run_pure]
             exact relTriple_pure_pure (Or.inr rfl)
         | cons message rest =>
-            rw [Typed.transform_receive absorb _ absorbed]
+            rw [Zkc.Transcript.transform_receive absorb _ absorbed]
             simp only [chainTransform, absorbed]
             cases recover (event message) with
             | none =>
@@ -248,32 +248,32 @@ theorem verifier_coupling (absorb : Typed.Interface I E P (Raw E S width))
                   stepBad | ⟨consistent', reached'⟩
                 · exact ih value _ _ _ _ _ (Or.inl stepBad)
                 · exact ih value _ _ _ _ _ (Or.inr ⟨consistent', reached'⟩)
-      · rw [Typed.transform_send absorb _ absorbed]
+      · rw [Zkc.Transcript.transform_send absorb _ absorbed]
         simp only [chainTransform, absorbed, StateT.run_bind]
         refine relTriple_bind_left fun step member => ?_
         rcases absorb_support consistent reached event step member with
           stepBad | ⟨consistent', reached'⟩
         · exact ih value _ _ _ _ _ (Or.inl stepBad)
         · exact ih value _ _ _ _ _ (Or.inr ⟨consistent', reached'⟩)
-      · rw [Typed.transform_query absorb _ absorbed]
-        simp only [chainTransform, absorbed, StateT.run_bind, historyAnswer]
+      · rw [Zkc.Transcript.transform_query absorb _ absorbed]
+        simp only [chainTransform, absorbed, StateT.run_bind, historyAsk, historyAnswer]
         refine relTriple_bind (collect_coupling event width (fun index => index) trace tables
           consistent reached) fun blocks cells ⟨same, consistent', reached'⟩ => ?_
         refine relTriple_bind_left fun step member => ?_
         rw [same]
         rcases absorb_support consistent' reached' event step member with
           stepBad | ⟨consistent'', reached''⟩
-        · cases decode history cells.1 with
+        · cases decode cells.1 with
           | none =>
               simp only [StateT.run_pure]
               exact relTriple_pure_pure (Or.inl stepBad)
           | some value => exact ih value _ _ _ _ _ (Or.inl stepBad)
-        · cases decode history cells.1 with
+        · cases decode cells.1 with
           | none =>
               simp only [StateT.run_pure]
               exact relTriple_pure_pure (Or.inr rfl)
           | some value => exact ih value _ _ _ _ _ (Or.inr ⟨consistent'', reached''⟩)
-      · rw [Typed.transform_refuse absorb _ absorbed]
+      · rw [Zkc.Transcript.transform_refuse absorb _ absorbed]
         simp only [chainTransform, absorbed, StateT.run_pure]
         exact relTriple_pure_pure (Or.inr rfl)
 
@@ -284,7 +284,7 @@ theorem chainRun_coupling (absorb : Typed.Interface I E P (Raw E S width))
     {trace : Trace E S X} {tables : Simulated E S X width}
     (consistent : Consistent width trace tables) :
     RelTriple ((chainRun absorb (fun input => traced input) validator initial proof).run trace)
-      ((Typed.transform absorb (historyAnswer width) validator initial proof).run tables)
+      ((Typed.transform absorb (historyAsk width) validator initial proof).run tables)
       (fun one two => one.2.bad = true ∨ one.1 = two.1) := by
   obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil nonempty
   simp only [chainRun, StateT.run_bind]

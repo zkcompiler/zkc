@@ -2,6 +2,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/AlgorithmSupport.h"
 #include "../lib/Transforms/MapOccurrence.h"
+#include "../lib/Transforms/NumericalSelection.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -84,6 +85,83 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!V,!V,!V)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
+
+constexpr llvm::StringLiteral repeatedMapFixture = R"mlir(
+!F = !algebra.field<"koala-bear">
+!V = !algebra.field_vector<"koala-bear">
+module { "protocol.module"() ({
+ func.func private @square(%x:!F)->!F {
+   %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F
+   func.return %r : !F
+ }
+ algebra.map_realize @mapped = @square [true] : (!V)->!V
+ local.func @work(%xs:!V)->(!V,!V) attributes {logical_origin=["work",[]]} {
+   %first = local.apply @mapped(%xs) {site="first"} : (!V)->!V
+   %second = local.apply @mapped(%xs) {site="second"} : (!V)->!V
+   local.return %first,%second : !V,!V
+ }
+ "protocol.func"() ({ ^entry(%xs:!V):
+   %r:2 = "protocol.local_call"(%xs) {callee=@work,role="P",site="work"} : (!V)->(!V,!V)
+   "protocol.return"(%r#0,%r#1) : (!V,!V)->()
+ }) {sym_name="main",function_type=(!V)->(!V,!V),roles=["P"],input_roles=[["P"]],output_roles=[["P"],["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+
+std::string identityCaptureFixture(llvm::StringRef control) {
+  std::string text = R"mlir(
+!F = !algebra.field<"koala-bear">
+!V = !algebra.field_vector<"koala-bear">
+!tag = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
+module { "protocol.module"() ({
+ func.func private @identity(%x:!F)->!F { func.return %x : !F }
+ algebra.map_realize @mapped = @identity [true] : (!V)->!V
+ local.func @work(%xs:!V,%other:!V,%flag:i1,%lo:ui64,%hi:ui64,%tag:!tag)->!V attributes {logical_origin=["work",[]]} {
+   %alias = local.apply @mapped(%xs) {site="identity"} : (!V)->!V
+)mlir";
+  if (control == "if")
+    text += R"mlir(
+   %r = "local.if"(%flag,%xs,%alias,%other) ({
+   ^yes(%x:!V,%y:!V,%z:!V): "local.yield"(%y) : (!V)->()
+   }, {
+   ^no(%x:!V,%y:!V,%z:!V): "local.yield"(%z) : (!V)->()
+   }) {site="control"} : (i1,!V,!V,!V)->!V
+)mlir";
+  else if (control == "match")
+    text += R"mlir(
+   %r = "local.match"(%tag,%xs,%alias,%other) ({
+   ^left(%x:!V,%y:!V,%z:!V): "local.yield"(%y) : (!V)->()
+   }, {
+   ^right(%x:!V,%y:!V,%z:!V): "local.yield"(%z) : (!V)->()
+   }) {alternatives=["left","right"],site="control"} : (!tag,!V,!V,!V)->!V
+)mlir";
+  else {
+    text += R"mlir(
+   %r = "local.for"(%lo,%hi,%other,%xs,%alias,%other,%flag) ({
+   ^body(%i:ui64,%state:!V,%x:!V,%y:!V,%z:!V,%go:i1):
+)mlir";
+    if (control == "condition")
+      text += R"mlir(
+     "local.condition"(%go,%y,%x,%y,%z,%go) : (i1,!V,!V,!V,!V,i1)->()
+)mlir";
+    else
+      text += R"mlir(
+     "local.yield"(%y,%x,%y,%z,%go) : (!V,!V,!V,!V,i1)->()
+)mlir";
+    text += R"mlir(
+   }) {site="control"} : (ui64,ui64,!V,!V,!V,!V,i1)->!V
+)mlir";
+  }
+  text += R"mlir(
+   local.return %r : !V
+ }
+ "protocol.func"() ({ ^entry(%xs:!V,%other:!V,%flag:i1,%lo:ui64,%hi:ui64,%tag:!tag):
+   %r = "protocol.local_call"(%xs,%other,%flag,%lo,%hi,%tag) {callee=@work,role="P",site="work"} : (!V,!V,i1,ui64,ui64,!tag)->!V
+   "protocol.return"(%r) : (!V)->()
+ }) {sym_name="main",function_type=(!V,!V,i1,ui64,ui64,!tag)->!V,roles=["P"],input_roles=[["P"],["P"],["P"],["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+  return text;
+}
 
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
@@ -956,6 +1034,161 @@ int main() {
           take(target::validatePhysical(*original, plan));
         });
   }
+  for (bool native : {false, true})
+    for (llvm::StringRef control : {"if", "match", "for", "condition"})
+      cases.run(
+          (native ? "native" : "vector") +
+              llvm::Twine(" identity map canonicalizes ") + control +
+              " captures and preserves port checking",
+          [&] {
+            auto source = parseSourceString<ModuleOp>(
+                identityCaptureFixture(control), &context);
+            require(bool(source), "identity capture fixture refused");
+            auto original = executable(*source);
+            auto frozen = copy(*original);
+            target::PhysicalPlanOptions options;
+            if (!native)
+              options.numericalPolicy.numericalExpressions =
+                  NumericalExpressionMode::VectorOnly;
+            auto plan = take(target::proposePhysical(
+                *original, target::installedCandidates(), {}, options));
+            auto selected = take(plan.cloneSelectedSubject(*original));
+            noResidualNumerics(*selected);
+            auto function = symbol<local::FuncOp>(*selected, "work");
+            Operation *branch = nullptr;
+            function.walk([&](Operation *op) {
+              if (isa<local::LocalIfOp, local::LocalMatchOp, local::LocalForOp>(
+                      op))
+                branch = op;
+            });
+            bool loop = control == "for" || control == "condition";
+            unsigned prefix = loop ? 3 : 1;
+            require(branch && branch->getNumOperands() == (loop ? 6 : 3) &&
+                        branch->getOperand(prefix) == function.getArgument(0) &&
+                        branch->getOperand(prefix + 1) ==
+                            function.getArgument(1),
+                    "alias capture survived or distinct leaf was lost");
+            for (auto &region : branch->getRegions()) {
+              auto &body = region.front();
+              require(body.getNumArguments() == (loop ? 5 : 2),
+                      "capture region ports were not canonicalized");
+              if (loop)
+                require(body.back().getNumOperands() ==
+                                (control == "condition" ? 5 : 4) &&
+                            body.back().getOperand(
+                                control == "condition" ? 1 : 0) ==
+                                body.getArgument(2),
+                        "loop state or forwarded captures changed");
+            }
+            require(succeeded(verify(*selected)) &&
+                        succeeded(mathematical::verifyNumericalLowering(
+                            *original, *selected, options.numericalPolicy)) &&
+                        same(*original, *frozen),
+                    "canonical capture layout failed correspondence");
+            take(target::validatePhysical(*original, plan));
+            auto physical = copy(*original);
+            auto physicalPlan = take(target::proposePhysical(
+                *physical, target::installedCandidates(), {}, options));
+            auto physicalChecked =
+                take(target::validatePhysical(*physical, physicalPlan));
+            if (auto error =
+                    protocol::materializePhysical(*physical, physicalChecked))
+              throw std::runtime_error(llvm::toString(std::move(error)));
+            take(protocol::readExecutionModel(*physical));
+
+            auto first = branch->getOperand(prefix);
+            auto second = branch->getOperand(prefix + 1);
+            branch->setOperand(prefix, second);
+            branch->setOperand(prefix + 1, first);
+            require(succeeded(verify(*selected)),
+                    "capture permutation must remain well formed");
+            require(named(context, "numerical-lowering-correspondence",
+                          [&] {
+                            return mathematical::verifyNumericalLowering(
+                                *original, *selected, options.numericalPolicy);
+                          }),
+                    "reader accepted a same-type capture permutation");
+          });
+  for (bool fallback : {false, true})
+    for (bool oneShort : {false, true})
+      cases.run(
+          llvm::Twine(fallback ? "catalog fallback" : "direct vector") +
+              " repeated maps with " + (oneShort ? "five" : "six") +
+              " required construction units",
+          [&] {
+            auto source =
+                parseSourceString<ModuleOp>(repeatedMapFixture, &context);
+            require(bool(source), "repeated square map fixture refused");
+            auto original = executable(*source);
+            auto frozen = copy(*original);
+            auto identities = target::physicalPlanOperations(*original);
+            mathematical::RealizationWork work;
+            work.requiredMapConstruction = oneShort ? 5 : 6;
+            uint64_t discarded = work.discardedRecipeExpansion;
+            uint64_t optional = work.optionalMapConstruction;
+            target::PhysicalPlanOptions options;
+            options.numericalWork = &work;
+            if (!fallback)
+              options.numericalPolicy.numericalExpressions =
+                  NumericalExpressionMode::VectorOnly;
+            Withheld catalog({"numerical.map"});
+            auto proposal =
+                target::proposePhysical(*original, catalog, {}, options);
+            if (oneShort)
+              refuses(std::move(proposal), "algebra-map-lowering");
+            else {
+              auto plan = take(std::move(proposal));
+              auto selected = take(plan.cloneSelectedSubject(*original));
+              noResidualNumerics(*selected);
+              require(callsOf(*selected, "vector.mul").size() == 2 &&
+                          callsOf(*selected, "numerical.map").empty() &&
+                          succeeded(mathematical::verifyNumericalLowering(
+                              *original, *selected, options.numericalPolicy)),
+                      "exact construction did not select both vector maps");
+              take(target::validatePhysical(*original, plan, catalog));
+            }
+            require(work.requiredMapConstruction == 0 &&
+                        work.discardedRecipeExpansion ==
+                            discarded - (fallback ? 3 : 0) &&
+                        work.optionalMapConstruction ==
+                            optional - (fallback ? 9 : 0),
+                    "retry lost required reserve or replenished optional "
+                    "work instead of charging discarded construction");
+            require(same(*original, *frozen) &&
+                        target::physicalPlanOperations(*original) == identities,
+                    "construction boundary changed original source");
+          });
+  for (bool oneShort : {false, true})
+    cases.run(llvm::Twine("map construction discard transfer ") +
+                  (oneShort ? "one-short" : "exact") + " aggregate reserve",
+              [&] {
+                mathematical::RealizationWork work;
+                work.helperOperations = work.finiteExpressions = 1;
+                work.helperSlots = work.polynomial = 1;
+                work.requiredMapConstruction = 6;
+                mathematical::RecipeConstructionWork snapshot(work);
+                work.discardedRecipeExpansion = 9;
+                require(!snapshot.canDiscard(work),
+                        "speculation omitted the required map reserve");
+                work.discardedRecipeExpansion = 10;
+                require(snapshot.canDiscard(work),
+                        "exact aggregate incoming reserve refused");
+                work.helperOperations = work.finiteExpressions = 0;
+                work.helperSlots = work.polynomial = 0;
+                work.requiredMapConstruction = 3;
+                work.discardedRecipeExpansion = oneShort ? 6 : 7;
+                require(snapshot.discard(work) == !oneShort,
+                        "discard transfer misclassified aggregate capacity");
+                require(work.discardedRecipeExpansion == (oneShort ? 6 : 0) &&
+                            work.requiredMapConstruction ==
+                                (oneShort ? 3 : 6) &&
+                            work.helperOperations == unsigned(!oneShort) &&
+                            work.finiteExpressions == unsigned(!oneShort) &&
+                            work.helperSlots == unsigned(!oneShort) &&
+                            work.polynomial == unsigned(!oneShort),
+                        "discard transfer partially settled or restored before "
+                        "charging its complete bounded debit");
+              });
   cases.run(
       "complete program preflight clone has an exact cumulative copy boundary",
       [&] {

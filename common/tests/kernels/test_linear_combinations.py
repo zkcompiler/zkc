@@ -2,7 +2,7 @@
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 
 @pytest.mark.parametrize('group', [
@@ -48,7 +48,7 @@ fn check(n:index, malformed:bool)->bool {
 protocol Run roles(P)(n:index@P,malformed:bool@P)->(ok:bool@P){return check(n,malformed);}
 run Demo=Run;
 '''.replace('GROUP', group)
-    entry = Entry(toolchain, journal, directory, source, (*library_modules('zkc'), *flags))
+    entry = Entry(toolchain, journal, directory, source, (*library_modules(*core_packages()), *flags))
     for n in (0, 1, 2, 9):
         assert entry.run(f'length-{n}', {'n': str(n), 'malformed': False})['ok'] is True
     entry.run('shape', {'n': '2', 'malformed': True}, refuses='entry-run-incomplete')
@@ -85,7 +85,7 @@ run Demo=Run;
     if not return_rows:
         source = source.replace('(bool,bool,bool)', 'bool')
         source = source.replace('return(first,second,first && second);', 'return first && second;')
-    entry = Entry(toolchain, journal, directory, source, library_modules('zkc'))
+    entry = Entry(toolchain, journal, directory, source, library_modules(*core_packages()))
     assert entry.run('valid', {'error': '0'})['checks'] == ([True, True, True] if return_rows else True)
     assert entry.run('cancelling-errors', {'error': '1'})['checks'] == ([False, False, False] if return_rows else False)
 
@@ -112,7 +112,7 @@ fn check(a:G::Scalar,reverse:bool,valid_left:bool)->G {
 protocol Run roles(P)(a:G::Scalar@P,reverse:bool@P,valid_left:bool@P)->(out:G@P){return check(a,reverse,valid_left);}
 run Demo=Run;
 """
-    entry = Entry(toolchain, journal, directory, source, library_modules('zkc'))
+    entry = Entry(toolchain, journal, directory, source, library_modules(*core_packages()))
     for reverse in (False, True):
         for valid_left in (False, True):
             report = entry.run(f'invalid-parts-{reverse}-{valid_left}',

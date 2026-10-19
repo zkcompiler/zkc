@@ -1,0 +1,14 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"ethereum::eip4844" = "lib.zkc"
+"ethereum::eip4844::transcript" = "transcript.zkc"
+
+["dependencies"]
+"kzg" = "../../../commitments/kzg"
+"algebra" = "../../../core/algebra"
+"collections" = "../../../core/collections"
+"encoding" = "../../../core/encoding"
+"polynomial" = "../../../core/polynomial"
+"primitive-algebra" = "../../../core/primitives/algebra"
+"primitive-cryptography" = "../../../core/primitives/cryptography"

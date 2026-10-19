@@ -1,0 +1,10 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::configurations::koala_bear_quartic" = "lib.zkc"
+
+["dependencies"]
+"stark-contract" = "../contract"
+"collections" = "../../../../core/collections"
+"encoding" = "../../../../core/encoding"
+"primitive-cryptography" = "../../../../core/primitives/cryptography"

@@ -319,6 +319,12 @@ projection and execution lowering retain their structural Local preservation
 checks against the accepted preparation result. No additional profile or
 post-projection Local rewrite window is introduced.
 
+After numerical recipe inlining, an identity recipe can make two distinct
+Local captures refer to one SSA value. Capture normalization retains the first
+occurrence and rewrites region arguments and loop forwarding together. The
+independent kernel reader derives this layout from actual operand identities;
+distinct values of the same type and ordered loop state remain distinct.
+
 Preparation expands callers that reach retained computations and the callbacks
 those computations name. Unrelated definitions keep their exact bodies.
 Source inspection and actual helper substitution have separate cumulative
@@ -413,7 +419,7 @@ Their tests compare arithmetic with independent integer references under default
 unsimplified and ordered compilation. They establish these mathematical slices,
 not complete proof protocols or a performance improvement.
 
-The maintained [AIR library](../../libraries/stark/README.md) also uses finite
+The maintained [AIR library](../../libraries/arguments/stark/README.md) also uses finite
 folds for quotient-claim recombination and interaction nonzero checks. Complete
 single-table AIR and three-table machine tests exercise these through proof
 construction and verification, with both LogUp and grand-product reductions.

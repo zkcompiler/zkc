@@ -7,7 +7,7 @@ from entry import Entry
 from journal import names
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::sequence={ROOT}/libraries/zkc/sequence.zkc']
+MODULES = [f'--module=zkc::sequence={ROOT}/libraries/core/primitives/collections/sequence.zkc']
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])

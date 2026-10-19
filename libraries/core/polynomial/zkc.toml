@@ -1,0 +1,14 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::coset" = "coset.zkc"
+"zkc::multilinear" = "multilinear.zkc"
+"zkc::opening" = "opening.zkc"
+"zkc::evaluation_domain" = "evaluation_domain.zkc"
+"zkc::opening_claims" = "opening_claims.zkc"
+
+["dependencies"]
+"algebra" = "../algebra"
+"collections" = "../collections"
+"primitive-polynomial" = "../primitives/polynomial"
+"core-traversal" = "../traversal"

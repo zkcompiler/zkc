@@ -1,12 +1,12 @@
 """Retained primitive bindings, unchanged library closures, and independent SSA laws."""
 import hashlib
 import json
-import re
 from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
 from tools import compiler, records
+from project import project_inputs
 
 commands = Commands(records())
 root = Path(__file__).resolve().parents[2]
@@ -334,9 +334,8 @@ with case('received-vector-malformation-and-capacity-stay-distinct'):
 
 
 def frontend(label):
-    caller = fixtures / 'primitive-callers.zkc'
-    modules = {re.search(r'^module\s+([\w:]+)\s*;', path.read_text(), re.M)[1]: path
-               for path in [caller, *sorted((root / 'libraries/zkc').glob('*.zkc'))]}
+    modules, assets = project_inputs(fixtures / 'primitive-callers.toml')
+    assert not assets
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
     commands.write(label + '-inputs.json', before)
     flags = ['--source-format=zkc', '--entry=primitive_examples::' + label + 'Entry',

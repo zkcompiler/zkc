@@ -98,7 +98,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
 | `air` | Trace height, width and evaluation blowup vary separately | Quadratic recurrence with first/last/transition constraints; one table |
-| `stark` | The `air` shapes through the [parameterized library](../../libraries/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
+| `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
 | `machine` | LogUp/grand-product, optional memory absent/present | Correlated STARK library regression; small fixtures, not a production zkVM scaling study |
 

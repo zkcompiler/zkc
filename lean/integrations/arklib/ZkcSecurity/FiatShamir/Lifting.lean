@@ -5,88 +5,41 @@ public import ZkcSecurity.FiatShamir.Laws
 
 @[expose] public section
 
-/-! Raw answers by the last event, and lifting uniform-sort certificates to
-typed certificates.
+/-! Lifting uniform-sort certificates to typed certificates.
 
-**Raw answers by the last event.** In the history class the request is the last
-event of its TranscriptQuery, so the oracle's raw answer type at a key is a
-function of that event. `ByLast Raw key` is `Raw` of the key's last event, and
-`Unit` at the empty key, which no query reaches; it is uniform when every
-`Raw event` is (`ByLast.sampleable`). At a key `preceding ++ [event]` the answer
-reads as a value of `Raw event` (`ByLast.read`), with the same uniform law
-(`prEvent_read`). `Absorption.queryLast` is a query whose decoder takes that
-value.
+A protocol's round-by-round analysis bounds a doomed query's escape under the
+uniform law of the query's reply sort. A law interface (`LawInterface`)
+presents a validator's operations to the transform with every query decoded
+from the raw answer of its occurrence by a law record into its reply sort
+(`LawInterface.absorb`). A uniform-sort certificate (`UniformCertificate`) is a
+doomed set whose every member meets the uniform-sort obligation
+(`UniformStep`): a doomed query's uniform reply leaves the set with probability
+at most the error of its operation at its history. As in the typed engine's
+charged certificates, the doomed set is indexed by the absorbed history, so one
+operation at one occurrence can carry a different error at each place it is
+reached, as the rounds of a loop whose occurrence has no iteration coordinate
+do. It lifts to a charged certificate of the typed engine, with the same doomed
+pairs, whenever every query's charge at a history covers its law record's
+coefficient times its error there plus its slack
+(`UniformCertificate.charged`): the law record's domination `κ·ν + λ` of the
+uniform law `ν` of the reply sort. Uniform laws of the reply sorts are the
+current specialization of a record's ideal law.
 
-**Lifting.** A protocol's round-by-round analysis bounds a doomed query's escape
-under the uniform law of the query's reply sort. A law interface
-(`LawInterface`) presents a validator's operations to the transform with every
-query decoded from the raw answer of its occurrence by a law record into its
-reply sort (`LawInterface.absorb`). A uniform-sort certificate
-(`UniformCertificate`) is a doomed set whose every member meets the
-uniform-sort obligation (`UniformStep`): a doomed query's uniform reply leaves
-the set with probability at most the error of its operation at its history. As
-in the typed engine's charged certificates, the doomed set is indexed by the
-absorbed history, so one operation at one occurrence can carry a different
-error at each place it is reached, as the rounds of a loop whose occurrence has
-no iteration coordinate do. It lifts to a charged certificate of the typed
-engine, with the same doomed pairs, whenever every query's charge at a history
-covers its law record's coefficient times its error there plus its slack
-(`UniformCertificate.charged`).
+For a doomed set and an error that ignore the history, whose receives keep every
+reply doomed, the same lifting gives a per-event certificate
+(`UniformEventStep.typed`, `UniformEventCertificate.typed`), each occurrence
+charged its law record's coefficient times its operation's error plus its slack.
 
-Law-record decoders do not depend on the history before the occurrence: the
-operands that a decoder reads are carried in the occurrence, the last event.
+Law-record decoders read the raw answer of the occurrence alone: the operands
+that a decoder reads are carried in the occurrence, the last event of the key.
+The raw answers by the last event, `ByLast`, are in
+`ZkcSecurity.FiatShamir.Interface`.
 -/
 
 set_option autoImplicit false
 
 namespace ZkcSecurity.FiatShamir.Typed
 open OracleComp OracleSpec
-
-section ByLast
-variable {E : Type} (Raw : E → Type)
-
-/-- `Raw` of the last event, and `Unit` without one. -/
-def OfLast : Option E → Type
-  | some event => Raw event
-  | none => Unit
-
-/-- The raw answer type of an oracle key: the raw type of its last event, and
-`Unit` at the empty key, which no query reaches. -/
-abbrev ByLast (key : List E) : Type := OfLast Raw key.getLast?
-
-theorem byLast_append (preceding : List E) (event : E) :
-    ByLast Raw (preceding ++ [event]) = Raw event := by
-  simp [ByLast, OfLast]
-
-/-- The answer at a key ending with an occurrence, read in the occurrence's raw
-type. -/
-def ByLast.read {preceding : List E} {event : E} : ByLast Raw (preceding ++ [event]) ≃ Raw event :=
-  Equiv.cast (byLast_append Raw preceding event)
-
-variable [∀ event, SampleableType (Raw event)]
-
-instance OfLast.sampleable : ∀ last : Option E, SampleableType (OfLast Raw last)
-  | some event => inferInstanceAs (SampleableType (Raw event))
-  | none => inferInstanceAs (SampleableType Unit)
-
-instance ByLast.sampleable (key : List E) : SampleableType (ByLast Raw key) :=
-  OfLast.sampleable Raw key.getLast?
-
-/-- Read in the occurrence's raw type, the uniform answer at a key is uniform. -/
-theorem prEvent_read (preceding : List E) (event : E) (holds : Raw event → Prop) :
-    Pr{let raw ← $ᵗ (ByLast Raw (preceding ++ [event]))}[holds (ByLast.read Raw raw)] =
-      Pr{let raw ← $ᵗ (Raw event)}[holds raw] :=
-  SampleableType.prEvent_uniformSample_equiv _ holds
-
-variable {P Reply : Type}
-
-/-- A query absorbed at `event` whose decoder reads the answer in the event's raw
-type. -/
-def Absorption.queryLast (event : E) (decode : List E → Raw event → Option Reply) :
-    Absorption E P (ByLast Raw) Reply :=
-  .query event fun preceding raw => decode preceding (ByLast.read Raw raw)
-
-end ByLast
 
 section Lifting
 variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} [∀ event, SampleableType (Raw event)]
@@ -114,12 +67,12 @@ abbrev LawInterface (I : PIR.Signature) (E P : Type) (Raw : E → Type)
 
 /-- The transcript interface of a law interface: a query asks the oracle at its
 occurrence and decodes the raw answer by its law record. -/
-def LawInterface.absorb (laws : LawInterface I E P Raw) : Interface I E P (ByLast Raw) :=
+def LawInterface.absorb (laws : LawInterface I E P Raw) : Interface I E P Raw :=
   fun operation =>
     match laws operation with
     | .receive event recover => .receive event recover
     | .send event value => .send event value
-    | .query event _ law => Absorption.queryLast Raw event fun _ raw => law.decode raw
+    | .query event _ law => .query event law.decode
     | .refuse => .refuse
 
 /-- The uniform-sort local obligation of a doomed set indexed by the absorbed
@@ -178,9 +131,7 @@ theorem UniformStep.charged {doomed : List E → PIR.Proc I A → Prop} {accepts
         simp only [ChargedStep, LawInterface.absorb, site]
         exact step
       · simp only [UniformStep, site] at step
-        simp only [ChargedStep, LawInterface.absorb, site, Absorption.queryLast]
-        rw [prEvent_read Raw history event fun raw =>
-          ∃ value, law.decode raw = some value ∧ ¬ doomed (history ++ [event]) (next value)]
+        simp only [ChargedStep, LawInterface.absorb, site]
         exact (@LawRecord.escape_le _ _ _ sort law
           (fun value => ¬ doomed (history ++ [event]) (next value)) _ step).trans
           (covers history operation event sort law site)
@@ -199,6 +150,70 @@ def UniformCertificate.charged {accepts : A → Prop} {error : List E → I.Op �
   doomed := certificate.doomed
   step history process member :=
     UniformStep.charged laws covers history process (certificate.step history process member)
+
+/-- The uniform-sort local obligation of a doomed set that ignores the history: a
+doomed result does not accept; every reply of a doomed receive and the reply of a
+doomed send stay doomed; and a doomed query's uniform reply of its sort leaves
+the doomed set with probability at most the error of its operation. -/
+def UniformEventStep (laws : LawInterface I E P Raw) (doomed : PIR.Proc I A → Prop)
+    (accepts : A → Prop) (error : I.Op → ENNReal) : PIR.Proc I A → Prop
+  | .done value => ¬ accepts value
+  | .halt _ => True
+  | .call operation next =>
+      match laws operation with
+      | .receive _ _ => ∀ value, doomed (next value)
+      | .send _ value => doomed (next value)
+      | .query _ sort _ =>
+          letI := sort
+          Pr{let value ← $ᵗ (I.Reply operation)}[¬ doomed (next value)] ≤ error operation
+      | .refuse => True
+
+/-- Round-by-round soundness with uniform replies of each query's sort and a doomed
+set and errors that ignore the history. -/
+structure UniformEventCertificate (laws : LawInterface I E P Raw) (accepts : A → Prop)
+    (error : I.Op → ENNReal) where
+  doomed : PIR.Proc I A → Prop
+  step : ∀ process, doomed process → UniformEventStep laws doomed accepts error process
+
+/-- The uniform-sort obligation of a history-free doomed set lifts to the typed
+per-event obligation when every query occurrence's error covers its law record's
+coefficient times its operation's error plus its slack. -/
+theorem UniformEventStep.typed {doomed : PIR.Proc I A → Prop} {accepts : A → Prop}
+    {error : I.Op → ENNReal} {eventError : E → ENNReal}
+    (covers : ∀ operation (event : E) (sort : SampleableType (I.Reply operation))
+      (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →
+      law.factor * error operation + law.slack ≤ eventError event) :
+    ∀ process, UniformEventStep laws doomed accepts error process →
+      Step laws.absorb doomed accepts eventError process
+  | .done _, step => step
+  | .halt _, step => step
+  | .call operation next, step => by
+      rcases site : laws operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, sort, law⟩ | _
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact step
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact step
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact (@LawRecord.escape_le _ _ _ sort law (fun value => ¬ doomed (next value)) _ step).trans
+          (covers operation event sort law site)
+      · simp only [Step, LawInterface.absorb, site]
+
+/-- A history-free uniform-sort certificate is a per-event certificate of the
+typed engine over the law interface's transcript interface, with the same doomed
+residuals. -/
+def UniformEventCertificate.typed {accepts : A → Prop} {error : I.Op → ENNReal}
+    (certificate : UniformEventCertificate laws accepts error) (eventError : E → ENNReal)
+    (covers : ∀ operation (event : E) (sort : SampleableType (I.Reply operation))
+      (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →
+      law.factor * error operation + law.slack ≤ eventError event) :
+    Certificate laws.absorb accepts eventError where
+  doomed := certificate.doomed
+  step process member :=
+    UniformEventStep.typed laws covers process (certificate.step process member)
 
 end Lifting
 

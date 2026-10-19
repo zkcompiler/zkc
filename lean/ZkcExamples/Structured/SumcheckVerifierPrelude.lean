@@ -21,7 +21,7 @@ def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
     Values Value reduceOutputs :=
   SumcheckVerifierBodies.reduceReturnValues state
 
-theorem return_indices : (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
+theorem return_indices : (reduceReturn []).erase = .ret reduceReturnIndices := rfl
 
 theorem return_equation {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I)
     (state : Values meaning.Value repeatState) {tail : List Ty}
@@ -51,26 +51,18 @@ def reduceResults (pc : Option (List F) × Option F) :
   .cons none (.cons none (.cons none (.cons none (.cons pc.1 (.cons pc.2 .nil)))))
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- At the verifier, the returned tuple keeps exactly the verifier's carried point
+and claim, wherever the state layout places them. -/
 theorem mask_returnValues (ctx : ProtocolContext) (self : Nat)
     (verifier : self = ctx.roles 1) (separate : ctx.roles 0 ≠ self)
     (state : Values (Component (assignment F G)) repeatState) :
     maskValues self (ctx.mapScopes reduceOutputScopes) (returnValues state) =
-      reduceResults (state.get (.there (.there (.there (.there .here)))),
-        state.get (.there (.there (.there (.there (.there .here)))))) := by
+      reduceResults (state.get SumcheckRoundNormalForms.verifierPointSlot,
+        state.get SumcheckRoundNormalForms.verifierClaimSlot) := by
   subst self
-  cases state with | cons a rest =>
-    cases rest with | cons b rest =>
-      cases rest with | cons c rest =>
-        cases rest with | cons d rest =>
-          cases rest with | cons e rest =>
-            cases rest with | cons f rest =>
-              cases rest
-              change maskValues (ctx.roles 1) (ctx.mapScopes reduceOutputScopes)
-                (.cons d (.cons a (.cons b (.cons c (.cons e (.cons f .nil)))))) =
-                  reduceResults (e, f)
-              iterate 7 unfold maskValues
-              simp [reduceOutputScopes, ProtocolContext.mapScopes, Participant.restrict,
-                Ne.symm separate, reduceResults]
+  unfold returnValues SumcheckVerifierBodies.reduceReturnValues reduceResults
+  iterate 7 unfold maskValues
+  simp [reduceOutputScopes, ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
 
 def reduceDenote (maximum : Nat) (U : UnitPayload) (ctx : ProtocolContext) (self : Nat)
     (arguments : Values (Component (assignment F G)) reduceInputs) :
@@ -106,8 +98,7 @@ theorem prelude_expansion (U : UnitPayload) (bodies : Bodies U.definitions)
         (plainHelpers U) self (U.plainProtocolTable F G) ctx)
       (reduceArguments none none none claim count service).get =
       (denoteRepeat (repeatSpec maximum) ctx self count
-        (.cons none (.cons none (.cons none (.cons none
-          (.cons (some []) (.cons claim .nil)))))) (.cons service .nil)
+        (SumcheckRoundNormalForms.verifierState (some []) claim) (.cons service .nil)
         (fun args => roundBody.denote
           (participantMeaningWith (.silent _) (participantActions F G)
             (plainHelpers U) self (U.plainProtocolTable F G) ctx) args.get)).bind
@@ -197,16 +188,7 @@ theorem reduce_zero (U : UnitPayload) (bodies : Bodies U.definitions)
     subst self
     simp
   rw [repeat_zero (repeatSpec maximum) ctx self _ _ _ inside]
-  have masked : maskValues self (ctx.mapScopes (repeatSpec maximum).stateScopes)
-      (Values.cons none (.cons none (.cons none (.cons none
-        (.cons (some ([] : List F)) (.cons claim .nil))))) :
-        Values (Component (assignment F G)) repeatState) =
-      (Values.cons none (.cons none (.cons none (.cons none
-        (.cons (some ([] : List F)) (.cons claim .nil)))))) := by
-    subst self
-    iterate 7 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict]
-  rw [masked]
+  rw [SumcheckRoundNormalForms.verifierState_masked ctx self verifier]
   change PIR.Proc.done (I := participantInterface F G)
     (maskValues self (ctx.mapScopes reduceOutputScopes) (returnValues _)) = _
   rw [mask_returnValues ctx self verifier separate]
@@ -237,6 +219,21 @@ theorem repeat_optional (U : UnitPayload) (bodies : Bodies U.definitions)
     · rw [repeat_above_maximum (repeatSpec maximum) ctx self _ _ _ count inside
         (Nat.lt_of_not_ge bounded)]
       simp only [admittedRounds, bounded, ↓reduceIte, PIR.Proc.bind]
+
+/-- The generated normal form of the whole body at the verifier, with its repeat
+admitted: the original count admission, the actual rounds, and the actual return
+permutation of the carried state. -/
+theorem verifierReduce_rounds (U : UnitPayload) (bodies : Bodies U.definitions)
+    (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1) (maximum : Nat)
+    (claim : Option F) (count service : Option Nat) :
+    SumcheckRoundNormalForms.verifierReduceProcess (G := G) U maximum ctx claim count service =
+      (admittedRounds maximum ctx count service claim).bind
+        (fun pc => .done (returnValues (embedV pc))) := by
+  unfold SumcheckRoundNormalForms.verifierReduceProcess
+  change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count (embedV (G := G) (some [], claim))
+    (cap service) (bodyFn U ctx (ctx.roles 1))).bind (fun state => .done (returnValues state)) = _
+  rw [repeat_optional U bodies ctx _ rfl separate]
+  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
 
 /-- The complete body includes the skipped P prelude, optional count admission,
 actual callback, exact six-slot return permutation, and output ownership mask. -/

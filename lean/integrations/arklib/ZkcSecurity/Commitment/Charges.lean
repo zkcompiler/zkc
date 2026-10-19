@@ -18,11 +18,11 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec
 
-variable {E Shape Shape' Value Query Y α : Type} {R : List E → Type}
+variable {E Shape Shape' Value Query Y α : Type} {Raw : E → Type}
 
 theorem liftHash_queryBound :
     ∀ (computation : OracleComp (Query →ₒ Y) α) (bound : ℕ), IsTotalQueryBound computation bound →
-      IsTotalQueryBound (liftHash R Shape computation) bound := by
+      IsTotalQueryBound (liftHash Raw Shape computation) bound := by
   intro computation
   induction computation using OracleComp.inductionOn with
   | pure value => intro _ _; trivial
@@ -30,12 +30,12 @@ theorem liftHash_queryBound :
       intro bound bounded
       rw [isTotalQueryBound_query_bind_iff] at bounded
       simp only [liftHash, simulateQ_bind, simulateQ_spec_query, hashCall] at ih ⊢
-      exact (isTotalQueryBound_query_bind_iff (spec := joint R Shape Y Query)
+      exact (isTotalQueryBound_query_bind_iff (spec := joint Raw Shape Y Query)
         (t := Sum.inr query)).mpr ⟨bounded.1, fun reply => ih reply _ (bounded.2 reply)⟩
 
 theorem liftHash_costBound (error : E → ENNReal) (hashError : ENNReal) :
     ∀ (computation : OracleComp (Query →ₒ Y) α) (bound : ℕ), IsTotalQueryBound computation bound →
-      WorstCaseCostBound (liftHash R Shape computation)
+      WorstCaseCostBound (liftHash Raw Shape computation)
         ⟨jointError (Shape := Shape) (Y := Y) (Query := Query) error hashError⟩
         (bound * hashError) := by
   intro computation
@@ -45,7 +45,7 @@ theorem liftHash_costBound (error : E → ENNReal) (hashError : ENNReal) :
       intro bound bounded
       rw [isTotalQueryBound_query_bind_iff] at bounded
       simp only [liftHash, simulateQ_bind, simulateQ_spec_query, hashCall] at ih ⊢
-      refine (worstCaseCostBound_query_bind_iff (spec := joint R Shape Y Query) (Sum.inr query)
+      refine (worstCaseCostBound_query_bind_iff (spec := joint Raw Shape Y Query) (Sum.inr query)
         _ _ _).mpr ?_
       intro reply cost member
       have tail := (worstCaseCostBound_iff_support_bound _ _ _).mp (ih reply _ (bounded.2 reply))

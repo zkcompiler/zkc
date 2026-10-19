@@ -83,4 +83,4 @@ committed false quotient/auxiliary words stop at the verifier identity guard;
 a different configured program with the same final value is rejected by the
 known-input obligation, with an ablation control. Source auxiliary columns and
 claims are compared with the independent staged reference. These tests are
-bounded evidence for the [selected profile](../../libraries/stark/README.md#whole-bundle-argument).
+bounded evidence for the [selected profile](../../libraries/arguments/stark/README.md#whole-bundle-argument).

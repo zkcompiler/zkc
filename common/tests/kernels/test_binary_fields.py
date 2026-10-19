@@ -13,7 +13,7 @@ import pytest
 from binary_reference import (BASE, CUBIC, cubic_add, cubic_inverse, cubic_mul, inverse,
                               literal, mul, readable)
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 Y = [0, 1, 0]
 Y2 = [0, 0, 1]
@@ -74,7 +74,7 @@ def little_endian(words):
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_binary_kernels_match_carry_less_arithmetic(toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules('zkc'), *flags))
+    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages()), *flags))
     rng = random.Random(2063)
 
     def word():
@@ -156,7 +156,7 @@ def test_prime_and_odd_characteristic_operations_refuse(toolchain, journal, dire
     path = directory / 'refused.zkc'
     path.write_text(REFUSED.format(field=field, result=result, body=body))
     journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                 f'--module=sample={path}', *library_modules('zkc'), 'sample::Demo',
+                 f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
                  f'--output={directory / "refused.zkpkg"}'], refuses=code)
 
 
@@ -166,5 +166,5 @@ def test_refusal_source_compiles_with_admitted_operations(toolchain, journal, di
     path.write_text(REFUSED.format(field=CUBIC, result='K',
                                    body='return kernel<K>("field.constant"; "0x1b") * a;'))
     journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                 f'--module=sample={path}', *library_modules('zkc'), 'sample::Demo',
+                 f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
                  f'--output={directory / "admitted.zkpkg"}'])

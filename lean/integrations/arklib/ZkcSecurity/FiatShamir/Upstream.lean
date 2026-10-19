@@ -26,7 +26,7 @@ The process form has a transcript interface (`absorb`): a statement is bound by
 one event (`initial`, which determines it), a message round absorbs the message
 with its round, and a challenge round absorbs its occurrence and reads the
 challenge from the raw answer of that occurrence, uniform on the round's
-challenge type (raw answers by the last event, `Typed.ByLast`).
+challenge type; the history oracle answers by the last event (`Typed.ByLast`).
 
 **`ofWorstCase`.** ArkLib's worst-case-per-prefix round-by-round soundness
 (`rbrSoundnessWorstCase`) gives a state function and, for every false input and
@@ -199,10 +199,9 @@ def recover (round : Fin n) : Event pSpec StmtIn → Option (pSpec.«Type» roun
 oracle at its occurrence and reads the challenge from the raw answer; a message
 round receives the round's message. -/
 def absorb : Interface (signature pSpec) (Event pSpec StmtIn) (Message pSpec)
-    (ByLast (Raw pSpec StmtIn)) := fun round =>
+    (Raw pSpec StmtIn) := fun round =>
   if challengeRound : pSpec.dir round = .V_to_P then
-    Absorption.queryLast (Raw pSpec StmtIn) (.challenge round) fun _ raw =>
-      some (decodeChallenge pSpec challengeRound raw)
+    .query (.challenge round) fun raw => some (decodeChallenge pSpec challengeRound raw)
   else .receive (fun message => .message message.1 message.2) (recover pSpec StmtIn round)
 
 /-- The bound statement, the initial history. -/
@@ -262,7 +261,7 @@ theorem processFrom_queryBound {A : Type} (verdict : FullTranscript pSpec → A)
       rw [fromRound_succ _ inside]
       by_cases challengeRound : pSpec.dir (⟨round.val, inside⟩ : Fin n) = .V_to_P
       · simp only [processFrom, Typed.QueryBound, absorb, challengeRound, ↓reduceDIte,
-          Absorption.queryLast, challengeIndicator, ↓reduceIte]
+          challengeIndicator, ↓reduceIte]
         refine ⟨by omega, fun value => ?_⟩
         rw [Nat.add_sub_cancel_left]
         exact processFrom_queryBound verdict remaining _ _ _
@@ -286,8 +285,7 @@ theorem processFrom_costBound {A : Type} (error : pSpec.ChallengeIdx → NNReal)
       have inside : round.val < n := by omega
       rw [fromRound_succ _ inside]
       by_cases challengeRound : pSpec.dir (⟨round.val, inside⟩ : Fin n) = .V_to_P
-      · simp only [processFrom, Typed.CostBound, absorb, challengeRound, ↓reduceDIte,
-          Absorption.queryLast]
+      · simp only [processFrom, Typed.CostBound, absorb, challengeRound, ↓reduceDIte]
         refine ⟨fromRound (roundError pSpec error) (round.val + 1), le_rfl, fun value => ?_⟩
         exact processFrom_costBound error verdict remaining _ _ _
       · simp only [processFrom, Typed.CostBound, absorb, challengeRound, ↓reduceDIte,
@@ -414,15 +412,7 @@ def worstCaseCertificate (stateFunction : verifier.StateFunction init impl langI
         exact verdict_rejected init impl guarded stateFunction statement _ false_
     | succ remaining =>
         by_cases challengeRound : pSpec.dir (⟨round.val, by omega⟩ : Fin n) = .V_to_P
-        · simp only [processFrom, Typed.Step, absorb, challengeRound, ↓reduceDIte,
-            Absorption.queryLast]
-          intro preceding
-          rw [prEvent_read (Raw pSpec StmtIn) preceding (.challenge _) fun raw =>
-            ∃ value, some (decodeChallenge pSpec challengeRound raw) = some value ∧
-              ¬ Doomed init impl guarded stateFunction
-                (processFrom (guardedVerdict guarded statement) remaining
-                  (Fin.succ ⟨round.val, by omega⟩) (by simp; omega)
-                  (Transcript.concat (m := ⟨round.val, by omega⟩) value transcript))]
+        · simp only [processFrom, Typed.Step, absorb, challengeRound, ↓reduceDIte]
           have transported := SampleableType.prEvent_uniformSample_equiv
             (Equiv.cast (challengeRaw_eq pSpec challengeRound :
               ChallengeRaw pSpec _ = pSpec.Challenge ⟨_, challengeRound⟩))

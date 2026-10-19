@@ -9,7 +9,7 @@ initial * product(gate * (shift - fingerprints[i]) + 1 - gate).
 ```
 
 The private generic helper collects factors using the existing
-[`air::interaction::gated_denominator`](../../../../../libraries/air/interaction.zkc),
+[`air::interaction::gated_denominator`](../../../../../libraries/relations/air/interaction.zkc),
 then multiplies them with an indexed total fold. Both consumers read through
 ordinary helpers with explicit `in_bounds` premises. Domain indices establish
 each bound on its original container. The same helpers serve both shift calls;
@@ -39,4 +39,4 @@ The [integration tests](../../../protocol/test_indexed_callback_selection.py)
 compare independent arithmetic in both fields and all four combinations of
 simplification and finite bulk selection. They inspect executable vector
 arithmetic and product sites separately from output values. See the
-[finite library guide](../../../../../libraries/zkc/README.md#finite-computations).
+[finite library guide](../../../../../libraries/core/README.md#finite-computations).

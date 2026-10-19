@@ -1,7 +1,14 @@
-format = "zkc.project/0"
-[modules]
-example = "main.zkc"
-statement = "protocol.zkc"
-[dependencies]
-schnorr = "../../../../libraries/schnorr"
-spongefish = "../../../../libraries/spongefish"
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+"statement" = "protocol.zkc"
+
+["dependencies"]
+"spongefish" = { workspace = "constructions.spongefish" }
+"core-encoding" = { workspace = "core.encoding" }
+"core-primitives-cryptography" = { workspace = "core.primitives.cryptography" }
+"schnorr" = { workspace = "protocols.sigma.schnorr" }
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

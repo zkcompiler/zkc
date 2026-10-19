@@ -60,6 +60,9 @@ that all native behavior already has a Lean model.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.
+- [Assurance reports](spec/assurance-report.md): the `zkc.assurance-report/0`
+  format, declaration records, the registry, the claims ledger and the
+  generated tables.
 - [Support](support.md): theorem scope, assumptions, proved subjects and tested
   boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.

@@ -64,6 +64,28 @@ theorem prelude_prover (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies 
   SumcheckRoundNormalForms.proverReduce_process U maximum bodies ctx _ rfl separate raw count rounds
     countBound roundsBound enough
 
+/-- The generated normal form of the whole body at the prover, with its repeat
+admitted: the honest rounds on the prover's own table and the actual return
+permutation of the carried state. -/
+theorem proverReduce_honest (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions)
+    (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0) (maximum : Nat)
+    (raw : List F) (count : Nat) (shape : HasShape raw count 1) (bound : raw.length < indexLimit)
+    (rounds : Nat) (admitted : rounds ≤ maximum) :
+    SumcheckRoundNormalForms.proverReduceProcess (G := G) U maximum ctx raw count rounds =
+      (PIR.repeatN rounds (roundHonest ctx raw count) []).bind
+        (fun point => .done (proverResults raw count point)) := by
+  unfold SumcheckRoundNormalForms.proverReduceProcess
+  change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 0) (some rounds)
+    (embedP (G := G) (honestState raw count [])) (cap none) (bodyFn U ctx (ctx.roles 0))).bind
+      (fun state => .done (returnValues state)) = _
+  have inside : ((repeatSpec maximum).roles.map ctx.roles).contains (ctx.roles 0) = true := by
+    simp
+  rw [repeat_admitted (repeatSpec maximum) ctx (ctx.roles 0) _ _ _ rounds inside admitted,
+    mask_embedP ctx (ctx.roles 0) rfl maximum,
+    loop_honest U bodies ctx (ctx.roles 0) rfl separate maximum none raw count shape bound 0 rounds []]
+  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  rfl
+
 /-- The complete Reduce body at the prover, for present prover inputs whose
 table has at least the requested, admitted number of rounds. The verifier's
 claim and service inputs are masked away at the prover. -/

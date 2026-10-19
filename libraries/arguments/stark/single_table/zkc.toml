@@ -1,0 +1,15 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::single_table" = "lib.zkc"
+"stark::single_table::low_degree" = "low_degree.zkc"
+
+["dependencies"]
+"stark-contract" = "../configurations/contract"
+"algebra" = "../../../core/algebra"
+"collections" = "../../../core/collections"
+"polynomial" = "../../../core/polynomial"
+"primitive-cryptography" = "../../../core/primitives/cryptography"
+"primitive-polynomial" = "../../../core/primitives/polynomial"
+"fri" = "../../../protocols/polynomial/fri"
+"air" = "../../../relations/air"

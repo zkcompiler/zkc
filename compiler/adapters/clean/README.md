@@ -144,7 +144,7 @@ The flat-channel control exports upstream `pushBytes` with signed weights.
 and Rust relation evaluation, independent recurrence/reference execution,
 mutated memory/program/boundary data, reusable compilation, malformed inputs,
 and end-to-end STARK prove/verify of the example projects. The wider
-[STARK controls](../../../libraries/stark/README.md#evidence-and-limits) exercise
+[STARK controls](../../../libraries/arguments/stark/README.md#evidence-and-limits) exercise
 malicious prover paths. These are bounded checks, not a proved translation or
 a cryptographic security theorem. The existing
 [Lean correspondence](../../../lean/integrations/clean/README.md) covers a smaller,

@@ -5,69 +5,27 @@ This is a tested data boundary. It generates no proof and never interprets a
 helper name as a mathematical specification.
 """
 
-import argparse
-import json
-from pathlib import Path
+from functools import partial
 import re
+from pathlib import Path
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import lean_render  # noqa: E402
+from bridges.common.lean_render import optional, record  # noqa: E402
 
-def record(value, size):
-    if not isinstance(value, list) or len(value) != size:
-        raise ValueError(f"expected array of size {size}")
-    return value
-
-
-def text(value):
-    if not isinstance(value, str) or len(value.encode("utf-8")) > 512:
-        raise ValueError("expected a UTF-8 string of at most 512 bytes")
-    # JSON's backspace/form-feed escapes are not Lean escapes. Render each
-    # character once, so literal backslashes cannot turn into escape prefixes.
-    escapes = {'"': r'\"', '\\': r'\\', '\n': r'\n', '\r': r'\r', '\t': r'\t'}
-    def character(char):
-        if char in escapes:
-            return escapes[char]
-        if ord(char) < 32 or ord(char) == 127:
-            return f"\\u{ord(char):04x}"
-        return char
-    return '"' + ''.join(character(char) for char in value) + '"'
-
-
-def nat(value, limit=4096):
-    if type(value) is not int or not 0 <= value <= limit:
-        raise ValueError("invalid bounded natural")
-    return str(value)
-
-
-def seq(values, render=nat):
-    if not isinstance(values, list) or len(values) > 4096:
-        raise ValueError("invalid bounded array")
-    return "[" + ", ".join(render(value) for value in values) + "]"
-
-
-def ty(value):
-    if value == ["bool"]:
-        return ".boolean"
-    if value == ["index"]:
-        return ".index"
-    tag, domain = record(value, 2)
-    if tag not in ("field", "vector", "group", "service"):
-        raise ValueError("unsupported type")
-    return f".{tag} {text(domain)}"
+# The structured source profile bounds strings at 512 bytes and references at 4096.
+text = partial(lean_render.text, limit=512)
+nat = lean_render.nat
+seq = lean_render.seq
+ty = lean_render.ty
 
 
 def descriptor(value):
     if not isinstance(value, list) or not value:
         raise ValueError("invalid descriptor")
     tag, *args = value
-    unary = {"field.add": "fieldAdd", "field.subtract": "fieldSubtract",
-             "field.multiply": "fieldMultiply", "field.equal": "fieldEqual",
-             "group.identity": "groupIdentity", "group.add": "groupAdd",
-             "group.equal": "groupEqual",
-             "bounded_at": "boundedAt", "call": "call", "apply": "apply", "guard": "guard"}
-    nullary = {"bool.and": "booleanAnd", "bool.or": "booleanOr", "bool.xor": "booleanXor",
-               "bool.equal": "booleanEqual", "bool.not_equal": "booleanNotEqual",
-               "if": "branch", "for": "loop", "for_condition": "loopCondition",
-               "index.equal": "indexEqual"}
+    unary, nullary = lean_render.UNARY_OPERATIONS, lean_render.NULLARY_OPERATIONS
     if tag in unary:
         record(args, 1)
         return f".{unary[tag]} {text(args[0])}"
@@ -102,13 +60,9 @@ def descriptor(value):
         relation_name, selectors, acceptance, target = record(args, 4)
         return (f".statement {text(relation_name)} {seq(selectors, text)} "
                 f"{nat(acceptance)} ({optional(target, text)})")
-    if tag in ("exchange", "draw", "group.scale"):
-        record(args, 2)
-        name = {"exchange": "exchange", "draw": "draw", "group.scale": "groupScale"}[tag]
-        return "." + name + " " + " ".join(text(arg) for arg in args)
-    if tag in ("field.constant", "local_call", "fold"):
+    if tag in lean_render.BINARY_OPERATIONS or tag == "fold":
         record(args, 3 if tag == "fold" else 2)
-        name = {"field.constant": "fieldConstant", "local_call": "localCall", "fold": "fold"}[tag]
+        name = lean_render.BINARY_OPERATIONS.get(tag, "fold")
         return "." + name + " " + " ".join(text(arg) for arg in args)
     raise ValueError(f"unknown descriptor: {tag}")
 
@@ -182,10 +136,6 @@ def relation(value):
     return (f"⟨{text(name)}, .{visibility}Def, {text(kind)}, {text(key)}, {text(revision)}, "
             f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}, "
             f"{optional(formula, text)}⟩")
-
-
-def optional(value, render):
-    return "none" if value is None else f"some ({render(value)})"
 
 
 def contract_selector(value):
@@ -295,8 +245,7 @@ def render(data, namespace):
     version, stage, source, entry, domains, relations, bindings, definitions, contracts, rows = record(data, 10)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
-    if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
-        raise ValueError("invalid Lean namespace")
+    lean_render.namespace(namespace)
     return f'''module
 
 public import Zkc.Source.Structured.Import
@@ -324,14 +273,5 @@ end {namespace}
 '''
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path)
-    parser.add_argument("output", type=Path)
-    parser.add_argument("--namespace", required=True)
-    args = parser.parse_args()
-    args.output.write_text(render(json.loads(args.input.read_text(encoding="utf-8")), args.namespace), encoding="utf-8")
-
-
 if __name__ == "__main__":
-    main()
+    lean_render.render_main(render, __doc__)

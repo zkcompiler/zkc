@@ -1,7 +1,9 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"collections" = "../../../../../libraries/core/collections"
+"polynomial" = "../../../../../libraries/core/polynomial"
+"primitive-polynomial" = "../../../../../libraries/core/primitives/polynomial"

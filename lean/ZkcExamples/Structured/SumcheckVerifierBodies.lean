@@ -27,6 +27,9 @@ abbrev repeatSpec (maximum : Nat) : RepeatSpec :=
   ⟨repeatState, [.service "random.bls12-381.fr/0"], [0, 1],
     [[0], [0], [0], [0], [1], [1]], maximum⟩
 
+/-- The state positions the retained return reads, in output order. -/
+abbrev reduceReturnIndices : List Nat := [3, 0, 1, 2, 4, 5]
+
 /-- The retained return permutation of the repeat's state, for any value family. -/
 def reduceReturnValues {Value : Ty → Type} (state : Values Value repeatState) :
     Values Value reduceOutputs :=

@@ -150,6 +150,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                     entry,
                     CheckOptions {
                         declarations: args.has("--declarations"),
+                        api: args.has("--api"),
                         notations: args.has("--notations").then(|| NotationOptions {
                             include_private: args.has("--notation-private"),
                             include_installation: args.has("--notation-installation"),
@@ -162,6 +163,11 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 .as_object_mut()
                 .unwrap()
                 .extend(fields.as_object().unwrap().clone());
+            if args.has("--api")
+                && let Some(graph) = source.project.graph()
+            {
+                report["project_graph"] = json!(graph);
+            }
             report["scope"] = json!(if entry.is_some() {
                 "entry"
             } else {

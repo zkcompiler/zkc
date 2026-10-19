@@ -4,6 +4,7 @@ public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.SumcheckSourceLaws
 public import ZkcExamples.Structured.SumcheckHelperBodies
 public import ZkcExamples.Structured.MapPrefixContracts
+public import ZkcExamples.Structured.SumcheckSourceNormalForms
 
 @[expose] public section
 namespace ZkcExamples.Structured.SumcheckSourceAssociations
@@ -49,9 +50,7 @@ theorem helper_inventory_length : unit.definitions.length = 27 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :
-    ProtocolOp.repeat
-      ⟨SumcheckSourceBodies.repeatState, [.service "random.bls12-381.fr/0"],
-        [0, 1], [[0], [0], [0], [0], [1], [1]], 2⟩ "s15" ∈
+    ProtocolOp.repeat (SumcheckVerifierBodies.repeatSpec SumcheckSourceNormalForms.reduceMaximum) "s15" ∈
       reduceDefinition.raw.operations :=
   by structured_mem
 

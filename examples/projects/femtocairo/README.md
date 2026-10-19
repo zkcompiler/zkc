@@ -19,7 +19,7 @@ The [adapter](../../../compiler/adapters/clean/README.md) creates three tables:
 | Memory | 8 | Indexed immutable values and lookup multiplicities |
 
 The `.zkc` client calls the general
-[`ThreeTableArgument`](../../../libraries/stark/README.md#whole-bundle-argument)
+[`ThreeTableArgument`](../../../libraries/arguments/stark/README.md#whole-bundle-argument)
 with LogUp. The compiler and runtime contain no FemtoCairo execution path.
 Program values and initial/final states are public. Memory values and CPU
 auxiliaries are witness inputs; the proof is **nonhiding**, so this is an
@@ -47,3 +47,24 @@ proof, and reject modified transition, program, address, selector, multiplicity
 and public-boundary data. They do not establish a general translation theorem
 or security of the full STARK composition. Parameters are deliberately small
 for tests; the proof encoding is zkc's own.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+zkc check
+zkc prove Proof
+zkc verify Proof
+```
+
+Inputs: inputs/example.Proof/{public,witness}.json; prepare.py regenerates the maps in a checkout.
+
+Profile: The octic whole-bundle profile has exactly three tables: CPU, program and immutable memory.
+
+Expected negative control: Changed transition, lookup multiplicity, memory address or final state refuses acceptance.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

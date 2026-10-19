@@ -1,6 +1,6 @@
 # Raw Spongefish Schnorr
 
-This project uses the [source library](../../../../../libraries/spongefish/README.md)
+This project uses the [source library](../../../../../libraries/constructions/spongefish/README.md)
 to produce 80-byte proofs compatible with the pinned Spongefish 0.7.4 Schnorr
 example, specialized to BLS12-381 G1 and SHAKE128. The nonce comes from the
 prover's managed random service. Run from this directory with `zkc` installed:

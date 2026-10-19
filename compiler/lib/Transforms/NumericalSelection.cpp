@@ -9,12 +9,13 @@ using namespace llvm;
 namespace zkc::mathematical {
 RecipeConstructionWork::RecipeConstructionWork(const RealizationWork &work)
     : helpers(work.helperOperations), expressions(work.finiteExpressions),
-      slots(work.helperSlots), polynomial(work.polynomial) {}
+      slots(work.helperSlots), polynomial(work.polynomial),
+      requiredMaps(work.requiredMapConstruction) {}
 bool RecipeConstructionWork::canDiscard(const RealizationWork &work) const {
   // Reserve the upper bound without overflowing caller-controlled quotas.
   uint64_t remaining = work.discardedRecipeExpansion;
-  for (uint64_t amount :
-       {uint64_t(helpers), uint64_t(expressions), slots, polynomial}) {
+  for (uint64_t amount : {uint64_t(helpers), uint64_t(expressions), slots,
+                          polynomial, requiredMaps}) {
     if (amount > remaining)
       return false;
     remaining -= amount;
@@ -24,12 +25,14 @@ bool RecipeConstructionWork::canDiscard(const RealizationWork &work) const {
 bool RecipeConstructionWork::discard(RealizationWork &work) const {
   assert(work.helperOperations <= helpers &&
          work.finiteExpressions <= expressions && work.helperSlots <= slots &&
-         work.polynomial <= polynomial);
+         work.polynomial <= polynomial &&
+         work.requiredMapConstruction <= requiredMaps);
   uint64_t remaining = work.discardedRecipeExpansion;
   for (uint64_t amount :
        {uint64_t(helpers - work.helperOperations),
         uint64_t(expressions - work.finiteExpressions),
-        slots - work.helperSlots, polynomial - work.polynomial}) {
+        slots - work.helperSlots, polynomial - work.polynomial,
+        requiredMaps - work.requiredMapConstruction}) {
     if (amount > remaining)
       return false;
     remaining -= amount;
@@ -39,6 +42,7 @@ bool RecipeConstructionWork::discard(RealizationWork &work) const {
   work.finiteExpressions = expressions;
   work.helperSlots = slots;
   work.polynomial = polynomial;
+  work.requiredMapConstruction = requiredMaps;
   return true;
 }
 

@@ -1,0 +1,18 @@
+module zkc::scalar;
+
+pub use zkc::primitives::scalar::{
+  inverse, from_index
+};
+
+pub fn power<F: Field>(base: F, exponent: index) -> F effects(stop) where () {
+  let mut remaining = exponent;
+  let mut factor = base;
+  let mut result: F = 1;
+  for _ in 0..64 {
+    let bit = kernel("index.mod", remaining, 2);
+    if bit == 1 { result = result * factor; }
+    factor = factor * factor;
+    remaining = kernel("index.div", remaining, 2);
+  }
+  return result;
+}

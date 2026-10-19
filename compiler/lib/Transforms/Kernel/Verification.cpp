@@ -129,10 +129,29 @@ class Checker {
     return success();
   }
   LogicalResult block(Block &before, Block &after, IRMapping values,
+                      ArrayRef<unsigned> ports = {},
+                      std::optional<unsigned> forwarded = {},
                       unsigned depth = 0) {
-    if (depth > 64 || before.getArgumentTypes() != after.getArgumentTypes())
-      return refuse(candidate, "Local block interface or depth changed");
-    values.map(before.getArguments(), after.getArguments());
+    if (depth > 64)
+      return refuse(candidate, "Local block depth changed");
+    if (ports.empty()) {
+      if (before.getArgumentTypes() != after.getArgumentTypes())
+        return refuse(candidate, "Local block interface changed");
+      values.map(before.getArguments(), after.getArguments());
+    } else {
+      if (ports.size() != before.getNumArguments())
+        return refuse(candidate, "Local capture layout changed");
+      unsigned width = 0;
+      for (auto [argument, port] : zip(before.getArguments(), ports)) {
+        if (port >= after.getNumArguments() ||
+            argument.getType() != after.getArgument(port).getType())
+          return refuse(candidate, "Local capture type changed");
+        values.map(argument, after.getArgument(port));
+        width = std::max(width, port + 1);
+      }
+      if (width != after.getNumArguments())
+        return refuse(candidate, "extra Local capture argument");
+    }
     auto *cursor = after.empty() ? nullptr : &after.front();
     for (auto it = before.begin(); it != before.end(); ++it) {
       auto &op = *it;
@@ -209,6 +228,24 @@ class Checker {
         }
         continue;
       }
+      bool control =
+          isa<local::LocalIfOp, local::LocalForOp, local::LocalMatchOp>(op);
+      bool loop = isa<local::LocalForOp>(op);
+      unsigned prefix = loop ? 2 + op.getNumResults() : 1;
+      SmallVector<unsigned> capturePorts;
+      if (control || (forwarded &&
+                      isa<local::LocalYieldOp, local::LocalConditionOp>(op))) {
+        unsigned start = control ? prefix : inputs.size() - *forwarded;
+        SmallVector<Value> canonical(inputs.begin(), inputs.begin() + start);
+        llvm::DenseMap<Value, unsigned> seen;
+        for (auto value : ArrayRef<Value>(inputs).drop_front(start)) {
+          auto [found, inserted] = seen.try_emplace(value, canonical.size());
+          if (inserted)
+            canonical.push_back(value);
+          capturePorts.push_back(found->second - start);
+        }
+        inputs = std::move(canonical);
+      }
       if (!cursor || cursor->getName() != op.getName() ||
           cursor->getAttrDictionary() != op.getAttrDictionary() ||
           cursor->getResultTypes() != op.getResultTypes() ||
@@ -216,10 +253,23 @@ class Checker {
           cursor->getNumRegions() != op.getNumRegions())
         return refuse(candidate,
                       "ordered Local context, pin, site or operand changed");
-      for (auto [a, b] : zip(op.getRegions(), cursor->getRegions()))
-        if (!hasSingleElement(a) || !hasSingleElement(b) ||
-            failed(block(a.front(), b.front(), values, depth + 1)))
+      for (auto [a, b] : zip(op.getRegions(), cursor->getRegions())) {
+        if (!hasSingleElement(a) || !hasSingleElement(b))
           return refuse(candidate, "structured Local control changed");
+        SmallVector<unsigned> innerPorts;
+        if (control) {
+          unsigned start = a.front().getNumArguments() - capturePorts.size();
+          for (unsigned i = 0; i < start; ++i)
+            innerPorts.push_back(i);
+          for (auto port : capturePorts)
+            innerPorts.push_back(start + port);
+        }
+        if (failed(block(a.front(), b.front(), values, innerPorts,
+                         loop ? std::optional<unsigned>(capturePorts.size())
+                              : std::nullopt,
+                         depth + 1)))
+          return refuse(candidate, "structured Local control changed");
+      }
       values.map(op.getResults(), cursor->getResults());
       cursor = cursor->getNextNode();
     }

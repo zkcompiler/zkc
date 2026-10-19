@@ -61,25 +61,29 @@ inductive Event where
   | positions
   deriving DecidableEq
 
-abbrev Raw : List Event → Type := fun _ => Fin 4
+abbrev Raw : Event → Type := fun _ => Fin 4
+
+/-- The history oracle answers every history by one position. -/
+abbrev HistoryRaw : List Event → Type := fun _ => Fin 4
 
 /-- The query phase requests one block through the correlated handler. -/
 def absorb : Typed.Interface signature Event Unit Raw
-  | .positions => .query .positions fun _ raw => correlated raw
+  | .positions => .query .positions fun raw => correlated raw
 
 /-- The validator of a word with one bad position: accept when the block avoids
 it. -/
 def validator : PIR.Proc signature Bool := .call Op.positions fun block => .done (decide (Good block))
 
 /-- The query-free prover sends nothing. -/
-def cheater : OracleComp (OracleSpec.ofFn Raw) (List Unit) := pure []
+def cheater : OracleComp (OracleSpec.ofFn HistoryRaw) (List Unit) := pure []
 
 theorem correlated_transform :
-    Typed.transform absorb Typed.answer validator [] [] =
+    Typed.transform absorb Typed.ask validator [] [] =
       (fun raw : Fin 4 => (PIR.Outcome.returned (decide (Good fun _ => raw)), ([] : List Unit))) <$>
-        Typed.answer (R := Raw) [Event.positions] := by
-  simp only [validator, Typed.transform, absorb, correlated, List.nil_append,
-    map_eq_bind_pure_comp, Function.comp_def]
+        Typed.answer (R := HistoryRaw) [Event.positions] := by
+  simp only [validator, Zkc.Transcript.transform, absorb, correlated, List.nil_append, Typed.ask,
+    Typed.ReadsByOccurrence.read, Equiv.refl_apply, map_eq_bind_pure_comp, Function.comp_def,
+    bind_assoc, pure_bind]
 
 /-- The word is accepted with probability `3 / 4`. -/
 theorem correlated_acceptance :

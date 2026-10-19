@@ -34,5 +34,5 @@ The [integration tests](../../../protocol/test_indexed_callback_selection.py)
 compare both fields against independent arithmetic with default compilation,
 `--no-simplify`, `--no-finite-bulk`, and both flags. They separately inspect
 executable dot-product sites and the indexed collection's vector arithmetic.
-See the [finite library guide](../../../../../libraries/zkc/README.md#finite-computations)
+See the [finite library guide](../../../../../libraries/core/README.md#finite-computations)
 for total access and domain formation.

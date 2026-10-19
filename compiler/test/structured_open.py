@@ -437,7 +437,7 @@ with case('unused-relations-retained-and-conflicting-identities-refused'):
 with case('actual-schnorr-library-interactive-retains-formula-and-relation'):
     source, symbol, data = frontend('example::Interactive', {
         'example': repository_root / 'examples/projects/schnorr/main.zkc',
-        'schnorr': repository_root / 'libraries/schnorr/lib.zkc'})
+        'schnorr': repository_root / 'libraries/protocols/sigma/schnorr/lib.zkc'})
     assert len(data[5]) == 1
     assert data[5][0][3] == 'zkc.language.formula/0'
     assert len([d for d in data[7] if d[2] == 'math']) == 1
@@ -451,7 +451,7 @@ with case('actual-schnorr-library-interactive-retains-formula-and-relation'):
     assert run(source, ['2', '6', None, None, '29'], 'role00000001', script, symbol=symbol) == returned([True], trace(script), 4)
     _, proof_symbol, proof = frontend('example::Proof', {
         'example': repository_root / 'examples/projects/schnorr/main.zkc',
-        'schnorr': repository_root / 'libraries/schnorr/lib.zkc'})
+        'schnorr': repository_root / 'libraries/protocols/sigma/schnorr/lib.zkc'})
     assert any(op[0][0] == 'statement' for op in definitions(proof)[proof_symbol][9][1])
 
 for form in ['Helpers', 'Reordered', 'EarlyChallenge']:

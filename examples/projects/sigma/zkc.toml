@@ -1,7 +1,10 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-sigma = "../../../libraries/sigma"
+["dependencies"]
+"sigma" = { workspace = "protocols.sigma.compositions" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

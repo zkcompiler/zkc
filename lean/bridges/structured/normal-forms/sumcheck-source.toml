@@ -1,0 +1,50 @@
+# Participant normal forms of the original Sumcheck source root: both roles apply
+# the shared `Reduce` body, whose generated normal forms are substituted at the
+# application; the prover owns the table and the verifier the terminal check.
+fixture = "lean/bridges/structured/fixtures/sumcheck-source.json"
+output = "lean/ZkcExamples/Structured/SumcheckSourceNormalForms.lean"
+namespace = "ZkcExamples.Structured.SumcheckSourceNormalForms"
+summary = "Participant normal forms of the original Sumcheck source root"
+imports = ["ZkcExamples.Structured.SumcheckSourceViews", "ZkcExamples.Structured.SumcheckRoundNormalForms",
+           "ZkcExamples.Structured.NormalFormSteps"]
+open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
+helper_modules = ["lean/ZkcExamples/Structured/SumcheckSourceBodies.lean",
+                  "lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
+                  "lean/ZkcExamples/Structured/MapFirstBodies.lean"]
+
+[unit]
+name = "SumcheckSourceViews.unit"
+views = "SumcheckSourceViews"
+helpers = "plainHelpers (F := F) (G := G) SumcheckSourceViews.unit"
+program = "SumcheckSourceViews.program"
+
+[[shared]]
+declaration = "run"
+body = "SumcheckSourceBodies.runBody"
+function = "runFn"
+
+[[shared.applications]]
+declaration = "reduce"
+body = "SumcheckVerifierBodies.reduceBody reduceMaximum"
+callee = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
+function = "reduceFn"
+arguments = { U = "SumcheckSourceViews.unit", maximum = "reduceMaximum" }
+roles.verifierReduce = { bodies = "bodies" }
+roles.proverReduce = { bodies = "bodies", countBound = "Nat.lt_trans shape.2.1 (by decide +kernel)", roundsBound = "Nat.lt_trans shape.2.1 (by decide +kernel)", enough = "Nat.le_refl _" }
+
+[[shared.roles]]
+role = 1
+name = "verifier"
+binders = "(bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)"
+inputs = [{ name = "raw", mode = "optional" }, { name = "claim", mode = "optional" },
+          { name = "count", mode = "optional" }, { name = "service", mode = "optional" }]
+opaque = ["checkHelper"]
+
+[[shared.roles]]
+role = 0
+name = "prover"
+binders = "(bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews.unit.definitions)"
+premises = "(shape : HasShape raw rounds 1) (bound : raw.length < indexLimit)"
+inputs = [{ name = "raw" }, { name = "claim", mode = "absent" }, { name = "rounds" },
+          { name = "service", mode = "absent" }]
+laws.tableHelper = { term = "SumcheckProverLaws.table_present SumcheckSourceViews.unit bodies {0} {1} shape bound", results = ["{0}", "{1}", "{2}"] }

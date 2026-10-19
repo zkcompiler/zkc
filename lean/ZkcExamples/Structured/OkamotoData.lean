@@ -6,8 +6,7 @@ public import Zkc.Source.Structured.Import
 
 /-! Constructor data from the retained actual MLIR export.
 Regenerate with bridges/structured/snapshot.py; admission and semantic proofs
-are separate. No bridge regenerates it yet: no maintained check compares it with
-a fresh export of bridges/structured/fixtures/okamoto.zkc. -/
+are separate. The native bridge checks exact regeneration against the source. -/
 
 namespace ZkcExamples.Structured.OkamotoData
 open Zkc.Source.Structured

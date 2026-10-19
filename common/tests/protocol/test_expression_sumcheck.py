@@ -27,7 +27,7 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
     arena = arena or PROJECT / 'product.ring.json'
     package = directory / f'{entry}.zkpkg'
     modules = ([f'--project={PROJECT}/zkc.toml'] if arena == PROJECT / 'product.ring.json' else [
-        *library_modules('sumcheck'),
+        *library_modules('protocols/polynomial/sumcheck'),
         f'--module=example={PROJECT}/main.zkc', f'--asset=product=ring-json={arena}'])
     report = json.loads(journal.run([
         toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}', *modules,

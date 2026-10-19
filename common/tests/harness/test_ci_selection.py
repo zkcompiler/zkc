@@ -27,6 +27,16 @@ def select(repo, base, output):
     return output.read_text()
 
 
+def check_output(output, expected):
+    lines = output.splitlines()
+    assert lines[:2] == ['existing=value', f'native={str(expected).lower()}']
+    assert len(lines) == 3 and lines[2].startswith('smoke=')
+    checks = lines[2].removeprefix('smoke=').split()
+    assert checks == ([f'.#checks.x86_64-linux.smoke-{name}' for name in
+                       ['eip4844', 'fri', 'gkr', 'monero', 'schnorr', 'sigma', 'spongefish', 'stark', 'sumcheck']]
+                      if expected else [])
+
+
 @pytest.mark.parametrize("path,remove,expected", [
     ("common/unicode/17.0.0/UnicodeData.txt", False, True),
     ("common/unicode/17.0.0/NormalizationTest.txt", False, True),
@@ -35,6 +45,7 @@ def select(repo, base, output):
     ("common/tests/run.py", False, True),
     ("pyproject.toml", False, True),
     ("uv.lock", False, True),
+    ("zkc.workspace.toml", False, True),
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
     ("crates/zkc-tools/build.rs", False, True),
@@ -57,7 +68,7 @@ def test_native_selection_from_changes(tmp_path, path, remove, expected):
         changed.write_text("after\n")
     git(repo, "add", "-A")
     git(repo, "commit", "--quiet", "-m", "change")
-    assert select(repo, base, tmp_path / "output") == f"existing=value\nnative={str(expected).lower()}\n"
+    check_output(select(repo, base, tmp_path / "output"), expected)
 
 
 @pytest.mark.parametrize("base", ["", "0" * 40])
@@ -68,4 +79,4 @@ def test_missing_base_uses_tracked_sources(tmp_path, base, path, expected):
     tracked.parent.mkdir(parents=True, exist_ok=True)
     tracked.write_text("tracked\n")
     git(tmp_path, "add", str(Path(path)))
-    assert select(tmp_path, base, tmp_path / "output") == f"existing=value\nnative={str(expected).lower()}\n"
+    check_output(select(tmp_path, base, tmp_path / "output"), expected)

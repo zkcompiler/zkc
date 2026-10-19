@@ -5,6 +5,7 @@
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
@@ -20,6 +21,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::string entry, format;
   std::optional<EntryKind> entryKind;
   bool declarations = false;
+  bool api = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -114,6 +116,11 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--api") {
+      if (api || command != "language-check")
+        return refuse(error("source.options",
+                            "--api is a check option and may appear once"));
+      api = true;
     } else if (arg == "--declarations") {
       if (declarations || command != "language-check")
         return refuse(
@@ -198,9 +205,26 @@ int runLanguageCompiler(int argc, char **argv) {
       return refuse(report.takeError());
     checked["notations"] = cantFail(json::parse(*report));
   }
-  if (entry.empty() && command == "language-check") {
-    outs() << json::Value(std::move(checked)) << '\n';
+  if (api) {
+    auto report = inspectPublicAPI(*project, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["api"] = cantFail(json::parse(*report));
+  }
+  auto publishCheck = [&]() {
+    std::string bytes;
+    // All optional views share an aggregate ceiling below the SDK process
+    // reader's 64 MiB limit. Refusal never publishes a partial JSON document.
+    BoundedStream out(bytes, 32 * 1024 * 1024);
+    out << json::Value(std::move(checked)) << '\n';
+    if (out.overflow())
+      return refuse(
+          error("source.limit", "source check report byte limit exceeded"));
+    outs() << bytes;
     return 0;
+  };
+  if (entry.empty() && command == "language-check") {
+    return publishCheck();
   }
   auto selected = closeEntry(*project, entry, limits, entryKind);
   if (!selected)
@@ -211,8 +235,7 @@ int runLanguageCompiler(int argc, char **argv) {
   if (command == "language-check") {
     checked["entry"] = selected->entry().qualifiedName;
     checked["original"] = original->identity();
-    outs() << json::Value(std::move(checked)) << '\n';
-    return 0;
+    return publishCheck();
   }
   if (command == "language-emit") {
     outs() << original->bytes();

@@ -4,16 +4,13 @@ public import Zkc.Source.Structured.ProtocolOperations
 
 @[expose] public section
 
-/-! Literal signatures and typed bodies of the actual `example::Proof` Entry: its
-protocol root, which retains the proof statement, and its relation formula.
-`SchnorrProof` proves admission of the complete original snapshot from these
-bodies. -/
+/-! Literal typed bodies printed from the admitted snapshot of
+`ZkcExamples.Construction.SchnorrProofData`. -/
 namespace ZkcExamples.Construction.SchnorrProofBodies
 open Zkc.Source Zkc.Source.Structured
 
 abbrev formulaHelper : Helper :=
-  ⟨"zkf_6d5ed5928b9bea74d6d7736ea8056c9f06e280ffdc4dbcaf2e00bf4f639c1873", .math,
-    [.group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr"], [.boolean]⟩
+  ⟨"zkf_6d5ed5928b9bea74d6d7736ea8056c9f06e280ffdc4dbcaf2e00bf4f639c1873", .math, [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr")], [.boolean]⟩
 
 def formulaBody : Region dialect formulaHelper.inputs formulaHelper.outputs :=
   .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
@@ -23,8 +20,7 @@ def formulaBody : Region dialect formulaHelper.inputs formulaHelper.outputs :=
 def proofSignature : ProtocolSignature where
   name := "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad"
   roles := ["role00000000", "role00000001"]
-  inputs := [.group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr",
-    .service "random.bls12-381.fr/0", .service "random.bls12-381.fr/0"]
+  inputs := [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.service "random.bls12-381.fr/0"), (.service "random.bls12-381.fr/0")]
   outputs := [.boolean]
   inputScopes := [[0, 1], [0, 1], [0], [0], [1]]
   outputScopes := [[1]]
