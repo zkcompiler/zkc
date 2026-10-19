@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.FiatShamir.Sampling
 public import Zkc.Construction.Soundness
+public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
 
@@ -467,13 +468,9 @@ theorem acceptance_le_of_image {A' : Type} (context : Context)
   have imaged : (prover >>= compiled) = image <$> experiment context validator initial prover := by
     rw [experiment, map_bind]
     exact congrArg (prover >>= ·) (funext construction)
-  have mapped : (simulateQ randomOracle
-      (image <$> experiment context validator initial prover)).run' ∅ =
-        image <$>
-          (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
-    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
-  rw [imaged, mapped, prEvent_map]
-  exact prEvent_mono _ _ _ fun result accepted => preserves result accepted
+  exact ZkcSecurity.VCVio.Pruning.prEvent_le_of_image randomOracle image
+    (event := fun result => Accepted accepts' result.1)
+    (idealEvent := fun result => Accepted accepts result.1) preserves imaged ∅
 
 /-- A final projection of the validator's result: the transform of
 `validator.bind (done ∘ f)` accepts with `accepts` exactly as often as the
