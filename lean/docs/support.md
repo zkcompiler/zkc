@@ -1016,6 +1016,24 @@ exposes the hash answer (`transfer_exposes`), and no frame has their
 simulation, whatever its projection (`transfer_no_frame`); the same simulator
 without the copy has one (`keptFrame`).
 
+`ZkcSecurity.HashChain.Joint` constructs the frame of the hash-chain provider
+with the commitment's row calls passed through to their own cells of the joint
+oracle on one byte hash, proves every frame obligation and the provider's budget
+map, and bounds the committed-opening verifier over the Keccak-256 hash chain
+with byte tags by `(q + depth + 4)² / 2^256` plus the commitment stage's loss at
+`q` (`keccak_soundness`). `TestsSecurity.HashChainJointFrame` checks that a leaf
+tag that prefixes the chain's binding tag is not separated
+(`prefixTag_not_separated`) and that its leaf call then collides with a binding
+(`prefixTag_collides`), instantiates the Keccak theorem with one-byte rows
+(`byteRows_soundness`), and checks the provider's budget map at that instance
+(`provider_budget_total`). The theorem is about the model's deployed reading of
+the abstract committed verifier: its events are encoded by a model encoding
+rather than the native frames, its index is one digest modulo `2^depth` rather
+than the installed 64-byte index request, request bytes whose occurrence is a
+root are other inputs, and no compiled Entry, native transcript reading or
+executable is connected. Keccak-256 is read as a random oracle, and the Rust
+kernels and the host's statement roots remain trusted.
+
 Each of these modules audits its own declarations, and
 `TestsSecurity.InterfaceAxioms` audits the shared-interface modules with the
 dependency rules: the core transcript interface and path bounds, the keyed
