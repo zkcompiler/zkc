@@ -1529,14 +1529,43 @@ obligations of a joint provider theorem.
   expansion counting towards one total (`joint`).
 
 A frame's contract (`Frame.contract`) takes its namespaces from the frame, so
-the namespaces the contract records are those the simulator uses. When the ideal failure of a mixture of provers is that of a
-random-oracle experiment after drawing the prover (`oracleMixture`,
-`oracleMixture_mixes`), the frame's simulation is a provider stage from that
-experiment's oracle game (`Frame.oracleRelation`). In
-`TestsSecurity.StageComposition` the committed verifier that reads one row at
-one drawn index composes with any such frame: its intended event is bounded by
-the simulation's loss, verifier expansion included, plus the commitment stage's
-loss at the simulation's transported query budget (`frame_composes`).
+the namespaces the contract records are those the simulator uses. When the
+ideal failure of a mixture of provers is that of a random-oracle experiment
+after drawing the prover (`oracleMixture`, `oracleMixture_mixes`), the frame's
+simulation is a provider stage from that experiment's oracle game
+(`Frame.oracleRelation`). In `TestsSecurity.StageComposition` the committed
+verifier that reads one row at one drawn index composes with any such frame:
+its intended event is bounded by the simulation's loss, verifier expansion
+included, plus the commitment stage's loss at the simulation's transported query
+budget (`frame_composes`).
+
+A simulator answers a prover's repeated calls from its record, so the
+translated prover asks each key once. Against the lazily sampled oracle a
+memoizing front end is transparent (`ZkcSecurity.VCVio.Memo.coupling`): from a
+record equal to the oracle's cache, the direct and the memoized runs return the
+same result and leave the same cache, and the memoized run's log is the direct
+log restricted to keys not seen before (`unseen`), the direct log agreeing with
+the final cache. The bridge's event reads the prover's log through checkpoint
+extractions, so it is unchanged by the repeated entries when the extractor reads
+its record only through first matches (`Extractable.FirstMatch`), as the
+extractor of Merkle trees with hashed leaves does
+(`LeafHashing.scheme_firstMatch`): the hash calls before a key's first query are
+read through first matches of the whole log (`find?_hashEntries_beforeFirst`),
+and dropping repeated entries keeps every first match
+(`ZkcSecurity.VCVio.Memo.find?_unseen_append`), so the checkpoint tables and the
+event are unchanged (`checkpointTables_unseen`, `falseAcceptance_unseen`), and
+the bridge's event is at most as likely for a prover as for its memoized
+version (`falseAcceptance_le_memo`). `TestsSecurity.JointSimulation` constructs
+a frame from a tagged provider whose primitive inputs are the joint oracle's
+tagged keys: the simulator assigns every input to its own cell and answers
+repeated inputs from its record, a hash call keeps its answer, and the record
+of transcript cells is the provider-state projection, which hash answers do not
+change. The simulation is exact at the total budget, every frame obligation
+holds, and composing through the contract bounds the committed verifier's
+concrete false acceptance by the commitment stage's loss at the total budget
+(`tagged_soundness`). Its tags are the joint key's own summands, so it has no
+chain state that could collide; a provider that encodes tags in bytes composes
+with it through `Relation.ofRenaming`.
 
 ## Obligations
 
