@@ -19,12 +19,12 @@ the earlier stage's loss.
 (`ZkcSecurity.Examples.CommittedOpeningBridge`) gives the commitment stage of its joint game
 (`bridgeRelation`), with the loss `q · ((1 - δ) + h q) + ((1 - δ) + (depth + 1) · h q)` at `q`
 prover queries, `h` the hash charge (`bridgeRelation_loss`). A provider simulated in the joint
-oracle, with the frame's pass-through and separation obligations recorded in `Frame`, gives the
-provider stage; with namespace separation, the bridge's checkpoint extraction and an intended
-event implying the concrete failure, the contract composes (`frame_composes`): the intended event
-of a concrete adversary within a per-family budget `b` has probability at most the simulation's
-loss at `b` and the verifier expansion, plus the commitment stage's loss at the simulation's
-transported query budget `cost b`. No compiled claim is made. -/
+oracle, with the frame's obligations recorded in `Frame`, gives the provider stage; with the
+frame's namespaces, the bridge's checkpoint extraction and checkpoint event, and an intended event
+implying the concrete failure, the contract composes (`bridgeContract`, `frame_composes`): the
+intended event of a concrete adversary within a per-family budget `b` has probability at most the
+simulation's loss at `b` and the verifier expansion, plus the commitment stage's loss at the
+simulation's transported query budget `cost b`. No compiled claim is made. -/
 
 namespace TestsSecurity.StageComposition
 open OracleComp OracleSpec
@@ -130,24 +130,52 @@ theorem bridgeRelation_loss (accepts : Row → Bool) (depth : ℕ) (fraction : E
         ((1 - fraction) + ((depth + 1 : ℕ) : ENNReal) * bridgeHash (Digest := Digest) depth queries) :=
   rfl
 
-/-- The joint-stage contract composes for the bridge: a provider simulated in the joint oracle,
-with the frame's obligations, gives a provider stage; with namespace separation of the shared
-primitive's inputs and an intended event implying the concrete failure, the intended event of an
-adversary within a per-family budget has probability at most the simulation's loss, the verifier
-expansion included, plus the commitment stage's loss at the transported query budget. -/
-theorem frame_composes {ι Family ExecBound ChainCall Input : Type} [DecidableEq Family]
+/-- The bridge's contract over a frame: the frame's namespaces, the bridge's checkpoint
+extraction, the checkpoint event of the bridge's joint game, and the frame's provider stage. -/
+noncomputable def bridgeContract {ι Family ExecBound ChainCall : Type} [DecidableEq Family]
     [Fintype Family] {primitive : OracleSpec ι} {family : ι → Family}
     {concreteFailure : OracleComp primitive (Digest × Proof (List Row) Row Digest) → ExecBound →
       ENNReal}
     (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (default : Row)
     (frame : Joint.Frame primitive family
-      (JointRange (fun _ : Event Row => Fin (2 ^ depth)) Unit Digest Query) concreteFailure
+      (JointRange (fun _ : Event Row => Fin (2 ^ depth)) Unit Digest Query) ChainCall
+      concreteFailure
       (fun provers _ => Joint.oracleMixture
         (experiment (absorb depth) (scheme model depth) (fun _ : Digest => validator accepts depth)
           initial (fun root => [((), root)]))
         (FalseAcceptance (words depth default) (scheme model depth) (fun root => [((), root)])
           (FalseTable accepts depth fraction default) (· = true)) provers))
-    (executions : ExecBound) (namespaces : Joint.Namespaces Query ChainCall Input)
+    (executions : ExecBound)
+    (intended : OracleComp primitive (Digest × Proof (List Row) Row Digest) → ENNReal)
+    (implies : ∀ adversary, intended adversary ≤ concreteFailure adversary executions) :=
+  frame.contract _ _ (Joint.bridgeCheckpoint (words depth default) (scheme model depth)
+      (fun root => [((), root)]))
+    (fun result => Joint.transcriptKeys result.verifierLog)
+    (fun result => result.proverLog ++ result.verifierLog)
+    (fun result extraction => Accepted (· = true) result.outcome ∧
+      FalseTable accepts depth fraction default result.statement (extraction result.statement))
+    (Joint.falseAcceptance_iff_checkpoint (words depth default) (scheme model depth)
+      (fun root => [((), root)]) (FalseTable accepts depth fraction default) (· = true))
+    executions intended implies
+
+/-- The joint-stage contract composes for the bridge: any frame over the bridge's joint oracle,
+with an intended event implying the concrete failure, bounds the intended event of an adversary
+within a per-family budget by the simulation's loss, the verifier expansion included, plus the
+commitment stage's loss at the simulation's transported query budget. -/
+theorem frame_composes {ι Family ExecBound ChainCall : Type} [DecidableEq Family]
+    [Fintype Family] {primitive : OracleSpec ι} {family : ι → Family}
+    {concreteFailure : OracleComp primitive (Digest × Proof (List Row) Row Digest) → ExecBound →
+      ENNReal}
+    (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (default : Row)
+    (frame : Joint.Frame primitive family
+      (JointRange (fun _ : Event Row => Fin (2 ^ depth)) Unit Digest Query) ChainCall
+      concreteFailure
+      (fun provers _ => Joint.oracleMixture
+        (experiment (absorb depth) (scheme model depth) (fun _ : Digest => validator accepts depth)
+          initial (fun root => [((), root)]))
+        (FalseAcceptance (words depth default) (scheme model depth) (fun root => [((), root)])
+          (FalseTable accepts depth fraction default) (· = true)) provers))
+    (executions : ExecBound)
     (intended : OracleComp primitive (Digest × Proof (List Row) Row Digest) → ENNReal)
     (implies : ∀ adversary, intended adversary ≤ concreteFailure adversary executions)
     (adversary : OracleComp primitive (Digest × Proof (List Row) Row Digest))
@@ -156,19 +184,8 @@ theorem frame_composes {ι Family ExecBound ChainCall Input : Type} [DecidableEq
       frame.simulation.queryCost.loss budget (frame.simulation.queryCost.expansion executions) +
         (bridgeRelation model accepts depth fraction default).loss
           (frame.simulation.queryCost.cost budget) := by
-  let contract : Joint.Contract (bridgeGame model accepts depth fraction default)
-      (Provider.concreteGame primitive family concreteFailure executions) Query ChainCall Input
-      (TranscriptKey (Event Row) Unit Digest)
-      ((key : JointKey (Event Row) Unit Digest Query) ×
-        JointRange (fun _ : Event Row => Fin (2 ^ depth)) Unit Digest Query key)
-      (Digest → List (Table Row)) :=
-    { namespaces := namespaces
-      checkpoint := Joint.bridgeCheckpoint (words depth default) (scheme model depth)
-        (fun root => [((), root)])
-      provider := frame.oracleRelation _ _ executions
-      intended := intended
-      implies := implies }
-  refine (contract.bounded (bridgeRelation model accepts depth fraction default) budget adversary
+  refine ((bridgeContract model accepts depth fraction default frame executions intended
+    implies).bounded (bridgeRelation model accepts depth fraction default) budget adversary
     within).trans (le_of_eq ?_)
   show (frame.simulation.queryCost.loss budget (frame.simulation.queryCost.expansion executions) +
       0) + _ = _

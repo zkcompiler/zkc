@@ -19,14 +19,17 @@ on any input. Namespace separation is an obligation, not an assumption that cell
 two encodings are jointly injective (`Namespaces.separated`), so no hash call is read as a chain
 call and conversely (`Namespaces.hash_ne_chain`).
 
-**Statement and history interpretation** (`Checkpoint`, `Contract.implies`). The commitment
-stage bounds a checkpoint event: the statement is read through the extraction from the hash calls
-before the first query of one of the verifier's transcript keys, and that extraction is frozen
-once the key is queried (`Checkpoint.frozen`; the bridge's extraction satisfies it,
-`bridgeCheckpoint`). An intended application event, such as acceptance of a statement that is
-false for the tables the prover committed to, enters the bound only through the implication
-`Contract.implies`. The implication is a required field: the checkpoint event needs a transcript
-query of the verifier and is false for a query-free verifier
+**Statement and history interpretation** (`Checkpoint`, `Contract.checkpointed`,
+`Contract.implies`). A checkpoint extraction for a key reads only the log entries strictly before
+the first entry that queries the key (`Checkpoint.factors`), so it is fixed before that query is
+answered and frozen afterwards (`Checkpoint.frozen`). The joint game is the oracle game of a
+prover experiment whose event is the checkpoint event (`Contract.checkpointed`): for one of the
+verifier's transcript keys, the result is false at the key's extraction. The bridge's event is of
+this form (`falseAcceptance_iff_checkpoint`, with `bridgeCheckpoint`). An intended application
+event, such as acceptance of a statement that is false for the tables the prover committed to,
+enters the bound only through the implication `Contract.implies` into the concrete game's
+failure. The implication is a required field: the checkpoint event needs a transcript query of the
+verifier and is false for a query-free verifier
 (`ZkcSecurity.Stage.not_falseAcceptance_of_verifierLog_nil`).
 
 **Adversary translation, verifier expansion, budgets and losses** (`Contract.provider`). The
@@ -43,17 +46,19 @@ adversary admissible at `b` has probability at most `provider.loss b + commitmen
 **The provider frame** (`Frame`). A provider stage over the joint oracle comes from a provider
 simulation whose simulator answers the commitment's hash calls from their own ideal cells and
 realizes the transcript cells by the provider. `Frame` records such a simulation with the
-obligations under which it is expected to hold: pass-through hash calls answered from their own
-cells (`Frame.passThrough`); tag separation, no other call realizing a hash cell
-(`Frame.separated`); and the loss charged over the joint trace and the joint budget, every call to
-the shared primitive counting towards one total (`Frame.joint`). The frame is not constructed here
-for any provider; a joint provider theorem has to establish these fields. The remaining
-obligation, transport between the commitment's pair keys and the provider's history keys, is a
-zero-loss stage for every renaming of oracle cells (`Relation.ofRenaming`, with
-`ZkcSecurity.Oracle.pairToHistory` and `ZkcSecurity.Oracle.historyToPair`). When the ideal failure
-of a mixture of provers is that of a random-oracle experiment after drawing the prover
-(`oracleMixture`), the frame's simulation is a provider stage from that experiment's oracle game
-(`Frame.oracleRelation`).
+obligations it must meet: the simulator uses the namespaces' own encodings (`passThrough`,
+`separated`, `chainOnly`); a hash call's reply is its cell's answer through a fixed range
+equivalence (`hashRange`, `hashAnswer`); recording a hash answer leaves the provider-state
+projection unchanged, and the attempts and private replies of every other call depend on the state
+only through that projection (`recordHash`, `attemptChain`, `respondChain`); and the loss is
+charged over the joint trace and the joint budget (`joint`). A frame's contract
+(`Frame.contract`) takes its namespaces from the frame, so the namespaces the contract records are
+the ones the simulator uses. When the ideal failure of a mixture of provers is that of a
+random-oracle experiment after drawing the prover (`oracleMixture`), the frame's simulation is a
+provider stage from that experiment's oracle game (`Frame.oracleRelation`).
+
+**Key forms.** A renaming of oracle cells is a zero-loss stage (`Relation.ofRenaming`); the
+renamings between the commitment bridge's keys and history keys are in `ZkcSecurity.Oracle.Keys`.
 -/
 
 set_option autoImplicit false
@@ -109,50 +114,176 @@ theorem hash_ne_chain (call : HashCall) (other : ChainCall) :
 
 end Namespaces
 
-/-- A checkpoint extraction: the extraction for a key from a log of entries, frozen once an entry
-of the log queries the key. -/
+/-- The entries of a log strictly before the first entry that queries `key`; the whole log when no
+entry does. -/
+def before {Key Entry : Type} (queries : Entry → Key → Bool) (key : Key) (log : List Entry) :
+    List Entry :=
+  log.takeWhile fun entry => !queries entry key
+
+theorem before_append {Key Entry : Type} (queries : Entry → Key → Bool) (key : Key) :
+    ∀ (log later : List Entry), (∃ entry ∈ log, queries entry key = true) →
+      before queries key (log ++ later) = before queries key log
+  | [], _, ⟨_, member, _⟩ => absurd member (List.not_mem_nil)
+  | head :: tail, later, ⟨entry, member, hit⟩ => by
+      unfold before
+      rw [List.cons_append, List.takeWhile_cons, List.takeWhile_cons]
+      by_cases here : queries head key = true
+      · simp [here]
+      · have inTail : ∃ entry ∈ tail, queries entry key = true := by
+          rcases List.mem_cons.mp member with same | inTail
+          · subst same
+            exact absurd hit here
+          · exact ⟨entry, inTail, hit⟩
+        have rest := before_append queries key tail later inTail
+        unfold before at rest
+        simp [here, rest]
+
+theorem before_before {Key Entry : Type} (queries : Entry → Key → Bool) (key : Key)
+    (log : List Entry) : before queries key (before queries key log) = before queries key log := by
+  unfold before
+  induction log with
+  | nil => rfl
+  | cons head tail ih =>
+      by_cases here : queries head key = true
+      · simp [here]
+      · simp [here, ih]
+
+/-- A checkpoint extraction: the extraction for a key from a log of entries reads only the entries
+strictly before the first entry that queries the key (`factors`), so it cannot depend on that
+query or anything after it. -/
 structure Checkpoint (Key Entry Extraction : Type) where
-  queries : Entry → Key → Prop
+  queries : Entry → Key → Bool
   extract : Key → List Entry → Extraction
-  frozen : ∀ key log later, (∃ entry ∈ log, queries entry key) →
-    extract key (log ++ later) = extract key log
+  factors : ∀ key log, extract key log = extract key (before queries key log)
+
+/-- Once the key is queried, later entries leave its extraction unchanged. -/
+theorem Checkpoint.frozen {Key Entry Extraction : Type} (checkpoint : Checkpoint Key Entry Extraction)
+    (key : Key) (log later : List Entry) (queried : ∃ entry ∈ log, checkpoint.queries entry key = true) :
+    checkpoint.extract key (log ++ later) = checkpoint.extract key log := by
+  rw [checkpoint.factors key (log ++ later), checkpoint.factors key log,
+    before_append _ key log later queried]
 
 section Bridge
-variable {J : PIR.Signature} {E Shape Value Query Y Stmt : Type} {Raw : E → Type}
+variable {J : PIR.Signature} {E Shape Value Query Y Stmt A P : Type} {Raw : E → Type}
   [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
 
+/-- The bridge's log entries that query a transcript key. -/
+def queriesKey (entry : (key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key)
+    (key : TranscriptKey E Shape Y) : Bool :=
+  decide (entry.1 = .inl key)
+
+theorem beforeFirst_eq_before (key : TranscriptKey E Shape Y) :
+    ∀ log : List ((key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key),
+      beforeFirst (.inl key) log = before queriesKey key log
+  | [] => rfl
+  | head :: tail => by
+      rw [beforeFirst_cons]
+      unfold before
+      rw [List.takeWhile_cons]
+      by_cases here : head.1 = .inl key
+      · simp [here, queriesKey]
+      · have rest := beforeFirst_eq_before key tail
+        unfold before at rest
+        simp [here, queriesKey, rest]
+
 /-- The commitment bridge's checkpoint extraction: a statement's tables extracted from the hash
-calls before the first query of a transcript key. -/
+calls strictly before the first query of a transcript key. -/
 def bridgeCheckpoint (words : Words J Shape Value) (scheme : Extractable Shape Value Query Y)
     (statementRoots : Stmt → List (Shape × Y)) :
     Checkpoint (TranscriptKey E Shape Y)
       ((key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key)
       (Stmt → List (Table Value)) where
-  queries entry key := entry.1 = .inl key
+  queries := queriesKey
   extract key log statement := checkpointTables words scheme statementRoots log key statement
-  frozen key log later queried := funext fun statement =>
-    checkpointTables_append words scheme statementRoots log later key statement queried
+  factors key log := by
+    funext statement
+    simp only [checkpointTables, beforeFirst_eq_before key log,
+      beforeFirst_eq_before key (before queriesKey key log), before_before]
+
+/-- The transcript keys of a joint log. -/
+def transcriptKeys (log : List ((key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key)) :
+    List (TranscriptKey E Shape Y) :=
+  log.filterMap fun entry =>
+    match entry.1 with
+    | .inl key => some key
+    | .inr _ => none
+
+omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query] in
+theorem mem_transcriptKeys (log : List ((key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key))
+    (key : TranscriptKey E Shape Y) :
+    key ∈ transcriptKeys log ↔ ∃ entry ∈ log, entry.1 = .inl key := by
+  unfold transcriptKeys
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨entry, member, found⟩
+    refine ⟨entry, member, ?_⟩
+    revert found
+    rcases entry with ⟨first | _, _⟩ <;> simp
+  · rintro ⟨entry, member, same⟩
+    exact ⟨entry, member, by rw [same]⟩
+
+/-- The bridge's event is its checkpoint event: the verifier accepts and the statement is false
+for its tables extracted at the checkpoint of one of the verifier's transcript keys, from the
+prover's and the verifier's log. -/
+theorem falseAcceptance_iff_checkpoint (words : Words J Shape Value)
+    (scheme : Extractable Shape Value Query Y) (statementRoots : Stmt → List (Shape × Y))
+    (falseStatement : Stmt → List (Table Value) → Prop) (accepts : A → Prop)
+    (result : JointRun Stmt P Value Y A (QueryLog (joint Raw Shape Y Query))) :
+    FalseAcceptance words scheme statementRoots falseStatement accepts result ↔
+      ∃ key ∈ transcriptKeys result.verifierLog,
+        Accepted accepts result.outcome ∧ falseStatement result.statement
+          ((bridgeCheckpoint words scheme statementRoots).extract key
+            (result.proverLog ++ result.verifierLog) result.statement) := by
+  unfold FalseAcceptance
+  simp only [mem_transcriptKeys, bridgeCheckpoint]
+  constructor
+  · rintro ⟨accepted, entry, member, key, same, falseAt⟩
+    exact ⟨key, ⟨entry, member, same⟩, accepted, falseAt⟩
+  · rintro ⟨key, ⟨entry, member, same⟩, accepted, falseAt⟩
+    exact ⟨accepted, entry, member, key, same, falseAt⟩
 
 end Bridge
 
-/-- The contract of a joint stage from the joint game `Joint` to the concrete game `Concrete`:
-namespace separation of the shared primitive's inputs, the checkpoint extraction, the provider
-stage, and an intended application event of concrete adversaries with its required implication
-into the concrete game's checkpoint event. -/
-structure Contract (Joint Concrete : Game) (HashCall ChainCall Input Key Entry Extraction : Type) where
+/-- The contract of a joint stage over the joint oracle `OracleSpec.ofFn R` to the concrete game
+`Concrete`. The joint game is the oracle game of a prover experiment whose event is a checkpoint
+event (`checkpointed`): the event holds exactly when, for one of the verifier's transcript keys,
+the result is false at the key's checkpoint extraction from the result's log. The contract also
+carries namespace separation of the shared primitive's inputs, the provider stage from the joint
+game, and an intended application event of concrete adversaries with its required implication
+into the concrete game's failure. -/
+structure Contract {D : Type} [DecidableEq D] (R : D → Type) [∀ key, SampleableType (R key)]
+    (Prover Budget Result : Type) (Concrete : Game)
+    (HashCall ChainCall Input Key Entry Extraction : Type) where
   namespaces : Namespaces HashCall ChainCall Input
   checkpoint : Checkpoint Key Entry Extraction
+  admissible : Budget → Prover → Prop
+  experiment : Prover → OracleComp (OracleSpec.ofFn R) Result
+  event : Result → Prop
+  /-- The verifier's transcript keys in a result. -/
+  verifierKeys : Result → List Key
+  /-- The log a result's checkpoints are extracted from. -/
+  log : Result → List Entry
+  /-- The result is false at an extraction. -/
+  falseAt : Result → Extraction → Prop
+  checkpointed : ∀ result, event result ↔
+    ∃ key ∈ verifierKeys result, falseAt result (checkpoint.extract key (log result))
   /-- The provider stage: adversary translation, transported budgets, and the loss with the
   verifier's expansion, initialization included. -/
-  provider : Relation Joint Concrete
+  provider : Relation (oracleGame R Prover Budget admissible experiment event) Concrete
   /-- The probability of the intended application event for each concrete adversary. -/
   intended : Concrete.Adversary → ENNReal
-  /-- The intended event implies the checkpoint event the stages bound. -/
+  /-- The intended event implies the concrete game's failure. -/
   implies : ∀ adversary, intended adversary ≤ Concrete.bad adversary
 
 namespace Contract
-variable {Joint Concrete : Game} {HashCall ChainCall Input Key Entry Extraction : Type}
-  (contract : Contract Joint Concrete HashCall ChainCall Input Key Entry Extraction)
+variable {D : Type} [DecidableEq D] {R : D → Type} [∀ key, SampleableType (R key)]
+  {Prover Budget Result : Type} {Concrete : Game}
+  {HashCall ChainCall Input Key Entry Extraction : Type}
+  (contract : Contract R Prover Budget Result Concrete HashCall ChainCall Input Key Entry Extraction)
+
+/-- The joint game: the oracle game of the contract's experiment and checkpoint event. -/
+noncomputable def jointGame : Game :=
+  oracleGame R Prover Budget contract.admissible contract.experiment contract.event
 
 /-- The concrete game with the intended application event as its bad event. -/
 def intendedGame : Game where
@@ -161,25 +292,27 @@ def intendedGame : Game where
   Admissible := Concrete.Admissible
   bad := contract.intended
 
-/-- The implication of the checkpoint event by the intended event, as a zero-loss stage. -/
+/-- The implication of the concrete failure by the intended event, as a zero-loss stage. -/
 def interpretation : Relation Concrete contract.intendedGame :=
   Relation.ofLe (S := Concrete) (T := contract.intendedGame) (fun adversary => adversary)
     (fun budget => budget) (fun _ _ holds => holds) fun _ adversary _ => contract.implies adversary
 
 /-- The commitment stage, the provider stage and the interpretation, composed. -/
-def relation (commitment : Relation Game.trivial Joint) : Relation Game.trivial contract.intendedGame :=
+noncomputable def relation (commitment : Relation Game.trivial contract.jointGame) :
+    Relation Game.trivial contract.intendedGame :=
   (commitment.comp contract.provider).comp contract.interpretation
 
 /-- The composed loss is the provider's loss plus the commitment stage's loss at the transported
 budget. -/
-theorem relation_loss (commitment : Relation Game.trivial Joint) (budget : Concrete.Budget) :
+theorem relation_loss (commitment : Relation Game.trivial contract.jointGame)
+    (budget : Concrete.Budget) :
     (contract.relation commitment).loss budget =
       contract.provider.loss budget + commitment.loss (contract.provider.budget budget) := by
   exact zero_add _
 
 /-- The intended event of a concrete adversary admissible at `b` has probability at most the
 provider's loss at `b` plus the commitment stage's loss at the transported budget. -/
-theorem bounded (commitment : Relation Game.trivial Joint) :
+theorem bounded (commitment : Relation Game.trivial contract.jointGame) :
     contract.intendedGame.Bounded fun budget =>
       contract.provider.loss budget + commitment.loss (contract.provider.budget budget) := by
   intro budget adversary holds
@@ -189,28 +322,58 @@ theorem bounded (commitment : Relation Game.trivial Joint) :
 end Contract
 
 section Frame
-variable {ι TranscriptKey HashCall Family ExecBound α β : Type} [DecidableEq Family] [Fintype Family]
-  {primitive : OracleSpec ι} {family : ι → Family} {R : TranscriptKey ⊕ HashCall → Type}
+variable {ι TranscriptKey HashCall ChainCall Family ExecBound α β : Type} [DecidableEq Family]
+  [Fintype Family] {primitive : OracleSpec ι} {family : ι → Family}
+  {R : TranscriptKey ⊕ HashCall → Type}
   {concreteFailure : OracleComp primitive α → ExecBound → ENNReal}
 
 /-- A provider simulation over a joint oracle of transcript cells and hash cells, with the
-obligations of the frame: every hash call is answered from its own ideal cell, no other call
-realizes a hash cell, and the loss is charged over the joint trace and the joint budget. -/
+obligations of the frame.
+
+* **Namespaces.** The primitive's inputs encode the commitment's hash calls and the provider's
+  chain calls with jointly injective encodings (`namespaces`), and these are the encodings the
+  simulator uses: every hash call belongs to its own ideal cell in every state (`passThrough`),
+  only that call realizes the cell (`separated`), and only chain calls realize transcript cells
+  (`chainOnly`).
+* **Hash answers.** A hash call's reply is its ideal cell's answer read through a fixed range
+  equivalence (`hashRange`, `hashAnswer`).
+* **State separation.** The simulator's state has a provider-state projection (`chainState`)
+  that recording a hash answer leaves unchanged (`recordHash`), and the attempts and private
+  replies of every call that is not a hash call depend on the state only through that projection
+  (`attemptChain`, `respondChain`): no hash answer becomes provider state.
+* **Joint loss.** The loss is charged over the joint trace and the joint budget: every call to the
+  shared primitive, the adversary's in every family and the verifier's expansion, counts towards
+  one total (`joint`). -/
 structure Frame (primitive : OracleSpec ι) (family : ι → Family) (R : TranscriptKey ⊕ HashCall → Type)
-    (concreteFailure : OracleComp primitive α → ExecBound → ENNReal)
+    (ChainCall : Type) (concreteFailure : OracleComp primitive α → ExecBound → ENNReal)
     (idealFailure : ProbComp (OracleComp (OracleSpec.ofFn R) α) → ExecBound → ENNReal) where
   simulation : Provider.Simulation primitive family R concreteFailure idealFailure
-  /-- The primitive call of each hash call. -/
-  hashCall : HashCall → ι
-  /-- Pass-through: a hash call belongs to its own ideal cell in every state. -/
+  namespaces : Namespaces HashCall ChainCall ι
   passThrough : ∀ budget state call,
-    (simulation.simulator budget).attempt state (hashCall call) = some (.inr call)
-  /-- Tag separation: a call that realizes a hash cell is that hash call, so no chain call is
-  answered from a hash cell and no hash answer becomes a chain state. -/
+    (simulation.simulator budget).attempt state (namespaces.hash call) = some (.inr call)
   separated : ∀ budget state query call,
-    (simulation.simulator budget).attempt state query = some (.inr call) → query = hashCall call
-  /-- The loss as a function of the joint trace: all calls to the shared primitive, the
-  adversary's in every family and the verifier's expansion, counted together. -/
+    (simulation.simulator budget).attempt state query = some (.inr call) →
+      query = namespaces.hash call
+  chainOnly : ∀ budget state query key,
+    (simulation.simulator budget).attempt state query = some (.inl key) →
+      ∃ chain, query = namespaces.chain chain
+  hashRange : (call : HashCall) → R (.inr call) ≃ primitive.Range (namespaces.hash call)
+  hashAnswer : ∀ budget call ideal,
+    (simulation.simulator budget).shared (namespaces.hash call) (.inr call) ideal =
+      hashRange call ideal
+  ChainState : Provider.Budget Family → Type
+  chainState : (budget : Provider.Budget Family) → (simulation.simulator budget).State →
+    ChainState budget
+  recordHash : ∀ budget state call ideal,
+    chainState budget ((simulation.simulator budget).record state (.inr call) ideal) =
+      chainState budget state
+  attemptChain : ∀ budget state other query, chainState budget state = chainState budget other →
+    (∀ call, query ≠ namespaces.hash call) →
+      (simulation.simulator budget).attempt state query =
+        (simulation.simulator budget).attempt other query
+  respondChain : ∀ budget state other query, chainState budget state = chainState budget other →
+    ((simulation.simulator budget).respond state query).1 =
+      ((simulation.simulator budget).respond other query).1
   jointLoss : ℕ → ENNReal
   joint : ∀ budget expansion,
     simulation.queryCost.loss budget expansion ≤ jointLoss ((∑ each, budget each) + expansion)
@@ -219,7 +382,7 @@ variable {idealFailure : ProbComp (OracleComp (OracleSpec.ofFn R) α) → ExecBo
 
 /-- The frame's simulation as a provider stage at one execution bound. -/
 noncomputable def Frame.toRelation
-    (frame : Frame primitive family R concreteFailure idealFailure) (executions : ExecBound)
+    (frame : Frame primitive family R ChainCall concreteFailure idealFailure) (executions : ExecBound)
     (mixes : Provider.Mixes idealFailure executions) :
     Relation (Provider.idealGame R idealFailure executions)
       (Provider.concreteGame primitive family concreteFailure executions) :=
@@ -254,7 +417,7 @@ provider stage from the oracle game of that experiment, at one execution bound. 
 noncomputable def Frame.oracleRelation
     (experiment : OracleComp (OracleSpec.ofFn R) α → OracleComp (OracleSpec.ofFn R) β)
     (event : β → Prop)
-    (frame : Frame primitive family R concreteFailure
+    (frame : Frame primitive family R ChainCall concreteFailure
       (fun provers _ => oracleMixture experiment event provers))
     (executions : ExecBound) :
     Relation (oracleGame R (OracleComp (OracleSpec.ofFn R) α) ℕ
@@ -266,6 +429,36 @@ noncomputable def Frame.oracleRelation
     (fun prover => prover) (fun queries => queries) (fun _ _ holds => holds)
     fun _ prover _ => le_of_eq (by simp only [Provider.idealGame, oracleMixture]; rfl)).comp
     (frame.toRelation executions (oracleMixture_mixes experiment event executions))
+
+/-- The contract of a frame: its namespaces are the frame's own, and its provider stage is the
+frame's simulation from the oracle game of the experiment whose mixtures give the ideal
+failure. -/
+noncomputable def Frame.contract {Key Entry Extraction : Type}
+    (experiment : OracleComp (OracleSpec.ofFn R) α → OracleComp (OracleSpec.ofFn R) β)
+    (event : β → Prop)
+    (frame : Frame primitive family R ChainCall concreteFailure
+      (fun provers _ => oracleMixture experiment event provers))
+    (checkpoint : Checkpoint Key Entry Extraction) (verifierKeys : β → List Key)
+    (log : β → List Entry) (falseAt : β → Extraction → Prop)
+    (checkpointed : ∀ result, event result ↔
+      ∃ key ∈ verifierKeys result, falseAt result (checkpoint.extract key (log result)))
+    (executions : ExecBound) (intended : OracleComp primitive α → ENNReal)
+    (implies : ∀ adversary, intended adversary ≤ concreteFailure adversary executions) :
+    Contract R (OracleComp (OracleSpec.ofFn R) α) ℕ β
+      (Provider.concreteGame primitive family concreteFailure executions) HashCall ChainCall ι
+      Key Entry Extraction where
+  namespaces := frame.namespaces
+  checkpoint := checkpoint
+  admissible queries prover := IsTotalQueryBound prover queries
+  experiment := experiment
+  event := event
+  verifierKeys := verifierKeys
+  log := log
+  falseAt := falseAt
+  checkpointed := checkpointed
+  provider := frame.oracleRelation experiment event executions
+  intended := intended
+  implies := implies
 
 end Frame
 
