@@ -401,9 +401,9 @@ fixes the type of provider simulations and proves one for the hash-chain
 suites' byte-level chain model (the duplex providers' simulations remain
 named), and states the joint experiment of a committed opening with its
 extraction checkpoint convention and proves its bound for a total straight-line
-extractor, an instance of a general bound for verifiers with committed tables
-read in one random oracle with their hash calls. The committed opening is a model
-protocol, not a compiled Entry. It also states law records with their five constructors and the gated
+extractor; a general bound for verifiers with committed tables, read in one
+random oracle with their hash calls, also applies to it. The committed opening
+is a model protocol, not a compiled Entry. It also states law records with their five constructors and the gated
 accepted-value decoder, per-key charges in the typed Fiat–Shamir theorems,
 raw answer types by the last event and the lifting of uniform-sort certificates,
 binding codecs over typed public-value binding events, and the data shape of the

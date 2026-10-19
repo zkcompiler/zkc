@@ -38,9 +38,10 @@ that all native behavior already has a Lean model.
   worst-case round-by-round soundness and its transport to the compiled verifier
   of a guessing fixture; formal readings of the construction obligations, the
   type of provider simulations and its hash-chain instance for the
-  construction's byte-level chain model; and verifiers with committed tables,
-  read with roots and openings in one random oracle with their hash calls, with
-  the bound of the committed-opening experiment as an instance.
+  construction's byte-level chain model, and the joint experiment of a
+  committed opening with its bound for a total straight-line extractor; and the
+  bound for verifiers with committed tables, read with roots and openings in
+  one random oracle with their hash calls.
 - [FRI security](spec/fri-security.md): the verifier of the FRI library's
   low-degree test at the ideal interpretation of its commitments, its
   line-by-line correspondence to the source and ArkLib's FRI analysis, its

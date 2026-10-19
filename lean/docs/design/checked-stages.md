@@ -55,9 +55,9 @@ transform of the original verifier: VCVio's Fiat–Shamir theorem for Sigma
 protocols and the multi-round theorems over round-by-round certificates. Lower
 stages, from the participant program to the executed `zkc.program`, are
 representation refinements, and their completeness statements need the resource
-and progress assumptions above. The executable lowering rule is the implemented
-one: its reading of the program must equal the constructed instructions or have
-the same normal form (`checkNormalized`), it relates the executable to a metered
+and progress assumptions above. The executable lowering rule implements one
+such stage: its reading of the program must equal the constructed instructions
+or have the same normal form (`checkNormalized`), it relates the executable to a metered
 ideal meaning that prunes the constructed validator's ideal meaning by stops at
 every budget, and its completeness statements take a budget sufficient for every
 run (`validate_sufficient`).
