@@ -5,7 +5,9 @@ fixture = "lean/bridges/structured/fixtures/gkr-source.json"
 output = "lean/ZkcExamples/Structured/GkrSourceNormalForms.lean"
 namespace = "ZkcExamples.Structured.GkrSourceNormalForms"
 summary = "The root of the original GKR Entry and its participants' normal forms"
-imports = ["ZkcExamples.Structured.GkrSourceViews"]
+imports = ["ZkcExamples.Structured.GkrRoundsNormalForms", "ZkcExamples.Structured.NormalFormSteps"]
+open = ["SumcheckVerifierHelpers"]
+options = ["maxHeartbeats 1600000"]
 helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
 
 [bodies]
@@ -13,3 +15,88 @@ name = "gkr"
 callbacks = { s4 = "output", s23 = "layer", s48 = "coefficient" }
 views = "GkrSourceViews"
 declaration = "gkr"
+
+[unit]
+name = "GkrSourceViews.unit"
+views = "GkrSourceViews"
+helpers = "plainHelpers (F := F) (G := G) GkrSourceViews.unit"
+program = "GkrSourceViews.program"
+
+# One output-point challenge: drawn by the verifier and delivered to the prover.
+[[shared]]
+repeat = "s4"
+body = "outputBody"
+function = "outputFn"
+
+[[shared.roles]]
+role = 1
+name = "verifierOutput"
+slots = [{ name = "point", mode = "optional" }]
+captures = [{ name = "service", mode = "optional" }]
+strict = ["*"]
+
+# One further coefficient of a layer's line polynomial.
+[[shared]]
+repeat = "s48"
+body = "coefficientBody"
+function = "coefficientFn"
+
+[[shared.roles]]
+role = 1
+name = "verifierCoefficient"
+slots = [{ name = "coefficients", mode = "optional" }]
+captures = [{ name = "line", mode = "optional" }]
+strict = ["*"]
+
+# One layer: the two layer Sumcheck applications, the line polynomial, the wiring
+# check and the line challenge.
+[[shared]]
+repeat = "s23"
+body = "layerBody"
+function = "layerFn"
+
+[[shared.applications]]
+name = "left"
+declaration = "rounds"
+body = "GkrRoundsNormalForms.roundsBody roundsMaximum"
+raw = "GkrRoundsNormalForms.roundsBody_raw"
+callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
+function = "roundsFn"
+results = ["point", "", "", "", "", "point", "value"]
+roles.verifierRounds = {}
+
+[[shared.applications]]
+name = "right"
+declaration = "rounds"
+body = "GkrRoundsNormalForms.roundsBody roundsMaximum"
+raw = "GkrRoundsNormalForms.roundsBody_raw"
+callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
+function = "roundsFn"
+results = ["point", "", "", "", "", "point", "value"]
+roles.verifierRounds = {}
+
+[[shared.roles]]
+role = 1
+name = "verifierLayer"
+slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
+captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
+            { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
+            { name = "selector", mode = "optional" }, { name = "width", mode = "optional" },
+            { name = "service", mode = "optional" }]
+strict = ["*"]
+
+# The whole root: the output point, the layers and the input check.
+[[shared]]
+body = "gkrBody"
+function = "gkrFn"
+declaration = "gkr"
+raw = "gkrBody_raw"
+
+[[shared.roles]]
+role = 1
+name = "verifier"
+inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "optional" },
+          { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
+          { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
+          { name = "width", mode = "optional" }, { name = "service", mode = "optional" }]
+strict = ["*"]
