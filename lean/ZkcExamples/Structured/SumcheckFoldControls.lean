@@ -46,7 +46,7 @@ theorem source_complete_instance :
         (SumcheckSourceVerifier.sourceRootInputs (some raw) (some raw.sum) (some 2) (some 7)),
         [2, 3]⟩ =
       ⟨.returned (.cons (some true) .nil), ⟨.done (.cons none .nil), []⟩, []⟩ :=
-  source_complete raw 2 raw_shape raw_bound (Nat.le_refl _) 7 [2, 3] (by decide)
+  source_complete raw 2 raw_shape raw_bound (by decide) 7 [2, 3] (by decide)
 
 /-- Every premise of `reduction_complete` holds, with one of two rounds. -/
 theorem reduction_complete_instance :
