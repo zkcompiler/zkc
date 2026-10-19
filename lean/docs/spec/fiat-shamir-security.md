@@ -5,10 +5,14 @@ any number of challenges, derived from round-by-round soundness of the
 interactive validator. The general theorems hold for any transcript interface
 with typed query sites and an error per site; the transform
 `Zkc.Construction.transform` of the [construction chapter](fiat-shamir.md) is one
-instance, and the imported Sumcheck verifier is an instance of that. The general
+instance, and the imported Sumcheck verifier, the plain GKR verifier and the
+compiled Sumcheck, GKR and guessing Entries are instances of that. The general
 theorems are in `ZkcSecurity.FiatShamir` (`Interface`, `Typed`, `Soundness`,
-`Decoding`, `Sampling`, `Grinding`, `Roles`); the Sumcheck instance is
-`ZkcSecurity.Examples.SumcheckFiatShamir`.
+`Decoding`, `Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`,
+`Binding`, `Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
+hash-chain provider simulation in `ZkcSecurity.HashChain` and the bound for
+verifiers with committed tables in `ZkcSecurity.Commitment`; the Sumcheck
+instance is `ZkcSecurity.Examples.SumcheckFiatShamir`.
 
 ## Typed query sites
 

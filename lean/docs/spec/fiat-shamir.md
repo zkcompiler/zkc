@@ -2,8 +2,11 @@
 
 This chapter defines the formal check of the compiler's native
 [transcript construction](../../../docs/spec/ir/construction.md) for a role-local
-validator, the transform theorems it supports for the compiled Schnorr and
-Sumcheck proof Entries, and the security theorem for the Schnorr Entry. The native [export](../../../docs/spec/formats/constructed-participant.md)
+validator, the transform theorems it supports for the compiled proof Entries of
+the Schnorr, Sumcheck, composed Sumcheck, Sigma and GKR examples and of a
+guessing fixture, and the security theorem for the Schnorr Entry; the security
+theorems of the compiled Sumcheck, GKR and guessing Entries are in
+[multi-round Fiat–Shamir security](fiat-shamir-security.md). The native [export](../../../docs/spec/formats/constructed-participant.md)
 supplies the checked candidate's validator; the
 [structured import](structured-source.md) supplies the original program.
 
@@ -180,17 +183,23 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   `project_sound` and `verifier_correspondence`.
 
 The compiled proof Entries of the Sumcheck example, its composed variant, the
-Sigma example and the guessing fixture are checked the same way
+Sigma example, the GKR example and the guessing fixture are checked the same way
 ([Sumcheck](participant-projection.md#the-compiled-sumcheck-proof-entry),
-[Sigma](participant-projection.md#the-compiled-sigma-proof-entries)):
+[Sigma](participant-projection.md#the-compiled-sigma-proof-entries),
+[GKR](participant-projection.md#the-compiled-gkr-proof-entry),
+[guessing](participant-projection.md#the-compiled-guessing-proof-entry)):
 each validator's ideal meaning is the Fiat–Shamir transform of its original
 validator for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
 composes this with the round-by-round soundness of the imported verifier's
-transform. The compiled guessing Entry's bound is imported from a worst-case
-round-by-round proof stated in ArkLib's framework (written for the example)
-([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers));
-the other compiled Entries have no security theorem here.
+transform. The compiled GKR Entry's bound composes the construction rule's
+equation with a reading of the exported instructions as the plain GKR verifier
+on well-formed statements
+([GKR](fiat-shamir-security.md#the-compiled-gkr-proof-entry)). The compiled
+guessing Entry's bound is imported from a worst-case round-by-round proof
+stated in ArkLib's framework (written for the example)
+([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
+The composed Sumcheck and Sigma proof Entries have no security theorem.
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any

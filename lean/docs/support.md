@@ -741,6 +741,20 @@ preparation proof's obligation; on values in `ZMod 5` it fixes the runtime's
 observations: the honest run returns from 190 instructions, a failing round
 check stops inside its local call after 21 instructions, and a stop inside an
 iteration leaves the call, iteration and participant frames innermost first.
+`Tests.ExecutableNormalization` runs `checkNormalized` on small programs. It
+accepts a calculation deferred past the transcript operations before its first
+consumer, the schedule calculation batching produces, with the export's ideal
+meaning in every monad (`rounds_same`), independent calculations reordered, a
+repeated term shared, a dead term dropped and a value moved across a loop. It
+refuses, each with its named reason, a calculation that can stop, a helper
+call, a guard or a transcript operation moved across another anchor, a value
+scheduled after the observation that absorbs it with that operand retargeted,
+changed arithmetic, a deleted or duplicated guard, work moved into a loop body
+and an ill-sorted calculation; the actual Schnorr and Sumcheck programs take the
+exact-equality path. Two counterexamples show the refused moves unsound: a
+stopping calculation or a rejecting guard moved after a challenge makes the
+program query the challenge function where the export does not
+(`moved_stop_changes_interaction`, `moved_guard_changes_interaction`).
 The axiom closures of the `knowledge_soundness` theorems of
 `CompiledSchnorrFiatShamir`, `ExecutableSchnorrFiatShamir`,
 `StructuredSchnorrFiatShamir`, `SchnorrAndSigma` and `ChaumPedersenSigma` are
@@ -939,6 +953,15 @@ The declaration audit covers `ZkcSecurity.FiatShamir.{Obligations,ProviderSimula
 `TestsSecurity.ProviderSimulation`, and also
 `ZkcSecurity.FiatShamir.{Laws,Lifting,Binding}`, `TestsSecurity.LawRecords` and
 `TestsSecurity.BindingCodecs`.
+`TestsSecurity.CommitmentBridge` prints the axiom closures of the commitment
+bridge: `ZkcSecurity.Commitment.soundness_weighted` and `soundness` with the
+lemmas of their proof, the extractor laws of `MerkleTrees` and `LeafHashing`,
+`CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`, the cost and
+query bounds of the concrete reading (`run_costBound`, `run_queryBound`), and
+`CommittedFri.soundness` with its ideal-reading and budget lemmas. It asserts
+nothing itself; the declaration audit (`TestsSecurity.Audit`), which covers
+every declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed
+axioms.
 The axiom closures of their theorems are subsets of `propext`,
 `Classical.choice` and `Quot.sound`; the counterexamples that compute with
 inverses in `ZMod 5` use `decide +kernel` on four or twenty-five cases.
