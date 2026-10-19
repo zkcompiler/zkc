@@ -248,13 +248,15 @@ def ReadInput (width : ℕ) : Input (Absorbed E Shape S) S Bytes → Prop
   | .request _ occurrence block => (∃ event, occurrence = .event event) ∧ block < width
   | .other _ => False
 
-theorem ReadInput.chainInput {input : Input (Absorbed E Shape S) S Bytes} (small : width ≤ 2 ^ 64)
-    (read : ReadInput width input) : ChainInput input := by
-  cases input with
-  | bind => trivial
-  | absorb => trivial
-  | request _ _ _ => exact ⟨read.1, lt_of_lt_of_le read.2 small⟩
-  | other => exact read.elim
+/-- A chain input of the reading, as a chain call of the byte encodings. -/
+def ReadInput.toCall {input : Input (Absorbed E Shape S) S Bytes} (small : width ≤ 2 ^ 64)
+    (read : ReadInput width input) : ChainCall E Shape S :=
+  ⟨input, by
+    cases input with
+    | bind => trivial
+    | absorb => trivial
+    | request _ _ _ => exact ⟨read.1, lt_of_lt_of_le read.2 small⟩
+    | other => exact read.elim⟩
 
 /-- The chain reading depends on its chain answers only at the inputs it makes. -/
 theorem chainRead_congr {first second : Input (Absorbed E Shape S) S Bytes → m S}

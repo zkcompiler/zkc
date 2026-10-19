@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.HashChain.Joint
 public import ZkcSecurity.Examples.CommittedOpeningBridge
+public import ZkcSecurity.FiatShamir.Laws
 
 @[expose] public section
 
@@ -15,7 +16,7 @@ row calls (`rowHashing`) on the same byte hash as the chain.
 
 **The commitment stage** (`chainStage`). The ideal reading receives the table in the clear and
 draws the index from the decoded blocks. When the decoder sends uniform blocks to a uniform index
-(`UniformDecoder`), the drawn row of a far table is accepted with probability at most `1 - δ`
+(`ZkcSecurity.FiatShamir.ExactLaw`), the drawn row of a far table is accepted with probability at most `1 - δ`
 (`chainCertificate`), and the bridge's stage has the loss
 `q · ((1 - δ) + h q) + ((1 - δ) + (depth + 1) · h q)` at `q` prover queries, with
 `h q = 4 (q + depth + 2) / |S|` (`chainStage_loss`).
@@ -58,18 +59,12 @@ def chainAbsorb (decode : (Fin width → S) → Fin (2 ^ depth)) :
   | .table => .receive Event.table (recoverTable depth)
   | .index => .query .index fun raw => some (decode raw)
 
-/-- A decoder that sends uniform counter blocks to a uniform index. -/
-def UniformDecoder [SampleableType S] (decode : (Fin width → S) → Fin (2 ^ depth)) : Prop :=
-  ∀ predicate : Fin (2 ^ depth) → Prop,
-    Pr{let raw ← $ᵗ (Fin width → S)}[predicate (decode raw)] =
-      Pr{let index ← $ᵗ (Fin (2 ^ depth))}[predicate index]
-
 variable [SampleableType S]
 
 /-- The one-step certificate of the ideal reading over a hash chain: from a far table, the decoded
 row is accepted with probability at most `1 - δ`. -/
 def chainCertificate (accepts : Row → Bool) (fraction : ENNReal) (default : Row)
-    (decode : (Fin width → S) → Fin (2 ^ depth)) (uniform : UniformDecoder depth width decode) :
+    (decode : (Fin width → S) → Fin (2 ^ depth)) (uniform : ExactLaw decode) :
     Typed.Certificate (chainAbsorb (Row := Row) depth width decode) (· = true)
       (error (Row := Row) fraction) where
   doomed := Doomed accepts depth fraction default
@@ -161,7 +156,7 @@ noncomputable abbrev openingHash (queries : ℕ) : ENNReal :=
 /-- The commitment stage of the committed-opening verifier over a hash chain, from the trivial
 game to its joint game. -/
 noncomputable def chainStage (accepts : Row → Bool) (fraction : ENNReal) (default : Row)
-    (uniform : UniformDecoder depth width decode) :
+    (uniform : ExactLaw decode) :
     Stage.Relation Stage.Game.trivial
       (Stage.jointGame (chainAbsorb (Row := Row) depth width decode) (words depth default)
         (scheme (rowHashing Row S) depth) (fun _ : S => validator accepts depth) initial
@@ -183,7 +178,7 @@ noncomputable def chainStage (accepts : Row → Bool) (fraction : ENNReal) (defa
       proof.messages proof.openings
 
 theorem chainStage_loss (accepts : Row → Bool) (fraction : ENNReal) (default : Row)
-    (uniform : UniformDecoder depth width decode) (queries : ℕ) :
+    (uniform : ExactLaw decode) (queries : ℕ) :
     (chainStage depth width decode accepts fraction default uniform).loss queries =
       queries * ((1 - fraction) + openingHash (S := S) depth queries) +
         ((1 - fraction) + ((depth + 1 : ℕ) : ENNReal) * openingHash (S := S) depth queries) :=
@@ -280,7 +275,7 @@ verifier accept while the table extracted at the checkpoint of its index key is 
 probability at most `(q + V)² / |S|`, `V = width + depth + 3`, plus the commitment stage's loss at
 `q`: `q · ((1 - δ) + h q) + ((1 - δ) + (depth + 1) · h q)` with `h q = 4 (q + depth + 2) / |S|`. -/
 theorem opening_soundness (encoding : Encoding (Event Row) Unit S (RowCall Row S))
-    (positive : 0 < width) (small : width ≤ 2 ^ 64) (uniform : UniformDecoder depth width decode)
+    (positive : 0 < width) (small : width ≤ 2 ^ 64) (uniform : ExactLaw decode)
     (accepts : Row → Bool) (fraction : ENNReal) (default : Row)
     (adversary : OracleComp (ByteHash S) (S × Proof (List Row) Row S)) {calls : ℕ}
     (bounded : IsTotalQueryBound adversary calls) :
@@ -342,7 +337,7 @@ theorem keccakIndex_val (depth : ℕ) (fits : depth ≤ 256) (raw : Fin 1 → Ke
 
 /-- The residue of a uniform digest modulo `2^depth` is a uniform index. -/
 theorem keccakIndex_uniform (depth : ℕ) (fits : depth ≤ 256) :
-    UniformDecoder depth 1 (keccakIndex depth fits) := by
+    ExactLaw (keccakIndex depth fits) := by
   intro predicate
   let pair : (Fin 1 → KeccakDigest) → Fin (2 ^ depth) × Fin (2 ^ (256 - depth)) := fun raw =>
     Prod.swap (finProdFinEquiv.symm
@@ -450,7 +445,7 @@ def keccakEncoding (codec : Bytes) (tableWidth tableHeight : ℕ) (rowBytes : Ro
     Encoding (Event Row) Unit KeccakDigest (RowCall Row KeccakDigest) :=
   (keccakRows codec tableWidth tableHeight rowBytes rowInjective).encoding digestBytes
     (openingEventBytes rowBytes) 32 digestBytes_length digestBytes_injective
-    (openingEventBytes_injective positive rowLengths rowInjective) keccak_tagsSeparated
+    (openingEventBytes_injective positive rowLengths rowInjective)
 
 /-- The hash charge of the committed opening over Keccak-256 at `q` prover queries:
 `4 (q + depth + 2) / 2^256`. -/

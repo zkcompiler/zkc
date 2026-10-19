@@ -395,7 +395,10 @@ omit [SampleableType S] in
 the call and its reply, and keeps the correspondence. -/
 theorem handle_log (bytes : Bytes) (state : JointState E Shape S Query width length)
     (classification : Classification E Shape S Query)
-    (corresponds : Corresponds encoding width length state classification) :
+    (corresponds : state.chain.answers = classification.answers ∧
+      state.chain.reached = classification.reached ∧
+      ∀ key, ((jointSimulator encoding width length).recorded state key).isSome =
+        classification.emitted key) :
     ∀ result ∈ support ((((jointSimulator encoding width length).handle bytes).run state).withQueryLog),
       skeleton result.2 = skeleton (classification.step encoding width bytes result.1.1).1 ∧
         Corresponds encoding width length result.1.2
@@ -486,7 +489,9 @@ classified byte log have one skeleton. -/
 theorem run_log {α : Type} (adversary : OracleComp (ByteHash S) α) :
     ∀ (state : JointState E Shape S Query width length)
       (classification : Classification E Shape S Query),
-      Corresponds encoding width length state classification →
+      state.chain.answers = classification.answers ∧ state.chain.reached = classification.reached ∧
+        (∀ key, ((jointSimulator encoding width length).recorded state key).isSome =
+          classification.emitted key) →
       ∀ result ∈ support (((simulateQ (jointSimulator encoding width length).handle
           adversary.withQueryLog).run state).withQueryLog),
         skeleton result.2 = skeleton (classification.read encoding width result.1.1.2) := by

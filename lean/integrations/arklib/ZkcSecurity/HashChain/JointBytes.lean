@@ -34,9 +34,9 @@ with the digests in the chain's state encoding. The installed Keccak-256 rows us
 `|codec|:u64le ‖ codec ‖ width:u64le ‖ height:u64le` (`keccakRows`), as in the
 [installed binary Merkle schemes](../../../../../docs/spec/domains/oracles.md#installed-binary-merkle-schemes).
 
-**Separation from bytes.** When the leaf and node tags and the three chain tags are pairwise
-non-prefix (`TagsSeparated`), row calls and chain calls have jointly injective encodings
-(`TaggedRows.separated`): a tag that is not a prefix of another fixes the role, a leaf input then
+**Separation from bytes.** Tagged rows carry the separation of their tags: the leaf and node tags
+and the three chain tags are pairwise non-prefix (`TagsSeparated`). Row calls and chain calls then
+have jointly injective encodings (`TaggedRows.separated`): a tag that is not a prefix of another fixes the role, a leaf input then
 fixes its row through the row codec, a node input its two fixed-length digests, and a chain input
 is fixed by `encodeInput_injective`. The Keccak tags are separated (`keccak_tagsSeparated`); a row
 tag that prefixes a chain tag is not (`TestsSecurity.HashChainJointFrame`). An `Encoding` packages
@@ -69,8 +69,8 @@ def ChainInput : Input (Absorbed E Shape S) S Bytes → Prop
 /-- The chain inputs the verifier makes. -/
 abbrev ChainCall (E Shape S : Type) := {input : Input (Absorbed E Shape S) S Bytes // ChainInput input}
 
-theorem ChainInput.encodable {input : Input (Absorbed E Shape S) S Bytes} (chain : ChainInput input) :
-    Encodable input := by
+theorem ChainCall.encodable (call : ChainCall E Shape S) : Encodable call.val := by
+  obtain ⟨input, chain⟩ := call
   cases input with
   | bind => trivial
   | absorb => trivial
@@ -102,19 +102,12 @@ def rowHashing (Row S : Type) : LeafHashing Row (RowCall Row S) S where
   leafRow_leaf _ := rfl
   children_node _ _ := rfl
 
-/-- Tagged byte encodings of row calls: tags for leaf and node inputs, a fixed leaf header and an
-injective row codec. -/
-structure TaggedRows (Row : Type) where
-  leafTag : Bytes
-  nodeTag : Bytes
-  header : Bytes
-  rowBytes : Row → Bytes
-  rowInjective : Function.Injective rowBytes
-
-/-- The bytes of a row call, with digests in the state encoding. -/
-def TaggedRows.callBytes (rows : TaggedRows Row) (stateBytes : S → Bytes) : RowCall Row S → Bytes
-  | .leaf row => rows.leafTag ++ rows.header ++ rows.rowBytes row
-  | .node left right => rows.nodeTag ++ stateBytes left ++ stateBytes right
+/-- The bytes of a row call under leaf and node tags, a leaf header and a row codec, with digests
+in the state encoding. -/
+def taggedCallBytes (leafTag nodeTag header : Bytes) (rowBytes : Row → Bytes) (stateBytes : S → Bytes) :
+    RowCall Row S → Bytes
+  | .leaf row => leafTag ++ header ++ rowBytes row
+  | .node left right => nodeTag ++ stateBytes left ++ stateBytes right
 
 /-- Two byte strings neither of which is a prefix of the other. -/
 def Unrelated (first second : Bytes) : Prop := ¬ first <+: second ∧ ¬ second <+: first
@@ -133,9 +126,19 @@ instance (leafTag nodeTag : Bytes) : Decidable (TagsSeparated leafTag nodeTag) :
   unfold TagsSeparated
   infer_instance
 
-theorem Unrelated.symm {first second : Bytes} (unrelated : Unrelated first second) :
-    Unrelated second first :=
-  ⟨unrelated.2, unrelated.1⟩
+/-- Tagged byte encodings of row calls: tags for leaf and node inputs that are separated from each
+other and from the chain tags, a fixed leaf header and an injective row codec. -/
+structure TaggedRows (Row : Type) where
+  leafTag : Bytes
+  nodeTag : Bytes
+  separatedTags : TagsSeparated leafTag nodeTag
+  header : Bytes
+  rowBytes : Row → Bytes
+  rowInjective : Function.Injective rowBytes
+
+/-- The bytes of a row call, with digests in the state encoding. -/
+def TaggedRows.callBytes (rows : TaggedRows Row) (stateBytes : S → Bytes) : RowCall Row S → Bytes :=
+  taggedCallBytes rows.leafTag rows.nodeTag rows.header rows.rowBytes stateBytes
 
 variable {E Shape : Type}
 
@@ -144,11 +147,11 @@ state encoding is injective with one length and the event encoding is injective.
 theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
     {eventBytes : Absorbed E Shape S → Bytes} {stateLength : ℕ}
     (stateLengths : ∀ state, (stateBytes state).length = stateLength)
-    (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes)
-    (tags : TagsSeparated rows.leafTag rows.nodeTag) :
+    (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes) :
     Function.Injective (Sum.elim (rows.callBytes stateBytes)
       fun call : ChainCall E Shape S => encodeInput stateBytes eventBytes call.val) := by
-  obtain ⟨leafNode, leafBind, leafAbsorb, leafRequest, nodeBind, nodeAbsorb, nodeRequest⟩ := tags
+  obtain ⟨leafNode, leafBind, leafAbsorb, leafRequest, nodeBind, nodeAbsorb, nodeRequest⟩ :=
+    rows.separatedTags
   have chainTag : ∀ (tag rest : Bytes) (call : ChainCall E Shape S), Unrelated tag bindTag →
       Unrelated tag absorbTag → Unrelated tag requestTag →
         tag ++ rest ≠ encodeInput stateBytes eventBytes call.val := by
@@ -172,19 +175,19 @@ theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
           | leaf row =>
               cases second with
               | leaf row' =>
-                  simp only [Sum.elim_inl, TaggedRows.callBytes, List.append_assoc,
+                  simp only [Sum.elim_inl, TaggedRows.callBytes, taggedCallBytes, List.append_assoc,
                     List.append_cancel_left_eq] at same
                   rw [rows.rowInjective same]
               | node left right =>
-                  simp only [Sum.elim_inl, TaggedRows.callBytes, List.append_assoc] at same
+                  simp only [Sum.elim_inl, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
                   exact absurd same (tag_append_ne leafNode)
           | node left right =>
               cases second with
               | leaf row =>
-                  simp only [Sum.elim_inl, TaggedRows.callBytes, List.append_assoc] at same
-                  exact absurd same (tag_append_ne leafNode.symm)
+                  simp only [Sum.elim_inl, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
+                  exact absurd same (tag_append_ne ⟨leafNode.2, leafNode.1⟩)
               | node left' right' =>
-                  simp only [Sum.elim_inl, TaggedRows.callBytes, List.append_assoc,
+                  simp only [Sum.elim_inl, TaggedRows.callBytes, taggedCallBytes, List.append_assoc,
                     List.append_cancel_left_eq] at same
                   obtain ⟨lefts, rights⟩ := List.append_inj same
                     (by rw [stateLengths, stateLengths])
@@ -193,10 +196,10 @@ theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
           exfalso
           cases first with
           | leaf row =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
               exact chainTag _ _ second leafBind leafAbsorb leafRequest same
           | node left right =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
               exact chainTag _ _ second nodeBind nodeAbsorb nodeRequest same
   | inr first =>
       cases second with
@@ -204,15 +207,15 @@ theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
           exfalso
           cases second with
           | leaf row =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
               exact chainTag _ _ first leafBind leafAbsorb leafRequest same.symm
           | node left right =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
               exact chainTag _ _ first nodeBind nodeAbsorb nodeRequest same.symm
       | inr second =>
           congr 1
           exact Subtype.ext (encodeInput_injective stateLengths stateInjective eventInjective
-            first.property.encodable second.property.encodable same)
+            first.encodable second.encodable same)
 
 end RowCalls
 
@@ -240,6 +243,7 @@ def keccakRows {Row : Type} (codec : Bytes) (width height : ℕ) (rowBytes : Row
     (rowInjective : Function.Injective rowBytes) : TaggedRows Row where
   leafTag := keccakLeafTag
   nodeTag := keccakNodeTag
+  separatedTags := keccak_tagsSeparated
   header := keccakHeader codec width height
   rowBytes := rowBytes
   rowInjective := rowInjective
@@ -318,8 +322,9 @@ theorem classify_callBytes (call : Query) :
   rw [chosen]
 
 /-- A chain call's bytes are classified as that call. -/
-theorem classify_chainBytes {input : Input (Absorbed E Shape S) S Bytes} (chain : ChainInput input) :
-    encoding.classify (encoding.chainBytes input) = .inr input := by
+theorem classify_chainBytes (call : ChainCall E Shape S) :
+    encoding.classify (encoding.chainBytes call.val) = .inr call.val := by
+  obtain ⟨input, chain⟩ := call
   have found : ∃ target : Query ⊕ ChainCall E Shape S,
       Sum.elim encoding.callBytes (fun call : ChainCall E Shape S => encoding.chainBytes call.val)
         target = encoding.chainBytes input := ⟨.inr ⟨input, chain⟩, rfl⟩
@@ -377,9 +382,9 @@ theorem chainInput_of_inl {bytes : Bytes} {call : Query} (classified : encoding.
   simp only [chainInput, classified]
 
 /-- The chain input of a chain call's bytes is that call. -/
-theorem chainInput_chainBytes {input : Input (Absorbed E Shape S) S Bytes} (chain : ChainInput input) :
-    encoding.chainInput (encoding.chainBytes input) = input :=
-  encoding.chainInput_of_inr (encoding.classify_chainBytes chain)
+theorem chainInput_chainBytes (call : ChainCall E Shape S) :
+    encoding.chainInput (encoding.chainBytes call.val) = call.val :=
+  encoding.chainInput_of_inr (encoding.classify_chainBytes call)
 
 end Encoding
 
@@ -388,8 +393,8 @@ event encoding give the encodings of the shared hash's inputs. -/
 def TaggedRows.encoding {Row : Type} (rows : TaggedRows Row) (stateBytes : S → Bytes)
     (eventBytes : Absorbed E Shape S → Bytes) (stateLength : ℕ)
     (stateLengths : ∀ state, (stateBytes state).length = stateLength)
-    (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes)
-    (tags : TagsSeparated rows.leafTag rows.nodeTag) : Encoding E Shape S (RowCall Row S) where
+    (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes) :
+    Encoding E Shape S (RowCall Row S) where
   callBytes := rows.callBytes stateBytes
   stateBytes := stateBytes
   eventBytes := eventBytes
@@ -397,7 +402,7 @@ def TaggedRows.encoding {Row : Type} (rows : TaggedRows Row) (stateBytes : S →
   stateLengths := stateLengths
   stateInjective := stateInjective
   eventInjective := eventInjective
-  separated := rows.separated stateLengths stateInjective eventInjective tags
+  separated := rows.separated stateLengths stateInjective eventInjective
 
 end Encodings
 

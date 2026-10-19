@@ -175,7 +175,9 @@ def SplitCaches (cache : (ByteHash S).QueryCache)
 /-- One byte call of the lazy random oracle against the split oracle, from agreeing caches. -/
 theorem split_step (bytes : Bytes) (cache : (ByteHash S).QueryCache)
     (state : Trace (Absorbed E Shape S) S Bytes × (Query → Option S))
-    (agree : SplitCaches encoding cache state) :
+    (agree : ∀ bytes, cache bytes = match encoding.classify bytes with
+      | .inl call => state.2 call
+      | .inr input => state.1.cache input) :
     RelTriple ((randomOracle (spec := ByteHash S) bytes).run cache)
       ((splitTraced encoding bytes).run state)
       (fun one two => one.1 = two.1 ∧ SplitCaches encoding one.2 two.2) := by
@@ -457,7 +459,7 @@ theorem chainRead_split (small : width ≤ 2 ^ 64) (process : PIR.Proc (committe
   refine chainRead_congr absorb scheme _ (fun input read => ?_) process state history roots messages
     openings
   simp only [byteChain, byteCall, simulateQ_spec_query]
-  exact splitTraced_inr encoding (encoding.classify_chainBytes (read.chainInput small))
+  exact splitTraced_inr encoding (encoding.classify_chainBytes (read.toCall small))
 
 theorem chainVerify_split (small : width ≤ 2 ^ 64) (verifier : PIR.Proc (committed J Shape Value) A)
     (initial : List (Absorbed E Shape S)) (roots : List (Shape × S)) (messages : List (Message P S))
@@ -477,7 +479,7 @@ theorem chainVerify_split (small : width ≤ 2 ^ 64) (verifier : PIR.Proc (commi
   refine chainVerify_congr absorb scheme _ (fun input read => ?_) verifier initial roots messages
     openings
   simp only [byteChain, byteCall, simulateQ_spec_query]
-  exact splitTraced_inr encoding (encoding.classify_chainBytes (read.chainInput small))
+  exact splitTraced_inr encoding (encoding.classify_chainBytes (read.toCall small))
 
 include encoding in
 /-- The reading against the traced oracle from a bad trace ends bad. -/
