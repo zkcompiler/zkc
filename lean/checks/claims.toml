@@ -207,12 +207,16 @@ subjects = ["okamoto"]
 [[proved]]
 subject = "Participant normal forms"
 result = '''
-`normal_forms.py` generates each role's process, its equation against the admitted unit, its run and the binding of a contract clause from a short request, as ordinary Lean source the kernel checks; Chaum–Pedersen, Okamoto and the Sumcheck units use it'''
-owners = [["Structured bridge", "bridges/structured/README.md#generated-participant-normal-forms"]]
+`normal_forms.py` generates each role's process, its equation against the admitted unit, its run and the binding of a contract clause from a short request, as ordinary Lean source the kernel checks; for a root that applies other protocols it substitutes the callee's generated normal form at the application's child context, through one generic step over the call substitution rule, and states each role's invocation at any caller context. Chaum–Pedersen, Schnorr AND, interactive Schnorr, Okamoto, the Sumcheck units and roots and the GKR layer Sumcheck use it'''
+owners = [["Structured bridge", "bridges/structured/README.md#generated-participant-normal-forms"], ["support", "docs/support.md#source-only-sumcheck-verifier"]]
 theorems = [
   "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process",
   "ZkcExamples.Structured.OkamotoNormalForms.verifier_process",
   "ZkcExamples.Structured.OkamotoNormalForms.exact_clause",
+  "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process",
+  "ZkcExamples.Structured.NormalFormSteps.apply_step",
+  "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke",
+  "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke",
 ]
 
 [[proved]]

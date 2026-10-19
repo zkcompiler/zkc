@@ -368,6 +368,7 @@ import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenNormalForms
 import ZkcExamples.Structured.ChaumPedersenViews
+import ZkcExamples.Structured.GkrRoundsNormalForms
 import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
 import ZkcExamples.Structured.GkrSourceLaws
@@ -447,6 +448,7 @@ import ZkcExamples.Structured.SchnorrAnd
 import ZkcExamples.Structured.SchnorrAndBinding
 import ZkcExamples.Structured.SchnorrAndBodies
 import ZkcExamples.Structured.SchnorrAndData
+import ZkcExamples.Structured.SchnorrAndNormalForms
 import ZkcExamples.Structured.SchnorrAndViews
 import ZkcExamples.Structured.SchnorrBinding
 import ZkcExamples.Structured.SchnorrCheckpoints
@@ -459,6 +461,7 @@ import ZkcExamples.Structured.SchnorrHonestProverControls
 import ZkcExamples.Structured.SchnorrInteractive
 import ZkcExamples.Structured.SchnorrInteractiveBodies
 import ZkcExamples.Structured.SchnorrInteractiveData
+import ZkcExamples.Structured.SchnorrInteractiveNormalForms
 import ZkcExamples.Structured.SchnorrReorderedData
 import ZkcExamples.Structured.SchnorrResponse
 import ZkcExamples.Structured.SchnorrResponseCandidateData
@@ -507,10 +510,12 @@ import ZkcExamples.Structured.SumcheckReduceData
 import ZkcExamples.Structured.SumcheckReduceLaws
 import ZkcExamples.Structured.SumcheckReduceVerifier
 import ZkcExamples.Structured.SumcheckReduceViews
+import ZkcExamples.Structured.SumcheckReductionNormalForms
 import ZkcExamples.Structured.SumcheckReductionRequests
 import ZkcExamples.Structured.SumcheckRelationContract
 import ZkcExamples.Structured.SumcheckRepackedBodies
 import ZkcExamples.Structured.SumcheckRepackedData
+import ZkcExamples.Structured.SumcheckRepackedNormalForms
 import ZkcExamples.Structured.SumcheckRepackedVerifier
 import ZkcExamples.Structured.SumcheckRepackedViews
 import ZkcExamples.Structured.SumcheckRoundLaws
@@ -520,6 +525,7 @@ import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts
 import ZkcExamples.Structured.SumcheckSourceData
 import ZkcExamples.Structured.SumcheckSourceLaws
+import ZkcExamples.Structured.SumcheckSourceNormalForms
 import ZkcExamples.Structured.SumcheckSourceVerifier
 import ZkcExamples.Structured.SumcheckSourceViews
 import ZkcExamples.Structured.SumcheckUnitContracts

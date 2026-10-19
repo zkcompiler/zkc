@@ -3,8 +3,9 @@ import ZkcTools.DeclarationAudit
 
 /-! Regression check for the maintained proof chain, rather than another
 substitution wrapper: every source verifier equation must actually depend on
-the generic interpreted source-call rule. Inspect stored proof bodies, including
-private helpers; merely importing the rule cannot satisfy this check. -/
+the generic interpreted source-call rule, through the generated root normal
+form and its application step. Inspect stored proof bodies, including private
+helpers; merely importing the rule cannot satisfy this check. -/
 namespace Tests.SumcheckSourceComposition
 open Lean Elab Command
 
@@ -36,7 +37,8 @@ def checkDependencies (modules roots : List Name) : CommandElabM Unit := do
     logInfo m!"SOURCE-COMPOSITION-DEPENDENCY {path}"
 
 run_cmd do
-  checkDependencies [`ZkcExamples.Structured.SumcheckSourceVerifier]
+  checkDependencies [`ZkcExamples.Structured.SumcheckSourceVerifier,
+      `ZkcExamples.Structured.SumcheckSourceNormalForms, `ZkcExamples.Structured.NormalFormSteps]
     [``ZkcExamples.Structured.SumcheckSourceVerifier.root_context_expansion,
      ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_linked,
      ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_missing,

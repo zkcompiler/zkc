@@ -54,6 +54,14 @@ theorem verifierState_masked (ctx : ProtocolContext) (self : Nat) (role : self =
   iterate 7 unfold maskValues
   simp [ProtocolContext.mapScopes, Participant.restrict]
 
+/-! Positions of the verifier's carried slots in the repeat state, named by the request. -/
+abbrev verifierPointPosition : Nat := 4
+abbrev verifierPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there (.there .here))))
+abbrev verifierClaimPosition : Nat := 5
+abbrev verifierClaimSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.field "bls12-381.fr") :=
+  (.there (.there (.there (.there (.there .here)))))
+
 /-- The verifier's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
@@ -224,6 +232,20 @@ theorem proverState_masked (ctx : ProtocolContext) (self : Nat) (role : self = c
   iterate 7 unfold maskValues
   simp [ProtocolContext.mapScopes, Participant.restrict]
 
+/-! Positions of the prover's carried slots in the repeat state, named by the request. -/
+abbrev proverEntriesPosition : Nat := 0
+abbrev proverEntriesSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  .here
+abbrev proverDimensionPosition : Nat := 1
+abbrev proverDimensionSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there .here)
+abbrev proverWidthPosition : Nat := 2
+abbrev proverWidthSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there (.there .here))
+abbrev proverPointPosition : Nat := 3
+abbrev proverPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there .here)))
+
 /-- The prover's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverProcess (ctx : ProtocolContext) (entries : List F) (dimension width : Nat) (point : List F) :
@@ -374,7 +396,7 @@ theorem verifierReduce_process (U : UnitPayload) (maximum : Nat) (bodies : Sumch
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 1) (U.plainProtocolTable F G) ctx
   unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
-  simp only [verifierReduceProcess, PIR.Proc.bind]
+  simp only [verifierReduceProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
   · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons none (.cons none (.cons none .nil))) = _
@@ -452,7 +474,7 @@ theorem proverReduce_process (U : UnitPayload) (maximum : Nat) (bodies : Sumchec
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 0) (U.plainProtocolTable F G) ctx
   unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
-  simp only [proverReduceProcess, PIR.Proc.bind]
+  simp only [proverReduceProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
   · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons (some entries) (.cons (some count) (.cons (some 1) .nil))) = _

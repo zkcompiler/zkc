@@ -53,6 +53,17 @@ theorem first_present (xs : List F) (dimension width : Nat) (r : F)
   simp only [positive, ↓reduceIte]
   rfl
 
+/-- The actual table constructor accepts a shaped width-one table unchanged. -/
+theorem table_present (xs : List F) (dimension : Nat) (shape : HasShape xs dimension 1)
+    (bound : xs.length < indexLimit) :
+    invoke (plainHelpers (F := F) (G := G) U).closed MapFirstBodies.tableHelper
+      (inputs xs dimension 1) = .done (inputs xs dimension 1) := by
+  have dimensionBound : dimension < indexLimit := Nat.lt_trans shape.2.1 (by decide +kernel)
+  rw [closed_invoke_plain, (SumcheckUnitContracts.first_laws U.linked bodies).tableLaw
+    xs dimension 1 bound dimensionBound (by decide +kernel)]
+  simp only [shape, ↓reduceIte]
+  rfl
+
 /-- The actual index comparison on representable operands. -/
 theorem less_present (count rounds : Nat) (countBound : count < indexLimit)
     (roundsBound : rounds < indexLimit) :

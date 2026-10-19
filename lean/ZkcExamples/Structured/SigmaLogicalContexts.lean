@@ -68,7 +68,10 @@ theorem dlogAt_holds {snapshot : Snapshot} {imported : Imported snapshot}
 /-! ### Chaum–Pedersen: one witness binder -/
 
 section Equality
-open ChaumPedersenBinding
+open ChaumPedersenNormalForms (owner firstBaseSelector firstKeySelector secondBaseSelector
+  secondKeySelector rootInvocation target assignments)
+open ChaumPedersenBinding (observedBoundary Relation relation_iff observed_target_iff extracted_target
+  decisionSelector)
 
 def SharedHolds (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)
     (witness : F) : Prop :=
@@ -118,7 +121,10 @@ end Equality
 /-! ### Schnorr AND: two witness binders -/
 
 section Pair
-open SchnorrAndBinding
+open SchnorrAndNormalForms (owner firstBaseSelector firstKeySelector secondBaseSelector
+  secondKeySelector rootInvocation target assignments)
+open SchnorrAndBinding (observedBoundary Relation relation_iff observed_target_iff extracted_target
+  decisionSelector)
 
 def IndependentHolds
     (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)

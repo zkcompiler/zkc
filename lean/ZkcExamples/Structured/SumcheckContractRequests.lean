@@ -245,9 +245,9 @@ def childProcess (raw : List F) (claim : F) (count handle : Nat) :=
     forgetSites
 
 set_option backward.isDefEq.respectTransparency false in
-/-- This request's component is the actual maximum-two callee in the Source
+/-- This request's component is the actual callee in the Source
 snapshot. The equation preserves the exact six-slot returned tuple and stops. -/
-theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted : count ≤ 2) :
+theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted : count ≤ SumcheckSourceNormalForms.reduceMaximum) :
     childProcess (G := G) raw claim count handle =
       (PIR.repeatN count (SumcheckVerifierLaws.roundPresent SumcheckSourceVerifier.childContext handle)
         ([], claim)).bind (fun pc => .done (SumcheckVerifierPrelude.reduceResults (some pc.1, some pc.2))) := by
@@ -256,7 +256,7 @@ theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted 
     forgetSites = _
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites]
   rw [SumcheckSourceVerifier.reduce_invoke_plain]
-  change SumcheckVerifierPrelude.reduceDenote 2 SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 1
+  change SumcheckVerifierPrelude.reduceDenote SumcheckSourceNormalForms.reduceMaximum SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 1
     (SumcheckVerifierPrelude.reduceArguments none none none (some claim) (some count) (some handle)) = _
   rw [SumcheckVerifierPrelude.reduce_optional SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies
     SumcheckSourceVerifier.childContext 1 rfl (by decide)]

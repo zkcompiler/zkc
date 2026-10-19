@@ -15,7 +15,8 @@ def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
     Values Value reduceSignature.outputs :=
   SumcheckVerifierBodies.reduceReturnValues state
 
-theorem return_indices : (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
+theorem return_indices : (reduceReturn []).erase =
+    .ret SumcheckVerifierBodies.reduceReturnIndices := rfl
 
 /-- This suffix is embedded directly in the admitted literal reduceBody. -/
 theorem return_equation {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I)
@@ -31,7 +32,7 @@ theorem reduce_checked_tree :
 /-- The original complete Reduce function has this same terminal permutation. -/
 theorem original_reduce_return :
     ∃ instructions, (SumcheckSourceData.snapshot.protocolFunctions[1]).body =
-      .block instructions (.ret [3, 0, 1, 2, 4, 5]) := ⟨_, rfl⟩
+      .block instructions (.ret SumcheckVerifierBodies.reduceReturnIndices) := ⟨_, rfl⟩
 
 theorem run_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] (context : ProtocolContext) (self : Nat)
