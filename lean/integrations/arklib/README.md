@@ -110,14 +110,15 @@ and `VCVio/Pruning`: host validation prunes the compiled verifier's acceptance b
 rejections at every budget, so it accepts at most as often. Its adaptive form
 uses the same typed public-value binding.
 
-`Examples/GkrFiatShamir` gives the plain GKR verifier a round-by-round
-certificate composed per phase (`FiatShamir/Composition`), with ArkLib's
-single-round successor bound at degree two for the layer rounds (`ArkLib/Gkr/Layer`)
-and Schwartz–Zippel for the line restriction, and
-`Examples/CompiledGkrFiatShamir` transfers its
+`Examples/GkrFiatShamir` gives the plain GKR verifier a charged round-by-round
+certificate composed from one reduction per phase (`FiatShamir/Reduction`), each
+challenge site charged its own error: ArkLib's single-round successor bound at
+degree two for the layer rounds (`ArkLib/Gkr/Layer`) and Schwartz–Zippel for the
+line restriction. `Examples/CompiledGkrFiatShamir` transfers its
 [fixed-statement bound](../../docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry)
-to the compiled GKR `example::Proof` verifier through the checked reading of its
-exported instructions.
+to the compiled GKR `example::Proof` verifier through the generated transform of
+the admitted original and the reading of the original's verifier normal form as
+the plain verifier.
 
 `FiatShamir/Upstream` imports ArkLib's
 [worst-case round-by-round soundness](../../docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)

@@ -201,8 +201,8 @@ validator for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
 composes this with the round-by-round soundness of the imported verifier's
 transform. The compiled GKR Entry's bound composes the construction rule's
-equation with a reading of the exported instructions as the plain GKR verifier
-on well-formed statements
+equation with a reading of the admitted original's verifier normal form as the
+plain GKR verifier on well-formed statements
 ([GKR](fiat-shamir-security.md#the-compiled-gkr-proof-entry)). The compiled
 guessing Entry's bound is imported from a worst-case round-by-round proof
 stated in ArkLib's framework (written for the example)
