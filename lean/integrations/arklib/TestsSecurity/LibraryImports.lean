@@ -100,6 +100,7 @@ import ZkcSecurity.HashChain.Reduction
 import ZkcSecurity.HashChain.Simulator
 import ZkcSecurity.HashChain.Steps
 import ZkcSecurity.Oracle.Encoding
+import ZkcSecurity.Oracle.Keys
 import ZkcSecurity.Registry
 import ZkcSecurity.Stage.FiatShamir
 import ZkcSecurity.Stage.Provider
