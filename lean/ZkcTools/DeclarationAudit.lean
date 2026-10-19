@@ -332,8 +332,9 @@ abbrev RegistryEntry := String × Option Name × Bool
   proposition's own leading binders (`∀ x, A x → D y` is headed by `D`). Every
   such declaration must be the schema of a registry entry. Uses under `¬`, as
   arguments of other constants, or inside conclusions are not premises and are
-  not counted; neither are the premises of structure projections and of
-  theorems Lean generates with internal names.
+  not counted; neither are proposition-valued structure fields, nor the
+  premises of structure projections, of auxiliary recursors and of theorems
+  Lean generates with internal names.
 
 The log line reports the counts that define the coverage. -/
 def checkRegistry (entries : List RegistryEntry) (families : List Name)
@@ -361,11 +362,14 @@ def checkRegistry (entries : List RegistryEntry) (families : List Name)
     for family in selected do
       matched := matched.insert family
     for info in env.header.moduleData[index]!.constants do
-      if ZkcTools.Statements.propositionValued info then
+      -- A proposition-valued field of a structure is part of the data the
+      -- structure carries, not a named hypothesis of its own.
+      if ZkcTools.Statements.propositionValued info && !(env.isProjectionFn info.name) then
         propositions := propositions.insert info.name
-      -- A structure projection has its own structure as a premise; that is
-      -- not a use of a hypothesis.
-      if info.isTheorem && !info.name.isInternal && !(env.isProjectionFn info.name) then
+      -- A structure projection has its own structure as a premise, and a
+      -- recursor that Lean generates has its motive's; neither is a use.
+      if info.isTheorem && !info.name.isInternal && !(env.isProjectionFn info.name) &&
+          !isAuxRecursor env info.name then
         theorems := theorems.push info
   for family in families do
     unless matched.contains family do
