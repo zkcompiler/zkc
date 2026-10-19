@@ -32,6 +32,7 @@ import ZkcSecurity.Commitment.Escape
 import ZkcSecurity.Commitment.Experiment
 import ZkcSecurity.Commitment.Extractable
 import ZkcSecurity.Commitment.HashedLeaves
+import ZkcSecurity.Commitment.HistoryKeys
 import ZkcSecurity.Commitment.Merkle
 import ZkcSecurity.Commitment.Record
 import ZkcSecurity.Commitment.Replay

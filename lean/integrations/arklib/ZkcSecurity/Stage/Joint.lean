@@ -58,7 +58,8 @@ random-oracle experiment after drawing the prover (`oracleMixture`), the frame's
 provider stage from that experiment's oracle game (`Frame.oracleRelation`).
 
 **Key forms.** A renaming of oracle cells is a zero-loss stage (`Relation.ofRenaming`); the
-renamings between the commitment bridge's keys and history keys are in `ZkcSecurity.Oracle.Keys`.
+renamings between the commitment bridge's joint keys and history keys, with sampling, budget and
+checkpoint transport, are in `ZkcSecurity.Commitment.HistoryKeys`.
 -/
 
 set_option autoImplicit false

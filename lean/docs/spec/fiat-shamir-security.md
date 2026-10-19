@@ -1459,9 +1459,20 @@ The stages of the Fiat–Shamir path are relations:
   (`Renaming.evalSPMF_translate`), arbitrary, malformed and empty keys included,
   no more queries and the source weight of each key's target cell
   (`translate_queryBound`, `translate_costBound`), so it is a zero-loss stage.
-  The commitment bridge's pair keys `(preceding, occurrence)` and the typed
-  engine's terminated histories are related by such renamings in both
-  directions (`pairToHistory`, `historyToPair`, `historyToPair_weight`).
+  Pairs `(preceding, occurrence)` over event histories and the typed engine's
+  terminated histories are related by such renamings in both directions
+  (`ZkcSecurity.Oracle.pairToHistory`, `ZkcSecurity.Oracle.historyToPair`,
+  `historyToPair_weight`). The commitment bridge's joint keys, whose histories
+  contain committed roots and whose hash calls form a separate summand, are
+  related to history keys in the same way
+  (`ZkcSecurity.Commitment.jointToHistory`, `historyToJoint`): a pair is the
+  history ending with its occurrence, a hash call is itself, and the empty
+  history and histories ending with a root are answered locally. Sampling,
+  queries and charges transport (`prEvent_jointToHistory`,
+  `jointToHistory_costBound`, `historyToJoint_costBound`), and against a table
+  read back, the hash calls before a transcript key's first query are the same
+  in both forms (`checkpoint_jointToHistory`), so every checkpoint extraction
+  agrees.
 
 Knowledge claims stay outside: an extractor-based theorem concludes an
 extraction probability, not a bad-event bound, and keeps its own endpoint.

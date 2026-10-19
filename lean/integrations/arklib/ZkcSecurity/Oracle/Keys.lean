@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.FiatShamir.Interface
 public import ZkcSecurity.VCVio.Deferral
+public import ZkcSecurity.Commitment.TableLog
 public import VCVio.ProgramLogic.Relational.SimulateQ.Basic
 public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
@@ -191,6 +192,83 @@ theorem translate_costBound [∀ key, Nonempty (R key)] (keys : Renaming R R')
           simpa [weighed] using rest ((keys.single key hit).symm ())
 
 end Costs
+
+section Tables
+
+/-- A target answer table read back as a source answer table: a source key's answer is its
+target cell's answer read back, or its single local answer. -/
+def pullback (keys : Renaming R R') (table : (target : D') → R' target) (key : D) : R key :=
+  match hit : keys.cell key with
+  | some target => keys.read key target hit (table target)
+  | none => (keys.single key hit).symm ()
+
+theorem pullback_some (keys : Renaming R R') (table : (target : D') → R' target) {key : D}
+    {target : D'} (hit : keys.cell key = some target) :
+    keys.pullback table key = keys.read key target hit (table target) := by
+  unfold pullback
+  split
+  · rename_i other found
+    obtain rfl : other = target := Option.some.inj (found.symm.trans hit)
+    rfl
+  · rename_i found
+    exact absurd (found.symm.trans hit) (by simp)
+
+theorem pullback_none (keys : Renaming R R') (table : (target : D') → R' target) {key : D}
+    (hit : keys.cell key = none) : keys.pullback table key = (keys.single key hit).symm () := by
+  unfold pullback
+  split
+  · rename_i other found
+    exact absurd (found.symm.trans hit) (by simp)
+  · rfl
+
+/-- One source query through the renaming, against a target table, answers the source key from
+the table read back. -/
+theorem evalWithAnswerFn_ask (keys : Renaming R R') (table : (target : D') → R' target) (key : D) :
+    evalWithAnswerFn (QueryImpl.ofFn table) (keys.ask key) = keys.pullback table key := by
+  cases hit : keys.cell key with
+  | some target =>
+      rw [ask_some keys hit, pullback_some keys table hit]
+      rfl
+  | none =>
+      rw [ask_none keys hit, pullback_none keys table hit]
+      rfl
+
+/-- Against a target table, the translated adversary returns what the source adversary returns
+against that table read back. -/
+theorem evalWithAnswerFn_translate (keys : Renaming R R') (table : (target : D') → R' target) :
+    ∀ adversary : OracleComp (OracleSpec.ofFn R) α,
+      evalWithAnswerFn (QueryImpl.ofFn table) (keys.translate adversary) =
+        evalWithAnswerFn (QueryImpl.ofFn (keys.pullback table)) adversary := by
+  intro adversary
+  induction adversary using OracleComp.inductionOn with
+  | pure value => rw [translate_pure]; rfl
+  | query_bind key next ih =>
+      rw [translate_query_bind, evalWithAnswerFn_bind, evalWithAnswerFn_ask, ih,
+        evalWithAnswerFn_bind]
+      rfl
+
+/-- Against a target table, the translated adversary asks the target cells of the source
+adversary's keys against that table read back, in order; locally answered keys ask nothing. -/
+theorem tableQueryLog_translate (keys : Renaming R R') (table : (target : D') → R' target) :
+    ∀ adversary : OracleComp (OracleSpec.ofFn R) α,
+      (tableQueryLog (keys.translate adversary) table).map Sigma.fst =
+        ((tableQueryLog adversary (keys.pullback table)).map Sigma.fst).filterMap keys.cell := by
+  intro adversary
+  induction adversary using OracleComp.inductionOn with
+  | pure value => simp [translate_pure]
+  | query_bind key next ih =>
+      rw [translate_query_bind, tableQueryLog_bind, evalWithAnswerFn_ask, tableQueryLog_query_bind,
+        List.map_append, ih]
+      cases hit : keys.cell key with
+      | some target =>
+          rw [ask_some keys hit, ZkcSecurity.Commitment.tableQueryLog_map]
+          simp [hit, pullback_some keys table hit]
+      | none =>
+          rw [ask_none keys hit]
+          simp [hit, pullback_none keys table hit]
+
+end Tables
+
 
 section Law
 variable [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]

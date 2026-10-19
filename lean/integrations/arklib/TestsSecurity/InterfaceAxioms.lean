@@ -4,6 +4,7 @@ import ZkcSecurity.HashChain.Bytes
 import ZkcSecurity.FiatShamir.Budget
 import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Binding
+import ZkcSecurity.Commitment.HistoryKeys
 import ZkcTools.DeclarationAudit
 
 /-! Axiom closures and dependency rules of the shared interfaces: the core transcript interface
