@@ -550,7 +550,8 @@ cost of each grinding attempt. This is a separate obligation of each transcript
 construction, stated with the idealization above; role separation at one key
 does not discharge it. Its type is fixed in
 [provider simulations](#provider-simulations), where it is proved for the
-hash-chain suites; for the duplex suites it remains a named obligation.
+hash-chain suites' byte-level chain model; for the duplex suites it remains a
+named obligation.
 
 ## The participant transform
 
@@ -1035,7 +1036,10 @@ injective and prefix-free and the three role tags pairwise non-prefix, and
 `byte_soundness` transfers the bound to a hash on bytes, given injective state
 encodings of one length, injective event encodings and `width ≤ 2^64`. The
 theorems assume `0 < width` and nonempty initial histories; every request has
-the same number of blocks.
+the same number of blocks. They are about the construction's byte-level chain
+model: that the compiled transcript handlers and the installed Keccak-256
+kernels implement that model, and that the suites' decoders are modelled ones,
+remain obligations.
 
 ### The committed-opening experiment
 
