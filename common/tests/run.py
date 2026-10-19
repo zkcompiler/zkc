@@ -61,8 +61,10 @@ def execute(scope, args):
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
         run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
              "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib"])
     elif scope == "lean-clean":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "clean"])
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "clean"])
         directory = ROOT / "lean/integrations/clean"
         output = reports / "lean/clean-air-control.json"
         output.parent.mkdir(parents=True, exist_ok=True)
