@@ -1724,7 +1724,7 @@ class Module:
             proof = spec.get("proof", "rfl")
             if proof == "normal-form":
                 self.root_form(out, spec, entry, program, role, role_name, held, names, binders, arguments,
-                               inputs_name, application, used)
+                               inputs_name, application)
             else:
                 tactic = "kernel_rfl" if proof == "kernel" else "rfl"
                 out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
@@ -1737,7 +1737,7 @@ class Module:
         self.root_spec = (entry, sites, names, role_names, program)
 
     def root_form(self, out, spec, entry, program, role, role_name, held, names, binders, arguments,
-                  inputs_name, application, used):
+                  inputs_name, application):
         """A root equation as an instance of the normalizer's soundness theorem."""
         body = spec["body"]
         pattern = ["present" if index in held else "absent" for index in range(len(names))]
@@ -1747,7 +1747,6 @@ class Module:
         pattern_name, form_name = f"{role_name}Pattern", f"{role_name}Form"
         pattern_literal = values_literal([f".{mode}" for mode in pattern])
         tuple_literal_ = binders_literal([names[index] for index in held])
-        used_names = " ".join(names[index] for index in used)
         out.append(f"/-- The {role_name}'s inputs as the normalizer reads them: held inputs are present. -/")
         out.append(f"def {pattern_name} : NormalForm.InputPattern {program}.payload.entry.inputs :=\n"
                    f"  {pattern_literal}\n")
@@ -1756,7 +1755,7 @@ class Module:
                    + lean_form(result["form"], 2, self.helper_term_of) + "\n")
         out.append(f"theorem {role_name}_normalized :\n    NormalForm.normalize {{}} {body} {role} {roster} "
                    f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
-        out.append(f"/-- The form's process between the output masks is the readable process. -/")
+        out.append("/-- The form's process between the output masks is the readable process. -/")
         out.append(f"theorem {role_name}_presentation (tables : NormalForm.Tables (ringModel F G)) {binders}:\n"
                    f"    ({form_name}.denote (ringModel F G) tables ⟨fun entry => entry.elim0⟩ {{}}\n"
                    f"        ({tuple_literal_})).bind\n"
@@ -2698,7 +2697,7 @@ class Module:
         out.append(f"theorem {name}_environment {scope_binders}:\n"
                    f"    {pattern_name}.environment (ringModel F G) ({binders_value}) =\n"
                    f"      ({environment} : Values (Component (assignment F G)) {types}) := by\n  kernel_rfl\n")
-        out.append(f"/-- The form's presented process is the readable process. -/")
+        out.append("/-- The form's presented process is the readable process. -/")
         out.append(f"theorem {name}_presentation (tables : NormalForm.Tables (ringModel F G)) (ctx : ProtocolContext)\n"
                    f"    {scope_binders}:\n"
                    f"    {form_name}.denoteWith (ringModel F G) tables {results_name} ctx\n"
