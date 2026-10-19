@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+
+["dependencies"]
+"core-collections" = { workspace = "core.collections" }
+"primitive-cryptography" = { workspace = "core.primitives.cryptography" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"
