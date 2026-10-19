@@ -673,7 +673,7 @@ class DeferredRounds:
         def first_product_retargeted(program):
             arguments = program_function(program, "_calculation_1")[2]
             inputs = [argument[0] for argument in arguments[:2]]
-            operation = function_operation(program, "_calculation_1", "field.multiply", inputs)
+            operation = function_operation(program, "_calculation_1", "field.mul", inputs)
             operation[4] = [operation[4][0], arguments[2][0]]
 
         def comparison_trivial(program):
