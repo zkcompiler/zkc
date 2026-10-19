@@ -232,7 +232,7 @@ def entries : List Entry := [
     "Proof bytes decode canonically to the typed messages in order."⟩,
   -- Binding obligations.
   ⟨"binding.statement-determination", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.Typed.Determined,
+    some `Zkc.Transcript.Determined,
     "The initial transcript of a statement, followed by any events, determines the \
     statement, malformed statements included."⟩,
   ⟨"binding.statement-determination.participant", .binding .statementDetermination,
@@ -290,6 +290,22 @@ def entries : List Entry := [
     "The local obligation of a history-indexed doomed set, with a charge per key."⟩,
   ⟨"family.typed-uniform-step", .familyProperty, some `ZkcSecurity.FiatShamir.Typed.UniformStep,
     "The uniform-sort local obligation of a history-indexed doomed set."⟩,
+  ⟨"family.typed-charged-step-to", .familyProperty,
+    some `ZkcSecurity.FiatShamir.Typed.ChargedStepTo,
+    "The local obligation of a history-indexed doomed set of sub-validator residuals with a \
+    postcondition on returned values, with a charge per key."⟩,
+  ⟨"family.typed-uniform-event-step", .familyProperty,
+    some `ZkcSecurity.FiatShamir.Typed.UniformEventStep,
+    "The uniform-sort local obligation of a doomed set that ignores the history."⟩,
+  ⟨"family.keyed-resample-bound", .familyProperty, some `ZkcSecurity.FiatShamir.ResampleBound,
+    "Under every answer table, resampling the answer at a key makes the key bad with \
+    probability at most its charge."⟩,
+  ⟨"family.commit-doomed", .familyProperty, some `ZkcSecurity.Commitment.CommitDoomed,
+    "A history-indexed doomed set of an ideal reading stays doomed across a commitment, read \
+    through every extraction."⟩,
+  ⟨"family.stage-bound", .familyProperty, some `ZkcSecurity.Stage.Game.Bounded,
+    "Every adversary admissible at a budget has bad probability at most the bound at that \
+    budget."⟩,
   ⟨"family.upstream-realization", .familyProperty, some `ZkcSecurity.FiatShamir.Upstream.Realizes,
     "A participant process realizes an upstream process-form residual operation by \
     operation."⟩,
@@ -311,7 +327,7 @@ def entries : List Entry := [
   ⟨"family.sigma-special-hvzk", .familyProperty, some `ZkcSecurity.VCVio.SigmaAnd.SpecialHVZK,
     "Special honest-verifier zero knowledge of a Sigma protocol."⟩,
   -- Events: conditions on a claim's statement or outcome.
-  ⟨"event.accepted", .event, some `ZkcSecurity.FiatShamir.Accepted,
+  ⟨"event.accepted", .event, some `Zkc.Transcript.Accepted,
     "A returned value satisfies the acceptance predicate; stops never accept."⟩,
   ⟨"event.returned-satisfies", .event, some `ZkcSecurity.VCVio.Execution.returnedSatisfies,
     "An execution returned a value satisfying a predicate; stops are nonaccepting."⟩,
@@ -393,6 +409,12 @@ def entries : List Entry := [
   ⟨"wellformed.execution-same-distribution", .wellFormedness,
     some `ZkcSecurity.VCVio.Execution.SameDist,
     "Equality of two complete output distributions."⟩,
+  ⟨"wellformed.renaming-related", .wellFormedness, some `ZkcSecurity.Oracle.Renaming.Related,
+    "Two caches agree through a renaming of oracle cells: a source key with a target cell \
+    holds that cell's answer read back, and cells no source key reaches are empty."⟩,
+  ⟨"wellformed.obligation-discharged", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.ObligationStatus.Discharged,
+    "An obligation's status is a proof."⟩,
   ⟨"wellformed.provider-constituents", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Provider.Simulator.Constituents,
     "Calls that belong to one concrete attempt of a provider simulator."⟩,

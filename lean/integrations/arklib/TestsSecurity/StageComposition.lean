@@ -1,5 +1,6 @@
 import ZkcSecurity.Stage.Joint
 import ZkcSecurity.Examples.CommittedOpeningBridge
+import ZkcTools.DeclarationAudit
 
 /-! Composition of stage relations: a control where the transported budget matters, and the
 joint-stage contract applied to a committed verifier.
@@ -178,15 +179,4 @@ end Bridge
 
 end TestsSecurity.StageComposition
 
-#print axioms TestsSecurity.StageComposition.composed_bounded
-#print axioms TestsSecurity.StageComposition.composed_attained
-#print axioms TestsSecurity.StageComposition.untransported_fails
-#print axioms TestsSecurity.StageComposition.bridgeRelation
-#print axioms TestsSecurity.StageComposition.frame_composes
-#print axioms ZkcSecurity.Stage.commitmentRelation
-#print axioms ZkcSecurity.Stage.checkpointTables_append
-#print axioms ZkcSecurity.Stage.not_falseAcceptance_of_verifierLog_nil
-#print axioms ZkcSecurity.Stage.Relation.ofRenaming
-#print axioms ZkcSecurity.Stage.Joint.Contract.bounded
-#print axioms ZkcSecurity.Stage.Joint.oracleMixture_mixes
-#print axioms ZkcSecurity.Stage.Joint.Frame.oracleRelation
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "STAGE-COMPOSITION-AXIOM-PASS"

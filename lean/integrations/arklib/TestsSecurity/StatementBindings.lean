@@ -1,4 +1,5 @@
 import ZkcSecurity.FiatShamir.Binding
+import ZkcTools.DeclarationAudit
 
 /-! Controls for statement bindings: determination transfers from policy statements to model
 statements through a functional relation, and fails without functionality.
@@ -51,8 +52,4 @@ theorem bounded_not_determines :
 
 end TestsSecurity.StatementBindings
 
-#print axioms ZkcSecurity.FiatShamir.StatementBinding.determines
-#print axioms ZkcSecurity.FiatShamir.StatementBinding.determined_represent
-#print axioms ZkcSecurity.FiatShamir.StatementBinding.falsePolicy_iff
-#print axioms TestsSecurity.StatementBindings.summed_determined
-#print axioms TestsSecurity.StatementBindings.bounded_not_determines
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "STATEMENT-BINDINGS-AXIOM-PASS"

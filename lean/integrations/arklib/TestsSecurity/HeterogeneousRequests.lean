@@ -1,6 +1,7 @@
 import ZkcSecurity.FiatShamir.Lifting
 import TestsSecurity.Counterexamples.Support
 import Mathlib.Data.ZMod.Basic
+import ZkcTools.DeclarationAudit
 
 /-! A protocol whose requests have different result sorts, through the transcript
 interface, the certificate and the typed theorem.
@@ -333,7 +334,4 @@ theorem cheater_acceptance :
 
 end TestsSecurity.HeterogeneousRequests
 
-#print axioms TestsSecurity.HeterogeneousRequests.certificate
-#print axioms TestsSecurity.HeterogeneousRequests.soundness_bound
-#print axioms TestsSecurity.HeterogeneousRequests.cheater_bound
-#print axioms TestsSecurity.HeterogeneousRequests.cheater_acceptance
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "HETEROGENEOUS-REQUESTS-AXIOM-PASS"
