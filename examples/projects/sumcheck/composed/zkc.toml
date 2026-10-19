@@ -1,9 +1,14 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 "sums" = "protocol.zkc"
 
-[dependencies]
-sumcheck = "../../../../libraries/sumcheck"
-zkc = "../../../../libraries/zkc"
+["dependencies"]
+"algebra" = { workspace = "core.algebra" }
+"collections" = { workspace = "core.collections" }
+"polynomial" = { workspace = "core.polynomial" }
+"sumcheck" = { workspace = "protocols.polynomial.sumcheck" }
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

@@ -1,5 +1,7 @@
 """Shared mathematical realization through source, Entry, and native execution."""
 
+from source_modules import core_packages, library_modules
+
 import json
 from pathlib import Path
 
@@ -8,18 +10,7 @@ import pytest
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [
-    f"--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc"
-    for name in (
-        "vector",
-        "matrix",
-        "finite",
-        "finite_domain",
-        "sequence",
-        "accumulation",
-        "curve",
-    )
-]
+MODULES = library_modules(*core_packages())
 HEADER = """module sample;
 use zkc::vector::{Vector, indexing []};
 use zkc::matrix::{Matrix};

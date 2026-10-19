@@ -23,7 +23,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     compiler = args.compiler.resolve()
     spec = read_json(HERE / 'requests/schnorr-dsl.json')
-    original = (ROOT / 'libraries/schnorr/lib.zkc').read_text()
+    original = (ROOT / 'libraries/protocols/sigma/schnorr/lib.zkc').read_text()
     rows = []
 
     def invoke(name, request, source, expected):

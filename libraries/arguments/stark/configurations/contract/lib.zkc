@@ -1,0 +1,114 @@
+module stark::configurations::contract;
+use zkc::vector::{Vector, length, transpose};
+use zkc::vector as vector;
+use zkc::indices::{Indices};
+use zkc::indices as indices;
+use zkc::oracle::{Root, Path, State};
+
+// The choices a deployed STARK makes outside its protocol order. One module
+// implementing this interface is one configuration of the library: its
+// fields, its challenge derivation, its Merkle instance and its data layout.
+// The protocol modules never name a concrete field, hash or layout.
+//
+// Positions and tables are natural-order: position i of a size-n table is
+// the evaluation at shift * g_n^i. A configuration may commit rows in another
+// order; its open and check members then translate positions themselves, so
+// the protocol never sees committed row numbers.
+pub interface Configuration {
+  // Trace values, and the extension field of challenges, quotient, DEEP and FRI.
+  type Base: Field;
+  type Extension: Field;
+  // The field the selected transcript draws. A configuration whose transcript
+  // draws extension elements directly maps a draw to itself.
+  type Challenge: Field;
+  // Row commitments over Base and over Extension values.
+  type BaseRows: Commitment;
+  type ExtensionRows: Commitment;
+
+  // A uniform Extension element from one uniform Challenge draw.
+  fn challenge(draw: Challenge) -> Extension effects(stop);
+  fn embed(values: Vector<Base>) -> Vector<Extension> effects(stop);
+  fn lift(value: Base) -> Extension effects(stop);
+  // The evaluation coset is shift * <g_N>; it must avoid every trace subgroup.
+  fn shift() -> Base effects(stop);
+
+  // Natural-order row-major tables of the given width, opened at natural
+  // positions. Open returns the rows in position order, duplicates included,
+  // with one proof; check recomputes the root from the verifier's own shape.
+  fn commit_base(rows: Vector<Base>, width: index)
+      -> (Root<BaseRows>, State<BaseRows>) effects(stop);
+  fn open_base(state: State<BaseRows>, positions: Indices, height: index)
+      -> (Vector<Base>, Path<BaseRows>) effects(stop);
+  fn check_base(root: Root<BaseRows>, width: index, height: index, positions: Indices,
+      rows: Vector<Base>, proof: Path<BaseRows>) -> bool effects(stop);
+  fn commit_extension(rows: Vector<Extension>, width: index)
+      -> (Root<ExtensionRows>, State<ExtensionRows>) effects(stop);
+  fn open_extension(state: State<ExtensionRows>, positions: Indices, height: index)
+      -> (Vector<Extension>, Path<ExtensionRows>) effects(stop);
+  fn check_extension(root: Root<ExtensionRows>, width: index, height: index, positions: Indices,
+      rows: Vector<Extension>, proof: Path<ExtensionRows>) -> bool effects(stop);
+
+  // FRI layers. Leaf k of a natural-order word of length 2*half holds the two
+  // evaluations one fold combines, (word[k], word[k + half]), at x and -x.
+  // Folding sends pair k to position k of the next word.
+  fn commit_pairs(word: Vector<Extension>)
+      -> (Root<ExtensionRows>, State<ExtensionRows>) effects(stop);
+  fn open_pairs(state: State<ExtensionRows>, pairs: Indices, half: index)
+      -> (Vector<Extension>, Path<ExtensionRows>) effects(stop);
+  fn check_pairs(root: Root<ExtensionRows>, half: index, pairs: Indices,
+      rows: Vector<Extension>, proof: Path<ExtensionRows>) -> bool effects(stop);
+}
+
+// Layout helpers for configurations. Natural order commits rows as given;
+// its pair table places (word[k], word[k + half]) in row k.
+pub fn natural_pairs<F: Field>(word: Vector<F>) -> Vector<F> effects(stop) where () {
+  let half = indices::divide(length(word), 2);
+  require length(word) == half * 2;
+  return transpose(word, 2, half);
+}
+
+// Leaf grouping: a configuration may instead commit an FRI word as a width-one
+// table, one value per leaf, and open both members of pair k as positions k
+// and k + half. Its open and check members then return and check the same
+// (low, high) rows, with two authentication paths per pair.
+pub fn pair_positions(pairs: Indices, half: index) -> Indices effects(stop) where () {
+  let mut result = indices::empty();
+  for pair in 0..indices::length(pairs) {
+    let low = indices::get(pairs, pair);
+    result = indices::append(indices::append(result, low), low + half);
+  }
+  return result;
+}
+
+// Bit-reversed order commits natural position i at row reverse(i). Its pair
+// table is the bit-reversed word read as width-two rows: row k holds natural
+// positions reverse(2k) and reverse(2k) + half, so natural pair j sits at row
+// reverse(j) of the half-height table, and positions translate the same way.
+pub fn reverse_bits(position: index, size: index) -> index effects(stop) where () {
+  require indices::less(position, size);
+  let mut remaining = size;
+  let mut value = position;
+  let mut reversed: index = 0;
+  for _ in 0..64 {
+    if indices::less(1, remaining) {
+      reversed = reversed * 2 + indices::remainder(value, 2);
+      value = indices::divide(value, 2);
+      remaining = indices::divide(remaining, 2);
+    }
+  }
+  require remaining == 1;
+  return reversed;
+}
+pub fn reverse_positions(positions: Indices, size: index) -> Indices effects(stop) where () {
+  let mut result = indices::empty();
+  for query in 0..indices::length(positions) {
+    result = indices::append(result, reverse_bits(indices::get(positions, query), size));
+  }
+  return result;
+}
+pub fn reversed_rows<F: Field>(rows: Vector<F>, width: index) -> Vector<F> effects(stop) where () {
+  return vector::bit_reverse_rows(rows, width);
+}
+pub fn reversed_pairs<F: Field>(word: Vector<F>) -> Vector<F> effects(stop) where () {
+  return vector::bit_reverse(word);
+}

@@ -241,7 +241,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     } else if (name == "nat")
       p.sort = Parameter::Sort::Natural;
     else {
-      auto target = resolve(decl, name, src.span);
+      std::optional<DeclarationId> provider;
+      auto target = resolve(decl, name, src.span, true, nullptr, &provider);
       if (!target || !signature(*target, depth + 1))
         return false;
       auto &interface = output.declarations[target->index];
@@ -255,6 +256,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       p.sort = Parameter::Sort::Module;
       p.interface = *target;
       p.arguments = std::move(*args);
+      moduleParameterProviders.emplace(p.atom, *provider);
     }
     if (p.sort != Parameter::Sort::Module && !src.constraint.arguments.empty())
       return types.fail("source.generic", "static sort does not take arguments",

@@ -1,0 +1,85 @@
+module kzg;
+use zkc::vector as vec;
+use zkc::vector::{Vector};
+use zkc::scalar as scalar;
+use zkc::indices as indices;
+use zkc::evaluation_domain as evaluation;
+use zkc::evaluation_domain::{EvaluationDomain, Evaluations};
+
+
+// Univariate KZG commitments to polynomials of degree below n in evaluation
+// form: values[i] is p(points[i]), where points lists the n-th roots of unity
+// of F in a fixed order. The opening proof for p(z) = y commits to the
+// quotient (p(X) - y) / (X - z), which these functions compute in the same
+// form. Commitments, pairings and transcripts belong to a concrete
+// construction such as ethereum::eip4844.
+
+// z is a domain point exactly when z^n = 1, because the domain is the whole
+// group of n-th roots of unity.
+pub fn in_domain<F: Field>(input: EvaluationDomain<F>, z: F) -> bool effects(stop) where () {
+  return scalar::power(z, evaluation::size(input)) == 1;
+}
+
+// The position of a domain point, found by scanning the domain.
+fn position_in_points<F: Field>(points: Vector<F>, z: F) -> index {
+  let n = vec::length(points);
+  let mut found: index = n;
+  for i in 0..n {
+    if vec::get(points, i) == z { found = i; }
+  }
+  require indices::less(found, n);
+  return found;
+}
+pub fn position<F: Field>(input: EvaluationDomain<F>, z: F) -> index effects(stop) where () {
+  return position_in_points(evaluation::points(input), z);
+}
+
+// The n-entry vector with a single one at position m.
+pub fn unit<F: Field>(n: index, m: index) -> Vector<F> effects(stop) where () {
+  require indices::less(m, n);
+  let ones = vec::concat(vec::fill<F>(0, m), vec::fill<F>(1, 1));
+  return vec::concat(ones, vec::fill<F>(0, n - m - 1));
+}
+
+// p(z). Inside the domain this is the stored value; outside it is the
+// barycentric formula p(z) = (z^n - 1) / n * sum_i values[i] points[i] / (z - points[i]).
+pub fn evaluate<F: Field>(input: Evaluations<F>, z: F) -> F effects(stop) where () {
+  let unity = evaluation::evaluation_domain(input);
+  let points = evaluation::points(unity);
+  let values = evaluation::values(input);
+  let n = evaluation::size(unity);
+  return if in_domain(unity, z) {
+    vec::get(values, position_in_points(points, z))
+  } else {
+    let inverses = vec::inverse(vec::subtract(vec::fill(z, n), points));
+    let sum = vec::dot(vec::hadamard(inverses, points), values);
+    sum * (scalar::power(z, n) - 1) * scalar::inverse(scalar::from_index<F>(n))
+  };
+}
+
+// Compute y = p(z) and return ((p(X) - y) / (X - z), y).
+// At a domain point z = points[m], entry m is the derivative form
+// sum_{i != m} (values[i] - y) points[i] / (z (z - points[i])); every other
+// entry is (values[i] - y) / (points[i] - z).
+pub fn quotient<F: Field>(input: Evaluations<F>, z: F) -> (Vector<F>, F) effects(stop) where () {
+  let unity = evaluation::evaluation_domain(input);
+  let points = evaluation::points(unity);
+  let values = evaluation::values(input);
+  let n = evaluation::size(unity);
+  let y = evaluate(input, z);
+  let shifted = vec::subtract(values, vec::fill(y, n));
+  let result = if in_domain(unity, z) {
+    // shifted[m] = values[m] - y = 0, so a unit placeholder denominator at m
+    // contributes nothing and avoids inverting zero.
+    let m = position_in_points(points, z);
+    let single = unit<F>(n, m);
+    let away = vec::add(vec::subtract(points, vec::fill(z, n)), single);
+    let rest = vec::hadamard(shifted, vec::inverse(away));
+    let scaled = vec::add(vec::scale(vec::subtract(vec::fill(z, n), points), z), single);
+    let at = vec::dot(vec::hadamard(shifted, points), vec::inverse(scaled));
+    vec::add(rest, vec::scale(single, at))
+  } else {
+    vec::hadamard(shifted, vec::inverse(vec::subtract(points, vec::fill(z, n))))
+  };
+  return (result, y);
+}

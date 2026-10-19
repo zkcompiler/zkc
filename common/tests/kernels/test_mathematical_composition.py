@@ -6,9 +6,9 @@ import pytest
 
 from entry import Entry
 from input_files import input_files
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
-MODULES = library_modules('zkc')
+MODULES = library_modules(*core_packages())
 PRELUDE = '''module sample;
 use zkc::vector as vec;
 use zkc::finite as finite;

@@ -65,7 +65,7 @@ implemented `DuplexChallenger`. Both paths trust the same crypto permutation.
 Monero hash and reduction use RustCrypto sha3 0.12.0 (`Keccak256`, **not**
 `Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` in the replay
 fixtures comes from the pinned upstream harness. The [source Bulletproofs+
-library](../../../../libraries/bulletproofs/README.md) derives this initial value
+library](../../../../libraries/arguments/bulletproofs/README.md) derives this initial value
 with the separate [Edwards point map](../edwards.rs); its BSD source notice is
 retained in [UPSTREAM-LICENSE-BSD](UPSTREAM-LICENSE-BSD). Independent
 [map vectors](../../tests/fixtures/README.md) cover that primitive. Six additional

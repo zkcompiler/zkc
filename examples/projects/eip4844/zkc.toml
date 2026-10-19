@@ -1,5 +1,10 @@
-format = "zkc.project/0"
-[modules]
+"format" = "zkc.project/0"
+
+["modules"]
 "example" = "main.zkc"
-[dependencies]
-kzg = "../../../libraries/kzg"
+
+["dependencies"]
+"eip4844" = { workspace = "constructions.ethereum.eip4844" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

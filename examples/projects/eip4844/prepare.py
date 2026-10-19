@@ -10,8 +10,9 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 ROOT = PROJECT.parents[2]
-CORPUS = ROOT / 'common/tests/fixtures/kzg-eip4844/vectors.json'
-SETUP = ROOT / 'libraries/kzg/eip4844/trusted_setup.txt'
+CORPUS = ROOT / 'libraries/constructions/ethereum/eip4844/example_vectors.json'
+SETUP_SHA256 = 'd39b9f2d047cc9dca2de58f264b6a09448ccd34db967881a6713eacacf0f26b7'
+SETUP = ROOT / 'libraries/constructions/ethereum/eip4844/trusted_setup.txt'
 
 
 def frame(tag, payload, count):
@@ -31,7 +32,9 @@ class Directory:
         return self.reference(f'{name}.zkcv', frame(70, data, len(data)))
 
     def setup(self):
-        words = SETUP.read_text().split()
+        setup_bytes = SETUP.read_bytes()
+        assert hashlib.sha256(setup_bytes).hexdigest() == SETUP_SHA256
+        words = setup_bytes.decode().split()
         points = b''.join(bytes.fromhex(word) for word in words[2:2 + 4096])
         return self.reference('setup.zkcv', frame(67, points, 4096))
 

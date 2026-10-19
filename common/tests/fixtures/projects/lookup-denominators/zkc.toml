@@ -1,8 +1,9 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
-lookup_denominators = "main.zkc"
+["modules"]
+"lookup_denominators" = "main.zkc"
 
-[dependencies]
-air = "../../../../../libraries/air"
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"collections" = "../../../../../libraries/core/collections"
+"traversal" = "../../../../../libraries/core/traversal"
+"air" = "../../../../../libraries/relations/air"

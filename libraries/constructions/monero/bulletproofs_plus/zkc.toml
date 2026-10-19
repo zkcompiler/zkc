@@ -1,0 +1,15 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"monero::bulletproofs_plus" = "lib.zkc"
+"monero::bulletproofs_plus::codec" = "codec.zkc"
+"monero::bulletproofs_plus::transcript" = "transcript.zkc"
+
+["dependencies"]
+"weighted-inner-product" = "../../../arguments/bulletproofs/weighted_inner_product"
+"algebra" = "../../../core/algebra"
+"collections" = "../../../core/collections"
+"encoding" = "../../../core/encoding"
+"primitive-cryptography" = "../../../core/primitives/cryptography"
+"services" = "../../../core/services"
+"traversal" = "../../../core/traversal"

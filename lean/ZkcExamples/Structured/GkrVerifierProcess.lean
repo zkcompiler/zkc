@@ -9,7 +9,7 @@ public import Zkc.Polynomial.Multilinear.Line
 
 /-! The plain GKR verifier process over the common participant actions.
 
-This is the verifier of the GKR library (`libraries/gkr/lib.zkc`) for an
+This is the verifier of the GKR library (`libraries/protocols/polynomial/gkr/lib.zkc`) for an
 admitted statement, written with the library's qualified action sites: the
 output-point challenges and their deliveries, then for each layer two
 applications of the degree-two Sumcheck rounds (three received coefficients,

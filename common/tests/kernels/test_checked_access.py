@@ -1,4 +1,6 @@
 """Public checked library access through source compilation and the common Host."""
+
+from source_modules import core_packages, library_modules
 from pathlib import Path
 
 import pytest
@@ -6,9 +8,7 @@ import pytest
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'field_array', 'symbolic',
-                        'finite', 'sequence', 'accumulation', 'curve')]
+MODULES = library_modules(*core_packages())
 
 
 # Extension degree of each installed KoalaBear extension; other fields have one.

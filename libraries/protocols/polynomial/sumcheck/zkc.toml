@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"sumcheck" = "lib.zkc"
+"sumcheck::expression" = "expression.zkc"
+
+["dependencies"]
+"collections" = "../../../core/collections"
+"polynomial" = "../../../core/polynomial"
+"primitive-polynomial" = "../../../core/primitives/polynomial"
+"traversal" = "../../../core/traversal"

@@ -1,9 +1,0 @@
-format = "zkc.project/0"
-[modules]
-"bulletproofs" = "lib.zkc"
-"bulletproofs::inner_product" = "inner_product.zkc"
-"bulletproofs::monero" = "monero.zkc"
-"bulletproofs::monero::transcript" = "monero/transcript.zkc"
-"bulletproofs::monero::codec" = "monero/codec.zkc"
-[dependencies]
-zkc = "../zkc"

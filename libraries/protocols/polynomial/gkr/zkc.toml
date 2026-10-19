@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"gkr" = "lib.zkc"
+
+["dependencies"]
+"collections" = "../../../core/collections"
+"polynomial" = "../../../core/polynomial"
+"traversal" = "../../../core/traversal"

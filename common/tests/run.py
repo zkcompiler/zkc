@@ -35,7 +35,7 @@ def lean_checks():
 
 def execute(scope, args):
     reports = reports_root()
-    if scope in {"integration", "harness", "sdk"}:
+    if scope in {"integration", "harness", "sdk", "smoke"}:
         workers = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "1")
         if not workers.isdecimal() or int(workers) < 1:
             raise ValueError("PYTEST_XDIST_AUTO_NUM_WORKERS must be a positive integer")
@@ -43,7 +43,11 @@ def execute(scope, args):
             "harness": ["common/tests/harness"],
             "sdk": ["common/tests/consumer"],
             "integration": ["common/tests/protocol", "common/tests/kernels"],
-        }[scope]
+        }.get(scope)
+        if scope == "smoke":
+            sys.path.insert(0, str(ROOT / 'common/tests/support'))
+            from smoke import MATRIX, cases
+            selection = cases([args.family] if args.family else MATRIX)
         run(["uv", "run", "--no-sync", "--locked", "pytest", *selection, "-n", workers,
              f"--junit-xml={reports / (scope + '.xml')}"])
     elif scope == "rust":
@@ -167,9 +171,13 @@ def execute(scope, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scopes = parser.add_subparsers(dest="scope", required=True)
-    for scope in ["integration", "harness", "sdk", "rust", "compiler", "lean",
+    for scope in ["integration", "harness", "sdk", "smoke", "rust", "compiler", "lean",
                   "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
         command = scopes.add_parser(scope)
+        if scope == 'smoke':
+            sys.path.insert(0, str(ROOT / 'common/tests/support'))
+            from smoke import MATRIX
+            command.add_argument('--family', choices=sorted(MATRIX))
         if scope in {"compiler", "install", "install-domain", "lean-native"}:
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
         if scope == "lean-native":

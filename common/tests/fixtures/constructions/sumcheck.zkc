@@ -1,7 +1,7 @@
 module sample;
 use sumcheck::{Sumcheck};
 use zkc::shake128 as shake;
-use spongefish as transcript;
+use spongefish::bls12_381 as transcript;
 use zkc::vector::{Vector};
 domain F=field("bls12-381.fr");
 interface TranscriptState {
@@ -15,7 +15,7 @@ module Provider:TranscriptState {
   fn initialize()->State{return State(shake::init());}
   fn observe(t:State,value:F)->State{return State(transcript::observe_scalar(unpack(t),value));}
   fn draw(t:State)->(State,F){
-    let (t,value)=transcript::challenge<F>(unpack(t));
+    let (t,value)=transcript::challenge(unpack(t));
     return (State(t),value);
   }
 }

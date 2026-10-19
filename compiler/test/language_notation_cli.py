@@ -29,7 +29,7 @@ for options in [[], ['--notation-private'], ['--notation-installation'],
         assert 'notation::shown' in owners
         assert ('notation::hidden' in owners) == ('--notation-private' in options)
 
-for flag in ['--notations', '--notation-private', '--notation-installation']:
+for flag in ['--api', '--notations', '--notation-private', '--notation-installation']:
     with case(f'duplicate and malformed {flag}'):
         commands.run([compiler, 'language-check', *args, flag, flag],
                      refuses='source.options')
@@ -47,7 +47,8 @@ for flag in ['--notation-private', '--notation-installation']:
 
 with case('declaration and notation views may be requested together'):
     report = json.loads(commands.run(
-        [compiler, 'language-check', *args, '--notations', '--declarations']))
+        [compiler, 'language-check', *args, '--notations', '--declarations', '--api']))
     assert report['declarations'] and report['notations']['bindings']
+    assert report['api']['format'] == 'zkc.source-api/0'
 
 counted()

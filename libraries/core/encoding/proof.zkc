@@ -1,0 +1,32 @@
+module zkc::proof;
+use zkc::bytes as bytes;
+use zkc::bytes::{Bytes};
+
+// The compiler uses initialize/write/finish structurally. append/take are
+// ordinary library methods for constructions that store messages sequentially.
+pub interface StreamCodec {
+  type Record:Copy+Drop;
+  fn initialize(layout:())->Record effects(stop, opaque);
+  fn write(record:Record)->Bytes effects(stop, opaque);
+  fn finish(record:Record,proof:Bytes)->() effects(stop, opaque);
+  fn append(record:Record,chunk:Bytes)->(Record,Bytes) effects(stop, opaque);
+  fn take(record:Record,count:index)->(Record,(index,index)) effects(stop, opaque);
+}
+pub module Stream:StreamCodec {
+  type Record:Copy+Drop=(Bytes,index);
+  fn initialize(layout:())->Record effects(stop) where () {return Record((bytes::empty(),0));}
+  fn write(record:Record)->Bytes effects() where () {let (buffer,offset)=unpack(record);return buffer;}
+  fn finish(record:Record,proof:Bytes)->() effects(stop) where () {
+    let (buffer,offset)=unpack(record);
+    require bytes::length(proof)==offset;
+    return ();
+  }
+  fn append(record:Record,chunk:Bytes)->(Record,Bytes) effects(stop) where () {
+    let (buffer,offset)=unpack(record);
+    return (Record((bytes::concat(buffer,chunk),offset+bytes::length(chunk))),chunk);
+  }
+  fn take(record:Record,count:index)->(Record,(index,index)) effects(stop) where () {
+    let (buffer,offset)=unpack(record);
+    return (Record((buffer,offset+count)),(offset,count));
+  }
+}

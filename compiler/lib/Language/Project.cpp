@@ -53,6 +53,7 @@ std::optional<StringRef> exceededLimit(const Limits &limits,
   CHECK_LIMIT(notationDescriptors);
   CHECK_LIMIT(notationHoles);
   CHECK_LIMIT(notationInspectionBytes);
+  CHECK_LIMIT(apiInspectionBytes);
   CHECK_LIMIT(interfaceBytes);
   CHECK_LIMIT(locationBytes);
   CHECK_LIMIT(typeDepth);

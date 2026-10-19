@@ -1,9 +1,12 @@
 #include "zkc/Language/Inspection.h"
+#include "State.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/JSON.h"
+#include <tuple>
 
 using namespace llvm;
 namespace zkc::language {
@@ -401,6 +404,285 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
   });
   if (out.overflow())
     return error("source.limit", "declaration report byte limit exceeded");
+  return bytes;
+}
+
+Expected<std::string> inspectPublicAPI(const CheckedProject &project,
+                                       const Limits &limits) {
+  if (auto failure = checkLimits(limits))
+    return std::move(failure);
+  if (project.checkedWork() > limits.work ||
+      project.checkedDeclarations() > limits.declarations ||
+      project.checkedOperations() > limits.operations)
+    return error("source.limit",
+                 "checked project exceeds API inspection limits");
+  const auto &records = project.storage->api;
+  detail::Work work{limits};
+  if (auto failure =
+          work.charge(project.declarations().size() + records.exports.size() +
+                      records.references.size()))
+    return std::move(failure);
+  auto name = [&](DeclarationId id) -> const std::string & {
+    return project.declarations()[id.index].qualifiedName;
+  };
+  auto source = [&](Span span) -> const SourceBuffer & {
+    return project.sources()[span.source.index];
+  };
+  auto location = [&](Span span) {
+    return json::Object{{"module", source(span).module},
+                        {"origin", source(span).origin == SourceOrigin::Captured
+                                       ? "captured"
+                                       : "installation"},
+                        {"begin", span.begin},
+                        {"end", span.end}};
+  };
+  std::vector<std::vector<unsigned>> exports(project.declarations().size());
+  for (unsigned i = 0; i < records.exports.size(); ++i)
+    exports[records.exports[i].owner.index].push_back(i);
+  const auto &notationRecords = project.storage->notations;
+  std::vector<std::vector<unsigned>> syntax(project.declarations().size());
+  for (const auto &scope : notationRecords.scopes)
+    if (scope.owner && !scope.body) {
+      if (auto failure = work.charge(scope.exported.size() + 1))
+        return std::move(failure);
+      syntax[scope.owner->index] = scope.exported;
+    }
+  std::vector<unsigned> depth(project.declarations().size());
+  std::vector<DeclarationId> reachable, roots;
+  for (const auto &decl : project.declarations())
+    if (!decl.parent && decl.kind == Declaration::Kind::Module &&
+        source(decl.span).origin == SourceOrigin::Captured) {
+      roots.push_back(decl.id);
+      reachable.push_back(decl.id);
+      depth[decl.id.index] = 1;
+    }
+  // Follow each graph node once, regardless of the number of public aliases.
+  for (unsigned i = 0; i < reachable.size(); ++i) {
+    auto id = reachable[i];
+    if (depth[id.index] > limits.importDepth)
+      return error("source.limit", "public API graph depth exceeded");
+    for (auto edge : exports[id.index]) {
+      if (auto failure = work.charge())
+        return std::move(failure);
+      auto target = records.exports[edge].target;
+      if (!depth[target.index]) {
+        depth[target.index] = depth[id.index] + 1;
+        reachable.push_back(target);
+      }
+    }
+    for (auto binding : syntax[id.index]) {
+      if (auto failure = work.charge())
+        return std::move(failure);
+      auto target = notationRecords.bindings[binding].target;
+      if (!depth[target.index]) {
+        depth[target.index] = depth[id.index] + 1;
+        reachable.push_back(target);
+      }
+    }
+  }
+  auto byName = [&](DeclarationId a, DeclarationId b) {
+    return name(a) < name(b);
+  };
+  llvm::sort(roots, byName);
+  llvm::sort(reachable, byName);
+  std::vector<unsigned> edges, references;
+  for (unsigned i = 0; i < records.exports.size(); ++i)
+    if (depth[records.exports[i].owner.index])
+      edges.push_back(i);
+  llvm::sort(edges, [&](unsigned a, unsigned b) {
+    const auto &x = records.exports[a], &y = records.exports[b];
+    return std::tie(name(x.owner), x.name, name(x.target)) <
+           std::tie(name(y.owner), y.name, name(y.target));
+  });
+  for (unsigned i = 0; i < records.references.size(); ++i)
+    if (source(records.references[i].span).origin == SourceOrigin::Captured)
+      references.push_back(i);
+  auto key = [&](unsigned i) {
+    const auto &r = records.references[i];
+    return std::tie(name(r.owner), source(r.span).module, r.span.begin,
+                    r.span.end, r.written, name(r.provider), name(r.target),
+                    r.abstractModule);
+  };
+  llvm::sort(references,
+             [&](unsigned a, unsigned b) { return key(a) < key(b); });
+  references.erase(
+      std::unique(references.begin(), references.end(),
+                  [&](unsigned a, unsigned b) { return key(a) == key(b); }),
+      references.end());
+  std::string bytes;
+  BoundedStream out(bytes, limits.apiInspectionBytes);
+  json::OStream json(out);
+  json.object([&] {
+    json.attribute("format", "zkc.source-api/0");
+    json.attributeArray("roots", [&] {
+      for (auto id : roots)
+        json.value(name(id));
+    });
+    json.attributeArray("exports", [&] {
+      for (auto i : edges) {
+        const auto &e = records.exports[i];
+        json.value(json::Object{{"owner", name(e.owner)},
+                                {"name", e.name},
+                                {"target", name(e.target)},
+                                {"imported", e.imported},
+                                {"source", location(e.span)}});
+        if (out.overflow())
+          break;
+      }
+    });
+    json.attributeArray("declarations", [&] {
+      for (auto id : reachable) {
+        if (out.overflow())
+          break;
+        const auto &decl = project.declarations()[id.index];
+        auto value = describe(project, decl);
+        for (auto &requirement : *value.getArray("requirements")) {
+          auto *record = requirement.getAsObject();
+          if (record->getString("kind") != "capability")
+            continue;
+          std::optional<std::string> selected;
+          for (const auto &exported : protocol::sourceCapabilityExports())
+            if (record->getString("predicate") == exported.predicate) {
+              auto path = exported.module + "::" + exported.name;
+              if (!selected || path < *selected)
+                selected = std::move(path);
+            }
+          if (selected)
+            (*record)["export"] = *selected;
+        }
+        value["requirements_written"] = records.writtenRequirements[id.index];
+        value["effects_written"] = records.writtenEffects[id.index];
+        auto dataKind = [&](StringRef kind) {
+          for (StringRef key :
+               {"definition", "roles", "input_order", "inputs", "scoped_inputs",
+                "outputs", "services", "effects", "effect_allowance"})
+            value.erase(key);
+          value["kind"] = kind;
+        };
+        auto fields = [&](ArrayRef<TypeField> fields) {
+          json::Array result;
+          for (const auto &field : fields)
+            if (field.isPublic)
+              result.push_back(json::Object{{"name", field.name},
+                                            {"type", formatType(field.type)}});
+          return result;
+        };
+        switch (decl.kind) {
+        case Declaration::Kind::Domain:
+        case Declaration::Kind::Alias:
+          dataKind(decl.kind == Declaration::Kind::Domain ? "domain" : "alias");
+          value["type"] = formatType(decl.domain);
+          break;
+        case Declaration::Kind::Record:
+        case Declaration::Kind::Variant: {
+          dataKind(decl.kind == Declaration::Kind::Record ? "record"
+                                                          : "variant");
+          bool privateFields = llvm::any_of(
+              decl.fields, [](const auto &f) { return !f.isPublic; });
+          json::Array alternatives;
+          for (const auto &alternative : decl.alternatives) {
+            privateFields |= llvm::any_of(
+                alternative.fields, [](const auto &f) { return !f.isPublic; });
+            alternatives.push_back(
+                json::Object{{"name", alternative.name},
+                             {"fields", fields(alternative.fields)}});
+          }
+          value["constructor"] =
+              decl.sealed || privateFields ? "owner" : "public";
+          value["private_fields"] = privateFields;
+          value["fields"] = fields(decl.fields);
+          if (decl.kind == Declaration::Kind::Variant)
+            value["alternatives"] = std::move(alternatives);
+          break;
+        }
+        case Declaration::Kind::Associated:
+          dataKind("associated");
+          value["sort"] =
+              decl.associatedSort.empty() ? "Type" : decl.associatedSort;
+          value["abstract"] = decl.abstract;
+          value["representation"] = "private";
+          if (decl.permissions)
+            value["permissions"] = permissions(*decl.permissions);
+          break;
+        case Declaration::Kind::Relation: {
+          value["kind"] = "relation";
+          json::Array purposes;
+          for (auto purpose : decl.relation->purposes)
+            purposes.push_back(
+                purpose == RelationPurpose::Parameter   ? "parameter"
+                : purpose == RelationPurpose::Statement ? "statement"
+                                                        : "witness");
+          value["purposes"] = std::move(purposes);
+          break;
+        }
+        case Declaration::Kind::Entry:
+          dataKind("entry");
+          value["entry_kind"] =
+              decl.entryKind() == EntryKind::Proof ? "proof" : "run";
+          break;
+        default:
+          break;
+        }
+        json.value(std::move(value));
+      }
+    });
+    json.attributeArray("notations", [&] {
+      for (auto owner : reachable) {
+        auto bindings = syntax[owner.index];
+        llvm::sort(bindings, [&](unsigned a, unsigned b) {
+          const auto &x = notationRecords.bindings[a];
+          const auto &y = notationRecords.bindings[b];
+          return x.identity < y.identity;
+        });
+        for (auto id : bindings) {
+          if (out.overflow())
+            break;
+          const auto &binding = notationRecords.bindings[id];
+          const auto &descriptor =
+              notationRecords.descriptors[binding.descriptor].descriptor;
+          json::Array arguments;
+          for (const auto &argument : binding.arguments)
+            arguments.push_back(argument ? json::Value(*argument)
+                                         : json::Value(nullptr));
+          json::Object value{{"owner", name(owner)},
+                             {"descriptor", descriptor.key()},
+                             {"symbol", descriptor.symbol},
+                             {"target", name(binding.target)},
+                             {"arguments", std::move(arguments)},
+                             {"source", location(binding.span)}};
+          if (binding.module)
+            value["abstract_module"] = *binding.module;
+          json.value(std::move(value));
+        }
+      }
+    });
+    json.attributeArray("references", [&] {
+      for (auto i : references) {
+        if (out.overflow())
+          break;
+        const auto &r = records.references[i];
+        json::Object value{
+            {"owner", name(r.owner)},
+            {"written", r.written},
+            {"provider",
+             source(project.declarations()[r.provider.index].span).module},
+            {"provider_origin",
+             source(project.declarations()[r.provider.index].span).origin ==
+                     SourceOrigin::Captured
+                 ? "captured"
+                 : "installation"},
+            {"target", name(r.target)},
+            {"target_module",
+             source(project.declarations()[r.target.index].span).module},
+            {"source", location(r.span)}};
+        if (r.abstractModule)
+          value["abstract_module"] = *r.abstractModule;
+        json.value(std::move(value));
+      }
+    });
+  });
+  if (out.overflow())
+    return error("source.limit", "public API report byte limit exceeded");
   return bytes;
 }
 } // namespace zkc::language

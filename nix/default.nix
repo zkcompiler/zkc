@@ -114,7 +114,10 @@ let
   };
   zkc = pkgs.symlinkJoin {
     name = "zkc";
-    paths = [ tools ];
+    paths = [
+      tools
+      libraries
+    ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram "$out/bin/zkc" --prefix PATH : "${compiler}/bin"
@@ -123,6 +126,11 @@ let
       description = "zkc compiler and execution CLI";
     };
   };
+  libraries = pkgs.runCommand "zkc-libraries" { } ''
+    mkdir -p "$out/share/zkc"
+    cp -r ${sources.libraries}/libraries "$out/share/zkc/libraries"
+    cp ${sources.libraries}/zkc.workspace.toml "$out/share/zkc/zkc.workspace.toml"
+  '';
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };
   fetchSource = pkgs.callPackage ./external-source.nix { };
   llzk = pkgs.callPackage ./llzk.nix {
@@ -155,6 +163,7 @@ in
       compiler
       tools
       zkc
+      libraries
       lean
       arklib
       llzk
@@ -228,7 +237,28 @@ in
       source = sources.rustTests;
       python3 = python;
     };
-  };
+  }
+  //
+    pkgs.lib.genAttrs
+      (map (name: "smoke-${name}") (
+        builtins.attrNames (builtins.fromJSON (builtins.readFile ../common/tests/smoke.json))
+      ))
+      (
+        name:
+        pkgs.callPackage ./checks/project.nix {
+          inherit
+            pythonTools
+            environment
+            tools
+            testSupport
+            ;
+          compiler = compiler;
+          source = sources.integration;
+          python3 = python;
+          scope = "smoke";
+          family = pkgs.lib.removePrefix "smoke-" name;
+        }
+      );
   formatter = pkgs.writeShellApplication {
     name = "zkc-nixfmt";
     runtimeInputs = [ pkgs.nixfmt ];

@@ -23,8 +23,8 @@ BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
     [[0, ['interval', 2, 6]], [1, ['interval', 3, 3]]], []]]]
 
 SOURCE = '''module air_stark_example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::table::{Statement, TableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::octic_table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 domain Scoped = bundle(asset statement_fixture);
 

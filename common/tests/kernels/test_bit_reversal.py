@@ -6,7 +6,7 @@ the native word-level reversal.
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 FIELDS = {'bls12-381.fr': 1, 'ristretto255.scalar': 1, 'bn254.fr': 1,
           'koala-bear': 1, 'koala-bear.ext8-binomial3': 8, 'koala-bear.ext4-binomial3': 4}
@@ -36,7 +36,7 @@ def element(degree, n):
 @pytest.mark.parametrize('field', sorted(FIELDS))
 def test_bit_reversal(toolchain, journal, directory, field):
     degree = FIELDS[field]
-    entry = Entry(toolchain, journal, directory, SOURCE.format(field=field), library_modules('zkc'))
+    entry = Entry(toolchain, journal, directory, SOURCE.format(field=field), library_modules(*core_packages()))
     for bits in (0, 1, 3, 5):
         n = 1 << bits
         xs = [element(degree, 7 + i) for i in range(n)]

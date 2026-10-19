@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"spongefish::duplex" = "duplex.zkc"
+"spongefish::bls12_381" = "bls12_381.zkc"
+"spongefish::bls12_381::schnorr" = "bls12_381/schnorr.zkc"
+
+["dependencies"]
+"collections" = "../../core/collections"
+"encoding" = "../../core/encoding"
+"primitive-cryptography" = "../../core/primitives/cryptography"

@@ -57,6 +57,12 @@ proof producer and joint Host use the same participant ceiling; their outer
 file and proof limits remain separate. Node, array, definition, instruction,
 name and depth bounds still apply independently.
 
+The complete program admits at most 65,536 static instructions across all
+definitions, including storage releases, nested bodies and returns. Each array
+retains its separate 32,768-element ceiling. C++ and Rust enforce the same
+instruction limit. The allowance includes the validation and release bookkeeping
+of checked library contexts; it does not increase execution work budgets.
+
 The byte allowance supports composition of protocol libraries whose specialized
 local definitions remain within those structural bounds. It changes capacity,
 not the program grammar or instruction meanings. Generic array-JSON consumers

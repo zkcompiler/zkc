@@ -1,5 +1,5 @@
 module example;
-use bulletproofs::monero::{Range, Monero};
+use monero::bulletproofs_plus::{Range, Monero};
 
 proof Proof = Range {
   prover P;

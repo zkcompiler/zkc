@@ -1,6 +1,6 @@
 module example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::bundle::{Statement, ThreeTableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::whole_bundle::{Statement, ThreeTableArgument};
 use air::interaction::{LogUp};
 use zkc::vector::{Vector};
 

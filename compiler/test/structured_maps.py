@@ -1,12 +1,12 @@
 """Original realization/map metadata and independent whole-source SSA behavior."""
 import hashlib
 import json
-import re
 from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
 from tools import compiler, records
+from project import project_inputs
 
 commands = Commands(records())
 root = Path(__file__).resolve().parents[2]
@@ -428,9 +428,8 @@ with case('received-row-malformation-capacity-and-shape-remain-distinct'):
 
 
 def frontend(label):
-    caller = fixtures / 'map-callers.zkc'
-    modules = {re.search(r'^module\s+([\w:]+)\s*;', path.read_text(), re.M)[1]: path
-               for path in [caller, *sorted((root / 'libraries/zkc').glob('*.zkc'))]}
+    modules, assets = project_inputs(fixtures / 'map-callers.toml')
+    assert not assets
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
     commands.write(label + '-inputs.json', before)
     flags = ['--source-format=zkc', '--entry=map_examples::' + label + 'Entry',

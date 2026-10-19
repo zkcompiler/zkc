@@ -1,5 +1,10 @@
-format = "zkc.project/0"
-[modules]
+"format" = "zkc.project/0"
+
+["modules"]
 "example" = "main.zkc"
-[dependencies]
-bulletproofs = "../../../libraries/bulletproofs"
+
+["dependencies"]
+"monero" = { workspace = "constructions.monero.bulletproofs_plus" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

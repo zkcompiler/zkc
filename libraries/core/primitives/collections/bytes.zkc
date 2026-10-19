@@ -1,0 +1,25 @@
+module zkc::primitives::bytes;
+
+use zkc::sequence::{Sequence};
+
+pub type Bytes = builtin("bytes");
+
+// Repeat one byte, or concatenate an ordered collection of fragments.
+
+pub fn repeat(byte: index, count: index) -> Bytes = primitive("bytes.repeat");
+
+pub fn join(parts: Sequence<Bytes>) -> Bytes = primitive("bytes.join");
+
+pub fn empty() -> Bytes = primitive("bytes.empty");
+
+pub fn append(value: Bytes, byte: index) -> Bytes = primitive("bytes.append");
+
+pub fn concat(left: Bytes, right: Bytes) -> Bytes = primitive("bytes.concat");
+
+pub fn slice(value: Bytes, start: index, count: index) -> Bytes = primitive("bytes.slice");
+
+pub fn at(value: Bytes, position: index) -> index = primitive("bytes.at");
+
+pub fn length(value: Bytes) -> index = primitive("bytes.length");
+
+pub fn equal(left: Bytes, right: Bytes) -> bool = primitive("bytes.equal");

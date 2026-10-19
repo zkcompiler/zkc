@@ -43,6 +43,7 @@ const COMMANDS: &[Command] = &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--declarations"),
+            Opt::new("--api"),
             Opt::new("--notations"),
             Opt::new("--notation-private"),
             Opt::new("--notation-installation"),
@@ -53,6 +54,7 @@ const COMMANDS: &[Command] = &[
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name. The report lists Entries.
 --declarations reports completed public callable contracts.
+--api reports the public export graph, type contracts and checked source references.
 --notations reports diagnostic syntax metadata. Add --notation-private for local/private
 records or --notation-installation for installation records; both require --notations.
 Syntax metadata is not a native interface. Named-call views are tooling aids,

@@ -13,7 +13,6 @@ import json
 import os
 from pathlib import Path
 import random
-import re
 import shutil
 import subprocess
 import sys
@@ -46,21 +45,12 @@ def fixture_stems(suite):
 
 def fixture_source(spec):
     """A fixture's single source module or project manifest, for source inventories."""
+    if "manifest" in spec:
+        return ROOT / spec["manifest"]
     if "project" in spec:
         return ROOT / spec["project"] / "zkc.toml"
     (path,) = spec["modules"].values()
     return ROOT / path
-
-
-def library_modules(caller):
-    """A caller module with every `libraries/zkc` module, keyed by its declared name."""
-    result = {}
-    for path in [ROOT / caller, *sorted((ROOT / "libraries/zkc").glob("*.zkc"))]:
-        match = re.search(r"^module\s+([\w:]+)\s*;", path.read_text(encoding="utf-8"), re.M)
-        if match is None or match[1] in result:
-            raise ValueError(f"invalid or duplicate module declaration: {path}")
-        result[match[1]] = path
-    return result
 
 
 def fixture(stem):
@@ -68,12 +58,10 @@ def fixture(stem):
     spec = fixture_table()[stem]
     if "modules" in spec:
         modules = {name: ROOT / path for name, path in spec["modules"].items()}
-    elif "library_caller" in spec:
-        modules = library_modules(spec["library_caller"])
     else:
         sys.path.append(str(ROOT / "common/tests/support"))
         from project import project_inputs
-        found, assets = project_inputs(ROOT / spec["project"] / "zkc.toml")
+        found, assets = project_inputs(fixture_source(spec))
         assert not assets
         modules = dict(sorted(found.items()))
     return spec["entry"], modules, (stem, spec["data"])

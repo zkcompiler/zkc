@@ -130,10 +130,15 @@ def test_zero_challenges_stop_without_publishing_partial_proofs(toolchain, journ
     # without requiring an infeasible zero preimage of the real Keccak chain.
     import shutil
     family = directory / 'bulletproofs'
-    shutil.copytree(ROOT / 'libraries/bulletproofs', family)
+    shutil.copytree(ROOT / 'libraries/constructions/monero/bulletproofs_plus', family)
     manifest = family / 'zkc.toml'
-    manifest.write_text(manifest.read_text().replace('"../zkc"', f'"{ROOT}/libraries/zkc"'))
-    source = family / 'monero.zkc'
+    import tomllib
+    from project import project_text
+    config = tomllib.loads(manifest.read_text())
+    config['dependencies'] = {name: str((ROOT / 'libraries/constructions/monero/bulletproofs_plus' / path).resolve())
+                              for name, path in config['dependencies'].items()}
+    manifest.write_text(project_text(config))
+    source = family / 'lib.zkc'
     before = f'on query {query}(t) {{ return transcript::Provider::draw(t); }}'
     after = f'on query {query}(t) {{ let (next, value) = transcript::Provider::draw(t); return (next, value - value); }}'
     assert before in source.read_text()
@@ -229,7 +234,7 @@ def test_coefficient_bases_match_dense_folds(toolchain, journal, directory, grou
     from source_modules import library_modules
 
     source = '''module sample;
-use bulletproofs::inner_product as ip;
+use bulletproofs::weighted_inner_product as ip;
 use zkc::vector as vec;
 use zkc::curve as curve;
 use zkc::scalar as scalar;
@@ -262,7 +267,7 @@ protocol Check roles(P)(challenges:vec::Vector<F>@P,y:F@P,n:index@P)
 run Demo=Check;
 '''.replace('GROUP', group).replace('FIELD', field)
     entry = Entry(toolchain, journal, directory, source,
-                  library_modules('bulletproofs'))
+                  library_modules('arguments/bulletproofs/weighted_inner_product', 'constructions/monero/bulletproofs_plus'))
     order = (2**252 + 27742317777372353535851937790883648493 if field.startswith('ristretto')
              else 52435875175126190479447740508185965837690552500527637822603658699938581184513)
     for rounds in range(5):
@@ -297,7 +302,7 @@ def test_argument_accepts_coordinates_and_rejects_wrong_coordinate(
         right:vec::fill<F>(3,n),rest:rest}};
     }}''' + source[end:]
     source = source.replace('ip::point_claim(bv,statement)', 'statement')
-    entry = Entry(toolchain, journal, directory, source, library_modules('bulletproofs'))
+    entry = Entry(toolchain, journal, directory, source, library_modules('arguments/bulletproofs/weighted_inner_product', 'constructions/monero/bulletproofs_plus'))
     public = journal.write('public.json', {'count': '4', 'right_count': '4', 'rounds': '2', 'y': '3'})
     witness = journal.write('witness.json', {'witness_count': '4'})
     proof = directory / 'coordinates.proof'

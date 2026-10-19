@@ -15,6 +15,15 @@ llvm::Expected<std::string> inspectEntries(const CheckedProject &,
 /// partial array is returned.
 llvm::Expected<std::string> inspectDeclarations(const CheckedProject &,
                                                 const Limits & = {});
+/// Version-0 public API graph, including reexports, public types and resolved
+/// source references. Private representations are omitted. Module aliases are
+/// graph edges; all alias-path combinations are never expanded. References
+/// identify the selected source provider separately from canonical targets.
+/// Diagnostic only; grants no access and changes no artifact identity. Rechecks
+/// retained work/declaration/operation limits and bounds traversal, depth and
+/// output by limits.apiInspectionBytes. Failure is source.limit with no output.
+llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
+                                             const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

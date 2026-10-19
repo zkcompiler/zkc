@@ -982,7 +982,7 @@ bound `3 / 5`.
 
 `ZkcSecurity.Examples.GkrFiatShamir` bounds the transform of
 `ZkcExamples.Structured.GkrVerifier.verifier`, the verifier of the
-[GKR library](../../../libraries/gkr/README.md) for a statement already decoded
+[GKR library](../../../libraries/protocols/polynomial/gkr/README.md) for a statement already decoded
 to tables: the claimed outputs and the inputs as tables of the width, and each
 layer's add and mul wiring as a table over `(z, x, y)`. Its round-by-round
 certificate composes one certificate per phase with

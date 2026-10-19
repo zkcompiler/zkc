@@ -21,6 +21,7 @@ production correctness theorem.
 | C++ compiler, dialects or passes | `just test-compiler` | CMake/CTest; accepts `dev`, `sanitize` or `shared` |
 | Runner, Host or backends | `just test-rust` | Root Cargo workspace, all features |
 | Source-to-execution integration | `just test-integration` | Protocol and kernel pytest suites against built compiler and Rust tools |
+| Compact family execution | `python3 common/tests/run.py smoke` | Package boundaries, literal README recipes and small valid/invalid protocol controls; `--family NAME` selects one family |
 | SDK discovery and dependency isolation | `just test-sdk` | Small static/shared CMake fixtures; no LLVM installation needed |
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
@@ -42,6 +43,8 @@ The driver uses existing project tools. Cargo tests and SDK checks compile their
 python3 common/tests/run.py harness
 python3 common/tests/run.py sdk
 python3 common/tests/run.py integration
+python3 common/tests/run.py smoke
+python3 common/tests/run.py smoke --family sigma
 python3 common/tests/run.py compiler --profile dev
 python3 common/tests/run.py rust
 python3 common/tests/run.py install --profile dev

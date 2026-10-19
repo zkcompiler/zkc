@@ -8,7 +8,7 @@ live with the backend tests.
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 INPUT = [894848333, 1437655012, 1200606629, 1690012884, 71131202, 1749206695, 1717947831,
          120589055, 19776022, 42382981, 1831865506, 724844064, 171220207, 1299207443,
@@ -41,7 +41,7 @@ run Demo=Run;
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_poseidon2_width16(toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules('zkc'), *flags))
+    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages()), *flags))
     other = list(range(16))
     states, same = entry.run('batch', {'states': INPUT + other + INPUT, 'count': 3})['result']
     assert same is True

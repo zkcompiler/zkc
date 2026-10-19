@@ -94,8 +94,8 @@ def air(root, shape):
     public = {'public_data': list(map(str, initial+final)), 'shift': '3',
               'round_count': str(height.bit_length()-1), 'query_count': str(shape['queries']), 'attempt_count': '8'}
     source = '''module example;
-use stark::koala_bear::{Base,Extension};
-use stark::koala_bear::table::{Statement,TableArgument};
+use stark::configurations::koala_bear_octic::{Base,Extension};
+use stark::octic_table::{Statement,TableArgument};
 use zkc::vector::{Vector}; use zkc::vector as v;
 domain Trace=bundle(asset trace);
 fn statement(public_data:Vector<Base>,shift:Base)->Statement {
@@ -124,9 +124,9 @@ def library(root, shape):
     bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final))}
     source = '''module example;
-use stark::koala_bear::{Base,Extension};
-use stark::koala_bear::quartic::{Poseidon2};
-use stark::argument::{Statement,TableArgument};
+use stark::configurations::koala_bear_octic::{Base,Extension};
+use stark::configurations::koala_bear_quartic::{Poseidon2};
+use stark::single_table::{Statement,TableArgument};
 use zkc::vector::{Vector}; use zkc::vector as v;
 domain Trace=bundle(asset trace);
 fn statement(public_data:Vector<Base>)->Statement<Base> {

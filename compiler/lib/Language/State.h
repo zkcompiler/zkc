@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_STATE_H
 #define ZKC_LANGUAGE_STATE_H
+#include "APIRecords.h"
 #include "NotationRecords.h"
 #include "zkc/Language/Project.h"
 #include <map>
@@ -26,6 +27,7 @@ struct CheckedStorage {
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   NotationRecords notations;
+  APIRecords api;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
   std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> signatureSources;

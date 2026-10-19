@@ -1,7 +1,12 @@
-format = "zkc.project/0"
-[modules]
-example = "main.zkc"
-evaluation = "protocol.zkc"
-[dependencies]
-fri = "../../../../../libraries/fri"
-zkc = "../../../../../libraries/zkc"
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+"evaluation" = "protocol.zkc"
+
+["dependencies"]
+"algebra" = "../../../../../libraries/core/algebra"
+"collections" = "../../../../../libraries/core/collections"
+"polynomial" = "../../../../../libraries/core/polynomial"
+"primitive-cryptography" = "../../../../../libraries/core/primitives/cryptography"
+"fri" = "../../../../../libraries/protocols/polynomial/fri"

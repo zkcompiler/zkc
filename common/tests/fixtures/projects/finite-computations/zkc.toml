@@ -1,7 +1,9 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"collections" = "../../../../../libraries/core/collections"
+"primitive-collections" = "../../../../../libraries/core/primitives/collections"
+"traversal" = "../../../../../libraries/core/traversal"

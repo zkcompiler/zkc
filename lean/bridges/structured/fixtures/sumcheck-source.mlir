@@ -135,8 +135,8 @@
       %41 = "arith.constant"() <{value = false}> : () -> i1
       %42 = "arith.cmpi"(%40, %41) <{predicate = 0 : i64}> : (i1, i1) -> i1
       "protocol.guard"(%42) <{owner = "role00000000", site = "s8"}> : (i1) -> ()
-      %43 = "protocol.local_call"() <{callee = @zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46, role = "role00000000", site = "s10"}> : () -> !algebra.field_vector<"bls12-381.fr">
-      %44 = "protocol.local_call"() <{callee = @zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46, role = "role00000001", site = "s12"}> : () -> !algebra.field_vector<"bls12-381.fr">
+      %43 = "protocol.local_call"() <{callee = @zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f, role = "role00000000", site = "s10"}> : () -> !algebra.field_vector<"bls12-381.fr">
+      %44 = "protocol.local_call"() <{callee = @zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f, role = "role00000001", site = "s12"}> : () -> !algebra.field_vector<"bls12-381.fr">
       %45:6 = "protocol.repeat"(%arg62, %arg58, %arg59, %arg60, %43, %44, %arg61, %arg63) <{carried = 6 : i64, carried_roles = [["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000001"], ["role00000001"]], maximum = 2 : i64, roles = ["role00000000", "role00000001"], site = "s15"}> ({
       ^bb0(%arg64: ui64, %arg65: !algebra.field_vector<"bls12-381.fr">, %arg66: ui64, %arg67: ui64, %arg68: !algebra.field_vector<"bls12-381.fr">, %arg69: !algebra.field_vector<"bls12-381.fr">, %arg70: !algebra.field<"bls12-381.fr">, %arg71: !protocol.service_ref<"random.bls12-381.fr/0">):
         %46:2 = "protocol.local_call"(%arg65, %arg66, %arg67) <{callee = @zkl_532a609cf36a935835501ca51308940142121e647ca360843a880bf231f04aa6, role = "role00000000", site = "s16"}> : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">)
@@ -151,8 +151,8 @@
         %54 = "protocol.exchange"(%53) <{receiver = "role00000000", sender = "role00000001", site = "label_64656c6976657279_0"}> : (!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
         %55 = "protocol.restrict_roles"(%54) <{roles = ["role00000000"]}> : (!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
         %56:3 = "protocol.local_call"(%arg65, %arg66, %arg67, %55) <{callee = @zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d, role = "role00000000", site = "s29"}> : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64, !algebra.field<"bls12-381.fr">) -> (!algebra.field_vector<"bls12-381.fr">, ui64, ui64)
-        %57 = "protocol.local_call"(%arg68, %55) <{callee = @zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58, role = "role00000000", site = "s31"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">
-        %58 = "protocol.local_call"(%arg69, %53) <{callee = @zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58, role = "role00000001", site = "s33"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">
+        %57 = "protocol.local_call"(%arg68, %55) <{callee = @zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d, role = "role00000000", site = "s31"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">
+        %58 = "protocol.local_call"(%arg69, %53) <{callee = @zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d, role = "role00000001", site = "s33"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">
         %59 = "algebra.constant"() <{value = "1"}> : () -> !algebra.field<"bls12-381.fr">
         %60 = "algebra.field_subtract"(%59, %53) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
         %61 = "algebra.field_multiply"(%60, %48) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
@@ -181,10 +181,10 @@
     ^bb0(%arg45: !algebra.field_vector<"bls12-381.fr">, %arg46: ui64, %arg47: ui64):
       "func.return"(%arg46) : (ui64) -> ()
     }) : () -> ()
-    "local.func"() <{function_type = () -> !algebra.field_vector<"bls12-381.fr">, sym_name = "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46"}> ({
+    "local.func"() <{function_type = () -> !algebra.field_vector<"bls12-381.fr">, sym_name = "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f"}> ({
       %32 = "algebra.exec.vector_empty"() <{binding = @zkl_binding_7, parameters = [], site = "s0"}> : () -> !algebra.field_vector<"bls12-381.fr">
       "local.return"(%32) : (!algebra.field_vector<"bls12-381.fr">) -> ()
-    }) {logical_origin = ["s3h7a6b636h766563746f725h656d707479", []]} : () -> ()
+    }) {logical_origin = ["s3h7a6b6310h7072696d6974697665736h766563746f725h656d707479", []]} : () -> ()
     "local.func"() <{function_type = (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">), sym_name = "zkl_532a609cf36a935835501ca51308940142121e647ca360843a880bf231f04aa6"}> ({
     ^bb0(%arg42: !algebra.field_vector<"bls12-381.fr">, %arg43: ui64, %arg44: ui64):
       %29:2 = "local.apply"(%arg42, %arg43, %arg44) <{callee = @zkl_46021cb00c22207246296c081a0fe3ef9fa4e1d20f4a866fd01bfa4b37888087, site = "s0"}> : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> (!algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">)
@@ -219,11 +219,11 @@
       %21 = "algebra.field_add"(%arg32, %20) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       "func.return"(%21) : (!algebra.field<"bls12-381.fr">) -> ()
     }) : () -> ()
-    "local.func"() <{function_type = (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">, sym_name = "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58"}> ({
+    "local.func"() <{function_type = (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">, sym_name = "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d"}> ({
     ^bb0(%arg30: !algebra.field_vector<"bls12-381.fr">, %arg31: !algebra.field<"bls12-381.fr">):
       %18 = "algebra.exec.vector_append"(%arg30, %arg31) <{binding = @zkl_binding_11, parameters = [], site = "s0"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">
       "local.return"(%18) : (!algebra.field_vector<"bls12-381.fr">) -> ()
-    }) {logical_origin = ["s3h7a6b636h766563746f726h617070656e64", []]} : () -> ()
+    }) {logical_origin = ["s3h7a6b6310h7072696d6974697665736h766563746f726h617070656e64", []]} : () -> ()
     "local.func"() <{function_type = (!algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> i1, sym_name = "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"}> ({
     ^bb0(%arg21: !algebra.field_vector<"bls12-381.fr">, %arg22: !algebra.field_vector<"bls12-381.fr">, %arg23: !algebra.field<"bls12-381.fr">):
       %12 = "algebra.exec.vector_length"(%arg22) <{binding = @zkl_binding_1, parameters = [], site = "s1"}> : (!algebra.field_vector<"bls12-381.fr">) -> ui64

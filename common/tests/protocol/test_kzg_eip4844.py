@@ -18,7 +18,7 @@ PROJECT = 'examples/projects/eip4844'
 FIXTURES = ROOT / 'common/tests/fixtures/kzg-eip4844'
 CORPUS = json.loads((FIXTURES / 'vectors.json').read_text())
 EXTRA = json.loads((FIXTURES / 'extra.json').read_text())
-SETUP = ROOT / 'libraries/kzg/eip4844/trusted_setup.txt'
+SETUP = ROOT / 'libraries/constructions/ethereum/eip4844/trusted_setup.txt'
 R = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
 
 
@@ -294,14 +294,14 @@ use zkc::bytes::{Bytes};
 use zkc::encoding as encoding;
 use zkc::curve as curve;
 use zkc::curve::{Groups};
-use kzg::eip4844 as eip4844;
+use ethereum::eip4844 as eip4844;
 protocol Check roles(P)(setup: Groups<eip4844::G1> @P) -> (key: Bytes @P, count: index @P) {
   let admitted = eip4844::admit_setup(setup);
   return (key = encoding::group_compressed(eip4844::verifier_key()), count = curve::length(admitted));
 }
 run Demo = Check;
 '''
-    entry = Entry(toolchain, journal, directory, source, library_modules('kzg'))
+    entry = Entry(toolchain, journal, directory, source, library_modules('commitments/kzg', 'constructions/ethereum/eip4844'))
     pinned = lagrange()
 
     def run(name, setup):
@@ -353,7 +353,7 @@ def test_batch_bound_is_static(toolchain, journal, directory):
     from source_modules import library_modules
 
     source = '''module sample;
-use kzg::eip4844::{BlobBatch, Batch};
+use ethereum::eip4844::{BlobBatch, Batch};
 proof Demo = BlobBatch<3> {
   prover P;
   verifier V;
@@ -362,7 +362,7 @@ proof Demo = BlobBatch<3> {
   construction Batch<3>;
 }
 '''
-    entry = Entry(toolchain, journal, directory, source, library_modules('kzg'))
+    entry = Entry(toolchain, journal, directory, source, library_modules('commitments/kzg', 'constructions/ethereum/eip4844'))
     case = named('verify_blob_kzg_proof_batch', 'verify_blob_kzg_proof_batch_case_4')
     blobs = [blob(key) for key in case['input']['blobs']]
     commitments = hexes(case['input']['commitments'])

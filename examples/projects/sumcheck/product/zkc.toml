@@ -1,12 +1,17 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-sumcheck = "../../../../libraries/sumcheck"
-zkc = "../../../../libraries/zkc"
+["dependencies"]
+"collections" = { workspace = "core.collections" }
+"sumcheck" = { workspace = "protocols.polynomial.sumcheck" }
 
-[assets.product]
-format = "ring-json"
-path = "product.ring.json"
+["assets"]
+
+["assets"."product"]
+"format" = "ring-json"
+"path" = "product.ring.json"
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

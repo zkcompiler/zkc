@@ -1,6 +1,6 @@
 //! Explicit source inputs. Imports never perform filesystem discovery.
 use crate::host::io;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -11,6 +11,8 @@ const MANIFEST_BYTES: usize = 1024 * 1024;
 const FILES: usize = 256;
 const MANIFESTS: usize = 64;
 const DEPTH: usize = 32;
+const CATALOGS: usize = 16;
+const CATALOG_ENTRIES: usize = 256;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -19,15 +21,60 @@ struct Manifest {
     #[serde(default)]
     modules: BTreeMap<String, String>,
     #[serde(default)]
-    dependencies: BTreeMap<String, String>,
+    dependencies: BTreeMap<String, Dependency>,
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
+    workspace: Option<Workspace>,
 }
 #[derive(Deserialize)]
+#[serde(untagged)]
+enum Dependency {
+    Path(String),
+    Workspace(WorkspaceSelection),
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceSelection {
+    workspace: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Workspace {
+    path: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Catalog {
+    format: String,
+    packages: BTreeMap<String, String>,
+}
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
     pub format: String,
     pub path: String,
+}
+
+/// Filesystem provenance for tooling, separate from the compiler's capture.
+/// A dependency identifies its visible manifest context, even for file symlinks.
+#[derive(Serialize)]
+pub struct ProjectGraph {
+    pub format: &'static str,
+    pub root: PathBuf,
+    pub packages: Vec<ProjectPackage>,
+}
+#[derive(Serialize)]
+pub struct ProjectPackage {
+    pub manifest: PathBuf,
+    pub modules: BTreeMap<String, String>,
+    pub assets: BTreeMap<String, Asset>,
+    pub dependencies: BTreeMap<String, PathBuf>,
+    pub catalog_dependencies: BTreeMap<String, CatalogDependency>,
+}
+#[derive(Serialize)]
+pub struct CatalogDependency {
+    pub catalog: PathBuf,
+    pub package: String,
 }
 
 /// Explicit source paths, made absolute when loaded. Imports are resolved only
@@ -36,6 +83,7 @@ pub struct Project {
     pub(crate) flags: Vec<String>,
     pub(crate) paths: Vec<String>,
     pub(crate) manifest: Option<PathBuf>,
+    graph: Option<ProjectGraph>,
 }
 impl Project {
     pub fn discover() -> Result<Self> {
@@ -60,6 +108,10 @@ impl Project {
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.paths.iter().map(String::as_str)
     }
+    /// Explicit SDK input maps have no filesystem package graph.
+    pub fn graph(&self) -> Option<&ProjectGraph> {
+        self.graph.as_ref()
+    }
     fn from_parts(
         manifest: Option<PathBuf>,
         mut modules: BTreeMap<String, String>,
@@ -71,10 +123,16 @@ impl Project {
             flags: vec![],
             paths: vec![],
             manifest: manifest.clone(),
+            graph: None,
         };
         if let Some(path) = manifest {
             let mut capture = Capture::default();
-            capture.load(&path)?;
+            let root = capture.load(&path)?;
+            result.graph = Some(ProjectGraph {
+                format: "zkc.project-graph/0",
+                root,
+                packages: capture.packages.into_values().collect(),
+            });
             modules = capture.modules;
             assets = capture.assets;
             result.paths = capture.manifests;
@@ -113,20 +171,23 @@ struct Capture {
     manifests: Vec<String>,
     active: BTreeSet<PathBuf>,
     visited: BTreeSet<PathBuf>,
+    packages: BTreeMap<PathBuf, ProjectPackage>,
+    catalogs: BTreeMap<PathBuf, Catalog>,
 }
 impl Capture {
-    fn load(&mut self, path: &Path) -> Result<()> {
+    fn load(&mut self, path: &Path) -> Result<PathBuf> {
         let parent = path
             .parent()
             .ok_or("source-project-format")?
             .canonicalize()
             .map_err(|_| "source-project-io")?;
         let context = parent.join(path.file_name().ok_or("source-project-format")?);
+        validate_path(context.to_str().ok_or("source-project-format")?)?;
         if self.active.contains(&context) {
             return Err("source-project-cycle".into());
         }
         if self.visited.contains(&context) {
-            return Ok(());
+            return Ok(context);
         }
         if self.visited.len() + self.active.len() >= MANIFESTS || self.active.len() >= DEPTH {
             return Err("source-project-limit".into());
@@ -136,6 +197,9 @@ impl Capture {
             io::ReadError::Io(_) => "source-project-io",
         })?;
         let project: Manifest = toml::from_slice(&bytes).map_err(|_| "source-project-format")?;
+        if let Some(workspace) = &project.workspace {
+            validate_path(&workspace.path)?;
+        }
         if project.format != "zkc.project/0"
             || (project.modules.is_empty() && project.dependencies.is_empty())
         {
@@ -149,9 +213,17 @@ impl Capture {
         self.active.insert(context.clone());
         self.manifests
             .push(context.to_str().ok_or("source-project-format")?.into());
+        let mut package = ProjectPackage {
+            manifest: context.clone(),
+            modules: BTreeMap::new(),
+            assets: BTreeMap::new(),
+            dependencies: BTreeMap::new(),
+            catalog_dependencies: BTreeMap::new(),
+        };
         for (name, path) in project.modules {
             validate_name(&name)?;
             let path = resolve(&parent, &path)?;
+            package.modules.insert(name.clone(), path.clone());
             if let Some(previous) = self.modules.get(&name) {
                 if !same_file(previous, &path) {
                     return Err("source-project-conflict".into());
@@ -167,6 +239,7 @@ impl Capture {
                 format: asset.format,
                 path: resolve(&parent, &asset.path)?,
             };
+            package.assets.insert(name.clone(), asset.clone());
             if let Some(previous) = self.assets.get(&name) {
                 if previous.format != asset.format || !same_file(&previous.path, &asset.path) {
                     return Err("source-project-conflict".into());
@@ -178,14 +251,74 @@ impl Capture {
         if self.modules.len() + self.assets.len() > FILES {
             return Err("source-project-limit".into());
         }
-        for (name, path) in project.dependencies {
+        for (name, selection) in project.dependencies {
             validate_name(&name)?;
-            let directory = resolve(&parent, &path)?;
-            self.load(&Path::new(&directory).join("zkc.toml"))?;
+            let path = match selection {
+                Dependency::Path(path) => Path::new(&resolve(&parent, &path)?).join("zkc.toml"),
+                Dependency::Workspace(selection) => {
+                    validate_name(&selection.workspace)?;
+                    let workspace = project.workspace.as_ref().ok_or("source-project-format")?;
+                    let catalog = PathBuf::from(resolve(&parent, &workspace.path)?);
+                    let (context, path) = self.select(&catalog, &selection.workspace)?;
+                    package.catalog_dependencies.insert(
+                        name.clone(),
+                        CatalogDependency {
+                            catalog: context,
+                            package: selection.workspace,
+                        },
+                    );
+                    path
+                }
+            };
+            let dependency = self.load(&path)?;
+            package.dependencies.insert(name, dependency);
         }
         self.active.remove(&context);
-        self.visited.insert(context);
-        Ok(())
+        self.visited.insert(context.clone());
+        self.packages.insert(context.clone(), package);
+        Ok(context)
+    }
+
+    fn select(&mut self, path: &Path, key: &str) -> Result<(PathBuf, PathBuf)> {
+        let parent = path
+            .parent()
+            .ok_or("source-project-format")?
+            .canonicalize()
+            .map_err(|_| "source-project-io")?;
+        let context = parent.join(path.file_name().ok_or("source-project-format")?);
+        validate_path(context.to_str().ok_or("source-project-format")?)?;
+        if !self.catalogs.contains_key(&context) {
+            if self.catalogs.len() >= CATALOGS {
+                return Err("source-project-limit".into());
+            }
+            let bytes = io::read_regular(&context, MANIFEST_BYTES).map_err(|e| match e {
+                io::ReadError::Limit => "source-project-limit",
+                io::ReadError::Io(_) => "source-project-io",
+            })?;
+            let catalog: Catalog = toml::from_slice(&bytes).map_err(|_| "source-project-format")?;
+            if catalog.format != "zkc.workspace/0" {
+                return Err("source-project-format".into());
+            }
+            if catalog.packages.len() > CATALOG_ENTRIES {
+                return Err("source-project-limit".into());
+            }
+            for (name, location) in &catalog.packages {
+                validate_name(name)?;
+                validate_path(location)?;
+            }
+            self.manifests
+                .push(context.to_str().ok_or("source-project-format")?.into());
+            self.catalogs.insert(context.clone(), catalog);
+        }
+        let location = self.catalogs[&context]
+            .packages
+            .get(key)
+            .ok_or("source-project-format")?;
+        let mut selected = PathBuf::from(resolve(&parent, location)?);
+        if selected.is_dir() {
+            selected.push("zkc.toml");
+        }
+        Ok((context, selected))
     }
 }
 
@@ -279,6 +412,219 @@ mod tests {
         path
     }
 
+    fn catalog(root: &Path, name: &str, body: &str) -> PathBuf {
+        let path = root.join(name);
+        std::fs::write(
+            &path,
+            format!("format='zkc.workspace/0'\n[packages]\n{body}"),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn catalog_selection_matches_paths_and_protects_only_used_inputs() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        let leaf = manifest(
+            root,
+            "leaf",
+            "[modules]\nshared='lib.zkc'\n[assets.r]\nformat='air-json'\npath='r.json'\n",
+        );
+        let workspace = catalog(
+            root,
+            "zkc.workspace.toml",
+            "chosen='leaf'\nabsent='never-opened'\n",
+        );
+        let top = manifest(
+            root,
+            "top",
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\nlocal={workspace='chosen'}\n",
+        );
+        let selected = Project::load(&top).unwrap();
+        let package = selected
+            .graph()
+            .unwrap()
+            .packages
+            .iter()
+            .find(|p| p.manifest == top)
+            .unwrap();
+        assert_eq!(package.dependencies["local"], leaf);
+        assert_eq!(package.catalog_dependencies["local"].catalog, workspace);
+        assert_eq!(package.catalog_dependencies["local"].package, "chosen");
+        assert!(selected.paths().any(|p| Path::new(p) == workspace));
+        assert_eq!(selected.paths().count(), 5);
+        catalog(root, "zkc.workspace.toml", "chosen='leaf/zkc.toml'\n");
+        assert_eq!(Project::load(&top).unwrap().flags, selected.flags);
+        manifest(root, "top", "[dependencies]\nlocal='../leaf'\n");
+        assert_eq!(Project::load(&top).unwrap().flags, selected.flags);
+        // Declaring an unused workspace validates its shape, but does not open it.
+        manifest(
+            root,
+            "top",
+            "[workspace]\npath='absent.toml'\n[dependencies]\nlocal='../leaf'\n",
+        );
+        assert_eq!(Project::load(&top).unwrap().paths().count(), 4);
+    }
+
+    #[test]
+    fn catalog_edges_do_not_inherit_workspace_and_keep_cycle_and_provider_checks() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        let top = manifest(
+            root,
+            "top",
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\nlocal={workspace='leaf'}\n",
+        );
+        catalog(root, "zkc.workspace.toml", "leaf='leaf'\ntop='top'\n");
+        manifest(root, "leaf", "[dependencies]\nback={workspace='top'}\n");
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-format");
+        manifest(
+            root,
+            "leaf",
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\nback={workspace='top'}\n",
+        );
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-cycle");
+        manifest(root, "leaf", "[modules]\nshared='lib.zkc'\n");
+        manifest(root, "other", "[modules]\nshared='lib.zkc'\n");
+        for name in ["leaf", "other"] {
+            std::fs::write(root.join(name).join("lib.zkc"), "module shared;").unwrap();
+        }
+        catalog(root, "zkc.workspace.toml", "leaf='leaf'\nother='other'\n");
+        manifest(
+            root,
+            "top",
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\na={workspace='leaf'}\nb={workspace='other'}\n",
+        );
+        assert_eq!(
+            Project::load(&top).err().unwrap(),
+            "source-project-conflict"
+        );
+    }
+
+    #[test]
+    fn catalog_syntax_is_strict_even_for_unselected_locations() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        manifest(root, "leaf", "[modules]\nshared='lib.zkc'\n");
+        let body =
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\na={workspace='leaf'}\n";
+        let top = manifest(root, "top", body);
+        for invalid in [
+            "leaf='leaf'\nunused=''",
+            "leaf='leaf'\nunused=1",
+            "leaf='leaf'\nleaf='leaf'",
+            "leaf='leaf'\nunused={path='leaf'}",
+            "leaf='leaf'\n''='leaf'",
+        ] {
+            catalog(root, "zkc.workspace.toml", invalid);
+            assert_eq!(Project::load(&top).err().unwrap(), "source-project-format");
+        }
+        catalog(root, "zkc.workspace.toml", "leaf='leaf'\n");
+        for invalid in [
+            body.replace("workspace='leaf'", "workspace='leaf',path='../leaf'"),
+            body.replace("workspace='leaf'", "workspace=''"),
+            body.replace("workspace='leaf'", "workspace='missing'"),
+            body.replace(
+                "path='../zkc.workspace.toml'",
+                "path='../zkc.workspace.toml',extra=1",
+            ),
+            body.replace("path='../zkc.workspace.toml'", "path=''"),
+        ] {
+            manifest(root, "top", &invalid);
+            assert_eq!(Project::load(&top).err().unwrap(), "source-project-format");
+        }
+        manifest(root, "top", body);
+        std::fs::write(
+            root.join("zkc.workspace.toml"),
+            "format='zkc.workspace/1'\n[packages]\nleaf='leaf'",
+        )
+        .unwrap();
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-format");
+    }
+
+    #[test]
+    fn catalog_count_entries_and_bytes_have_separate_ceilings() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        let mut entries = String::from("leaf='leaf'\n");
+        for i in 1..CATALOG_ENTRIES {
+            entries.push_str(&format!("unused{i}='absent'\n"));
+        }
+        let top = manifest(
+            root,
+            "top",
+            "[workspace]\npath='../zkc.workspace.toml'\n[dependencies]\na={workspace='leaf'}\n",
+        );
+        manifest(root, "leaf", "[modules]\nshared='lib.zkc'\n");
+        catalog(root, "zkc.workspace.toml", &entries);
+        assert!(Project::load(&top).is_ok());
+        catalog(root, "zkc.workspace.toml", &(entries + "extra='absent'\n"));
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-limit");
+        std::fs::write(
+            root.join("zkc.workspace.toml"),
+            vec![b' '; MANIFEST_BYTES + 1],
+        )
+        .unwrap();
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-limit");
+        for i in 0..=CATALOGS {
+            catalog(root, &format!("c{i}.toml"), &format!("next='d{}'\n", i + 1));
+            manifest(
+                root,
+                &format!("d{i}"),
+                &format!(
+                    "[workspace]\npath='../c{i}.toml'\n[dependencies]\na={{workspace='next'}}\n"
+                ),
+            );
+        }
+        manifest(
+            root,
+            &format!("d{}", CATALOGS + 1),
+            "[modules]\nshared='lib.zkc'\n",
+        );
+        assert_eq!(
+            Project::load(root.join("d0/zkc.toml")).err().unwrap(),
+            "source-project-limit"
+        );
+        manifest(
+            root,
+            &format!("d{CATALOGS}"),
+            "[modules]\nshared='lib.zkc'\n",
+        );
+        assert!(Project::load(root.join("d0/zkc.toml")).is_ok());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn catalog_file_symlinks_use_the_visible_parent_and_directory_aliases_share_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        std::fs::create_dir(root.join("visible")).unwrap();
+        let source = catalog(root, "original.toml", "chosen='family'\n");
+        std::os::unix::fs::symlink(source, root.join("visible/catalog.toml")).unwrap();
+        let leaf = manifest(root, "visible/family", "[modules]\nshared='lib.zkc'\n");
+        std::os::unix::fs::symlink(root.join("visible"), root.join("alias")).unwrap();
+        let top = manifest(
+            root,
+            "top",
+            "[workspace]\npath='../alias/catalog.toml'\n[dependencies]\na={workspace='chosen'}\n",
+        );
+        let project = Project::load(top).unwrap();
+        assert!(
+            project
+                .graph()
+                .unwrap()
+                .packages
+                .iter()
+                .any(|p| p.manifest == leaf)
+        );
+        assert!(
+            project
+                .paths()
+                .any(|p| Path::new(p) == root.join("visible/catalog.toml"))
+        );
+    }
+
     #[test]
     fn dependency_diamonds_share_one_capture_and_protect_every_manifest() {
         let directory = tempfile::tempdir().unwrap();
@@ -304,6 +650,27 @@ mod tests {
             assert!(project.paths().any(|found| Path::new(found) == path));
         }
         assert_eq!(project.paths().count(), 5);
+        let graph = project.graph().unwrap();
+        assert_eq!(graph.format, "zkc.project-graph/0");
+        assert_eq!(graph.root, root.join("top/zkc.toml"));
+        assert_eq!(graph.packages.len(), 4);
+        let top = graph
+            .packages
+            .iter()
+            .find(|p| p.manifest == graph.root)
+            .unwrap();
+        assert_eq!(top.dependencies["left"], root.join("left/zkc.toml"));
+        assert_eq!(top.dependencies["right"], root.join("right/zkc.toml"));
+        assert!(top.modules.is_empty());
+        let leaf = graph
+            .packages
+            .iter()
+            .find(|p| !p.modules.is_empty())
+            .unwrap();
+        assert_eq!(
+            leaf.modules["shared"],
+            root.join("leaf/lib.zkc").to_str().unwrap()
+        );
     }
 
     #[test]

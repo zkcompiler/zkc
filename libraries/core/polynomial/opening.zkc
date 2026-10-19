@@ -1,0 +1,167 @@
+module zkc::opening;
+use zkc::vector as vector;
+use zkc::vector::{Vector, length, empty, append, get, accumulate};
+use zkc::indices::{Indices};
+use zkc::indices as indices;
+use zkc::coset as coset;
+use zkc::coset::{CosetDomain, ColumnBatch};
+use zkc::scalar::{inverse, power};
+use zkc::boolean::{both};
+use zkc::opening_claims as claims;
+use zkc::opening_claims::{OpeningClaims};
+
+// These views establish local mathematical invariants. The protocol still owns
+// authentication, degree bounds, challenge sampling and transcript order.
+pub struct BoundOpenings<F: Field> {
+  geometry: CosetDomain<F>,
+  width: index,
+  selected: Indices,
+  claimed: Vector<F>,
+  points: Vector<F>
+}
+
+pub fn bind_openings<F: Field>(geometry: CosetDomain<F>, width: index,
+    height: index, zeta: F, input: OpeningClaims<F>) -> BoundOpenings<F>
+    effects(stop) where zkc::algebra::TwoAdicField(F) {
+  // Admit the trace rotation domain even when no descriptors are present.
+  let generator = coset::root<F>(height);
+  require !(generator == 0);
+  let selected = claims::columns(input);
+  let rotations = claims::rotations(input);
+  let size = coset::domain_size(geometry);
+  let excluded = power(coset::domain_shift(geometry), size);
+  let mut points = empty<F>();
+  for opening in 0..indices::length(rotations) {
+    let rotation = indices::get(rotations, opening);
+    require both(indices::less(indices::get(selected, opening), width),
+      indices::less(rotation, height));
+    let at = zeta * coset::point<F>(1, height, rotation);
+    require !(power(at, size) == excluded);
+    points = append(points, at);
+  }
+  return BoundOpenings<F> { geometry: geometry, width: width,
+    selected: selected, claimed: claims::values(input), points: points };
+}
+
+struct GeometricWeights<F: Field> { ratio: F, next: F }
+math fn advance<F: Field>(input: GeometricWeights<F>) -> GeometricWeights<F> where () {
+  return GeometricWeights<F> { ratio: input.ratio, next: input.next * input.ratio };
+}
+
+pub struct VectorAccumulator<F: Field> {
+  geometry: CosetDomain<F>,
+  weights: GeometricWeights<F>,
+  values: Vector<F>
+}
+pub fn vector_accumulator<F: Field>(geometry: CosetDomain<F>, ratio: F,
+    initial: Vector<F>, first_weight: F) -> VectorAccumulator<F>
+    effects(stop) where () {
+  require length(initial) == coset::domain_size(geometry);
+  return VectorAccumulator<F> { geometry: geometry,
+    weights: GeometricWeights<F> { ratio: ratio, next: first_weight }, values: initial };
+}
+pub math fn vector_values<F: Field>(input: VectorAccumulator<F>) -> Vector<F> where () {
+  return input.values;
+}
+pub math fn vector_weight<F: Field>(input: VectorAccumulator<F>) -> F where () {
+  return input.weights.next;
+}
+
+pub struct QueryRow<F: Field> {
+  geometry: CosetDomain<F>,
+  width: index,
+  position: index,
+  values: Vector<F>
+}
+pub fn query_row<F: Field>(geometry: CosetDomain<F>, width: index,
+    position: index, values: Vector<F>) -> QueryRow<F> effects(stop) where () {
+  require both(indices::less(position, coset::domain_size(geometry)), length(values) == width);
+  return QueryRow<F> { geometry: geometry, width: width, position: position, values: values };
+}
+pub fn row_point<F: Field>(input: QueryRow<F>) -> F effects(stop)
+    where zkc::algebra::TwoAdicField(F) {
+  return coset::domain_point(input.geometry, input.position);
+}
+
+pub struct ScalarAccumulator<F: Field> {
+  geometry: CosetDomain<F>,
+  position: index,
+  weights: GeometricWeights<F>,
+  value: F
+}
+pub fn scalar_accumulator<F: Field>(geometry: CosetDomain<F>, position: index,
+    ratio: F, initial: F, first_weight: F) -> ScalarAccumulator<F> effects(stop) where () {
+  require indices::less(position, coset::domain_size(geometry));
+  return ScalarAccumulator<F> { geometry: geometry, position: position,
+    weights: GeometricWeights<F> { ratio: ratio, next: first_weight }, value: initial };
+}
+pub math fn scalar_value<F: Field>(input: ScalarAccumulator<F>) -> F where () {
+  return input.value;
+}
+pub math fn scalar_weight<F: Field>(input: ScalarAccumulator<F>) -> F where () {
+  return input.weights.next;
+}
+
+pub fn opening_claims<F: Field>(columns: ColumnBatch<F>, zeta: F) -> Vector<F>
+    effects(stop) where zkc::algebra::TwoAdicField(F) {
+  let geometry = coset::batch_domain(columns);
+  let mut result = empty<F>();
+  for column in 0..coset::batch_width(columns) {
+    let word = coset::word(coset::batch_column(columns, column), coset::domain_shift(geometry));
+    result = append(result, zkc::polynomial::evaluate(coset::interpolate(word), zeta));
+  }
+  return result;
+}
+
+pub fn deep_columns<F: Field>(columns: ColumnBatch<F>, input: BoundOpenings<F>,
+    initial: VectorAccumulator<F>) -> VectorAccumulator<F> effects(stop)
+    where zkc::algebra::TwoAdicField(F) {
+  require coset::same_domain(coset::batch_domain(columns), input.geometry);
+  require coset::same_domain(initial.geometry, input.geometry);
+  require coset::batch_width(columns) == input.width;
+  let selected = input.selected;
+  let values = input.claimed;
+  let mut result = initial.values;
+  let mut weights = initial.weights;
+  for opening in 0..indices::length(selected) {
+    let column = coset::batch_column(columns, indices::get(selected, opening));
+    let reduced = coset::opening_quotient(column, coset::domain_shift(input.geometry),
+      get(input.points, opening), get(values, opening));
+    result = accumulate(result, reduced, weights.next);
+    weights = advance(weights);
+  }
+  return VectorAccumulator<F> { geometry: input.geometry, weights: weights, values: result };
+}
+
+pub fn deep_row<F: Field>(row: QueryRow<F>, input: BoundOpenings<F>,
+    initial: ScalarAccumulator<F>) -> ScalarAccumulator<F> effects(stop)
+    where zkc::algebra::TwoAdicField(F) {
+  require coset::same_domain(row.geometry, input.geometry);
+  require coset::same_domain(initial.geometry, input.geometry);
+  require both(row.width == input.width, row.position == initial.position);
+  let selected = input.selected;
+  let values = input.claimed;
+  let x = row_point(row);
+  let mut result = initial.value;
+  let mut weights = initial.weights;
+  for opening in 0..indices::length(selected) {
+    let reduced = (get(row.values, indices::get(selected, opening)) - get(values, opening)) *
+      inverse(x - get(input.points, opening));
+    result = result + weights.next * reduced;
+    weights = advance(weights);
+  }
+  return ScalarAccumulator<F> { geometry: input.geometry, position: row.position,
+    weights: weights, value: result };
+}
+
+// Quotient chunks are opened at zeta itself: rotation zero.
+pub fn same_rotation(count: index, rotation: index) -> (Indices, Indices)
+    effects(stop) where () {
+  let mut selected = indices::empty();
+  let mut rotations = indices::empty();
+  for column in 0..count {
+    selected = indices::append(selected, column);
+    rotations = indices::append(rotations, rotation);
+  }
+  return (selected, rotations);
+}

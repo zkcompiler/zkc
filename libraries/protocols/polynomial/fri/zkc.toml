@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"fri" = "lib.zkc"
+
+["dependencies"]
+"algebra" = "../../../core/algebra"
+"collections" = "../../../core/collections"
+"polynomial" = "../../../core/polynomial"
+"primitive-cryptography" = "../../../core/primitives/cryptography"
+"primitive-polynomial" = "../../../core/primitives/polynomial"

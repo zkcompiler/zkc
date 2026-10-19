@@ -37,6 +37,7 @@ root.
 | `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive Entry |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive Entry |
+| `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
 | `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check` |
 | `family` | `module`, `instance`, `kind` | family package, its concrete instance, `sigma`, `certificate` or `upstream` |
 | `claims` | `endpoint` | `ideal-meaning`, `executable-bytes`, `transform-equation` or `admission` |

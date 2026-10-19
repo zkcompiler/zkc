@@ -58,7 +58,7 @@ selected source-bound executions and stopping observations as bounded evidence.
 ### Sumcheck
 
 The library target is the multilinear protocol in
-`libraries/sumcheck/lib.zkc`. Each round sends a pair `(a0, a1)`, checks the
+`libraries/protocols/polynomial/sumcheck/lib.zkc`. Each round sends a pair `(a0, a1)`, checks the
 current claim against `a0 + a1`, obtains a fresh challenge `r`, and updates the
 claim to `(1-r) * a0 + r * a1`.
 [Retained protocol repeats](../spec/structured-source.md#retained-protocol-repeats)

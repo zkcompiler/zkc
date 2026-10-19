@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::bytes" = "bytes.zkc"
+"zkc::proof" = "proof.zkc"
+
+["dependencies"]
+"primitive-collections" = "../primitives/collections"
+"primitive-cryptography" = "../primitives/cryptography"

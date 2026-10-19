@@ -6,7 +6,7 @@ import pytest
 from input_files import input_files
 
 SOURCE = '''module sample;
-use zkc::sampling::{Words,uniform_index};
+use zkc::sampling::words::{Words,uniform_index};
 module TestWords:Words {
   type State:Copy+Drop=(index,index);
   pub fn start(word:index,count:index)->State{return State((word,count));}
@@ -32,7 +32,7 @@ run Demo=Sample;
 def test_replaced_service_cannot_hide_queries_inside_nonzero_sampler(toolchain, journal, directory):
     source = directory / 'main.zkc'
     source.write_text('''module sample;
-    use zkc::sampling::{Nonzero};
+    use zkc::sampling::fields::{Nonzero};
     domain F=field("bls12-381.fr");
     interface ProviderType {type State:Copy+Drop;fn initialize()->State effects();}
     module Provider:ProviderType {
@@ -52,11 +52,11 @@ def test_replaced_service_cannot_hide_queries_inside_nonzero_sampler(toolchain, 
     }
     proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
     ''')
-    library = Path(__file__).resolve().parents[3] / 'libraries/zkc/sampling.zkc'
+    library = Path(__file__).resolve().parents[3] / 'libraries/core/services/fields.zkc'
     # The private sampler's unlabelled draw is still a query on the selected
     # root. A construction cannot omit it and silently retain managed entropy.
     journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                  f'--module=sample={source}', f'--module=zkc::sampling={library}',
+                  f'--module=sample={source}', f'--module=zkc::sampling::fields={library}',
                   'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
                  refuses='source.construction')
 
@@ -66,10 +66,10 @@ def test_replaced_service_cannot_hide_queries_inside_nonzero_sampler(toolchain, 
 def test_bounded_word_sampling(toolchain, journal, directory, attempts, flags):
     source = directory / 'main.zkc'
     source.write_text(SOURCE.replace('ATTEMPTS', str(attempts)))
-    library = Path(__file__).resolve().parents[3] / 'libraries/zkc/sampling.zkc'
+    library = Path(__file__).resolve().parents[3] / 'libraries/core/services/words.zkc'
     package = directory / 'sampling.zkpkg'
     built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                          f'--module=sample={source}', f'--module=zkc::sampling={library}',
+                          f'--module=sample={source}', f'--module=zkc::sampling::words={library}',
                           'sample::Demo', f'--output={package}', *flags])
     maximum = (1 << 64) - 1
     # Exercise both sides of the exact threshold, powers of two, the singleton
@@ -132,8 +132,8 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
     '''
     source = directory / 'main.zkc'
     source.write_text(text.replace('BOUND', str(bound)))
-    library = Path(__file__).resolve().parents[3] / 'libraries/zkc/sampling.zkc'
-    modules = [f'--module=sample={source}', f'--module=zkc::sampling={library}']
+    library = Path(__file__).resolve().parents[3] / 'libraries/core/services/words.zkc'
+    modules = [f'--module=sample={source}', f'--module=zkc::sampling::words={library}']
     package = directory / 'sampling.zkpkg'
     built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                           *modules, 'sample::Demo', f'--output={package}'])

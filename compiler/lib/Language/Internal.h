@@ -298,6 +298,7 @@ struct SyntaxConstruction {
 struct Import {
   std::string module;
   std::optional<DeclarationId> target;
+  std::optional<DeclarationId> provider;
   std::vector<std::string> names;
   Span span;
   std::optional<std::string> alias;

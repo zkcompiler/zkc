@@ -17,8 +17,8 @@ abbrev sumsHelper : Helper := ⟨"zkl_532a609cf36a935835501ca51308940142121e647c
 abbrev checkTableHelper : Helper := ⟨"zkl_3b67bb5451d0deeed7ab9379c12e7c154a5c16946b7db9b65bc0d4be6b613f1d", .local, [vector, vector, scalar], [.boolean]⟩
 abbrev checkHelper : Helper := ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [vector, vector, scalar], [.boolean]⟩
 
-abbrev emptyHelper : Helper := ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [vector]⟩
-abbrev appendHelper : Helper := ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [vector, scalar], [vector]⟩
+abbrev emptyHelper : Helper := ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [vector]⟩
+abbrev appendHelper : Helper := ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [vector, scalar], [vector]⟩
 
 def emptyBody : Region dialect [] [.vector "bls12-381.fr"] :=
   .letOp (.mark "s0") .nil .nil <|

@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "zkc/Language/Diagnostics.h"
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::domainExpression(const Declaration &decl,
@@ -28,8 +29,13 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
         return {};
       auto &interface = output.declarations[parameter.interface->index];
       for (auto id : interface.members)
-        if (output.declarations[id.index].name == parts.second)
+        if (output.declarations[id.index].name == parts.second) {
+          if (!recordReference(decl,
+                               moduleParameterProviders.at(parameter.atom), id,
+                               name, span, formatType(*module)))
+            return {};
           return CallableReference{id, *module};
+        }
       types.fail("source.call", "unknown interface member", span);
       return {};
     }

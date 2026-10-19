@@ -1,79 +1,103 @@
-# Libraries
+# Source libraries
 
-Libraries are ordinary `.zkc` modules built and tested with the compiler. Their
-public functions, records and child protocols are composed using the existing
-language. Applications select concrete statements, inputs and Entries. A library
-may capture its own mathematical assets through its manifest.
+Libraries own reusable operations and protocols. [Example projects](../examples/projects/README.md)
+select concrete domains, relation assets, constructions, Entries and inputs.
 
-## Layers
+```text
+libraries/
+  core/
+    primitives/{collections,algebra,polynomial,cryptography}/
+    traversal/
+    {collections,algebra,polynomial,encoding,services}/
+  protocols/
+    sigma/{schnorr,compositions}/
+    polynomial/{sumcheck,gkr,fri}/
+  relations/air/
+  commitments/kzg/
+  arguments/
+    stark/{configurations,sampling,single_table,whole_bundle}/
+    bulletproofs/weighted_inner_product/
+  constructions/
+    spongefish/
+    monero/bulletproofs_plus/
+    ethereum/eip4844/
+```
 
-| Layer | Responsibility | Examples |
-|---|---|---|
-| [Common operations](zkc/README.md) | Collections, algebra, polynomial representations, encoding and local commitment operations | `zkc::vector`, `zkc::multilinear`, `zkc::coset`, `zkc::oracle` |
-| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [GKR](gkr/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md), [Bulletproofs+](bulletproofs/README.md), [KZG](kzg/README.md), [Sigma compositions](sigma/README.md) |
-| Concrete constructions | Selected transcript transitions and wire encodings | [Spongefish](spongefish/README.md), Monero Bulletproofs+, Ethereum EIP-4844 KZG |
-| [Projects](../examples/projects/README.md) | Domains, captured relations, complete compositions and Entries | Schnorr, composed Sumcheck, AIR and machine clients |
+The hierarchy describes responsibility and dependency direction. Each leaf
+`zkc.toml` owns its sources exactly once and can be checked independently.
+Directory indexes do not introduce source modules or capture optional children.
+Public source names, physical folders, capture packages and native capabilities
+are separate choices. For example, `zkc::vector` is the convenient facade, while
+`zkc::primitives::vector` owns its native representation and direct operations.
 
-A reduction can return a point and claimed value for its parent to check.
-A complete protocol combines all its required checks into an acceptance result.
-Neither an ordinary record nor a successful row authentication is a security
-certificate. Keep the actual participant's received values and explicit random
-services when composing protocols.
+| Layer | Responsibility and guide |
+|---|---|
+| [Core](core/README.md) | Native ports, traversal, checked mathematical views and local convenience operations |
+| Protocols | [Schnorr](protocols/sigma/schnorr/README.md), [Sigma compositions](protocols/sigma/compositions/README.md), [Sumcheck](protocols/polynomial/sumcheck/README.md), [GKR](protocols/polynomial/gkr/README.md), [FRI](protocols/polynomial/fri/README.md) |
+| Relations and commitments | [AIR interpretation](relations/air/README.md), [generic KZG algebra](commitments/kzg/README.md) |
+| Arguments | [STARK profiles](arguments/stark/README.md), [weighted inner products](arguments/bulletproofs/README.md) |
+| Concrete constructions | [Spongefish](constructions/spongefish/README.md), [Monero Bulletproofs+](constructions/monero/bulletproofs_plus/README.md), [Ethereum EIP-4844](constructions/ethereum/eip4844/README.md) |
 
-The [Schnorr module](schnorr/lib.zkc) provides the discrete-log relation and
-three-message protocol. It is generic over the group; the client chooses the
-field/group implementation and construction. The [Sigma module](sigma/README.md)
-composes the same pattern into an AND of two statements with one shared
-challenge and a Chaum–Pedersen proof of one discrete logarithm at two bases.
-The library implementations and small example parameters provide execution
-evidence, not general security proofs.
+## Consume a package
 
-## Select a family
+For a project at `examples/projects/my-project`:
 
 ```toml
 format = "zkc.project/0"
-
 [modules]
 example = "main.zkc"
-
+[workspace]
+path = "../../../zkc.workspace.toml"
 [dependencies]
-sumcheck = "../../../libraries/sumcheck"
+sumcheck = { workspace = "protocols.polynomial.sumcheck" }
 ```
-
-Then use its public declarations:
 
 ```text
 use sumcheck::{Reduce, check};
 ```
 
-Each family owns a `zkc.toml` with its sources and local dependencies. The loader
-captures all listed sources, including private implementation modules. Dependency
-labels do not rename source modules. Shared dependencies load once; conflicting
-providers and cycles refuse. Paths are relative to the declaring manifest.
-All captured modules share one namespace, including transitive dependencies.
-Declare a directly used family explicitly so its availability does not depend
-on another family's implementation dependencies.
-There is no registry, download or global implicit import. Explicit compiler
-module maps and SDK byte captures remain available.
+The [local catalog](../zkc.workspace.toml) selects individual leaf packages.
+Catalog locations use the catalog's visible parent; the workspace path uses
+the declaring manifest's visible parent. A path dependency such as
+`sumcheck = "../../../libraries/protocols/polynomial/sumcheck"` works independently
+of a catalog. Installed sources retain this layout under `share/zkc`.
+Labels and catalog keys do not rename source
+modules. Dependencies load once; conflicting providers and cycles refuse.
+The loader captures the selected closure, including private modules. It adds
+no registry, download or implicit global import.
 
-Run `zkc check --project=libraries/zkc/zkc.toml` to check the common family.
-See the [walkthrough](../docs/getting-started.md) for compiling and executing a
-project, and [input files](../docs/language/README.md#project-inputs) for Entry inputs.
+Declare every directly used package, including a facade. A facade can expose a
+lower declaration without requiring its consumer to declare the implementation
+package. Importing that lower module directly requires its owner explicitly.
+Primitives never depend on traversal or facades; traversal depends on primitives;
+higher layers may depend on the same or lower layers. Concrete constructions
+select transcript transitions and wire encodings explicitly.
+Every package under `libraries/` must belong to a classified layer; an unknown
+location refuses rather than inheriting the application policy.
 
-## Design and maintenance
+`zkc check --api --project=...` reports the compact public export graph, completed
+contracts and checked provider references, alongside manifest ownership. These
+are diagnostic views; they do not alter capture or artifact identities. Public
+authored functions freeze requirements with `where` and local effects with
+`effects`. Native bindings retain their installed catalog contracts. The
+[package checks](../common/tests/protocol/test_library_packages.py) enforce
+ownership, direct dependencies, layers and authored boundaries from those views.
 
-- Put shared local mathematical operations under `zkc`; keep relation
-  interpretation, round algorithms and acceptance conditions in their families.
-- Expose the smallest useful composition boundary. Return the prover residual
-  when a parent needs it; preserve the verifier's own point and statement.
-- Select concrete carriers, commitments and transcript constructions explicitly.
-  A generic signature promises only the installed capabilities it requires.
-- Use an interface when implementations actually vary, such as AIR interaction
-  reductions. Do not duplicate native domain contracts in a wrapper interface.
-- Keep demos in projects. A library has no application Entry or bundled witness.
-- Validate new APIs with independent clients and negative controls, including
-  shape, degree, authority, message order and exact external bytes where promised.
+## Extend a family
 
-With built tools, select the affected checks from the
-[test guide](../common/tests/README.md#selecting-checks). Library changes update
-clients and manifests together; they add no compatibility module or version bump.
+Place code at the lowest layer that owns its policy. Keep native bindings under
+primitives, shared traversal separate, relation interpretation under relations,
+round schedules under protocols or arguments, and selected encodings under
+constructions. A new preset owns its required aliases and capabilities without
+capturing unrelated presets. Use interfaces where implementations actually vary.
+A convenience facade reexports deliberate declarations and notation; it does
+not create another implementation or a compatibility namespace.
+
+Preserve role ownership, received values, explicit randomness, message order,
+callback effects and residual obligations. A reduction is not acceptance, and a
+checked view or successful row authentication is not a security certificate.
+Validate reusable APIs with independent arithmetic, malformed inputs, constructor
+authority controls and external byte vectors where promised. Update consuming
+manifests, examples and docs in the same change. See the
+[test guide](../common/tests/README.md#selecting-checks) for affected checks and
+the compact family smoke lane.

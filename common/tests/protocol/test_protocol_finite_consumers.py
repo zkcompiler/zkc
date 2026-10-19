@@ -7,15 +7,15 @@ import pytest
 from entry import Entry
 from input_files import decimal_values
 from octic_reference import P, ZERO, ONE, add, mul, power
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 import test_air_stark as stark
 import test_fri as fri
 import test_machine_stark as machine
 from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
-SHARED = library_modules('zkc')
-AIR = library_modules('air')
+SHARED = library_modules(*core_packages())
+AIR = library_modules('relations/air')
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
          ('--no-simplify', '--no-finite-bulk')]
 MODES = ['default', 'no-simplify', 'ordered', 'ordered-no-simplify']

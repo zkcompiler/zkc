@@ -6,7 +6,7 @@ schema = "zkc.subject/0"
 name = "schnorr"
 
 [source]
-modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/schnorr/lib.zkc" }
+modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/protocols/sigma/schnorr/lib.zkc" }
 project = "examples/projects/schnorr"
 compiler_options = []
 

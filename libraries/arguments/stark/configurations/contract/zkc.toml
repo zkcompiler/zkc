@@ -1,0 +1,8 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::configurations::contract" = "lib.zkc"
+
+["dependencies"]
+"collections" = "../../../../core/collections"
+"primitive-cryptography" = "../../../../core/primitives/cryptography"

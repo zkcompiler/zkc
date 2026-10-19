@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_inputs, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE = '''module sample;
 use zkc::bytes::{Bytes};
-use spongefish::schnorr as schnorr;
+use spongefish::bls12_381::schnorr as schnorr;
 domain G=group("bls12-381.g1");
 protocol Fixed roles(P,V)
     (tag:Bytes@(P,V),session:Bytes@(P,V),base:G@(P,V),point:G@(P,V),
@@ -49,14 +49,13 @@ def test_source_transcript_vector_and_decode_effect_order(toolchain, journal, di
         text = text.replace('construction authored;', 'construction ExternalWire;')
         text += 'construction ExternalWire for Fixed {base authored;format RawBytes;}\n'
     source.write_text(text)
-    modules = {'sample': source, 'spongefish': ROOT / 'libraries/spongefish/lib.zkc',
-               'spongefish::schnorr': ROOT / 'libraries/spongefish/schnorr.zkc'}
-    modules.update({f'zkc::{name}': ROOT / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'shake128', 'encoding']})
+    modules = {'sample': source, 'spongefish::duplex': ROOT / 'libraries/constructions/spongefish/duplex.zkc',
+               'spongefish::bls12_381::schnorr': ROOT / 'libraries/constructions/spongefish/bls12_381/schnorr.zkc'}
+    modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile',
                            f'--compiler={toolchain.compiler}',
-                           *library_modules('spongefish', 'sumcheck', overrides=modules),
+                           *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                            'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', PUBLIC)
     witness = journal.write('witness.json', {'scalar': '7', 'nonce': '11'})
@@ -208,20 +207,20 @@ def test_private_snapshot_containers_and_byte_relation_metadata(toolchain, journ
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_bulk_observation_preserves_order_and_empty_cursor(toolchain, journal, directory, flags):
     source = '''module sample;
-use spongefish as transcript;
+use spongefish::bls12_381 as transcript;
 use zkc::bytes as bytes;
 use zkc::vector::{Vector, length, get};
 domain F=field("bls12-381.fr");
 fn check(values:Vector<F>,prior:index)->(F,F,F,F) {
   let mut state=transcript::initialize(bytes::empty(),bytes::empty());
-  for i in 0..prior { let (next,_) = transcript::challenge<F>(state); state=next; }
+  for i in 0..prior { let (next,_) = transcript::challenge(state); state=next; }
   let mut scalar=state;
   for i in 0..length(values) { scalar=transcript::observe_scalar(scalar,get(values,i)); }
   let bulk=transcript::observe_scalars(state,values);
-  let (scalar,a)=transcript::challenge<F>(scalar);
-  let (bulk,b)=transcript::challenge<F>(bulk);
-  let (_,c)=transcript::challenge<F>(scalar);
-  let (_,d)=transcript::challenge<F>(bulk);
+  let (scalar,a)=transcript::challenge(scalar);
+  let (bulk,b)=transcript::challenge(bulk);
+  let (_,c)=transcript::challenge(scalar);
+  let (_,d)=transcript::challenge(bulk);
   return (a,b,c,d);
 }
 protocol Run roles(P)(values:Vector<F>@P,prior:index@P)
@@ -233,7 +232,7 @@ protocol Run roles(P)(values:Vector<F>@P,prior:index@P)
 run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source,
-                  (*flags, *library_modules('spongefish')))
+                  (*flags, *library_modules('constructions/spongefish')))
     # Independent SHAKE model for scalar observations; no upstream slice API.
     session = hashlib.shake_128(b'fiat-shamir/session-id'.ljust(168, b'\0')).digest(32)
     initialized = bytes(200) + session
@@ -251,3 +250,12 @@ run Demo=Run;
             for prefix in ('scalar', 'bulk'):
                 assert int(result[f'{prefix}_first']) == expected[0]
                 assert int(result[f'{prefix}_next']) == expected[1]
+
+
+def test_fixed_spongefish_encoding_refuses_another_group(toolchain, journal, directory):
+    path = directory / 'wrong-group.zkc'
+    path.write_text(SOURCE.replace('bls12-381.g1', 'bls12-381.g2'))
+    report = journal.json([toolchain.runtime, '--json', 'check',
+                           f'--compiler={toolchain.compiler}', f'--module=sample={path}',
+                           *library_modules('constructions/spongefish')], refuses='source-compilation')
+    assert report['diagnostics'].startswith('source.type:'), report

@@ -108,7 +108,7 @@ From the repository root, after preparing the native compiler and Lean packages:
 ```sh
 python3 lean/bridges/common/verify.py \
   --module=example=examples/projects/schnorr/main.zkc \
-  --module=schnorr=libraries/schnorr/lib.zkc --entry=example::Interactive \
+  --module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc --entry=example::Interactive \
   --compiler=build/compiler/zkc-compile \
   --spec=lean/bridges/common/requests/schnorr-dsl.json \
   --output=build/reports/lean/schnorr

@@ -1,3 +1,4 @@
+#include "../AlgorithmSupport.h"
 #include "../CheckedCandidate.h"
 #include "../RealizationTrace.h"
 #include "Support.h"
@@ -101,6 +102,10 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
       output.replaceAllUsesWith(values.lookup(value));
     call.erase();
   }
+  // Identity recipes can alias captures that were distinct before inlining.
+  // Rewrite their ports together before physical scheduling sees the module.
+  if (failed(protocol::detail::canonicalizeCaptures(owner)))
+    return refuse(owner, "capture normalization refused");
   // Formation already checked dormant definitions. They create no executable
   // work but still cannot remain in physical input, even when there are no
   // calls.
