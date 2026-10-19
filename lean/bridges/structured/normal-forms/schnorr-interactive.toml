@@ -16,6 +16,7 @@ s0 = "nonceSite"
 [root]
 inputs = ["base", "key", "witness", "nonces", "challenges"]
 roles = ["prover", "verifier"]
+proof = "kernel"
 
 [contract]
 clause = "knowledge"

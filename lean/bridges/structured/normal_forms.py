@@ -1571,8 +1571,9 @@ class Module:
             out.append(f"def {process} {used_binders}:\n    PIR.Proc (participantInterface F G)\n"
                        f"      (Values (Component (assignment F G)) {program}.payload.entry.outputs) :=\n"
                        f"{text}\n")
+            tactic = "kernel_rfl" if spec.get("proof") == "kernel" else "rfl"
             out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
-                       f"({inputs_name} {arguments}) =\n      {application} := by\n  rfl\n")
+                       f"({inputs_name} {arguments}) =\n      {application} := by\n  {tactic}\n")
             replies = self.run_equation(out, program, role, role_name, inputs_name, arguments, binders, node)
             self.roles_info[role] = {"name": role_name, "inputs": inputs_name, "held": held,
                                      "arguments": arguments, "binders": binders, "replies": replies,

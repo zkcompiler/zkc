@@ -18,6 +18,7 @@ s2 = "secondNonceSite"
 inputs = ["firstBase", "firstKey", "secondBase", "secondKey", "firstWitness", "secondWitness", "nonces",
           "challenges"]
 roles = ["prover", "verifier"]
+proof = "kernel"
 
 [contract]
 clause = "knowledge"
