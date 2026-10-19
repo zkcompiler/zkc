@@ -72,6 +72,8 @@ def check(ledger, lock, records):
         if record is None:
             if entry is not None and entry.get("package") not in packages:
                 skipped.append(name)
+            elif any(r["name"] == name for r in records.declarations):
+                findings.append(f"{name} is private; cite a public theorem")
             else:
                 findings.append(f"stale theorem name: {name} is not a declaration of "
                                 f"{', '.join(sorted(packages))}")
