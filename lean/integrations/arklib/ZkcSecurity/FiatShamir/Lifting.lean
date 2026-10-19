@@ -25,6 +25,11 @@ coefficient times its error there plus its slack
 uniform law `ν` of the reply sort. Uniform laws of the reply sorts are the
 current specialization of a record's ideal law.
 
+For a doomed set and an error that ignore the history, whose receives keep every
+reply doomed, the same lifting gives a per-event certificate
+(`UniformEventStep.typed`, `UniformEventCertificate.typed`), each occurrence
+charged its law record's coefficient times its operation's error plus its slack.
+
 Law-record decoders read the raw answer of the occurrence alone: the operands
 that a decoder reads are carried in the occurrence, the last event of the key.
 The raw answers by the last event, `ByLast`, are in
@@ -145,6 +150,70 @@ def UniformCertificate.charged {accepts : A → Prop} {error : List E → I.Op �
   doomed := certificate.doomed
   step history process member :=
     UniformStep.charged laws covers history process (certificate.step history process member)
+
+/-- The uniform-sort local obligation of a doomed set that ignores the history: a
+doomed result does not accept; every reply of a doomed receive and the reply of a
+doomed send stay doomed; and a doomed query's uniform reply of its sort leaves
+the doomed set with probability at most the error of its operation. -/
+def UniformEventStep (laws : LawInterface I E P Raw) (doomed : PIR.Proc I A → Prop)
+    (accepts : A → Prop) (error : I.Op → ENNReal) : PIR.Proc I A → Prop
+  | .done value => ¬ accepts value
+  | .halt _ => True
+  | .call operation next =>
+      match laws operation with
+      | .receive _ _ => ∀ value, doomed (next value)
+      | .send _ value => doomed (next value)
+      | .query _ sort _ =>
+          letI := sort
+          Pr{let value ← $ᵗ (I.Reply operation)}[¬ doomed (next value)] ≤ error operation
+      | .refuse => True
+
+/-- Round-by-round soundness with uniform replies of each query's sort and a doomed
+set and errors that ignore the history. -/
+structure UniformEventCertificate (laws : LawInterface I E P Raw) (accepts : A → Prop)
+    (error : I.Op → ENNReal) where
+  doomed : PIR.Proc I A → Prop
+  step : ∀ process, doomed process → UniformEventStep laws doomed accepts error process
+
+/-- The uniform-sort obligation of a history-free doomed set lifts to the typed
+per-event obligation when every query occurrence's error covers its law record's
+coefficient times its operation's error plus its slack. -/
+theorem UniformEventStep.typed {doomed : PIR.Proc I A → Prop} {accepts : A → Prop}
+    {error : I.Op → ENNReal} {eventError : E → ENNReal}
+    (covers : ∀ operation (event : E) (sort : SampleableType (I.Reply operation))
+      (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →
+      law.factor * error operation + law.slack ≤ eventError event) :
+    ∀ process, UniformEventStep laws doomed accepts error process →
+      Step laws.absorb doomed accepts eventError process
+  | .done _, step => step
+  | .halt _, step => step
+  | .call operation next, step => by
+      rcases site : laws operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, sort, law⟩ | _
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact step
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact step
+      · simp only [UniformEventStep, site] at step
+        simp only [Step, LawInterface.absorb, site]
+        exact (@LawRecord.escape_le _ _ _ sort law (fun value => ¬ doomed (next value)) _ step).trans
+          (covers operation event sort law site)
+      · simp only [Step, LawInterface.absorb, site]
+
+/-- A history-free uniform-sort certificate is a per-event certificate of the
+typed engine over the law interface's transcript interface, with the same doomed
+residuals. -/
+def UniformEventCertificate.typed {accepts : A → Prop} {error : I.Op → ENNReal}
+    (certificate : UniformEventCertificate laws accepts error) (eventError : E → ENNReal)
+    (covers : ∀ operation (event : E) (sort : SampleableType (I.Reply operation))
+      (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →
+      law.factor * error operation + law.slack ≤ eventError event) :
+    Certificate laws.absorb accepts eventError where
+  doomed := certificate.doomed
+  step process member :=
+    UniformEventStep.typed laws covers process (certificate.step process member)
 
 end Lifting
 
