@@ -195,10 +195,23 @@ def absentComps {Δ : Scope} : (types : List Ty) → Values (Comp laws Δ) types
   | [] => .nil
   | _ :: rest => .cons .absent (absentComps rest)
 
-/-- Whether the operation needs the presence of its operands at this role. -/
-def demanded {Δ : Scope} (role : Nat) : (op : ProtocolOp) → Values (Comp laws Δ) op.arguments → Bool
-  | .calculate .., operands => !anyAbsent operands
-  | .localCall _ _ owner _, operands => owner == role && !anyAbsent operands
+/-- Whether a request's helper key selects the called helper: by kind, inputs and
+outputs, and by name when names are compared. -/
+def helperMatches (names : Bool) (key helper : Helper) : Bool :=
+  key.kind == helper.kind && key.inputs == helper.inputs && key.outputs == helper.outputs &&
+    (!names || key.name == helper.name)
+
+/-- Whether owned calls of the helper are kept as owned invocations. -/
+def Signature.keeps (sig : Signature) (helper : Helper) : Bool :=
+  sig.kept.any fun key => helperMatches sig.names key helper
+
+/-- Whether the operation needs the presence of its operands at this role. A
+calculation that can stop is presented only through a law on components, and a
+kept owned call takes its operands as components, so neither demands them. -/
+def demanded (sig : Signature) {Δ : Scope} (role : Nat) :
+    (op : ProtocolOp) → Values (Comp sig.laws Δ) op.arguments → Bool
+  | .calculate op _, operands => op.total && !anyAbsent operands
+  | .localCall helper _ owner _, operands => owner == role && !anyAbsent operands && !sig.keeps helper
   | .exchange _ sender _ _, _ => sender == role
   | .draw owner _ _, operands => owner == role && !anyAbsent operands
   | .guard owner _, operands => owner == role && !anyAbsent operands
@@ -214,11 +227,81 @@ def constantResults {Δ : Scope} : (op : Op) → Option (Values (Comp laws Δ) o
   | .groupIdentity domain => some (.cons (.present (.groupZero domain)) .nil)
   | _ => none
 
+def Term.index? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
+  | .var _ => none
+  | .result .. => none
+  | .index value => some value
+  | .bool _ => none
+  | .field .. => none
+  | .groupZero _ => none
+  | .calc .. => none
+  | .law .. => none
+
+def Term.bool? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Bool
+  | .var _ => none
+  | .result .. => none
+  | .index _ => none
+  | .bool value => some value
+  | .field .. => none
+  | .groupZero _ => none
+  | .calc .. => none
+  | .law .. => none
+
+/-- A Boolean operation on two Boolean literals, folded. -/
+def booleanFold {Δ : Scope} (combine : Bool → Bool → Bool) (left right : Term laws Δ .boolean) :
+    Option (Values (Comp laws Δ) [.boolean]) :=
+  match left.bool? with
+  | none => none
+  | some first => right.bool?.map fun second => .cons (.present (.bool (combine first second))) .nil
+
+/-- Index equality and Boolean operations on literals are literals. -/
+def folded {Δ : Scope} : (op : Op) → Terms laws Δ op.arguments → Option (Values (Comp laws Δ) op.results)
+  | .indexEqual => fun
+    | .cons left (.cons right .nil) =>
+      match left.index? with
+      | none => none
+      | some first => right.index?.map fun second => .cons (.present (.bool (first == second))) .nil
+  | .booleanAnd => fun | .cons left (.cons right .nil) => booleanFold (· && ·) left right
+  | .booleanOr => fun | .cons left (.cons right .nil) => booleanFold (· || ·) left right
+  | .booleanXor => fun | .cons left (.cons right .nil) => booleanFold xor left right
+  | .booleanEqual => fun | .cons left (.cons right .nil) => booleanFold (· == ·) left right
+  | .booleanNotEqual => fun | .cons left (.cons right .nil) => booleanFold (· != ·) left right
+  | _ => fun _ => none
+
 /-- The results of a total calculation. -/
 def calculation {Δ : Scope} (op : Op) (total : op.total = true) (args : Terms laws Δ op.arguments) :
     Values (Comp laws Δ) op.results :=
-  (constantResults op).getD
-    (mapValues (fun position => .present (.calc op total args position)) (Operands.identity op.results))
+  (constantResults op).getD ((folded op args).getD
+    (mapValues (fun position => .present (.calc op total args position)) (Operands.identity op.results)))
+
+/-- A literal of a sort, as a term. -/
+def literalTerm {Δ : Scope} : (ty : Ty) → Nat → Option (Term laws Δ ty)
+  | .index, value => some (.index value)
+  | .boolean, value => some (.bool (value == 1))
+  | .field domain, value => some (.field domain value)
+  | .vector _, _ => none
+  | .group _, _ => none
+  | .service _, _ => none
+
+/-- A returning law's results as components: from its result function, from the
+call's arguments, or literals. -/
+def lawComps {Δ : Scope} (entry : Fin laws.length) (args : Terms laws Δ laws[entry].helper.inputs) :
+    (types : List Ty) → ({ty : Ty} → Var types ty → Var laws[entry].helper.outputs ty) → List LawOutput →
+      Option (Values (Comp laws Δ) types)
+  | [], _, _ => some .nil
+  | ty :: types, position, outputs =>
+    let first : Option (Comp laws Δ ty) :=
+      match outputs.headD .result with
+      | .result => some (.present (.law entry args (position .here)))
+      | .argument input => (Var.decode _ ty input).map fun binder => .present (termsAt args binder)
+      | .literal value => (literalTerm ty value).map .present
+    match first with
+    | none => none
+    | some comp => (lawComps entry args types (fun binder => position (.there binder)) outputs.tail).map (.cons comp)
+
+/-- The components of a returned tuple bound at the newest binder. -/
+def readComps {Δ : Scope} (types : List Ty) : Values (Comp laws (.tuple types :: Δ)) types :=
+  mapValues (fun position => .read .here position) (Operands.identity types)
 
 /-- The first law whose helper has the called helper's kind, inputs and
 outputs, and its name when `names` is set. The equalities returned are those
@@ -305,51 +388,103 @@ def decision {Δ : Scope} : Term laws Δ .boolean → Decision laws Δ
 section Normalize
 variable {out : List Ty}
 
+/-- A calculation that cannot stop, on resolved operands. -/
+def totalCalculation (sig : Signature) {Γ : List Ty} (op : Op) (total : op.total = true)
+    (args : Operands Γ op.arguments) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
+    Except Refusal (Form sig.laws Δ out) :=
+  let operands := lookup state.env args
+  if anyAbsent operands then next (state.push (absentComps op.results))
+  else
+    match presentTerms operands with
+    | none => .error "undecided-operand"
+    | some terms => next (state.push (calculation op total terms))
+
+/-- A Math call, presented by a passing law on the operands' components. -/
+def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands Γ helper.inputs) {Δ : Scope}
+    (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
+    Except Refusal (Form sig.laws Δ out) :=
+  if helper.kind = .math then
+    match findLaw sig.names helper sig.laws with
+    | some ⟨entry, _, _⟩ =>
+      match sig.laws[entry].shape with
+      | .passes positions =>
+        match passEntries (lookup state.env args) helper.outputs positions with
+        | some passed => do
+          let rest ← next (state.push passed)
+          pure (.byLaw entry helper rest)
+        | none => .error "law-positions"
+      | .returns _ => .error "calculation-can-stop"
+      | .stops _ => .error "calculation-can-stop"
+    | none => .error "calculation-can-stop"
+  else .error "calculation-can-stop"
+
+/-- A calculation: total ones as terms, Math calls through a passing law. -/
+def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operands Γ op.arguments) {Δ : Scope}
+    (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
+    Except Refusal (Form sig.laws Δ out) :=
+  if total : op.total = true then totalCalculation sig op total args state next
+  else
+    match op, args, @next with
+    | .invoke helper, args, next => mathCall sig helper args state next
+    | _, _, _ => .error "calculation-can-stop"
+
+/-- A call presented by a returning law: its results, then the continuation. -/
+def lawReturn (sig : Signature) {Γ : List Ty} (entry : Fin sig.laws.length) (helper : Helper) {Δ : Scope}
+    (state : State sig.laws Γ₀ Δ Γ) (lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs)
+    (outputsSame : sig.laws[entry].helper.outputs = helper.outputs) (outputs : List LawOutput)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
+    Except Refusal (Form sig.laws Δ out) :=
+  match lawComps entry lawArgs _ (fun position => position) outputs with
+  | some lawResults => do
+    let rest ← next (state.push (outputsSame ▸ lawResults : Values (Comp sig.laws Δ) helper.outputs))
+    pure (.byLaw entry helper rest)
+  | none => .error "law-outputs"
+
+/-- An owned call at its owner, on present arguments: a law's results or stop,
+or the helper's strict invocation. -/
+def ownedCall (sig : Signature) {Γ : List Ty} (helper : Helper) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
+    (terms : Terms sig.laws Δ helper.inputs)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
+    Except Refusal (Form sig.laws Δ out) :=
+  match findLaw sig.names helper sig.laws with
+  | some ⟨entry, inputsSame, outputsSame⟩ =>
+    let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := inputsSame ▸ terms
+    if pinsMatch state.inputs sig.laws[entry].pins lawArgs then
+      match sig.laws[entry].shape with
+      | .returns outputs => lawReturn sig entry helper state lawArgs outputsSame outputs next
+      | .stops reason => .ok (.byLaw entry helper (.halt reason))
+      | .passes _ => .error "law-shape"
+    else .error "law-pins"
+  | none =>
+    if sig.strict then do
+      let rest ← next ((state.weaken (.results helper.outputs)).push
+        (mapValues (fun position => .present (.result .here position)) (Operands.identity helper.outputs)))
+      pure (.strict helper terms rest)
+    else .error "no-law"
+
 /-- One operation on resolved operands, then the continuation on its results. -/
 def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : ProtocolOp) → Operands Γ op.arguments →
-    {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
+    Regions protocolDialect op.regions → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
     ({Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) →
     Except Refusal (Form sig.laws Δ out)
-  | .calculate op _, args, _, state, next =>
-    if total : op.total = true then
-      let operands := lookup state.env args
-      if anyAbsent operands then next (state.push (absentComps op.results))
-      else
-        match presentTerms operands with
-        | none => .error "undecided-operand"
-        | some terms => next (state.push (calculation op total terms))
-    else .error "calculation-can-stop"
-  | .localCall helper _ owner _, args, Δ, state, next =>
+  | .calculate op _, args, _, _, state, next => calculateOperation sig op args state next
+  | .localCall helper _ owner _, args, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (absentComps helper.outputs))
     else
       let operands := lookup state.env args
       if anyAbsent operands then .ok (.halt .incomplete)
+      else if sig.keeps helper then do
+        let rest ← next ((state.weaken (.tuple helper.outputs)).push (readComps helper.outputs))
+        pure (.owned owner helper operands rest)
       else
         match presentTerms operands with
         | none => .error "undecided-operand"
-        | some terms =>
-          match findLaw sig.names helper sig.laws with
-          | some ⟨entry, inputsSame, outputsSame⟩ =>
-            let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := inputsSame ▸ terms
-            if pinsMatch state.inputs sig.laws[entry].pins lawArgs then
-              match sig.laws[entry].shape with
-              | .returns => do
-                let lawResults : Values (Comp sig.laws Δ) sig.laws[entry].helper.outputs :=
-                  mapValues (fun position => .present (.law entry lawArgs position))
-                    (Operands.identity sig.laws[entry].helper.outputs)
-                let rest ← next (state.push (outputsSame ▸ lawResults : Values (Comp sig.laws Δ) helper.outputs))
-                pure (.byLaw entry helper rest)
-              | .stops reason => .ok (.byLaw entry helper (.halt reason))
-            else .error "law-pins"
-          | none =>
-            if sig.strict then do
-              let rest ← next ((state.weaken (.results helper.outputs)).push
-                (mapValues (fun position => .present (.result .here position))
-                  (Operands.identity helper.outputs)))
-              pure (.strict helper terms rest)
-            else .error "no-law"
-  | .exchange ty sender receiver site, .cons arg .nil, _, state, next =>
+        | some terms => ownedCall sig helper state terms next
+  | .exchange ty sender receiver site, .cons arg .nil, _, _, state, next =>
     if roster ≤ sender || roster ≤ receiver then .error "role-outside-roster"
     else if sender == role then
       match entryAt state.env arg with
@@ -362,11 +497,11 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
       let rest ← next ((state.weaken (.value ty)).push (.cons (.present (.var .here)) .nil))
       pure (.receive ty site sender rest)
     else next (state.push (.cons .absent .nil))
-  | .restrict _ roles, .cons arg .nil, _, state, next =>
+  | .restrict _ roles, .cons arg .nil, _, _, state, next =>
     if roles.any (roster ≤ ·) then .error "role-outside-roster"
     else if roles.contains role then next (state.push (.cons (entryAt state.env arg) .nil))
     else next (state.push (.cons .absent .nil))
-  | .draw owner field site, .cons arg .nil, _, state, next =>
+  | .draw owner field site, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (.cons .absent .nil))
     else
@@ -377,7 +512,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
           (.cons (.present (.var .here)) .nil))
         pure (.query site field (.cons handle .nil) rest)
       | _ => .error "undecided-operand"
-  | .guard owner _, .cons arg .nil, _, state, next =>
+  | .guard owner _, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push .nil)
     else
@@ -392,10 +527,14 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
           pure (.guard equality left right rest)
         | .unknown => .error "guard-undecided"
       | _ => .error "undecided-operand"
-  | .statement .., _, _, state, next => next (state.push .nil)
-  | .mark _, _, _, state, next => next (state.push .nil)
-  | .protocolApply .., _, _, _, _ => .error "protocol-application"
-  | .repeat .., _, _, _, _ => .error "repeat"
+  | .statement .., _, _, _, state, next => next (state.push .nil)
+  | .mark _, _, _, _, state, next => next (state.push .nil)
+  | .protocolApply .., _, _, _, _, _ => .error "protocol-application"
+  | .repeat spec site, .cons count rest, .cons callback .nil, _, state, next =>
+    let parts := Values.split spec.state (lookup state.env rest)
+    do
+      let after ← next ((state.weaken (.tuple spec.state)).push (readComps spec.state))
+      pure (.repeat spec site callback (entryAt state.env count) parts.1 parts.2 after)
 
 /-- Split on the undecided inputs the operation needs, in operand order. -/
 def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (args : Operands Γ op.arguments) :
@@ -404,7 +543,7 @@ def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (arg
     Except Refusal (Form sig.laws Δ out)
   | 0, _, state, proceed => proceed state
   | fuel + 1, _, state, proceed =>
-    if demanded role op (lookup state.env args) then
+    if demanded sig role op (lookup state.env args) then
       match firstInput (lookup state.env args) with
       | none => proceed state
       | some ⟨_, subject⟩ => do
@@ -418,9 +557,9 @@ def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → R
   | _, .ret values, _, state => .ok (.done (lookup state.env values))
   | _, .stop reason, _, _ => .ok (.halt reason)
   | _, .bind .., _, _ => .error "region-bind"
-  | _, .letOp op args _ next, _, state =>
+  | _, .letOp op args bodies next, _, state =>
     resolve sig role op args op.arguments.length state fun state =>
-      operation sig role roster op args state fun state => normalizeRegion sig role roster next state
+      operation sig role roster op args bodies state fun state => normalizeRegion sig role roster next state
 
 end Normalize
 

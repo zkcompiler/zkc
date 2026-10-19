@@ -98,6 +98,11 @@ def formJson {out : List Ty} : {Δ : Scope} → Form laws Δ out → Json
     .arr #[.str "strict", .str helper.name, .arr (termsJson args).toArray, formJson next]
   | _, .compute op _ args next => .arr #[.str "compute", opJson op, .arr (termsJson args).toArray, formJson next]
   | _, .byLaw entry helper next => .arr #[.str "byLaw", nat entry.val, .str helper.name, formJson next]
+  | _, .owned owner helper args next =>
+    .arr #[.str "owned", nat owner, .str helper.name, .arr (compsJson args).toArray, formJson next]
+  | _, .repeat _ site _ count state captures next =>
+    .arr #[.str "repeat", .str site, compJson count, .arr (compsJson state).toArray,
+      .arr (compsJson captures).toArray, formJson next]
 
 /-! Requests. -/
 
@@ -124,14 +129,26 @@ def decodePin : Json → Except String (Option Nat)
   | .null => .ok none
   | json => return some (← Format.decimal (← Format.string json))
 
-/-- `[helper, shape, pins]`: a shape is `"returns"` or `["stops", reason]`; a pin is `null` or an input position. -/
+/-- One result of a returning law: `["result"]`, `["argument", position]` or `["literal", value]`. -/
+def decodeLawOutput : Json → Except String LawOutput
+  | .arr #[.str "result"] => .ok .result
+  | .arr #[.str "argument", position] => return .argument (← Format.decimal (← Format.string position))
+  | .arr #[.str "literal", value] => return .literal (← Format.decimal (← Format.string value))
+  | _ => .error "normal-form-law-output"
+
+/-- `[helper, shape, pins]`: a shape is `"returns"`, `["returns", [output…]]`, `["stops", reason]` or
+`["passes", [position…]]`; a pin is `null` or an input position. -/
 def decodeLaw (definitions : List CheckedDefinition) (json : Json) : Except String LawKey := do
   let [name, shape, pins] ← Format.array json | throw "normal-form-law"
   let name ← Format.string name
   let some definition := definitions.find? (·.name == name) | throw "normal-form-helper"
   let shape ← match shape with
-    | .str "returns" => pure LawShape.returns
+    | .str "returns" => pure (LawShape.returns [])
+    | .arr #[.str "returns", outputs] => pure (LawShape.returns (← (← Format.array outputs).mapM decodeLawOutput))
     | .arr #[.str "stops", reason] => pure (LawShape.stops (← decodeStop reason))
+    | .arr #[.str "passes", positions] =>
+      pure (LawShape.passes (← (← Format.array positions).mapM fun position => do
+        Format.decimal (← Format.string position)))
     | _ => throw "normal-form-law-shape"
   let pins ← (← Format.array pins).mapM decodePin
   return ⟨definition.helper, shape, pins⟩
@@ -155,15 +172,17 @@ def findRepeat (site : String) : {Γ out : List Ty} → Region protocolDialect �
 def callsMatch {laws : List LawKey} {Δ : Scope} {out : List Ty} (form : Form laws Δ out) : Bool :=
   form.lawCalls.all fun call => decide (laws[call.1].helper = call.2)
 
-/-- The request `[protocol, repeat, role, roster, pattern, laws, strict]`: a
-protocol name, the site of the repeat whose callback is normalized (or
+/-- The request `[protocol, repeat, role, roster, pattern, laws, strict, kept]`:
+a protocol name, the site of the repeat whose callback is normalized (or
 `null`), the role and roster size, one input pattern entry per input of the
-body, the signature's laws and whether owned calls without a law are kept.
+body, the signature's laws, whether owned calls without a law are kept as
+strict invocations, and the helpers whose owned calls are kept on components.
 Laws are chosen by signature first; if that presents a call by another
-helper's law, the run is repeated choosing by name too, and the reply says so
-(`names`), for the printed signature to ask for it. -/
+helper's law or is refused, the run is repeated choosing by name too, and the
+reply says when that was needed (`names`), for the printed signature to ask
+for it. -/
 def run (program : Program) (request : Json) : Except String Json := do
-  let [protocolName, repeatSite, role, roster, pattern, laws, strict] ← Format.array request
+  let [protocolName, repeatSite, role, roster, pattern, laws, strict, kept] ← Format.array request
     | throw "normal-form-request"
   let protocolName ← Format.string protocolName
   let some definition := program.payload.protocols.find? (·.name == protocolName)
@@ -177,11 +196,18 @@ def run (program : Program) (request : Json) : Except String Json := do
   let roster ← Format.decimal (← Format.string roster)
   let laws ← (← Format.array laws).mapM (decodeLaw program.payload.definitions)
   let strict := strict == .bool true
+  let kept ← (← Format.array kept).mapM fun name => do
+    let name ← Format.string name
+    let some definition := program.payload.definitions.find? (·.name == name) | throw "normal-form-helper"
+    pure definition.helper
   let ⟨inputs, _, region⟩ := body
   let pattern ← decodePattern inputs (← Format.array pattern)
-  let bySignature ← normalize ⟨laws, strict, false⟩ region role roster pattern
-  let (names, form) ← if callsMatch bySignature then pure (false, bySignature)
-    else pure (true, ← normalize ⟨laws, strict, true⟩ region role roster pattern)
+  let byName := normalize ⟨laws, strict, true, kept⟩ region role roster pattern
+  let (names, form) ← match normalize ⟨laws, strict, false, kept⟩ region role roster pattern with
+    | .ok bySignature => if callsMatch bySignature then pure (false, bySignature) else pure (true, ← byName)
+    | .error refusal => match byName with
+      | .ok form => pure (true, form)
+      | .error _ => throw refusal
   return .mkObj [("status", .str "normalized"), ("scope", .arr (pattern.scope.map slotJson).toArray),
     ("names", .bool names), ("form", formJson form)]
 

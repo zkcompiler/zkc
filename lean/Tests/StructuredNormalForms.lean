@@ -44,8 +44,9 @@ example : normalize {} SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalF
     .error "no-law" := by kernel_rfl
 
 /-- A law pinned to an input the call does not read is refused. -/
-example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns, [some 2, some 2, some 3]⟩,
-      ⟨MapFirstBodies.firstHelper, .returns, []⟩, ⟨SumcheckHelperBodies.appendHelper, .returns, []⟩], false, false⟩
+example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns [], [some 2, some 2, some 3]⟩,
+      ⟨MapFirstBodies.firstHelper, .returns [], []⟩, ⟨SumcheckHelperBodies.appendHelper, .returns [], []⟩], false,
+      false, []⟩
     SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalForms.proverPattern = .error "law-pins" := by
   kernel_rfl
 
@@ -53,7 +54,7 @@ example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns, [some 2, s
 def renamedSums : Helper := { SumcheckHelperBodies.sumsHelper with name := "renamed" }
 
 /-- A signature whose only law is about the renamed helper. -/
-def renamedSignature (names : Bool) : Signature := ⟨[⟨renamedSums, .stops .reject, []⟩], false, names⟩
+def renamedSignature (names : Bool) : Signature := ⟨[⟨renamedSums, .stops .reject, []⟩], false, names, []⟩
 
 /-- Choosing laws by signature presents the sums call by the renamed helper's law;
 the form records the helper actually called. -/
@@ -74,8 +75,8 @@ example : True := by
 example : normalize (renamedSignature true) SumcheckVerifierBodies.roundBody 0 1
     SumcheckRoundNormalForms.proverEmptyPattern = .error "no-law" := by kernel_rfl
 
-/-- The Reduce body starts with a Math call, which may stop or depend on the
-helper body: it is refused, not presented as a total term. -/
+/-- A Math call is presented only through a law on components: without one the
+Reduce body's first call is refused, not presented as a total term. -/
 example : normalize {} (SumcheckVerifierBodies.reduceBody 4) 1 2
     (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil)))))) =
     .error "calculation-can-stop" := by kernel_rfl

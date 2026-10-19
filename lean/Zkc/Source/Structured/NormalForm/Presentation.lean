@@ -214,9 +214,12 @@ def Form.finishes {out : List Ty} (spec : Values (fun _ => Carried) out) : {Δ :
   | _, .strict _ _ next => next.finishes spec
   | _, .compute _ _ _ next => next.finishes spec
   | _, .byLaw _ _ next => next.finishes spec
+  | _, .owned _ _ _ next => next.finishes spec
+  | _, .repeat _ _ _ _ _ _ next => next.finishes spec
 
 section Finish
 variable (model) (tables : Tables model) (results : LawResults model laws) (context : ProtocolContext)
+  (runs : Runs model)
 
 /-- A returned tuple, presented. -/
 def finishLeaf {out : List Ty} (spec : Values (fun _ => Carried) out) {Δ : Scope}
@@ -230,8 +233,8 @@ def finishLeaf {out : List Ty} (spec : Values (fun _ => Carried) out) {Δ : Scop
 process followed by the embedding of the presented tuple. -/
 theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
     {Δ : Scope} → (form : Form laws Δ out) → form.finishes spec = true → (binders : Binders model Δ) →
-      form.denote model tables results context binders =
-        (form.denoteWith model tables results context (finishLeaf model results spec) binders).bind
+      form.denote model tables results context runs binders =
+        (form.denoteWith model tables results context runs (finishLeaf model results spec) binders).bind
           fun tuple => .done (embed model.Value spec (Tuple.toValues tuple))
   | _, .done values, finishes, binders => by
     obtain ⟨presentedValues, found, same⟩ := presented_embed results binders spec values finishes
@@ -264,6 +267,64 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
     simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
     exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .byLaw _ _ next, finishes, binders => denote_finish spec next finishes binders
+  | _, .owned _ _ _ next, finishes, binders => by
+    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
+    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+  | _, .repeat _ _ _ _ _ _ next, finishes, binders => by
+    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
+    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+
+/-- Two ways of running repeats that agree on every repeat give the same process. -/
+theorem denoteWith_runs {out : List Ty} {A : Type}
+    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Proc (Interface model) A)
+    (first second : Runs model)
+    (agree : ∀ (spec : RepeatSpec) (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
+      (count : Option Nat) (state : Values (Component model.Value) spec.state)
+      (captures : Values (Component model.Value) spec.captures),
+        first.run spec count state captures (first.callback spec region) =
+          second.run spec count state captures (second.callback spec region)) :
+    {Δ : Scope} → (form : Form laws Δ out) → (binders : Binders model Δ) →
+      form.denoteWith model tables results context first leaf binders =
+        form.denoteWith model tables results context second leaf binders
+  | _, .done _, _ => rfl
+  | _, .halt _, _ => rfl
+  | _, .send _ _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.call _) (funext fun _ => denoteWith_runs leaf first second agree next binders)
+  | _, .receive _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.call _) (funext fun reply =>
+      denoteWith_runs leaf first second agree next (.cons reply binders))
+  | _, .query _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.call _) (funext fun reply =>
+      denoteWith_runs leaf first second agree next (.cons reply binders))
+  | _, .split subject absent present, binders => by
+    simp only [Form.denoteWith]
+    cases subject.eval results binders with
+    | none => exact denoteWith_runs leaf first second agree absent binders
+    | some value => exact denoteWith_runs leaf first second agree present (.cons value binders)
+  | _, .guard _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    rw [denoteWith_runs leaf first second agree next binders]
+  | _, .strict _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+      denoteWith_runs leaf first second agree next (.cons values binders))
+  | _, .compute _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+      denoteWith_runs leaf first second agree next (.cons values binders))
+  | _, .byLaw _ _ next, binders => denoteWith_runs leaf first second agree next binders
+  | _, .owned _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+      denoteWith_runs leaf first second agree next (.cons values binders))
+  | _, .repeat spec _ callback _ _ _ next, binders => by
+    simp only [Form.denoteWith]
+    rw [agree spec callback]
+    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+      denoteWith_runs leaf first second agree next (.cons values binders))
 
 end Finish
 
@@ -275,6 +336,31 @@ theorem RosterDistinct.only (context : ProtocolContext) : RosterDistinct context
 
 section Uniform
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+
+/-- The uniform participant rules' repeats, naming the constants readable
+processes name: `denoteRepeat` and the uniform participant meaning. -/
+def Runs.uniform (tables : Evaluation.ComponentTables F G (participantInterface F G))
+    (protocols : ProtocolTable (assignment F G) (participantInterface F G)) (context : ProtocolContext)
+    (self : Nat) : Runs (ringModel F G) where
+  callback _ region := fun args => region.denote
+    (participantMeaningWith (.silent _) (participantActions F G) tables self protocols context) args.get
+  run spec := denoteRepeat spec context self
+
+theorem runs_uniform (tables : Evaluation.ComponentTables F G (participantInterface F G))
+    (protocols : ProtocolTable (assignment F G) (participantInterface F G)) (context : ProtocolContext)
+    (role : Nat) (spec : RepeatSpec)
+    (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
+    (count : Option Nat) (state : Values (Component (assignment F G)) spec.state)
+    (captures : Values (Component (assignment F G)) spec.captures) :
+    (runsAt (ringModel F G) tables.toOn protocols context role).run spec count state captures
+        ((runsAt (ringModel F G) tables.toOn protocols context role).callback spec region) =
+      (Runs.uniform tables protocols context (context.roles role)).run spec count state captures
+        ((Runs.uniform tables protocols context (context.roles role)).callback spec region) := by
+  simp only [runsAt, Runs.uniform]
+  rw [denoteRepeat_eq_denoteRepeatOn]
+  congr 1
+  funext args
+  exact (denote_participantMeaningWith_eq _ _ _ _ _ _ region args.get).symm
 
 /-- `normalize_sound` for the uniform participant meaning. -/
 theorem sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
@@ -289,11 +375,18 @@ theorem sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protoc
     (lawsHold : LawsHold tables.toOn results inputs) :
     body.denote (participantMeaningWith (.silent _) (participantActions F G) tables (context.roles role)
         protocols context) inputs.get =
-      form.denote (ringModel F G) tables.toOn results context binders := by
+      form.denote (ringModel F G) tables.toOn results context
+        (Runs.uniform tables protocols context (context.roles role)) binders := by
   subst environment
   rw [denote_participantMeaningWith_eq]
-  exact normalize_sound (protocols := protocols) sig body role roster pattern form normalized matched distinct
-    results binders lawsHold
+  have sound : body.denote (meaningAt (ringModel F G) tables.toOn protocols context role)
+      (pattern.environment (ringModel F G) binders).get =
+        form.denote (ringModel F G) tables.toOn results context
+          (runsAt (ringModel F G) tables.toOn protocols context role) binders :=
+    normalize_sound sig body role roster pattern form normalized matched distinct results binders lawsHold
+  exact sound.trans (denoteWith_runs (ringModel F G) tables.toOn results context
+    (fun values binders => .done (Comps.eval results values binders)) _ _
+    (runs_uniform tables protocols context role) form binders)
 
 /-- A repeat callback's process, factored through the role's presented tuple. -/
 theorem callback_sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
@@ -311,11 +404,12 @@ theorem callback_sound_uniform (sig : Signature) {Γ out : List Ty} (body : Regi
     body.denote (participantMeaningWith (.silent _) (participantActions F G) tables (context.roles role)
         protocols context) inputs.get =
       (form.denoteWith (ringModel F G) tables.toOn results context
+        (Runs.uniform tables protocols context (context.roles role))
         (finishLeaf (ringModel F G) results spec) binders).bind
           fun tuple => .done (embed (ringModel F G).Value spec (Tuple.toValues tuple)) :=
   (sound_uniform sig body role roster pattern form normalized matched context distinct tables protocols results
     binders inputs environment lawsHold).trans
-      (denote_finish (ringModel F G) tables.toOn results context spec form finishes binders)
+      (denote_finish (ringModel F G) tables.toOn results context _ spec form finishes binders)
 
 /-- An entry's participant at the root context: the normal form of the entry
 body, on the masked inputs, followed by the output masks. -/
@@ -333,7 +427,10 @@ theorem participant_sound_uniform (program : Program)
         (maskValues role program.payload.entry.inputScopes inputs)) :
     program.participant F G role inputs =
       (form.denote (ringModel F G) (program.payload.definitions.foldl
-        (Evaluation.ComponentTables.extend (.silent (participantInterface F G))) ⟨[], []⟩).toOn results {} binders).bind
+        (Evaluation.ComponentTables.extend (.silent (participantInterface F G))) ⟨[], []⟩).toOn results {}
+        (Runs.uniform (program.payload.definitions.foldl
+          (Evaluation.ComponentTables.extend (.silent (participantInterface F G))) ⟨[], []⟩)
+          (program.payload.plainProtocolTable F G) {} role) binders).bind
           fun out => .done (maskValues role program.payload.entry.outputScopes out) := by
   refine (program.payload.protocolTable_forgetSites (F := F) (G := G) program.payload.entry.signature {} role
     inputs).trans ?_

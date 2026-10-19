@@ -95,6 +95,17 @@ theorem lookup_eq_eval {α : Type} {V : α → Type} {Γ : List α} (values : Va
   | _, .cons position rest => by
     simp only [lookup, Operands.eval, entryAt_eq_get, lookup_eq_eval values rest]
 
+/-- The entries at input positions, one per output sort; `none` if a position
+is out of range or holds another sort. -/
+def passEntries {V : Ty → Type} {inputs : List Ty} (values : Values V inputs) :
+    (outputs : List Ty) → List Nat → Option (Values V outputs)
+  | [], _ => some .nil
+  | _ :: _, [] => none
+  | ty :: outputs, position :: positions =>
+    match Var.decode inputs ty position with
+    | none => none
+    | some binder => (passEntries values outputs positions).map (.cons (entryAt values binder))
+
 /-- A binder of a form's scope. -/
 inductive Slot where
   /-- A present value: a present input, a received or drawn value, the present
@@ -110,12 +121,27 @@ inductive Slot where
 
 abbrev Scope := List Slot
 
+/-- One result of a law that returns. -/
+inductive LawOutput where
+  /-- The law's result function gives it. -/
+  | result
+  /-- It is the call's argument at this input position. -/
+  | argument (position : Nat)
+  /-- It is this literal: an index, a Boolean (`1` is true) or the natural of a
+  field element. -/
+  | literal (value : Nat)
+  deriving DecidableEq, Repr
+
 /-- What a law says about its helper on the arguments it covers. -/
 inductive LawShape where
-  /-- The helper returns the law's results. -/
-  | returns
+  /-- The helper returns, per output, what the list says; missing entries are
+  the law's result function. -/
+  | returns (outputs : List LawOutput)
   /-- The helper stops with this reason. -/
   | stops (reason : PIR.Stop)
+  /-- A Math helper returns, on components, the arguments' components at these
+  input positions, one per output, whether present or not. -/
+  | passes (positions : List Nat)
   deriving DecidableEq, Repr
 
 /-- A helper law, keyed by the helper, never by an occurrence. `pins` follows
@@ -139,6 +165,9 @@ structure Signature where
   because every law use is checked against the law's helper (`byLaw`); names
   are needed only where two helpers of one signature meet in a body. -/
   names : Bool := false
+  /-- Owned calls of these helpers are kept as the helper's owned invocation on
+  the arguments' components, without deciding their presence. -/
+  kept : List Helper := []
   deriving Repr
 
 /-- The decidable equalities a guard can compare. -/
@@ -169,6 +198,12 @@ mutual
     | cons {ty : Ty} {types : List Ty} (head : Term laws Δ ty) (tail : Terms laws Δ types) :
         Terms laws Δ (ty :: types)
 end
+
+/-- The term at a position of a tuple of terms. -/
+def termsAt {laws : List LawKey} {Δ : Scope} : {types : List Ty} → {ty : Ty} → Terms laws Δ types → Var types ty →
+    Term laws Δ ty
+  | _, _, .cons head _, .here => head
+  | _, _, .cons _ tail, .there position => termsAt tail position
 
 /-- Optional components in a scope. -/
 inductive Comp (laws : List LawKey) (Δ : Scope) (ty : Ty) where
@@ -208,6 +243,18 @@ inductive Form (laws : List LawKey) : Scope → List Ty → Type where
   are the law's terms in `next`, and a stopping law's stop is `next`. -/
   | byLaw {Δ : Scope} {out : List Ty} (entry : Fin laws.length) (helper : Helper)
       (next : Form laws Δ out) : Form laws Δ out
+  /-- A kept call of a helper at its owner on the arguments' components: it
+  stops as incomplete when one is absent, else runs the helper; the returned
+  components are bound as a tuple. -/
+  | owned {Δ : Scope} {out : List Ty} (owner : Nat) (helper : Helper) (args : Values (Comp laws Δ) helper.inputs)
+      (next : Form laws (.tuple helper.outputs :: Δ) out) : Form laws Δ out
+  /-- A repeat of a callback region on a count, a carried state and captures;
+  the final state is bound as a tuple. -/
+  | «repeat» {Δ : Scope} {out : List Ty} (spec : RepeatSpec) (site : String)
+      (callback : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
+      (count : Comp laws Δ .index) (state : Values (Comp laws Δ) spec.state)
+      (captures : Values (Comp laws Δ) spec.captures)
+      (next : Form laws (.tuple spec.state :: Δ) out) : Form laws Δ out
 
 /-- A named reason for not normalizing a body. -/
 abbrev Refusal := String

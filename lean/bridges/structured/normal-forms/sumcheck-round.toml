@@ -67,10 +67,14 @@ closed = "(plainHelpers (F := F) (G := G) U).closed"
 components = "(plainHelpers (F := F) (G := G) U).components"
 repeat_spec = "SumcheckVerifierBodies.repeatSpec maximum"
 callback = "roundFn U"
+callback_body = "SumcheckVerifierBodies.roundBody"
+tables = "plainHelpers (F := F) (G := G) U"
+protocols = "U.plainProtocolTable F G"
 
 [[shared.roles]]
 role = 1
 name = "verifierReduce"
+proof = "normal-form"
 binders = "(bodies : SumcheckVerifierHelpers.Bodies U.definitions)"
 inputs = [{ mode = "absent" }, { mode = "absent" }, { mode = "absent" }, { name = "claim", mode = "optional" },
           { name = "count", mode = "optional" }, { name = "service", mode = "optional" }]
@@ -81,12 +85,12 @@ laws.emptyHelper = { term = "empty_plain U bodies", results = ["[]"] }
 [[shared.roles]]
 role = 0
 name = "proverReduce"
+proof = "normal-form"
 binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
 premises = "(countBound : count < indexLimit) (roundsBound : rounds < indexLimit) (enough : rounds ≤ count)"
 inputs = [{ name = "entries" }, { name = "count" }, { name = "width", value = "1" }, { mode = "absent" },
           { name = "rounds" }, { mode = "absent" }]
 laws.widthHelper = { term = "width_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ {0} {1} {2}", results = ["{2}"], components = true }
 laws.variablesHelper = { term = "variables_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ {0} {1} {2}", results = ["{1}"], components = true }
-laws.lessHelper = { term = "SumcheckProverLaws.less_present U bodies {0} {1} countBound roundsBound", results = ["decide ({0} < {1})"] }
+laws.lessHelper = { term = "by rw [SumcheckProverLaws.less_present U bodies {0} {1} countBound roundsBound, decide_eq_false (Nat.not_lt.mpr enough)]", results = ["false"] }
 laws.emptyHelper = { term = "empty_plain U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩", results = ["[]"] }
-rewrites = [{ expr = "decide (count < rounds)", value = "false", proof = "decide_eq_false (Nat.not_lt.mpr enough)" }]

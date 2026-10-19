@@ -125,9 +125,21 @@ abbrev Interface (model : DomainModel) := participantInterfaceOn model.toCarrier
 abbrev Tables (model : DomainModel) :=
   Evaluation.ComponentTablesOn model.toCarriers (Interface model)
 
+/-- What a form's repeats run: the function a callback region denotes and the
+repeat rule at the participant. The soundness theorem takes the participant
+rules of the domain model; the uniform presentation takes the uniform ones,
+which name the same constants as the readable processes. -/
+structure Runs (model : DomainModel) where
+  callback : (spec : RepeatSpec) → Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state →
+    RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state)
+  run : (spec : RepeatSpec) → Option Nat → Values (Component model.Value) spec.state →
+    Values (Component model.Value) spec.captures →
+    RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state) →
+    PIR.Proc (Interface model) (Values (Component model.Value) spec.state)
+
 section Denote
 variable (model) (tables : Tables model) (results : LawResults model laws)
-  (context : ProtocolContext) {out : List Ty}
+  (context : ProtocolContext) (runs : Runs model) {out : List Ty}
 
 /-- A form's process, with the given meaning of its returned tuples. -/
 def Form.denoteWith {A : Type}
@@ -159,12 +171,19 @@ def Form.denoteWith {A : Type}
         (op.calculationRegions allowed)).bind fun values =>
           next.denoteWith leaf (.cons values binders)
   | _, .byLaw _ _ next, binders => next.denoteWith leaf binders
+  | _, .owned owner helper args next, binders =>
+      (Participant.owned (context.roles owner) (context.roles owner) (invoke tables.closed helper)
+        (Comps.eval results args binders)).bind fun values => next.denoteWith leaf (.cons values binders)
+  | _, .repeat spec _ callback count state captures next, binders =>
+      (runs.run spec (count.eval results binders) (Comps.eval results state binders)
+        (Comps.eval results captures binders) (runs.callback spec callback)).bind fun values =>
+          next.denoteWith leaf (.cons values binders)
 
 /-- A form's process, returning its tuple of components. -/
 def Form.denote {Δ : Scope} (form : Form laws Δ out) (binders : Binders model Δ) :
     PIR.Proc (Interface model) (Values (Component model.Value) out) :=
-  form.denoteWith model tables results context (fun values binders => .done (Comps.eval results values binders))
-    binders
+  form.denoteWith model tables results context runs
+    (fun values binders => .done (Comps.eval results values binders)) binders
 
 end Denote
 
@@ -184,15 +203,46 @@ def Pinned {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ₀) :
           | some binder => inputs.get binder = some value
           | none => False) ∧ Pinned inputs pins values
 
-/-- The helper behaviour a law presents, on the arguments it covers. -/
+/-- A literal's value: an index, a Boolean (`1` is true) or a field element. -/
+def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Value ty)
+  | .index, value => some value
+  | .boolean, value => some (value == 1)
+  | .field domain, value => some (fieldLiteral model.toFieldModel domain value)
+  | .vector _, _ => none
+  | .group _, _ => none
+  | .service _, _ => none
+
+/-- A returning law's results, mirroring `lawComps`: from the result function,
+from the arguments, or literals. -/
+def lawValues (model : DomainModel) (helper : Helper) (results : Values model.Value helper.outputs)
+    (args : Values model.Value helper.inputs) :
+    (types : List Ty) → ({ty : Ty} → Var types ty → Var helper.outputs ty) → List LawOutput →
+      Option (Values model.Value types)
+  | [], _, _ => some .nil
+  | ty :: types, position, outputs =>
+    let first : Option (model.Value ty) :=
+      match outputs.headD .result with
+      | .result => some (results.get (position .here))
+      | .argument input => (Var.decode helper.inputs ty input).map (entryAt args)
+      | .literal value => literalValue model ty value
+    match first with
+    | none => none
+    | some value => (lawValues model helper results args types (fun binder => position (.there binder))
+        outputs.tail).map (.cons value)
+
+/-- The helper behaviour a law presents, on the arguments it covers. A passing
+law is about the Math helper's meaning on components, for every argument. -/
 def LawHolds {Γ₀ : List Ty} {I : PIR.Signature} (tables : Evaluation.ComponentTablesOn model.toCarriers I)
     (inputs : Values (Component model.Value) Γ₀) (key : LawKey)
     (result : Values model.Value key.helper.inputs → Values model.Value key.helper.outputs) : Prop :=
-  ∀ args, Pinned inputs key.pins args →
-    invoke tables.closed key.helper args =
-      match key.shape with
-      | .returns => .done (result args)
-      | .stops reason => .halt reason
+  match key.shape with
+  | .returns outputs => ∀ args, Pinned inputs key.pins args → ∀ values,
+      lawValues model key.helper (result args) args key.helper.outputs (fun position => position) outputs =
+        some values → invoke tables.closed key.helper args = .done values
+  | .stops reason => ∀ args, Pinned inputs key.pins args → invoke tables.closed key.helper args = .halt reason
+  | .passes positions => ∀ (args : Values (Component model.Value) key.helper.inputs) values,
+      passEntries args key.helper.outputs positions = some values →
+        invoke tables.components key.helper args = .done values
 
 /-- One premise per law of the signature. -/
 def LawsHold {Γ₀ : List Ty} {I : PIR.Signature} (tables : Evaluation.ComponentTablesOn model.toCarriers I)
@@ -211,6 +261,8 @@ def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws Δ out → Prop
   | _, .strict _ _ next => next.LawsMatch
   | _, .compute _ _ _ next => next.LawsMatch
   | _, .byLaw entry helper next => laws[entry].helper = helper ∧ next.LawsMatch
+  | _, .owned _ _ _ next => next.LawsMatch
+  | _, .repeat _ _ _ _ _ _ next => next.LawsMatch
 
 /-- The law uses of a form with their called helpers, in order. -/
 def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws Δ out → List (Fin laws.length × Helper)
@@ -224,6 +276,8 @@ def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws Δ out → List (
   | _, .strict _ _ next => next.lawCalls
   | _, .compute _ _ _ next => next.lawCalls
   | _, .byLaw entry helper next => (entry, helper) :: next.lawCalls
+  | _, .owned _ _ _ next => next.lawCalls
+  | _, .repeat _ _ _ _ _ _ next => next.lawCalls
 
 /-- The law uses' helpers, as an equation of two lists: an instance checks it
 by definitional equality of helper terms, so equal helpers are recognized at
@@ -248,6 +302,8 @@ theorem Form.lawsMatch_of_callsMatch {out : List Ty} :
   | _, .byLaw _ _ next, same => by
     simp only [Form.CallsMatch, Form.lawCalls, List.map_cons, List.cons.injEq] at same
     exact ⟨same.1, next.lawsMatch_of_callsMatch same.2⟩
+  | _, .owned _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .repeat _ _ _ _ _ _ next, same => next.lawsMatch_of_callsMatch same
 
 /-- Every other role of the roster is played by a different participant. -/
 def RosterDistinct (context : ProtocolContext) (role roster : Nat) : Prop :=
