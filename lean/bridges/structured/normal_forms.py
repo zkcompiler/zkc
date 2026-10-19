@@ -2273,7 +2273,8 @@ class Module:
                     parts.append(value.expr)
             if proof is not None and frame.mode == "shared":
                 proof.append(f"{pad}rfl")
-            return Done(tuple_literal(parts))
+            # A role that carries no slot of this repeat returns the unit value.
+            return Done(tuple_literal(parts) if parts else "()")
 
         proof = []
         node = Evaluator(frame, names, finish).run(block[1], block[2], env, proof, 2)
@@ -2289,14 +2290,14 @@ class Module:
         script = "\n".join(proof)
         uses_separate = re.search(r"(?<![\w.])separate(?![\w'])", script) is not None
         result_type = " × ".join(paren(slot_type(slot)) if " " in slot_type(slot) else slot_type(slot)
-                                 for slot in slots)
+                                 for slot in slots) or "Unit"
         out.append(f"/-- The {name}'s normal form of one body run: its ordered actions, the values it\n"
                    f"computes, guards as conditionals and missing inputs as stops. -/")
         out.append(f"def {process} {process_binders}:\n"
                    f"    PIR.Proc (participantInterface F G) ({result_type}) :=\n{text}\n")
-        projections = self.projections(len(slots))
-        embedded = f"{embed} {' '.join(projections)}"
-        ends = f"(fun result => .done ({embedded}))"
+        projections = self.projections(len(slots)) if slots else []
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        ends = f"(fun {'result' if slots else '_'} => .done ({embedded}))"
         others = [other for other in range(len(protocol.roles)) if other != role]
         if len(others) != 1:
             raise GeneratorError("shared normal forms support two-role protocols")
