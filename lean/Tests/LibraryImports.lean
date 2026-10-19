@@ -18,7 +18,11 @@ import Zkc.Executable.Cleanup
 import Zkc.Executable.Completeness
 import Zkc.Executable.Evaluation
 import Zkc.Executable.Execution
+import Zkc.Executable.Framing
+import Zkc.Executable.HelperSoundness
+import Zkc.Executable.Helpers
 import Zkc.Executable.Installed
+import Zkc.Executable.Loops
 import Zkc.Executable.Lowering
 import Zkc.Executable.Normalization
 import Zkc.Executable.NormalizationSoundness
@@ -322,9 +326,11 @@ import ZkcExamples.Executable.SchnorrProof
 import ZkcExamples.Executable.SchnorrProofProgramData
 import ZkcExamples.Executable.SumcheckCharges
 import ZkcExamples.Executable.SumcheckCompleteness
+import ZkcExamples.Executable.SumcheckFamily
 import ZkcExamples.Executable.SumcheckHelpers
 import ZkcExamples.Executable.SumcheckProof
 import ZkcExamples.Executable.SumcheckProofProgramData
+import ZkcExamples.Executable.SumcheckShape
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls
