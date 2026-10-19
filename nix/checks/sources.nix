@@ -1,6 +1,10 @@
 # Guard meaningful package/check boundaries using the actual filtered trees.
-{ runCommand, sources }:
-runCommand "zkc-source-boundaries" { } ''
+{
+  runCommand,
+  python3,
+  sources,
+}:
+runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   set -x
   test -f ${sources.compiler}/compiler/CMakeLists.txt
   test -f ${sources.compiler}/common/unicode/generate.py
@@ -21,6 +25,9 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.rust}/compiler
   test ! -e ${sources.rust}/common/tests
   test -f ${sources.rustTests}/compiler/test/fixtures/relation/polynomial-chunks.json
+  # Scope discovery must not require protocol-only project support.
+  test ! -e ${sources.rustTests}/common/tests/support
+  python3 ${sources.rustTests}/common/tests/run.py rust --help > /dev/null
   test ! -e ${sources.integration}/common/tests/harness
   test ! -e ${sources.integration}/common/tests/consumer
   test -f ${sources.integration}/docs/getting-started.md

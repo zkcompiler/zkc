@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-from project import project_inputs
-
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = json.loads((Path(__file__).with_suffix('.json')).read_text())
 
@@ -36,6 +34,8 @@ def select_families(paths, root=ROOT):
                 path.startswith(('examples/', 'libraries/'))]
     if not relevant:
         return set()
+    from project import project_inputs
+
     consumers = {}
     try:
         for family, spec in MATRIX.items():
