@@ -72,6 +72,7 @@ import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.FiatShamir.Binding
+import ZkcSecurity.FiatShamir.Budget
 import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding

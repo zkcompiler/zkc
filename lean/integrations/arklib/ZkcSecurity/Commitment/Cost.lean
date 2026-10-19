@@ -1,6 +1,8 @@
 module
 
 public import ZkcSecurity.Commitment.Charges
+public import ZkcSecurity.Commitment.Replay
+public import Zkc.Transcript.Budget
 
 @[expose] public section
 
@@ -18,6 +20,11 @@ authentication at an admissible shape makes at most `authCalls` hash calls:
 
 Admissibility carries the authentication bound from the statement's roots and the verifier's own
 commitments to every read.
+
+`Charged` and the commitment count `CommitBound` are path bounds of the shared combinator
+`Zkc.Transcript.Walk.Bound` without positions (`charged_iff`, `commitBound_iff`), with their own
+transition charges; shape admissibility is the walk's admission predicate, kept apart from the
+charges.
 -/
 
 set_option autoImplicit false
@@ -72,7 +79,111 @@ theorem Charged.mono {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E �
       obtain ⟨rest, charged, after⟩ := bounded
       exact ⟨rest, charged.trans le, after⟩
 
+/-- The walk of `Charged`: every reply continues; a commitment is admitted when its shape is
+admissible; a transcript query is charged its occurrence's charge, a read `readCharge`. -/
+def chargedWalk {ω : Type} [Zero ω] (charge : E → ω) (readCharge : ω) :
+    Zkc.Transcript.Walk (committed J Shape Value) Unit ω where
+  admits _ operation :=
+    match operation with
+    | .commit shape => admissible shape
+    | _ => True
+  charge _ operation :=
+    match operation with
+    | .base operation =>
+        match absorb operation with
+        | .query event _ => charge event
+        | _ => 0
+    | .commit _ => 0
+    | .read _ _ => readCharge
+  next _ _ _ _ := True
+
+/-- `Charged` is the path bound of its walk. -/
+theorem charged_iff {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E → ω) (readCharge : ω) :
+    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ω),
+      Charged absorb admissible charge readCharge process budget ↔
+        (chargedWalk absorb admissible charge readCharge).Bound process () budget
+  | .done _, _ => Iff.rfl
+  | .halt _, _ => Iff.rfl
+  | .call (.base operation) next, budget => by
+      have ih := fun reply => charged_iff charge readCharge (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [chargedWalk, true_and, forall_const]
+      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, decode⟩ | _
+      all_goals simp only [Charged, absorbed, zero_add]
+      · exact ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp (bounded reply)⟩,
+          fun ⟨remaining, le, bounded⟩ reply =>
+            (ih reply budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) le)⟩
+      · exact ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp (bounded reply)⟩,
+          fun ⟨remaining, le, bounded⟩ reply =>
+            (ih reply budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) le)⟩
+      · exact ⟨fun ⟨remaining, le, bounded⟩ =>
+            ⟨remaining, le, fun reply _ => (ih reply remaining).mp (bounded reply)⟩,
+          fun ⟨remaining, le, bounded⟩ =>
+            ⟨remaining, le, fun reply => (ih reply remaining).mpr (bounded reply ())⟩⟩
+      · exact ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp (bounded reply)⟩,
+          fun ⟨remaining, le, bounded⟩ reply =>
+            (ih reply budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) le)⟩
+  | .call (.commit shape) next, budget => by
+      have ih := fun reply => charged_iff charge readCharge (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [Charged, chargedWalk, zero_add, forall_const]
+      exact and_congr_right fun _ =>
+        ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp bounded⟩,
+          fun ⟨remaining, le, bounded⟩ =>
+            (ih () budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded () ()) le)⟩
+  | .call (.read handle position) next, budget => by
+      have ih := fun reply => charged_iff charge readCharge (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [Charged, chargedWalk, true_and, forall_const]
+      exact ⟨fun ⟨remaining, le, bounded⟩ =>
+          ⟨remaining, le, fun reply _ => (ih reply remaining).mp (bounded reply)⟩,
+        fun ⟨remaining, le, bounded⟩ =>
+          ⟨remaining, le, fun reply => (ih reply remaining).mpr (bounded reply ())⟩⟩
+
 end Charged
+
+section Commitments
+
+/-- The walk of `CommitBound`: one per commitment, every reply continues. -/
+def commitWalk : Zkc.Transcript.Walk (committed J Shape Value) Unit ℕ where
+  admits _ _ := True
+  charge _ operation :=
+    match operation with
+    | .commit _ => 1
+    | _ => 0
+  next _ _ _ _ := True
+
+/-- `CommitBound` is the path bound of its walk. -/
+theorem commitBound_iff :
+    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ℕ),
+      CommitBound process budget ↔ (commitWalk (J := J)).Bound process () budget
+  | .done _, _ => Iff.rfl
+  | .halt _, _ => Iff.rfl
+  | .call (.base operation) next, budget => by
+      have ih := fun reply => commitBound_iff (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [CommitBound, commitWalk, true_and, zero_add, forall_const]
+      exact ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp (bounded reply)⟩,
+        fun ⟨remaining, le, bounded⟩ reply =>
+          (ih reply budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) le)⟩
+  | .call (.commit shape) next, budget => by
+      have ih := fun reply => commitBound_iff (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [CommitBound, commitWalk, true_and, forall_const]
+      exact ⟨fun ⟨positive, bounded⟩ => ⟨budget - 1, by omega, fun reply _ =>
+          (ih reply (budget - 1)).mp bounded⟩,
+        fun ⟨remaining, le, bounded⟩ => ⟨by omega, (ih () (budget - 1)).mpr
+          (Zkc.Transcript.Walk.Bound.mono _ _ (bounded () ()) (by omega))⟩⟩
+  | .call (.read handle position) next, budget => by
+      have ih := fun reply => commitBound_iff (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      simp only [CommitBound, commitWalk, true_and, zero_add, forall_const]
+      exact ⟨fun bounded => ⟨budget, le_rfl, fun reply _ => (ih reply budget).mp (bounded reply)⟩,
+        fun ⟨remaining, le, bounded⟩ reply =>
+          (ih reply budget).mpr (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) le)⟩
+
+end Commitments
 
 section Run
 variable (absorb : Typed.Interface J E P Raw) (admissible : Shape → Prop)

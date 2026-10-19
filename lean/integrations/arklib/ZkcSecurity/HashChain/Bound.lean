@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.HashChain.Reduction
 public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import ZkcSecurity.FiatShamir.Budget
 
 @[expose] public section
 
@@ -27,6 +28,12 @@ with `V` calls (`experiment_queryBound`).
 on every path: one per received or sent event and `width + 1` per query (the
 counter blocks and the absorption of the occurrence). Binding and absorbing the
 initial history adds its length (`chainRun_queryBound`).
+
+**Primitive calls as a metric.** `CallBound` is the path bound of the shared
+combinator `Zkc.Transcript.Walk.Bound` without positions that charges each
+operation its primitive calls (`callBound_iff`). Primitive calls are a metric of
+their own: they follow from a vector budget of queries and messages through the
+conversion `(q, m) ↦ (width + 1) q + m` (`callBound_of_counts`).
 -/
 
 set_option autoImplicit false
@@ -241,6 +248,79 @@ theorem experiment_queryBound (absorb : Typed.Interface I E P (Raw E S width))
     ((chainRun_queryBound (X := X) absorb (validator claimed.1) (initial claimed.1) claimed.2
       (bounded claimed.1)).mono (within claimed.1)) fun _ => trivial
   simpa using composed
+
+omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
+/-- The chain verifier's primitive calls per operation: one per received or sent
+event, `width + 1` per query, none for a refusal. -/
+def callCharge (absorb : Typed.Interface I E P (Raw E S width)) (operation : I.Op) : ℕ :=
+  match absorb operation with
+  | .receive _ _ => 1
+  | .send _ _ => 1
+  | .query _ _ => width + 1
+  | .refuse => 0
+
+omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
+/-- `CallBound` is the walk without positions charging each operation its
+primitive calls. -/
+theorem callBound_iff (absorb : Typed.Interface I E P (Raw E S width)) :
+    ∀ (process : PIR.Proc I A) (budget : ℕ),
+      CallBound absorb process budget ↔
+        (absorb.replyWalk (callCharge absorb)).Bound process () budget
+  | .done _, _ => Iff.rfl
+  | .halt _, _ => Iff.rfl
+  | .call operation next, budget => by
+      have ih := fun reply => callBound_iff absorb (next reply)
+      rw [Zkc.Transcript.Walk.bound_call]
+      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, decode⟩ | _
+      all_goals simp only [CallBound, absorbed, Zkc.Transcript.Interface.replyWalk_admits,
+        Zkc.Transcript.Interface.replyWalk_charge, Zkc.Transcript.Interface.replyWalk_next,
+        callCharge, true_and, true_implies, IsEmpty.forall_iff, implies_true, and_true]
+      · constructor
+        · rintro ⟨positive, bounded⟩
+          exact ⟨budget - 1, by omega, fun reply _ => (ih reply (budget - 1)).mp (bounded reply)⟩
+        · rintro ⟨remaining, le, bounded⟩
+          exact ⟨by omega, fun reply => (ih reply (budget - 1)).mpr
+            (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) (by omega))⟩
+      · constructor
+        · rintro ⟨positive, bounded⟩
+          exact ⟨budget - 1, by omega, fun reply _ same =>
+            same ▸ (ih value (budget - 1)).mp bounded⟩
+        · rintro ⟨remaining, le, bounded⟩
+          exact ⟨by omega, (ih value (budget - 1)).mpr
+            (Zkc.Transcript.Walk.Bound.mono _ _ (bounded value () rfl) (by omega))⟩
+      · constructor
+        · rintro ⟨enough, bounded⟩
+          exact ⟨budget - (width + 1), by omega, fun reply _ =>
+            (ih reply (budget - (width + 1))).mp (bounded reply)⟩
+        · rintro ⟨remaining, le, bounded⟩
+          exact ⟨by omega, fun reply => (ih reply (budget - (width + 1))).mpr
+            (Zkc.Transcript.Walk.Bound.mono _ _ (bounded reply ()) (by omega))⟩
+      · exact ⟨fun _ => ⟨budget, by omega⟩, fun _ => trivial⟩
+
+/-- Primitive calls from counts of queries and messages: `width + 1` calls per
+query and one per message. -/
+def callsOfCounts (width : ℕ) : ℕ × ℕ →+ ℕ :=
+  (AddMonoidHom.mulLeft (width + 1)).comp (AddMonoidHom.fst ℕ ℕ) + AddMonoidHom.snd ℕ ℕ
+
+omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
+/-- A vector budget of queries and messages bounds the chain verifier's primitive
+calls through the conversion `(q, m) ↦ (width + 1) q + m`. -/
+theorem callBound_of_counts (absorb : Typed.Interface I E P (Raw E S width))
+    (process : PIR.Proc I A) (counts : ℕ × ℕ)
+    (counted : (absorb.replyWalk absorb.messageQueryCharge).Bound process () counts) :
+    CallBound absorb process (callsOfCounts width counts) := by
+  refine (callBound_iff absorb process _).mpr
+    (Zkc.Transcript.Walk.Bound.convert _ _ (callsOfCounts width) ?_ (fun _ _ _ => trivial) ?_
+      (fun _ _ _ _ step => step) process counted)
+  · intro first second le
+    simp only [callsOfCounts, AddMonoidHom.add_apply, AddMonoidHom.coe_comp, Function.comp_apply,
+      AddMonoidHom.coe_fst, AddMonoidHom.coe_snd, AddMonoidHom.coe_mulLeft]
+    exact Nat.add_le_add (Nat.mul_le_mul_left _ le.1) le.2
+  · intro position operation
+    simp only [Zkc.Transcript.Interface.replyWalk_charge, callCharge,
+      Zkc.Transcript.Interface.messageQueryCharge]
+    cases absorb operation <;> simp [callsOfCounts]
 
 end Calls
 
