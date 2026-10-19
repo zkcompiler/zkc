@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Executable.Program
+public import Zkc.Executable.Numerical
 public import Zkc.Construction.Semantics
 
 @[expose] public section
@@ -18,8 +19,9 @@ receive's physical type: a missing message cancels the run, a decoding failure
 stops it after charging the receive. A stop leaves every active frame,
 innermost first, and retires the live transcript; a normal return hands the
 returned transcript to the host, which retires it. The runner's other resources
-(loop iterations, retained values and bytes, logical work and frame depth) are
-not modelled: their exhaustion only stops a run.
+(loop iterations, retained values and bytes, logical work, a numerical call's
+work and managed memory, and frame depth) are not modelled: their exhaustion
+only stops a run.
 
 Installed operations are interpreted through a `Vocabulary`: each row assigns
 a meaning to an exact contract, static arguments and implementation. Values
@@ -29,8 +31,10 @@ under the deployment `Context`, and a challenge applies the challenge function
 to the history ending with its occurrence; a template without a model
 occurrence stops the run. Calculations have the structured meaning of
 `Zkc.Construction.calculate` and the structured primitives their meaning of
-`Zkc.Source.Structured.Primitive.evaluate`. The transcript is an affine unit:
-an operation must consume its live state.
+`Zkc.Source.Structured.Primitive.evaluate`. A numerical call evaluates the
+expression its parameter carries (`Zkc.Executable.Numerical.decode`) at every
+row of its domain. The transcript is an affine unit: an operation must consume
+its live state.
 
 `validate` adds the host's acceptance: the framing header names the expected
 invocation binding, the run returns normally with the selected Boolean true,
@@ -45,18 +49,24 @@ open Zkc.Construction Zkc.Source
 /-! ## Installed operations -/
 
 /-- Operations of local bodies that are not structured calculations: the
-structured index and vector primitives, pointwise vector arithmetic and the
-requirement that a Boolean is true. -/
+structured index and vector primitives, pointwise vector arithmetic, the
+requirement that a Boolean is true, and a numerical call: an expression over
+the field `domain`, read at every row with one operand per mask position (a
+scalar for `false`, a vector for `true`), combined by its reduction. -/
 inductive Computation where
   | primitive (primitive : Structured.Primitive)
   | vectorAdd (domain : String)
   | vectorSubtract (domain : String)
   | vectorScale (domain : String)
   | require
+  | numerical (reduction : Numerical.Reduction) (domain : String) (mask : List Bool)
+      (expression : Zkc.Algebra.RingExpression.Expr Nat Nat)
   deriving DecidableEq, Repr
 
 /-- The meaning assumed for an installed operation. Constants take their value
-from the operation's single canonical decimal parameter. -/
+from the operation's single canonical decimal parameter. A numerical row takes
+the operand mask as its last static argument and the expression as its single
+parameter; `characteristic` is its field's. -/
 inductive Kernel where
   | indicesEmpty
   | indicesAppend
@@ -66,6 +76,7 @@ inductive Kernel where
   | indexConstant
   | fieldConstant (domain : String)
   | compute (operation : Computation)
+  | numerical (reduction : Numerical.Reduction) (domain : String) (characteristic : Nat)
   deriving DecidableEq, Repr
 
 /-- One installed operation: a binding's contract, static arguments and
@@ -102,14 +113,22 @@ def decimalValue? (text : String) : Option Nat :=
       !digits.all Char.isDigit then none
   else some (digits.foldl (fun value digit => 10 * value + (digit.toNat - '0'.toNat)) 0)
 
+/-- Whether a row takes a binding's static arguments: exactly its own, or, for
+a numerical row, its own followed by the operand mask. -/
+def Installed.takes (row : Installed) (arguments : List String) : Bool :=
+  match row.kernel with
+  | .numerical _ _ _ => arguments.length == row.arguments.length + 1 && arguments.dropLast == row.arguments
+  | _ => arguments == row.arguments
+
 def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option Installed :=
   vocabulary.operations.find? fun row =>
-    row.contract == binding.contract && row.arguments == binding.arguments &&
+    row.contract == binding.contract && row.takes binding.arguments &&
       row.implementation == binding.implementation
 
 /-- Resolve a binding and its parameters: transcript operations carry exactly
-one occurrence, constants exactly one canonical decimal below `2 ^ 64`, and
-other operations none. -/
+one occurrence, constants exactly one canonical decimal below `2 ^ 64`, a
+numerical call exactly one expression that `Numerical.decode` admits for its
+mask (`Numerical.mask?`), and other operations none. -/
 def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
     (parameters : List Parameter) : Option Resolved :=
   match vocabulary.installed? binding with
@@ -126,6 +145,10 @@ def Vocabulary.resolve (vocabulary : Vocabulary) (binding : Binding)
       | .fieldConstant domain, [.text text] =>
           (decimalValue? text).map fun value => .calculate (.fieldConstant domain value)
       | .compute operation, [] => some (.compute operation)
+      | .numerical reduction domain characteristic, [.text body] =>
+          (binding.arguments.getLast? >>= Numerical.mask?).bind fun mask =>
+            (Numerical.decode domain characteristic mask.length body).toOption.map fun expression =>
+              .compute (.numerical reduction domain mask expression)
       | _, _ => none
   | none => none
 
@@ -280,11 +303,49 @@ def custodyKept [DecidableEq F] [DecidableEq G] (live : History F G) (values : L
     | .transcript history => history == live
     | _ => true
 
+/-- One operand of a numerical call: a scalar for every row, or a column with
+a value per row. -/
+inductive Numerical.Slot (F : Type) where
+  | scalar (value : F)
+  | column (values : List F)
+
+/-- The value a slot gives at a row. -/
+def Numerical.Slot.read [Zero F] (row : Nat) : Numerical.Slot F → F
+  | .scalar value => value
+  | .column values => values.getD row 0
+
+/-- The operands of a numerical call over `domain` with `rows` rows, as slots:
+one scalar of the field for each `false` of the mask and one vector of exactly
+`rows` values for each `true`, including slots the expression does not read. -/
+def Numerical.slots (domain : String) (rows : Nat) :
+    List Bool → List (Value F G) → Option (List (Numerical.Slot F))
+  | [], [] => some []
+  | false :: mask, .data (.field field value) :: rest =>
+      if field = domain then (.scalar value :: ·) <$> Numerical.slots domain rows mask rest else none
+  | true :: mask, .vector field values :: rest =>
+      if field = domain ∧ values.length = rows then
+        (.column values :: ·) <$> Numerical.slots domain rows mask rest
+      else none
+  | _, _ => none
+
+/-- The expression's value at a row: each input reads its slot at the row, and
+each literal is the natural number in the field. -/
+def Numerical.row [CommRing F] (expression : Zkc.Algebra.RingExpression.Expr Nat Nat)
+    (slots : List (Numerical.Slot F)) (row : Nat) : F :=
+  (expression.map fun literal : Nat => (literal : F)).eval fun slot =>
+    ((slots[slot]?).map (·.read row)).getD 0
+
 section Machine
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 variable {m : Type → Type} [Monad m]
 
-/-- The meaning of a pure operation on its argument values. -/
+/-- The meaning of a pure operation on its argument values. A numerical call
+reads the row count, then its operands: an operand count other than the mask's,
+an operand of another kind or field, or a vector of another length is refused.
+A map returns the vector of the expression's values at the rows, a sum their
+sum from zero and a product their product from one. The runtime's bound on a
+call's rows (`Numerical.rowLimit`) is a native capacity limit, like the element
+limit of every vector a kernel produces: neither stops this meaning. -/
 def Computation.apply : Computation → List (Value F G) → PIR.Outcome (List (Value F G))
   | .primitive operation, arguments =>
       match decodeValues operation.arguments arguments with
@@ -305,6 +366,15 @@ def Computation.apply : Computation → List (Value F G) → PIR.Outcome (List (
       if first = domain ∧ second = domain then .returned [.vector domain (xs.map (· * scalar))]
       else .stopped .refused
   | .require, [.data (.boolean true)] => .returned []
+  | .numerical reduction domain mask expression, .index rows :: operands =>
+      match Numerical.slots domain rows mask operands with
+      | some slots =>
+          let values := (List.range rows).map (Numerical.row expression slots)
+          match reduction with
+          | .map => .returned [.vector domain values]
+          | .sum => .returned [.data (.field domain (values.foldl (· + ·) 0))]
+          | .product => .returned [.data (.field domain (values.foldl (· * ·) 1))]
+      | none => .stopped .refused
   | _, _ => .stopped .refused
 
 /-- Apply a resolved operation to its argument values and the live transcript:

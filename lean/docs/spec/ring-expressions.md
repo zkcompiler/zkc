@@ -4,7 +4,10 @@ These models cover ring-expression evaluation and the flat Clean/AIR
 connection; native decoder and provider correctness and the cryptographic
 soundness of a complete AIR proof system are separate claims.
 
-`Zkc.Algebra.RingExpression` defines a finite arithmetic expression and evaluation.
+`Zkc.Algebra.RingExpression` defines a finite arithmetic expression and evaluation;
+`Zkc.Algebra.RingExpression.Basic` holds the tree and its evaluation alone, which
+the [executable stage](executable.md) uses to read the expressions of native
+numerical calls.
 `Zkc.Relation.AIR` adds noncyclic row offsets, scopes and checked windows. Out-of-
 range reads are refused; last-row transitions do not wrap. Polynomial evaluation
 and degree laws concern this mathematical model.

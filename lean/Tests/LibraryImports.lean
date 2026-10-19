@@ -1,5 +1,6 @@
 -- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.
 import Zkc
+import Zkc.Algebra.RingExpression.Basic
 import Zkc.Algebra.RingExpression
 import Zkc.Construction.Binding
 import Zkc.Construction.Compiled
@@ -25,6 +26,7 @@ import Zkc.Executable.Loops
 import Zkc.Executable.Lowering
 import Zkc.Executable.Normalization
 import Zkc.Executable.NormalizationSoundness
+import Zkc.Executable.Numerical
 import Zkc.Executable.Program
 import Zkc.Executable.Pruning
 import Zkc.Executable.Refusal
@@ -230,6 +232,7 @@ import Tests.DeriveRegionSources
 import Tests.DeriveRegionSumcheck
 import Tests.ExecutableControls
 import Tests.ExecutableNormalization
+import Tests.ExecutableNumerical
 import Tests.ExecutableSumcheckControls
 import Tests.Finite
 import Tests.Machine

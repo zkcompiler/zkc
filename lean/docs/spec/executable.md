@@ -6,9 +6,9 @@ deployment's constructed validator to the original verifier. This page owns the
 next stage: the validator participant of the deployment's `zkc.program/0`
 candidate, which the runtime admits and executes. A per-compile lowering rule
 relates the two, so that a theorem about the constructed validator transfers to
-the executable program. The modules are `Zkc.Executable.{Program, Execution,
-Installed, Refusal, Normalization, Lowering, Relation, Evaluation, Soundness,
-Pruning, Completeness, NormalizationSoundness, Cleanup, Helpers,
+the executable program. The modules are `Zkc.Executable.{Program, Numerical,
+Execution, Installed, Refusal, Normalization, Lowering, Relation, Evaluation,
+Soundness, Pruning, Completeness, NormalizationSoundness, Cleanup, Helpers,
 HelperSoundness, Loops, Framing}`.
 
 ## Carrier
@@ -53,9 +53,30 @@ instruction budget.
   those of `Zkc.Construction`: structured calculations
   (`Zkc.Construction.calculate`), the structured index and vector primitives
   (`Zkc.Source.Structured.Primitive.evaluate`), pointwise vector arithmetic, the
-  requirement that a Boolean is true, occurrence coordinates, and observation
-  and challenge on the ideal transcript model. A constant takes its value from
-  the operation's single canonical decimal parameter. A transcript operation's
+  requirement that a Boolean is true, numerical expression calls, occurrence
+  coordinates, and observation and challenge on the ideal transcript model. A
+  constant takes its value from the operation's single canonical decimal
+  parameter.
+- Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
+  binding names its field and an operand mask, and its operation carries one
+  `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a
+  `Zkc.Algebra.RingExpression.Expr` with natural literals and slot inputs,
+  refusing with a named reason exactly the payloads the runtime's program
+  admission refuses: a body over 4096 bytes, text other than the canonical
+  encoding of an arena, an input or constant outside the call's field, a literal
+  that is not a canonical decimal below the characteristic, an input node outside
+  the declared inputs, an operand that does not point backward, an embedding,
+  declared inputs other than the mask's positions, other than one output, and a
+  node the output does not reach. A mask has at most 1023 positions. A refused
+  payload or mask does not resolve. One vocabulary row serves every mask: the
+  mask is the binding's last static argument. The call reads the row count and
+  then one scalar for each `0` and one vector of exactly that many values for
+  each `1`; another operand count, kind, field or length is a refusal of the
+  kernel. Scalars are broadcast, and the call returns the vector of the
+  expression's values at the rows, their sum from zero or their product from
+  one. The runtime's bound of 1 048 576 rows is a capacity limit of the native
+  call, like the element limit of every vector a kernel produces; the meaning
+  does not stop on it. A transcript operation's
   occurrence template is named by its model occurrence under the context; a
   template without one is a contract failure, as it is a refusal of the ideal
   meaning.
@@ -75,8 +96,9 @@ instruction budget.
 must be the framing magic and the expected invocation binding, the run must
 return normally with the selected Boolean true, and every proof byte must be
 read. `installed` is the vocabulary of the native BLS12-381 deployments: the
-arkworks scalar-field, G1 and scalar-vector kernels, the native index kernels
-and the Merlin transcript kernels of `merlin3.bls12-381.fr64be/0`.
+arkworks scalar-field, G1, scalar-vector and numerical expression kernels, the
+native index kernels and the Merlin transcript kernels of
+`merlin3.bls12-381.fr64be/0`.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the
@@ -501,7 +523,9 @@ native-correctness assumptions are replaced by the following.
   direction; completeness also needs the converse at a sufficient budget and
   within the runtime's other resource limits.
 - Installed kernels implement the meanings of `installed`, at the admitted
-  representations.
+  representations and within the runtime's capacity limits. For a numerical
+  call this includes that the kernel evaluates the expression as
+  `Numerical.decode` reads its payload.
 - The native codec is a function of a message's bytes and type. Soundness needs
   no other property of it.
 - The managed transcript absorbs the invocation's public values injectively.

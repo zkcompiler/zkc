@@ -17,8 +17,21 @@ challenge, which the ideal transcript model idealizes. Vector and index
 operations have the meanings of the structured primitives
 (`Zkc.Source.Structured.Primitive.evaluate`), element access is
 `Zkc.Construction.Calculation.boundedAt`, and the pointwise vector operations
-and the requirement have the meanings of `Zkc.Executable.Computation.apply`. A
-row absent from this table makes the lowering rule refuse.
+and the requirement have the meanings of `Zkc.Executable.Computation.apply`.
+
+The arkworks numerical kernels (`numerical.map`, `numerical.sum` and
+`numerical.product` over the scalar field) are one row each, whatever their
+operand mask: the row takes the mask as the binding's last static argument. Their
+assumed meaning is that, within the runtime's row bound
+(`Zkc.Executable.Numerical.rowLimit`), the kernel evaluates the `zkc.ring/0`
+expression its parameter carries, as `Zkc.Executable.Numerical.decode` reads it,
+at every row with the operands the mask selects, and returns the vector of the
+values, their sum or their product (`Zkc.Executable.Computation.apply`); a payload
+the decoder refuses has no meaning, as the runtime's program admission refuses
+it. Above the row bound the kernel refuses, a capacity limit like the element
+limit of every vector kernel, which only stops a run.
+
+A row absent from this table makes the lowering rule refuse.
 -/
 
 set_option autoImplicit false
@@ -31,6 +44,11 @@ abbrev nativeSuite : String := "merlin3.bls12-381.fr64be/0"
 
 /-- The BLS12-381 scalar field. -/
 abbrev scalarField : String := "bls12-381.fr"
+
+/-- The characteristic of the BLS12-381 scalar field: numerical expression
+literals are below it. -/
+def scalarCharacteristic : Nat :=
+  52435875175126190479447740508185965837690552500527637822603658699938581184513
 
 def installed : Vocabulary where
   operations := [
@@ -69,7 +87,13 @@ def installed : Vocabulary where
     ⟨"vector.add", [scalarField], "arkworks/vector.add", .compute (.vectorAdd scalarField)⟩,
     ⟨"vector.sub", [scalarField], "arkworks/vector.sub", .compute (.vectorSubtract scalarField)⟩,
     ⟨"vector.scale", [scalarField], "arkworks/vector.scale", .compute (.vectorScale scalarField)⟩,
-    ⟨"control.require", [], "arkworks/control.require", .compute .require⟩]
+    ⟨"control.require", [], "arkworks/control.require", .compute .require⟩,
+    ⟨"numerical.map", [scalarField], "arkworks/numerical.map",
+      .numerical .map scalarField scalarCharacteristic⟩,
+    ⟨"numerical.sum", [scalarField], "arkworks/numerical.sum",
+      .numerical .sum scalarField scalarCharacteristic⟩,
+    ⟨"numerical.product", [scalarField], "arkworks/numerical.product",
+      .numerical .product scalarField scalarCharacteristic⟩]
   representations := [
     (.data (.group "bls12-381.g1"), "arkworks.g1/0"),
     (.data (.field scalarField), "arkworks.fr/0"),
