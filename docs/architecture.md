@@ -133,10 +133,11 @@ including unchecked returned PCS values.
 ## Formal models and extension boundaries
 
 Lean models define complete execution, observations, conditional refinement and
-selected protocol experiments. Their direct plans, finite tables and source
-representations remain independent research subjects. They are not stages of
-the native compiler, and their executable correspondence results do not validate
-`zkc.program/0`. [Assurance](assurance.md) owns that distinction.
+selected protocol experiments. Maintained native bridges check selected exported
+subjects against these models. They are not stages of the native compiler and
+do not establish general correctness of `zkc.program/0` execution or its backends.
+[Formal support](../lean/docs/support.md) records their exact scope;
+[assurance](assurance.md) owns the remaining trust boundaries.
 
 Extensions add ordinary mathematical operations, transparent local algorithms,
 protocol libraries or backend kernels at the appropriate owner. A whole-protocol

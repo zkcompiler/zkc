@@ -20,8 +20,8 @@ independently.
 
 Build on the checked physical plan, which retains original Kernel bodies and
 selected Local realizations together, with checked binding lifetimes in the
-physical schedule. Extend this boundary with a real generated numerical-loop
-target, preserving domains, indexing, reductions and failure obligations.
+physical schedule. Extend the checked SCF loop schedule with target-specific
+numerical kernels, preserving domains, indexing, reductions and failure obligations.
 Compare numerical variants through the same checked transaction and installed
 operation contracts. Establish field representations,
 layouts, aliasing and work bounds before adding generated arithmetic. VM control
