@@ -370,11 +370,12 @@ for a guard whose condition is not a decided proposition, and `rewrites` states
 facts (`expr`, `value`, `proof`) that the proof rewrites with, for example a
 comparison that a premise decides.
 
-**Normal-form proofs.** With `proof = "normal-form"` (in `[root]`, together with
-the entry's typed `body`, or in a repeat callback's `[[shared.roles]]` entry,
-whose `[[shared]]` entry then also names its helper `tables` and `protocols`),
-an equation is an instance of the normalizer's soundness theorem
-(`Zkc.Source.Structured.NormalForm.normalize_sound`) instead of a step script.
+**Normal-form proofs.** With `proof = "normal-form"` in a `[[shared.roles]]`
+entry (whose `[[shared]]` entry names its helper `tables` and `protocols`; a
+request with a `[unit]` supplies both), an equation is an instance of the
+normalizer's soundness theorem
+(`Zkc.Source.Structured.NormalForm.normalize_sound`) instead of a step script,
+and the module imports the normalizer.
 The generator runs the compiled normalizer (`structured-source normal-form`,
 built by `lake build structured-source`; `ZKC_STRUCTURED_SOURCE` selects
 another binary) and prints, per role, `<role>Pattern` (the inputs as the
@@ -388,25 +389,28 @@ normalizer returns the literal), `<role>_lawsMatch` (every law use in the
 literal is a call of the law's own helper, compared as terms rather than by
 name), `<role>_presentation` (the literal's process is the readable one),
 `<role>_environment`, `<role>_finishes` and `<role>_embedding`. The statements of the readable definitions and of the
-process equations are unchanged, and the masked-state theorems become
-instances of `NormalForm.maskValues_embed`. The compiled run is not trusted: a
-form it prints wrongly is a failed kernel check.
+process equations are unchanged, the masked-state theorems become
+instances of `NormalForm.maskValues_embed`, and a callback role's `fold` is
+stated and proved from its process equation as before. The compiled run is not
+trusted: a form it prints wrongly is a failed kernel check.
 
 A whole-body role (`[[shared.roles]]` with `inputs`) takes `proof =
-"normal-form"` too; its equation is an instance of `NormalForm.sound_uniform`,
-and a repeat in the body is presented by the callback region the entry's
-`callback_body` names (with its `repeat_spec`). Laws keep their request syntax
+"normal-form"` too; its equation is an instance of `NormalForm.sound_uniform`.
+A repeat in a body is presented by its callback region: the callback's own
+entry when the request states one (named in `[bodies] callbacks`, or with a
+`repeat_spec`), else the entry's `callback_body` with its `repeat_spec`. Laws keep their request syntax
 and are read by shape: results that are arguments (`"{2}"`) or literals
 (`"false"`) are presented as such, a Math law with `components = true` passes
 argument components, and each argument a law reads at every use is pinned to
 an input or to a literal. `opaque` helpers stay owned calls on components. For
-each protocol application the role takes part in, the generator states the
-callee's invocation in this unit at any child context
-(`<application>_<callee role>_invoke`, from `<declaration>_view`, the callee's
-process theorem and `<application>_<callee role>_returned`), the callee
+each protocol application the role takes part in, whole-body and callback roles
+alike, the generator states the callee's invocation in this unit at any child
+context (`<declaration>_<callee role>_invoke`, from `<declaration>_view`, the
+callee's process theorem and `<declaration>_<callee role>_returned`), the callee
 processes the form applies (`<role>Callees`) and the premise that each callee
-presents its applications (`<role>_callees`); a callee whose process theorem
-has premises is pinned to the caller's inputs its binders receive.
+presents its applications (`<role>_callees`). Applications of one callee role
+on the same input pattern share one callee; a callee whose process theorem has
+premises is pinned to the caller's inputs its binders receive.
 
 A whole-body entry over a `[unit]` may also name its `declaration` (and a `raw`
 equation when its `body` is not the one the views use). Each role then also gets

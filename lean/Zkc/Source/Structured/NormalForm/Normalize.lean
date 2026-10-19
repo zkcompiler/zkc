@@ -15,17 +15,22 @@ operation's arity, and no step unfolds a helper body or a protocol table.
 
 * Presence. Where an operation needs its operands at this role (a calculation
   without an absent operand, an owned call, a send, a draw or a guard of the
-  role), the first operand that is an undecided input is split on, and the
-  operation is normalized again in both cases. An absent operand decides a
-  calculation (absent results), an owned call, a draw or a guard (each stops
-  as incomplete) without splitting.
+  role), the first operand that is undecided (an optional input, or a
+  component of a tuple returned by a repeat, a kept call or a protocol
+  application) is split on, and the operation is normalized again in both
+  cases. An absent operand decides a calculation (absent results), an owned
+  call, a draw or a guard (each stops as incomplete) without splitting.
+* Repeats and applications. A repeat stays a repeat of its callback region,
+  and a protocol application at this role becomes the callee form the
+  signature names; both return tuples whose components later operations read.
 * Roles. Every role index the body names must be below the roster, and the
   normalizer decides `owner = role` on numerals; `RosterDistinct` makes the
   participant rules agree with that decision.
 * Refusals. Anything outside the supported fragment is refused with a named
-  reason: protocol applications and repeats, Math calls, calculations that can
-  stop, undecided guard conditions, laws whose pins do not match, owned calls
-  without a law when calls are not kept, and the shared-suffix `bind` form.
+  reason: calculations that can stop outside a Math call, undecided guard
+  conditions, laws whose pins or shapes do not match, owned calls without a law
+  when calls are not kept, applications without a callee form, and the
+  shared-suffix `bind` form.
 
 * Laws. A law is chosen for an owned call by the called helper's kind,
   inputs and outputs, and by its name only when the signature asks for names.
@@ -105,26 +110,63 @@ def setValue {α : Type} {V : α → Type} :
   | _, _, values, .here, value => .cons value (laterEntries values)
   | _, _, values, .there position, value => .cons (firstEntry values) (setValue (laterEntries values) position value)
 
-/-- The absent and present cases of an undecided input. -/
-def Comp.absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀)) {ty : Ty} :
-    Comp laws Δ ty → Comp laws Δ ty
-  | .absent => .absent
-  | .present term => .present term
-  | .input binder =>
-    match Var.same? binder subject with
-    | some _ => .absent
-    | none => .input binder
+/-- An undecided component the normalizer splits on: an optional input, or one
+position of a returned tuple. -/
+inductive Subject (Δ : Scope) (ty : Ty) where
+  | input (binder : Var Δ (.component ty))
+  | read {types : List Ty} (binder : Var Δ (.tuple types)) (position : Var types ty)
+
+def Subject.comp {Δ : Scope} {ty : Ty} : Subject Δ ty → Comp laws Δ ty
+  | .input binder => .input binder
   | .read binder position => .read binder position
 
-def Comp.presentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀)) {ty : Ty} :
-    Comp laws Δ ty → Comp laws (.value ty₀ :: Δ) ty
-  | .absent => .absent
-  | .present term => .present (term.rename .there)
+/-- Two reads at equal binder and position indices are the same read. -/
+theorem Comp.read_heq {Δ : Scope} {types₀ types : List Ty} {ty₀ ty : Ty}
+    (binder₀ : Var Δ (.tuple types₀)) (position₀ : Var types₀ ty₀)
+    (binder : Var Δ (.tuple types)) (position : Var types ty)
+    (sameBinder : binder₀.index = binder.index) (samePosition : position₀.index = position.index) :
+    ty₀ = ty ∧ HEq (Comp.read (laws := laws) binder₀ position₀) (Comp.read (laws := laws) binder position) := by
+  obtain ⟨sorts, binders⟩ := Var.index_heq binder₀ binder sameBinder
+  cases Slot.tuple.inj sorts
+  cases eq_of_heq binders
+  obtain ⟨sort, positions⟩ := Var.index_heq position₀ position samePosition
+  subst sort
+  cases eq_of_heq positions
+  exact ⟨rfl, HEq.rfl⟩
+
+/-- Whether a component is the subject, compared by position; a match has the
+subject's sort. -/
+def Subject.same? {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀) {ty : Ty} :
+    Comp laws Δ ty → Option (PLift (ty₀ = ty))
   | .input binder =>
-    match Var.same? binder subject with
-    | some ⟨same⟩ => .present (.var (Var.hereAs (Slot.component.inj same)))
-    | none => .input binder.there
-  | .read binder position => .read binder.there position
+    match subject with
+    | .input decided =>
+      match Var.same? decided binder with
+      | some ⟨same⟩ => some ⟨Slot.component.inj same⟩
+      | none => none
+    | .read _ _ => none
+  | .read binder position =>
+    match subject with
+    | .read decided at₀ =>
+      if same : decided.index = binder.index ∧ at₀.index = position.index then
+        some ⟨(Comp.read_heq (laws := laws) decided at₀ binder position same.1 same.2).1⟩
+      else none
+    | .input _ => none
+  | .absent => none
+  | .present _ => none
+
+/-- The absent and present cases of an undecided component. -/
+def Comp.absentAt {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀) {ty : Ty} (comp : Comp laws Δ ty) :
+    Comp laws Δ ty :=
+  match subject.same? comp with
+  | some _ => .absent
+  | none => comp
+
+def Comp.presentAt {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀) {ty : Ty} (comp : Comp laws Δ ty) :
+    Comp laws (.value ty₀ :: Δ) ty :=
+  match subject.same? comp with
+  | some ⟨same⟩ => .present (.var (Var.hereAs same.symm))
+  | none => comp.rename .there
 
 /-! The symbolic state of one body. -/
 
@@ -159,11 +201,11 @@ def Comp.isAbsent {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Bool
   | .input _ => false
   | .read _ _ => false
 
-def Comp.input? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Σ ty, Var Δ (.component ty))
+def Comp.undecided? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Subject Δ ty)
   | .absent => none
   | .present _ => none
-  | .input binder => some ⟨_, binder⟩
-  | .read _ _ => none
+  | .input binder => some (.input binder)
+  | .read binder position => some (.read binder position)
 
 def Comp.term? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Term laws Δ ty)
   | .absent => none
@@ -175,13 +217,13 @@ def anyAbsent {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types �
   | _, .nil => false
   | _, .cons head tail => head.isAbsent || anyAbsent tail
 
-def firstInput {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types →
-    Option (Σ ty, Var Δ (.component ty))
+def firstUndecided {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types →
+    Option (Σ ty, Subject Δ ty)
   | _, .nil => none
   | _, .cons head tail =>
-    match head.input? with
-    | some found => some found
-    | none => firstInput tail
+    match head.undecided? with
+    | some found => some ⟨_, found⟩
+    | none => firstUndecided tail
 
 def presentTerms {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types → Option (Terms laws Δ types)
   | _, .nil => some .nil
@@ -670,7 +712,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
       let after ← next ((state.weaken (.tuple spec.state)).push (readComps spec.state))
       pure (.repeat spec site callback (entryAt state.env count) parts.1 parts.2 after)
 
-/-- Split on the undecided inputs the operation needs, in operand order. -/
+/-- Split on the undecided components the operation needs, in operand order. -/
 def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (args : Operands Γ op.arguments) :
     Nat → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
     ({Δ' : Scope} → State sig.laws Γ₀ Δ' Γ → Except Refusal (Form sig.laws sig.callees Δ' out)) →
@@ -678,12 +720,12 @@ def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (arg
   | 0, _, state, proceed => proceed state
   | fuel + 1, _, state, proceed =>
     if demanded sig role op (lookup state.env args) then
-      match firstInput (lookup state.env args) with
+      match firstUndecided (lookup state.env args) with
       | none => proceed state
       | some ⟨_, subject⟩ => do
         let absent ← resolve sig role op args fuel (state.map (Comp.absentAt subject)) proceed
         let present ← resolve sig role op args fuel (state.map (Comp.presentAt subject)) proceed
-        pure (.split (.input subject) absent present)
+        pure (.split subject.comp absent present)
     else proceed state
 
 def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → Region protocolDialect Γ out → {Δ : Scope} →

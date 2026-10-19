@@ -1,10 +1,10 @@
 module
 
 public import ZkcExamples.Structured.SumcheckVerifierBodies
-public import Zkc.Source.Structured.NormalForm.Presentation
 public import ZkcExamples.Structured.SumcheckRoundLaws
 public import ZkcExamples.Structured.NormalFormSteps
 public import Zkc.Source.DenotationLaws
+public import Zkc.Source.Structured.NormalForm.Presentation
 
 @[expose] public section
 

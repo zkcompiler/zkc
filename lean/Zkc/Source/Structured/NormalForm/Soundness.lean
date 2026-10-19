@@ -177,42 +177,59 @@ theorem term_eval_weaken {Δ : Scope} {slot : Slot} (value : Slot.Value model sl
 
 /-! Splits. -/
 
-theorem comp_eval_absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀))
-    (binders : Binders model Δ) (absent : entryAt binders subject = none) {ty : Ty} (comp : Comp laws Δ ty) :
-    (comp.absentAt subject).eval results binders = comp.eval results binders := by
+/-- A component the subject matches is the subject. -/
+theorem subject_same?_heq {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀) {ty : Ty} (comp : Comp laws Δ ty)
+    (same : PLift (ty₀ = ty)) (found : subject.same? comp = some same) : HEq (subject.comp (laws := laws)) comp := by
   cases comp with
+  | absent => simp [Subject.same?] at found
+  | present _ => simp [Subject.same?] at found
   | input binder =>
-    simp only [Comp.absentAt]
-    split
-    · rename_i same found
-      obtain ⟨same⟩ := same
-      have sameSort := Slot.component.inj same
-      subst sameSort
-      cases eq_of_heq (var_same?_heq binder subject same found)
-      simp only [Comp.eval, absent]
-    · rfl
-  | absent => rfl
-  | present _ => rfl
-  | read _ _ => rfl
+    cases subject with
+    | read _ _ => simp [Subject.same?] at found
+    | input decided =>
+      simp only [Subject.same?] at found
+      split at found
+      · rename_i sorts matched
+        have sort := Slot.component.inj sorts
+        subst sort
+        cases eq_of_heq (var_same?_heq decided binder sorts matched)
+        exact HEq.rfl
+      · cases found
+  | read binder position =>
+    cases subject with
+    | input _ => simp [Subject.same?] at found
+    | read decided at₀ =>
+      simp only [Subject.same?] at found
+      split at found
+      · rename_i indices
+        exact (Comp.read_heq decided at₀ binder position indices.1 indices.2).2
+      · cases found
 
-theorem comp_eval_presentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀))
-    (value : model.Value ty₀) (binders : Binders model Δ) (present : entryAt binders subject = some value)
+theorem comp_eval_absentAt {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀)
+    (binders : Binders model Δ) (absent : (subject.comp (laws := laws)).eval results binders = none)
+    {ty : Ty} (comp : Comp laws Δ ty) :
+    (comp.absentAt subject).eval results binders = comp.eval results binders := by
+  unfold Comp.absentAt
+  split
+  · rename_i same found
+    obtain ⟨same⟩ := same
+    subst same
+    cases eq_of_heq (subject_same?_heq subject comp _ found)
+    exact absent.symm
+  · rfl
+
+theorem comp_eval_presentAt {Δ : Scope} {ty₀ : Ty} (subject : Subject Δ ty₀)
+    (value : model.Value ty₀) (binders : Binders model Δ)
+    (present : (subject.comp (laws := laws)).eval results binders = some value)
     {ty : Ty} (comp : Comp laws Δ ty) :
     (comp.presentAt subject).eval results (.cons value binders) = comp.eval results binders := by
-  cases comp with
-  | input binder =>
-    simp only [Comp.presentAt]
-    split
-    · rename_i same found
-      have sameSort := Slot.component.inj same
-      subst sameSort
-      cases eq_of_heq (var_same?_heq binder subject same found)
-      simp only [Comp.eval, present]
-      rfl
-    · rfl
-  | absent => rfl
-  | present term => exact congrArg some (term_eval_weaken results _ binders term)
-  | read _ _ => rfl
+  unfold Comp.presentAt
+  split
+  · rename_i same found
+    subst same
+    cases eq_of_heq (subject_same?_heq subject comp _ found)
+    exact present.symm
+  · exact comp_eval_weaken results (slot := .value ty₀) value binders comp
 
 end Evaluation
 
@@ -1116,8 +1133,8 @@ theorem resolve_sound (sig : Signature) (results : LawResults model sig.laws)
           | ok presentForm =>
             rw [absentResult, except_bind_ok, presentResult, except_bind_ok] at normalized
             cases normalized
-            simp only [Form.denote, Form.denoteWith, Comp.eval]
-            cases value : entryAt binders subject with
+            simp only [Form.denote, Form.denoteWith]
+            cases value : Comp.eval results subject.comp binders with
             | none =>
               have preserved := state_map_eval results (Comp.absentAt subject) binders binders
                 (comp_eval_absentAt results subject binders value) state

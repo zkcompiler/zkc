@@ -38,6 +38,7 @@ components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
 [[shared.roles]]
 role = 1
 name = "verifier"
+proof = "normal-form"
 fold = true
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
@@ -46,6 +47,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "prover"
+proof = "normal-form"
 fold = true
 slots = [{ name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
          { name = "left", mode = "optional" }, { name = "right", mode = "optional" },
@@ -69,6 +71,7 @@ components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
 [[shared.roles]]
 role = 1
 name = "verifierRounds"
+proof = "normal-form"
 inputs = [{ mode = "absent" }, { mode = "absent" }, { mode = "absent" }, { mode = "absent" },
           { name = "claim", mode = "optional" }, { name = "rounds", mode = "optional" },
           { name = "service", mode = "optional" }]
@@ -77,6 +80,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverRounds"
+proof = "normal-form"
 inputs = [{ name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
           { name = "left", mode = "optional" }, { name = "right", mode = "optional" },
           { mode = "absent" }, { name = "rounds", mode = "optional" }, { mode = "absent" }]

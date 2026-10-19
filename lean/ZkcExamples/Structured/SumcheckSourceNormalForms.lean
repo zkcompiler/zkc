@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.SumcheckSourceViews
 public import ZkcExamples.Structured.SumcheckRoundNormalForms
 public import ZkcExamples.Structured.NormalFormSteps
+public import Zkc.Source.Structured.NormalForm.Presentation
 
 @[expose] public section
 

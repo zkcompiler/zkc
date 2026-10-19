@@ -3,7 +3,7 @@
 fixture = "lean/bridges/structured/fixtures/sumcheck-reduce.json"
 output = "lean/ZkcExamples/Structured/SumcheckRoundNormalForms.lean"
 namespace = "ZkcExamples.Structured.SumcheckRoundNormalForms"
-imports = ["ZkcExamples.Structured.SumcheckVerifierBodies", "Zkc.Source.Structured.NormalForm.Presentation", "ZkcExamples.Structured.SumcheckRoundLaws",
+imports = ["ZkcExamples.Structured.SumcheckVerifierBodies", "ZkcExamples.Structured.SumcheckRoundLaws",
            "ZkcExamples.Structured.NormalFormSteps", "Zkc.Source.DenotationLaws"]
 open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
 helper_modules = ["lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",

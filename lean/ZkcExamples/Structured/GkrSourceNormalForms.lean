@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Structured.GkrRoundsNormalForms
 public import ZkcExamples.Structured.NormalFormSteps
+public import Zkc.Source.Structured.NormalForm.Presentation
 
 @[expose] public section
 
@@ -13,7 +14,6 @@ definition and equation below is checked by the kernel. -/
 namespace ZkcExamples.Structured.GkrSourceNormalForms
 open Zkc.Source Zkc.Source.Structured SumcheckVerifierHelpers
 
-set_option maxHeartbeats 1600000
 abbrev gkrInputs : List Ty :=
   [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]
 
@@ -215,6 +215,10 @@ def verifierOutputState (point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
   .cons point (.cons none .nil)
 
+/-- The positions of the carried state the verifierOutput presents. -/
+def verifierOutputFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .cons .optional (.cons .absent .nil)
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the verifierOutput's components. -/
 theorem verifierOutputState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
@@ -222,9 +226,8 @@ theorem verifierOutputState_masked (ctx : ProtocolContext) (self : Nat) (role : 
     maskValues self (ctx.mapScopes [[1], [0]]) (verifierOutputState (F := F) (G := G) point) =
       verifierOutputState point := by
   subst self
-  unfold verifierOutputState
-  iterate 3 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 1 verifierOutputFinish _ rfl
+    (.cons point .nil)
 
 /-! Positions of the verifierOutput's carried slots in the repeat state, named by the request. -/
 abbrev verifierOutputPointPosition : Nat := 0
@@ -248,8 +251,72 @@ def verifierOutputProcess (ctx : ProtocolContext) (service : Option Nat) (point 
       (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons point (.cons output .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (appendResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
       .done (some (appendResults.get .here))
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `verifierOutputProcess` over the typed body. -/
+/-- The verifierOutput's laws as the normalizer reads them, keyed by helper. -/
+def verifierOutputSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the verifierOutput's laws present, from the request's templates. -/
+def verifierOutputResults : NormalForm.LawResults (ringModel F G) verifierOutputSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The verifierOutput's inputs as the normalizer reads them. -/
+def verifierOutputPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .optional (.cons .absent (.cons .optional .nil)))
+
+/-- The verifierOutput's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def verifierOutputForm : NormalForm.Form verifierOutputSignature.laws verifierOutputSignature.callees verifierOutputPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .split (.input (.there (.there .here)))
+    (
+      .halt .incomplete)
+    (
+      .query "label_6f7574707574" "bls12-381.fr" (.cons (.var .here) .nil) <|
+      .send (.field "bls12-381.fr") "label_6f75747075745f64656c6976657279_0" 0 (.var .here) <|
+      .split (.input (.there (.there (.there .here))))
+        (
+          .halt .incomplete)
+        (
+          .strict GkrSourceBodies.appendHelper (.cons (.var .here) (.cons (.var (.there .here)) .nil)) <|
+          .done (.cons (.present (.result .here .here)) (.cons .absent .nil))))
+
+theorem verifierOutput_normalized :
+    NormalForm.normalize verifierOutputSignature outputBody 1 2 verifierOutputPattern = .ok verifierOutputForm := by
+  kernel_rfl
+
+theorem verifierOutput_lawsMatch : verifierOutputForm.CallsMatch := by
+  kernel_rfl
+
+theorem verifierOutput_finishes : verifierOutputForm.finishes verifierOutputFinish = true := by
+  kernel_rfl
+
+theorem verifierOutput_environment (index : Nat) (point : Option (List F)) (service : Option Nat) :
+    verifierOutputPattern.environment (ringModel F G) (.cons index (.cons point (.cons service .nil))) =
+      (.cons (some index)
+      ((verifierOutputState point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem verifierOutput_presentation (ctx : ProtocolContext)
+    (index : Nat) (point : Option (List F)) (service : Option Nat) :
+    verifierOutputForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierOutputResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 1))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) verifierOutputResults verifierOutputFinish) (.cons index (.cons point (.cons service .nil))) =
+      verifierOutputProcess ctx service point := by
+  kernel_rfl
+
+theorem verifierOutput_embedding (result : (Option (List F))) :
+    NormalForm.embed (assignment F G) verifierOutputFinish (NormalForm.Tuple.toValues result) =
+      verifierOutputState result := by
+  kernel_rfl
+
+/-- The verifierOutput's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem verifierOutput_laws (index : Nat) (service : Option Nat) (point : Option (List F)) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierOutputResults
+      (.cons (some index)
+      ((verifierOutputState point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `verifierOutputProcess`, an instance of the normalizer's soundness. -/
 theorem verifierOutput_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
@@ -258,56 +325,12 @@ theorem verifierOutput_process
       ((verifierOutputState point).append (.cons service .nil))) =
       (verifierOutputProcess ctx service point).bind (fun result => .done (verifierOutputState result)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 1) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold outputFn outputBody
-  simp only [verifierOutputProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  cases service with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "label_6f7574707574") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.draw 1 "bls12-381.fr" "label_6f7574707574") _ _ _ _ .incomplete
-    change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6f7574707574") "bls12-381.fr" (.cons none .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-    simp only [Participant.query, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-    rfl
-  | some service =>
-    refine (Region.denote_letOp_done m (.mark "label_6f7574707574") _ _ _ _ .nil rfl).trans ?_
-    refine Region.denote_letOp_call m (.draw 1 "bls12-381.fr" "label_6f7574707574") _ _ _ _ (.query (qualifyProtocolSite ctx.applicationPrefix "label_6f7574707574") "bls12-381.fr" (.cons service .nil)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-    · change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6f7574707574") "bls12-381.fr" (.cons (some service) .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-      simp only [Participant.query, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-      rfl
-    intro output
-    change F at output
-    refine (Region.denote_letOp_done m (.mark "label_6f75747075745f64656c6976657279_0") _ _ _ _ .nil rfl).trans ?_
-    refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 1 0 "label_6f75747075745f64656c6976657279_0") _ _ _ _ (.send (ty := .field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6f75747075745f64656c6976657279_0") (ctx.roles 0) output) (fun _ => (.cons (some output) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-    · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (ctx.roles 0) (qualifyProtocolSite ctx.applicationPrefix "label_6f75747075745f64656c6976657279_0") (ty := .field "bls12-381.fr") (some output)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-      simp only [Participant.exchange, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-      rfl
-    intro _
-    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-    refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [0]) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-    · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 0)].contains (ctx.roles 1)) (some output))) = _
-      simp [Participant.restrict, Ne.symm separate]
-      rfl
-    cases point with
-    | none =>
-      refine (Region.denote_letOp_done m (.mark "s9") _ _ _ _ .nil rfl).trans ?_
-      apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.appendHelper rfl 1 "s9") _ _ _ _ .incomplete
-      change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons (some output) .nil)) = _
-      simp only [Participant.owned, ↓reduceIte]
-      rfl
-    | some point =>
-      refine (Region.denote_letOp_done m (.mark "s9") _ _ _ _ .nil rfl).trans ?_
-      refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.appendHelper rfl 1 "s9") _ _ _ _
-        (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons point (.cons output .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])) (fun appendResults => .cons (some (appendResults.get .here)) .nil) _ _ ?_ ?_
-      · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons point (.cons output .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-        refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun appendResults => ?_))
-        cases appendResults with | cons value0 appendResults => cases appendResults; rfl
-      intro appendResults
-      refine (Region.denote_letOp_done m (.mark "s11") _ _ _ _ .nil rfl).trans ?_
-      refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.appendHelper rfl 0 "s11") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-      · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons none .nil)) = _
-        rw [Participant.owned_other _ _ separate]
-        rfl
-      rfl
+  exact (NormalForm.callback_sound_uniform verifierOutputSignature outputBody 1 2 verifierOutputPattern
+    verifierOutputFinish verifierOutputForm verifierOutput_normalized verifierOutput_lawsMatch verifierOutput_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierOutputResults (NormalForm.noCallees _) (.cons index (.cons point (.cons service .nil))) _
+    (verifierOutput_environment index point service) (verifierOutput_laws index service point) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Proc.bind (verifierOutput_presentation ctx index point service)
+      (funext fun result => congrArg PIR.Proc.done (verifierOutput_embedding result)))
 
 /-- The repeat of `outputFn` at the verifierOutput on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -332,6 +355,10 @@ def proverOutputState (point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
   .cons none (.cons point .nil)
 
+/-- The positions of the carried state the proverOutput presents. -/
+def proverOutputFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .cons .absent (.cons .optional .nil)
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the proverOutput's components. -/
 theorem proverOutputState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
@@ -339,9 +366,8 @@ theorem proverOutputState_masked (ctx : ProtocolContext) (self : Nat) (role : se
     maskValues self (ctx.mapScopes [[1], [0]]) (proverOutputState (F := F) (G := G) point) =
       proverOutputState point := by
   subst self
-  unfold proverOutputState
-  iterate 3 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 0 proverOutputFinish _ rfl
+    (.cons point .nil)
 
 /-! Positions of the proverOutput's carried slots in the repeat state, named by the request. -/
 abbrev proverOutputPointPosition : Nat := 1
@@ -360,8 +386,67 @@ def proverOutputProcess (ctx : ProtocolContext) (point : Option (List F)) :
     (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons point (.cons outputDelivery .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (appendResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
     .done (some (appendResults.get .here))
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `proverOutputProcess` over the typed body. -/
+/-- The proverOutput's laws as the normalizer reads them, keyed by helper. -/
+def proverOutputSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the proverOutput's laws present, from the request's templates. -/
+def proverOutputResults : NormalForm.LawResults (ringModel F G) proverOutputSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The proverOutput's inputs as the normalizer reads them. -/
+def proverOutputPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .absent (.cons .optional (.cons .optional .nil)))
+
+/-- The proverOutput's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def proverOutputForm : NormalForm.Form proverOutputSignature.laws proverOutputSignature.callees proverOutputPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .receive (.field "bls12-381.fr") "label_6f75747075745f64656c6976657279_0" 1 <|
+  .split (.input (.there (.there .here)))
+    (
+      .halt .incomplete)
+    (
+      .strict GkrSourceBodies.appendHelper (.cons (.var .here) (.cons (.var (.there .here)) .nil)) <|
+      .done (.cons .absent (.cons (.present (.result .here .here)) .nil)))
+
+theorem proverOutput_normalized :
+    NormalForm.normalize proverOutputSignature outputBody 0 2 proverOutputPattern = .ok proverOutputForm := by
+  kernel_rfl
+
+theorem proverOutput_lawsMatch : proverOutputForm.CallsMatch := by
+  kernel_rfl
+
+theorem proverOutput_finishes : proverOutputForm.finishes proverOutputFinish = true := by
+  kernel_rfl
+
+theorem proverOutput_environment (index : Nat) (point : Option (List F)) (service : Option Nat) :
+    proverOutputPattern.environment (ringModel F G) (.cons index (.cons point (.cons service .nil))) =
+      (.cons (some index)
+      ((proverOutputState point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem proverOutput_presentation (ctx : ProtocolContext)
+    (index : Nat) (point : Option (List F)) (service : Option Nat) :
+    proverOutputForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverOutputResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 0))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) proverOutputResults proverOutputFinish) (.cons index (.cons point (.cons service .nil))) =
+      proverOutputProcess ctx point := by
+  kernel_rfl
+
+theorem proverOutput_embedding (result : (Option (List F))) :
+    NormalForm.embed (assignment F G) proverOutputFinish (NormalForm.Tuple.toValues result) =
+      proverOutputState result := by
+  kernel_rfl
+
+/-- The proverOutput's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem proverOutput_laws (index : Nat) (service : Option Nat) (point : Option (List F)) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverOutputResults
+      (.cons (some index)
+      ((proverOutputState point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `proverOutputProcess`, an instance of the normalizer's soundness. -/
 theorem proverOutput_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self)
@@ -370,47 +455,12 @@ theorem proverOutput_process
       ((proverOutputState point).append (.cons service .nil))) =
       (proverOutputProcess ctx point).bind (fun result => .done (proverOutputState result)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 0) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold outputFn outputBody
-  simp only [proverOutputProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  refine (Region.denote_letOp_done m (.mark "label_6f7574707574") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.draw 1 "bls12-381.fr" "label_6f7574707574") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6f7574707574") "bls12-381.fr" (.cons service .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-    simp only [Participant.query, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "label_6f75747075745f64656c6976657279_0") _ _ _ _ .nil rfl).trans ?_
-  refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 1 0 "label_6f75747075745f64656c6976657279_0") _ _ _ _ (.receive (.field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6f75747075745f64656c6976657279_0") (ctx.roles 1)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-  · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 1) (ctx.roles 0) (qualifyProtocolSite ctx.applicationPrefix "label_6f75747075745f64656c6976657279_0") (ty := .field "bls12-381.fr") none).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-    simp only [Participant.exchange, separate, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-    rfl
-  intro outputDelivery
-  change F at outputDelivery
-  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [0]) _ _ _ _ (.cons (some outputDelivery) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 0)].contains (ctx.roles 0)) (some outputDelivery))) = _
-    simp [Participant.restrict]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s9") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.appendHelper rfl 1 "s9") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons none .nil)) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  cases point with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s11") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.appendHelper rfl 0 "s11") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons (some outputDelivery) .nil)) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some point =>
-    refine (Region.denote_letOp_done m (.mark "s11") _ _ _ _ .nil rfl).trans ?_
-    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.appendHelper rfl 0 "s11") _ _ _ _
-      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons point (.cons outputDelivery .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])) (fun appendResults => .cons (some (appendResults.get .here)) .nil) _ _ ?_ ?_
-    · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons point (.cons outputDelivery .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun appendResults => ?_))
-      cases appendResults with | cons value0 appendResults => cases appendResults; rfl
-    intro appendResults
-    rfl
+  exact (NormalForm.callback_sound_uniform proverOutputSignature outputBody 0 2 proverOutputPattern
+    proverOutputFinish proverOutputForm proverOutput_normalized proverOutput_lawsMatch proverOutput_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverOutputResults (NormalForm.noCallees _) (.cons index (.cons point (.cons service .nil))) _
+    (proverOutput_environment index point service) (proverOutput_laws index service point) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Proc.bind (proverOutput_presentation ctx index point service)
+      (funext fun result => congrArg PIR.Proc.done (proverOutput_embedding result)))
 
 /-- The repeat of `outputFn` at the proverOutput on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -446,6 +496,10 @@ def verifierCoefficientState (coefficients : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr"] :=
   .cons coefficients .nil
 
+/-- The positions of the carried state the verifierCoefficient presents. -/
+def verifierCoefficientFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr"] :=
+  .cons .optional .nil
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the verifierCoefficient's components. -/
 theorem verifierCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
@@ -453,9 +507,8 @@ theorem verifierCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (ro
     maskValues self (ctx.mapScopes [[1]]) (verifierCoefficientState (F := F) (G := G) coefficients) =
       verifierCoefficientState coefficients := by
   subst self
-  unfold verifierCoefficientState
-  iterate 2 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 1 verifierCoefficientFinish _ rfl
+    (.cons coefficients .nil)
 
 /-! Positions of the verifierCoefficient's carried slots in the repeat state, named by the request. -/
 abbrev verifierCoefficientCoefficientsPosition : Nat := 0
@@ -474,8 +527,67 @@ def verifierCoefficientProcess (ctx : ProtocolContext) (coefficients : Option (L
     (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons coefficients (.cons lineCoefficient .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (appendResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
     .done (some (appendResults.get .here))
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `verifierCoefficientProcess` over the typed body. -/
+/-- The verifierCoefficient's laws as the normalizer reads them, keyed by helper. -/
+def verifierCoefficientSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the verifierCoefficient's laws present, from the request's templates. -/
+def verifierCoefficientResults : NormalForm.LawResults (ringModel F G) verifierCoefficientSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The verifierCoefficient's inputs as the normalizer reads them. -/
+def verifierCoefficientPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .cons .present (.cons .optional (.cons .optional .nil))
+
+/-- The verifierCoefficient's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def verifierCoefficientForm : NormalForm.Form verifierCoefficientSignature.laws verifierCoefficientSignature.callees verifierCoefficientPattern.scope [.vector "bls12-381.fr"] :=
+  .receive (.field "bls12-381.fr") "label_6c696e655f636f656666696369656e74_0" 0 <|
+  .split (.input (.there (.there .here)))
+    (
+      .halt .incomplete)
+    (
+      .strict GkrSourceBodies.appendHelper (.cons (.var .here) (.cons (.var (.there .here)) .nil)) <|
+      .done (.cons (.present (.result .here .here)) .nil))
+
+theorem verifierCoefficient_normalized :
+    NormalForm.normalize verifierCoefficientSignature coefficientBody 1 2 verifierCoefficientPattern = .ok verifierCoefficientForm := by
+  kernel_rfl
+
+theorem verifierCoefficient_lawsMatch : verifierCoefficientForm.CallsMatch := by
+  kernel_rfl
+
+theorem verifierCoefficient_finishes : verifierCoefficientForm.finishes verifierCoefficientFinish = true := by
+  kernel_rfl
+
+theorem verifierCoefficient_environment (index : Nat) (coefficients line : Option (List F)) :
+    verifierCoefficientPattern.environment (ringModel F G) (.cons index (.cons coefficients (.cons line .nil))) =
+      (.cons (some index)
+      ((verifierCoefficientState coefficients).append (.cons line .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem verifierCoefficient_presentation (ctx : ProtocolContext)
+    (index : Nat) (coefficients line : Option (List F)) :
+    verifierCoefficientForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierCoefficientResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 1))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) verifierCoefficientResults verifierCoefficientFinish) (.cons index (.cons coefficients (.cons line .nil))) =
+      verifierCoefficientProcess ctx coefficients := by
+  kernel_rfl
+
+theorem verifierCoefficient_embedding (result : (Option (List F))) :
+    NormalForm.embed (assignment F G) verifierCoefficientFinish (NormalForm.Tuple.toValues result) =
+      verifierCoefficientState result := by
+  kernel_rfl
+
+/-- The verifierCoefficient's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem verifierCoefficient_laws (index : Nat) (line coefficients : Option (List F)) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierCoefficientResults
+      (.cons (some index)
+      ((verifierCoefficientState coefficients).append (.cons line .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `verifierCoefficientProcess`, an instance of the normalizer's soundness. -/
 theorem verifierCoefficient_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
@@ -484,42 +596,12 @@ theorem verifierCoefficient_process
       ((verifierCoefficientState coefficients).append (.cons line .nil))) =
       (verifierCoefficientProcess ctx coefficients).bind (fun result => .done (verifierCoefficientState result)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 1) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold coefficientFn coefficientBody
-  simp only [verifierCoefficientProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  refine (Region.denote_letOp_done m (.mark "s49") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.helper70Helper rfl 0 "s49") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper70Helper) (.cons line (.cons (some index) .nil)) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "label_6c696e655f636f656666696369656e74_0") _ _ _ _ .nil rfl).trans ?_
-  refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 0 1 "label_6c696e655f636f656666696369656e74_0") _ _ _ _ (.receive (.field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f656666696369656e74_0") (ctx.roles 0)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-  · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f656666696369656e74_0") (ty := .field "bls12-381.fr") none).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-    simp only [Participant.exchange, separate, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-    rfl
-  intro lineCoefficient
-  change F at lineCoefficient
-  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [1]) _ _ _ _ (.cons (some lineCoefficient) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 1)].contains (ctx.roles 1)) (some lineCoefficient))) = _
-    simp [Participant.restrict]
-    rfl
-  cases coefficients with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s52") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.appendHelper rfl 1 "s52") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons (some lineCoefficient) .nil)) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some coefficients =>
-    refine (Region.denote_letOp_done m (.mark "s52") _ _ _ _ .nil rfl).trans ?_
-    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.appendHelper rfl 1 "s52") _ _ _ _
-      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons coefficients (.cons lineCoefficient .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])) (fun appendResults => .cons (some (appendResults.get .here)) .nil) _ _ ?_ ?_
-    · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons coefficients (.cons lineCoefficient .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun appendResults => ?_))
-      cases appendResults with | cons value0 appendResults => cases appendResults; rfl
-    intro appendResults
-    rfl
+  exact (NormalForm.callback_sound_uniform verifierCoefficientSignature coefficientBody 1 2 verifierCoefficientPattern
+    verifierCoefficientFinish verifierCoefficientForm verifierCoefficient_normalized verifierCoefficient_lawsMatch verifierCoefficient_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierCoefficientResults (NormalForm.noCallees _) (.cons index (.cons coefficients (.cons line .nil))) _
+    (verifierCoefficient_environment index coefficients line) (verifierCoefficient_laws index line coefficients) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Proc.bind (verifierCoefficient_presentation ctx index coefficients line)
+      (funext fun result => congrArg PIR.Proc.done (verifierCoefficient_embedding result)))
 
 /-- The repeat of `coefficientFn` at the verifierCoefficient on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -544,6 +626,10 @@ def proverCoefficientState :
     Values (Component (assignment F G)) [.vector "bls12-381.fr"] :=
   .cons none .nil
 
+/-- The positions of the carried state the proverCoefficient presents. -/
+def proverCoefficientFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr"] :=
+  .cons .absent .nil
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the proverCoefficient's components. -/
 theorem proverCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
@@ -551,9 +637,8 @@ theorem proverCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (role
     maskValues self (ctx.mapScopes [[1]]) (proverCoefficientState (F := F) (G := G)) =
       proverCoefficientState := by
   subst self
-  unfold proverCoefficientState
-  iterate 2 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 0 proverCoefficientFinish _ rfl
+    .nil
 
 /-! Positions of the proverCoefficient's carried slots in the repeat state, named by the request. -/
 
@@ -569,8 +654,67 @@ def proverCoefficientProcess (ctx : ProtocolContext) (index : Nat) (line : Optio
     .call (.send (ty := .field scalarDomain) (lineCoefficientSite ctx) (ctx.roles 1) (helper70Results.get .here)) fun _ =>
     .done ()
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `proverCoefficientProcess` over the typed body. -/
+/-- The proverCoefficient's laws as the normalizer reads them, keyed by helper. -/
+def proverCoefficientSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the proverCoefficient's laws present, from the request's templates. -/
+def proverCoefficientResults : NormalForm.LawResults (ringModel F G) proverCoefficientSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The proverCoefficient's inputs as the normalizer reads them. -/
+def proverCoefficientPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"] :=
+  .cons .present (.cons .absent (.cons .optional .nil))
+
+/-- The proverCoefficient's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def proverCoefficientForm : NormalForm.Form proverCoefficientSignature.laws proverCoefficientSignature.callees proverCoefficientPattern.scope [.vector "bls12-381.fr"] :=
+  .split (.input (.there .here))
+    (
+      .halt .incomplete)
+    (
+      .strict GkrSourceBodies.helper70Helper (.cons (.var .here) (.cons (.var (.there .here)) .nil)) <|
+      .send (.field "bls12-381.fr") "label_6c696e655f636f656666696369656e74_0" 1 (.result .here .here) <|
+      .done (.cons .absent .nil))
+
+theorem proverCoefficient_normalized :
+    NormalForm.normalize proverCoefficientSignature coefficientBody 0 2 proverCoefficientPattern = .ok proverCoefficientForm := by
+  kernel_rfl
+
+theorem proverCoefficient_lawsMatch : proverCoefficientForm.CallsMatch := by
+  kernel_rfl
+
+theorem proverCoefficient_finishes : proverCoefficientForm.finishes proverCoefficientFinish = true := by
+  kernel_rfl
+
+theorem proverCoefficient_environment (index : Nat) (line : Option (List F)) :
+    proverCoefficientPattern.environment (ringModel F G) (.cons index (.cons line .nil)) =
+      (.cons (some index)
+      ((proverCoefficientState).append (.cons line .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem proverCoefficient_presentation (ctx : ProtocolContext)
+    (index : Nat) (line : Option (List F)) :
+    proverCoefficientForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverCoefficientResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 0))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) proverCoefficientResults proverCoefficientFinish) (.cons index (.cons line .nil)) =
+      proverCoefficientProcess ctx index line := by
+  kernel_rfl
+
+theorem proverCoefficient_embedding (result : Unit) :
+    NormalForm.embed (assignment F G) proverCoefficientFinish (NormalForm.Tuple.toValues result) =
+      proverCoefficientState := by
+  kernel_rfl
+
+/-- The proverCoefficient's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem proverCoefficient_laws (index : Nat) (line : Option (List F)) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverCoefficientResults
+      (.cons (some index)
+      ((proverCoefficientState).append (.cons line .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `proverCoefficientProcess`, an instance of the normalizer's soundness. -/
 theorem proverCoefficient_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self)
@@ -579,41 +723,12 @@ theorem proverCoefficient_process
       ((proverCoefficientState).append (.cons line .nil))) =
       (proverCoefficientProcess ctx index line).bind (fun _ => .done (proverCoefficientState)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 0) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold coefficientFn coefficientBody
-  simp only [proverCoefficientProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  cases line with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s49") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper70Helper rfl 0 "s49") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper70Helper) (.cons none (.cons (some index) .nil)) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some line =>
-    refine (Region.denote_letOp_done m (.mark "s49") _ _ _ _ .nil rfl).trans ?_
-    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.helper70Helper rfl 0 "s49") _ _ _ _
-      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper70Helper (.cons line (.cons index .nil) : Values (assignment F G) [.vector "bls12-381.fr", .index])) (fun helper70Results => .cons (some (helper70Results.get .here)) .nil) _ _ ?_ ?_
-    · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper70Helper) (.cons line (.cons index .nil) : Values (assignment F G) [.vector "bls12-381.fr", .index]).present = _
-      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun helper70Results => ?_))
-      cases helper70Results with | cons value0 helper70Results => cases helper70Results; rfl
-    intro helper70Results
-    refine (Region.denote_letOp_done m (.mark "label_6c696e655f636f656666696369656e74_0") _ _ _ _ .nil rfl).trans ?_
-    refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 0 1 "label_6c696e655f636f656666696369656e74_0") _ _ _ _ (.send (ty := .field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f656666696369656e74_0") (ctx.roles 1) (helper70Results.get .here)) (fun _ => (.cons (some (helper70Results.get .here)) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-    · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f656666696369656e74_0") (ty := .field "bls12-381.fr") (some (helper70Results.get .here))).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-      simp only [Participant.exchange, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-      rfl
-    intro _
-    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-    refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [1]) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-    · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 1)].contains (ctx.roles 0)) (some (helper70Results.get .here)))) = _
-      simp [Participant.restrict, Ne.symm separate]
-      rfl
-    refine (Region.denote_letOp_done m (.mark "s52") _ _ _ _ .nil rfl).trans ?_
-    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.appendHelper rfl 1 "s52") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons none .nil)) = _
-      rw [Participant.owned_other _ _ separate]
-      rfl
-    rfl
+  exact (NormalForm.callback_sound_uniform proverCoefficientSignature coefficientBody 0 2 proverCoefficientPattern
+    proverCoefficientFinish proverCoefficientForm proverCoefficient_normalized proverCoefficient_lawsMatch proverCoefficient_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverCoefficientResults (NormalForm.noCallees _) (.cons index (.cons line .nil)) _
+    (proverCoefficient_environment index line) (proverCoefficient_laws index line) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Proc.bind (proverCoefficient_presentation ctx index line)
+      (funext fun result => congrArg PIR.Proc.done (proverCoefficient_embedding result)))
 
 /-- The repeat of `coefficientFn` at the proverCoefficient on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -753,6 +868,10 @@ def verifierLayerState (point : Option (List F)) (claim : Option F) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .cons point (.cons none (.cons claim .nil))
 
+/-- The positions of the carried state the verifierLayer presents. -/
+def verifierLayerFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons .optional (.cons .absent (.cons .optional .nil))
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the verifierLayer's components. -/
 theorem verifierLayerState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
@@ -760,9 +879,8 @@ theorem verifierLayerState_masked (ctx : ProtocolContext) (self : Nat) (role : s
     maskValues self (ctx.mapScopes [[1], [0], [1]]) (verifierLayerState (F := F) (G := G) point claim) =
       verifierLayerState point claim := by
   subst self
-  unfold verifierLayerState
-  iterate 4 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 1 verifierLayerFinish _ rfl
+    (.cons point (.cons claim .nil))
 
 /-! Positions of the verifierLayer's carried slots in the repeat state, named by the request. -/
 abbrev verifierLayerPointPosition : Nat := 0
@@ -834,7 +952,168 @@ def verifierLayerProcess (ctx : ProtocolContext) (index : Nat) (add mul : Option
                     .halt .reject
 
 set_option linter.unusedSimpArgs false in
-/-- The process equation of `verifierLayerProcess` over the typed body. -/
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- The returned components kept at role 1; the others are masked away. -/
+theorem rounds_verifierRounds_returned (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (values : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :
+    maskValues (ctx.roles 1) (ctx.mapScopes [[0], [0], [0], [0], [0], [1], [1]]) values =
+      .cons none (.cons none (.cons none (.cons none (.cons none (.cons (values.get (.there (.there (.there (.there (.there .here)))))) (.cons (values.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))) := by
+  cases values with | cons value0 values =>
+    cases values with | cons value1 values =>
+      cases values with | cons value2 values =>
+        cases values with | cons value3 values =>
+          cases values with | cons value4 values =>
+            cases values with | cons value5 values =>
+              cases values with | cons value6 values =>
+                cases values
+                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
+                  Participant.restrict, separate, Ne.symm separate, Values.get]
+
+set_option linter.unusedSimpArgs false in
+/-- The `left` callee at role 1: its invocation in this unit at any child context. -/
+theorem rounds_verifierRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (claim : Option F) (rounds service : Option Nat) (input0 input1 input2 input3 : Option (List F)) :
+    invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G) GkrSourceBodies.roundsSignature ctx (ctx.roles 1)
+      (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
+      (GkrRoundsNormalForms.verifierRoundsProcess ctx claim rounds service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there (.there .here)))))) (.cons (out.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))) := by
+  refine (rounds_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
+  · iterate 8 unfold maskValues
+    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+  refine (congrArg (fun process => PIR.Proc.bind process _)
+    (GkrRoundsNormalForms.verifierRounds_process (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (rounds := rounds) (service := service))).trans ?_
+  apply congrArg (PIR.Proc.bind _)
+  funext out
+  exact congrArg PIR.Proc.done (rounds_verifierRounds_returned ctx separate out)
+
+/-- The verifierLayer's laws as the normalizer reads them, keyed by helper. -/
+def verifierLayerSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], [⟨GkrSourceBodies.roundsSignature, 1, (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil))))))), [none, none, none]⟩]⟩
+
+/-- The results the verifierLayer's laws present, from the request's templates. -/
+def verifierLayerResults : NormalForm.LawResults (ringModel F G) verifierLayerSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The verifierLayer's callees' processes, by callee. -/
+def verifierLayerCallees : NormalForm.CalleeProcesses (ringModel F G) verifierLayerSignature.callees :=
+  fun callee => match callee with
+  | ⟨0, _⟩ => fun ctx binders => GkrRoundsNormalForms.verifierRoundsProcess ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here)))
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierLayerSignature])
+
+/-- The verifierLayer's inputs as the normalizer reads them. -/
+def verifierLayerPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .optional (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))))))
+
+/-- The verifierLayer's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def verifierLayerForm : NormalForm.Form verifierLayerSignature.laws verifierLayerSignature.callees verifierLayerPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .apply ⟨0, by decide⟩ GkrSourceBodies.roundsSignature [0, 1] "label_6c656674"
+    (.cons (NormalForm.Comp.input (.there (.there .here))) (.cons (NormalForm.Comp.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (NormalForm.Comp.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)) : Values (NormalForm.Argument _ _) [.component (.field "bls12-381.fr"), .component .index, .component (.service "random.bls12-381.fr/0")]) <|
+  .apply ⟨0, by decide⟩ GkrSourceBodies.roundsSignature [0, 1] "label_7269676874"
+    (.cons (NormalForm.Comp.read .here (.there (.there (.there (.there (.there (.there .here))))))) (.cons (NormalForm.Comp.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (NormalForm.Comp.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil)) : Values (NormalForm.Argument _ _) [.component (.field "bls12-381.fr"), .component .index, .component (.service "random.bls12-381.fr/0")]) <|
+  .receive (.field "bls12-381.fr") "label_6c696e655f636f6e7374616e74_0" 0 <|
+  .strict GkrSourceBodies.emptyHelper .nil <|
+  .strict GkrSourceBodies.appendHelper (.cons (.result .here .here) (.cons (.var (.there .here)) .nil)) <|
+  .repeat coefficientSpec "s48" coefficientBody (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))
+    (.cons (.present (.result .here .here)) .nil)
+    (.cons .absent .nil) <|
+  .split (.read .here .here)
+    (
+      .halt .incomplete)
+    (
+      .strict GkrSourceBodies.sumHelper (.cons (.var .here) .nil) <|
+      .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))
+        (
+          .halt .incomplete)
+        (
+          .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))
+            (
+              .halt .incomplete)
+            (
+              .strict GkrSourceBodies.selectBlockHelper (.cons (.var (.there .here)) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.var .here) .nil))) <|
+              .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))
+                (
+                  .halt .incomplete)
+                (
+                  .split (.read (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.there (.there (.there (.there (.there .here))))))
+                    (
+                      .halt .incomplete)
+                    (
+                      .split (.read (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.there (.there (.there (.there (.there .here))))))
+                        (
+                          .halt .incomplete)
+                        (
+                          .strict GkrSourceBodies.evaluateWiringHelper (.cons (.result (.there (.there (.there .here))) .here) (.cons (.var (.there (.there .here))) (.cons (.var (.there .here)) (.cons (.var .here) .nil)))) <|
+                          .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))
+                            (
+                              .halt .incomplete)
+                            (
+                              .strict GkrSourceBodies.selectBlockHelper (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil))) <|
+                              .strict GkrSourceBodies.evaluateWiringHelper (.cons (.result .here .here) (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var (.there (.there (.there .here)))) .nil)))) <|
+                              .split (.read (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.there (.there (.there (.there (.there (.there .here)))))))
+                                (
+                                  .halt .incomplete)
+                                (
+                                  .guard (.field "bls12-381.fr") (.var .here) (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.result (.there (.there (.there (.there .here)))) .here) (.cons (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons (.result (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.result (.there .here) .here) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) .nil)) .here) (.cons (.result (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .here) .nil)) .here) .nil)) .here) <|
+                                  .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))))))))))
+                                    (
+                                      .halt .incomplete)
+                                    (
+                                      .query "label_6c696e655f6368616c6c656e6765" "bls12-381.fr" (.cons (.var .here) .nil) <|
+                                      .send (.field "bls12-381.fr") "label_6c696e655f64656c6976657279_0" 0 (.var .here) <|
+                                      .strict GkrSourceBodies.evaluateCoefficientsHelper (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) (.cons (.var .here) .nil)) <|
+                                      .strict GkrSourceBodies.linePointHelper (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.var (.there .here)) .nil))) <|
+                                      .done (.cons (.present (.result .here .here)) (.cons .absent (.cons (.present (.result (.there .here) .here)) .nil))))))))))))
+
+theorem verifierLayer_normalized :
+    NormalForm.normalize verifierLayerSignature layerBody 1 2 verifierLayerPattern = .ok verifierLayerForm := by
+  kernel_rfl
+
+theorem verifierLayer_lawsMatch : verifierLayerForm.CallsMatch := by
+  kernel_rfl
+
+theorem verifierLayer_finishes : verifierLayerForm.finishes verifierLayerFinish = true := by
+  kernel_rfl
+
+theorem verifierLayer_environment (index : Nat) (point : Option (List F)) (claim : Option F) (inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    verifierLayerPattern.environment (ringModel F G) (.cons index (.cons point (.cons claim (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))))) =
+      (.cons (some index)
+      ((verifierLayerState point claim).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem verifierLayer_presentation (ctx : ProtocolContext)
+    (index : Nat) (point : Option (List F)) (claim : Option F) (inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    verifierLayerForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierLayerResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 1))
+        verifierLayerCallees
+        (NormalForm.finishLeaf (ringModel F G) verifierLayerResults verifierLayerFinish) (.cons index (.cons point (.cons claim (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))))) =
+      verifierLayerProcess ctx index add mul selector width service point claim := by
+  kernel_rfl
+
+theorem verifierLayer_embedding (result : ((Option (List F)) × (Option F))) :
+    NormalForm.embed (assignment F G) verifierLayerFinish (NormalForm.Tuple.toValues result) =
+      verifierLayerState result.1 result.2 := by
+  kernel_rfl
+
+/-- The verifierLayer's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem verifierLayer_laws (index : Nat) (inputs add mul : Option (List F)) (layers selector width service : Option Nat) (point : Option (List F)) (claim : Option F) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierLayerResults
+      (.cons (some index)
+      ((verifierLayerState point claim).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The verifierLayer's callees present their applications: each callee's invocation in this unit. -/
+theorem verifierLayer_callees (index : Nat) (point : Option (List F)) (claim : Option F) (inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    NormalForm.CalleesHold (GkrSourceViews.unit.plainProtocolTable F G) verifierLayerCallees
+      (.cons (some index)
+      ((verifierLayerState point claim).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun callee => match callee with
+  | ⟨0, _⟩ => fun ctx binders others pinned distinct =>
+    match binders, others, pinned with
+    | .cons calleeClaim (.cons calleeRounds (.cons calleeService .nil)), .cons input0 (.cons input1 (.cons input2 (.cons input3 .nil))), _ => by
+      exact rounds_verifierRounds_invoke ctx (distinct 0 (show 0 < 2 by decide) (show (0 : Nat) ≠ 1 by decide)) calleeClaim calleeRounds calleeService input0 input1 input2 input3
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierLayerSignature])
+
+/-- The process equation of `verifierLayerProcess`, an instance of the normalizer's soundness. -/
 theorem verifierLayer_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
@@ -843,276 +1122,12 @@ theorem verifierLayer_process
       ((verifierLayerState point claim).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) =
       (verifierLayerProcess ctx index add mul selector width service point claim).bind (fun result => .done (verifierLayerState result.1 result.2)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 1) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold layerFn layerBody
-  simp only [verifierLayerProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons add (.cons mul (.cons inputs (.cons layers (.cons selector (.cons width (.cons (some index) .nil))))))) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s26") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.selectBlockHelper rfl 0 "s26") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons add (.cons (some index) (.cons selector .nil))) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s27") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.selectBlockHelper rfl 0 "s27") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons mul (.cons (some index) (.cons selector .nil))) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s28") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.helper36Helper rfl 0 "s28") _ _ _ _ (.cons none (.cons none (.cons none (.cons none .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper36Helper) (.cons none (.cons none (.cons none (.cons none (.cons width .nil))))) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "label_6c656674") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.apply_step GkrSourceViews.unit GkrSourceViews.roundsDefinition GkrSourceViews.rounds_member GkrSourceBodies.roundsSignature GkrSourceViews.rounds_signature (GkrRoundsNormalForms.roundsBody roundsMaximum) GkrRoundsNormalForms.roundsBody_raw
-    [0, 1] "label_6c656674" ctx (ctx.roles 1) _ _ _
-    ((ProtocolContext.contains_iff _ _ _).mpr ⟨1, by decide, rfl⟩)
-    (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons width (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-    (GkrRoundsNormalForms.verifierRoundsProcess (leftContext ctx) claim width service) ?_
-    (fun (leftReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) => .cons none (.cons none (.cons none (.cons none (.cons none (.cons (leftReturned.get (.there (.there (.there (.there (.there .here)))))) (.cons (leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))) ?_ _ ?_
-  · change maskValues (ctx.roles 1) ((ctx.enter "label_6c656674" [0, 1]).mapScopes [[0], [0], [0], [0], [1], [0, 1], [1]]) (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons width (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
-    iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-      Participant.restrict, separate, Ne.symm separate]
-  · exact GkrRoundsNormalForms.verifierRounds_process (ctx := (leftContext ctx)) (self := (ctx.roles 1)) (role := rfl) (separate := separate) (claim := claim) (rounds := width) (service := service)
-  · exact left_verifierLayer_outputs ctx separate
-  intro leftReturned
-  change Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] at leftReturned
-  refine (Region.denote_letOp_done m (.mark "label_7269676874") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.apply_step GkrSourceViews.unit GkrSourceViews.roundsDefinition GkrSourceViews.rounds_member GkrSourceBodies.roundsSignature GkrSourceViews.rounds_signature (GkrRoundsNormalForms.roundsBody roundsMaximum) GkrRoundsNormalForms.roundsBody_raw
-    [0, 1] "label_7269676874" ctx (ctx.roles 1) _ _ _
-    ((ProtocolContext.contains_iff _ _ _).mpr ⟨1, by decide, rfl⟩)
-    (.cons none (.cons none (.cons none (.cons none (.cons (leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons width (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-    (GkrRoundsNormalForms.verifierRoundsProcess (rightContext ctx) (leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) width service) ?_
-    (fun (rightReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) => .cons none (.cons none (.cons none (.cons none (.cons none (.cons (rightReturned.get (.there (.there (.there (.there (.there .here)))))) (.cons (rightReturned.get (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))) ?_ _ ?_
-  · change maskValues (ctx.roles 1) ((ctx.enter "label_7269676874" [0, 1]).mapScopes [[0], [0], [0], [0], [1], [0, 1], [1]]) (.cons none (.cons none (.cons none (.cons none (.cons (leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons width (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
-    iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-      Participant.restrict, separate, Ne.symm separate]
-  · exact GkrRoundsNormalForms.verifierRounds_process (ctx := (rightContext ctx)) (self := (ctx.roles 1)) (role := rfl) (separate := separate) (claim := leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) (rounds := width) (service := service)
-  · exact right_verifierLayer_outputs ctx separate
-  intro rightReturned
-  change Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] at rightReturned
-  refine (Region.denote_letOp_done m (.mark "s38") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.helper69Helper rfl 0 "s38") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper69Helper) (.cons none (.cons none (.cons none (.cons width .nil)))) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.calculate (.indexConstant 0) rfl) _ _ _ _ (.cons (some 0) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
-  refine (Region.denote_letOp_done m (.mark "s41") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.helper57Helper rfl 0 "s41") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper57Helper) (.cons none (.cons (some 0) .nil)) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "label_6c696e655f636f6e7374616e74_0") _ _ _ _ .nil rfl).trans ?_
-  refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 0 1 "label_6c696e655f636f6e7374616e74_0") _ _ _ _ (.receive (.field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f6e7374616e74_0") (ctx.roles 0)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-  · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f6e7374616e74_0") (ty := .field "bls12-381.fr") none).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-    simp only [Participant.exchange, separate, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-    rfl
-  intro lineConstant
-  change F at lineConstant
-  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [1]) _ _ _ _ (.cons (some lineConstant) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 1)].contains (ctx.roles 1)) (some lineConstant))) = _
-    simp [Participant.restrict]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s44") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.emptyHelper rfl 1 "s44") _ _ _ _
-    (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])) (fun emptyResults => .cons (some (emptyResults.get .here)) .nil) _ ?_ ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) (.nil : Values (assignment F G) []).present = _
-    refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun emptyResults => ?_))
-    cases emptyResults with | cons value0 emptyResults => cases emptyResults; rfl
-  intro emptyResults
-  refine (Region.denote_letOp_done m (.mark "s45") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.appendHelper rfl 1 "s45") _ _ _ _
-    (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper (.cons (emptyResults.get .here) (.cons lineConstant .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])) (fun appendResults => .cons (some (appendResults.get .here)) .nil) _ ?_ ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons (emptyResults.get .here) (.cons lineConstant .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-    refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun appendResults => ?_))
-    cases appendResults with | cons value0 appendResults => cases appendResults; rfl
-  intro appendResults
-  refine (Region.denote_letOp_done m (.mark "s48") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.repeat (coefficientSpec) "s48") _ _ _ _
-    (denoteRepeat (coefficientSpec) ctx (ctx.roles 1) width (.cons (some (appendResults.get .here)) .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"])
-    (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) (coefficientFn ctx (ctx.roles 1)))
-    (fun coefficientReturned => .cons (coefficientReturned.get .here) .nil) _ ?_ ?_
-  · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun coefficientReturned => ?_))
-    cases coefficientReturned with | cons value0 coefficientReturned => cases coefficientReturned; rfl
-  intro coefficientReturned
-  cases coefficientReturned.get .here with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s56") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.sumHelper rfl 1 "s56") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sumHelper) (.cons none .nil) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some coefficients =>
-    refine (Region.denote_letOp_done m (.mark "s56") _ _ _ _ .nil rfl).trans ?_
-    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.sumHelper rfl 1 "s56") _ _ _ _
-      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sumHelper (.cons coefficients .nil : Values (assignment F G) [.vector "bls12-381.fr"])) (fun sumResults => .cons (some (sumResults.get .here)) .nil) _ _ ?_ ?_
-    · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sumHelper) (.cons coefficients .nil : Values (assignment F G) [.vector "bls12-381.fr"]).present = _
-      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun sumResults => ?_))
-      cases sumResults with | cons value0 sumResults => cases sumResults; rfl
-    intro sumResults
-    cases add with
-    | none =>
-      refine (Region.denote_letOp_done m (.mark "s58") _ _ _ _ .nil rfl).trans ?_
-      apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s58") _ _ _ _ .incomplete
-      change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons none (.cons (some index) (.cons selector .nil))) = _
-      simp only [Participant.owned, ↓reduceIte]
-      rfl
-    | some add =>
-      cases selector with
-      | none =>
-        refine (Region.denote_letOp_done m (.mark "s58") _ _ _ _ .nil rfl).trans ?_
-        apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s58") _ _ _ _ .incomplete
-        change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons (some add) (.cons (some index) (.cons none .nil))) = _
-        simp only [Participant.owned, ↓reduceIte]
-        rfl
-      | some selector =>
-        refine (Region.denote_letOp_done m (.mark "s58") _ _ _ _ .nil rfl).trans ?_
-        refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s58") _ _ _ _
-          (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper (.cons add (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])) (fun selectBlockResults => .cons (some (selectBlockResults.get .here)) .nil) _ _ ?_ ?_
-        · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons add (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
-          refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun selectBlockResults => ?_))
-          cases selectBlockResults with | cons value0 selectBlockResults => cases selectBlockResults; rfl
-        intro selectBlockResults
-        cases point with
-        | none =>
-          refine (Region.denote_letOp_done m (.mark "s61") _ _ _ _ .nil rfl).trans ?_
-          apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s61") _ _ _ _ .incomplete
-          change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons (some (selectBlockResults.get .here)) (.cons none (.cons (leftReturned.get (.there (.there (.there (.there (.there .here)))))) (.cons (rightReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))) = _
-          simp only [Participant.owned, ↓reduceIte]
-          rfl
-        | some point =>
-          cases leftReturned.get (.there (.there (.there (.there (.there .here))))) with
-          | none =>
-            refine (Region.denote_letOp_done m (.mark "s61") _ _ _ _ .nil rfl).trans ?_
-            apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s61") _ _ _ _ .incomplete
-            change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons (some (selectBlockResults.get .here)) (.cons (some point) (.cons none (.cons (rightReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))) = _
-            simp only [Participant.owned, ↓reduceIte]
-            rfl
-          | some leftPoint =>
-            cases rightReturned.get (.there (.there (.there (.there (.there .here))))) with
-            | none =>
-              refine (Region.denote_letOp_done m (.mark "s61") _ _ _ _ .nil rfl).trans ?_
-              apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s61") _ _ _ _ .incomplete
-              change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons (some (selectBlockResults.get .here)) (.cons (some point) (.cons (some leftPoint) (.cons none .nil)))) = _
-              simp only [Participant.owned, ↓reduceIte]
-              rfl
-            | some rightPoint =>
-              refine (Region.denote_letOp_done m (.mark "s61") _ _ _ _ .nil rfl).trans ?_
-              refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s61") _ _ _ _
-                (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper (.cons (selectBlockResults.get .here) (.cons point (.cons leftPoint (.cons rightPoint .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])) (fun evaluateWiringResults => .cons (some (evaluateWiringResults.get .here)) .nil) _ _ ?_ ?_
-              · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons (selectBlockResults.get .here) (.cons point (.cons leftPoint (.cons rightPoint .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]).present = _
-                refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun evaluateWiringResults => ?_))
-                cases evaluateWiringResults with | cons value0 evaluateWiringResults => cases evaluateWiringResults; rfl
-              intro evaluateWiringResults
-              cases mul with
-              | none =>
-                refine (Region.denote_letOp_done m (.mark "s63") _ _ _ _ .nil rfl).trans ?_
-                apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s63") _ _ _ _ .incomplete
-                change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons none (.cons (some index) (.cons (some selector) .nil))) = _
-                simp only [Participant.owned, ↓reduceIte]
-                rfl
-              | some mul =>
-                refine (Region.denote_letOp_done m (.mark "s63") _ _ _ _ .nil rfl).trans ?_
-                refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s63") _ _ _ _
-                  (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper (.cons mul (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])) (fun selectBlockResults2 => .cons (some (selectBlockResults2.get .here)) .nil) _ _ ?_ ?_
-                · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons mul (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
-                  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun selectBlockResults2 => ?_))
-                  cases selectBlockResults2 with | cons value0 selectBlockResults2 => cases selectBlockResults2; rfl
-                intro selectBlockResults2
-                refine (Region.denote_letOp_done m (.mark "s66") _ _ _ _ .nil rfl).trans ?_
-                refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s66") _ _ _ _
-                  (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper (.cons (selectBlockResults2.get .here) (.cons point (.cons leftPoint (.cons rightPoint .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])) (fun evaluateWiringResults2 => .cons (some (evaluateWiringResults2.get .here)) .nil) _ _ ?_ ?_
-                · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons (selectBlockResults2.get .here) (.cons point (.cons leftPoint (.cons rightPoint .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]).present = _
-                  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun evaluateWiringResults2 => ?_))
-                  cases evaluateWiringResults2 with | cons value0 evaluateWiringResults2 => cases evaluateWiringResults2; rfl
-                intro evaluateWiringResults2
-                refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                refine (Region.denote_letOp_done m (.calculate (.fieldAdd "bls12-381.fr") rfl) _ _ _ _ (.cons (some (lineConstant + (sumResults.get .here))) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons (some ((evaluateWiringResults.get .here) * (lineConstant + (sumResults.get .here)))) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons (some ((evaluateWiringResults2.get .here) * lineConstant)) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons (some (((evaluateWiringResults2.get .here) * lineConstant) * (sumResults.get .here))) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                refine (Region.denote_letOp_done m (.calculate (.fieldAdd "bls12-381.fr") rfl) _ _ _ _ (.cons (some (((evaluateWiringResults.get .here) * (lineConstant + (sumResults.get .here))) + (((evaluateWiringResults2.get .here) * lineConstant) * (sumResults.get .here)))) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                cases rightReturned.get (.there (.there (.there (.there (.there (.there .here)))))) with
-                | none =>
-                  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                  refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-                  refine (Region.denote_letOp_done m (.mark "s75") _ _ _ _ .nil rfl).trans ?_
-                  apply Region.denote_letOp_halt m (.guard 1 "s75") _ _ _ _ .incomplete
-                  change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) none).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
-                  simp only [Participant.guard, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                  rfl
-                | some rightValue =>
-                  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                  refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons (some (decide (rightValue = ((evaluateWiringResults.get .here) * (lineConstant + (sumResults.get .here))) + (((evaluateWiringResults2.get .here) * lineConstant) * (sumResults.get .here))))) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-                  refine (Region.denote_letOp_done m (.mark "s75") _ _ _ _ .nil rfl).trans ?_
-                  by_cases holds : rightValue = ((evaluateWiringResults.get .here) * (lineConstant + (sumResults.get .here))) + (((evaluateWiringResults2.get .here) * lineConstant) * (sumResults.get .here))
-                  · simp only [eq_true holds, decide_true, ↓reduceIte, PIR.Proc.bind]
-                    refine (Region.denote_letOp_done m (.guard 1 "s75") _ _ _ _ .nil ?_).trans ?_
-                    · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (some true)).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
-                      simp only [Participant.guard, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                      rfl
-                    cases service with
-                    | none =>
-                      refine (Region.denote_letOp_done m (.mark "label_6c696e655f6368616c6c656e6765") _ _ _ _ .nil rfl).trans ?_
-                      apply Region.denote_letOp_halt m (.draw 1 "bls12-381.fr" "label_6c696e655f6368616c6c656e6765") _ _ _ _ .incomplete
-                      change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f6368616c6c656e6765") "bls12-381.fr" (.cons none .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                      simp only [Participant.query, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                      rfl
-                    | some service =>
-                      refine (Region.denote_letOp_done m (.mark "label_6c696e655f6368616c6c656e6765") _ _ _ _ .nil rfl).trans ?_
-                      refine Region.denote_letOp_call m (.draw 1 "bls12-381.fr" "label_6c696e655f6368616c6c656e6765") _ _ _ _ (.query (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f6368616c6c656e6765") "bls12-381.fr" (.cons service .nil)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-                      · change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f6368616c6c656e6765") "bls12-381.fr" (.cons (some service) .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                        simp only [Participant.query, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                        rfl
-                      intro lineChallenge
-                      change F at lineChallenge
-                      refine (Region.denote_letOp_done m (.mark "label_6c696e655f64656c6976657279_0") _ _ _ _ .nil rfl).trans ?_
-                      refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 1 0 "label_6c696e655f64656c6976657279_0") _ _ _ _ (.send (ty := .field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f64656c6976657279_0") (ctx.roles 0) lineChallenge) (fun _ => (.cons (some lineChallenge) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-                      · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (ctx.roles 0) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f64656c6976657279_0") (ty := .field "bls12-381.fr") (some lineChallenge)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                        simp only [Participant.exchange, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-                        rfl
-                      intro _
-                      refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                      refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [0]) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                      · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 0)].contains (ctx.roles 1)) (some lineChallenge))) = _
-                        simp [Participant.restrict, Ne.symm separate]
-                        rfl
-                      refine (Region.denote_letOp_done m (.mark "s80") _ _ _ _ .nil rfl).trans ?_
-                      refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.evaluateCoefficientsHelper rfl 1 "s80") _ _ _ _
-                        (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateCoefficientsHelper (.cons coefficients (.cons lineChallenge .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])) (fun evaluateCoefficientsResults => .cons (some (evaluateCoefficientsResults.get .here)) .nil) _ _ ?_ ?_
-                      · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateCoefficientsHelper) (.cons coefficients (.cons lineChallenge .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-                        refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun evaluateCoefficientsResults => ?_))
-                        cases evaluateCoefficientsResults with | cons value0 evaluateCoefficientsResults => cases evaluateCoefficientsResults; rfl
-                      intro evaluateCoefficientsResults
-                      refine (Region.denote_letOp_done m (.mark "s84") _ _ _ _ .nil rfl).trans ?_
-                      refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.linePointHelper rfl 1 "s84") _ _ _ _
-                        (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper (.cons leftPoint (.cons rightPoint (.cons lineChallenge .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])) (fun linePointResults => .cons (some (linePointResults.get .here)) .nil) _ _ ?_ ?_
-                      · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper) (.cons leftPoint (.cons rightPoint (.cons lineChallenge .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-                        refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun linePointResults => ?_))
-                        cases linePointResults with | cons value0 linePointResults => cases linePointResults; rfl
-                      intro linePointResults
-                      refine (Region.denote_letOp_done m (.mark "s86") _ _ _ _ .nil rfl).trans ?_
-                      refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.linePointHelper rfl 0 "s86") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                      · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper) (.cons none (.cons none (.cons none .nil))) = _
-                        rw [Participant.owned_other _ _ separate]
-                        rfl
-                      rfl
-                  · simp only [eq_false holds, decide_false, ↓reduceIte, PIR.Proc.bind]
-                    apply Region.denote_letOp_halt m (.guard 1 "s75") _ _ _ _ .reject
-                    change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 1) (some false)).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
-                    simp only [Participant.guard, Bool.false_eq_true, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                    rfl
+  exact (NormalForm.callback_sound_uniform verifierLayerSignature layerBody 1 2 verifierLayerPattern
+    verifierLayerFinish verifierLayerForm verifierLayer_normalized verifierLayer_lawsMatch verifierLayer_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierLayerResults verifierLayerCallees (.cons index (.cons point (.cons claim (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))))) _
+    (verifierLayer_environment index point claim inputs add mul layers selector width service) (verifierLayer_laws index inputs add mul layers selector width service point claim) (verifierLayer_callees index point claim inputs add mul layers selector width service)).trans
+    (congrArg₂ PIR.Proc.bind (verifierLayer_presentation ctx index point claim inputs add mul layers selector width service)
+      (funext fun result => congrArg PIR.Proc.done (verifierLayer_embedding result)))
 
 /-- The repeat of `layerFn` at the verifierLayer on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -1137,6 +1152,10 @@ def proverLayerState (point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .cons none (.cons point (.cons none .nil))
 
+/-- The positions of the carried state the proverLayer presents. -/
+def proverLayerFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons .absent (.cons .optional (.cons .absent .nil))
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- Masking the carried state to its declared scopes keeps the proverLayer's components. -/
 theorem proverLayerState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
@@ -1144,9 +1163,8 @@ theorem proverLayerState_masked (ctx : ProtocolContext) (self : Nat) (role : sel
     maskValues self (ctx.mapScopes [[1], [0], [1]]) (proverLayerState (F := F) (G := G) point) =
       proverLayerState point := by
   subst self
-  unfold proverLayerState
-  iterate 4 unfold maskValues
-  simp [ProtocolContext.mapScopes, Participant.restrict]
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 0 proverLayerFinish _ rfl
+    (.cons point .nil)
 
 /-! Positions of the proverLayer's carried slots in the repeat state, named by the request. -/
 abbrev proverLayerPointPosition : Nat := 1
@@ -1209,7 +1227,164 @@ def proverLayerProcess (ctx : ProtocolContext) (index : Nat) (inputs add mul : O
                     .done (some (linePointResults.get .here))
 
 set_option linter.unusedSimpArgs false in
-/-- The process equation of `proverLayerProcess` over the typed body. -/
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- The returned components kept at role 0; the others are masked away. -/
+theorem rounds_proverRounds_returned (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (values : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :
+    maskValues (ctx.roles 0) (ctx.mapScopes [[0], [0], [0], [0], [0], [1], [1]]) values =
+      .cons (values.get .here) (.cons (values.get (.there .here)) (.cons (values.get (.there (.there .here))) (.cons (values.get (.there (.there (.there .here)))) (.cons (values.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil)))))) := by
+  cases values with | cons value0 values =>
+    cases values with | cons value1 values =>
+      cases values with | cons value2 values =>
+        cases values with | cons value3 values =>
+          cases values with | cons value4 values =>
+            cases values with | cons value5 values =>
+              cases values with | cons value6 values =>
+                cases values
+                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
+                  Participant.restrict, separate, Ne.symm separate, Values.get]
+
+set_option linter.unusedSimpArgs false in
+/-- The `left` callee at role 0: its invocation in this unit at any child context. -/
+theorem rounds_proverRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (add mul left right : Option (List F)) (rounds : Option Nat) (input4 : Option F) (input6 : Option Nat) :
+    invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G) GkrSourceBodies.roundsSignature ctx (ctx.roles 0)
+      (.cons add (.cons mul (.cons left (.cons right (.cons input4 (.cons rounds (.cons input6 .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
+      (GkrRoundsNormalForms.proverRoundsProcess ctx add mul left right rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons (out.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil)))))))) := by
+  refine (rounds_view ctx (ctx.roles 0) _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
+  · iterate 8 unfold maskValues
+    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+  refine (congrArg (fun process => PIR.Proc.bind process _)
+    (GkrRoundsNormalForms.proverRounds_process (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (add := add) (mul := mul) (left := left) (right := right) (rounds := rounds))).trans ?_
+  apply congrArg (PIR.Proc.bind _)
+  funext out
+  exact congrArg PIR.Proc.done (rounds_proverRounds_returned ctx separate out)
+
+/-- The proverLayer's laws as the normalizer reads them, keyed by helper. -/
+def proverLayerSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], [⟨GkrSourceBodies.roundsSignature, 0, (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent (.cons .optional (.cons .absent .nil))))))), [none, none, none, none, none]⟩]⟩
+
+/-- The results the proverLayer's laws present, from the request's templates. -/
+def proverLayerResults : NormalForm.LawResults (ringModel F G) proverLayerSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The proverLayer's callees' processes, by callee. -/
+def proverLayerCallees : NormalForm.CalleeProcesses (ringModel F G) proverLayerSignature.callees :=
+  fun callee => match callee with
+  | ⟨0, _⟩ => fun ctx binders => GkrRoundsNormalForms.proverRoundsProcess ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here))) (NormalForm.entryAt binders (.there (.there (.there .here)))) (NormalForm.entryAt binders (.there (.there (.there (.there .here)))))
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverLayerSignature])
+
+/-- The proverLayer's inputs as the normalizer reads them. -/
+def proverLayerPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .absent (.cons .optional (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))))))
+
+/-- The proverLayer's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def proverLayerForm : NormalForm.Form proverLayerSignature.laws proverLayerSignature.callees proverLayerPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .split (.input (.there (.there (.there .here))))
+    (
+      .halt .incomplete)
+    (
+      .split (.input (.there (.there (.there (.there (.there .here))))))
+        (
+          .halt .incomplete)
+        (
+          .split (.input (.there (.there (.there (.there .here)))))
+            (
+              .halt .incomplete)
+            (
+              .split (.input (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))
+                (
+                  .halt .incomplete)
+                (
+                  .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))
+                    (
+                      .halt .incomplete)
+                    (
+                      .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))
+                        (
+                          .halt .incomplete)
+                        (
+                          .strict GkrSourceBodies.helper34Helper (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var (.there (.there (.there .here)))) (.cons (.var (.there (.there .here))) (.cons (.var (.there .here)) (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))) <|
+                          .strict GkrSourceBodies.selectBlockHelper (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.var (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.var (.there (.there .here))) .nil))) <|
+                          .strict GkrSourceBodies.selectBlockHelper (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.var (.there (.there (.there .here)))) .nil))) <|
+                          .split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))
+                            (
+                              .halt .incomplete)
+                            (
+                              .strict GkrSourceBodies.helper36Helper (.cons (.result (.there (.there .here)) .here) (.cons (.result (.there .here) .here) (.cons (.var .here) (.cons (.result (.there (.there (.there .here))) .here) (.cons (.var (.there (.there (.there (.there .here))))) .nil))))) <|
+                              .apply ⟨0, by decide⟩ GkrSourceBodies.roundsSignature [0, 1] "label_6c656674"
+                                (.cons (NormalForm.Comp.present (.result .here .here)) (.cons (NormalForm.Comp.present (.result .here (.there .here))) (.cons (NormalForm.Comp.present (.result .here (.there (.there .here)))) (.cons (NormalForm.Comp.present (.result .here (.there (.there (.there .here))))) (.cons (NormalForm.Comp.present (.var (.there (.there (.there (.there (.there .here))))))) .nil)))) : Values (NormalForm.Argument _ _) [.component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component .index]) <|
+                              .apply ⟨0, by decide⟩ GkrSourceBodies.roundsSignature [0, 1] "label_7269676874"
+                                (.cons (NormalForm.Comp.read .here (.there .here)) (.cons (NormalForm.Comp.read .here (.there (.there .here))) (.cons (NormalForm.Comp.read .here (.there (.there (.there .here)))) (.cons (NormalForm.Comp.read .here (.there (.there (.there (.there .here))))) (.cons (NormalForm.Comp.present (.var (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))) : Values (NormalForm.Argument _ _) [.component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component (.vector "bls12-381.fr"), .component .index]) <|
+                              .split (.read (.there .here) .here)
+                                (
+                                  .halt .incomplete)
+                                (
+                                  .split (.read (.there .here) .here)
+                                    (
+                                      .halt .incomplete)
+                                    (
+                                      .strict GkrSourceBodies.helper69Helper (.cons (.result (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .here) (.cons (.var (.there .here)) (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))) <|
+                                      .strict GkrSourceBodies.helper57Helper (.cons (.result .here .here) (.cons (.index 0) .nil)) <|
+                                      .send (.field "bls12-381.fr") "label_6c696e655f636f6e7374616e74_0" 1 (.result .here .here) <|
+                                      .repeat coefficientSpec "s48" coefficientBody (.present (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))
+                                        (.cons .absent .nil)
+                                        (.cons (.present (.result (.there .here) .here)) .nil) <|
+                                      .receive (.field "bls12-381.fr") "label_6c696e655f64656c6976657279_0" 1 <|
+                                      .strict GkrSourceBodies.linePointHelper (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var .here) .nil))) <|
+                                      .done (.cons .absent (.cons (.present (.result .here .here)) (.cons .absent .nil))))))))))))
+
+theorem proverLayer_normalized :
+    NormalForm.normalize proverLayerSignature layerBody 0 2 proverLayerPattern = .ok proverLayerForm := by
+  kernel_rfl
+
+theorem proverLayer_lawsMatch : proverLayerForm.CallsMatch := by
+  kernel_rfl
+
+theorem proverLayer_finishes : proverLayerForm.finishes proverLayerFinish = true := by
+  kernel_rfl
+
+theorem proverLayer_environment (index : Nat) (point inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    proverLayerPattern.environment (ringModel F G) (.cons index (.cons point (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) =
+      (.cons (some index)
+      ((proverLayerState point).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem proverLayer_presentation (ctx : ProtocolContext)
+    (index : Nat) (point inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    proverLayerForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverLayerResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 0))
+        proverLayerCallees
+        (NormalForm.finishLeaf (ringModel F G) proverLayerResults proverLayerFinish) (.cons index (.cons point (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) =
+      proverLayerProcess ctx index inputs add mul layers selector width point := by
+  kernel_rfl
+
+theorem proverLayer_embedding (result : (Option (List F))) :
+    NormalForm.embed (assignment F G) proverLayerFinish (NormalForm.Tuple.toValues result) =
+      proverLayerState result := by
+  kernel_rfl
+
+/-- The proverLayer's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem proverLayer_laws (index : Nat) (inputs add mul : Option (List F)) (layers selector width service : Option Nat) (point : Option (List F)) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverLayerResults
+      (.cons (some index)
+      ((proverLayerState point).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The proverLayer's callees present their applications: each callee's invocation in this unit. -/
+theorem proverLayer_callees (index : Nat) (point inputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    NormalForm.CalleesHold (GkrSourceViews.unit.plainProtocolTable F G) proverLayerCallees
+      (.cons (some index)
+      ((proverLayerState point).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun callee => match callee with
+  | ⟨0, _⟩ => fun ctx binders others pinned distinct =>
+    match binders, others, pinned with
+    | .cons calleeAdd (.cons calleeMul (.cons calleeLeft (.cons calleeRight (.cons calleeRounds .nil)))), .cons input4 (.cons input6 .nil), _ => by
+      exact rounds_proverRounds_invoke ctx (distinct 1 (show 1 < 2 by decide) (show (1 : Nat) ≠ 0 by decide)) calleeAdd calleeMul calleeLeft calleeRight calleeRounds input4 input6
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverLayerSignature])
+
+/-- The process equation of `proverLayerProcess`, an instance of the normalizer's soundness. -/
 theorem proverLayer_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self)
@@ -1218,261 +1393,12 @@ theorem proverLayer_process
       ((proverLayerState point).append (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) =
       (proverLayerProcess ctx index inputs add mul layers selector width point).bind (fun result => .done (proverLayerState result)) := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 0) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold layerFn layerBody
-  simp only [proverLayerProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  cases add with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons none (.cons mul (.cons inputs (.cons layers (.cons selector (.cons width (.cons (some index) .nil))))))) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some add =>
-    cases mul with
-    | none =>
-      refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-      apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-      change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons (some add) (.cons none (.cons inputs (.cons layers (.cons selector (.cons width (.cons (some index) .nil))))))) = _
-      simp only [Participant.owned, ↓reduceIte]
-      rfl
-    | some mul =>
-      cases inputs with
-      | none =>
-        refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-        apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-        change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons (some add) (.cons (some mul) (.cons none (.cons layers (.cons selector (.cons width (.cons (some index) .nil))))))) = _
-        simp only [Participant.owned, ↓reduceIte]
-        rfl
-      | some inputs =>
-        cases layers with
-        | none =>
-          refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-          apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-          change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons (some add) (.cons (some mul) (.cons (some inputs) (.cons none (.cons selector (.cons width (.cons (some index) .nil))))))) = _
-          simp only [Participant.owned, ↓reduceIte]
-          rfl
-        | some layers =>
-          cases selector with
-          | none =>
-            refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-            apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-            change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons (some add) (.cons (some mul) (.cons (some inputs) (.cons (some layers) (.cons none (.cons width (.cons (some index) .nil))))))) = _
-            simp only [Participant.owned, ↓reduceIte]
-            rfl
-          | some selector =>
-            cases width with
-            | none =>
-              refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-              apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _ .incomplete
-              change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons (some add) (.cons (some mul) (.cons (some inputs) (.cons (some layers) (.cons (some selector) (.cons none (.cons (some index) .nil))))))) = _
-              simp only [Participant.owned, ↓reduceIte]
-              rfl
-            | some width =>
-              refine (Region.denote_letOp_done m (.mark "s24") _ _ _ _ .nil rfl).trans ?_
-              refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.helper34Helper rfl 0 "s24") _ _ _ _
-                (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper (.cons add (.cons mul (.cons inputs (.cons layers (.cons selector (.cons width (.cons index .nil)))))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .index])) (fun helper34Results => .cons (some (helper34Results.get .here)) .nil) _ _ ?_ ?_
-              · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper34Helper) (.cons add (.cons mul (.cons inputs (.cons layers (.cons selector (.cons width (.cons index .nil)))))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .index]).present = _
-                refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun helper34Results => ?_))
-                cases helper34Results with | cons value0 helper34Results => cases helper34Results; rfl
-              intro helper34Results
-              refine (Region.denote_letOp_done m (.mark "s26") _ _ _ _ .nil rfl).trans ?_
-              refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.selectBlockHelper rfl 0 "s26") _ _ _ _
-                (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper (.cons add (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])) (fun selectBlockResults => .cons (some (selectBlockResults.get .here)) .nil) _ _ ?_ ?_
-              · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons add (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
-                refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun selectBlockResults => ?_))
-                cases selectBlockResults with | cons value0 selectBlockResults => cases selectBlockResults; rfl
-              intro selectBlockResults
-              refine (Region.denote_letOp_done m (.mark "s27") _ _ _ _ .nil rfl).trans ?_
-              refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.selectBlockHelper rfl 0 "s27") _ _ _ _
-                (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper (.cons mul (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])) (fun selectBlockResults2 => .cons (some (selectBlockResults2.get .here)) .nil) _ _ ?_ ?_
-              · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons mul (.cons index (.cons selector .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
-                refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun selectBlockResults2 => ?_))
-                cases selectBlockResults2 with | cons value0 selectBlockResults2 => cases selectBlockResults2; rfl
-              intro selectBlockResults2
-              cases point with
-              | none =>
-                refine (Region.denote_letOp_done m (.mark "s28") _ _ _ _ .nil rfl).trans ?_
-                apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper36Helper rfl 0 "s28") _ _ _ _ .incomplete
-                change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper36Helper) (.cons (some (selectBlockResults.get .here)) (.cons (some (selectBlockResults2.get .here)) (.cons none (.cons (some (helper34Results.get .here)) (.cons (some width) .nil))))) = _
-                simp only [Participant.owned, ↓reduceIte]
-                rfl
-              | some point =>
-                refine (Region.denote_letOp_done m (.mark "s28") _ _ _ _ .nil rfl).trans ?_
-                refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.helper36Helper rfl 0 "s28") _ _ _ _
-                  (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper36Helper (.cons (selectBlockResults.get .here) (.cons (selectBlockResults2.get .here) (.cons point (.cons (helper34Results.get .here) (.cons width .nil)))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index])) (fun helper36Results => .cons (some (helper36Results.get .here)) (.cons (some (helper36Results.get (.there .here))) (.cons (some (helper36Results.get (.there (.there .here)))) (.cons (some (helper36Results.get (.there (.there (.there .here))))) .nil)))) _ _ ?_ ?_
-                · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper36Helper) (.cons (selectBlockResults.get .here) (.cons (selectBlockResults2.get .here) (.cons point (.cons (helper34Results.get .here) (.cons width .nil)))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index]).present = _
-                  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun helper36Results => ?_))
-                  cases helper36Results with | cons value0 helper36Results => cases helper36Results with | cons value1 helper36Results => cases helper36Results with | cons value2 helper36Results => cases helper36Results with | cons value3 helper36Results => cases helper36Results; rfl
-                intro helper36Results
-                refine (Region.denote_letOp_done m (.mark "label_6c656674") _ _ _ _ .nil rfl).trans ?_
-                refine NormalFormSteps.apply_step_after GkrSourceViews.unit GkrSourceViews.roundsDefinition GkrSourceViews.rounds_member GkrSourceBodies.roundsSignature GkrSourceViews.rounds_signature (GkrRoundsNormalForms.roundsBody roundsMaximum) GkrRoundsNormalForms.roundsBody_raw
-                  [0, 1] "label_6c656674" ctx (ctx.roles 0) _ _ _
-                  ((ProtocolContext.contains_iff _ _ _).mpr ⟨0, by decide, rfl⟩)
-                  (.cons (some (helper36Results.get .here)) (.cons (some (helper36Results.get (.there .here))) (.cons (some (helper36Results.get (.there (.there .here)))) (.cons (some (helper36Results.get (.there (.there (.there .here))))) (.cons none (.cons (some width) (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-                  (GkrRoundsNormalForms.proverRoundsProcess (leftContext ctx) (some (helper36Results.get .here)) (some (helper36Results.get (.there .here))) (some (helper36Results.get (.there (.there .here)))) (some (helper36Results.get (.there (.there (.there .here))))) (some width)) ?_
-                  (fun (leftReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) => .cons (leftReturned.get .here) (.cons (leftReturned.get (.there .here)) (.cons (leftReturned.get (.there (.there .here))) (.cons (leftReturned.get (.there (.there (.there .here)))) (.cons (leftReturned.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil))))))) ?_ _ _ ?_
-                · change maskValues (ctx.roles 0) ((ctx.enter "label_6c656674" [0, 1]).mapScopes [[0], [0], [0], [0], [1], [0, 1], [1]]) (.cons (some (helper36Results.get .here)) (.cons (some (helper36Results.get (.there .here))) (.cons (some (helper36Results.get (.there (.there .here)))) (.cons (some (helper36Results.get (.there (.there (.there .here))))) (.cons none (.cons (some width) (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
-                  iterate 8 unfold maskValues
-                  simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                    Participant.restrict, separate, Ne.symm separate]
-                · exact GkrRoundsNormalForms.proverRounds_process (ctx := (leftContext ctx)) (self := (ctx.roles 0)) (role := rfl) (separate := separate) (add := some (helper36Results.get .here)) (mul := some (helper36Results.get (.there .here))) (left := some (helper36Results.get (.there (.there .here)))) (right := some (helper36Results.get (.there (.there (.there .here))))) (rounds := some width)
-                · exact left_proverLayer_outputs ctx separate
-                intro leftReturned
-                change Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] at leftReturned
-                refine (Region.denote_letOp_done m (.mark "label_7269676874") _ _ _ _ .nil rfl).trans ?_
-                refine NormalFormSteps.apply_step_after GkrSourceViews.unit GkrSourceViews.roundsDefinition GkrSourceViews.rounds_member GkrSourceBodies.roundsSignature GkrSourceViews.rounds_signature (GkrRoundsNormalForms.roundsBody roundsMaximum) GkrRoundsNormalForms.roundsBody_raw
-                  [0, 1] "label_7269676874" ctx (ctx.roles 0) _ _ _
-                  ((ProtocolContext.contains_iff _ _ _).mpr ⟨0, by decide, rfl⟩)
-                  (.cons (leftReturned.get (.there .here)) (.cons (leftReturned.get (.there (.there .here))) (.cons (leftReturned.get (.there (.there (.there .here)))) (.cons (leftReturned.get (.there (.there (.there (.there .here))))) (.cons none (.cons (some width) (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-                  (GkrRoundsNormalForms.proverRoundsProcess (rightContext ctx) (leftReturned.get (.there .here)) (leftReturned.get (.there (.there .here))) (leftReturned.get (.there (.there (.there .here)))) (leftReturned.get (.there (.there (.there (.there .here))))) (some width)) ?_
-                  (fun (rightReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) => .cons (rightReturned.get .here) (.cons (rightReturned.get (.there .here)) (.cons (rightReturned.get (.there (.there .here))) (.cons (rightReturned.get (.there (.there (.there .here)))) (.cons (rightReturned.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil))))))) ?_ _ _ ?_
-                · change maskValues (ctx.roles 0) ((ctx.enter "label_7269676874" [0, 1]).mapScopes [[0], [0], [0], [0], [1], [0, 1], [1]]) (.cons (leftReturned.get (.there .here)) (.cons (leftReturned.get (.there (.there .here))) (.cons (leftReturned.get (.there (.there (.there .here)))) (.cons (leftReturned.get (.there (.there (.there (.there .here))))) (.cons none (.cons (some width) (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
-                  iterate 8 unfold maskValues
-                  simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                    Participant.restrict, separate, Ne.symm separate]
-                · exact GkrRoundsNormalForms.proverRounds_process (ctx := (rightContext ctx)) (self := (ctx.roles 0)) (role := rfl) (separate := separate) (add := leftReturned.get (.there .here)) (mul := leftReturned.get (.there (.there .here))) (left := leftReturned.get (.there (.there (.there .here)))) (right := leftReturned.get (.there (.there (.there (.there .here))))) (rounds := some width)
-                · exact right_proverLayer_outputs ctx separate
-                intro rightReturned
-                change Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] at rightReturned
-                cases leftReturned.get .here with
-                | none =>
-                  refine (Region.denote_letOp_done m (.mark "s38") _ _ _ _ .nil rfl).trans ?_
-                  apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper69Helper rfl 0 "s38") _ _ _ _ .incomplete
-                  change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper69Helper) (.cons (some (helper34Results.get .here)) (.cons none (.cons (rightReturned.get .here) (.cons (some width) .nil)))) = _
-                  simp only [Participant.owned, ↓reduceIte]
-                  rfl
-                | some leftPoint =>
-                  cases rightReturned.get .here with
-                  | none =>
-                    refine (Region.denote_letOp_done m (.mark "s38") _ _ _ _ .nil rfl).trans ?_
-                    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.helper69Helper rfl 0 "s38") _ _ _ _ .incomplete
-                    change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper69Helper) (.cons (some (helper34Results.get .here)) (.cons (some leftPoint) (.cons none (.cons (some width) .nil)))) = _
-                    simp only [Participant.owned, ↓reduceIte]
-                    rfl
-                  | some rightPoint =>
-                    refine (Region.denote_letOp_done m (.mark "s38") _ _ _ _ .nil rfl).trans ?_
-                    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.helper69Helper rfl 0 "s38") _ _ _ _
-                      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper69Helper (.cons (helper34Results.get .here) (.cons leftPoint (.cons rightPoint (.cons width .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index])) (fun helper69Results => .cons (some (helper69Results.get .here)) .nil) _ _ ?_ ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper69Helper) (.cons (helper34Results.get .here) (.cons leftPoint (.cons rightPoint (.cons width .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index]).present = _
-                      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun helper69Results => ?_))
-                      cases helper69Results with | cons value0 helper69Results => cases helper69Results; rfl
-                    intro helper69Results
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.indexConstant 0) rfl) _ _ _ _ (.cons (some 0) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "s41") _ _ _ _ .nil rfl).trans ?_
-                    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.helper57Helper rfl 0 "s41") _ _ _ _
-                      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper57Helper (.cons (helper69Results.get .here) (.cons 0 .nil) : Values (assignment F G) [.vector "bls12-381.fr", .index])) (fun helper57Results => .cons (some (helper57Results.get .here)) .nil) _ _ ?_ ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.helper57Helper) (.cons (helper69Results.get .here) (.cons 0 .nil) : Values (assignment F G) [.vector "bls12-381.fr", .index]).present = _
-                      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun helper57Results => ?_))
-                      cases helper57Results with | cons value0 helper57Results => cases helper57Results; rfl
-                    intro helper57Results
-                    refine (Region.denote_letOp_done m (.mark "label_6c696e655f636f6e7374616e74_0") _ _ _ _ .nil rfl).trans ?_
-                    refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 0 1 "label_6c696e655f636f6e7374616e74_0") _ _ _ _ (.send (ty := .field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f6e7374616e74_0") (ctx.roles 1) (helper57Results.get .here)) (fun _ => (.cons (some (helper57Results.get .here)) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-                    · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f636f6e7374616e74_0") (ty := .field "bls12-381.fr") (some (helper57Results.get .here))).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                      simp only [Participant.exchange, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-                      rfl
-                    intro _
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [1]) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 1)].contains (ctx.roles 0)) (some (helper57Results.get .here)))) = _
-                      simp [Participant.restrict, Ne.symm separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s44") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.emptyHelper rfl 1 "s44") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) .nil = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s45") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.appendHelper rfl 1 "s45") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.appendHelper) (.cons none (.cons none .nil)) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s48") _ _ _ _ .nil rfl).trans ?_
-                    refine NormalFormSteps.denote_letOp_bind_after m (.repeat (coefficientSpec) "s48") _ _ _ _
-                      (denoteRepeat (coefficientSpec) ctx (ctx.roles 0) (some width) (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"])
-    (.cons (some (helper69Results.get .here)) .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) (coefficientFn ctx (ctx.roles 0)))
-                      (fun coefficientReturned => .cons (coefficientReturned.get .here) .nil) _ _ ?_ ?_
-                    · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun coefficientReturned => ?_))
-                      cases coefficientReturned with | cons value0 coefficientReturned => cases coefficientReturned; rfl
-                    intro coefficientReturned
-                    refine (Region.denote_letOp_done m (.mark "s56") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.sumHelper rfl 1 "s56") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sumHelper) (.cons (coefficientReturned.get .here) .nil) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s58") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s58") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons (some add) (.cons (some index) (.cons (some selector) .nil))) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s61") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s61") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons none (.cons none (.cons none (.cons none .nil)))) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s63") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.selectBlockHelper rfl 1 "s63") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.selectBlockHelper) (.cons (some mul) (.cons (some index) (.cons (some selector) .nil))) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s66") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.evaluateWiringHelper rfl 1 "s66") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateWiringHelper) (.cons none (.cons none (.cons none (.cons none .nil)))) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldAdd "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldMultiply "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldAdd "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.mark "s75") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.guard 1 "s75") _ _ _ _ .nil ?_).trans ?_
-                    · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 1) none).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
-                      simp only [Participant.guard, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "label_6c696e655f6368616c6c656e6765") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.draw 1 "bls12-381.fr" "label_6c696e655f6368616c6c656e6765") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change ((Participant.query (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 1) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f6368616c6c656e6765") "bls12-381.fr" (.cons service .nil)).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                      simp only [Participant.query, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "label_6c696e655f64656c6976657279_0") _ _ _ _ .nil rfl).trans ?_
-                    refine Region.denote_letOp_call m (.exchange (.field "bls12-381.fr") 1 0 "label_6c696e655f64656c6976657279_0") _ _ _ _ (.receive (.field "bls12-381.fr") (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f64656c6976657279_0") (ctx.roles 1)) (fun value => (.cons (some value) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"])) _ ?_ ?_
-                    · change ((Participant.exchange (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 1) (ctx.roles 0) (qualifyProtocolSite ctx.applicationPrefix "label_6c696e655f64656c6976657279_0") (ty := .field "bls12-381.fr") none).interpret (participantActions F G)).bind (fun value => .done (one (F := F) (G := G) (ty := .field "bls12-381.fr") value)) = _
-                      simp only [Participant.exchange, separate, ↓reduceIte, PIR.Proc.interpret, participantActions, PIR.Proc.bind]
-                      rfl
-                    intro lineDelivery
-                    change F at lineDelivery
-                    refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.restrict (.field "bls12-381.fr") [0]) _ _ _ _ (.cons (some lineDelivery) .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change PIR.Proc.done (I := participantInterface F G) (one (F := F) (G := G) (ty := .field "bls12-381.fr") (Participant.restrict ([(ctx.roles 0)].contains (ctx.roles 0)) (some lineDelivery))) = _
-                      simp [Participant.restrict]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s80") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.evaluateCoefficientsHelper rfl 1 "s80") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateCoefficientsHelper) (.cons (coefficientReturned.get .here) (.cons none .nil)) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s84") _ _ _ _ .nil rfl).trans ?_
-                    refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.linePointHelper rfl 1 "s84") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper) (.cons none (.cons none (.cons none .nil))) = _
-                      rw [Participant.owned_other _ _ separate]
-                      rfl
-                    refine (Region.denote_letOp_done m (.mark "s86") _ _ _ _ .nil rfl).trans ?_
-                    refine NormalFormSteps.denote_letOp_bind_after m (.localCall GkrSourceBodies.linePointHelper rfl 0 "s86") _ _ _ _
-                      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper (.cons leftPoint (.cons rightPoint (.cons lineDelivery .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])) (fun linePointResults => .cons (some (linePointResults.get .here)) .nil) _ _ ?_ ?_
-                    · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper) (.cons leftPoint (.cons rightPoint (.cons lineDelivery .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]).present = _
-                      refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun linePointResults => ?_))
-                      cases linePointResults with | cons value0 linePointResults => cases linePointResults; rfl
-                    intro linePointResults
-                    rfl
+  exact (NormalForm.callback_sound_uniform proverLayerSignature layerBody 0 2 proverLayerPattern
+    proverLayerFinish proverLayerForm proverLayer_normalized proverLayer_lawsMatch proverLayer_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverLayerResults proverLayerCallees (.cons index (.cons point (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) _
+    (proverLayer_environment index point inputs add mul layers selector width service) (proverLayer_laws index inputs add mul layers selector width service point) (proverLayer_callees index point inputs add mul layers selector width service)).trans
+    (congrArg₂ PIR.Proc.bind (proverLayer_presentation ctx index point inputs add mul layers selector width service)
+      (funext fun result => congrArg PIR.Proc.done (proverLayer_embedding result)))
 
 /-- The repeat of `layerFn` at the proverLayer on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -1545,8 +1471,79 @@ def verifierProcess (ctx : ProtocolContext) (inputs outputs add mul : Option (Li
           | some claim =>
             .done (.cons (some (decide (evaluateResults2.get .here = claim))) .nil : Values (Component (assignment F G)) [.boolean])
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `verifierProcess` over the typed body. -/
+/-- The verifier's laws as the normalizer reads them, keyed by helper. -/
+def verifierSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the verifier's laws present, from the request's templates. -/
+def verifierResults : NormalForm.LawResults (ringModel F G) verifierSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The verifier's inputs as the normalizer reads them. -/
+def verifierPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"] :=
+  .cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))))
+
+/-- The verifier's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def verifierForm : NormalForm.Form verifierSignature.laws verifierSignature.callees verifierPattern.scope [.boolean] :=
+  .strict GkrSourceBodies.emptyHelper .nil <|
+  .repeat outputSpec "s4" outputBody (.input (.there (.there (.there (.there (.there (.there (.there .here))))))))
+    (.cons (.present (.result .here .here)) (.cons .absent .nil))
+    (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) .nil) <|
+  .split (.input (.there (.there (.there .here))))
+    (
+      .halt .incomplete)
+    (
+      .split (.read (.there .here) .here)
+        (
+          .halt .incomplete)
+        (
+          .strict GkrSourceBodies.evaluateHelper (.cons (.var (.there .here)) (.cons (.var .here) .nil)) <|
+          .repeat layerSpec "s23" layerBody (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))
+            (.cons (.present (.var (.there .here))) (.cons (.read (.there (.there (.there .here))) (.there .here)) (.cons (.present (.result .here .here)) .nil)))
+            (.cons (.input (.there (.there (.there (.there (.there .here)))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil))))))) <|
+          .split (.input (.there (.there (.there (.there (.there (.there .here)))))))
+            (
+              .halt .incomplete)
+            (
+              .split (.read (.there .here) .here)
+                (
+                  .halt .incomplete)
+                (
+                  .strict GkrSourceBodies.evaluateHelper (.cons (.var (.there .here)) (.cons (.var .here) .nil)) <|
+                  .split (.read (.there (.there (.there .here))) (.there (.there .here)))
+                    (
+                      .done (.cons .absent .nil))
+                    (
+                      .done (.cons (.present (.calc (.fieldEqual "bls12-381.fr") rfl (.cons (.result (.there .here) .here) (.cons (.var .here) .nil)) .here)) .nil))))))
+
+theorem verifier_normalized :
+    NormalForm.normalize verifierSignature gkrBody 1 2 verifierPattern = .ok verifierForm := by
+  kernel_rfl
+
+theorem verifier_lawsMatch : verifierForm.CallsMatch := by
+  kernel_rfl
+
+theorem verifier_environment (inputs outputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    verifierPattern.environment (ringModel F G) (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) =
+      (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's process is the readable process. -/
+theorem verifier_presentation (ctx : ProtocolContext)
+    (inputs outputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    verifierForm.denote (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 1)) (NormalForm.noCallees _)
+        (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) =
+      verifierProcess ctx inputs outputs add mul layers selector width service := by
+  kernel_rfl
+
+/-- The verifier's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem verifier_laws (inputs outputs add mul : Option (List F)) (layers selector width service : Option Nat) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierResults
+      (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `verifierProcess`, an instance of the normalizer's soundness. -/
 theorem verifier_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
@@ -1555,92 +1552,11 @@ theorem verifier_process
       (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) =
       verifierProcess ctx inputs outputs add mul layers selector width service := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 1) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold gkrFn gkrBody
-  simp only [verifierProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  refine (Region.denote_letOp_done m (.mark "s0") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.emptyHelper rfl 1 "s0") _ _ _ _
-    (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])) (fun emptyResults => .cons (some (emptyResults.get .here)) .nil) _ ?_ ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) (.nil : Values (assignment F G) []).present = _
-    refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun emptyResults => ?_))
-    cases emptyResults with | cons value0 emptyResults => cases emptyResults; rfl
-  intro emptyResults
-  refine (Region.denote_letOp_done m (.mark "s2") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.emptyHelper rfl 0 "s2") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) .nil = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s4") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.repeat (outputSpec) "s4") _ _ _ _
-    (denoteRepeat (outputSpec) ctx (ctx.roles 1) width (.cons (some (emptyResults.get .here)) (.cons none .nil) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
-    (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (outputFn ctx (ctx.roles 1)))
-    (fun outputReturned => .cons (outputReturned.get .here) (.cons (outputReturned.get (.there .here)) .nil)) _ ?_ ?_
-  · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun outputReturned => ?_))
-    cases outputReturned with | cons value0 outputReturned => cases outputReturned with | cons value1 outputReturned => cases outputReturned; rfl
-  intro outputReturned
-  cases outputs with
-  | none =>
-    refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
-    apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s15") _ _ _ _ .incomplete
-    change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons none (.cons (outputReturned.get .here) .nil)) = _
-    simp only [Participant.owned, ↓reduceIte]
-    rfl
-  | some outputs =>
-    cases outputReturned.get .here with
-    | none =>
-      refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
-      apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s15") _ _ _ _ .incomplete
-      change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons (some outputs) (.cons none .nil)) = _
-      simp only [Participant.owned, ↓reduceIte]
-      rfl
-    | some point =>
-      refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
-      refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s15") _ _ _ _
-        (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper (.cons outputs (.cons point .nil) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])) (fun evaluateResults => .cons (some (evaluateResults.get .here)) .nil) _ ?_ ?_
-      · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons outputs (.cons point .nil) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"]).present = _
-        refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun evaluateResults => ?_))
-        cases evaluateResults with | cons value0 evaluateResults => cases evaluateResults; rfl
-      intro evaluateResults
-      refine (Region.denote_letOp_done m (.mark "s23") _ _ _ _ .nil rfl).trans ?_
-      refine NormalFormSteps.denote_letOp_bind m (.repeat (layerSpec) "s23") _ _ _ _
-        (denoteRepeat (layerSpec) ctx (ctx.roles 1) layers (.cons (some point) (.cons (outputReturned.get (.there .here)) (.cons (some (evaluateResults.get .here)) .nil)) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
-    (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) (layerFn ctx (ctx.roles 1)))
-        (fun layerReturned => .cons (layerReturned.get .here) (.cons (layerReturned.get (.there .here)) (.cons (layerReturned.get (.there (.there .here))) .nil))) _ ?_ ?_
-      · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun layerReturned => ?_))
-        cases layerReturned with | cons value0 layerReturned => cases layerReturned with | cons value1 layerReturned => cases layerReturned with | cons value2 layerReturned => cases layerReturned; rfl
-      intro layerReturned
-      cases inputs with
-      | none =>
-        refine (Region.denote_letOp_done m (.mark "s90") _ _ _ _ .nil rfl).trans ?_
-        apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s90") _ _ _ _ .incomplete
-        change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons none (.cons (layerReturned.get .here) .nil)) = _
-        simp only [Participant.owned, ↓reduceIte]
-        rfl
-      | some inputs =>
-        cases layerReturned.get .here with
-        | none =>
-          refine (Region.denote_letOp_done m (.mark "s90") _ _ _ _ .nil rfl).trans ?_
-          apply Region.denote_letOp_halt m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s90") _ _ _ _ .incomplete
-          change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons (some inputs) (.cons none .nil)) = _
-          simp only [Participant.owned, ↓reduceIte]
-          rfl
-        | some point2 =>
-          refine (Region.denote_letOp_done m (.mark "s90") _ _ _ _ .nil rfl).trans ?_
-          refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s90") _ _ _ _
-            (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper (.cons inputs (.cons point2 .nil) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])) (fun evaluateResults2 => .cons (some (evaluateResults2.get .here)) .nil) _ ?_ ?_
-          · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons inputs (.cons point2 .nil) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"]).present = _
-            refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun evaluateResults2 => ?_))
-            cases evaluateResults2 with | cons value0 evaluateResults2 => cases evaluateResults2; rfl
-          intro evaluateResults2
-          cases layerReturned.get (.there (.there .here)) with
-          | none =>
-            refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-            refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-            rfl
-          | some claim =>
-            refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-            refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons (some (decide (evaluateResults2.get .here = claim))) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-            rfl
+  exact (NormalForm.sound_uniform verifierSignature gkrBody 1 2 verifierPattern
+    verifierForm (verifier_normalized ) (verifier_lawsMatch ) ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierResults (NormalForm.noCallees _) (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) _
+    (verifier_environment inputs outputs add mul layers selector width service) (verifier_laws inputs outputs add mul layers selector width service) (NormalForm.noCallees_hold _ _)).trans
+    (verifier_presentation ctx inputs outputs add mul layers selector width service)
 
 set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -1697,8 +1613,57 @@ def proverProcess (ctx : ProtocolContext) (inputs add mul : Option (List F)) (la
     (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) (layerFn ctx (ctx.roles 0))).bind fun (_ : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons none .nil : Values (Component (assignment F G)) [.boolean])
 
-set_option linter.unusedSimpArgs false in
-/-- The process equation of `proverProcess` over the typed body. -/
+/-- The prover's laws as the normalizer reads them, keyed by helper. -/
+def proverSignature : NormalForm.Signature :=
+  ⟨[], true, false, [], []⟩
+
+/-- The results the prover's laws present, from the request's templates. -/
+def proverResults : NormalForm.LawResults (ringModel F G) proverSignature.laws :=
+  ⟨fun entry => entry.elim0⟩
+
+/-- The prover's inputs as the normalizer reads them. -/
+def proverPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"] :=
+  .cons .optional (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent .nil)))))))
+
+/-- The prover's form, printed from the compiled normalizer; the kernel checks it. -/
+noncomputable def proverForm : NormalForm.Form proverSignature.laws proverSignature.callees proverPattern.scope [.boolean] :=
+  .strict GkrSourceBodies.emptyHelper .nil <|
+  .repeat outputSpec "s4" outputBody (.input (.there (.there (.there (.there (.there (.there .here)))))))
+    (.cons .absent (.cons (.present (.result .here .here)) .nil))
+    (.cons .absent .nil) <|
+  .repeat layerSpec "s23" layerBody (.input (.there (.there (.there (.there (.there .here))))))
+    (.cons (.read .here .here) (.cons (.read .here (.there .here)) (.cons .absent .nil)))
+    (.cons (.input (.there (.there .here))) (.cons (.input (.there (.there (.there .here)))) (.cons (.input (.there (.there (.there (.there .here))))) (.cons (.input (.there (.there (.there (.there (.there .here)))))) (.cons (.input (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons .absent .nil))))))) <|
+  .done (.cons .absent .nil)
+
+theorem prover_normalized :
+    NormalForm.normalize proverSignature gkrBody 0 2 proverPattern = .ok proverForm := by
+  kernel_rfl
+
+theorem prover_lawsMatch : proverForm.CallsMatch := by
+  kernel_rfl
+
+theorem prover_environment (inputs add mul : Option (List F)) (layers selector width : Option Nat) :
+    proverPattern.environment (ringModel F G) (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width .nil)))))) =
+      (.cons inputs (.cons none (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's process is the readable process. -/
+theorem prover_presentation (ctx : ProtocolContext)
+    (inputs add mul : Option (List F)) (layers selector width : Option Nat) :
+    proverForm.denote (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 0)) (NormalForm.noCallees _)
+        (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width .nil)))))) =
+      proverProcess ctx inputs add mul layers selector width := by
+  kernel_rfl
+
+/-- The prover's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem prover_laws (inputs add mul : Option (List F)) (layers selector width : Option Nat) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverResults
+      (.cons inputs (.cons none (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) :=
+  fun entry => entry.elim0
+
+/-- The process equation of `proverProcess`, an instance of the normalizer's soundness. -/
 theorem prover_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self)
@@ -1707,50 +1672,11 @@ theorem prover_process
       (.cons inputs (.cons none (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil)))))))) =
       proverProcess ctx inputs add mul layers selector width := by
   subst self
-  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 0) (GkrSourceViews.unit.plainProtocolTable F G) ctx
-  unfold gkrFn gkrBody
-  simp only [proverProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
-  refine (Region.denote_letOp_done m (.mark "s0") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.emptyHelper rfl 1 "s0") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) .nil = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s2") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.localCall GkrSourceBodies.emptyHelper rfl 0 "s2") _ _ _ _
-    (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])) (fun emptyResults => .cons (some (emptyResults.get .here)) .nil) _ ?_ ?_
-  · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper) (.nil : Values (assignment F G) []).present = _
-    refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) (funext fun emptyResults => ?_))
-    cases emptyResults with | cons value0 emptyResults => cases emptyResults; rfl
-  intro emptyResults
-  refine (Region.denote_letOp_done m (.mark "s4") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.repeat (outputSpec) "s4") _ _ _ _
-    (denoteRepeat (outputSpec) ctx (ctx.roles 0) width (.cons none (.cons (some (emptyResults.get .here)) .nil) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
-    (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (outputFn ctx (ctx.roles 0)))
-    (fun outputReturned => .cons (outputReturned.get .here) (.cons (outputReturned.get (.there .here)) .nil)) _ ?_ ?_
-  · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun outputReturned => ?_))
-    cases outputReturned with | cons value0 outputReturned => cases outputReturned with | cons value1 outputReturned => cases outputReturned; rfl
-  intro outputReturned
-  refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s15") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons none (.cons (outputReturned.get .here) .nil)) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "s23") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.denote_letOp_bind m (.repeat (layerSpec) "s23") _ _ _ _
-    (denoteRepeat (layerSpec) ctx (ctx.roles 0) layers (.cons (outputReturned.get .here) (.cons (outputReturned.get (.there .here)) (.cons none .nil)) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
-    (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .service "random.bls12-381.fr/0"]) (layerFn ctx (ctx.roles 0)))
-    (fun layerReturned => .cons (layerReturned.get .here) (.cons (layerReturned.get (.there .here)) (.cons (layerReturned.get (.there (.there .here))) .nil))) _ ?_ ?_
-  · refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) (funext fun layerReturned => ?_))
-    cases layerReturned with | cons value0 layerReturned => cases layerReturned with | cons value1 layerReturned => cases layerReturned with | cons value2 layerReturned => cases layerReturned; rfl
-  intro layerReturned
-  refine (Region.denote_letOp_done m (.mark "s90") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.localCall GkrSourceBodies.evaluateHelper rfl 1 "s90") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) ?_).trans ?_
-  · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.evaluateHelper) (.cons inputs (.cons (layerReturned.get .here) .nil)) = _
-    rw [Participant.owned_other _ _ separate]
-    rfl
-  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
-  refine (Region.denote_letOp_done m (.calculate (.fieldEqual "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
-  rfl
+  exact (NormalForm.sound_uniform proverSignature gkrBody 0 2 proverPattern
+    proverForm (prover_normalized ) (prover_lawsMatch ) ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverResults (NormalForm.noCallees _) (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width .nil)))))) _
+    (prover_environment inputs add mul layers selector width) (prover_laws inputs add mul layers selector width) (NormalForm.noCallees_hold _ _)).trans
+    (prover_presentation ctx inputs add mul layers selector width)
 
 set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
