@@ -71,4 +71,22 @@ for depth, code in [(29, None), (30, "interactive-json-depth"), (65, "interactiv
                              body, ["nested", []]])
         check(candidate, code)
 
+with case("static instruction budget spans all definitions and includes returns"):
+    functions = []
+    # Keep each body below the independent array ceiling and the whole carrier
+    # below its byte/node bounds, so only the cumulative instruction cap differs.
+    for index in range(4):
+        count = 16382 if index == 0 else 16383
+        body = [["bool_constant", f"s{i}", f"v{i}", True] for i in range(count)]
+        body.append(["return", []])
+        name = f"work{index}"
+        functions.append(["function", name, [], [], body, [name, []]])
+    candidate = ["zkc.program/0", [], functions,
+                 [["participant", "mainP", "root", "P", [], [], [["return", []]], []]],
+                 [["entry", "main", [["P", "mainP"]]]]]
+    assert sum(len(function[4]) for function in functions) + 1 == 65536
+    check(candidate)
+    functions[0][4].insert(0, ["bool_constant", "extra", "extra", True])
+    check(candidate, "interactive-instruction-limit")
+
 print(f"Program boundary checks: {commands.save()}")
