@@ -89,4 +89,38 @@ theorem proofBytes_body (encode : PhysicalType → Payload F G → List UInt8) {
   have magicLength : magic.length = 8 := rfl
   simp [proofBytes, List.drop_append, magicLength, bindingLength]
 
+/-- Messages of one receive type, framed after their encoding. -/
+def messageFrames {α : Type} (encode : α → List UInt8) (messages : List α) : List UInt8 :=
+  (messages.map fun value => frame (encode value)).flatten
+
+/-- Messages of one receive type decode to their payloads when the decoder
+inverts the encoder at that type and every encoding fits in one proof. -/
+theorem decodeProof_messages {α : Type} (decode : PhysicalType → List UInt8 → Option (Payload F G))
+    (type : PhysicalType) (encode : α → List UInt8) (embed : α → Payload F G)
+    (roundtrip : ∀ value, decode type (encode value) = some (embed value))
+    (bounded : ∀ value, (encode value).length ≤ proofLimit) :
+    ∀ messages : List α,
+      decodeProof decode (List.replicate messages.length type) (messageFrames encode messages) = messages.map embed
+  | [] => rfl
+  | value :: messages => by
+      simp only [messageFrames, List.length_cons, List.replicate_succ, List.map_cons, List.flatten_cons, decodeProof,
+        readFrame_frame _ _ (bounded value), roundtrip]
+      exact congrArg _ (decodeProof_messages decode type encode embed roundtrip bounded messages)
+
+/-- The proof bytes of messages of one receive type. -/
+def messageBytes {α : Type} (encode : α → List UInt8) (binding : List UInt8) (messages : List α) : List UInt8 :=
+  magic ++ binding ++ messageFrames encode messages
+
+theorem messageBytes_header {α : Type} (encode : α → List UInt8) {binding : List UInt8}
+    (bindingLength : binding.length = 32) (messages : List α) :
+    (messageBytes encode binding messages).take 40 = magic ++ binding := by
+  have magicLength : magic.length = 8 := rfl
+  simp [messageBytes, List.take_append, magicLength, bindingLength, List.take_of_length_le]
+
+theorem messageBytes_body {α : Type} (encode : α → List UInt8) {binding : List UInt8}
+    (bindingLength : binding.length = 32) (messages : List α) :
+    (messageBytes encode binding messages).drop 40 = messageFrames encode messages := by
+  have magicLength : magic.length = 8 := rfl
+  simp [messageBytes, List.drop_append, magicLength, bindingLength]
+
 end Zkc.Executable
