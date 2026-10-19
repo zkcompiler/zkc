@@ -663,14 +663,24 @@ projection, from the generated root normal forms at the prover and
 covered.
 
 The layer Sumcheck of the original GKR Entry (`gkr::Rounds`) has generated
-verifier normal forms over the admitted unit (`GkrRoundsNormalForms`, from
+normal forms at both roles over the admitted unit (`GkrRoundsNormalForms`, from
 [`gkr-rounds.toml`](../bridges/structured/normal-forms/gkr-rounds.toml) and the
 retained export [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json)):
-its typed body with the admitted declaration's raw equation, one round and the
-whole body at the verifier, and the verifier's invocation at any caller
-context. Helper calls stay as their participant rule. The GKR verifier root,
-whose layer loop applies the rounds twice and nests a further loop, is not
-generated; the compiled GKR theorems read the constructed instructions.
+its typed body with the admitted declaration's raw equation, one round (with its
+repeat as a fold of the round's normal form) and the whole body, and each role's
+invocation at any caller context. The GKR root (`gkr::Gkr`) has generated
+normal forms too (`GkrSourceNormalForms`, from
+[`gkr-source.toml`](../bridges/structured/normal-forms/gkr-source.toml)): its
+typed body with the output-point, layer and line-coefficient callbacks named
+and the admitted declaration's raw equation (`gkrBody_raw`); each callback at
+both roles, the layer callback with both layer Sumcheck applications
+substituted, and each callback's repeat as a fold; and the whole root at both
+roles, with `verifier_participant` and `prover_participant` stating
+`program.participant` itself. Owned helper calls stay as the helpers' own
+invocations on present arguments, so the admitted unit's helper laws
+(`GkrSourceLaws`) rewrite them; no helper law is assumed. The compiled GKR
+theorems still read the constructed instructions; they do not use these forms
+yet.
 
 `SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
 interaction phase records the challenges the prover receives at the delivery
