@@ -1754,9 +1754,13 @@ registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
   meaning, or host validation of the deployed program's proof bytes;
 - the **statement form** (`Form`): fixed before the prover runs, or chosen by the
   prover after its oracle queries;
-- the **statement relation** (`StatementRelation`): model statements, the
-  functional relation from policy to model statements, the false model
-  statements, and the policy statements the application counts as false;
+- the **application claim**: for ordinary soundness, which policy statements the
+  application counts as false (`ApplicationFalse`); for knowledge soundness, the
+  application's witness relation. Neither is chosen by the evidence: it is the
+  formula the admitted original retains for its target clause, recovered from
+  the export by `bind_contract` and read at the policy's published inputs, whose
+  selectors and publication order the kernel checks. No false statement is
+  required to exist;
 - the **regime** (`Regime`): the oracle's answer type and the decoding of a
   challenge from it, exactly uniform field elements at `Regime.exact`.
 
@@ -1765,20 +1769,31 @@ admitted original, the composed construction and projection check, and the
 selection constructed from the admitted original and the policy and checked
 against the export. From them alone the compiled verifier on a statement is the
 transform of the admitted original validator on that statement
-(`Compiled.transform_eq`). Ordinary soundness evidence (`SoundnessEvidence`)
-adds the model equation (the original validator is the family's model validator
-of every model statement its statement denotes), a charged certificate family
-(`CertificateFamily`) dooming the model validator of every false model statement
-after every initial transcript, and the original validator's charge on every
-statement. Two requirements are selected by the indices, so they cannot be
-omitted: an adaptive claim requires binding evidence (`BindingEvidence`), the
-application context whose policy-derived codec (`policyCodec`: one typed
-public-value binding event with one row entry per published input) determines
-every statement, and coverage of the application's false statements, either by
-model falsity or rejection of unmapped statements, or by an implication from the
-application's false-acceptance event to the modeled one; a claim about program
-bytes requires lowering evidence (`LoweringEvidence`), the executable validator
-accepted by the lowering rule with prepared and sorted helpers.
+(`Compiled.transform_eq`).
+
+Ordinary soundness evidence (`SoundnessEvidence`) adds the family's model
+relation (`ModelRelation`: model statements, the functional relation from
+policy statements to them, and the false model statements), the model equation
+(the original validator on a policy statement is the family's model validator
+of every model statement it denotes, by computation or a generated normal
+form), a charged certificate family (`CertificateFamily`) dooming the model
+validator of every false model statement after every initial transcript, the
+**coverage** of the application claim, and the original validator's charge on
+every statement. Coverage has two parts, both required at both forms: every
+application-false statement is false in the model or denotes no model statement,
+and the original validator of a statement that denotes none is doomed after
+every initial transcript. Together they make the original validator of every
+application-false statement doomed (`SoundnessEvidence.original_doomed`), which
+is all the endpoints use of the application claim. A family therefore cannot
+narrow the claim to the statements it models: a malformed statement the
+application counts as false must be rejected by the original validator itself.
+Two requirements are selected by the indices, so they cannot be omitted: an
+adaptive claim requires binding evidence (`BindingEvidence`), the application
+context whose policy-derived codec (`policyCodec`: one typed public-value
+binding event with one row entry per published input) determines every
+statement; a claim about program bytes requires lowering evidence
+(`LoweringEvidence`), the executable validator accepted by the lowering rule
+with prepared and sorted helpers.
 
 The ordinary soundness endpoints (`fixed_soundness`, `adaptive_soundness`,
 `fixed_soundness_bytes`, `adaptive_soundness_bytes`) are each one composition
@@ -1790,23 +1805,57 @@ validator's charge, the supremum over statements for adaptive statements.
 
 Fixed-statement knowledge soundness goes through the generic Sigma bridge
 (`ZkcSecurity.Endpoint.Sigma`). A one-challenge transcript shape gives the
-commitment's message events in order (one or more), the challenge occurrence,
-and checked encoders and decoders of commitments and typed proofs. Routing sends
-a history that ends in a commitment's events and the challenge occurrence to its
-prior history and the commitment, and every other history, malformed and empty
-ones included, to itself on a separate branch; it is injective on all histories
-(`Shape.route_injective`), so the experiment of a corresponding verifier is
-exactly VCVio's knowledge verification run of the routed prover
-(`Shape.run_eq`), which issues one oracle query per history query
+commitment's message events in order (any number, zero included), the
+challenge occurrence, and checked encoders and decoders of commitments and typed
+proofs. Routing sends a history that ends in a commitment's events and the
+challenge occurrence to its prior history and the commitment, and every other
+history, malformed and empty ones included, to itself on a separate branch; it
+is injective on all histories (`Shape.route_injective`), so the experiment of a
+corresponding verifier is exactly VCVio's knowledge verification run of the
+routed prover (`Shape.run_eq`), which issues one oracle query per history query
 (`Shape.reduce_bound`). Knowledge evidence (`KnowledgeEvidence`) carries a Sigma
 family (`SigmaFamily`) with the verifier correspondence and the shape fact of its
-model validator, the model equation and the correspondence of the application's
-witness relation with the protocol's. The endpoints (`knowledge_soundness`,
-`knowledge_soundness_bytes`) conclude that the replay extractor on the routed
-prover finds a witness with probability at least
-`accepting · (accepting / (Q + 1) - 1 / |F|)`; for program bytes, host
-validation's acceptance is at most the acceptance of what the bytes decode to and
-read as. Adaptive knowledge soundness is a separate property.
+model validator (every typed proof is the proof of what it reads as, or is
+rejected on every path), the model equation and the correspondence of the
+contract's witness relation with the protocol's. The ideal-meaning endpoint
+(`knowledge_soundness`) quantifies over provers of arbitrary typed proofs: such
+a prover's acceptance is at most the acceptance of the prover of what its proof
+reads as, with the same query budget (`typedAcceptance_le`), and the replay
+extractor on that prover, routed, finds a witness with probability at least
+`accepting · (accepting / (Q + 1) - 1 / |F|)`. For program bytes
+(`knowledge_soundness_bytes`), host validation's acceptance is at most the
+acceptance of what the bytes decode to and read as. Adaptive knowledge soundness
+is a separate property. The family packages of Schnorr and of three variants
+(Chaum–Pedersen over the base pair, two Schnorr proofs under one challenge, and
+Okamoto's proof of a representation) supply shapes of one or two commitments and
+one or two responses.
+
+A named hypothesis (`Hypothesis`) cites a registry entry by identifier, with
+the proposition it instantiates and its status: a proof, or a reported
+assumption citing a registry entry of its category. The declaration records
+check that the proposition is an instantiation of the cited entry's schema and
+record its arguments, so an evidence value cannot state a different proposition
+under a registered name.
+
+A claim is a declaration, not a convention. For a subject whose manifest names a
+claims namespace, the subject driver generates the artifacts module (the
+artifacts, the compiled facts and the lowering evidence, each a generated
+per-Entry fact) and the claims module: the evidence, built by the family
+package's constructor, and the claim, the registered endpoint applied to it and
+stated at the subject's artifacts, its contract declaration and its regime. The
+kernel checks that the evidence has that type, so evidence for other artifacts,
+another relation or another regime fails to build. The constructor's evidence at
+every other endpoint and statement form the subject covers is applied in the
+same module. The [assurance report](assurance-report.md) is established only
+through that application.
+
+The evidence record states its scope: one field and group, one transcript oracle
+on typed histories with a total decoding of its answer, the common participant
+interface and the ordinary random-oracle experiment. Challenges decoded per
+domain with refusal, decoder and proximity laws with admissible parameters, and
+evidence that joins provider simulations, several stages or native realizations
+with event and budget transport are claims of a different form, not instances
+of this record.
 
 ## Obligations
 

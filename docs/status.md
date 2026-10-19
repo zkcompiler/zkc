@@ -512,9 +512,19 @@ separate registered obligations.
 state ordinary soundness, for fixed and adaptive statements, of a compiled
 verifier's ideal meaning and of host validation of program bytes, and
 fixed-statement knowledge soundness through a generic Sigma bridge, for evidence
-indexed by a compiled Entry's artifacts. They apply to the compiled Schnorr and
-guessing Entries; the subject modules are not yet derived from them, so no
-assurance report is established.
+indexed by a compiled Entry's artifacts and by the claim its retained contract
+states. The subject driver generates each claim as the registered endpoint
+applied to a subject's evidence: knowledge soundness of the compiled Schnorr
+(ideal meaning and program bytes), Chaum–Pedersen, two-proof AND and Okamoto
+proof Entries, and ordinary soundness of the guessing Entry (ideal meaning) and
+of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
+statements, every round count up to the static maximum, malformed vectors
+included). Assurance reports are established for Schnorr, Chaum–Pedersen, AND,
+Okamoto and the guessing Entry. The Sumcheck report stays unresolved because the
+committed Sumcheck program data is not what the current compiler emits for it,
+so the subject pipeline does not validate; the composed Sumcheck and GKR Entries
+retain no target clause to state a claim at, and composed Sumcheck has no
+certificate composition yet.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

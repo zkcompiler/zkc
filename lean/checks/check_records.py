@@ -11,7 +11,8 @@
 3. Render the "What is proved" table and, from subject manifests, one
    `zkc.assurance-report/0` per subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
-   one.
+   one. A report is established only with the pipeline's evidence, so the
+   subject rows are compared only by a run given `--evidence`.
 4. Run the negative controls of the ledger check and the report generator.
 
 Without `--integration`, only the main package is emitted; a ledger row whose
@@ -146,8 +147,13 @@ def main():
             built.append(report)
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
-    if subject_manifests and "arklib" in packages:
+    if subject_manifests and "arklib" in packages and args.evidence is not None:
         compare(SUPPORT, "subject-rows", rows, args.write, failures, notes)
+    elif subject_manifests and "arklib" in packages:
+        # A report is established only with the pipeline's evidence, so the rows a
+        # run without it renders are not the subjects' outcomes; only a run with
+        # evidence is compared.
+        notes.append(f"{SUPPORT.relative_to(ROOT)}#subject-rows: not compared without --evidence")
     elif subject_manifests:
         # Without the security package the registry and endpoints are absent, so the
         # rows are incomplete; only a run that emits them is compared.

@@ -255,9 +255,15 @@ soundness for fixed and adaptive statements, ideal meaning and program bytes,
 each as one composition of stage relations. `Endpoint/Sigma` is the generic
 Sigma bridge and `Endpoint/Knowledge` gives fixed-statement knowledge soundness
 for both endpoints. `Families/Schnorr` is the Schnorr family package over any
-checked context; family packages import no compiled Entry.
-`TestsSecurity.Endpoints` applies the endpoints to the compiled Schnorr and
-guessing Entries ([support](../../docs/support.md#endpoint-applications)).
+checked context and `Families/SchnorrVariants` the Chaum–Pedersen, two-proof
+AND and Okamoto family packages; family packages import no compiled Entry.
+`Examples/Subjects/<subject>` holds each subject's claim: a hand `Contract`
+recovered from the admitted original's retained contract, a hand `Evidence`
+applying the family package, and the driver-generated `Artifacts` and `Claims`
+modules, whose applications the assurance reports check.
+`TestsSecurity.Endpoints` relates the subjects' evidence to the earlier compiled
+theorems and holds the Lean controls
+([support](../../docs/support.md#endpoint-applications)).
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

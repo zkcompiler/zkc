@@ -100,16 +100,16 @@ One row per subject manifest, from its generated [assurance report](spec/assuran
 <!-- BEGIN GENERATED subject-rows: lean/checks/check_records.py --write -->
 | Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
 |---|---|---|---|---|---|---|
-| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.ChaumPedersenSigma is not a declaration of arklib, main |
+| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
 | composed-sumcheck | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
 | deferred-rounds | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
-| gkr | `example::Proof` | ideal-meaning | soundness | fixed | `event.false-statement`, `budget.weighted-cost`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.CompiledGkrFiatShamir is not a declaration of arklib, main |
-| guess | `example::Proof` | ideal-meaning | soundness | fixed | `event.false-statement`, `budget.weighted-cost`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.CompiledGuessFiatShamir is not a declaration of arklib, main |
-| okamoto-proof | `example::Proof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: the manifest names no evidence instance |
+| gkr | `example::Proof` | ideal-meaning | soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: the manifest names no application declaration |
+| guess | `example::Proof` | ideal-meaning | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
+| okamoto-proof | `example::Proof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
 | okamoto | `` |  |  |  |  | unresolved: the manifest claims no property |
-| schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.SchnorrAndSigma is not a declaration of arklib, main |
-| schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.ExecutableSchnorrFiatShamir is not a declaration of arklib, main |
-| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: evidence instance ZkcSecurity.Examples.ExecutableSumcheckFiatShamir is not a declaration of arklib, main |
+| schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
+| schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
+| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: no pipeline evidence connects the generated data to the source, export and program bytes |
 <!-- END GENERATED subject-rows -->
 
 ## Finite fold subjects
@@ -1055,33 +1055,57 @@ commitment bridge. Every declaration's axioms are within `propext`,
 
 ## Endpoint applications
 
-`TestsSecurity.Endpoints` applies the registered
-[endpoints](spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
-to evidence built from generated per-Entry facts.
+Each subject with a claims namespace states its claim as the registered
+[endpoint](spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
+applied to its evidence, in the generated module
+`ZkcSecurity.Examples.Subjects.<subject>.Claims`, at the artifacts the driver
+generates and the contract the subject recovers from its admitted original.
 
-- **Schnorr.** Knowledge evidence of the compiled `example::Proof` Entry from its
-  generated construction facts, the Schnorr family package, the generated model
-  equation, the relation the Proof Entry retains and, for program bytes, the
-  generated lowering facts. Its compiled verifier is the one of
-  `CompiledSchnorrFiatShamir` (`schnorr_verify_eq`), and both knowledge
-  endpoints apply (`schnorr_knowledge`, `schnorr_knowledge_bytes`).
-- **Guessing Entry.** Ordinary soundness evidence from the imported ArkLib
-  certificate. The fixed-statement endpoint gives back the bound of
-  `CompiledGuessFiatShamir.soundness` for that theorem's verifier
-  (`guess_fixed_soundness`), attained at zero queries; the adaptive endpoint,
-  with the policy-derived binding of the offset, bounds a prover that chooses the
-  offset after `Q` queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`). Its
-  evidence records statement determination as a named hypothesis of the binding
-  category, discharged by the codec's proof (`guessDetermination_discharged`).
-- **Controls.** Lowering evidence is required exactly for program bytes and
-  binding evidence exactly for adaptive statements, by the evidence's indices; the
-  composed check refuses the Schnorr original with the guessing export
-  (`mismatched_artifacts`), so no evidence exists for that pair.
+| Subject | Contract | Family | Claimed | Also covered |
+|---|---|---|---|---|
+| schnorr | `knowledge`: `DLog` | `Families.Schnorr` | knowledge soundness, program bytes | ideal meaning |
+| chaum-pedersen | `knowledge`: `DLogEquality` | `Families.SchnorrVariants.equalityFamily` | knowledge soundness, ideal meaning | |
+| schnorr-and | `knowledge`: `DLogPair` | `Families.SchnorrVariants.conjunctionFamily` | knowledge soundness, ideal meaning | |
+| okamoto-proof | `knowledge`: `Representation` | `Families.SchnorrVariants.representationFamily` | knowledge soundness, ideal meaning | |
+| guess | the imported ArkLib language, empty | imported ArkLib certificate | soundness, ideal meaning, adaptive | fixed statements |
+| sumcheck | `public_sum`: `Sum` | `SumcheckFiatShamir` certificate with rejecting runs | soundness, program bytes, adaptive | fixed statements, ideal meaning |
 
-The existing subject modules are not yet derived from the endpoints, and the
-subject manifests do not yet name evidence instances, so every assurance report
-remains `unresolved`. Every declaration's axioms are within `propext`,
-`Classical.choice` and `Quot.sound`.
+The Sumcheck evidence covers every round count up to the admitted original's
+static maximum and every malformed vector: a statement whose vector has no
+table at its count, or whose count exceeds the maximum, denotes no model
+statement, and its validator is doomed by the terminal's shape check or by the
+refusal before any action. The guessing fixture retains no target clause, so its
+claim is the imported ArkLib verifier's language, which is empty.
+
+`TestsSecurity.Endpoints` relates the evidence to the earlier compiled theorems
+and holds the Lean controls:
+
+- **Schnorr.** The subject's evidence runs the compiled verifier of
+  `CompiledSchnorrFiatShamir` (`schnorr_verify_eq`).
+- **Guessing Entry.** The generated fixed-statement application gives back the
+  bound of `CompiledGuessFiatShamir.soundness` for that theorem's verifier
+  (`guess_fixed_soundness`), attained at zero queries. Statement determination
+  of the adaptive binding is a named hypothesis of the binding category,
+  discharged by the codec's proof (`determination_discharged`).
+- **Malformed statement.** A one-entry vector at one round with a claim other
+  than its total is false under the Sumcheck contract (`malformed_false`),
+  denotes no model statement (`malformed_unmapped`), has a doomed original
+  validator (`malformed_doomed`), and the fixed-statement application bounds
+  acceptance on it (`malformed_soundness`).
+- **Wrong validator.** The Schnorr original interacts before it decides, so no
+  family whose validator accepts outright meets the model equation
+  (`wrong_validator`).
+- **Requirements and artifacts.** Lowering evidence is required exactly for
+  program bytes and binding evidence exactly for adaptive statements, by the
+  evidence's indices; the composed check refuses the Schnorr original with the
+  guessing export (`mismatched_artifacts`), so no evidence exists for that pair.
+
+With the subject pipeline's evidence, the assurance reports of schnorr,
+chaum-pedersen, schnorr-and, okamoto-proof and guess are `established`. The
+Sumcheck report is `unresolved`: the committed Sumcheck program data differs
+from what the current compiler emits, so the pipeline does not validate the
+subject. The composed Sumcheck and GKR Entries retain no target clause. Every
+declaration's axioms are within `propext`, `Classical.choice` and `Quot.sound`.
 
 ## Construction obligation counterexamples
 
