@@ -1,0 +1,31 @@
+# Assumption identifiers that subject manifests request, with the text a
+# report prints for each. `{context}` names the Entry's checked occurrence
+# context. The records pipeline maps these identifiers to its registry.
+
+[lean]
+kernel = "Lean kernel and the installed Lean toolchain"
+
+[export]
+structured-renderer = "the protocol-structured exporter and its renderer denote the original MLIR"
+program-renderer = "the zkc.program/0 renderer reads the admitted program bytes as the runtime's program loader does"
+
+[runtime]
+acceptance-inclusion = "the runtime accepts proof bytes for the admitted validator only when Zkc.Executable.validate accepts them under the Entry's checked occurrence context {context}"
+installed-kernels = "installed kernels implement the meanings of Zkc.Executable.installed"
+codec-function = "the native codec is a function of a message's bytes and type"
+
+[transcript]
+injective-encoding = "the bytes the native kernels absorb are an injective encoding of the model events: the suite's framing, labels and payload codecs encode typed histories injectively, and each occurrence template's model occurrence under {context} determines its native bytes (the occurrence-template encoding is proved injective by Zkc.Construction.occurrence_inj)"
+random-oracle = "the Merlin suite behaves as a random oracle on its absorbed byte histories"
+exact-uniform = "reduced 64-byte challenges are treated as exactly uniform scalars"
+decoding-loss = "the suite's challenge derivation is the decoding of the adaptive theorem, with its stated loss"
+
+[host]
+binding = "the host binds the authorized public context and the policy's public inputs"
+public-absorption = "the managed transcript absorbs the invocation's public values injectively, as the Entry's initial transcript encodes them"
+
+[statement]
+fixed = "fixed statement: the statement is chosen before the prover runs"
+
+[projection]
+not-applied = "the participant projection rule is not applied to this Entry: the theorems relate host validation to the constructed validator, not to the original protocol"

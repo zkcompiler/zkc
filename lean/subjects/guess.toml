@@ -1,0 +1,43 @@
+schema = "zkc.subject/0"
+name = "guess"
+
+[source]
+modules = { example = "lean/bridges/construction/fixtures/guess.zkc" }
+
+[entries]
+proof = "example::Proof"
+
+[profiles]
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/GuessProofData.lean"
+bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
+participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/GuessProof.lean"
+
+[family]
+module = "ZkcSecurity.FiatShamir.Realization"
+instance = "ZkcSecurity.Examples.CompiledGuessFiatShamir"
+kind = "upstream"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["soundness"]
+statement = "fixed"
+regime = "exact-uniform challenges"
+
+[assumptions]
+requested = ["lean.kernel", "export.structured-renderer", "transcript.random-oracle"]
+
+[mutations]
+kinds = ["challenge-names-delivery", "equality-self", "native-domain-separator"]
+
+[construction]
+admission = "views"
+inputs = "payloads"
+model = "experiment"
+model_imports = ["ZkcExamples.Construction.GuessProofModel"]
+
+[bodies]
+entry = "proof"

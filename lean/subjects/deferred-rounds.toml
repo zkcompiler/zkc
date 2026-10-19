@@ -1,0 +1,63 @@
+schema = "zkc.subject/0"
+name = "deferred-rounds"
+
+[source]
+project = "common/tests/fixtures/projects/deferred-rounds"
+
+[entries]
+proof = "example::Proof"
+
+[profiles]
+construction = true
+executable = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/DeferredRoundsData.lean"
+participant = "lean/ZkcExamples/Construction/DeferredRoundsParticipant.lean"
+glue = "lean/ZkcExamples/Construction/DeferredRounds.lean"
+program = "lean/ZkcExamples/Executable/DeferredRoundsProgramData.lean"
+facts = "lean/ZkcExamples/Executable/DeferredRoundsFacts.lean"
+
+[claims]
+endpoint = "executable-bytes"
+
+[assumptions]
+requested = ["lean.kernel", "export.structured-renderer", "export.program-renderer",
+             "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
+             "projection.not-applied"]
+
+[mutations]
+kinds = ["lowering-retarget-operand", "lowering-operand-self", "lowering-observe-reads-message",
+         "lowering-results-swapped"]
+
+[executable]
+threshold = "derived"
+variants = { Unbatched = ["--no-calculation-batching"] }
+exact = { actual = false, Unbatched = true }
+
+[construction]
+rule = "construction"
+inputs = "values"
+
+[receipt]
+theorem = "ZkcExamples.Executable.DeferredRounds.executable_validate"
+security_module = "ZkcExamples.Executable.DeferredRounds"
+chain = [
+  "ZkcExamples.Executable.DeferredRounds.executable_validate",
+  "ZkcExamples.Executable.DeferredRounds.executable_prunes",
+  "ZkcExamples.Executable.DeferredRounds.accepted",
+  "ZkcExamples.Executable.DeferredRounds.rescheduled",
+  "ZkcExamples.Construction.DeferredRounds.accepted",
+  "Zkc.Executable.validate_ideal",
+  "Zkc.Executable.validate_prunes_export",
+  "Zkc.Executable.checkLowering_sound",
+  "Zkc.Executable.checkNormalized_sound",
+  "Zkc.Executable.checkNormalized_flow",
+  "Zkc.Executable.execute_cleaned",
+]
+used = [
+  "Zkc.Executable.validate_ideal",
+  "Zkc.Executable.checkLowering_sound",
+  "Zkc.Executable.checkNormalized_sound",
+  "ZkcExamples.Executable.DeferredRounds.accepted",
+]

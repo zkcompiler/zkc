@@ -12,22 +12,17 @@ from pathlib import Path
 import sys
 import tomllib
 
-from check import FIELD, MODULUS, ROOT, definition, digest, write_json
+from check import FIELD, MODULUS, ROOT, definition, digest, fixture_source, fixture_stems, fixture_table, write_json
 from evidence import owned_sources
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
 sys.path.insert(0, str(ROOT / "common/tests/support"))
 from project import project_inputs  # noqa: E402
 
-SUBJECTS = [
-    ("repeat", "Repeat", "sample::Demo", "compiler/test/fixtures/language/repeat.zkc"),
-    ("repeat-nested", "RepeatNested", "sample::Demo", "compiler/test/fixtures/language/repeat_nested.zkc"),
-    ("repeat-service", "RepeatService", "sample::Demo", "compiler/test/fixtures/structured-source/repeat-service-order.zkc"),
-    ("repeat-service-wrapper", "RepeatServiceWrapper", "sample::Nested", "compiler/test/fixtures/structured-source/repeat-service-order.zkc"),
-    ("sumcheck-reduce", "SumcheckReduce", "example::Reduction", "examples/projects/sumcheck/composed/zkc.toml"),
-    ("sumcheck-source", "SumcheckSource", "example::Interactive", "examples/projects/sumcheck/zkc.toml"),
-    ("sumcheck-repacked", "SumcheckRepacked", "example::Reduction", "lean/bridges/structured/fixtures/sumcheck-repacked/zkc.toml"),
-]
+# The retained subjects, from `fixtures.toml`: stem, data name, Entry and its
+# single source module or project manifest.
+SUBJECTS = [(stem, spec["data"], spec["entry"], fixture_source(spec).relative_to(ROOT))
+            for stem, spec in fixture_table().items() if stem in fixture_stems("repeats")]
 
 
 def source_modules(path):
@@ -72,7 +67,7 @@ class RepeatSuite(OpenSuite):
         for tree in ("scripts", "common/tests/support", "lean/checks", "lean/support"):
             paths.update(owned_sources(ROOT / tree, {".py"}))
         bridge = ROOT / "lean/bridges/structured"
-        paths.update(owned_sources(bridge, {".py", ".md", ".json", ".mlir", ".zkc"}))
+        paths.update(owned_sources(bridge, {".py", ".md", ".json", ".mlir", ".zkc", ".toml"}))
         for tree in ("include", "lib", "tools", "test", "cmake"):
             paths.update(owned_sources(ROOT / "compiler" / tree,
                 {".cpp", ".h", ".td", ".def", ".inc", ".cmake", ".in", ".txt",

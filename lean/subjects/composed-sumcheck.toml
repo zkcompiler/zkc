@@ -1,0 +1,29 @@
+schema = "zkc.subject/0"
+name = "composed-sumcheck"
+
+[source]
+project = "examples/projects/sumcheck/composed"
+
+[entries]
+proof = "example::Proof"
+
+[profiles]
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/ComposedSumcheckProofData.lean"
+participant = "lean/ZkcExamples/Construction/ComposedSumcheckProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/ComposedSumcheckProof.lean"
+
+[claims]
+endpoint = "transform-equation"
+
+[assumptions]
+requested = ["lean.kernel", "export.structured-renderer"]
+
+[mutations]
+kinds = ["conjunction-self", "call-reads-sibling", "native-helper-constant"]
+
+[construction]
+admission = "kernel"
+inputs = "values"

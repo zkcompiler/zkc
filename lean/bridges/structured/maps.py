@@ -5,27 +5,14 @@ import argparse
 import copy
 import json
 from pathlib import Path
-import re
 import sys
 
-from check import MODULUS, ROOT, definition, returned as closed_returned
+from check import MODULUS, ROOT, definition, fixture, returned as closed_returned
 from open_protocol import OpenSuite, returned, stopped
 
 
-def modules():
-    sources = [ROOT / "compiler/test/fixtures/structured-source/map-callers.zkc",
-               *sorted((ROOT / "libraries/zkc").glob("*.zkc"))]
-    result = {}
-    for path in sources:
-        name = re.search(r"^module\s+([\w:]+)\s*;", path.read_text(encoding="utf-8"), re.M)
-        if name is None or name[1] in result:
-            raise ValueError(f"invalid or duplicate source module: {path}")
-        result[name[1]] = path
-    return result
-
-
-def authored(suite, label, entry, stem, namespace):
-    subject = suite.authored(label, "map_examples::" + entry, modules(), (stem, namespace))
+def authored(suite, label, stem):
+    subject = suite.authored(label, *fixture(stem))
     interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
     assert interface["original"] == subject[2][2].removeprefix("sha256:")
     assert interface["protocol"] == subject[2][3]
@@ -61,8 +48,8 @@ def prefix_reference(values, dimensions, columns, point):
 
 
 def restriction_cases(suite):
-    first = authored(suite, "first", "FirstEntry", "map-first", "MapFirst")
-    prefix = authored(suite, "prefix", "PrefixEntry", "map-prefix", "MapPrefix")
+    first = authored(suite, "first", "map-first")
+    prefix = authored(suite, "prefix", "map-prefix")
     cases = [
         ([2, 7], 1, 1, [3]), ([1, 7, 2, 9], 2, 1, [3, 5]),
         ([1, 7, 2, 9], 1, 2, [5]), ([3, 8, 2, 11, 5, 17, 7, 19], 3, 1, [2, 6]),
@@ -106,8 +93,8 @@ def local_site(subject):
 
 
 def formula_cases(suite):
-    combination = authored(suite, "combination", "LinearCombinationEntry", "map-combination", "MapCombination")
-    constant = authored(suite, "constant", "ConstantRowsEntry", "map-constant", "MapConstant")
+    combination = authored(suite, "combination", "map-combination")
+    constant = authored(suite, "constant", "map-constant")
     for index, (a, b, unused, s, t) in enumerate([
         ([], [], [], 2, 5), ([1], [7], [19], 2, 5),
         ([1, 7, 2], [9, 3, 11], [0, 0, 0], 2, 5),
@@ -160,7 +147,7 @@ def source_variants(suite, combination):
 
 
 def realization_cases(suite):
-    subject = authored(suite, "values", "RealizeValuesEntry", "realization-values", "RealizationValues")
+    subject = authored(suite, "values", "realization-values")
     for index, (values, dimensions, columns) in enumerate([
         ([7], 0, 1), ([1, 7, 2, 9], 2, 1), ([1, 7, 2, 9], 1, 2),
         ([], 0, 1), ([1, 7], 1, 0), ([1, 7], 2**64 - 1, 1),

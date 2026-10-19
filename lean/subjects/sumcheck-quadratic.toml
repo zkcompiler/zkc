@@ -1,0 +1,51 @@
+schema = "zkc.subject/0"
+name = "sumcheck-quadratic"
+
+[source]
+modules = { scalar_sumcheck = "lean/bridges/common/fixtures/sumcheck.zkc" }
+
+[profiles]
+scalar = true
+
+[claims]
+properties = ["perfect-completeness", "interactive-soundness"]
+
+[scalar]
+contract = "sumcheck.quadratic-two-round/0"
+namespace = "Zkc.Protocols.Sumcheck.Common"
+module = "Zkc.Protocols.Sumcheck.Common"
+binders = "(coefficients : Coefficients F) (claim : F) (service : Nat)"
+arguments = "coefficients claim service"
+unfold = ["experiment", "experimentWith", "standardArithmetic", "wireBoundary", "wireEvaluate", "evaluate"]
+
+[scalar.inputs]
+"constant.constant" = ["coefficients.constant.constant", "field"]
+"constant.linear" = ["coefficients.constant.linear", "field"]
+"constant.quadratic" = ["coefficients.constant.quadratic", "field"]
+"linear.constant" = ["coefficients.linear.constant", "field"]
+"linear.linear" = ["coefficients.linear.linear", "field"]
+"linear.quadratic" = ["coefficients.linear.quadratic", "field"]
+"quadratic.constant" = ["coefficients.quadratic.constant", "field"]
+"quadratic.linear" = ["coefficients.quadratic.linear", "field"]
+"quadratic.quadratic" = ["coefficients.quadratic.quadratic", "field"]
+claim = ["claim", "field"]
+service = ["service", "service"]
+
+[scalar.properties.perfect-completeness]
+theorem = "perfect_completeness"
+experiment = "interactive.independent-uniform-field/0"
+premises = ["honest abstract strategy", "two independent uniform full-field coins"]
+
+[scalar.properties.interactive-soundness]
+theorem = "soundness"
+experiment = "interactive.independent-uniform-field/0"
+premises = ["false public sum claim", "arbitrary fixed causal strategy", "two independent uniform full-field coins"]
+
+[scalar.properties.arklib-interactive-soundness]
+theorem = "randomized_soundness"
+experiment = "interactive.reached-uniform-queries/0"
+premises = ["false public sum claim", "arbitrary private distribution of causal two-round strategies",
+            "fresh uniform full-field sampling at reached challenge queries", "finite field"]
+module = "ZkcSecurity.ArkLib.Sumcheck.Soundness"
+context = "[Fintype F] [SampleableType F] "
+consumer = "ZkcSecurity.ArkLib.Sumcheck.randomized_soundness"

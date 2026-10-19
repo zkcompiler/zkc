@@ -1,9 +1,12 @@
 """Maintained semantic contracts and independent property consumers.
 
-Registry entries are reviewed code. A request selects entries; it never provides
-Lean source, tactics, imports or theorem names. No source hashes occur here.
+Registry entries are reviewed data in the subject manifests' scalar profile. A
+request selects entries; it never provides Lean source, tactics, imports or
+theorem names. No source hashes occur here.
 """
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 
 
 @dataclass(frozen=True)
@@ -29,58 +32,41 @@ class Contract:
     composed: bool = False
 
 
-UNIFORM = 'interactive.independent-uniform-field/0'
-CAUSAL = 'interactive.causal-transcripts/0'
-ROUND = 'Zkc.Protocols.Sumcheck.Common'
-FACTOR = 'Zkc.Protocols.Sumcheck.FactorOpening'
-SCHNORR = 'Zkc.Protocols.Schnorr.Common'
+PROPERTY_FIELDS = {'theorem', 'experiment', 'premises', 'module', 'context', 'consumer'}
 
-# Premises describe the theorem, not facts established about native execution.
-SUM_PROPERTIES = {
-    'perfect-completeness': Property('perfect_completeness', UNIFORM,
-        ('honest abstract strategy', 'two independent uniform full-field coins')),
-    'interactive-soundness': Property('soundness', UNIFORM,
-        ('false public sum claim', 'arbitrary fixed causal strategy',
-         'two independent uniform full-field coins')),
-}
 
-ARKLIB_SOUNDNESS = Property('randomized_soundness', 'interactive.reached-uniform-queries/0',
-    ('false public sum claim', 'arbitrary private distribution of causal two-round strategies',
-     'fresh uniform full-field sampling at reached challenge queries', 'finite field'),
-    'ZkcSecurity.ArkLib.Sumcheck.Soundness', '[Fintype F] [SampleableType F] ',
-    'ZkcSecurity.ArkLib.Sumcheck.randomized_soundness')
+def _contracts():
+    """The scalar-profile contracts of the subject manifests (`lean/subjects`).
 
-SCHNORR_SIMULATION = Property('honest_verifier_zero_knowledge', 'interactive.honest-verifier-view/0',
-    ('public key = secret scalar times base', 'uniform prover nonce and simulator response',
-     'honest challenge fixed independently of nonce', 'public one-session transcript and verifier outcome'),
-    'ZkcSecurity.VCVio.Schnorr', '[SampleableType F] ',
-    'ZkcSecurity.VCVio.Schnorr.honest_verifier_zero_knowledge')
+    Each manifest with the scalar profile names one contract, its inputs and
+    the properties a request may select. The manifests are reviewed data; the
+    loader refuses unknown fields.
+    """
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from bridges.pipeline import manifest  # noqa: E402
 
-CONTRACTS = {
-    'schnorr.verifier/0': Contract(SCHNORR, SCHNORR, '(base key : G) (service : Nat)',
-        'base key service', {'base': ('base', 'group'), 'key': ('key', 'group'),
-        'service': ('service', 'service')}, ('experiment',), {
-            'perfect-completeness': Property('perfect_completeness', CAUSAL,
-                ('honest abstract response and commitment', 'public key = secret scalar times base')),
-            'special-soundness': Property('special_soundness', CAUSAL,
-                ('same commitment', 'two distinct challenges', 'both transcripts accept')),
-            'honest-verifier-zero-knowledge': SCHNORR_SIMULATION,
-        }, group=True),
-    'sumcheck.quadratic-two-round/0': Contract(ROUND, ROUND,
-        '(coefficients : Coefficients F) (claim : F) (service : Nat)',
-        'coefficients claim service', {
-            **{f'{row}.{col}': (f'coefficients.{row}.{col}', 'field')
-               for row in ('constant', 'linear', 'quadratic')
-               for col in ('constant', 'linear', 'quadratic')},
-            'claim': ('claim', 'field'), 'service': ('service', 'service')},
-        ('experiment', 'experimentWith', 'standardArithmetic', 'wireBoundary', 'wireEvaluate', 'evaluate'),
-        {**SUM_PROPERTIES, 'arklib-interactive-soundness': ARKLIB_SOUNDNESS}),
-    'sumcheck.public-factor-openings/0': Contract(FACTOR, FACTOR + '.Security',
-        '(statement : Statement F) (claim : F) (service : Nat)', 'statement claim service', {
-            **{f'{side}.{part}': (f'statement.{side}.{part}', 'field')
-               for side in ('left', 'right') for part in ('constant', 'second', 'first', 'mixed')},
-            'claim': ('claim', 'field'), 'service': ('service', 'service')},
-        ('experiment', 'experimentWith', 'terminal', 'publicChecks', 'value',
-         ROUND + '.rounds', ROUND + '.roundsWith', ROUND + '.standardArithmetic',
-         ROUND + '.wireBoundary', ROUND + '.wireEvaluate'), SUM_PROPERTIES, composed=True),
-}
+    contracts = {}
+    for subject in manifest.load_all():
+        if not subject.profile('scalar'):
+            continue
+        data = subject.table('scalar')
+        properties = {}
+        for name, value in data.get('properties', {}).items():
+            unknown = set(value) - PROPERTY_FIELDS
+            if unknown or not {'theorem', 'experiment', 'premises'} <= set(value):
+                raise ValueError(f'{subject.name}: malformed scalar property {name}')
+            properties[name] = Property(value['theorem'], value['experiment'], tuple(value['premises']),
+                                        value.get('module'), value.get('context', ''), value.get('consumer'))
+        inputs = {name: tuple(value) for name, value in data.get('inputs', {}).items()}
+        if any(len(value) != 2 for value in inputs.values()):
+            raise ValueError(f'{subject.name}: scalar inputs are [path, kind] pairs')
+        contract = data['contract']
+        if contract in contracts:
+            raise ValueError(f'duplicate scalar contract {contract}')
+        contracts[contract] = Contract(data['namespace'], data['module'], data['binders'], data['arguments'],
+                                       inputs, tuple(data.get('unfold', ())), properties,
+                                       data.get('group', False), data.get('composed', False))
+    return contracts
+
+
+CONTRACTS = _contracts()

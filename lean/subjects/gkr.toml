@@ -1,0 +1,37 @@
+schema = "zkc.subject/0"
+name = "gkr"
+
+[source]
+project = "examples/projects/gkr"
+
+[entries]
+proof = "example::Proof"
+
+[profiles]
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
+participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/GkrProof.lean"
+
+[family]
+module = "ZkcSecurity.FiatShamir.Composition"
+instance = "ZkcSecurity.Examples.CompiledGkrFiatShamir"
+kind = "certificate"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["soundness"]
+statement = "fixed"
+
+[assumptions]
+requested = ["lean.kernel", "export.structured-renderer", "transcript.random-oracle"]
+
+[mutations]
+kinds = ["challenge-names-delivery", "drop-guard", "update-self", "stale-yield", "native-helper-constant"]
+
+[construction]
+admission = "external"
+views = "ZkcExamples.Structured.GkrSourceViews"
+inputs = "values"
