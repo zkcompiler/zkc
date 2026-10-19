@@ -96,6 +96,13 @@ import ZkcSecurity.HashChain.Bridge
 import ZkcSecurity.HashChain.Bytes
 import ZkcSecurity.HashChain.Encoding
 import ZkcSecurity.HashChain.Instance
+import ZkcSecurity.HashChain.Joint
+import ZkcSecurity.HashChain.JointBridge
+import ZkcSecurity.HashChain.JointBytes
+import ZkcSecurity.HashChain.JointCoupling
+import ZkcSecurity.HashChain.JointOpening
+import ZkcSecurity.HashChain.JointReading
+import ZkcSecurity.HashChain.JointSimulator
 import ZkcSecurity.HashChain.Model
 import ZkcSecurity.HashChain.Provider
 import ZkcSecurity.HashChain.Reduction
@@ -146,6 +153,7 @@ import TestsSecurity.Counterexamples.Support
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
+import TestsSecurity.HashChainJointFrame
 import TestsSecurity.HeterogeneousRequests
 import TestsSecurity.InterfaceAxioms
 import TestsSecurity.JointSimulation
