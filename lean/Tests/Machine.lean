@@ -1,4 +1,5 @@
 import Zkc.Semantics.Machine
+import ZkcTools.DeclarationAudit
 
 /-! Controls distinguish observation limits, rejection and a false return, and
 exercise actual successor state and ordered events across resumed execution. -/
@@ -48,9 +49,12 @@ theorem spin_running (fuel state : Nat) :
   | zero => rfl
   | succ fuel ih => exact ih
 
-#print axioms PIR.Machine.runFrom_add
-#print axioms PIR.Machine.runFrom_events
-#print axioms PIR.Proc.complete_run
-#print axioms spin_running
+-- The machine semantics and every theorem of these controls have axiom
+-- closures within `propext`, `Classical.choice` and `Quot.sound`.
+run_cmd do
+  ZkcTools.DeclarationAudit.check [`Zkc.Semantics.Machine] "MACHINE-AUDIT-PASS"
+    (exactModules := true)
+
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "MACHINE-CONTROLS-AXIOM-PASS"
 
 end MachineTests

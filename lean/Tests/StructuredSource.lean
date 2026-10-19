@@ -2,7 +2,7 @@ import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.ClosedProfile
 import Zkc.Source.Structured.ModelAdmission
 import ZkcTools.StructuredSource.Evaluation
-import Lean
+import ZkcTools.DeclarationAudit
 
 /-! Synthetic checker/semantics controls. Actual-export fixtures and their
 binding/proofs are owned by the structured bridge, not these unit tests. -/
@@ -193,14 +193,15 @@ def totalImported : ClosedImported total := closedImportedOfIsOk total total_adm
 theorem total_exact_subject : totalImported.program.snapshot = total :=
   totalImported.exactSubject
 
+-- The structured admission, checked-data and law modules, and every theorem of
+-- this file so far, have axiom closures within `propext`, `Classical.choice`
+-- and `Quot.sound`.
 run_cmd do
-  for name in [`StructuredSourceTests.total_admitted, `StructuredSourceTests.wrong_call_refused,
-      `StructuredSourceTests.wrong_capture_refused, `StructuredSourceTests.total_exact_subject,
-      ``check_ok_inversion, ``CheckedDefinition.exactBody,
-      ``Evaluation.denoteFold_reference, ``Evaluation.foldTransition_false, ``Evaluation.invoke_extended, ``Evaluation.boundedAt_exact] do
-    for axiomName in ← Lean.collectAxioms name do
-      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
-        throwError "unexpected axiom in {name}: {axiomName}"
+  ZkcTools.DeclarationAudit.check
+    [`Zkc.Source.Structured.Import, `Zkc.Source.Structured.CheckedData, `Zkc.Source.Structured.Laws]
+    "STRUCTURED-SOURCE-LAWS-AUDIT-PASS" (exactModules := true)
+
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "STRUCTURED-SOURCE-CONTROLS-AXIOM-PASS"
 
 def run : IO Unit := do
   let failures ← IO.mkRef ([] : List String)
