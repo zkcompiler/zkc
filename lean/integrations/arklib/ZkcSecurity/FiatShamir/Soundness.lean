@@ -238,16 +238,16 @@ theorem transform_eq (context : Context) (decode : B → F) :
           | nil => rfl
           | cons payload rest =>
               rw [Typed.transform_receive (interface context decode) _ rfl, received_message]
-              simp only [transform]
+              simp only [transform_eq_receive]
               cases payload.value ty with
               | none => rfl
               | some value => exact ih value _ _
       | query site op arguments =>
           rw [Typed.transform_query (interface context decode) _ rfl]
-          simp only [transform, decodedQuery, bind_map_left, Typed.answer]
+          simp only [transform_eq_query, decodedQuery, bind_map_left, Typed.answer]
           exact congrArg (_ >>= ·) (funext fun reply => ih _ _ _)
       | send site receiver sent =>
-          simp only [transform]
+          simp only [transform_eq_send]
           cases encoded : Payload.ofValue _ sent with
           | none =>
               rw [Typed.transform_refuse (interface context decode) _

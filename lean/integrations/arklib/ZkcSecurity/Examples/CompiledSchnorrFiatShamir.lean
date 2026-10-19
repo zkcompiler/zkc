@@ -163,8 +163,8 @@ theorem transform_experiment {m : Type → Type} [Monad m] [LawfulMonad m]
           .challenge challengeOrigin]) >>= fun answer =>
         pure (.returned (some (decide (proof.2 • base = proof.1 + answer • key))), []) := by
   rcases proof with ⟨commitment, response⟩
-  simp [Zkc.Protocols.Schnorr.Common.experiment, transform, Payload.value, Payload.ofValue,
-    SchnorrProof.wiring, ZkcExamples.NativePrograms.Schnorr.wiring, commitmentOrigin,
+  simp [Zkc.Protocols.Schnorr.Common.experiment, transform_eq_done, transform_eq_receive,
+    transform_eq_query, transform_eq_send, Payload.value, Payload.ofValue, SchnorrProof.wiring, ZkcExamples.NativePrograms.Schnorr.wiring, commitmentOrigin,
     challengeOrigin, SchnorrProof.context_eq]
 
 /-- Prover oracles: uniform coins and the transcript oracle on histories. -/

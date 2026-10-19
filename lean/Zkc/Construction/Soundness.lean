@@ -27,10 +27,7 @@ variable {F G : Type}
 section Transform
 variable {m : Type → Type} [Monad m]
 
-/-- Apply a function to a returned value; stops are unchanged. -/
-def mapOutcome {A B : Type} (f : A → B) : PIR.Outcome A → PIR.Outcome B
-  | .returned value => .returned (f value)
-  | .stopped stop => .stopped stop
+export Zkc.Transcript (mapOutcome)
 
 /-- A pure final projection commutes with the transform. -/
 theorem transform_bind_done [LawfulMonad m] {A B : Type} (context : Context)
@@ -38,32 +35,8 @@ theorem transform_bind_done [LawfulMonad m] {A B : Type} (context : Context)
     ∀ (history : History F G) (proof : Proof F G),
       transform context challenge (process.bind fun value => .done (f value)) history proof =
         (fun result => (mapOutcome f result.1, result.2)) <$>
-          transform context challenge process history proof := by
-  induction process with
-  | done value => intro history proof; simp [PIR.Proc.bind, transform, mapOutcome]
-  | halt stop => intro history proof; simp [PIR.Proc.bind, transform, mapOutcome]
-  | call operation next ih =>
-      intro history proof
-      cases operation with
-      | receive ty site sender =>
-          cases proof with
-          | nil => simp [PIR.Proc.bind, transform, mapOutcome]
-          | cons payload rest =>
-              simp only [PIR.Proc.bind, transform]
-              cases payload.value ty with
-              | none => simp [mapOutcome]
-              | some value => exact ih value _ _
-      | query site field arguments =>
-          simp only [PIR.Proc.bind, transform, map_bind]
-          congr 1
-          funext answer
-          exact ih answer _ _
-      | send site receiver sent =>
-          simp only [PIR.Proc.bind, transform]
-          cases Payload.ofValue _ sent with
-          | none => simp [mapOutcome]
-          | some payload => exact ih () _ _
-
+          transform context challenge process history proof :=
+  Transcript.transform_bind_done context.interface _ f process
 
 end Transform
 
@@ -184,9 +157,9 @@ theorem receive_sound {R : Type} (state successor : CheckState)
       subst pending
       clear conditions
       cases unread with
-      | nil => simp [transform]
+      | nil => simp [transform_eq_receive]
       | cons payload rest =>
-        simp only [transform]
+        simp only [transform_eq_receive]
         cases decoded : payload.value common with
         | none =>
           have different := Zkc.Construction.Payload.value_isSome (payload := payload) (ty := common)
@@ -269,8 +242,8 @@ theorem guard_sound {R : Type} (state successor : CheckState) (site : String) (o
       simp only [idealStep, specStep]
       split
       · exact agree _ _ _ synchronized
-      · simp [transform]
-      · simp [transform]
+      · simp [transform_eq_halt]
+      · simp [transform_eq_halt]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem encodeValues_length {tys : List Structured.Ty}
@@ -318,8 +291,8 @@ theorem calculate_sound {R : Type} (state successor : CheckState) (calculation :
           apply agree
           refine synchronized.append _ results ?_
           rw [calculate_length calculation computed, resultsEq, List.length_map]
-        · simp [transform]
-      · simp [transform]
+        · simp [transform_eq_halt]
+      · simp [transform_eq_halt]
 
 theorem call_sound {R : Type} (state successor : CheckState) (name : String)
     (operands : List Nat) (results : List ValueSort) (body : List Instruction)
@@ -346,9 +319,9 @@ theorem call_sound {R : Type} (state successor : CheckState) (name : String)
         · split
           · rename_i arity
             exact agree _ _ _ (synchronized.append _ results arity)
-          · simp [transform]
-        · simp [transform]
-      · simp [transform]
+          · simp [transform_eq_halt]
+        · simp [transform_eq_halt]
+      · simp [transform_eq_halt]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- A delivery send is absorbed by the transform with its payload. -/
@@ -449,7 +422,8 @@ theorem challenge_sound {R : Type} (state successor : CheckState) (suite field :
         obtain ⟨_, currentEq, _, originEq, _, _, _, _⟩ := conditions
         cases accepted
         subst currentEq
-        simp only [idealStep, specStep, historyAt, originEq, querySite, Option.getD_some, transform]
+        simp only [idealStep, specStep, historyAt, originEq, querySite, Option.getD_some,
+          transform_eq_query]
         congr 1
         funext answer
         apply agree
@@ -660,8 +634,8 @@ theorem loop_sound {R : Type} (state successor : CheckState) (site : String) (ma
               refine ⟨by simp [length, finalLength], absorbed', ?_, by simp [pendingNone]⟩
               rw [← length, transcriptAt_suffix]
               exact finalAt
-          · simp [transform]
-        · simp [transform]
+          · simp [transform_eq_halt]
+        · simp [transform_eq_halt]
       · cases accepted
     · cases accepted
     · cases accepted
@@ -761,7 +735,7 @@ theorem check_sound (participant : Participant) (accepted : check context partic
         simp only at pending
         subst pending
         simp only [finish]
-        split <;> simp [transform]
+        split <;> simp [transform_eq_done, transform_eq_halt]
       · refine ⟨by simp; omega, initial, ?_, rfl⟩
         have index : participant.inputs.length - 1 = data.length := by omega
         rw [index]

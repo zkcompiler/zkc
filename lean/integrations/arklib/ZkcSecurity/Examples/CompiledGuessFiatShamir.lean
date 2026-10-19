@@ -231,7 +231,8 @@ theorem compiledVerifier_guess (offset guess : F) (initial : History F G) :
         pure (.returned (some (decide (guess + offset = challenge))), []) := by
   rw [compiledVerifier, GuessProof.compiled_transform historyQuery offset 0 initial,
     GuessProof.verifier_correspondence]
-  simp [GuessProof.experiment, transform, Payload.value, Payload.ofValue]
+  simp [GuessProof.experiment, transform_eq_done, transform_eq_receive, transform_eq_query,
+    transform_eq_send, Payload.value, Payload.ofValue]
 
 /-- A prover that sends a guess without querying is accepted by the compiled
 verifier with probability exactly `1 / |F|`: `soundness` is attained at zero

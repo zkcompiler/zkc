@@ -125,20 +125,23 @@ theorem transform_rejects {m : Type → Type} [Monad m] [LawfulMonad m]
         (Zkc.Protocols.Schnorr.Common.experiment SchnorrProof.wiring base key handle) prior proof := by
   unfold Zkc.Protocols.Schnorr.Common.experiment
   rcases proof with _ | ⟨first, rest⟩
-  · simp [transform, accepted]
+  · simp [transform_eq_receive, accepted]
   · cases decodedFirst : first.value (.group SchnorrProof.wiring.groupDomain) with
-    | none => simp [transform, decodedFirst, accepted]
+    | none => simp [transform_eq_receive, decodedFirst, accepted]
     | some commitment =>
         have firstEq : first = .group groupDomain commitment := value_group decodedFirst
         rcases rest with _ | ⟨second, rest₂⟩
-        · simp [transform, decodedFirst, accepted, Payload.ofValue]
+        · simp [transform_eq_receive, transform_eq_query, transform_eq_send, decodedFirst, accepted,
+            Payload.ofValue]
         · cases decodedSecond : second.value (.field SchnorrProof.wiring.fieldDomain) with
-          | none => simp [transform, decodedFirst, decodedSecond, accepted, Payload.ofValue]
+          | none => simp [transform_eq_receive, transform_eq_query, transform_eq_send, decodedFirst,
+              decodedSecond, accepted, Payload.ofValue]
           | some response =>
               have secondEq : second = .field fieldDomain response := value_field decodedSecond
               rcases rest₂ with _ | ⟨third, rest₃⟩
               · exact absurd (by rw [firstEq, secondEq]) (bad commitment response)
-              · simp [transform, decodedFirst, decodedSecond, accepted, Payload.ofValue]
+              · simp [transform_eq_done, transform_eq_receive, transform_eq_query, transform_eq_send,
+                  decodedFirst, decodedSecond, accepted, Payload.ofValue]
 
 /-- Host validation of proof bytes, with the transcript oracle answering every
 challenge. -/
