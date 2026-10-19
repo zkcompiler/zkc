@@ -1,0 +1,459 @@
+module
+
+public import Zkc.Source.Structured.NormalForm.Denote
+
+@[expose] public section
+
+/-! The normalizer: one role's form of a typed protocol body.
+
+It evaluates the body symbolically at the role, following the participant
+rules. The symbolic environment holds a component for every variable of the
+body's context; the body's inputs are kept beside it, so that a law pinned to
+an input can be checked against the call's argument. Every step is structural:
+the body by its `next` region, presence splits by a counter bounded by the
+operation's arity, and no step unfolds a helper body or a protocol table.
+
+* Presence. Where an operation needs its operands at this role (a calculation
+  without an absent operand, an owned call, a send, a draw or a guard of the
+  role), the first operand that is an undecided input is split on, and the
+  operation is normalized again in both cases. An absent operand decides a
+  calculation (absent results), an owned call, a draw or a guard (each stops
+  as incomplete) without splitting.
+* Roles. Every role index the body names must be below the roster, and the
+  normalizer decides `owner = role` on numerals; `RosterDistinct` makes the
+  participant rules agree with that decision.
+* Refusals. Anything outside the supported fragment is refused with a named
+  reason: protocol applications and repeats, Math calls, calculations that can
+  stop, undecided guard conditions, laws whose pins do not match, owned calls
+  without a law when calls are not kept, and the shared-suffix `bind` form.
+
+Normalization never compares strings or sorts on a hot path. Helper
+structures are compared when a law is looked up, and sorts when a pin is
+decoded, once per law use. -/
+
+set_option autoImplicit false
+namespace Zkc.Source.Structured
+namespace NormalForm
+
+variable {laws : List LawKey}
+
+/-! Scope operations. -/
+
+/-- Compare two variables of one context by position; equal positions have equal sorts. -/
+def Var.same? {α : Type} : {Γ : List α} → {a b : α} → Var Γ a → Var Γ b → Option (PLift (a = b))
+  | _, _, _, .here, .here => some ⟨rfl⟩
+  | _, _, _, .here, .there _ => none
+  | _, _, _, .there _, .here => none
+  | _, _, _, .there left, .there right => Var.same? left right
+
+/-- The newest binder, at a sort known to be equal to its own. -/
+def Var.hereAs {Δ : Scope} {ty ty₀ : Ty} (same : ty = ty₀) : Var (.value ty₀ :: Δ) (.value ty) := by
+  subst same
+  exact .here
+
+abbrev Rename (Δ Δ' : Scope) := {slot : Slot} → Var Δ slot → Var Δ' slot
+
+mutual
+  def Term.rename {Δ Δ' : Scope} (rename : Rename Δ Δ') {ty : Ty} : Term laws Δ ty → Term laws Δ' ty
+    | .var binder => .var (rename binder)
+    | .result binder position => .result (rename binder) position
+    | .index value => .index value
+    | .bool value => .bool value
+    | .field domain value => .field domain value
+    | .groupZero domain => .groupZero domain
+    | .calc op total args position => .calc op total (Terms.rename rename args) position
+    | .law entry args position => .law entry (Terms.rename rename args) position
+
+  def Terms.rename {Δ Δ' : Scope} (rename : Rename Δ Δ') {types : List Ty} :
+      Terms laws Δ types → Terms laws Δ' types
+    | .nil => .nil
+    | .cons head tail => .cons (head.rename rename) (Terms.rename rename tail)
+end
+
+def Comp.rename {Δ Δ' : Scope} (rename : Rename Δ Δ') {ty : Ty} : Comp laws Δ ty → Comp laws Δ' ty
+  | .absent => .absent
+  | .present term => .present (term.rename rename)
+  | .input binder => .input (rename binder)
+  | .read binder position => .read (rename binder) position
+
+/-- Apply a sort-preserving map to every entry. -/
+def mapValues {α : Type} {V W : α → Type} (f : {a : α} → V a → W a) :
+    {types : List α} → Values V types → Values W types
+  | [], .nil => .nil
+  | _ :: _, .cons head tail => .cons (f head) (mapValues f tail)
+
+/-- Replace the entry at one variable. -/
+def setValue {α : Type} {V : α → Type} :
+    {types : List α} → {a : α} → Values V types → Var types a → V a → Values V types
+  | _ :: _, _, .cons _ tail, .here, value => .cons value tail
+  | _ :: _, _, .cons head tail, .there position, value => .cons head (setValue tail position value)
+
+/-- The absent and present cases of an undecided input. -/
+def Comp.absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀)) {ty : Ty} :
+    Comp laws Δ ty → Comp laws Δ ty
+  | .absent => .absent
+  | .present term => .present term
+  | .input binder =>
+    match Var.same? binder subject with
+    | some _ => .absent
+    | none => .input binder
+  | .read binder position => .read binder position
+
+def Comp.presentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀)) {ty : Ty} :
+    Comp laws Δ ty → Comp laws (.value ty₀ :: Δ) ty
+  | .absent => .absent
+  | .present term => .present (term.rename .there)
+  | .input binder =>
+    match Var.same? binder subject with
+    | some ⟨same⟩ => .present (.var (Var.hereAs (Slot.component.inj same)))
+    | none => .input binder.there
+  | .read binder position => .read binder.there position
+
+/-! The symbolic state of one body. -/
+
+/-- The body's inputs and the current environment, as components in a scope. -/
+structure State (laws : List LawKey) (Γ₀ : List Ty) (Δ : Scope) (Γ : List Ty) where
+  inputs : Values (Comp laws Δ) Γ₀
+  env : Values (Comp laws Δ) Γ
+
+variable {Γ₀ : List Ty}
+
+def State.map {Δ Δ' : Scope} {Γ : List Ty} (f : {ty : Ty} → Comp laws Δ ty → Comp laws Δ' ty)
+    (state : State laws Γ₀ Δ Γ) : State laws Γ₀ Δ' Γ :=
+  ⟨mapValues f state.inputs, mapValues f state.env⟩
+
+def State.weaken {Δ : Scope} {Γ : List Ty} (slot : Slot) (state : State laws Γ₀ Δ Γ) :
+    State laws Γ₀ (slot :: Δ) Γ :=
+  state.map (Comp.rename .there)
+
+def State.push {Δ : Scope} {Γ types : List Ty} (state : State laws Γ₀ Δ Γ)
+    (added : Values (Comp laws Δ) types) : State laws Γ₀ Δ (types ++ Γ) :=
+  ⟨state.inputs, added.append state.env⟩
+
+def State.set {Δ : Scope} {Γ : List Ty} {ty : Ty} (state : State laws Γ₀ Δ Γ) (position : Var Γ ty)
+    (value : Comp laws Δ ty) : State laws Γ₀ Δ Γ :=
+  ⟨state.inputs, setValue state.env position value⟩
+
+/-! Operands. -/
+
+def Comp.isAbsent {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Bool
+  | .absent => true
+  | .present _ => false
+  | .input _ => false
+  | .read _ _ => false
+
+def Comp.input? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Σ ty, Var Δ (.component ty))
+  | .absent => none
+  | .present _ => none
+  | .input binder => some ⟨_, binder⟩
+  | .read _ _ => none
+
+def Comp.term? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Term laws Δ ty)
+  | .absent => none
+  | .present term => some term
+  | .input _ => none
+  | .read _ _ => none
+
+def anyAbsent {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types → Bool
+  | [], .nil => false
+  | _ :: _, .cons head tail => head.isAbsent || anyAbsent tail
+
+def firstInput {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types →
+    Option (Σ ty, Var Δ (.component ty))
+  | [], .nil => none
+  | _ :: _, .cons head tail =>
+    match head.input? with
+    | some found => some found
+    | none => firstInput tail
+
+def presentTerms {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types → Option (Terms laws Δ types)
+  | [], .nil => some .nil
+  | _ :: _, .cons head tail =>
+    match head.term?, presentTerms tail with
+    | some term, some terms => some (.cons term terms)
+    | some _, none => none
+    | none, _ => none
+
+def absentComps {Δ : Scope} : (types : List Ty) → Values (Comp laws Δ) types
+  | [] => .nil
+  | _ :: rest => .cons .absent (absentComps rest)
+
+/-- Whether the operation needs the presence of its operands at this role. -/
+def demanded {Δ : Scope} (role : Nat) : (op : ProtocolOp) → Values (Comp laws Δ) op.arguments → Bool
+  | .calculate .., operands => !anyAbsent operands
+  | .localCall _ _ owner _, operands => owner == role && !anyAbsent operands
+  | .exchange _ sender _ _, _ => sender == role
+  | .draw owner _ _, operands => owner == role && !anyAbsent operands
+  | .guard owner _, operands => owner == role && !anyAbsent operands
+  | _, _ => false
+
+/-! Calculations, laws and conditions. -/
+
+/-- Constants are literals. -/
+def constantResults {Δ : Scope} : (op : Op) → Option (Values (Comp laws Δ) op.results)
+  | .fieldConstant domain value => some (.cons (.present (.field domain value)) .nil)
+  | .indexConstant value => some (.cons (.present (.index value)) .nil)
+  | .booleanConstant value => some (.cons (.present (.bool value)) .nil)
+  | .groupIdentity domain => some (.cons (.present (.groupZero domain)) .nil)
+  | _ => none
+
+/-- The results of a total calculation. -/
+def calculation {Δ : Scope} (op : Op) (total : op.total = true) (args : Terms laws Δ op.arguments) :
+    Values (Comp laws Δ) op.results :=
+  (constantResults op).getD
+    (mapValues (fun position => .present (.calc op total args position)) (Operands.identity op.results))
+
+/-- The first law of the helper. -/
+def findLaw (helper : Helper) :
+    (laws : List LawKey) → Option (Σ' entry : Fin laws.length, laws[entry].helper = helper)
+  | [] => none
+  | key :: rest =>
+    if same : key.helper = helper then some ⟨⟨0, Nat.zero_lt_succ _⟩, same⟩
+    else (findLaw helper rest).map fun found => ⟨found.1.succ, found.2⟩
+
+def Term.var? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option (Var Δ (.value ty))
+  | .var binder => some binder
+  | .result .. => none
+  | .index _ => none
+  | .bool _ => none
+  | .field .. => none
+  | .groupZero _ => none
+  | .calc .. => none
+  | .law .. => none
+
+def Term.literal? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
+  | .var _ => none
+  | .result .. => none
+  | .index value => some value
+  | .bool value => some value.toNat
+  | .field _ value => some value
+  | .groupZero _ => none
+  | .calc .. => none
+  | .law .. => none
+
+/-- Syntactic identity of variables and literals; other terms are never identified. -/
+def Term.same {Δ : Scope} {ty : Ty} (left right : Term laws Δ ty) : Bool :=
+  match left.var?, right.var? with
+  | some first, some second => (Var.same? first second).isSome
+  | some _, none => false
+  | none, some _ => false
+  | none, none =>
+    match left.literal?, right.literal? with
+    | some first, some second => first == second
+    | some _, none => false
+    | none, _ => false
+
+/-- Whether the call's present arguments are the pinned inputs. -/
+def pinsMatch {Δ : Scope} (inputs : Values (Comp laws Δ) Γ₀) :
+    {types : List Ty} → List (Option Nat) → Terms laws Δ types → Bool
+  | [], _, .nil => true
+  | _ :: _, [], .cons _ _ => true
+  | ty :: _, pin :: pins, .cons term terms =>
+    (match pin with
+      | none => true
+      | some index =>
+        match Var.decode Γ₀ ty index with
+        | some binder =>
+          match inputs.get binder with
+          | .present pinned => term.same pinned
+          | _ => false
+        | none => false) && pinsMatch inputs pins terms
+
+/-- The decision of a guard's present condition. -/
+inductive Decision (laws : List LawKey) (Δ : Scope) where
+  | holds | fails
+  | compare {ty : Ty} (equality : Equality ty) (left right : Term laws Δ ty)
+  | unknown
+
+def comparison {Δ : Scope} : (op : Op) → Terms laws Δ op.arguments → Decision laws Δ
+  | .fieldEqual domain => fun | .cons left (.cons right .nil) => .compare (.field domain) left right
+  | .groupEqual domain => fun | .cons left (.cons right .nil) => .compare (.group domain) left right
+  | .indexEqual => fun | .cons left (.cons right .nil) => .compare .index left right
+  | _ => fun _ => .unknown
+
+def decision {Δ : Scope} : Term laws Δ .boolean → Decision laws Δ
+  | .var _ => .unknown
+  | .result .. => .unknown
+  | .bool value => if value then .holds else .fails
+  | .calc op _ args _ => comparison op args
+  | .law .. => .unknown
+
+section Normalize
+variable {out : List Ty}
+
+/-- One operation on resolved operands, then the continuation on its results. -/
+def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : ProtocolOp) → Operands Γ op.arguments →
+    {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
+    ({Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) →
+    Except Refusal (Form sig.laws Δ out)
+  | .calculate op _, args, _, state, next =>
+    if total : op.total = true then
+      let operands := Operands.eval state.env.get args
+      if anyAbsent operands then next (state.push (absentComps op.results))
+      else
+        match presentTerms operands with
+        | none => .error "undecided-operand"
+        | some terms => next (state.push (calculation op total terms))
+    else .error "calculation-can-stop"
+  | .localCall helper _ owner _, args, Δ, state, next =>
+    if roster ≤ owner then .error "role-outside-roster"
+    else if owner != role then next (state.push (absentComps helper.outputs))
+    else
+      let operands := Operands.eval state.env.get args
+      if anyAbsent operands then .ok (.halt .incomplete)
+      else
+        match presentTerms operands with
+        | none => .error "undecided-operand"
+        | some terms =>
+          match findLaw helper sig.laws with
+          | some ⟨entry, same⟩ =>
+            let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := same ▸ terms
+            if pinsMatch state.inputs sig.laws[entry].pins lawArgs then
+              match sig.laws[entry].shape with
+              | .returns =>
+                next (state.push (same ▸ mapValues (fun position => .present (.law entry lawArgs position))
+                  (Operands.identity sig.laws[entry].helper.outputs)))
+              | .stops reason => .ok (.halt reason)
+            else .error "law-pins"
+          | none =>
+            if sig.strict then do
+              let rest ← next ((state.weaken (.results helper.outputs)).push
+                (mapValues (fun position => .present (.result .here position))
+                  (Operands.identity helper.outputs)))
+              pure (.strict helper terms rest)
+            else .error "no-law"
+  | .exchange ty sender receiver site, .cons arg .nil, _, state, next =>
+    if roster ≤ sender || roster ≤ receiver then .error "role-outside-roster"
+    else if sender == role then
+      match state.env.get arg with
+      | .absent => .ok (.halt .incomplete)
+      | .present term => do
+        let rest ← next (state.push (.cons (.present term) .nil))
+        pure (.send ty site receiver term rest)
+      | _ => .error "undecided-operand"
+    else if receiver == role then do
+      let rest ← next ((state.weaken (.value ty)).push (.cons (.present (.var .here)) .nil))
+      pure (.receive ty site sender rest)
+    else next (state.push (.cons .absent .nil))
+  | .restrict _ roles, .cons arg .nil, _, state, next =>
+    if roles.any (roster ≤ ·) then .error "role-outside-roster"
+    else if roles.contains role then next (state.push (.cons (state.env.get arg) .nil))
+    else next (state.push (.cons .absent .nil))
+  | .draw owner field site, .cons arg .nil, _, state, next =>
+    if roster ≤ owner then .error "role-outside-roster"
+    else if owner != role then next (state.push (.cons .absent .nil))
+    else
+      match state.env.get arg with
+      | .absent => .ok (.halt .incomplete)
+      | .present handle => do
+        let rest ← next ((state.weaken (.value (services.result field))).push
+          (.cons (.present (.var .here)) .nil))
+        pure (.query site field (.cons handle .nil) rest)
+      | _ => .error "undecided-operand"
+  | .guard owner _, .cons arg .nil, _, state, next =>
+    if roster ≤ owner then .error "role-outside-roster"
+    else if owner != role then next (state.push .nil)
+    else
+      match state.env.get arg with
+      | .absent => .ok (.halt .incomplete)
+      | .present condition =>
+        match decision condition with
+        | .holds => next (state.push .nil)
+        | .fails => .ok (.halt .reject)
+        | .compare equality left right => do
+          let rest ← next ((state.set arg (.present (.bool true))).push .nil)
+          pure (.guard equality left right rest)
+        | .unknown => .error "guard-undecided"
+      | _ => .error "undecided-operand"
+  | .statement .., _, _, state, next => next (state.push .nil)
+  | .mark _, _, _, state, next => next (state.push .nil)
+  | .protocolApply .., _, _, _, _ => .error "protocol-application"
+  | .repeat .., _, _, _, _ => .error "repeat"
+
+/-- Split on the undecided inputs the operation needs, in operand order. -/
+def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (args : Operands Γ op.arguments) :
+    Nat → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
+    ({Δ' : Scope} → State sig.laws Γ₀ Δ' Γ → Except Refusal (Form sig.laws Δ' out)) →
+    Except Refusal (Form sig.laws Δ out)
+  | 0, _, state, proceed => proceed state
+  | fuel + 1, _, state, proceed =>
+    if demanded role op (Operands.eval state.env.get args) then
+      match firstInput (Operands.eval state.env.get args) with
+      | none => proceed state
+      | some ⟨_, subject⟩ => do
+        let absent ← resolve sig role op args fuel (state.map (Comp.absentAt subject)) proceed
+        let present ← resolve sig role op args fuel (state.map (Comp.presentAt subject)) proceed
+        pure (.split (.input subject) absent present)
+    else proceed state
+
+def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → Region protocolDialect Γ out → {Δ : Scope} →
+    State sig.laws Γ₀ Δ Γ → Except Refusal (Form sig.laws Δ out)
+  | _, .ret values, _, state => .ok (.done (Operands.eval state.env.get values))
+  | _, .stop reason, _, _ => .ok (.halt reason)
+  | _, .bind .., _, _ => .error "region-bind"
+  | _, .letOp op args _ next, _, state =>
+    resolve sig role op args op.arguments.length state fun state =>
+      operation sig role roster op args state fun state => normalizeRegion sig role roster next state
+
+end Normalize
+
+/-! Input patterns. -/
+
+/-- How a role holds one input of the body. -/
+inductive Input : Ty → Type where
+  | absent {ty : Ty} : Input ty
+  | present {ty : Ty} : Input ty
+  /-- Present or absent; decided where first needed. -/
+  | optional {ty : Ty} : Input ty
+  | index (value : Nat) : Input .index
+  | field (domain : String) (value : Nat) : Input (.field domain)
+  | bool (value : Bool) : Input .boolean
+
+abbrev InputPattern (Γ : List Ty) := Values Input Γ
+
+/-- One binder per present or optional input, in input order. -/
+def InputPattern.scope : {Γ : List Ty} → InputPattern Γ → Scope
+  | [], .nil => []
+  | ty :: _, .cons .present rest => .value ty :: scope rest
+  | ty :: _, .cons .optional rest => .component ty :: scope rest
+  | _ :: _, .cons .absent rest => scope rest
+  | _ :: _, .cons (.index _) rest => scope rest
+  | _ :: _, .cons (.field ..) rest => scope rest
+  | _ :: _, .cons (.bool _) rest => scope rest
+
+/-- The inputs as components of the pattern's binders. -/
+def InputPattern.initial : {Γ : List Ty} → (pattern : InputPattern Γ) →
+    Values (Comp laws pattern.scope) Γ
+  | [], .nil => .nil
+  | _ :: _, .cons .present rest => .cons (.present (.var .here)) (mapValues (Comp.rename .there) (initial rest))
+  | _ :: _, .cons .optional rest => .cons (.input .here) (mapValues (Comp.rename .there) (initial rest))
+  | _ :: _, .cons .absent rest => .cons .absent (initial rest)
+  | _ :: _, .cons (.index value) rest => .cons (.present (.index value)) (initial rest)
+  | _ :: _, .cons (.field domain value) rest => .cons (.present (.field domain value)) (initial rest)
+  | _ :: _, .cons (.bool value) rest => .cons (.present (.bool value)) (initial rest)
+
+/-- The inputs the pattern's binders give. -/
+def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →
+    Binders model pattern.scope → Values (Component model.Value) Γ
+  | [], .nil, _ => .nil
+  | ty :: _, .cons .present rest, binders =>
+    let binders : Values (Slot.Value model) (.value ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons (some value) (environment model rest binders)
+  | ty :: _, .cons .optional rest, binders =>
+    let binders : Values (Slot.Value model) (.component ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons value (environment model rest binders)
+  | _ :: _, .cons .absent rest, binders => .cons none (environment model rest binders)
+  | _ :: _, .cons (.index value) rest, binders => .cons (some value) (environment model rest binders)
+  | _ :: _, .cons (.field domain value) rest, binders =>
+    .cons (some (fieldLiteral model.toFieldModel domain value)) (environment model rest binders)
+  | _ :: _, .cons (.bool value) rest, binders => .cons (some value) (environment model rest binders)
+
+/-- One role's form of a body, for the inputs the pattern describes. -/
+def normalize (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
+    (role roster : Nat) (pattern : InputPattern Γ) : Except Refusal (Form sig.laws pattern.scope out) :=
+  normalizeRegion sig role roster body ⟨pattern.initial, pattern.initial⟩
+
+end NormalForm
+end Zkc.Source.Structured

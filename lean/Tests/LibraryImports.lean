@@ -176,6 +176,11 @@ import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.ModelAdmission
+import Zkc.Source.Structured.NormalForm.Denote
+import Zkc.Source.Structured.NormalForm.Normalize
+import Zkc.Source.Structured.NormalForm.Presentation
+import Zkc.Source.Structured.NormalForm.Soundness
+import Zkc.Source.Structured.NormalForm.Syntax
 import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning

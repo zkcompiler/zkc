@@ -1,0 +1,171 @@
+module
+
+public import Zkc.Source.Structured.DomainParticipant
+
+@[expose] public section
+
+/-! Participant normal forms as data.
+
+A form is the process one role runs for a typed protocol body: its ordered
+actions, the values it computes on the way, its decided conditions and the
+places where a missing input stops it. Forms are indexed by a scope of typed
+binders, newest first, so a form term is well scoped and well typed by
+construction. Values computed from binders are terms; inputs whose presence is
+decided where an operation first needs them are components.
+
+* A query binds the reply sort its service request declares (`services.result`),
+  so a service whose reply sort depends on the request is presented as it is.
+* A calculation enters the total term language only with a witness that its
+  meaning returns for every argument (`Op.total`). A calculation that can stop
+  is a separate node that binds its results after the stop has been decided.
+* A helper call is presented through a law of the signature (a returned
+  result or a stop) or kept as the helper's own invocation on present
+  arguments. A law names its helper; the soundness theorem asks for one
+  premise per law, so every presented call is tied to the admitted helper it
+  is about.
+
+The normalizer (`Normalize`) computes forms from bodies, the denotation
+(`Denote`) gives them their participant meaning, and `Soundness` proves the
+two agree. -/
+
+set_option autoImplicit false
+namespace Zkc.Source.Structured
+
+/-- Calculations whose meaning returns for every argument: constants, ring and
+group arithmetic, comparisons, Boolean connectives and selection. Primitive
+executions, bounded reads, helper calls, folds and maps can stop or depend on
+helper bodies and are excluded. -/
+def Op.total : Op → Bool
+  | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
+  | .fieldMultiply .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
+  | .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor
+  | .booleanEqual | .booleanNotEqual | .select .. => true
+  | _ => false
+
+namespace NormalForm
+
+/-- A binder of a form's scope. -/
+inductive Slot where
+  /-- A present value: a present input, a received or drawn value, the present
+  case of a split. -/
+  | value (ty : Ty)
+  /-- An input whose presence the form decides where it is first needed. -/
+  | component (ty : Ty)
+  /-- The present results of a kept helper call or of a calculation that can stop. -/
+  | results (types : List Ty)
+  /-- A returned tuple of components. -/
+  | tuple (types : List Ty)
+  deriving DecidableEq, Repr
+
+abbrev Scope := List Slot
+
+/-- What a law says about its helper on the arguments it covers. -/
+inductive LawShape where
+  /-- The helper returns the law's results. -/
+  | returns
+  /-- The helper stops with this reason. -/
+  | stops (reason : PIR.Stop)
+  deriving DecidableEq, Repr
+
+/-- A helper law, keyed by the helper, never by an occurrence. `pins` follows
+the helper's inputs: `some j` restricts the law to calls whose argument at that
+position is the body's input `j`, which must be present; `none` leaves the
+argument free. A missing entry is free. -/
+structure LawKey where
+  helper : Helper
+  shape : LawShape
+  pins : List (Option Nat) := []
+  deriving DecidableEq, Repr
+
+/-- The part of a request the normalizer reads. -/
+structure Signature where
+  laws : List LawKey := []
+  /-- Owned calls of the role's own helpers without a law are kept as the
+  helper's invocation on present arguments (`true`) or refused (`false`). -/
+  strict : Bool := false
+  deriving Repr
+
+/-- The decidable equalities a guard can compare. -/
+inductive Equality : Ty → Type where
+  | field (domain : String) : Equality (.field domain)
+  | group (domain : String) : Equality (.group domain)
+  | index : Equality .index
+  deriving Repr
+
+mutual
+  /-- Present values in a scope. -/
+  inductive Term (laws : List LawKey) (Δ : Scope) : Ty → Type where
+    | var {ty : Ty} (binder : Var Δ (.value ty)) : Term laws Δ ty
+    | result {types : List Ty} {ty : Ty} (binder : Var Δ (.results types)) (position : Var types ty) :
+        Term laws Δ ty
+    | index (value : Nat) : Term laws Δ .index
+    | bool (value : Bool) : Term laws Δ .boolean
+    /-- A field literal, presented as `0`, `1` or the cast of the natural. -/
+    | field (domain : String) (value : Nat) : Term laws Δ (.field domain)
+    | groupZero (domain : String) : Term laws Δ (.group domain)
+    | calc {ty : Ty} (op : Op) (total : op.total = true) (args : Terms laws Δ op.arguments)
+        (position : Var op.results ty) : Term laws Δ ty
+    | law {ty : Ty} (entry : Fin laws.length) (args : Terms laws Δ laws[entry].helper.inputs)
+        (position : Var laws[entry].helper.outputs ty) : Term laws Δ ty
+
+  inductive Terms (laws : List LawKey) (Δ : Scope) : List Ty → Type where
+    | nil : Terms laws Δ []
+    | cons {ty : Ty} {types : List Ty} (head : Term laws Δ ty) (tail : Terms laws Δ types) :
+        Terms laws Δ (ty :: types)
+end
+
+/-- Optional components in a scope. -/
+inductive Comp (laws : List LawKey) (Δ : Scope) (ty : Ty) where
+  | absent
+  | present (term : Term laws Δ ty)
+  | input (binder : Var Δ (.component ty))
+  | read {types : List Ty} (binder : Var Δ (.tuple types)) (position : Var types ty)
+
+/-- One role's process for a body. -/
+inductive Form (laws : List LawKey) : Scope → List Ty → Type where
+  | done {Δ : Scope} {out : List Ty} (values : Values (Comp laws Δ) out) : Form laws Δ out
+  | halt {Δ : Scope} {out : List Ty} (reason : PIR.Stop) : Form laws Δ out
+  | send {Δ : Scope} {out : List Ty} (ty : Ty) (site : String) (peer : Nat)
+      (value : Term laws Δ ty) (next : Form laws Δ out) : Form laws Δ out
+  | receive {Δ : Scope} {out : List Ty} (ty : Ty) (site : String) (peer : Nat)
+      (next : Form laws (.value ty :: Δ) out) : Form laws Δ out
+  /-- A service request; the reply has the sort the request declares. -/
+  | query {Δ : Scope} {out : List Ty} (site : String) (request : services.Op)
+      (args : Terms laws Δ (services.arguments request))
+      (next : Form laws (.value (services.result request) :: Δ) out) : Form laws Δ out
+  /-- The absent and present cases of a component. -/
+  | split {Δ : Scope} {out : List Ty} {ty : Ty} (subject : Comp laws Δ ty)
+      (absent : Form laws Δ out) (present : Form laws (.value ty :: Δ) out) : Form laws Δ out
+  /-- Continue when the two values are equal; otherwise reject. -/
+  | guard {Δ : Scope} {out : List Ty} {ty : Ty} (equality : Equality ty)
+      (left right : Term laws Δ ty) (next : Form laws Δ out) : Form laws Δ out
+  /-- A kept helper call on present arguments: its effects and stops, then its
+  present results. -/
+  | strict {Δ : Scope} {out : List Ty} (helper : Helper) (args : Terms laws Δ helper.inputs)
+      (next : Form laws (.results helper.outputs :: Δ) out) : Form laws Δ out
+  /-- A calculation that can stop, on present arguments: its stop, or its
+  present results. -/
+  | compute {Δ : Scope} {out : List Ty} (op : Op) (allowed : op.isCalculation = true)
+      (args : Terms laws Δ op.arguments)
+      (next : Form laws (.results op.results :: Δ) out) : Form laws Δ out
+
+/-- A named reason for not normalizing a body. -/
+abbrev Refusal := String
+
+/-! Presentation of a repeat callback's returned state: each position of the
+state is absent at this role, presented as its present value, or presented as
+its component. -/
+
+inductive Carried where
+  | absent | present | optional
+  deriving DecidableEq, Repr
+
+/-- The presented positions, in order, with their presentation. -/
+def carried : {out : List Ty} → Values (fun _ => Carried) out → List (Ty × Bool)
+  | [], .nil => []
+  | _ :: _, .cons .absent rest => carried rest
+  | ty :: _, .cons .present rest => (ty, false) :: carried rest
+  | ty :: _, .cons .optional rest => (ty, true) :: carried rest
+
+end NormalForm
+end Zkc.Source.Structured
