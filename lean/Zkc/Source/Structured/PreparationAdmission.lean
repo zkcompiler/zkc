@@ -18,10 +18,13 @@ def PreparationProfile.error : PreparationProfile → String
   | .realization => "structured-realization"
   | .map => "structured-map"
 
+/-- Map closures stay in scalar fields; realizations exclude services. The
+identities are admitted against the unit's catalogue rows. -/
 def PreparationProfile.typeAllowed (profile : PreparationProfile) (type : Ty) : Bool :=
-  match profile with
-  | .realization => validType type && !type.isService
-  | .map => type == .field scalarDomain
+  match profile, type with
+  | .realization, type => !type.isService
+  | .map, .field _ => true
+  | .map, _ => false
 
 /-- Every port is checked, even an unused input or a discarded result. -/
 def PreparationProfile.typesAllowed (profile : PreparationProfile) (types : List Ty) : Bool :=
@@ -59,8 +62,14 @@ def RealizationDeclaration.raw (declaration : RealizationDeclaration) : RawRegio
   .letOp (.invoke declaration.helperSpec) (List.range declaration.inputs.length)
     declaration.outputs .nil (.ret (List.range declaration.outputs.length))
 
+/-- The field a map lifts: the field of its one vector result. -/
+def MapDeclaration.field (declaration : MapDeclaration) : String :=
+  match declaration.outputs with
+  | [.vector field] => field
+  | _ => ""
+
 def MapDeclaration.spec (declaration : MapDeclaration) : MapSpec :=
-  ⟨declaration.helper, scalarDomain, declaration.rowwise⟩
+  ⟨declaration.helper, declaration.field, declaration.rowwise⟩
 
 def MapDeclaration.raw (declaration : MapDeclaration) : RawRegion Ty Op :=
   .letOp (.map declaration.spec) (List.range declaration.inputs.length)
@@ -75,20 +84,18 @@ def MapDeclaration.validate (snapshot : Snapshot)
     (declaration : MapDeclaration) : Except String Unit := do
   if !(Definition.map declaration).headerValid ||
       declaration.inputs != declaration.spec.arguments ||
-      declaration.outputs != [.vector scalarDomain] then throw "structured-map"
+      declaration.outputs != [.vector declaration.field] then throw "structured-map"
+  snapshot.catalogue.require declaration.field .field "Field"
   checkPreparationClosure snapshot .map declaration.spec.helper
 
 /-- Structural counterpart for semantic proofs over the existing checked
 carrier. No theorem about return behavior follows merely from this definition. -/
 def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
-  | .fieldConstant d n => d == scalarDomain && n < scalarModulus
-  | .fieldAdd d | .fieldSubtract d | .fieldMultiply d => d == scalarDomain
+  | .fieldConstant .. | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ => true
   | .invoke helper => helper.kind == .math && validString helper.name &&
       profile.typesAllowed helper.inputs && profile.typesAllowed helper.outputs
-  | .fieldEqual d => profile == .realization && d == scalarDomain
-  | .groupIdentity d | .groupAdd d | .groupEqual d =>
-    profile == .realization && d == groupDomain
-  | .groupScale g f => profile == .realization && g == groupDomain && f == scalarDomain
+  | .fieldEqual _ | .groupIdentity _ | .groupAdd _ | .groupEqual _ | .groupScale _ _ =>
+    profile == .realization
   | .indexConstant n => profile == .realization && n < indexLimit
   | .indexEqual | .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization

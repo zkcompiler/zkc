@@ -239,6 +239,7 @@ def readingContext : Context where
   validator := 1
   service := 7
   contract := "random.bls12-381.fr/0"
+  request := some (.draw "bls12-381.fr")
   suite := "merlin3.bls12-381.fr64be/0"
   draws := [("label_6f7574707574", "label_6f75747075745f64656c6976657279_0"),
     ("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"),
@@ -260,7 +261,7 @@ and peers inside the actions of its processes. -/
 theorem origin_query (context : Context) (entry : String) (steps : List Step)
     (caller site port contract owner : String) :
     Template.origin context ⟨entry, steps, ["query", caller, site, port, contract, "draw", owner]⟩ =
-      some (context.query
+      context.request.map (context.query
         (Template.qualify ⟨entry, steps, ["query", caller, site, port, contract, "draw", owner]⟩ site)) :=
   rfl
 

@@ -1,9 +1,10 @@
 # Transcript-construction bridge
 
-`check.py` connects six compiled proof Entries, `example::Proof` of the
-Schnorr, Sumcheck, composed Sumcheck and GKR example projects and
-`example::AndProof` and `example::EqualityProof` of the Sigma example project, to
-the
+`check.py` connects seven compiled proof Entries, `example::Proof` of the
+Schnorr, Sumcheck, composed Sumcheck and GKR example projects,
+`example::AndProof` and `example::EqualityProof` of the Sigma example project and
+`example::Proof` of the guessing fixture [`fixtures/guess.zkc`](fixtures/guess.zkc),
+to the
 [formal transcript-construction rule](../../docs/spec/fiat-shamir.md) and the
 [participant projection rule](../../docs/spec/participant-projection.md). It is
 part of `python3 common/tests/run.py lean-native`.
@@ -48,7 +49,9 @@ For each subject:
    `lean/ZkcExamples/Structured/GkrSourceData.lean` and `GkrProofParticipant.lean`
    (its typed bodies `GkrSourceBodies.lean` are likewise admitted in the kernel,
    and `GkrProofInstructions` names the participant's loop bodies, checked equal
-   to it by `rfl`). For Sumcheck the comparison is also the
+   to it by `rfl`); for the guessing fixture `GuessProofData.lean` and
+   `GuessProofParticipant.lean` (its typed bodies `GuessProofBodies.lean`, printed
+   by `bodies.py`, are admitted in the kernel). For Sumcheck the comparison is also the
    pin that the Proof Entry's original export is the admitted Sumcheck source of
    the security theorems (check
    `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
@@ -69,7 +72,9 @@ For each subject:
    left check twice, and the right terminal check reads the left reduction's
    point and claim. For both Sigma Entries: the second observation absorbs the
    first commitment, a comparison compares the base with itself, and the
-   conjunction reads the first check twice. For GKR: the challenge origin names
+   conjunction reads the first check twice. For the guessing fixture: the
+   challenge origin names the delivery site, and the final comparison reads the
+   sum twice. For GKR: the challenge origin names
    the delivery site, the first round check and the wiring check are dropped,
    the round claim update adds the constant term twice, and the layer loop
    yields the claim it started with. Every mutation that keeps the transcript wiring is accepted
@@ -83,8 +88,8 @@ For each subject:
    both Sumcheck subjects: a constant changed in the prepared body of the last
    terminal check helper (exactly `native-proof-correspondence`); the Lean rules
    read helper calls with the original's checked helpers, so this is the native
-   boundary. For both Sigma Entries: a challenge origin naming the delivery site
-   (exactly `native-proof-correspondence`).
+   boundary. For both Sigma Entries and the guessing fixture: a challenge origin
+   naming the delivery site (exactly `native-proof-correspondence`).
 
 The retained `report.json` lists commands, exit statuses, hashes and checks per
 subject.

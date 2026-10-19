@@ -894,67 +894,102 @@ module {
           return kernel::verifyKernelLowering(*logical, *lowered);
         });
       });
-  cases.run(
-      "shared interpolation crosses an ordered guard through concrete ports",
-      [&] {
-        auto source = fixture(context, "kernel/shared-polynomial.mlir");
-        auto participant = copy(*source);
-        run(*participant, protocol::createProjectProtocolPass(false));
-        auto logical = copy(*participant);
-        run(*logical, protocol::createLowerMathPass());
-        require(succeeded(mathematical::verifyProjectionPreserved(*participant,
-                                                                  *logical)),
-                "raw descriptor reconstruction or transitive escape differed");
-        unsigned descriptors = 0;
-        logical->walk([&](Operation *op) {
-          descriptors += op->getName().getStringRef() == "poly.interpolate";
-        });
-        require(descriptors == 2,
-                "raw descriptor was not reconstructed at both cuts");
-        auto normalized = kernel::prepareKernelLowering(*logical);
-        require(bool(normalized), "shared normalization frontier refused");
-        unsigned extraInputs = 0, extraOutputs = 0;
-        for (auto function :
-             owner(*normalized).getBody().front().getOps<local::FuncOp>()) {
-          auto before = SymbolTable(owner(*logical))
-                            .lookup<local::FuncOp>(function.getSymName());
-          require(bool(before),
-                  "normalization added an unrelated Local function");
-          extraInputs += function.getNumArguments() - before.getNumArguments();
-          extraOutputs += function.getNumResults() - before.getNumResults();
-        }
-        require(extraInputs && extraOutputs,
-                "shared coefficients were recomputed instead of exported");
-        auto lowered = copy(*logical);
-        require(succeeded(kernel::lowerKernels(*lowered)),
-                "shared frontier recipe lowering failed");
-        require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
-                "shared frontier actual candidate failed correspondence");
-        local::CallOp consumer;
-        lowered->walk([&](protocol_ir::ParticipantOp participant) {
-          participant.walk([&](local::CallOp call) {
+  for (bool batching : {false, true})
+    cases.run(
+        Twine("shared interpolation crosses a guard with batching=") +
+            (batching ? "true" : "false"),
+        [&] {
+          MathematicalSelectionPolicy policy;
+          policy.calculationBatching = batching;
+          auto source = fixture(context, "kernel/shared-polynomial.mlir");
+          auto participant = copy(*source);
+          run(*participant, protocol::createProjectProtocolPass(false));
+          auto logical = copy(*participant);
+          run(*logical, protocol::createLowerMathPass(policy));
+          require(
+              succeeded(mathematical::verifyProjectionPreserved(
+                  *participant, *logical, policy)),
+              "raw descriptor reconstruction or transitive escape differed");
+          unsigned descriptors = 0;
+          logical->walk([&](Operation *op) {
+            descriptors += op->getName().getStringRef() == "poly.interpolate";
+          });
+          require(descriptors == 2,
+                  "raw descriptor was not reconstructed at both cuts");
+          auto normalized = kernel::prepareKernelLowering(*logical);
+          require(bool(normalized), "shared normalization frontier refused");
+          unsigned extraInputs = 0, extraOutputs = 0;
+          for (auto function :
+               owner(*normalized).getBody().front().getOps<local::FuncOp>()) {
             auto before = SymbolTable(owner(*logical))
-                              .lookup<local::FuncOp>(call.getCallee());
-            if (before && call.getNumOperands() > before.getNumArguments())
-              consumer = call;
+                              .lookup<local::FuncOp>(function.getSymName());
+            require(bool(before),
+                    "normalization added an unrelated Local function");
+            extraInputs +=
+                function.getNumArguments() - before.getNumArguments();
+            extraOutputs += function.getNumResults() - before.getNumResults();
+          }
+          require(extraInputs && extraOutputs,
+                  "shared coefficients were recomputed instead of exported");
+          auto lowered = copy(*logical);
+          require(succeeded(kernel::lowerKernels(*lowered)),
+                  "shared frontier recipe lowering failed");
+          require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                  "shared frontier actual candidate failed correspondence");
+          local::CallOp consumer;
+          lowered->walk([&](protocol_ir::ParticipantOp participant) {
+            participant.walk([&](local::CallOp call) {
+              auto before = SymbolTable(owner(*logical))
+                                .lookup<local::FuncOp>(call.getCallee());
+              if (before && call.getNumOperands() > before.getNumArguments())
+                consumer = call;
+            });
+          });
+          require(bool(consumer), "frontier consumer lost its concrete inputs");
+          bool changed = false;
+          for (Value input : consumer.getInputs().drop_back())
+            if (input != consumer.getInputs().back() &&
+                input.getType() == consumer.getInputs().back().getType()) {
+              consumer->setOperand(consumer.getNumOperands() - 1, input);
+              changed = true;
+              break;
+            }
+          require(changed, "frontier fixture has no same-typed mutation");
+          require(succeeded(verify(*lowered)),
+                  "frontier coordinate mutation malformed");
+          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+            return kernel::verifyKernelLowering(*logical, *lowered);
           });
         });
-        require(bool(consumer), "frontier consumer lost its concrete inputs");
-        bool changed = false;
-        for (Value input : consumer.getInputs().drop_back())
-          if (input != consumer.getInputs().back() &&
-              input.getType() == consumer.getInputs().back().getType()) {
-            consumer->setOperand(consumer.getNumOperands() - 1, input);
-            changed = true;
-            break;
-          }
-        require(changed, "frontier fixture has no same-typed mutation");
-        require(succeeded(verify(*lowered)),
-                "frontier coordinate mutation malformed");
-        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
-          return kernel::verifyKernelLowering(*logical, *lowered);
-        });
+  cases.run("the independent outliner reader binds the selected schedule", [&] {
+    auto source = fixture(context, "kernel/shared-polynomial.mlir");
+    Operation *second = nullptr, *guard = nullptr;
+    source->walk([&](Operation *op) {
+      if (op->getName().getStringRef() == "poly.evaluate")
+        second = op;
+      if (op->getName().getStringRef() == "protocol.guard")
+        guard = op;
+    });
+    require(second && guard, "missing scheduling fixture operations");
+    second->moveBefore(guard);
+    require(succeeded(verify(*source)), "early observation fixture malformed");
+    auto participant = copy(*source);
+    run(*participant, protocol::createProjectProtocolPass(false));
+    for (bool batching : {false, true}) {
+      MathematicalSelectionPolicy policy;
+      policy.calculationBatching = batching;
+      auto logical = copy(*participant);
+      run(*logical, protocol::createLowerMathPass(policy));
+      require(succeeded(mathematical::verifyProjectionPreserved(
+                  *participant, *logical, policy)),
+              "selected schedule failed its independent reader");
+      policy.calculationBatching = !batching;
+      expectRefusal(*logical, "mathematical-lowering-preservation", [&] {
+        return mathematical::verifyProjectionPreserved(*participant, *logical,
+                                                       policy);
       });
+    }
+  });
   cases.run(
       "mixed helper concrete work is not replayed across action cuts", [&] {
         auto source = fixture(context, "kernel/mixed-helper-cuts.mlir");

@@ -337,9 +337,10 @@ lowering. Package inspection validates the captured package view. Neither path
 performs native admission, key import, resource issuance or execution.
 
 Source compilation accepts `--no-simplify`, `--release-storage`,
-`--no-finite-bulk`, `--fuse-vector-reductions` and `--fuse-collect-fold` for
+`--no-finite-bulk`, `--fuse-vector-reductions`, `--fuse-collect-fold` and
+`--no-calculation-batching` for
 `compile`, `run`, `prove`, `verify`, `bindings` and `inputs check`.
-The resulting package records all five choices. These
+The resulting package records all six choices. These
 options are refused by `check`, `inspect`, `inputs init` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).

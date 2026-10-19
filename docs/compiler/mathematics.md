@@ -267,19 +267,32 @@ The [IR contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
 defines exact eligibility and shared bounds.
 
 `EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
-`mathematicalSelection` policy, with independent `finiteBulk`,
-`vectorReductionFusion` and `collectFoldFusion` family controls. Preparation, total Math demand
-lowering, proof construction and polynomial correspondence reconstruction all
-receive the same policy. Public preparation, projection and lowering passes
-expose `optimize-finite`, `fuse-vector-reductions` and `fuse-collect-fold` options;
-the participant pipeline forwards these choices to its stages. Physical storage release remains
-a separate control.
+`mathematicalSelection` policy, with independent `finiteBulk` and
+`vectorReductionFusion` and `collectFoldFusion` family controls and the `calculationBatching` schedule.
+Preparation, total Math demand lowering, proof construction and polynomial
+correspondence reconstruction all receive the same policy. Public preparation,
+projection and lowering passes expose `optimize-finite` and
+`fuse-vector-reductions` and `fuse-collect-fold` options, and the lowering pass also
+`calculation-batching`; the participant pipeline forwards these choices to its
+stages. Physical storage release remains a separate control.
 
-Entry packages and compilation reports record `finite_bulk`,
-`fuse_vector_reductions` and `fuse_collect_fold` alongside their separate simplify
-and storage choices. Native-proof deployments record simplify, storage release,
-vector reduction fusion, finite bulk and collect–fold fusion in that order;
-readers require all five choices. Reconstruction uses the
+Total Math demand lowering outlines a participant's pure calculations into
+calculation calls placed before actions. With batching, the default, each
+needed operation is computed in the one call before the first action whose
+demand reaches it, so a value consumed only late is deferred past the
+transcript operations, receives and loops in between. `--no-calculation-batching`
+computes, before each action, the needed concrete results of operations that
+precede it in source order and were not computed yet. Formal polynomial
+descriptors are reconstructed beside their consumers; they do not become
+participant ports. The compiler's lowering check expects the selected schedule; the
+[executable lowering rule](../../lean/docs/spec/executable.md#normalization)
+accepts both, since their normal forms are the export's.
+
+Entry packages record `finite_bulk`, `fuse_vector_reductions` and
+`fuse_collect_fold` and `calculation_batching` alongside their separate simplify and storage choices;
+compilation reports record the three family choices and the schedule. Native-proof deployments record
+simplify, storage release, vector reduction fusion, finite bulk, collect–fold fusion and calculation batching in that
+order; readers require all six choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
 The explicit `rewriteLocalAlgorithms` preparation service admits the immutable

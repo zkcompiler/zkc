@@ -44,6 +44,7 @@ int zkc::runCompiler(int argc, char **argv,
            "    [--no-simplify] [--release-storage] "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=run|proof] and select the "
            "sole eligible Entry when --entry is omitted.\n"
@@ -63,11 +64,12 @@ int zkc::runCompiler(int argc, char **argv,
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
-           "    [--fix-polynomial-factors]\n"
+           "    [--no-calculation-batching] [--fix-polynomial-factors]\n"
            "  protocol-checked-bundle FILE.mlir [--requirements=FILE] "
            "[--public-coin=FILE] [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
            "CANDIDATE.mlir [--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
@@ -80,6 +82,7 @@ int zkc::runCompiler(int argc, char **argv,
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
@@ -138,6 +141,8 @@ int zkc::runCompiler(int argc, char **argv,
           options.releaseStorage = true;
         else if (option == "--no-finite-bulk")
           options.mathematicalSelection.finiteBulk = false;
+        else if (option == "--no-calculation-batching")
+          options.mathematicalSelection.calculationBatching = false;
         else if (option == "--fuse-vector-reductions")
           options.mathematicalSelection.vectorReductionFusion = true;
         else if (option == "--fuse-collect-fold")
@@ -320,6 +325,8 @@ int zkc::runCompiler(int argc, char **argv,
         options.releaseStorage = true;
       else if (argument == "--no-finite-bulk")
         options.mathematicalSelection.finiteBulk = false;
+      else if (argument == "--no-calculation-batching")
+        options.mathematicalSelection.calculationBatching = false;
       else if (argument == "--fuse-vector-reductions")
         options.mathematicalSelection.vectorReductionFusion = true;
       else if (argument == "--fuse-collect-fold")

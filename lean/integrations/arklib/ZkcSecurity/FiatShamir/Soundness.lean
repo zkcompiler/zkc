@@ -211,7 +211,8 @@ def interface (context : Context) (decode : B → F) :
       | some payload =>
           .send (.message (context.message site context.validator receiver) payload) ()
       | none => .refuse
-  | .query site _ _ => .query (.challenge (context.query site)) fun _ raw => some (decode raw)
+  | .query site field _ =>
+      .query (.challenge (context.query site (.draw field))) fun _ raw => some (decode raw)
 
 theorem received_message (context : Context) (ty : Ty) (site : String) (sender : Nat)
     (payload : Payload F G) :

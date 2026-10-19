@@ -15,7 +15,7 @@ private def snapshot (bindings : List Binding) (defs : List Definition := [root]
   (let contractDefinitions : List Definition := defs
    ⟨digest, "main", [], [], bindings, contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 private def binding (contract : String) (arguments : List String := []) : Binding :=
   ⟨"primitive", contract, arguments, ""⟩
 private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : String := "exec")
@@ -24,6 +24,10 @@ private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : Str
     if kind == .local then some ("work", []) else none,
     .block [.instruction op (List.range inputs.length) outputs regions site]
       (.ret (List.range outputs.length))⟩
+private def refusedWith {α : Type} (result : Except String α) (code : String) : Bool :=
+  match result with
+  | .error actual => actual == code
+  | .ok _ => false
 private def admits (bindings : List Binding) (defs : List Definition := [root]) : Bool :=
   (check (snapshot bindings defs)).isOk
 private def arr (values : List Json) : Json := .arr values.toArray
@@ -112,13 +116,24 @@ private def run : IO Unit := do
   test "name-256" (admits [{binding "index.add" with name := String.ofList (List.replicate 256 'a')}])
   test "name-punctuation" (admits [{binding "index.add" with name := "_A.0-b"}])
   for bad in [binding "unknown", binding "vector.product" [scalarDomain],
-      binding "index.add" [scalarDomain], binding "vector.split", binding "vector.sum" [groupDomain],
-      binding "field.equal" ["koala-bear"], {binding "index.add" with implementation := "native/index.add"}] do
+      binding "index.add" [scalarDomain], binding "vector.split",
+      binding "field.equal" [scalarDomain, scalarDomain],
+      {binding "index.add" with implementation := "native/index.add"}] do
     test ("invalid-unused:" ++ bad.contract) (!admits [bad] && !(Format.binding (bindingWire bad)).isOk)
+  -- A root is resolved against the unit's catalogue rows, even when unused.
+  for (bad, code) in [(binding "vector.sum" [groupDomain], "structured-domain-sort"),
+      (binding "field.equal" ["koala-bear"], "structured-domain-unknown")] do
+    test ("unresolved-root:" ++ bad.contract) (!admits [bad] &&
+      (Format.binding (bindingWire bad)).isOk &&
+      refusedWith (bad.resolveRoot blsRows) code)
+  let fieldOnly : Catalogue := ⟨[⟨"f", .field, [], ["Field"], some 5⟩], [], []⟩
+  test "root-capability" (refusedWith ((binding "vector.equal" ["f"]).resolveRoot fieldOnly)
+    "structured-domain-capability")
+  test "root-field" ((binding "vector.sum" ["f"]).resolveRoot fieldOnly matches .ok "f")
   let envelope := [Json.str "zkc.structured-source/0", .str "original", .str digest,
-    .str "main", arr [], arr [], arr [], arr [], arr []]
-  test "wire-nine-fields" ((Format.snapshot (arr envelope)).isOk)
-  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 8))).isOk)
+    .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []]]
+  test "wire-ten-fields" ((Format.snapshot (arr envelope)).isOk)
+  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 9))).isOk)
   test "wire-no-extra-envelope" (!(Format.snapshot (arr (envelope ++ [arr []]))).isOk)
   test "wire-unused-bad-binding" (!(Format.snapshot (arr (envelope.set 6
     (arr [bindingWire (binding "vector.product" [scalarDomain])])))).isOk)

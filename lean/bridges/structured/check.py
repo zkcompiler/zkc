@@ -530,6 +530,49 @@ def boundary_cases(suite, unit_text):
         suite.case('native-unicode-helper-' + str(len(name)), renamed)
 
 
+def installed_rows_cases(suite):
+    """Every installed field, group and random service exports native rows that
+    Lean decodes and finds consistent. Lean then refuses them only because its
+    environment does not list them, or does not admit the sort instance."""
+    def unit(declarations="", inputs=""):
+        return ('''module { "protocol.module"() ({
+''' + declarations + '''
+"protocol.func"() ({ ^entry(%flag:i1''' + (",%service:" + inputs if inputs else "") + '''):
+"protocol.return"(%flag) : (i1)->()
+}) {sym_name="main",function_type=(i1''' + ("," + inputs if inputs else "") + ''')->i1,roles=["P"],input_roles=[["P"]'''
+                + (',["P"]' if inputs else "") + '''],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }''')
+
+    def dead(kind, identity):
+        value = f'!algebra.{kind}<"{identity}">'
+        return unit(f"func.func private @dead(%x:{value}) -> {value} {{ return %x : {value} }}")
+
+    unknown = "structured-catalogue-unknown"
+    subjects = [(identity, dead("field", identity), unknown) for identity in [
+        "ristretto255.scalar", "bn254.fr", "koala-bear", "koala-bear.ext8-binomial3",
+        "koala-bear.ext4-binomial3", "gf2-64.pentanomial-4-3-1",
+        "gf2-64.pentanomial-4-3-1.ext3-trinomial1"]]
+    subjects += [(identity, dead("group", identity), unknown) for identity in [
+        "bn254.g1", "bn254.g2", "bn254.gt", "ristretto255.group", "edwards25519.prime"]]
+    # Rows the environment lists, at sort instances it does not admit.
+    subjects += [(identity, dead("group", identity), "structured-type-unadmitted")
+                 for identity in ["bls12-381.g2", "bls12-381.gt"]]
+    subjects += [(contract, unit(inputs=f'!protocol.service_ref<"{contract}">'), unknown) for contract in [
+        "random.bn254.fr/0", "random.ristretto255.scalar/0", "random.koala-bear.ext8-binomial3/0"]]
+    for name, source, code in subjects:
+        label = "installed-rows-" + name.replace("/", "-")
+        def refused(label=label, source=source, code=code):
+            folder = suite.directory / label
+            folder.mkdir(exist_ok=True)
+            original = folder / "source.mlir"
+            original.write_text(source, encoding="utf-8")
+            snapshot = json.loads(suite.command(label + ":export", [
+                suite.tools["compiler"], "protocol-structured", original, "--symbol=main"]))
+            assert snapshot[9][0] or snapshot[9][1], snapshot[9]
+            suite.refuse_snapshot(label, snapshot, code)
+        suite.case(label, refused)
+
+
 def run_cases(suite):
     finite = ROOT / "compiler/test/fixtures/finite"
     total_text = (finite / "total-state.mlir").read_text(encoding="utf-8")
@@ -580,6 +623,7 @@ def run_cases(suite):
             if "runtime" in suite.tools:
                 suite.case(name + "-runner", lambda s=compiled, n=name, v=values, e=expected: suite.native(s, n, v, e))
     provenance_cases(suite, structured)
+    installed_rows_cases(suite)
     boundary_cases(suite, unit_text)
     guarded = suite.export("guarded", (structured / "guards.mlir").read_text(encoding="utf-8"))
     for enabled in (False, True):

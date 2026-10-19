@@ -309,7 +309,7 @@ or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
 exports the checked validators of the compiled proof Entries of the Schnorr,
-Sumcheck, composed Sumcheck, Sigma and GKR examples
+Sumcheck, composed Sumcheck, Sigma and GKR examples and of a guessing fixture
 ([format](spec/formats/constructed-participant.md)). Lean checks their transcript
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
 against the original exports and proves that each compiled verifier's ideal
@@ -351,8 +351,19 @@ of the Schnorr and Sumcheck Entries' `zkc.program/0` candidates, which the runti
 admits. Lean checks each against its constructed validator with a
 [lowering rule](../lean/docs/spec/executable.md) whose meaning covers proof
 framing, decoding failures, instruction budgets, loops, local calls with frames,
-helper calls and transcript custody. For Sumcheck the program's helper functions
-are proved to implement the source's checked helpers. The security bounds
+helper calls and transcript custody. The rule compares instructions up to checked
+normalization of pure total calculations, so a schedule that computes values
+before their first consumer, as the compiler's calculation batching does, is
+accepted when its anchors and their operand terms agree with the export's. The
+compiled Schnorr and Sumcheck programs equal their exports; a two-round fixture
+whose program defers the first round's product past the second draw is accepted
+through normalization, and compiled with `--no-calculation-batching`, which
+computes values where the source defines them, by equality. That fixture's
+theorems stop at the constructed validator, since the participant projection
+rule is not applied to it. For Sumcheck the program's helper functions are proved to
+implement the source's checked helpers, and honest-prover completeness of the
+executable holds at every budget of at least `68 + 61 · rounds` instructions,
+which at two rounds is the runtime's acceptance threshold. The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness
@@ -378,12 +389,29 @@ bounds defined by `data.index` constants, which meets operand provenance
 statically. Programmable handlers may ignore values, and nothing checks the
 omission classes for them. No gate, block request, declared role of hash calls,
 challenge-input coverage, configuration provenance check or interaction-pattern
-digest is implemented, and no provider has a simulation theorem. Lean states
-formal readings of the obligations, refutes each with a model counterexample
+digest is implemented, the salt kind is not admitted natively, and no provider
+has a simulation theorem. Lean states formal readings of the obligations,
+refutes each with a model counterexample
 ([support](../lean/docs/support.md#construction-obligation-counterexamples)),
 fixes the type of provider simulations and states the joint experiment of a
 committed opening with its extraction checkpoint convention, without proving its
-bound.
+bound. It also states law records with their five constructors and the gated
+accepted-value decoder, per-key charges in the typed Fiat–Shamir theorems,
+raw answer types by the last event and the lifting of uniform-sort certificates,
+binding codecs over typed public-value binding events, and the data shape of the
+interaction pattern with the reserved salt kind. The construction model carries
+typed draw requests on its challenge occurrences and a typed public-value
+binding event, from which the compiled and executable Sumcheck theorems derive
+their statement binding; the exported query key and the native occurrence
+template keep their draw spelling until the first method with operands. ArkLib's
+worst-case round-by-round soundness imports into the typed engine for verifiers
+with a guarded verdict, each challenge round charged its own error, and a
+process-form certificate transports to a participant validator that realizes the
+process form: a worst-case round-by-round proof stated in ArkLib's framework
+(written for the example) bounds the compiled verifier of a guessing fixture
+Entry, and the bound is attained at zero queries. The import of ArkLib's interaction-stack soundness is deferred, blocked
+upstream by its execution prefixes in `Type 1`, its challenge models that sample
+arbitrary distributions and its private Sumcheck instance.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
@@ -392,7 +420,8 @@ Native SSA/Lean differential tests cover the admitted finite scalar profile.
 The separate [structured import](spec/formats/structured-source.md) exports
 original protocol-stage units: shared helpers, protocol roots, retained contracts
 and formula links, checked primitives, maps and realizations, protocol
-applications and repeats. The native exporter and an independent C++ SSA
+applications and repeats, with the native catalogue rows of every domain
+identity and random service they use. The native exporter and an independent C++ SSA
 reference check this profile, including the 4096-instruction admission budget,
 reference depth 64 and effective-site collisions. The
 [structured bridge](../lean/bridges/structured/README.md) compares native SSA
@@ -402,7 +431,11 @@ construction-start selection are outside this profile.
 
 Lean independently checks each structured export's metadata, signatures, helper
 linking, role scopes, service provenance and computational availability, and
-proves its process equations on the shared Region carrier.
+proves its process equations on the shared Region carrier. It resolves every
+domain identity against the exported catalogue rows and admits the rows that
+agree with its environment: the BLS12-381 scalar field, its pairing groups and
+its random service, at field, vector, G1 and service types. Other installed
+identities export their rows and are refused by Lean admission.
 [Formal support](../lean/docs/support.md) states exact experiments and premises,
 including: the Interactive Schnorr verifier contracts, an honest prover derived
 from the checked source's sends and the Sigma properties; the Schnorr AND and

@@ -123,7 +123,7 @@ private def source : Snapshot :=
       some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none, .block [] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 private def mainSignature : ProtocolSignature :=
   ⟨"Main", ["A"], [.boolean, .boolean], [.boolean], [[0], [0]], [[0]]⟩
 private def mainBody : Region protocolDialect [.boolean, .boolean] [.boolean] :=

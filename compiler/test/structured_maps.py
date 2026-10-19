@@ -99,7 +99,7 @@ map_args = [['2', '7'], ['11', '13'], ['8', '9'], '3']
 
 with case('exact-original-declaration-records-and-full-projection-abi'):
     snapshot = export(mapped)
-    assert len(snapshot) == 9
+    assert len(snapshot) == 10
     row = next(row for row in snapshot[7] if row[1] == 'mapped')
     assert row == ['map', 'mapped', [vector_type] * 3 + [field_type],
                    [vector_type], 'formula', [True, True, True, False]]
@@ -138,10 +138,14 @@ with case('realization-total-profile-keeps-pure-index-and-group-values'):
     export(source)
     assert run(source, ['7', maximum, '1']) == returned(['7'])
 
-with case('other-installed-fields-remain-outside-structured-map-profile'):
+with case('other-installed-fields-export-with-their-rows'):
+    # The map profile lifts any installed field; Lean admits only its own rows.
     source = mapped.replace('bls12-381.fr', 'koala-bear')
     commands.verified(source)
-    export(source, refusal='structured-source-type')
+    nominals, services = export(source)[9]
+    assert nominals == [['nominal', 'koala-bear', 'Field', [],
+                         ['TwoAdicField', 'Field', 'CommRing', 'PrimeField', 'CharacteristicNotTwo'],
+                         '2130706433']] and services == []
     run(source, [], refusal='structured-reference-unsupported')
 
 with case('shape-checks-include-unused-rows-and-empty-first-row'):

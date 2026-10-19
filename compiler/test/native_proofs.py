@@ -35,6 +35,7 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
         'true' if '--fuse-vector-reductions' in options else 'false',
         'false' if '--no-finite-bulk' in options else 'true',
         'true' if '--fuse-collect-fold' in options else 'false',
+        'false' if '--no-calculation-batching' in options else 'true',
     ]
     assert envelope[5] == hashlib.sha256(envelope[4].encode()).hexdigest()
     assert json.loads(envelope[4])[0] == 'zkc.program/0'

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.SumcheckFiatShamir
+public import ZkcSecurity.FiatShamir.Binding
 public import ZkcExamples.Construction.SumcheckProof
 
 @[expose] public section
@@ -41,10 +42,13 @@ count) and initial transcript, in a random oracle on all typed histories, by
 statements chosen after the oracle queries, with decoded challenges, by
 `(Q + 2) * (1 / |F| + loss)`, under a binding whose initial histories determine
 the statement (`Determined`); `reduced_soundness` instantiates the decoding with
-the reduction of a uniform sample below `N` modulo the field size. The host's
-binding of the vector and count public inputs is not modelled (the binding
-model covers scalar public inputs only), so the adaptive theorems take the
-determining binding as a premise rather than deriving it from the policy.
+the reduction of a uniform sample below `N` modulo the field size. The
+adaptive theorems take a determining binding as a premise. The typed
+public-value binding of the statement discharges it: one binding event whose row
+holds the table values as a vector, the claimed sum as a scalar and the round
+count as a count (`publicInitial`) determines the statement
+(`publicInitial_determined`, from `ZkcSecurity.FiatShamir.determined_single`),
+and `adaptive_soundness_public` is the adaptive bound from that binding.
 -/
 
 set_option autoImplicit false
@@ -91,6 +95,45 @@ theorem construction {m : Type → Type} [Monad m] [LawfulMonad m] (challenge : 
     verifier_imported]
 
 end Compiled
+
+section Binding
+
+/-- The statement's typed public-value row, in input order: the table values as
+a vector, the claimed sum as a scalar and the round count as a count. -/
+def publicRow (statement : PublicStatement F) : Row (Payload F G) :=
+  [("table", .vector (statement.raw.map (.field "bls12-381.fr"))),
+    ("claim", .scalar (.field "bls12-381.fr" statement.claim)),
+    ("rounds", .count statement.count)]
+
+/-- The host's initial transcript for a statement: one typed public-value binding
+event of the application context and the statement's row. -/
+def publicInitial (application : String) (statement : PublicStatement F) : History F G :=
+  [.publicBinding ⟨application, publicRow statement⟩]
+
+/-- The row determines the statement: it gives back the table values, the claim
+and the round count, and the decoded table is a function of the values and the
+count. -/
+theorem publicRow_injective : Function.Injective (publicRow (F := F) (G := G)) := by
+  rintro ⟨raw, claim, count, table, decoded⟩ ⟨raw', claim', count', table', decoded'⟩ same
+  simp only [publicRow, List.cons.injEq, Prod.mk.injEq, PublicValue.vector.injEq,
+    PublicValue.scalar.injEq, PublicValue.count.injEq, Payload.field.injEq, true_and,
+    and_true] at same
+  obtain ⟨rawEq, claimEq, countEq⟩ := same
+  have values : raw = raw' :=
+    List.map_injective_iff.mpr (fun _ _ same => by cases same; rfl) rawEq
+  subst values claimEq countEq
+  rw [decoded] at decoded'
+  cases decoded'
+  rfl
+
+/-- The typed public-value binding determines the statement. -/
+theorem publicInitial_determined (application : String) :
+    Determined (publicInitial (F := F) (G := G) application) :=
+  fun statement other rest otherRest same =>
+    determined_single Event.publicBinding (fun _ _ same => by cases same; rfl) application
+      publicRow publicRow_injective statement other rest otherRest same
+
+end Binding
 
 section Security
 variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
@@ -159,6 +202,21 @@ theorem reduced_soundness (numbering : F ≃ Fin (Fintype.card F)) (N : Nat) [Ne
       (queries + 2) * (1 / (Fintype.card F : ENNReal) + (Fintype.card F : ENNReal) / N) :=
   adaptive_soundness (reduce numbering N) _ (balanced_reduce numbering N) initial determined prover
     queries proverBound
+
+/-- The adaptive bound from the typed public-value binding of the statement: no
+determination premise remains. -/
+theorem adaptive_soundness_public {B : Type} [SampleableType B] (decode : B → F)
+    (loss : ENNReal) (balanced : Balanced decode loss) (application : String)
+    (prover : OracleComp (Oracle F G B) (PublicStatement F × Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
+        (fun result => (claimed.1, result)) <$>
+          compiledVerifier (decodedQuery decode) claimed.1.raw claimed.1.claim claimed.1.count
+            (publicInitial application claimed.1) claimed.2)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      (queries + 2) * (1 / (Fintype.card F : ENNReal) + loss) :=
+  adaptive_soundness decode loss balanced (publicInitial application)
+    (publicInitial_determined application) prover queries proverBound
 
 end Security
 

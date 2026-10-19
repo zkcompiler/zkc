@@ -33,6 +33,7 @@ impl Target {
                             | "--fuse-vector-reductions"
                             | "--fuse-collect-fold"
                             | "--no-finite-bulk"
+                            | "--no-calculation-batching"
                     )
                 }))
         {

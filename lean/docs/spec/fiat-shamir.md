@@ -176,15 +176,18 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   selected acceptance output is the common Schnorr experiment, is derived from
   `project_sound` and `verifier_correspondence`.
 
-The compiled proof Entries of the Sumcheck example, its composed variant and
-the Sigma example are checked the same way
+The compiled proof Entries of the Sumcheck example, its composed variant, the
+Sigma example and the guessing fixture are checked the same way
 ([Sumcheck](participant-projection.md#the-compiled-sumcheck-proof-entry),
 [Sigma](participant-projection.md#the-compiled-sigma-proof-entries)):
 each validator's ideal meaning is the Fiat–Shamir transform of its original
 validator for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
 composes this with the round-by-round soundness of the imported verifier's
-transform; the other compiled Entries have no security theorem here.
+transform. The compiled guessing Entry's bound is imported from a worst-case
+round-by-round proof stated in ArkLib's framework (written for the example)
+([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers));
+the other compiled Entries have no security theorem here.
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any
@@ -212,6 +215,51 @@ initial history is the binding of the checked public values
 (`initial_binds_public`). `ZkcSecurity.Examples.StructuredSchnorrFiatShamir`
 states the same bound for the transform of the imported interactive verifier's
 Sigma instance.
+
+## Typed requests
+
+A selected challenge's occurrence carries its typed request
+(`Zkc.Construction.Request`): the method, the operands fixed before sampling and
+the result sort. `draw` is the only method of the construction model: it has no
+operands, and its result sort is the field its service contract names
+(`Request.draw`). The model key of a challenge (`Origin.query`) spells the kind,
+the occurrence (entry, site, port and contract) and the owner, and carries the
+request. The transform reads the request from the validator's query, the draw of
+its field. The construction rule and occurrence templates read it from the
+context (`Context.request`), which the check derives from the field of the
+export's first challenge (`exportContext`), the export under check rather than
+the original; the rule checks that each challenge carries the draw of its own
+field. For `draw` this check is implied by the contract check, which requires
+each challenge's field to be the replaced service contract's field: field,
+contract and request determine one another, so the derivation certifies nothing
+by itself and nothing is lost. A method with operands must instead take its
+request from the original or authenticated side, the original's service call
+or a checked policy, since a request derived from the export under check would
+certify itself. The exported structured key `["draw", owner, field]` and the native occurrence
+template, which already carries the method, are unchanged: with `draw` the only
+method, they encode the typed request injectively. The respelling of the export
+key as `["query", owner, method, [operand…]]`, with the occurrence encoding's
+injectivity (`occurrence_inj`) extended to the operand list, lands with the
+first method that has operands (`index`, `indices`).
+
+## Interaction patterns
+
+A programmable history provider binds its construction identity through the
+digest of an interaction pattern the compiler emits
+([construction obligations](../../../docs/spec/ir/construction-obligations.md#query-identities)).
+`Zkc.Construction.Pattern` defines its data shape only: a `Pattern ValueSort` is
+a list of `PatternStep`s, each with a kind (`StepKind`: a public value, an
+absorbed message, a hint that is not absorbed, a challenge, a proof-of-work step
+or a salt), the sort of its values (a parameter, to which a catalogue's sort
+vocabulary attaches), how many values it carries (`StepCount`: none, one, a
+static number, or at most a static maximum; a proof-of-work step carries its
+difficulty in bits) and its label. No digest, encoding or semantics is defined.
+The salt kind is reserved: it is part of the vocabulary because adding it later
+would change request and transcript identities, but it has no semantics, and an
+admissible pattern has no salt step (`Pattern.Admissible`).
+`Tests.ConstructionPattern` checks that Schnorr-shaped and gated query-phase
+patterns are admissible, that a salted one is refused, and that patterns
+differing only in a difficulty or a maximum are different data.
 
 ## Named assumptions
 

@@ -21,6 +21,7 @@ pub struct CompileOptions {
     pub finite_bulk: bool,
     pub fuse_vector_reductions: bool,
     pub fuse_collect_fold: bool,
+    pub calculation_batching: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -210,7 +211,7 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false},"assets":[]})
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
@@ -240,6 +241,7 @@ mod tests {
                 finite_bulk: true,
                 fuse_vector_reductions: false,
                 fuse_collect_fold: false,
+                calculation_batching: true,
             }
         );
         assert_eq!(package.clone().identity(), package.identity());
@@ -327,6 +329,11 @@ mod tests {
                 "\"fuse_vector_reductions\":false,\"fuse_vector_reductions\":false",
             ),
             original.replace("\"finite_bulk\":true,", ""),
+            original.replace("\"calculation_batching\":true,", ""),
+            original.replace(
+                "\"calculation_batching\":true",
+                "\"calculation_batching\":\"true\"",
+            ),
             original.replace("\"finite_bulk\":true", "\"finite_bulk\":\"true\""),
             original.replace(
                 "\"finite_bulk\":true",
@@ -411,8 +418,8 @@ mod tests {
             Err(PackageError::Format)
         ));
         let value = frame().replace(
-            r#"{"finite_bulk":true,"fuse_collect_fold":false,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
-            "[true,false,true,false,false]",
+            r#"{"calculation_batching":true,"finite_bulk":true,"fuse_collect_fold":false,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
+            "[true,false]",
         );
         assert_ne!(value, frame());
         assert!(matches!(

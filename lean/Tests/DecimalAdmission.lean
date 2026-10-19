@@ -29,7 +29,7 @@ private def constantSnapshot : Snapshot :=
         [.field scalarDomain] [] ""] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 
 private def constantProgram : ClosedProgram :=
   (checkClosed constantSnapshot).toOption.get (by decide +kernel)

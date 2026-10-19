@@ -72,7 +72,8 @@ def cheatKey : History Scalar Scalar :=
         (SumcheckSourceVerifier.childContext.roles 0) SumcheckProof.context.validator)
       (.field "bls12-381.fr" 0)] ++
     [.challenge (SumcheckProof.context.query
-      (SumcheckVerifierLaws.challengeSite SumcheckSourceVerifier.childContext))]
+      (SumcheckVerifierLaws.challengeSite SumcheckSourceVerifier.childContext)
+      (.draw "bls12-381.fr"))]
 
 /-- The compiled verifier asks one challenge on the cheating proof, at
 `cheatKey`, and decides. -/

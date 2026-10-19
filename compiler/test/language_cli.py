@@ -73,11 +73,15 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert json.loads(package['interface']) == interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
     assert package['options'] == {'simplify': True, 'release_storage': False,
-                                  'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False}
+                                  'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False,
+                                  'calculation_batching': True}
     assert package_bytes.endswith('}')
     (OUT / 'transfer.zkpkg').write_text(package_bytes)
 
 for flags, expected in [
+    (['--no-calculation-batching'],
+     {'simplify': True, 'finite_bulk': True, 'fuse_vector_reductions': False,
+      'fuse_collect_fold': False, 'calculation_batching': False}),
     (['--fuse-collect-fold'],
      {'simplify': True, 'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': True}),
     (['--no-finite-bulk', '--fuse-collect-fold'],
@@ -91,7 +95,7 @@ for flags, expected in [
 ]:
     with case(f'independent mathematical choices {flags}'):
         selected = json.loads(commands.run([compiler, 'language-package', *options, *flags]))
-        assert selected['options'] == {'release_storage': False, **expected}
+        assert selected['options'] == {'release_storage': False, 'calculation_batching': True, **expected}
         commands.run([compiler, 'language-check', *options, *flags], refuses='source.options')
 
 with case('same-signature protocols execute through distinct Entries'):
@@ -302,7 +306,7 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
                 assert envelope[0] == 'zkc.native-proof/0'
                 assert envelope[7] == ['true' if simplified else 'false',
                                        'true' if released else 'false',
-                                       'false', 'true', 'false']
+                                       'false', 'true', 'false', 'true']
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')

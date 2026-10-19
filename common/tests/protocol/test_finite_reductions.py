@@ -340,7 +340,7 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         entry = Entry(toolchain, journal, subdirectory(directory, name), PROOF, flags)
         package = json.loads(entry.package.read_text())
         deployment = json.loads(package['artifact'])
-        assert deployment[7] == ['true', 'false', 'true' if flags else 'false', 'true', 'false']
+        assert deployment[7] == ['true', 'false', 'true' if flags else 'false', 'true', 'false', 'true']
         descriptors.append(deployment[2])
         wire_sites.append(deployment[8])
         candidates.append(deployment[4:6])
@@ -400,9 +400,9 @@ def test_finite_proof_policy_reconstructs_actual_candidate(
     package = json.loads(entry.package.read_text())
     assert package['options'] == {'simplify': simplify, 'release_storage': False,
                                   'fuse_vector_reductions': False, 'finite_bulk': bulk,
-                                  'fuse_collect_fold': False}
+                                  'fuse_collect_fold': False, 'calculation_batching': True}
     deployment = json.loads(package['artifact'])
-    assert deployment[7] == [str(simplify).lower(), 'false', 'false', str(bulk).lower(), 'false']
+    assert deployment[7] == [str(simplify).lower(), 'false', 'false', str(bulk).lower(), 'false', 'true']
     original = directory / 'original.mlir'
     original.write_text(package['original'])
     policy = journal.write('policy.json', deployment[2][1])

@@ -51,37 +51,40 @@ theorem unchanged_accepted :
 
 /-! ## Arithmetic and result mutations -/
 
-/-- The final addition takes its operands in the other order. -/
+/-- The final addition takes its operands in the other order. The sum is a pure
+term, so the rule finds the difference where the decision it feeds is returned. -/
 def additionSwapped : Validator :=
   withStep actual "_calculation_2" 2 (.operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v26", "v24"] ["v27"])
 
 theorem additionSwapped_refused :
-    refusal (checkLowering installed constructed additionSwapped) = some (.instruction 12) := by
+    refusal (checkLowering installed constructed additionSwapped) = some (.returned 0) := by
   decide +kernel
 
-/-- The final comparison compares one side with itself. -/
+/-- The final comparison compares one side with itself: the returned decision
+denotes another term. -/
 def comparisonTrivial : Validator :=
   withStep actual "_calculation_2" 3 (.operation "lc_6_kernel_6_kernel_1_3" "_kernel_binding_3" [] ["v25", "v25"] ["v28"])
 
 theorem comparisonTrivial_refused :
-    refusal (checkLowering installed constructed comparisonTrivial) = some (.instruction 13) := by
+    refusal (checkLowering installed constructed comparisonTrivial) = some (.returned 0) := by
   decide +kernel
 
 /-- The participant returns its decision and transcript in the other order. -/
 def resultsSwapped : Validator := withAction actual 7 (.ret ["v38", "v39"])
 
 theorem resultsSwapped_refused :
-    refusal (checkLowering installed constructed resultsSwapped) = some (.different "returned") := by
+    refusal (checkLowering installed constructed resultsSwapped) = some (.returned 0) := by
   decide +kernel
 
 /-! ## Transcript mutations -/
 
-/-- The first observation absorbs the base instead of the received commitment. -/
+/-- The first observation absorbs the base instead of the received commitment:
+the second anchor's second operand denotes another term. -/
 def baseObserved : Validator :=
   withAction actual 1 (.call "_transcript_12" "_transcript_1" ["v31", "v29"] ["v33"])
 
 theorem baseObserved_refused :
-    refusal (checkLowering installed constructed baseObserved) = some (.instruction 2) := by
+    refusal (checkLowering installed constructed baseObserved) = some (.anchorOperand 1 1) := by
   decide +kernel
 
 /-- The delivery is observed on the transcript state from before the challenge:

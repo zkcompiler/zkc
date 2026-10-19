@@ -23,7 +23,8 @@ defines the Lean interpretation.
 The current format is an exact tagged array, `zkc.structured-source/0`:
 
 ```text
-[format, "original", source-sha256, entry-name, domains, relations, bindings, definitions, contracts]
+[format, "original", source-sha256, entry-name, domains, relations, bindings, definitions, contracts,
+ catalogue]
 ```
 
 `source-sha256` is `sha256:` followed by 64 lowercase hexadecimal digits, hashing
@@ -31,7 +32,7 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
-All nine slots are required, including empty tables. Each declaration category preserves its native encounter
+All ten slots are required, including empty tables. Each declaration category preserves its native encounter
 order. There is no cross-category declaration-order field.
 
 | Type | Native interpretation |
@@ -43,9 +44,29 @@ order. There is no cross-category declaration-order field.
 | `["group", domain]` | nominal group |
 | `["service", contract]` | owner-local reusable service reference |
 
-The admitted domains are `bls12-381.fr` and `bls12-381.g1`, whose associated
-scalar field is `bls12-381.fr`. The only service contract is
-`random.bls12-381.fr/0`, with method `draw`. Services originate at protocol
+A domain is a native catalogue identity: field and vector types name a `Field`
+identity admitted for that logical kind, group types a `Group` identity admitted
+for `group`, and service types an installed random-service contract. The
+`catalogue` slot carries the rows of every identity the export uses, closed
+under associated members, in native catalogue order, and the rows of the
+services it uses:
+
+```text
+catalogue := [nominal-rows, service-rows]
+["nominal", identity, sort, [[member, identity]...], [capability...], modulus | null]
+["service", contract, sampled-field, [method...]]
+```
+
+A nominal row is the native row: its sort (`Field`, `Group`, `Commitment` or
+`Transcript`), its associated members, its capability facts in native order
+and, for a field, its modulus as a canonical decimal string. A service row
+names the field the service samples and its methods: `draw`, and `index`
+exactly when that field has `IndexRandomness`. The exporter writes the rows of
+whatever the native catalogue admits; an importer admits only identities whose
+rows agree with its own catalogue (the
+[formal admission contract](../../../lean/docs/spec/structured-source.md#domain-catalogue)
+admits the BLS12-381 scalar field, G1 and the random service of that field).
+Services originate at protocol
 input roots and may be query handles or actual protocol application arguments.
 The native
 [service contract](../runtime/services.md) requires singleton ownership and
@@ -145,8 +166,8 @@ checked even when unused. The exact represented native attributes are
 `sym_name`, `contract`, `arguments`, and `implementation`; no signature, body,
 visibility, or execution parameters are invented for them. Names match ASCII
 `[A-Za-z_][A-Za-z0-9_.-]*` and have at most 256 bytes. Index contracts require
-empty domain arguments; vector and field contracts require exactly
-`["bls12-381.fr"]`. The implementation selector must be the explicit empty
+empty domain arguments; vector and field contracts require exactly one
+`Field` identity, whose row the catalogue slot carries. The implementation selector must be the explicit empty
 string. Selected implementations and contracts outside the catalogue below are
 refused, including on dormant declarations. Distinct binding names with the
 same metadata remain distinct retained rows.
@@ -196,7 +217,7 @@ on dead calls. It can accept a premise discharged by a finite index callback
 below an unconditional realization root. Such a structured negative also hits
 the finite-work exclusion; it does not isolate the transitive-premise check.
 
-A map root takes only `bls12-381.fr` scalars and returns exactly one such scalar.
+A map root takes scalars of one field identity and returns exactly one such scalar.
 `rowwise` is a Boolean array with exactly one entry per input and at least one
 true. A true position lifts that scalar to a vector; a false position remains a
 scalar broadcast. The result is one vector. Every transitive instruction,

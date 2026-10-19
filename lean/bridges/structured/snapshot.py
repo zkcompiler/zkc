@@ -256,8 +256,43 @@ def definition(value):
             f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
 
 
+SORTS = {"Field": ".field", "Group": ".group", "Commitment": ".commitment",
+         "Transcript": ".transcript"}
+
+
+def modulus(value):
+    if value is None:
+        return "none"
+    if not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,1023}", value):
+        raise ValueError("invalid catalogue modulus")
+    return f"(some {value})"
+
+
+def nominal(value):
+    tag, identity, sort, members, capabilities, characteristic = record(value, 6)
+    if tag != "nominal" or sort not in SORTS:
+        raise ValueError("invalid nominal catalogue row")
+    def member(pair):
+        name, target = record(pair, 2)
+        return f"({text(name)}, {text(target)})"
+    return (f"⟨{text(identity)}, {SORTS[sort]}, {seq(members, member)}, "
+            f"{seq(capabilities, text)}, {modulus(characteristic)}⟩")
+
+
+def service_row(value):
+    tag, contract, sampled, methods = record(value, 4)
+    if tag != "service":
+        raise ValueError("invalid service catalogue row")
+    return f"⟨{text(contract)}, {text(sampled)}, {seq(methods, text)}⟩"
+
+
+def catalogue(value):
+    nominals, services = record(value, 2)
+    return f"{{ nominals := {seq(nominals, nominal)}, services := {seq(services, service_row)} }}"
+
+
 def render(data, namespace):
-    version, stage, source, entry, domains, relations, bindings, definitions, contracts = record(data, 9)
+    version, stage, source, entry, domains, relations, bindings, definitions, contracts, rows = record(data, 10)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
@@ -283,6 +318,7 @@ def snapshot : Snapshot where
   bindings := {seq(bindings, primitive_binding)}
   definitions := {seq(definitions, definition)}
   contracts := {seq(contracts, protocol_contract)}
+  catalogue := {catalogue(rows)}
 
 end {namespace}
 '''

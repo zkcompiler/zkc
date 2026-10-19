@@ -133,7 +133,7 @@ def program_validator(program, deployment):
     return next(item for item in program[3] if item[3] == deployment[2][1][3])
 
 
-def function_operation(program, symbol, contract):
+def function_operation(program, symbol, contract, inputs=None):
     """Select one top-level operation by its declared contract, retaining its names.
 
     Generated sites and binding symbols can change during Kernel lowering. A
@@ -141,7 +141,8 @@ def function_operation(program, symbol, contract):
     """
     bindings = {binding[0]: binding[1] for binding in program[1]}
     matches = [item for item in program_function(program, symbol)[4]
-               if item[0] == "op" and bindings[item[2]] == contract]
+               if item[0] == "op" and bindings[item[2]] == contract
+               and (inputs is None or item[4] == inputs)]
     if len(matches) != 1:
         raise ValueError(f"expected one {contract!r} operation in {symbol!r}, found {len(matches)}")
     return matches[0]
@@ -161,6 +162,8 @@ class Schnorr:
     # The executable takes the data inputs base then statement; values are mapped to zero.
     prediction_data = '[.data (.group "bls12-381.g1" 0), .data (.group "bls12-381.g1" 0)]'
     threshold = 25
+    # The static total charge; the rule theorem `actual_total` checks it.
+    charge = None
     theorem = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness"
     security_module = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"
     chain = [
@@ -177,6 +180,8 @@ class Schnorr:
         "Zkc.Executable.validate_ideal",
         "Zkc.Executable.validate_rejects",
         "Zkc.Executable.execute_cleaned",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
         "Zkc.Construction.compiled_transform",
         "Zkc.Construction.check_sound",
         "Zkc.Construction.project_sound",
@@ -191,6 +196,7 @@ class Schnorr:
         "ZkcExamples.Construction.SchnorrProof.compiled",
         "Zkc.Executable.validate_ideal",
         "Zkc.Executable.validate_rejects",
+        "Zkc.Executable.checkLowering_sound",
         "ZkcExamples.Executable.SchnorrProof.accepted",
     ]
     # Entry-specific equations about the compiled program's meaning, which the proof must not use.
@@ -275,10 +281,10 @@ class Schnorr:
             program[2].append(copy.deepcopy(program_function(program, "_calculation_2")))
 
         return {
-            "addition-swapped": (addition_swapped, "some (.instruction 12)"),
-            "comparison-trivial": (comparison_trivial, "some (.instruction 13)"),
-            "results-swapped": (results_swapped, "some (.different \"returned\")"),
-            "base-observed": (base_observed, "some (.instruction 2)"),
+            "addition-swapped": (addition_swapped, "some (.returned 0)"),
+            "comparison-trivial": (comparison_trivial, "some (.returned 0)"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
+            "base-observed": (base_observed, "some (.anchorOperand 1 1)"),
             "stale-transcript": (stale_transcript, "some (.operation \"transition\")"),
             "uninstalled-implementation": (uninstalled, f"some (.binding {json.dumps(addition_binding)})"),
             "unchecked-representation": (unchecked_representation, "some .representation"),
@@ -333,7 +339,8 @@ class Schnorr:
              "accepts": ["constructed_export", "program"],
              "certificate": "ZkcExamples.Executable.SchnorrProof.accepted",
              "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_ideal",
-                           "Zkc.Executable.validate_rejects", "Zkc.Executable.execute_cleaned"]},
+                           "Zkc.Executable.validate_rejects", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"]},
         ]
 
 
@@ -353,6 +360,10 @@ class Sumcheck:
     # maps every value to zero, so that every honest check holds.
     prediction_data = '[.vector "bls12-381.fr" [0, 0, 0, 0], .data (.field "bls12-381.fr" 0), .index 2]'
     threshold = 190
+    # The Lean charge bound of a complete run for the public round count; the honest
+    # run must be accepted from exactly this budget (`SumcheckCompleteness.honest_accepted`).
+    charge = "ZkcExamples.Executable.SumcheckCharges.charge"
+    completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"
     theorem = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness"
     security_module = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir"
     chain = [
@@ -371,12 +382,21 @@ class Sumcheck:
         "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes",
         "ZkcExamples.Executable.SumcheckHelpers.prepared",
         "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
+        "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted",
+        "ZkcExamples.Executable.SumcheckCharges.sufficient",
+        "ZkcExamples.Executable.SumcheckCharges.check_cost",
+        "Zkc.Executable.metered_sufficient",
+        "Zkc.Executable.validate_sufficient",
         "ZkcExamples.Construction.SumcheckProof.compiled",
         "ZkcExamples.Construction.SumcheckProof.compiled_transform",
         "Zkc.Executable.execute_metered",
         "Zkc.Executable.validate_metered",
         "Zkc.Executable.metered_prunes",
         "Zkc.Executable.validate_prunes",
+        "Zkc.Executable.validate_prunes_export",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "ZkcExamples.Executable.SumcheckProof.helpersSorted",
         "Zkc.Executable.execute_cleaned",
         "Zkc.Construction.compiled_transform",
         "Zkc.Construction.check_sound",
@@ -389,6 +409,7 @@ class Sumcheck:
         "ZkcExamples.Structured.SumcheckSourceViews.imported",
         "ZkcExamples.Construction.SumcheckProof.compiled",
         "Zkc.Executable.validate_prunes",
+        "Zkc.Executable.validate_prunes_export",
         "ZkcExamples.Executable.SumcheckProof.accepted",
         "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
         "ZkcSecurity.VCVio.Pruning.Prunes.prEvent_le",
@@ -483,13 +504,13 @@ class Sumcheck:
             constant[3] = ["2"]
 
         return {
-            "loop-maximum-raised": (maximum_raised, "some (.instruction 1)"),
+            "loop-maximum-raised": (maximum_raised, "some (.anchor 1)"),
             "loop-count-retargeted": (count_retargeted, "some (.loop \"apply_18_label_726564756365_s15\")"),
             "loop-carried-swapped": (carried_swapped, "some (.operation \"apply_18_label_726564756365_s24\")"),
-            "round-check-trivial": (round_check_trivial, "some (.instruction 1)"),
+            "round-check-trivial": (round_check_trivial, "some (.anchorOperand 4 0)"),
             "stale-transcript": (stale_transcript, "some (.operation \"transition\")"),
             "helper-retargeted": (helper_retargeted, "some (.operation \"apply_18_label_726564756365_s12\")"),
-            "results-swapped": (results_swapped, "some (.different \"returned\")"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
             "uninstalled-implementation": (uninstalled, "some (.binding \"_transcript_0\")"),
             # The rule reads a helper body only for its sorts and its freedom from transcript
             # operations; what the body computes is the obligation
@@ -557,11 +578,170 @@ class Sumcheck:
              "helper_preparation": "ZkcExamples.Executable.SumcheckHelpers.prepared",
              "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_metered",
                            "Zkc.Executable.metered_prunes", "Zkc.Executable.validate_prunes",
-                           "Zkc.Executable.execute_cleaned"]},
+                           "Zkc.Executable.validate_prunes_export", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"],
+             "completeness": ["Zkc.Executable.metered_sufficient", "Zkc.Executable.validate_sufficient",
+                              "ZkcExamples.Executable.SumcheckCharges.sufficient",
+                              "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted"]},
         ]
 
 
-SUBJECTS = {subject.name: subject for subject in (Schnorr(), Sumcheck())}
+
+class DeferredRounds:
+    """The two-round `example::Proof` Entry of the deferred-rounds fixture, whose program
+    computes the verifier's products after the second draw (calculation batching)."""
+
+    name = "deferred-rounds"
+    entry = "example::Proof"
+    modules = ["example=common/tests/fixtures/projects/deferred-rounds/main.zkc"]
+    public = ROOT / "common/tests/fixtures/projects/deferred-rounds/inputs/example.Proof/public.json"
+    witness = ROOT / "common/tests/fixtures/projects/deferred-rounds/inputs/example.Proof/witness.json"
+    data = LEAN / "ZkcExamples/Executable/DeferredRoundsProgramData.lean"
+    namespace = "ZkcExamples.Executable.DeferredRoundsProgramData"
+    construction = "ZkcExamples.Construction.DeferredRounds"
+    # The executable takes the public value; values are mapped to zero.
+    prediction_data = '[.data (.field "bls12-381.fr" 0)]'
+    threshold = 35
+    charge = None
+    # The same Entry compiled without calculation batching.
+    variants = {"Unbatched": ["--no-calculation-batching"]}
+    theorem = "ZkcExamples.Executable.DeferredRounds.executable_validate"
+    security_module = "ZkcExamples.Executable.DeferredRounds"
+    chain = [
+        theorem,
+        "ZkcExamples.Executable.DeferredRounds.executable_prunes",
+        "ZkcExamples.Executable.DeferredRounds.accepted",
+        "ZkcExamples.Executable.DeferredRounds.rescheduled",
+        "ZkcExamples.Construction.DeferredRounds.accepted",
+        "Zkc.Executable.validate_ideal",
+        "Zkc.Executable.validate_prunes_export",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "Zkc.Executable.checkNormalized_flow",
+        "Zkc.Executable.execute_cleaned",
+    ]
+    used = [
+        "Zkc.Executable.validate_ideal",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "ZkcExamples.Executable.DeferredRounds.accepted",
+    ]
+    unused = []
+    lean_files = ["lean/ZkcExamples/Construction/DeferredRoundsData.lean",
+                  "lean/ZkcExamples/Construction/DeferredRoundsParticipant.lean",
+                  "lean/ZkcExamples/Executable/DeferredRoundsProgramData.lean"]
+    assumptions = [
+        "Lean kernel and the installed Lean toolchain",
+        "the protocol-structured exporter and its renderer denote the original MLIR",
+        "the zkc.program/0 renderer reads the admitted program bytes as the runtime's program loader does",
+        "the runtime accepts proof bytes for the admitted validator only when "
+        "Zkc.Executable.validate accepts them under the Entry's checked occurrence context "
+        "ZkcExamples.Construction.DeferredRounds.context",
+        "installed kernels implement the meanings of Zkc.Executable.installed",
+        "the native codec is a function of a message's bytes and type",
+        "the participant projection rule is not applied to this Entry: the theorems relate host "
+        "validation to the constructed validator, not to the original protocol",
+    ]
+    wrong_case = "first-message-wrong-value"
+
+    def construction_data(self, artifacts):
+        return [
+            (LEAN / "ZkcExamples/Construction/DeferredRoundsData.lean",
+             "ZkcExamples.Construction.DeferredRoundsData",
+             lambda namespace: structured.render(json.loads(artifacts["original_text"]), namespace), True),
+            (LEAN / "ZkcExamples/Construction/DeferredRoundsParticipant.lean",
+             "ZkcExamples.Construction.DeferredRoundsParticipant",
+             lambda namespace: constructed.render(artifacts["exported"], namespace), True),
+        ]
+
+    def rule_theorems(self):
+        return ["theorem actual_total : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Actual.validator).toOption.map (·.total?) = some (some 35) := by decide +kernel",
+                # The rule accepts the program through normalization, not by equality.
+                "theorem actual_rescheduled : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Actual.validator).toOption.map (fun lowered => decide (Code.instructionList "
+                "lowered.code = Fresh.Constructed.participant.instructions)) = some false := by decide +kernel",
+                # Without calculation batching the program computes every value where the source
+                # defines it, so the rule accepts it by equality.
+                "theorem unbatched_exact : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Unbatched.validator).toOption.map (fun lowered => decide (Code.instructionList "
+                "lowered.code = Fresh.Constructed.participant.instructions)) = some true := by decide +kernel"]
+
+    def mutations(self, deployment):
+        # The batched calculation's formals are the first message, the first challenge, the
+        # second challenge, the public value and the second message.
+        def first_product_retargeted(program):
+            arguments = program_function(program, "_calculation_1")[2]
+            inputs = [argument[0] for argument in arguments[:2]]
+            operation = function_operation(program, "_calculation_1", "field.multiply", inputs)
+            operation[4] = [operation[4][0], arguments[2][0]]
+
+        def comparison_trivial(program):
+            operation = function_operation(program, "_calculation_1", "field.equal")
+            operation[4] = [operation[4][0], operation[4][0]]
+
+        def second_observation_retargeted(program):
+            participant = program_validator(program, deployment)
+            receive = next(item for item in participant[6] if item[0] == "receive")
+            call = next(item for item in participant[6] if item[:2] == ["local", "_transcript_18"])
+            call[3] = [call[3][0], receive[4]]
+
+        def results_swapped(program):
+            body = program_validator(program, deployment)[6]
+            body[-1][1] = list(reversed(body[-1][1]))
+
+        return {
+            "first-product-retargeted": (first_product_retargeted, "some (.returned 0)"),
+            "comparison-trivial": (comparison_trivial, "some (.returned 0)"),
+            "second-observation-retargeted": (second_observation_retargeted, "some (.anchorOperand 5 1)"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
+        }
+
+    def scenarios(self, proof):
+        """Proof mutations, the payloads the runtime codec refuses in each, and the
+        payloads it reads as another value."""
+        assert proof[:8] == b"ZKCPRF00" and len(proof) == 132
+        first = proof[48:86]
+        return {
+            "honest": (proof, [], []),
+            "first-message-out-of-range": (replace(proof, 54, b"\xff" * 32), [replace(first, 6, b"\xff" * 32)], []),
+            "first-message-wrong-value": (replace(proof, 54, b"\x00" * 31 + b"\x01"), [], []),
+            "second-message-wrong-value": (replace(proof, 100, b"\x00" * 31 + b"\x01"), [], []),
+            "second-message-missing": (proof[:86], [], []),
+            "second-message-truncated": (proof[:110], [], []),
+            "trailing-byte": (proof + b"\x00", [], []),
+            "header-binding": (replace(proof, 8, bytes([proof[8] ^ 0x01])), [], []),
+        }
+
+    def runtime_only(self, driver, codes):
+        # With every value mapped to zero the prediction cannot tell a wrong message from the
+        # right one; the runtime must reject wrong messages itself.
+        for name in ("first-message-wrong-value", "second-message-wrong-value"):
+            driver.check(f"deferred-rounds:runtime-rejects-{name}",
+                         codes[name][0] != 0 and codes[name][1] == "artifact-rejected", json.dumps(codes[name]))
+
+    @staticmethod
+    def receipt_mutation(program):
+        operation = function_operation(program, "_calculation_1", "field.equal")
+        operation[4] = [operation[4][0], operation[4][0]]
+
+    def rules_entry(self):
+        return [
+            {"name": "transcript construction", "check": "Zkc.Construction.checkExport",
+             "accepts": ["original_export", "constructed_export"],
+             "certificate": "ZkcExamples.Construction.DeferredRounds.accepted"},
+            {"name": "executable lowering", "check": "Zkc.Executable.checkLowering",
+             "vocabulary": "Zkc.Executable.installed",
+             "accepts": ["constructed_export", "program"],
+             "certificate": "ZkcExamples.Executable.DeferredRounds.accepted",
+             "normalization": "ZkcExamples.Executable.DeferredRounds.rescheduled",
+             "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_ideal",
+                           "Zkc.Executable.validate_prunes_export", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"]},
+        ]
+
+
+SUBJECTS = {subject.name: subject for subject in (Schnorr(), Sumcheck(), DeferredRounds())}
 
 
 class Driver:
@@ -581,7 +761,8 @@ class Driver:
                                   exit=result.returncode, started=started, finished=now(),
                                   stdout_sha256=digest(result.stdout.encode()), stderr=result.stderr[-4000:]))
         if expect is not None and result.returncode != expect:
-            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}: {result.stderr[-2000:]}")
+            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}:\n"
+                               f"{result.stdout[-2000:]}{result.stderr[-2000:]}")
         return result
 
     def check(self, name, passed, detail=""):
@@ -632,16 +813,24 @@ class Driver:
         (output / "original.json").write_text(original_text)
         self.check(f"{prefix}:participant-source", exported[1] == "sha256:" + digest(source))
         self.check(f"{prefix}:participant-policy", exported[3] == policy, json.dumps([exported[3], policy]))
+        # Programs of the same Entry compiled with other options, for the rule's theorems.
+        variants = {}
+        for name, flags in getattr(subject, "variants", {}).items():
+            text = self.run([compiler, "language-bundle", *common, *flags],
+                            name=f"{prefix}:bundle:{name}").stdout.rstrip("\n")
+            (output / f"deployment-{name}.json").write_text(text)
+            variants[name] = json.loads(text)
         return dict(source=source, deployment=deployment, deployment_text=deployment_text,
                     package=package, package_bytes=package_bytes, program=program,
-                    exported=exported, export_text=export_text, original_text=original_text)
+                    exported=exported, export_text=export_text, original_text=original_text,
+                    variants=variants)
 
     def regenerate(self, subject, artifacts):
         files = {subject.data: (executable.render(artifacts["deployment"], subject.namespace), True)}
         for path, namespace, render, owned in subject.construction_data(artifacts):
             files[path] = (render(namespace), owned)
         for path, (text, owned) in files.items():
-            if self.args.write and owned and path == subject.data:
+            if self.args.write and owned:
                 path.write_text(text, encoding="utf-8")
             current = path.read_text(encoding="utf-8") if path.exists() else None
             self.check(f"regenerated:{path.relative_to(ROOT)}", current == text,
@@ -654,6 +843,8 @@ class Driver:
         prefixes = ", ".join(f"`{name}" for name in ENTRY_PREFIXES)
         meanings = ", ".join(f"`{name}" for name in COMPILED_MEANINGS)
         imports = sorted({subject.security_module for subject in subjects}
+                         | {subject.completeness_module for subject in subjects
+                            if getattr(subject, "completeness_module", None)}
                          | {"ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"})
         chain = []
         for subject in subjects:
@@ -774,6 +965,8 @@ class Driver:
                  "set_option maxRecDepth 20000",
                  body(constructed.render(exported, "Fresh.Constructed")),
                  body(executable.render(deployment, "Fresh.Actual")),
+                 *[body(executable.render(variant, f"Fresh.{name}"))
+                   for name, variant in artifacts["variants"].items()],
                  "open Zkc.Construction Zkc.Executable",
                  "def refusal : Except Refusal Lowered → Option Refusal\n"
                  "  | .error refusal => some refusal\n  | .ok _ => none"]
@@ -827,14 +1020,16 @@ class Driver:
         self.check(f"{prefix}:role-map-validator", selection is not None)
         self.check(f"{prefix}:role-map-public-inputs", selection["inputs_match"], json.dumps(selection))
         self.check(f"{prefix}:role-map-acceptance", selection["acceptance_match"], json.dumps(selection))
-        # Controls: a policy selecting another output, or public inputs in another order, fails.
+        # Controls: a policy selecting another output, or other public inputs (in another order,
+        # or none when there is one), fails.
         other = copy.deepcopy(deployment)
         other[2][1][4] = str(int(other[2][1][4]) + 1)
         reordered = copy.deepcopy(deployment)
-        reordered[2][1][7] = list(reversed(reordered[2][1][7]))
+        inputs = reordered[2][1][7]
+        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else []
         self.check(f"{prefix}:role-map-refuses-other-acceptance",
                    not self.role_selection(other)["acceptance_match"])
-        self.check(f"{prefix}:role-map-refuses-reordered-inputs",
+        self.check(f"{prefix}:role-map-refuses-other-inputs",
                    not self.role_selection(reordered)["inputs_match"])
         return dict(symbol=selection["symbol"], data_inputs=selection["data_inputs"],
                     acceptance=selection["acceptance"])
@@ -936,13 +1131,21 @@ class Driver:
             lines.append(f"#eval IO.println (predict {budget} {lean_bytes(binding)} {lean_bytes(bytes_)} "
                          f"[{', '.join(lean_bytes(item) for item in invalid)}] "
                          f"[{', '.join(lean_bytes(item) for item in ones)}])")
+        if subject.charge:
+            # The charge bound of the completeness theorem at the public round count.
+            rounds = int(json.loads(subject.public.read_text())["rounds"])
+            lines.insert(2, f"import {subject.completeness_module}")
+            lines.append(f"#eval IO.println (\"charge \" ++ toString ({subject.charge} {rounds}))")
         path = self.directory(subject) / "Predictions.lean"
         path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=LEAN,
                           name=f"{subject.name}:lean-predictions")
         values = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
         self.check(f"{subject.name}:lean-predictions", len(values) == len(cases), result.stdout[-400:])
-        return values
+        charges = re.findall(r"^charge (\d+)$", result.stdout, re.M)
+        if subject.charge:
+            self.check(f"{subject.name}:lean-charge", len(charges) == 1, result.stdout[-400:])
+        return values, (int(charges[0]) if charges else None)
 
     def runtime(self, subject, artifacts):
         output = self.directory(subject)
@@ -968,7 +1171,12 @@ class Driver:
             observed.append((name, self.observed(exit_code, report)))
             codes[name] = (exit_code, report.get("code"))
         subject.runtime_only(self, codes)
-        predicted = self.predictions(subject, artifacts, cases, binding)
+        predicted, charge = self.predictions(subject, artifacts, cases, binding)
+        if subject.charge:
+            # Completeness: the runtime accepts the honest proof from exactly the budget the Lean
+            # charge bound gives for the public round count.
+            self.check(f"{subject.name}:runtime-threshold-is-lean-charge", charge == subject.threshold,
+                       json.dumps(dict(charge=charge, threshold=subject.threshold)))
         comparisons = []
         for (name, actual), expected in zip(observed, predicted):
             if expected["outcome"] == "returned" and actual["outcome"] == "accepted":
@@ -984,7 +1192,8 @@ class Driver:
         accepted = [c["case"] for c in comparisons if c["runtime"]["outcome"] == "accepted"]
         expected = [f"budget-{subject.threshold}", f"budget-{subject.threshold + 1}", "honest"]
         self.check(f"{subject.name}:runtime-accepted-cases", accepted == expected, json.dumps(accepted))
-        return dict(pin=pin, proof_sha256=digest(proof), binding=binding.hex(), comparisons=comparisons)
+        return dict(pin=pin, proof_sha256=digest(proof), binding=binding.hex(), lean_charge=charge,
+                    comparisons=comparisons)
 
     # The receipt and its binding to the runtime.
 
@@ -1083,7 +1292,8 @@ def main():
     parser.add_argument("--subject", action="append", choices=sorted(SUBJECTS),
                         help="check only the named subjects (default: all)")
     parser.add_argument("--write", action="store_true",
-                        help="rewrite the committed program data from the fresh programs")
+                        help="rewrite the committed program data and the construction data this driver "
+                             "owns from the fresh programs and exports")
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.compiler = args.compiler.resolve()

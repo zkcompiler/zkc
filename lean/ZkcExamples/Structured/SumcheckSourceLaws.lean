@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Structured.SumcheckSourceViews
 public import Zkc.Source.Structured.OpenLaws
+public import ZkcExamples.Structured.SumcheckVerifierBodies
 
 @[expose] public section
 
@@ -12,11 +13,7 @@ open Zkc.Source Zkc.Source.Structured SumcheckSourceBodies SumcheckSourceViews
 
 def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
     Values Value reduceSignature.outputs :=
-  .cons (state.get (.there (.there (.there .here))))
-    (.cons (state.get .here) (.cons (state.get (.there .here))
-      (.cons (state.get (.there (.there .here)))
-        (.cons (state.get (.there (.there (.there (.there .here)))))
-          (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil)))))
+  SumcheckVerifierBodies.reduceReturnValues state
 
 theorem return_indices : (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
 

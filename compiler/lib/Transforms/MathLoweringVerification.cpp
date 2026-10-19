@@ -18,6 +18,7 @@ class LoweringVerifier {
   SymbolTableCollection kernelSymbols;
   SymbolTable sourceSymbols, symbols;
   size_t remaining = 1000000;
+  bool batching = true;
   LogicalResult refuse(Operation *op, StringRef detail) {
     return diagnostics::emit(op->emitOpError(),
                              "mathematical-lowering-preservation", detail);
@@ -70,15 +71,48 @@ class LoweringVerifier {
     unsigned index = 0;
     for (auto &op : original)
       order[&op] = index++;
+    // Without batching, every operation some action demands is expected
+    // before the first action that follows it.
+    llvm::DenseSet<Operation *> demanded;
+    if (!batching) {
+      SmallVector<Value> pending;
+      for (auto &action : original)
+        if (!isTotal(&action))
+          append_range(pending, action.getOperands());
+      while (!pending.empty()) {
+        auto value = pending.pop_back_val();
+        if (!charge())
+          return refuse(target, "lowering comparison work limit exceeded");
+        auto *definition = value.getDefiningOp();
+        if (!definition || !isTotal(definition) ||
+            !demanded.insert(definition).second)
+          continue;
+        append_range(pending, definition->getOperands());
+      }
+    }
     auto *cursor = &candidate.front();
     for (auto &action : original) {
       if (isTotal(&action))
         continue;
-      // Stop at operations realized at an earlier cut, even when an internal
-      // result was not exported. A later demand for that result must then fail
-      // capture matching, rather than silently permit recomputation.
-      SmallVector<Value> pending(action.getOperands());
       SmallVector<Operation *> needed;
+      SmallVector<Value> pending;
+      if (batching) {
+        append_range(pending, action.getOperands());
+      } else {
+        for (auto &op : original) {
+          if (&op == &action)
+            break;
+          if (!charge())
+            return refuse(target, "lowering comparison work limit exceeded");
+          if (demanded.contains(&op))
+            for (auto value : op.getResults())
+              if (!isa<poly::PolynomialType>(value.getType()) &&
+                  !realized.contains(value))
+                pending.push_back(value);
+        }
+      }
+      // Concrete values are computed once; formal descriptors may be rebuilt
+      // for later consumers without introducing physical ports or work.
       llvm::DenseSet<Operation *> visited;
       while (!pending.empty()) {
         auto value = pending.pop_back_val();
@@ -269,8 +303,9 @@ class LoweringVerifier {
 
 public:
   LoweringVerifier(protocol_ir::ProtocolModuleOp before,
-                   protocol_ir::ProtocolModuleOp after)
-      : before(before), after(after), sourceSymbols(before), symbols(after) {}
+                   protocol_ir::ProtocolModuleOp after, bool batching)
+      : before(before), after(after), sourceSymbols(before), symbols(after),
+        batching(batching) {}
   LogicalResult run() {
     if (before.getProfile() != protocol_ir::Profile::Participant ||
         after.getProfile() != protocol_ir::Profile::Exec)
@@ -364,7 +399,8 @@ public:
 };
 } // namespace
 LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
-                                 protocol_ir::ProtocolModuleOp candidate) {
-  return LoweringVerifier(original, candidate).run();
+                                 protocol_ir::ProtocolModuleOp candidate,
+                                 bool batching) {
+  return LoweringVerifier(original, candidate, batching).run();
 }
 } // namespace zkc::mathematical

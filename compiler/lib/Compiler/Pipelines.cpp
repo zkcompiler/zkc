@@ -22,15 +22,18 @@ struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
       llvm::cl::desc("Compose total collect and ordered fold traversals")};
   Option<bool> release{*this, "release-storage", llvm::cl::init(false),
                        llvm::cl::desc("Release local storage after last use")};
+  Option<bool> calculationBatching{
+      *this, "calculation-batching", llvm::cl::init(true),
+      llvm::cl::desc("Compute each calculation at its first demand")};
 };
 } // namespace
 void registerCompilerPipelines() {
   static mlir::PassPipelineRegistration<ParticipantOptions> participants(
       "zkc-participant-pipeline", "Project and plan an interactive protocol",
       [](mlir::OpPassManager &pm, const ParticipantOptions &options) {
-        MathematicalSelectionPolicy policy{options.optimizeFinite,
-                                           options.fuseVectorReductions,
-                                           options.fuseCollectFold};
+        MathematicalSelectionPolicy policy{
+            options.optimizeFinite, options.fuseVectorReductions,
+            options.fuseCollectFold, options.calculationBatching};
         pm.addPass(protocol::createProjectProtocolPass(true, policy));
         if (!options.projectOnly) {
           pm.addPass(protocol::createLowerMathPass(policy));

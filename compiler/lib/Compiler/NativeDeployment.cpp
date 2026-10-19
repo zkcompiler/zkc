@@ -152,7 +152,9 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
                                                                   : "false",
               options.mathematicalSelection.finiteBulk ? "true" : "false",
               options.mathematicalSelection.collectFoldFusion ? "true"
-                                                              : "false"}) ||
+                                                              : "false",
+              options.mathematicalSelection.calculationBatching ? "true"
+                                                                : "false"}) ||
       !out[8].getAsArray() || *out[8].getAsArray() != wireSites)
     return error("native-deployment-correspondence");
   auto decoded = protocol::verifyProgramArtifact(physical, *candidate);

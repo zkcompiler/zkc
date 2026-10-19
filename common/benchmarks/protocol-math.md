@@ -46,7 +46,9 @@ python3 common/benchmarks/protocol_math.py \
 
 The matrix always contains baseline default, current default and current
 `--no-finite-bulk`. `--release-storage` adds current default with storage release
-as its own policy; it does not silently change either default. The same binary
+as its own policy, and `--no-calculation-batching` adds current default with
+each calculation computed before the first action that follows it in source
+order; neither silently changes either default. The same binary
 paths may be supplied for both sources to isolate source changes. Distinct
 binaries compare the combined source/tool changes. A binary's SHA-256 is its
 identity here; the adjacent source revision is **not** a verified build provenance

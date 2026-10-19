@@ -121,7 +121,7 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
           match context.draws.lookup site with
           | some delivery =>
               if suite = context.suite ∧ current = state.current ∧ template.entry = context.entry ∧
-                  template.origin context = some (context.query site) ∧
+                  template.origin context = some (context.query site (.draw field)) ∧
                   "random." ++ field ++ "/0" = context.contract ∧ site ∉ state.seen ∧
                   coordinatesValid state template coordinates = true ∧
                   results = [.data (.field field), .transcript context.suite] then

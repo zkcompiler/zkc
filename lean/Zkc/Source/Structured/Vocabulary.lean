@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.RegionDecoding
+public import Zkc.Source.Structured.Catalogue
 
 @[expose] public section
 
@@ -8,6 +9,10 @@ public import Zkc.Source.RegionDecoding
 execution and structural formation use the shared `RawRegion` and `Region`. -/
 
 namespace Zkc.Source.Structured
+
+/-! The BLS12-381 identities and modulus of the admitted catalogue
+(`blsCatalogue`), retained as names for clients and tools. Admission resolves
+identities against catalogue rows, not against these names. -/
 
 def scalarDomain : String := "bls12-381.fr"
 def groupDomain : String := "bls12-381.g1"
@@ -235,6 +240,8 @@ structure Snapshot where
   bindings : List Binding
   definitions : List Definition
   contracts : List ProtocolContract := []
+  /-- The catalogue rows of the identities the unit uses. -/
+  catalogue : Catalogue
   deriving Repr
 
 def Definition.name : Definition → String

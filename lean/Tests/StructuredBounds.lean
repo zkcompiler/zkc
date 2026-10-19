@@ -45,7 +45,7 @@ private def program (bindings : List Binding) (inputs outputs : List Ty) (body :
           (.ret (List.range outputs.length))⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], bindings, contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 private def runClosed (source : Snapshot) (inputs : List Json := []) : Except String Json := do
   evaluate (← check source) (arr inputs)
 private def openRequest (inputs : List Json) (replies : List Json := []) : Json :=
@@ -272,7 +272,7 @@ def run : IO Unit := do
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'),
     "main", [], [], constants, contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
   let receiveRun (replies : List Json) : Except String Json := do
     evaluateOpen (← check receivedLoop) (openRequest [.null] replies)
   test "received small index executes independently"
@@ -292,7 +292,7 @@ def run : IO Unit := do
    ⟨receivedLoop.source, "main", [], [],
     [binding "append" "vector.append" true], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
   let receivedAppendRun (n : Nat) : Except String Json := do
     evaluateOpen (← check receivedAppend) (openRequest [.null, .str "0"]
       [reply receiveVector (arr (List.replicate n (.str "0")))])
@@ -309,7 +309,7 @@ def run : IO Unit := do
          .instruction (.localCall "work" "P") [0] [] [] "work"] (.ret [])⟩]
    ⟨receivedLoop.source, "main", [], [], constants, contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
   equal "math helper retains optional dependency precision" (runOpen (optionalCall 2) [.null])
     (arr [.str "zkc.structured-open-result/0", arr [.str "returned", arr []], arr [], toJson (0 : Nat)])
   refusal "math helper with absent unused operand can generate huge bound"

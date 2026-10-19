@@ -26,8 +26,10 @@ that all native behavior already has a Lean model.
   relating an exported validator to the original program at its role, and its
   composition with transcript construction.
 - [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness
-  over typed query sites with per-site errors and realized decoding laws,
-  including proof-of-work-gated and compound sites; as its instance, soundness of
+  over typed query sites with per-site errors or per-key charges and realized
+  decoding laws as law records, including proof-of-work-gated and compound
+  sites; raw answers by the last event and the lifting of uniform-sort
+  certificates; binding codecs over typed public-value events; as its instance, soundness of
   the transform of any validator from round-by-round soundness, in a random
   oracle on all typed histories, its instances for the imported Sumcheck
   verifier and the plain GKR verifier, and its composition with the checked

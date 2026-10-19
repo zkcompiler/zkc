@@ -12,7 +12,7 @@ use zkc_runtime::vm::{LogicalType, PhysicalType};
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
         json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false},"assets":[]})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":[]})
         .to_string();
     Package::capture(
         bytes.as_bytes(),
@@ -615,7 +615,7 @@ fn proof_fixture() -> (Value, String) {
                 ""
             ]
         ],
-        ["true", "false", "false", "true", "false"],
+        ["true", "false", "false", "true", "false", "true"],
         []
     ])
     .to_string();
@@ -838,6 +838,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
         "fuse_vector_reductions",
         "finite_bulk",
         "fuse_collect_fold",
+        "calculation_batching",
     ] {
         let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
         frame["options"][key] = json!(!frame["options"][key].as_bool().unwrap());

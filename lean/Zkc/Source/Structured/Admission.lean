@@ -19,11 +19,6 @@ abbrev Facts := List (Nat × Nat)
 
 def validString (value : String) (empty : Bool := false) : Bool :=
   value.utf8ByteSize ≤ 512 && (empty || !value.isEmpty)
-def validType : Ty → Bool
-  | .boolean | .index => true
-  | .field d | .vector d => d == scalarDomain
-  | .group d => d == groupDomain
-  | .service contract => contract == scalarServiceContract
 def Ty.isService : Ty → Bool
   | .service _ => true
   | _ => false
@@ -44,7 +39,28 @@ def validProtocolIdentifier (name : String) : Bool :=
       let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
       initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9'))
 
-def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries && types.all validType
+/-- Signature length. Every stored type is admitted against the unit's
+catalogue rows by `Snapshot.checkCatalogue`. -/
+def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries
+
+/-- An admitted sort instance: the exported rows give its identity the right
+sort, and the environment admits that instance. -/
+def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
+  | .boolean | .index => pure ()
+  | .field d => do
+    discard <| exported.expect d .field
+    if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
+  | .vector d => do
+    discard <| exported.expect d .field
+    if !environment.types.contains ("vector", d) then throw "structured-type-unadmitted"
+  | .group g => do
+    discard <| exported.expect g .group
+    if !environment.types.contains ("group", g) then throw "structured-type-unadmitted"
+  | .service c => do
+    let service ← exported.findService c
+    discard <| exported.expect service.sampled .field
+    if !(environment.services.map (·.contract)).contains c then throw "structured-type-unadmitted"
+
 def validRefs (refs : List Nat) : Bool := refs.length ≤ Limits.listEntries && refs.all (· ≤ Limits.instructions)
 
 /-- Remove empty instruction lists without charging an instruction. -/
@@ -52,6 +68,39 @@ def nextInstruction : List (List Instruction) → Option (Instruction × List (L
   | [] => none
   | [] :: rest => nextInstruction rest
   | (instruction :: instructions) :: rest => some (instruction, instructions :: rest)
+
+/-- The types stored in instructions: results, selected types and region
+signatures, nested regions included, in the bounded worklist order of
+`instructionWorkWithin`. -/
+def instructionTypes : Nat → List (List Instruction) → List Ty
+  | 0, _ => []
+  | remaining + 1, work => match nextInstruction work with
+    | none => []
+    | some (.instruction descriptor _ results regions _, rest) =>
+      let children := regions.map fun (.region _ _ (.block instructions _)) => instructions
+      results ++ (match descriptor with | .select type => [type] | _ => []) ++
+        regions.flatMap (fun (.region inputs outputs _) => inputs ++ outputs) ++
+        instructionTypes remaining (children ++ rest)
+
+/-- Every type stored in the snapshot: declaration signatures and the types of
+every stored instruction, including dormant bodies. Admission computes it after
+the instruction budget holds, so the budget covers every instruction. -/
+def Snapshot.storedTypes (snapshot : Snapshot) : List Ty :=
+  snapshot.domains.flatMap (·.inputs) ++
+    snapshot.relations.flatMap (fun relation => relation.inputs ++ relation.outputs) ++
+    snapshot.definitions.flatMap (fun definition => definition.inputs ++ definition.outputs) ++
+    instructionTypes Limits.instructions (snapshot.definitions.filterMap fun definition =>
+      match definition with
+      | .function function => let .block instructions _ := function.body; some instructions
+      | .finite _ | .realization _ | .map _ => none)
+
+/-- The unit's rows are consistent and are the environment's rows, and every
+stored type is an admitted instance. -/
+def Snapshot.checkCatalogue (snapshot : Snapshot) (environment : Catalogue) : Except String Unit := do
+  snapshot.catalogue.check
+  snapshot.catalogue.agrees environment
+  snapshot.storedTypes.forM (snapshot.catalogue.checkType environment)
+  snapshot.bindings.forM fun binding => discard <| binding.resolveRoot snapshot.catalogue
 
 /-- Bound a structural preflight before helper analysis. The budget counts
 stored instructions, including nested regions, rather than expanded calls. -/
@@ -219,36 +268,38 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
-/-- Resolve the exact operation/contract pair and parameters independently of
-wire parsing. Direct constructor subjects pass the same checks. -/
+/-- Resolve the exact operation/contract pair, the binding's root against the
+unit's catalogue rows, and the parameters, independently of wire parsing.
+Direct constructor subjects pass the same checks. -/
 def resolvePrimitive (snapshot : Snapshot) (operation name : String)
     (parameters : List String) : Except String Primitive := do
   let binding ← requireSome (snapshot.bindings.find? (·.name == name)) "structured-unknown-binding"
   if !binding.valid then throw "structured-binding"
-  let pair ← match operation with
-    | "algebra.exec.index_constant" => pure ("index.constant", Primitive.indexConstant 0)
-    | "algebra.exec.index_equal" => pure ("index.equal", Primitive.indexEqual)
-    | "algebra.exec.index_less" => pure ("index.less", Primitive.indexLess)
-    | "algebra.exec.index_add" => pure ("index.add", Primitive.indexAdd)
-    | "algebra.exec.index_mul" => pure ("index.mul", Primitive.indexMul)
-    | "algebra.exec.index_sub" => pure ("index.sub", Primitive.indexSub)
-    | "algebra.exec.index_div" => pure ("index.div", Primitive.indexDiv)
-    | "algebra.exec.index_mod" => pure ("index.mod", Primitive.indexMod)
-    | "algebra.exec.vector_empty" => pure ("vector.empty", Primitive.vectorEmpty scalarDomain)
-    | "algebra.exec.vector_length" => pure ("vector.length", Primitive.vectorLength scalarDomain)
-    | "algebra.exec.vector_sum" => pure ("vector.sum", Primitive.vectorSum scalarDomain)
-    | "algebra.exec.vector_split" => pure ("vector.split", Primitive.vectorSplit scalarDomain)
-    | "algebra.exec.vector_append" => pure ("vector.append", Primitive.vectorAppend scalarDomain)
-    | "algebra.exec.vector_equal" => pure ("vector.equal", Primitive.vectorEqual scalarDomain)
-    | "algebra.exec.field_equal" => pure ("field.equal", Primitive.fieldEqual scalarDomain)
+  let pair : String × (String → Primitive) ← match operation with
+    | "algebra.exec.index_constant" => pure ("index.constant", fun _ => Primitive.indexConstant 0)
+    | "algebra.exec.index_equal" => pure ("index.equal", fun _ => Primitive.indexEqual)
+    | "algebra.exec.index_less" => pure ("index.less", fun _ => Primitive.indexLess)
+    | "algebra.exec.index_add" => pure ("index.add", fun _ => Primitive.indexAdd)
+    | "algebra.exec.index_mul" => pure ("index.mul", fun _ => Primitive.indexMul)
+    | "algebra.exec.index_sub" => pure ("index.sub", fun _ => Primitive.indexSub)
+    | "algebra.exec.index_div" => pure ("index.div", fun _ => Primitive.indexDiv)
+    | "algebra.exec.index_mod" => pure ("index.mod", fun _ => Primitive.indexMod)
+    | "algebra.exec.vector_empty" => pure ("vector.empty", Primitive.vectorEmpty)
+    | "algebra.exec.vector_length" => pure ("vector.length", Primitive.vectorLength)
+    | "algebra.exec.vector_sum" => pure ("vector.sum", Primitive.vectorSum)
+    | "algebra.exec.vector_split" => pure ("vector.split", Primitive.vectorSplit)
+    | "algebra.exec.vector_append" => pure ("vector.append", Primitive.vectorAppend)
+    | "algebra.exec.vector_equal" => pure ("vector.equal", Primitive.vectorEqual)
+    | "algebra.exec.field_equal" => pure ("field.equal", Primitive.fieldEqual)
     | _ => throw "structured-primitive-operation"
   if binding.contract != pair.1 then throw "structured-binding-contract"
+  let root ← binding.resolveRoot snapshot.catalogue
   if operation == "algebra.exec.index_constant" then
     let [text] := parameters | throw "structured-primitive-parameters"
     return .indexConstant (← Format.indexDecimal text)
   else
     if !parameters.isEmpty then throw "structured-primitive-parameters"
-    return pair.2
+    return pair.2 root
 
 def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (context : List Ty) (facts : Facts) (identities : List Nat)
@@ -279,8 +330,9 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       | .local => pure HelperKind.local
       | .protocol => throw "structured-call-kind"
     pure (Op.invoke ⟨name, helperKind, callee.inputs, callee.outputs⟩)
+  let catalogue := snapshot.catalogue
   let checkField := fun (d : String) =>
-    if d == scalarDomain then pure () else (throw "structured-field-domain" : LowerM Unit)
+    (catalogue.require d .field "Field" : Except String Unit)
   match descriptor with
   | .exec operation binding parameters =>
     return .exec (← resolvePrimitive snapshot operation binding parameters)
@@ -289,23 +341,23 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .fieldConstant d text =>
     checkField d
     let value ← Format.decimal text
-    if value ≥ scalarModulus then throw "structured-field-canonical"
+    catalogue.belowModulus d value
     return .fieldConstant d value
   | .fieldAdd d => checkField d; return .fieldAdd d
   | .fieldSubtract d => checkField d; return .fieldSubtract d
   | .fieldMultiply d => checkField d; return .fieldMultiply d
   | .fieldEqual d => checkField d; return .fieldEqual d
   | .groupIdentity d =>
-    if d != groupDomain then throw "structured-group-domain"
+    catalogue.require d .group "ScalarAction"
     return .groupIdentity d
   | .groupAdd d =>
-    if d != groupDomain then throw "structured-group-domain"
+    catalogue.require d .group "ScalarAction"
     return .groupAdd d
   | .groupScale g f =>
-    if g != groupDomain || f != scalarDomain then throw "structured-group-domain"
+    catalogue.requireScale g f
     return .groupScale g f
   | .groupEqual d =>
-    if d != groupDomain then throw "structured-group-domain"
+    catalogue.require d .group "ScalarAction"
     return .groupEqual d
   | .booleanConstant value => return .booleanConstant value
   | .booleanAnd => return .booleanAnd
@@ -314,10 +366,10 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .booleanEqual => return .booleanEqual
   | .booleanNotEqual => return .booleanNotEqual
   | .select type =>
-    if !validType type || type.isService then throw "structured-type-unsupported"
+    if type.isService then throw "structured-type-unsupported"
     return .select type
   | .boundedAt d =>
-    checkField d
+    discard <| catalogue.expect d .field
     match factOperands with
     | [container, index] =>
       if !facts.contains (index, container) then throw "structured-bounded-at-premise"
