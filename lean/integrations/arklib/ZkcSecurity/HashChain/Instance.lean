@@ -1,6 +1,8 @@
 module
 
 public import ZkcSecurity.HashChain.Bridge
+public import ZkcSecurity.Stage.FiatShamir
+public import ZkcSecurity.Stage.Provider
 
 @[expose] public section
 
@@ -32,6 +34,15 @@ queries (`ZkcSecurity.FiatShamir.Typed.adaptive_soundness`, through
 `ZkcSecurity.FiatShamir.Provider.Simulation.concrete_le`).
 `concrete_soundness_weighted` is the same with per-site errors, through the
 simulation's weighted budget.
+
+As a stage relation (`relation`), the simulation translates primitive-call
+adversaries into history-oracle provers at the TranscriptQuery budget `q`, with
+the loss `(q + V)² / |S|`. `concrete_soundness_charged` composes it with the
+charged typed Fiat–Shamir stage (`ZkcSecurity.Stage.chargedRelation`) by
+`ZkcSecurity.Stage.Relation.comp`: a charged certificate whose key charges are
+at most `bound` and validators charging at most `validatorCost` bound the
+concrete experiment by `q * bound + validatorCost + (q + V)² / |S|`.
+`concrete_soundness` and `concrete_soundness_weighted` are its corollaries.
 -/
 
 set_option autoImplicit false
@@ -120,6 +131,87 @@ theorem familyQueryBound_of_total {α : Type} :
       rw [same]
       exact ih reply (calls - 1) (rest reply)
 
+omit [DecidableEq S] [DecidableEq X] [Inhabited S] [Fintype S] in
+/-- The ideal event of a mixture of provers is at most that of its worst prover. -/
+theorem idealEvent_mixes (absorb : Typed.Interface I E P (Raw E S width))
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (event : Stmt × (PIR.Outcome A × List P) → Prop) :
+    Provider.Mixes (idealEvent absorb validator initial event) () := by
+  intro provers
+  refine prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover member => ?_
+  refine le_trans (le_of_eq ?_) (le_iSup₂ (f := fun prover (_ : prover ∈ support provers) =>
+    idealEvent absorb validator initial event (pure prover) ()) prover member)
+  simp only [idealEvent, pure_bind]
+
+/-- The hash-chain provider simulation as a stage relation from the ideal typed
+game to the concrete game. -/
+noncomputable def relation (positive : 0 < width) (absorb : Typed.Interface I E P (Raw E S width))
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (nonempty : ∀ statement, initial statement ≠ []) {queries : ℕ}
+    (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
+    (verifierCalls : ℕ) (callBudget : Stmt → ℕ)
+    (callBounded : ∀ statement, CallBound absorb (validator statement) (callBudget statement))
+    (within : ∀ statement, (initial statement).length + callBudget statement ≤ verifierCalls)
+    (event : Stmt × (PIR.Outcome A × List P) → Prop) :
+    Stage.Relation (Provider.idealGame (Answer E S width) (idealEvent absorb validator initial event) ())
+      (Provider.concreteGame (Primitive E S X) (fun _ => ())
+        (concreteEvent absorb validator initial event) ()) :=
+  (simulation positive absorb validator initial nonempty queryBounded verifierCalls callBudget
+    callBounded within event).toRelation () (idealEvent_mixes absorb validator initial event)
+
+omit [DecidableEq S] [DecidableEq X] [Inhabited S] [Fintype S] in
+/-- The typed game and the ideal game of the simulation have the same bad
+probability for every prover. -/
+noncomputable def idealRelation (absorb : Typed.Interface I E P (Raw E S width))
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (falseStatement : Stmt → Prop)
+    (accepts : A → Prop) :
+    Stage.Relation (Stage.typedGame (R := Answer E S width) absorb validator initial falseStatement accepts)
+      (Provider.idealGame (Answer E S width)
+        (idealEvent absorb validator initial fun result =>
+          falseStatement result.1 ∧ Accepted accepts result.2.1) ()) :=
+  Stage.Relation.ofLe (fun prover => prover) (fun budget => budget) (fun _ _ holds => holds)
+    fun _ prover _ => le_of_eq (by simp only [Provider.idealGame, idealEvent]; rfl)
+
+/-- Fiat–Shamir soundness of the hash-chain construction with a charged
+certificate whose key charges are at most `bound`: an adversary with at most `q`
+primitive calls makes the validator of a false statement accept with probability
+at most `q * bound + validatorCost + (q + V)² / |S|`, where the validators'
+charges are at most `validatorCost` and their primitive calls at most `V`. The
+proof composes the charged typed stage with the simulation's stage. -/
+theorem concrete_soundness_charged (positive : 0 < width)
+    {absorb : Typed.Interface I E P (Raw E S width)} {accepts : A → Prop}
+    {charge : List E → E → ENNReal} (certificate : Typed.ChargedCertificate absorb accepts charge)
+    {bound : ENNReal} (bounded : ∀ history event, charge history event ≤ bound)
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
+    (nonempty : ∀ statement, initial statement ≠ []) (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (initial statement) (validator statement))
+    {queries : ℕ} (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
+    (validatorCost : ENNReal)
+    (validatorBound : ∀ statement,
+      Typed.ChargedCostBound absorb charge (validator statement) (initial statement) validatorCost)
+    (verifierCalls : ℕ) (callBudget : Stmt → ℕ)
+    (callBounded : ∀ statement, CallBound absorb (validator statement) (callBudget statement))
+    (within : ∀ statement, (initial statement).length + callBudget statement ≤ verifierCalls)
+    (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {calls : ℕ}
+    (adversaryBound : IsTotalQueryBound adversary calls) :
+    Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial adversary)).run'
+        ∅}[falseStatement result.1 ∧ Accepted accepts result.2.1] ≤
+      calls * bound + validatorCost +
+        (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S := by
+  let composed := (Stage.chargedRelation (R := Answer E S width) certificate bounded validator initial
+    determined falseStatement doomedValidator validatorCost validatorBound).comp
+      ((idealRelation absorb validator initial falseStatement accepts).comp
+        (relation (X := X) positive absorb validator initial nonempty queryBounded verifierCalls
+          callBudget callBounded within fun result =>
+            falseStatement result.1 ∧ Accepted accepts result.2.1))
+  have total := composed.bounded (fun _ => calls) adversary
+    (familyQueryBound_of_total adversary calls adversaryBound)
+  refine total.trans (le_of_eq ?_)
+  change (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S + 0 +
+      ((calls : ℕ) * bound + validatorCost) = _
+  rw [add_zero, add_comm]
+
 /-- Fiat–Shamir soundness of the hash-chain construction: an adversary with at
 most `q` primitive calls makes the validator of a false statement accept with
 probability at most `(q + queries) * bound + (q + V)² / |S|`, where every site
@@ -141,15 +233,14 @@ theorem concrete_soundness (positive : 0 < width) {absorb : Typed.Interface I E 
     Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial adversary)).run'
         ∅}[falseStatement result.1 ∧ Accepted accepts result.2.1] ≤
       (calls + queries) * bound +
-        (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S :=
-  (simulation positive absorb validator initial nonempty queryBounded verifierCalls callBudget
-      callBounded within fun result => falseStatement result.1 ∧ Accepted accepts result.2.1).concrete_le
-    (idealBound := fun proverQueries _ => (proverQueries + queries) * bound)
-    (fun _ proverQueries _ proverBound =>
-      prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover member =>
-        Typed.adaptive_soundness certificate bounded validator initial determined falseStatement
-          doomedValidator queries queryBounded prover proverQueries (proverBound prover member))
-    adversary (fun _ => calls) () (familyQueryBound_of_total adversary calls adversaryBound)
+        (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S := by
+  have charged := concrete_soundness_charged positive certificate.charged (bound := bound)
+    (fun _ event => bounded event) validator initial determined nonempty falseStatement
+    doomedValidator queryBounded (queries * bound)
+    (fun statement => Typed.QueryBound.chargedCostBound absorb (fun _ event => bounded event)
+      (validator statement) queries (queryBounded statement) (initial statement))
+    verifierCalls callBudget callBounded within adversary adversaryBound
+  rwa [add_mul]
 
 /-- Fiat–Shamir soundness of the hash-chain construction with an error per site:
 the translated adversary's TranscriptQueries charge at most `q * bound` on every
@@ -176,23 +267,11 @@ theorem concrete_soundness_weighted (positive : 0 < width)
     Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial adversary)).run'
         ∅}[falseStatement result.1 ∧ Accepted accepts result.2.1] ≤
       calls * bound + validatorCost +
-        (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S := by
-  let instance_ := simulation (X := X) positive absorb validator initial nonempty queryBounded
-    verifierCalls callBudget callBounded within
-    fun result => falseStatement result.1 ∧ Accepted accepts result.2.1
-  have keyBounded : ∀ key, Typed.keyError error key ≤ bound := by
-    intro key
-    unfold Typed.keyError
-    split
-    · exact bounded _
-    · exact zero_le
-  have within' := familyQueryBound_of_total adversary calls adversaryBound
-  refine (instance_.bound_translate adversary (fun _ => calls) () within').trans
-    (add_le_add_left ?_ _)
-  exact prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover member =>
-    Typed.adaptive_soundness_weighted certificate validator initial determined falseStatement
-      doomedValidator validatorCost validatorBound prover (calls * bound)
-      (instance_.weightedBudget (Typed.keyError error) keyBounded adversary (fun _ => calls)
-        within' prover member)
+        (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S :=
+  concrete_soundness_charged positive certificate.charged (bound := bound)
+    (fun _ event => bounded event) validator initial determined nonempty falseStatement
+    doomedValidator queryBounded validatorCost
+    (fun statement => Typed.CostBound.charged absorb error _ validatorCost (validatorBound statement) _)
+    verifierCalls callBudget callBounded within adversary adversaryBound
 
 end ZkcSecurity.HashChain
