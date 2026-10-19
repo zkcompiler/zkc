@@ -21,7 +21,9 @@ import Mathlib.Algebra.Field.ZMod
   that theorem's (`guess_verify_eq`), whose bound is attained at zero queries
   (`CompiledGuessFiatShamir.guess_accepted`). The adaptive endpoint, with the
   policy-derived binding of the offset, bounds a prover that chooses the offset
-  after its queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`).
+  after its queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`); its evidence
+  records statement determination as a named hypothesis discharged by the codec
+  (`guessDetermination`).
 - **Controls.** The requirements are selected by the indices: lowering evidence
   exactly for program bytes, binding evidence exactly for adaptive statements.
   Evidence is indexed by the artifacts: the composed check refuses the Schnorr
@@ -230,10 +232,12 @@ theorem guess_costBound (statement : guessArtifacts.Statement F G) (initial : Hi
         initial
       rwa [Nat.cast_one, one_mul] at bounded
 
-/-- Ordinary soundness evidence of the guessing Entry's ideal meaning at a form. -/
+/-- Ordinary soundness evidence of the guessing Entry's ideal meaning at a form,
+with named hypotheses. -/
 noncomputable def guessEvidence (form : Form)
     (binding : BindingRequirement (guessRelation (F := F) (G := G)) (fun initial statement =>
-      (guessFamily (F := F) (G := G)).certificate.doomed initial (guessCompiled.original statement 0)) form) :
+      (guessFamily (F := F) (G := G)).certificate.doomed initial (guessCompiled.original statement 0)) form)
+    (hypotheses : List Hypothesis := []) :
     SoundnessEvidence (F := F) (G := G) guessArtifacts .idealMeaning form guessRelation (Regime.exact F) where
   compiled := guessCompiled
   handle := 0
@@ -245,7 +249,7 @@ noncomputable def guessEvidence (form : Form)
   costBound := guess_costBound
   binding := binding
   lowering := PUnit.unit
-  hypotheses := []
+  hypotheses := hypotheses
 
 omit [Fintype F] [SampleableType F] in
 /-- The evidence's verifier is the compiled verifier of `CompiledGuessFiatShamir`. -/
@@ -285,6 +289,19 @@ def guessBinding (application : String) :
   coverage := .rejects (fun statement _ => .inl ⟨guessOffset statement, rfl, trivial⟩)
     fun statement unmapped => absurd rfl (unmapped (guessOffset statement))
 
+omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Statement determination by the policy-derived binding, as a named hypothesis
+discharged by the codec's proof. -/
+def guessDetermination (application : String) : Hypothesis where
+  category := .binding .statementDetermination
+  claim := Typed.Determined (policyCodec (F := F) (G := G) guessArtifacts.publics application).encode
+  status := .proved (policyCodec guessArtifacts.publics application).determined
+
+omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem guessDetermination_discharged (application : String) :
+    (guessDetermination (F := F) (G := G) application).status.Discharged :=
+  trivial
+
 /-- **Adaptive ordinary soundness of the compiled guessing Entry.** A prover that
 chooses the offset after at most `queries` oracle queries, the verifier starting
 from the policy-derived binding of the chosen offset, is accepted with
@@ -294,10 +311,11 @@ theorem guess_adaptive_soundness (application : String)
     (proverBound : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
         (fun result => (claimed.1, result)) <$>
-          (guessEvidence .adaptive (guessBinding application)).verify claimed.1
+          (guessEvidence .adaptive (guessBinding application) [guessDetermination (F := F) (G := G) application]).verify claimed.1
             ((policyCodec guessArtifacts.publics application).encode claimed.1) claimed.2)).run' ∅}[
       Zkc.Transcript.Accepted (· = some true) result.2.1] ≤ (queries + 1) * (Fintype.card F : ℝ≥0∞)⁻¹ := by
-  have bound := adaptive_soundness (guessEvidence (G := G) .adaptive (guessBinding application)) prover
+  have bound := adaptive_soundness
+    (guessEvidence (G := G) .adaptive (guessBinding application) [guessDetermination (F := F) (G := G) application]) prover
     (queries * guessError)
     (Typed.worstCaseCostBound_of_isTotalQueryBound _ (Typed.keyCharge_le fun _ _ => le_rfl) prover queries
       proverBound)

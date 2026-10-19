@@ -1070,7 +1070,9 @@ to evidence built from generated per-Entry facts.
   `CompiledGuessFiatShamir.soundness` for that theorem's verifier
   (`guess_fixed_soundness`), attained at zero queries; the adaptive endpoint,
   with the policy-derived binding of the offset, bounds a prover that chooses the
-  offset after `Q` queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`).
+  offset after `Q` queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`). Its
+  evidence records statement determination as a named hypothesis of the binding
+  category, discharged by the codec's proof (`guessDetermination_discharged`).
 - **Controls.** Lowering evidence is required exactly for program bytes and
   binding evidence exactly for adaptive statements, by the evidence's indices; the
   composed check refuses the Schnorr original with the guessing export
