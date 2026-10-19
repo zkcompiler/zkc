@@ -86,6 +86,39 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
 
 
+def test_native_lean_checks_subjects_then_requests_then_records(monkeypatch, tmp_path):
+    developer = load("test_runner", "common/tests/run.py")
+    requests = tmp_path / "lean/bridges/structured/normal-forms"
+    requests.mkdir(parents=True)
+    for name in ("second.toml", "first.toml"):
+        (requests / name).write_text("")
+    calls = []
+
+    def run(arguments, **kwargs):
+        calls.append(list(map(str, arguments)))
+
+    monkeypatch.setattr(developer, "run", run)
+    monkeypatch.setattr(developer, "ROOT", tmp_path)
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
+    monkeypatch.setattr(sys, "argv", ["run.py", "lean-native", "--compiler-build", str(tmp_path / "compiler")])
+    developer.main()
+    # The suites and request checks run first; then one subject driver run over every
+    # manifest, every normal-form request in order, and the records check, with the
+    # security package's registry, over the driver's evidence.
+    subject, first, second, records = calls[-4:]
+    assert subject[:4] == [sys.executable, str(tmp_path / "lean/bridges/subject.py"), "--check", "--runtime"]
+    output = Path(subject[subject.index("--output") + 1])
+    assert output.is_dir() and output.is_relative_to(tmp_path / "reports")
+    assert first == [sys.executable, str(tmp_path / "lean/bridges/structured/normal_forms.py"),
+                     str(requests / "first.toml"), "--check"]
+    assert second == [sys.executable, str(tmp_path / "lean/bridges/structured/normal_forms.py"),
+                      str(requests / "second.toml"), "--check"]
+    assert records == [sys.executable, str(tmp_path / "lean/checks/check_records.py"),
+                       "--integration", "arklib", "--evidence", str(output / "evidence")]
+    assert not any("construction/check.py" in part or "executable/check.py" in part
+                   for call in calls for part in call)
+
+
 @pytest.mark.parametrize("explicit", [False, True])
 def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp_path, native_config):
     developer = load("test_runner", "common/tests/run.py")

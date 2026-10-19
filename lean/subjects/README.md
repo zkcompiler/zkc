@@ -41,7 +41,7 @@ root.
 | `family` | `module`, `instance`, `kind` | family package, its concrete instance, `sigma`, `certificate` or `upstream` |
 | `claims` | `endpoint` | `ideal-meaning`, `executable-bytes`, `transform-equation` or `admission` |
 | `claims` | `properties`, `statement`, `regime` | claimed properties, `fixed` or `adaptive`, expected parameter regime |
-| `assumptions` | `requested` | assumption identifiers the author expects (`shared/assumptions.toml`) |
+| `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |
 | `executable` | `public`, `witness` | runtime inputs; default `<project>/inputs/<Entry>/{public,witness}.json` |
@@ -81,6 +81,4 @@ and their expected refusals are listed by `python3 lean/bridges/subject.py
 
 ## Files
 
-- `shared/assumptions.toml`: assumption identifiers and the text a report
-  prints for each.
 - `fixtures/`: sources of subjects that exist only as verification fixtures.

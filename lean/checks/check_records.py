@@ -145,8 +145,12 @@ def main():
             built.append(report)
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
-    if subject_manifests:
+    if subject_manifests and "arklib" in packages:
         compare(SUPPORT, "subject-rows", rows, args.write, failures, notes)
+    elif subject_manifests:
+        # Without the security package the registry and endpoints are absent, so the
+        # rows are incomplete; only a run that emits them is compared.
+        notes.append(f"{SUPPORT.relative_to(ROOT)}#subject-rows: not compared without --integration arklib")
     if samples:
         notes.append(f"no subject manifests under {SUBJECTS.relative_to(ROOT)}; "
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")

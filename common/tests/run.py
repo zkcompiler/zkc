@@ -136,10 +136,9 @@ def execute(scope, args):
              "--output", subjects])
         for request in sorted((ROOT / "lean/bridges/structured/normal-forms").glob("*.toml")):
             run([sys.executable, ROOT / "lean/bridges/structured/normal_forms.py", request, "--check"])
-        records = ROOT / "lean/checks/check_records.py"
-        if records.exists():
-            # The assurance reports join the declaration records with this run's evidence.
-            run([sys.executable, records, "--evidence", subjects / "evidence"])
+        # The assurance reports join the declaration records with this run's evidence.
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib",
+             "--evidence", subjects / "evidence"])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

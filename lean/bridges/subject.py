@@ -38,7 +38,6 @@ import json
 from pathlib import Path
 import re
 import sys
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 LEAN = ROOT / "lean"
@@ -55,7 +54,6 @@ from bridges.structured import bodies as printer, snapshot as structured  # noqa
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
 NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
-ASSUMPTIONS = ROOT / "lean/subjects/shared/assumptions.toml"
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
 # walk lists every equation between processes (`PIR.Proc`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
@@ -66,11 +64,6 @@ COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
     "Zkc.Executable.execute", "Zkc.Executable.validate", "Zkc.Executable.metered",
 ]
-
-
-def assumption_texts():
-    with ASSUMPTIONS.open("rb") as stream:
-        return tomllib.load(stream)
 
 
 def record_accepted(record, name, **detail):
@@ -86,6 +79,7 @@ class Driver(Runner):
         self.output = args.output
         self.evidence = {}
         self.built = set()
+        self.registry_entries = None
 
     # Directories, Lean and generated files.
 
@@ -96,6 +90,25 @@ class Driver(Runner):
 
     def lake(self, *arguments, cwd=LEAN, name, expect=0):
         return self.run([self.args.lake, *arguments], cwd=cwd, name=name, expect=expect)
+
+    def registry(self):
+        """The assumption registry of the security integration: identifier to
+        category and statement, read from `ZkcSecurity.Registry.table`."""
+        if self.registry_entries is None:
+            path = self.output / "Registry.lean"
+            path.write_text("import ZkcSecurity.Registry\n\n"
+                            "#eval for (identifier, category, _, statement) in ZkcSecurity.Registry.table do\n"
+                            "  IO.println s!\"ENTRY\\t{identifier}\\t{category}\\t{statement}\"\n",
+                            encoding="utf-8")
+            result = self.lake("env", "lean", path, cwd=LEAN / "integrations/arklib", name="registry")
+            entries = {}
+            for line in result.stdout.splitlines():
+                if line.startswith("ENTRY\t"):
+                    _, identifier, category, statement = line.split("\t", 3)
+                    entries[identifier] = dict(category=category, statement=statement)
+            self.check("registry-read", bool(entries), result.stdout[-400:])
+            self.registry_entries = entries
+        return self.registry_entries
 
     def build(self, *modules):
         """Build Lean modules: their kernel checks."""
@@ -710,11 +723,12 @@ class Driver(Runner):
                       sources={name: file_digest(path) for name, path in sorted(subject.modules.items())},
                       claims=subject.table("claims"), family=subject.table("family"))
         self.evidence[subject.name] = record
-        texts = assumption_texts()
         requested = subject.get("assumptions", "requested", [])
-        unknown = [name for name in requested if name not in texts]
-        self.check(f"{subject.name}:assumptions-registered", not unknown, json.dumps(unknown))
-        record["requested_assumptions"] = {name: texts[name] for name in requested}
+        if requested:
+            registry = self.registry()
+            unknown = [name for name in requested if name not in registry]
+            self.check(f"{subject.name}:assumptions-registered", not unknown, json.dumps(unknown))
+            record["requested_assumptions"] = {name: registry[name] for name in requested}
         if subject.profile("structured"):
             self.interactive(subject, record)
         run = None
