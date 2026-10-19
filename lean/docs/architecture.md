@@ -93,21 +93,29 @@ named kernel equation per admission phase, ordering declarations with the
 admission orderers themselves; `structured_associations` writes each body's
 membership, signature and raw-tree association. The commands produce ordinary
 declarations, so a stale or mistyped body fails a phase equation. Phase
-equations use `kernel_rfl`, which checks a closed definitional equality in the
-kernel only.
+equations use `kernel_rfl`, which checks a definitional equality in the kernel
+only, for every value of the goal's binders at once.
 
 `bridges/structured/normal_forms.py` generates the role-local facts of an
 admitted unit from its retained snapshot and a short request: site constants,
 positional input builders, each participant's normal form with its process
-equation (definitional for a root; explicit operation steps citing named helper
-laws for a typed body several units share), carried-state embeddings, reply
-scripts and observed runs, and the relation binding and observed decision of a
-contract clause. For a body that applies other protocols it substitutes the
-callee's generated normal form at the application's child context, between the
-callee's input and output masks (one generic step over the call substitution
-rule), and states each role's invocation at any caller context. Its output is
-ordinary source that the kernel checks; what it cannot derive (helper laws,
-premises, protocol mathematics) stays authored.
+equation, carried-state embeddings, reply scripts and observed runs, and the
+relation binding and observed decision of a contract clause. A root equation
+that holds definitionally is checked by `kernel_rfl` alone. Every other process
+equation is an instance of one soundness theorem: `Structured.NormalForm`
+defines participant forms (`Syntax`) and their processes (`Denote`), a
+normalizer that computes one role's form of a typed body by symbolic
+evaluation under the participant rules (`Normalize`), and
+`NormalForm.normalize_sound` with its uniform-meaning corollaries
+(`Soundness`, `Presentation`). The compiled normalizer
+(`structured-source normal-form`) prints the form as a Lean literal; the kernel
+checks by evaluation that the normalizer returns it and that its process is the
+readable one, and the request's helper laws and callee summaries discharge the
+theorem's premises. For a body that applies other protocols the callee's
+generated normal form stands at the application's child context, between the
+callee's input and output masks, and each role's invocation at any caller
+context is stated. The generator's output is ordinary source that the kernel
+checks; what it cannot derive (helper laws, premises, protocol mathematics) stays authored.
 
 `Source.RegionDerivation` and its tactics derive process correspondence from the
 same typed body using local rules. `Structured.ContractCalls` enumerates lexical

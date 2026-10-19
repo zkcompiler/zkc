@@ -211,17 +211,18 @@ subjects = ["okamoto", "okamoto-proof"]
 [[proved]]
 subject = "Participant normal forms"
 result = '''
-`normal_forms.py` generates each role's process, its equation against the admitted unit, its run and the binding of a contract clause from a short request, as ordinary Lean source the kernel checks; for a body that applies other protocols, also inside a repeat callback, it substitutes the callee's generated normal form at the application's child context, through one generic step over the call substitution rule, and states each role's invocation at any caller context; a repeat anywhere in a body binds its returned state, and a callback's repeat on an admitted count is the fold of the callback's normal form, by one generic law. Chaum–Pedersen, Schnorr AND, interactive Schnorr, Okamoto, the Sumcheck units and roots, the GKR layer Sumcheck and the GKR root use it'''
+`normal_forms.py` generates each role's process, its equation against the admitted unit, its run and the binding of a contract clause from a short request, as ordinary Lean source the kernel checks. Each process equation is an instance of one soundness theorem of the verified participant normalizer, whose form the compiled normalizer prints and the kernel checks by evaluation; a definitional root equation is checked by `kernel_rfl` alone. For a body that applies other protocols, also inside a repeat callback, the callee's generated normal form stands at the application's child context, and each role's invocation at any caller context is stated; a repeat anywhere in a body binds its returned state, and a callback's repeat on an admitted count is the fold of the callback's normal form, by one generic law. Chaum–Pedersen, Schnorr AND, interactive Schnorr, Okamoto, the Sumcheck units and roots, the GKR layer Sumcheck and the GKR root use it'''
 owners = [["Structured bridge", "bridges/structured/README.md#generated-participant-normal-forms"], ["support", "docs/support.md#source-only-sumcheck-verifier"]]
 theorems = [
   "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process",
   "ZkcExamples.Structured.OkamotoNormalForms.verifier_process",
   "ZkcExamples.Structured.OkamotoNormalForms.exact_clause",
   "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process",
-  "ZkcExamples.Structured.NormalFormSteps.apply_step",
+  "Zkc.Source.Structured.NormalForm.normalize_sound",
+  "Zkc.Source.Structured.NormalForm.callback_sound_uniform",
   "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke",
   "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke",
-  "ZkcExamples.Structured.NormalFormSteps.apply_step_after",
+  "ZkcExamples.Structured.GkrSourceNormalForms.verifierLayer_process",
   "ZkcExamples.Structured.NormalFormSteps.repeat_embed",
   "ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant",
 ]
