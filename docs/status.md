@@ -363,10 +363,18 @@ the second draw, is accepted through normalization, and compiled with `--no-calc
 computes values where the source defines them, by equality. That fixture's
 theorems stop at the constructed validator, since the participant projection
 rule is not applied to it. For Sumcheck the program's helper functions are proved to
-implement the source's checked helpers, and honest-prover completeness of the
-executable holds for tables of at most two rounds, the Entry's static maximum,
-at every budget of at least `68 + 61 · rounds` instructions, which at two rounds
-is the runtime's acceptance threshold. The security bounds
+implement the source's checked helpers: the empty point and the point extension
+by the general helper rule, whose soundness is proved once, and the terminal
+check, whose body iterates and is outside the rule's recipes, by a proof of its
+own. Honest-prover completeness of the executable holds for every round count up
+to the Entry's static maximum, at every budget of at least `68 + 61 · rounds`
+instructions, a charge derived from the program's reading, which at two rounds
+is the runtime's acceptance threshold; the proofs are the Sumcheck family's and
+do not depend on the value of the maximum. A current limitation: the compiler
+accepts a Sumcheck Entry with any static maximum, but the library's terminal
+check bounds the point at 64 coordinates, so honest proofs of 64 or more rounds
+are rejected, and the executable theorems require a maximum below 64.
+The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness

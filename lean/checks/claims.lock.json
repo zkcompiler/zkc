@@ -25,6 +25,12 @@
       "structural": "96448e4b6e36a7da",
       "explicit": "fc194d8c3dccc9cd"
     },
+    "Zkc.Executable.checkHelpers_sound": {
+      "package": "main",
+      "module": "Zkc.Executable.HelperSoundness",
+      "structural": "770ecda66738ebfb",
+      "explicit": "8babecf768d19e59"
+    },
     "Zkc.Executable.checkNormalized_sound": {
       "package": "main",
       "module": "Zkc.Executable.NormalizationSoundness",
@@ -154,8 +160,14 @@
     "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted": {
       "package": "main",
       "module": "ZkcExamples.Executable.SumcheckCompleteness",
-      "structural": "dcf30c5915a82fe5",
-      "explicit": "d245014cab7af9ca"
+      "structural": "a85f8f15c80dae75",
+      "explicit": "50f8afe0bd91be0c"
+    },
+    "ZkcExamples.Executable.SumcheckFamily.honest_accepted": {
+      "package": "main",
+      "module": "ZkcExamples.Executable.SumcheckFamily",
+      "structural": "1a416c67708cfd16",
+      "explicit": "e8a7737c812a1a52"
     },
     "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes": {
       "package": "main",
