@@ -3,7 +3,7 @@
 fixture = "lean/bridges/structured/fixtures/sumcheck-reduce.json"
 output = "lean/ZkcExamples/Structured/SumcheckRoundNormalForms.lean"
 namespace = "ZkcExamples.Structured.SumcheckRoundNormalForms"
-imports = ["ZkcExamples.Structured.SumcheckVerifierBodies", "ZkcExamples.Structured.SumcheckRoundLaws",
+imports = ["ZkcExamples.Structured.SumcheckVerifierBodies", "Zkc.Source.Structured.NormalForm.Presentation", "ZkcExamples.Structured.SumcheckRoundLaws",
            "ZkcExamples.Structured.NormalFormSteps", "Zkc.Source.DenotationLaws"]
 open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
 helper_modules = ["lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
@@ -18,10 +18,13 @@ parameters = "(U : UnitPayload)"
 meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx"
 closed = "(plainHelpers (F := F) (G := G) U).closed"
 components = "(plainHelpers (F := F) (G := G) U).components"
+tables = "plainHelpers (F := F) (G := G) U"
+protocols = "U.plainProtocolTable F G"
 
 [[shared.roles]]
 role = 1
 name = "verifier"
+proof = "normal-form"
 binders = "(bodies : SumcheckVerifierHelpers.Bodies U.definitions)"
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
@@ -30,6 +33,7 @@ laws.appendHelper = { term = "append_plain U bodies {0} {1}", results = ["{0} ++
 [[shared.roles]]
 role = 0
 name = "prover"
+proof = "normal-form"
 binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
 premises = "(shape : HasShape entries dimension width) (bound : entries.length < indexLimit) (positive : 0 < dimension)"
 slots = [{ name = "entries" }, { name = "dimension" }, { name = "width" }, { name = "point" }]
@@ -41,6 +45,7 @@ laws.appendHelper = { term = "append_plain U ⟨bodies.empty, bodies.append, bod
 [[shared.roles]]
 role = 0
 name = "proverEmpty"
+proof = "normal-form"
 state = "proverState"
 reuse_state = true
 theorem = "prover_empty_process"
