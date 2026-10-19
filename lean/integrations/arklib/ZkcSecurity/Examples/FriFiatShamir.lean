@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.ArkLib.Fri.Certificate
 public import ZkcSecurity.FiatShamir.Typed
 public import ZkcSecurity.FiatShamir.Grinding
+public import ZkcSecurity.FiatShamir.Lifting
 
 @[expose] public section
 
@@ -88,32 +89,23 @@ inductive Event (F : Type) where
 
 variable {F : Type} {b s : ℕ}
 
-/-- Raw answers by the last event of a key. -/
-def Raw (F : Type) (block : Block b s) : Option (Event F) → Type
-  | some (.fold _) => F
-  | some (.positions _ _) => block.Raw
+/-- The raw answer of a query occurrence: a field element after a folding occurrence, the block
+sampler's raw answer after the query block occurrence. -/
+def Raw (F : Type) (block : Block b s) : Event F → Type
+  | .fold _ => F
+  | .positions _ _ => block.Raw
   | _ => Unit
 
-/-- The oracle's answer type at a key. -/
-abbrev Answer (F : Type) (block : Block b s) (key : List (Event F)) : Type :=
-  Raw F block key.getLast?
+/-- The oracle's answer type at a key: the raw answer of its last event. -/
+abbrev Answer (F : Type) (block : Block b s) : List (Event F) → Type :=
+  ByLast (Raw F block)
 
 instance rawSampleable [SampleableType F] (block : Block b s) :
-    ∀ last : Option (Event F), SampleableType (Raw F block last)
-  | some (.fold _) => inferInstanceAs (SampleableType F)
-  | some (.positions _ _) => inferInstanceAs (SampleableType block.Raw)
-  | some (.word _) => inferInstanceAs (SampleableType Unit)
-  | some (.final _) => inferInstanceAs (SampleableType Unit)
-  | none => inferInstanceAs (SampleableType Unit)
-
-instance answerSampleable [SampleableType F] (block : Block b s) (key : List (Event F)) :
-    SampleableType (Answer F block key) :=
-  rawSampleable block key.getLast?
-
-/-- The answer type at a key ending with an occurrence is the occurrence's raw type. -/
-theorem answer_last (block : Block b s) (preceding : List (Event F)) (event : Event F) :
-    Answer F block (preceding ++ [event]) = Raw F block (some event) := by
-  simp [Answer]
+    ∀ event : Event F, SampleableType (Raw F block event)
+  | .fold _ => inferInstanceAs (SampleableType F)
+  | .positions _ _ => inferInstanceAs (SampleableType block.Raw)
+  | .word _ => inferInstanceAs (SampleableType Unit)
+  | .final _ => inferInstanceAs (SampleableType Unit)
 
 /-- A committed word of size `2 ^ logSize`, recovered from its event. -/
 def recoverWord (logSize : ℕ) : Event F → Option (Fin (2 ^ logSize) → F)
@@ -141,12 +133,10 @@ theorem decodeBlock_self (block : Block b s) (raw : block.Raw) :
   simp [decodeBlock]
 
 /-- The transcript interface of the verifier with the block sampler `block`. -/
-def absorb (block : Block b s) : Interface (operations F) (Event F) (List F) (Answer F block)
-  | .fold round => .query (.fold round) fun preceding raw =>
-      some (cast (answer_last block preceding (.fold round)) raw)
-  | .positions logSize count => .query (.positions logSize count) fun preceding raw =>
-      decodeBlock block logSize count (cast (answer_last block preceding (.positions logSize count))
-        raw)
+def absorb (block : Block b s) : Interface (operations F) (Event F) (List F) (Raw F block)
+  | .fold round => .query (.fold round) fun raw => some raw
+  | .positions logSize count => .query (.positions logSize count) fun raw =>
+      decodeBlock block logSize count raw
   | .word _ logSize => .receive Event.word (recoverWord logSize)
   | .final => .receive Event.final recoverFinal
 
@@ -159,13 +149,58 @@ def eventError (foldError : ℕ → ENNReal) (blockError : ENNReal) : Event F �
 variable [Field F] [DecidableEq F] [SampleableType F]
 
 omit [Field F] [DecidableEq F] in
-/-- The local obligations over uniform sorts are the typed obligations: folding challenges decode
-exactly, and the query block's error is scaled by its sampler's realized law. -/
-theorem typedStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool → Prop}
+/-- The block decoding at a block shape is realized with the sampler's factor and slack: at the
+sampler's own shape it is the sampler's decoding, and at any other it refuses. -/
+theorem decodeBlock_realized (block : Block b s) (logSize count : ℕ) :
+    Realized (decodeBlock block logSize count) block.factor block.slack := by
+  by_cases shape : logSize = b ∧ count = s
+  · obtain ⟨rfl, rfl⟩ := shape
+    have same : decodeBlock block logSize count = block.decode := funext (decodeBlock_self block)
+    rw [same]
+    exact block.realized
+  · intro event
+    refine le_trans (le_of_eq (prEvent_eq_zero_of_forall_not _ _ fun raw escaping => ?_)) zero_le
+    obtain ⟨value, decoded, -⟩ := escaping
+    have refused : decodeBlock block logSize count raw = none := by
+      unfold decodeBlock
+      split
+      · exact absurd ‹_› shape
+      · rfl
+    exact absurd (refused.symm.trans decoded) (by simp)
+
+omit [Field F] [DecidableEq F] in
+/-- The law record of the query block at a block shape: the block decoding with the sampler's
+realized law. -/
+def blockLaw (block : Block b s) (logSize count : ℕ) :
+    LawRecord block.Raw (Fin count → Fin (2 ^ logSize)) :=
+  LawRecord.dominated (decodeBlock block logSize count) block.factor block.slack
+    (decodeBlock_realized block logSize count) 1 (prEvent_le_one _ _)
+
+omit [Field F] [DecidableEq F] in
+/-- The law interface of the verifier: folding challenges read the field answer exactly, and the
+query block is decoded by its law record. -/
+def laws (block : Block b s) : LawInterface (operations F) (Event F) (List F) (Raw F block)
+  | .fold round => .query (.fold round) (inferInstanceAs (SampleableType F)) (LawRecord.identity F)
+  | .positions logSize count =>
+      .query (.positions logSize count)
+        (inferInstanceAs (SampleableType (Fin count → Fin (2 ^ logSize))))
+        (blockLaw block logSize count)
+  | .word _ logSize => .receive Event.word (recoverWord logSize)
+  | .final => .receive Event.final recoverFinal
+
+omit [Field F] [DecidableEq F] in
+/-- The law interface presents the verifier's transcript interface. -/
+theorem laws_absorb (block : Block b s) : (laws (F := F) block).absorb = absorb block := by
+  funext operation
+  cases operation <;> rfl
+
+omit [Field F] [DecidableEq F] in
+/-- The local obligations over uniform sorts are the uniform-sort obligations of the law
+interface. -/
+theorem uniformStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool → Prop}
     {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Proc (operations F) Bool)
     (step : Step doomed (siteError foldError queryError) process) :
-    Typed.Step (absorb block) doomed (· = true)
-      (eventError foldError (block.factor * queryError + block.slack)) process := by
+    UniformEventStep (laws block) doomed (· = true) (siteError foldError queryError) process := by
   cases process with
   | done accepted =>
       change accepted = false at step
@@ -176,45 +211,31 @@ theorem typedStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool →
       cases operation with
       | fold round =>
           change Pr{let beta ← $ᵗ F}[¬ doomed (next beta)] ≤ foldError round at step
-          intro preceding
-          refine (prEvent_mono _ _
-            (fun raw => ¬ doomed (next (cast (answer_last block preceding (.fold round)) raw)))
-            fun raw escaping => ?_).trans ?_
-          · obtain ⟨value, decoded, outside⟩ := escaping
-            cases Option.some.inj decoded
-            exact outside
-          · exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv
-              (Equiv.cast (answer_last block preceding (.fold round)))
-              fun beta : F => ¬ doomed (next beta))).trans step
+          exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv (Equiv.refl _)
+            fun beta : F => ¬ doomed (next beta))).trans step
       | positions logSize count =>
           change Pr{let positions ← $ᵗ (Fin count → Fin (2 ^ logSize))}[
             ¬ doomed (next positions)] ≤ queryError at step
-          intro preceding
-          by_cases shape : logSize = b ∧ count = s
-          · obtain ⟨rfl, rfl⟩ := shape
-            refine (prEvent_mono _ _
-              (fun raw => ∃ value, block.decode
-                (cast (answer_last block preceding (.positions logSize count)) raw) = some value ∧
-                  ¬ doomed (next value))
-              fun raw escaping => ?_).trans ?_
-            · obtain ⟨value, decoded, outside⟩ := escaping
-              exact ⟨value, (decodeBlock_self block _).symm.trans decoded, outside⟩
-            · exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv
-                (Equiv.cast (answer_last block preceding (.positions logSize count)))
-                fun raw : block.Raw => ∃ value, block.decode raw = some value ∧
-                  ¬ doomed (next value))).trans (block.realized.escape_le _ step)
-          · refine le_of_eq_of_le (prEvent_eq_zero_of_forall_not _ _ fun raw escaping => ?_)
-              zero_le
-            obtain ⟨value, decoded, -⟩ := escaping
-            have refused : decodeBlock block logSize count
-                (cast (answer_last block preceding (.positions logSize count)) raw) = none := by
-              unfold decodeBlock
-              split
-              · exact absurd ‹_› shape
-              · rfl
-            exact absurd (refused.symm.trans decoded) (by simp)
+          exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv (Equiv.refl _)
+            fun positions : Fin count → Fin (2 ^ logSize) => ¬ doomed (next positions))).trans step
       | word round logSize => exact step
       | final => exact step
+
+omit [Field F] [DecidableEq F] in
+/-- The local obligations over uniform sorts are the typed obligations, by the generic lifting of
+law interfaces: folding challenges decode exactly, and the query block's error is scaled by its
+sampler's realized law. -/
+theorem typedStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool → Prop}
+    {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Proc (operations F) Bool)
+    (step : Step doomed (siteError foldError queryError) process) :
+    Typed.Step (absorb block) doomed (· = true)
+      (eventError foldError (block.factor * queryError + block.slack)) process := by
+  rw [← laws_absorb]
+  refine UniformEventStep.typed (laws block) (fun operation event sort law site => ?_) process
+    (uniformStep block process step)
+  cases operation <;> simp only [laws] at site <;> cases site
+  · simp [LawRecord.identity, LawRecord.exact, siteError, eventError]
+  · simp [blockLaw, LawRecord.dominated, siteError, eventError]
 
 /-- The typed certificate of the verifier after the first commitment, with the block sampler
 `block` of the verifier's own block shape. -/

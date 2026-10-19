@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.FiatShamir.Sampling
 public import Zkc.Construction.Soundness
+public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
 
@@ -113,13 +114,11 @@ def adaptiveExperiment (context : Context) (decode : B → F)
   prover >>= fun claimed => (fun result => (claimed.1, result)) <$>
     transform context (decodedQuery decode) (validator claimed.1) (initial claimed.1) claimed.2
 
-/-- The initial histories determine the statements: when two statements' initial
-histories, each followed by some events, are equal, the statements are equal.
-Injective initial histories of which none is a proper prefix of another satisfy
-this. -/
-def Determined (initial : Stmt → History F G) : Prop :=
-  ∀ statement other (rest otherRest : History F G),
-    initial statement ++ rest = initial other ++ otherRest → statement = other
+/-- The initial histories determine the statements (`Zkc.Transcript.Determined`
+at typed histories): when two statements' initial histories, each followed by
+some events, are equal, the statements are equal. -/
+abbrev Determined (initial : Stmt → History F G) : Prop :=
+  Zkc.Transcript.Determined initial
 
 section RoundByRound
 variable [SampleableType F]
@@ -188,75 +187,53 @@ end RoundByRound
 
 section Interface
 
-/-- The reply a received message event carries: the payload at the expected
-message occurrence, decoded at the expected type. -/
-def received (context : Context) (ty : Ty) (site : String) (sender : Nat) :
-    Event F G → Option (ScalarValue F G ty)
-  | .message origin payload =>
-      if origin = context.message site sender context.validator then payload.value ty else none
-  | _ => none
-
 /-- The transcript interface of the common participant actions: a receive
 absorbs its message occurrence with the payload and recovers the payload's value
 at the expected type, a send absorbs its message occurrence with the sent value
 (refusing a value without a payload), and every query absorbs its challenge
-occurrence and decodes the oracle answer with `decode`, which never refuses. -/
+occurrence and decodes the oracle answer with `decode`, which never refuses. It
+is the construction's interface `Zkc.Construction.Context.interface` with the
+field answers read through `decode` (`interface_eq_mapRaw`). -/
 def interface (context : Context) (decode : B → F) :
     Typed.Interface (Actions F G) (Event F G) (Payload F G) (fun _ => B)
   | .receive ty site sender =>
       .receive (fun payload => .message (context.message site sender context.validator) payload)
-        (received context ty site sender)
+        (context.receivedValue ty site sender)
   | .send (ty := ty) site receiver sent =>
       match Payload.ofValue ty sent with
       | some payload =>
           .send (.message (context.message site context.validator receiver) payload) ()
       | none => .refuse
   | .query site field _ =>
-      .query (.challenge (context.query site (.draw field))) fun _ raw => some (decode raw)
+      .query (.challenge (context.query site (.draw field))) fun raw => some (decode raw)
 
 theorem received_message (context : Context) (ty : Ty) (site : String) (sender : Nat)
     (payload : Payload F G) :
-    received context ty site sender (.message (context.message site sender context.validator)
+    context.receivedValue ty site sender (.message (context.message site sender context.validator)
       payload) = payload.value ty := by
-  simp [received]
+  simp [Context.receivedValue]
+
+/-- The interface is the construction's interface with the field answers read
+through `decode`. -/
+theorem interface_eq_mapRaw (context : Context) (decode : B → F) :
+    interface (G := G) context decode = context.interface.mapRaw fun _ => decode := by
+  funext operation
+  cases operation with
+  | receive ty site sender => rfl
+  | query site field arguments => rfl
+  | send site receiver sent =>
+      simp only [interface, Zkc.Transcript.Interface.mapRaw, Context.interface]
+      cases Payload.ofValue _ sent <;> rfl
 
 /-- The transform of the participant actions is the transform over their
 interface, with the decoded oracle as challenge function. -/
 theorem transform_eq (context : Context) (decode : B → F) :
     ∀ (process : PIR.Proc (Actions F G) A) (history : History F G) (proof : Proof F G),
       transform context (decodedQuery decode) process history proof =
-        Typed.transform (interface context decode) Typed.answer process history proof := by
-  intro process
-  induction process with
-  | done value => intro history proof; rfl
-  | halt stop => intro history proof; rfl
-  | call operation next ih =>
-      intro history proof
-      cases operation with
-      | receive ty site sender =>
-          cases proof with
-          | nil => rfl
-          | cons payload rest =>
-              rw [Typed.transform_receive (interface context decode) _ rfl, received_message]
-              simp only [transform]
-              cases payload.value ty with
-              | none => rfl
-              | some value => exact ih value _ _
-      | query site op arguments =>
-          rw [Typed.transform_query (interface context decode) _ rfl]
-          simp only [transform, decodedQuery, bind_map_left, Typed.answer]
-          exact congrArg (_ >>= ·) (funext fun reply => ih _ _ _)
-      | send site receiver sent =>
-          simp only [transform]
-          cases encoded : Payload.ofValue _ sent with
-          | none =>
-              rw [Typed.transform_refuse (interface context decode) _
-                (by simp [interface, encoded])]
-          | some payload =>
-              rw [Typed.transform_send (interface context decode) _
-                (event := .message (context.message site context.validator receiver) payload)
-                (value := ()) (by simp [interface, encoded])]
-              exact ih () _ _
+        Typed.transform (interface context decode) Typed.ask process history proof := by
+  intro process history proof
+  rw [interface_eq_mapRaw, Zkc.Transcript.transform_mapRaw, transform_eq_transcript]
+  congr 1
 
 /-- The query count of a participant process is its query count over the
 interface. -/
@@ -300,7 +277,6 @@ def RoundByRound.typed {accepts : A → Prop} {error : ENNReal} (bound : ENNReal
             | none => trivial
             | some payload => exact certificate.send _ site receiver sent next member
         | query site op arguments =>
-            intro preceding
             refine le_trans (le_of_eq (prEvent_congr _ _
               (fun raw => ¬ certificate.doomed (next (decode raw))) fun raw => ?_))
               (escape _ (certificate.query site op arguments next member))
@@ -492,13 +468,9 @@ theorem acceptance_le_of_image {A' : Type} (context : Context)
   have imaged : (prover >>= compiled) = image <$> experiment context validator initial prover := by
     rw [experiment, map_bind]
     exact congrArg (prover >>= ·) (funext construction)
-  have mapped : (simulateQ randomOracle
-      (image <$> experiment context validator initial prover)).run' ∅ =
-        image <$>
-          (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
-    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
-  rw [imaged, mapped, prEvent_map]
-  exact prEvent_mono _ _ _ fun result accepted => preserves result accepted
+  exact ZkcSecurity.VCVio.Pruning.prEvent_le_of_image randomOracle image
+    (event := fun result => Accepted accepts' result.1)
+    (idealEvent := fun result => Accepted accepts result.1) preserves imaged ∅
 
 /-- A final projection of the validator's result: the transform of
 `validator.bind (done ∘ f)` accepts with `accepts` exactly as often as the

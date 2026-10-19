@@ -22,7 +22,7 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Type}
 
 theorem settle_settle (tables : List (Table Value)) :
     ∀ process : PIR.Proc (committed J Shape Value) A,
@@ -39,8 +39,8 @@ theorem settle_settle (tables : List (Table Value)) :
 
 section Replay
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
-variable (extracted : Shape → Y → Table Value) (answers : (key : TranscriptKey E Shape Y) → R [key.2])
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
+variable (extracted : Shape → Y → Table Value) (answers : (key : TranscriptKey E Shape Y) → Raw key.2)
 
 /-- A replay along nonempty events answers the reads at the head first. -/
 theorem replay_settle (tables : List (Table Value)) (history : List (Absorbed E Shape Y))
@@ -108,7 +108,7 @@ theorem replay_append (second : List (Absorbed E Shape Y)) :
                 · rfl
               · simp only
                 split
-                · cases decode [] (answers (history, event)) with
+                · cases decode (answers (history, event)) with
                   | none => rfl
                   | some value =>
                       simp only
@@ -159,10 +159,10 @@ theorem replay_send {operation : J.Op}
 /-- One query occurrence, answered by decoding the answer at its key. -/
 theorem replay_query {operation : J.Op}
     {next : J.Reply operation → PIR.Proc (committed J Shape Value) A} {event : E}
-    {decode : (preceding : List E) → R (preceding ++ [event]) → Option (J.Reply operation)}
+    {decode : Raw event → Option (J.Reply operation)}
     (absorbed : absorb operation = .query event decode) (tables : List (Table Value))
     (history : List (Absorbed E Shape Y)) {value : J.Reply operation}
-    (decoded : decode [] (answers (history, event)) = some value) :
+    (decoded : decode (answers (history, event)) = some value) :
     replay absorb words extracted answers (.call (.base operation) next) tables history
         [.event event] = some (settle tables (next value), tables) := by
   rw [replay.eq_def]
@@ -179,7 +179,7 @@ theorem replay_commit {shape : Shape} {next : Unit → PIR.Proc (committed J Sha
   simp only [↓reduceIte, replay_nil]
 
 /-- A replay reads the transcript answers only at histories shorter than the replayed one. -/
-theorem replay_congr_answers {other : (key : TranscriptKey E Shape Y) → R [key.2]} :
+theorem replay_congr_answers {other : (key : TranscriptKey E Shape Y) → Raw key.2} :
     ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Proc (committed J Shape Value) A)
       (tables : List (Table Value)) (history : List (Absorbed E Shape Y)),
       (∀ key : TranscriptKey E Shape Y, key.1.length < history.length + events.length →
@@ -230,7 +230,7 @@ theorem replay_congr_answers {other : (key : TranscriptKey E Shape Y) → R [key
                     apply agree
                     simp
                   rw [agreeing]
-                  cases decode [] (other (history, event)) with
+                  cases decode (other (history, event)) with
                   | none => rfl
                   | some value => exact ih (next value) tables _ shifted
                 · rfl
@@ -288,7 +288,7 @@ theorem replay_congr_extracted {other : Shape → Y → Table Value} :
                 · rfl
               · simp only
                 split
-                · cases decode [] (answers (history, event)) with
+                · cases decode (answers (history, event)) with
                   | none => rfl
                   | some value => exact ih (next value) tables _ later
                 · rfl
@@ -320,8 +320,8 @@ def CommitBound : PIR.Proc (committed J Shape Value) A → ℕ → Prop
 
 section Committed
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
-  (extracted : Shape → Y → Table Value) (answers : (key : TranscriptKey E Shape Y) → R [key.2])
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
+  (extracted : Shape → Y → Table Value) (answers : (key : TranscriptKey E Shape Y) → Raw key.2)
 
 /-- A replay from a process with at most `budget` commitments absorbs at most `budget` roots. -/
 theorem replay_committed_le :
@@ -377,7 +377,7 @@ theorem replay_committed_le :
                 split at replayed
                 · rename_i same
                   subst same
-                  cases decoded : decode [] (answers (history, event)) with
+                  cases decoded : decode (answers (history, event)) with
                   | none => rw [decoded] at replayed; simp at replayed
                   | some value =>
                       rw [decoded] at replayed
@@ -402,8 +402,8 @@ theorem replay_committed_le :
 end Committed
 
 section Table
-variable (absorb : Typed.Interface J E P R) (scheme : Extractable Shape Value Query Y)
-  (table : JointTable R Shape Y Query)
+variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value Query Y)
+  (table : JointTable Raw Shape Y Query)
 
 /-- The concrete reading against a complete answer table: the outcome and the keys queried. -/
 def runTable : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) →
@@ -424,7 +424,7 @@ def runTable : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y
       | .send event value =>
           runTable (next value) (history ++ [.event event]) roots messages openings
       | .query event decode =>
-          match decode [] (table (.inl (history, event))) with
+          match decode (table (.inl (history, event))) with
           | some value =>
               let result := runTable (next value) (history ++ [.event event]) roots messages openings
               (result.1, .inl (history, event) :: result.2)
@@ -484,7 +484,7 @@ theorem run_table :
           · simp only [run, runTable, absorbed]
             rw [evalWithAnswerFn_bind, evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply,
               tableQueryLog_query_bind, List.map_cons]
-            cases decode [] (table (.inl (history, event))) with
+            cases decode (table (.inl (history, event))) with
             | none => exact ⟨rfl, rfl⟩
             | some value =>
                 exact ⟨(ih value _ _ _ _).1, congrArg (List.cons _) (ih value _ _ _ _).2⟩

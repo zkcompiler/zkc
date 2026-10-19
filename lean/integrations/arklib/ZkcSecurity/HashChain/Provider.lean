@@ -133,7 +133,7 @@ theorem chainAttempt_noteReached {width : ℕ} {reached : S → Option (List E)}
 /-- The hash-chain simulator over the history oracle with `width`-digest answers,
 with a private tape of `length` digests. -/
 @[reducible] def chainSimulator (width length : ℕ) :
-    Provider.Simulator (Primitive E S X) (Raw E S width) (Fin length → S) where
+    Provider.Simulator (Primitive E S X) (Answer E S width) (Fin length → S) where
   State := ChainState E S X width length
   start tape := ⟨tape, 0, fun _ => none, fun _ => none, fun _ => none⟩
   attempt state input := chainAttempt width state.reached input

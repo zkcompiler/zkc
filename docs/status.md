@@ -433,6 +433,34 @@ and a restricted route through a propositional realization relation is proposed
 but unchecked
 ([imports](../lean/docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)).
 
+The security results share one probabilistic endpoint and one composition rule.
+Lean states keyed bad-event certificates over any key space of the lazily
+sampled oracle, with an all-table resampling and a trace obligation, and its
+soundness theorem is the endpoint that typed certificates and the commitment
+bridge reach through transformers; charged reductions compose sub-validators
+whose returned values satisfy a postcondition
+([composing certificates](../lean/docs/spec/fiat-shamir-security.md#composing-certificates)).
+Renamings of oracle cells transport executions, query bounds and weighted costs
+between key forms, including the commitment bridge's joint keys and history
+keys. [Stage relations](../lean/docs/spec/fiat-shamir-security.md#stage-relations)
+compose with budget transport, bounding against the worst adversary in a
+translation's support; the construction, projection and pruning equalities, the
+typed theorem, provider simulations and the commitment bridge are stages. The
+[joint stage](../lean/docs/spec/fiat-shamir-security.md#the-joint-stage-of-a-commitment-and-a-provider)
+of a commitment and a transcript provider that share one primitive is a
+contract with jointly injective namespaces, a checkpoint extraction, the
+checkpoint event and an implication from the intended event, and its frame
+records a provider simulation with namespace, hash-answer, state-separation and
+joint-loss obligations; the contract composes, and a frame is constructed for a
+provider whose primitive inputs are the joint oracle's own tagged keys. No frame
+is constructed for the hash-chain provider, whose chain calls and the
+commitment's hash calls would share the byte hash, so no theorem bounds a
+committed verifier under the native hash-chain suites in one primitive; that
+collision and prediction loss over the joint trace remains open. Statement
+bindings relate policy statements to model statements, with the coverage of the
+application's false statements and the rejection of unmapped statements as
+separate registered obligations.
+
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.

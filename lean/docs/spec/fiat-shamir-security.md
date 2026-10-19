@@ -6,19 +6,25 @@ interactive validator. The general theorems hold for any transcript interface
 with typed query sites and an error per site; the transform
 `Zkc.Construction.transform` of the [construction chapter](fiat-shamir.md) is one
 instance, and the imported Sumcheck verifier, the plain GKR verifier and the
-compiled Sumcheck, GKR and guessing Entries are instances of that. The general
-theorems are in `ZkcSecurity.FiatShamir` (`Interface`, `Typed`, `Soundness`,
-`Decoding`, `Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`,
-`Binding`, `Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
-hash-chain provider simulation in `ZkcSecurity.HashChain` and the bound for
-verifiers with committed tables in `ZkcSecurity.Commitment`; the Sumcheck
-instance is `ZkcSecurity.Examples.SumcheckFiatShamir`.
+compiled Sumcheck, GKR and guessing Entries are instances of that. The
+transcript interface, the transform and replay are core definitions
+(`Zkc.Transcript`). The general theorems are in `ZkcSecurity.FiatShamir`
+(`Interface`, `Typed`, `Keyed`, `Reduction`, `Budget`, `Soundness`, `Decoding`,
+`Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`, `Binding`,
+`Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
+hash-chain provider simulation in `ZkcSecurity.HashChain`, the bound for
+verifiers with committed tables in `ZkcSecurity.Commitment`, the transport
+between oracle key forms in `ZkcSecurity.Oracle.Keys`, and the
+[stage relations](#stage-relations) that compose them in `ZkcSecurity.Stage`;
+the Sumcheck instance is `ZkcSecurity.Examples.SumcheckFiatShamir`.
 
 ## Typed query sites
 
 A validator is a process `PIR.Proc I A` over any operation signature `I`. A
-**transcript interface** `Typed.Interface I E P R` states, for each operation,
-how the transform treats it (`Typed.Absorption`):
+**transcript interface** `Zkc.Transcript.Interface I E P Raw` (also
+`Typed.Interface`) states, for each operation, how the transform treats it
+(`Zkc.Transcript.Absorption`); `Raw : E → Type` is the raw answer type of each
+query occurrence:
 
 - `receive event recover`: read the next proof message `m : P`, absorb the
   event `event m : E` and continue with the reply `recover (event m)`; a message
@@ -27,17 +33,34 @@ how the transform treats it (`Typed.Absorption`):
 - `send event value`: absorb `event` and continue with `value`.
 - `query event decode`: absorb the challenge occurrence `event`, ask the
   transcript oracle at the history `preceding ++ [event]` and continue with
-  `decode preceding raw` of its raw answer; a refused decoding stops with
-  `exhausted`.
+  `decode raw` of its raw answer `raw : Raw event`; a refused decoding stops
+  with `exhausted`.
 - `refuse`: stop.
 
-The transcript oracle answers a history `key` with a value of its raw type
-`R key`, so the raw answer may depend on the occurrence that ends the key, for
-example on its method and on operands fixed before sampling. Each query site
-chooses its result sort (a field or extension element, a bounded index, a bit
-string, a gated pair or a block of indices) and its decoder; decoders may
-refuse, as rejection samplers do. `Typed.transform` is the transform with a
-challenge function in any monad.
+The raw answer type is a function of the occurrence, so it may depend on the
+request the occurrence carries, for example on its method, its result sort and
+operands fixed before sampling. The decoder reads the raw answer alone; an
+operand it needs is carried in the occurrence. Each query site chooses its
+result sort (a field or extension element, a bounded index, a bit string, a
+gated pair or a block of indices) and its decoder; decoders may refuse, as
+rejection samplers do. The transform `Zkc.Transcript.transform absorb oracle`
+(also `Typed.transform`) runs a validator from an absorbed history on a proof
+in any monad, asking `oracle preceding event` at every query, and returns the
+outcome and the unread proof suffix. A result is accepted when its outcome is
+(`Accepted accepts`); complete acceptance (`AcceptedComplete`) also requires
+the unread suffix to be empty, so a bound on acceptance bounds it.
+`Zkc.Transcript.replay` replays a validator along given events against an
+answer table.
+
+The transcript oracle on all event histories, `OracleSpec.ofFn R`, answers a
+history `key` in `R key`. `Typed.ReadsByOccurrence R Raw` reads its answer at a
+key `preceding ++ [event]` as a raw answer of the occurrence, by an
+equivalence: a range independent of the key reads every answer as itself, and
+the range by the last event, `Typed.ByLast Raw`, reads it in `Raw event`
+([below](#raw-answers-by-the-last-event-and-lifting)). The typed engine's
+transform asks the history oracle through this reading (`Typed.ask`). Oracle
+identity, replay and doomed sets depend on the whole history; the answer type
+and the decoder depend on the occurrence only.
 
 A **certificate** `Typed.Certificate absorb accepts error` is a set `doomed` of
 residual processes, with an error `error e` for every absorbed occurrence `e`,
@@ -46,8 +69,9 @@ whose members meet the local obligations `Typed.Step`:
 - a doomed `done` result does not satisfy `accepts`;
 - a doomed receive stays doomed for every reply, and a doomed send stays doomed;
 - from a doomed query with occurrence `e`, after every absorbed prefix, the
-  site's decoding of a fresh uniform raw answer yields a value that leaves the
-  doomed set with probability at most `error e`; refused answers never escape.
+  site's decoding of a fresh uniform raw answer of `e` yields a value that
+  leaves the doomed set with probability at most `error e`; refused answers
+  never escape.
 
 The escape bound is stated for the decoded law of the site, so a site's error
 already includes its sampling correction (see [realized laws](#realized-sampling-laws)).
@@ -80,6 +104,12 @@ error per occurrence is one from every history (`CostBound.charged`), and a
 query count with every charge at most `bound` charges at most `budget * bound`
 (`QueryBound.chargedCostBound`).
 
+The charged certificate is the endpoint certificate. Per-occurrence
+certificates, the round-by-round certificates of the construction model
+(`RoundByRound.typed`), uniform-sort certificates of law interfaces and the
+imports from ArkLib become charged certificates, and their theorems are
+corollaries of the charged ones.
+
 ## The ideal experiment
 
 The transcript oracle on all event histories is `OracleSpec.ofFn R`.
@@ -87,11 +117,11 @@ The transcript oracle on all event histories is `OracleSpec.ofFn R`.
 
 ```text
 Typed.fixedExperiment absorb validator initial prover :=
-  prover >>= fun proof => Typed.transform absorb answer validator initial proof
+  prover >>= fun proof => Typed.transform absorb Typed.ask validator initial proof
 
 Typed.experiment absorb validator initial prover :=
   prover >>= fun (statement, proof) =>
-    (statement, ·) <$> Typed.transform absorb answer
+    (statement, ·) <$> Typed.transform absorb Typed.ask
       (validator statement) (initial statement) proof
 ```
 
@@ -167,9 +197,26 @@ neither obligation of the weighted bound: the all-table resampling bound and the
 pathwise weighted budget are proved for each certificate. With law records, the
 charge of a query site is `κ · ε + λ` at its key.
 
-The proofs apply VCVio's weighted adaptive bad-query bound
-`OracleComp.prEvent_randomOracle_le_of_bad_queries_weighted` directly to the
-history oracle, with no routing to library keys:
+**One endpoint.** Every bound of this chapter is one application of the
+keyed certificate `ZkcSecurity.FiatShamir.KeyedCertificate R game fails`: for a
+game `game` on the lazily sampled oracle `OracleSpec.ofFn R` over any key space
+(typed histories, or the joint keys of transcript queries and hash calls) and
+an event `fails` of its result, a charge per key, a set of bad keys under each
+answer table, the all-table resampling bound (`ResampleBound`: under every
+background table, resampling the answer at a key makes it bad with probability
+at most its charge) and the trace (on every table where the game fails, it
+queries a bad key). `KeyedCertificate.soundness` bounds the probability of
+`fails` by every pathwise charge bound of the game (`WorstCaseCostBound`),
+through VCVio's weighted adaptive bad-query bound
+`OracleComp.prEvent_randomOracle_le_of_bad_queries_weighted`; a mixture of games
+drawn before the oracle computation is bounded by its worst game
+(`KeyedCertificate.soundness_mixture`). Certificate transformers produce it:
+`Typed.ChargedCertificate.keyed` and `keyedFixed` for the adaptive and the
+fixed-statement experiments, and `ZkcSecurity.Commitment.keyed` for
+[verifiers with committed tables](#verifiers-with-committed-tables).
+
+The keyed certificate of the typed experiments works directly on the history
+oracle, with no routing to library keys:
 
 - **Bad keys.** `Typed.replay` walks a statement's validator from its initial
   history along a key's events, recovering received replies from the absorbed
@@ -197,6 +244,72 @@ ending with its own occurrence, which is absorbed; every sent value is absorbed;
 and histories only grow. A transform that did not absorb a prover message would
 break replay, and with it the theorems. For adaptive statements the initial
 history must also bind the statement.
+
+## Composing certificates
+
+Certificates of composite validators are assembled from **charged reductions**
+`Typed.Reduction absorb Post charge`: a set of doomed pairs of an absorbed
+history and a residual whose members meet the charged local obligations, with
+a postcondition `Post history value` on returned values in place of rejection
+(`Typed.ChargedStepTo`).
+
+- `Reduction.bind`: a head's reduction with postcondition `Post₁` and, for
+  every returned value, a reduction of the continuation, linked by
+  `Post₁ history value → doomed₂ history (continuation value)`, give a reduction
+  of the sequence.
+- `Reduction.repeatN`: an invariant indexed by the absorbed history, the number
+  of remaining iterations and the carried state, with one reduction per
+  iteration whose returned states meet the invariant at one fewer iteration,
+  gives a reduction of the bounded repetition that ends in the invariant at
+  zero.
+- `Reduction.union` and `Reduction.union₂`: branches under one charge, or under
+  two charges both dominated by a common charge.
+- `Reduction.receive`: a received message followed by one reduction per
+  message.
+- `Reduction.toCertificate`: a postcondition that implies rejection gives a
+  charged certificate. Conversely every charged certificate is a reduction with
+  the postcondition "not accepted" (`ChargedCertificate.toReduction`), and so
+  are per-occurrence certificates (`Certificate.toReduction`) and uniform-sort
+  certificates of law interfaces (`UniformCertificate.toReduction`).
+
+Reductions over the common participant actions with a uniform error
+(`ZkcSecurity.FiatShamir.Reduction`, from which the plain GKR verifier's
+certificate is assembled) become charged reductions
+(`ZkcSecurity.FiatShamir.Reduction.typed`).
+
+## Path bounds
+
+The query count `Typed.QueryBound`, the cost with an error per occurrence
+`Typed.CostBound` and the charged cost `Typed.ChargedCostBound` are path
+bounds of one combinator (`queryBound_iff`, `costBound_iff`,
+`chargedCostBound_iff`). A walk (`Zkc.Transcript.Walk`) states at each position
+which operations are admitted, a shape admissibility kept apart from charges,
+what an operation costs, and which positions follow each reply;
+`Walk.Bound walk process position budget` holds when every path from the
+position admits its operations and charges at most the budget. Costs form an
+ordered additive commutative monoid, so a vector budget with one coordinate per
+resource is a cost. The combinators are shared: `Walk.Bound.mono` raises the
+budget, `Walk.Bound.bind` sequences, `Walk.Bound.repeatN` bounds a repetition by
+its count times the body's budget, and `Walk.Bound.convert` turns a bound into
+one of another metric through a monotone additive map that dominates the target
+walk's charges on the target walk's paths. A transcript interface walks either
+its absorbed histories (`Interface.walk`), where a receive continues only with
+the replies its absorbed events recover, or without positions
+(`Interface.replyWalk`).
+
+The metrics stay distinct, connected by proved conversions: transcript queries
+(`Interface.queryCharge`), the weighted loss of a per-key charge
+(`Interface.lossCharge`), counts of queries and messages
+(`Interface.messageQueryCharge`), the hash chain's primitive calls
+(`HashChain.callBound_iff`: receives and sends absorb, a query absorbs and asks
+`width` counter blocks), and the commitment charges of verifiers with committed
+tables with their shape admissibility (`Commitment.charged_iff`,
+`Commitment.commitBound_iff`). A bound without positions holds at every history
+(`replyWalk_walk`), and a query count becomes a charged cost through the
+conversion `n ↦ n · bound` when every charge is at most `bound`
+(`QueryBound.chargedCostBound_of_walk`). The executable instruction budget is a
+separate operational contract: its exhaustion changes behaviour, and its
+charges depend on executable environments and helper evaluation.
 
 ## Realized sampling laws
 
@@ -356,8 +469,8 @@ the raw answer type of a key is a function of its last event
 last event, and `Unit` at the empty key, which no query reaches; it is uniform
 when every `Raw event` is (`ByLast.sampleable`). At a key `preceding ++ [event]`
 the answer reads as a value of `Raw event` (`ByLast.read`), with the same
-uniform law (`prEvent_read`), and `Absorption.queryLast` is a query whose
-decoder takes that value.
+uniform law (`prEvent_read`): `ByLast Raw` is the history oracle that reads by
+occurrence (`ReadsByOccurrence (ByLast Raw) Raw`).
 
 A **law interface** `Typed.LawInterface I E P Raw` presents a validator's
 operations to the transform with every query decoded by a law record from the
@@ -377,6 +490,27 @@ exact challenge in `Fin 5` and a gated block of positions has uniform errors
 and the typed engine bounds its acceptance by `(queries + 2) / 5`. A loop that
 draws twice at one occurrence, with first-round error `1 / 4` and second-round
 error `1 / 2`, is charged `1 / 4 + 1 / 2`.
+
+A doomed set and errors that ignore the history give the per-occurrence form:
+a **history-free uniform-sort certificate** `Typed.UniformEventCertificate laws
+accepts error`, with an error per operation, lifts to a per-occurrence
+certificate over `LawInterface.absorb` whenever every query occurrence's error
+covers its record's `factor · error + slack` (`UniformEventCertificate.typed`,
+`UniformEventStep.typed`). The FRI verifier's typed step is this lifting: its law
+interface reads the folding challenges exactly and decodes the query block by
+its sampler's realized law, a refusal at every other block shape
+(`ZkcSecurity.Examples.FriFiatShamir.laws`, `typedStep`).
+
+Requests with different result sorts go through one interface. In
+`TestsSecurity.HeterogeneousRequests` a validator receives a claim and asks a
+field element, an index below a bound its request carries, read from a raw
+answer below twice the bound reduced modulo it (an exact law), and a block of
+two field elements. The raw answer type depends on the request's bound, so the
+oracle reads by the last event. The uniform-sort certificate lifts through the
+law interface, the weighted fixed-statement theorem bounds every prover by its
+charge plus `1 / 5 + 1 / 3 + 1 / 5`, and the query-free prover is accepted with
+probability exactly `43 / 75`, one minus the product of the three miss
+probabilities, below the bound `11 / 15`.
 
 ## Binding codecs
 
@@ -406,6 +540,57 @@ event each with no count or length is not prefix-free and is not determined.
 A binding codec establishes statement determination only; that the native
 transcript absorbs the encoded rows, in order, belongs to the encoding and
 transcript-state [obligation](#obligations).
+
+The host binds the policy's statements, its public inputs in policy order,
+while a library's theorem is about the model's statements. A **statement
+binding** `StatementBinding Policy Model E` pairs a binding codec of policy
+statements with the relation between policy and model statements, required to be
+functional: a policy statement denotes at most one model statement.
+Determination transfers through it: a policy statement's initial history,
+followed by any events, determines its model statement
+(`StatementBinding.determines`); choosing a denoting policy statement for every
+model statement gives model histories that determine the statement
+(`StatementBinding.determined_represent`); and a policy statement is false
+exactly when its model statement is (`falsePolicy_iff`). In
+`TestsSecurity.StatementBindings` a relation that is not functional breaks the
+transfer.
+
+Determination says nothing about a policy statement that denotes no model
+statement (`StatementBinding.Unmapped`): under the empty relation every policy
+statement is unmapped and none is false in the model, so the modeled event
+cannot see an accepted statement the application calls false. An adaptive
+endpoint needs coverage of the application's false statements in one of two
+forms. Either every application-false policy statement is false in the model or
+unmapped (`StatementBinding.Covers`) and, as a separate obligation, the
+validators of unmapped statements are doomed
+(`StatementBinding.RejectsUnmapped`), which together make the validators of all
+application-false statements doomed when those of model-false statements are
+(`StatementBinding.doomed_of_covers`); or the application's false-acceptance
+event implies the modeled event (`EventImplication`), which transfers the bound
+(`EventImplication.prEvent_le`). Coverage and rejection are separate registry
+obligations with separate schemas, so evidence for coverage does not stand for
+rejection. `TestsSecurity.StatementBindings` shows the gap with the empty
+relation and a validator that accepts every statement: an accepted false
+statement is invisible to the modeled event, coverage holds only through
+unmapped statements, and the rejection it then requires fails.
+
+Statement determination is the first of four binding obligations. The other
+three are typed obligation structures, each with its claim and its status
+(`ObligationStatus`: a proof, or a reported assumption that cites an entry of
+the obligation's own category in the registry `ZkcSecurity.Registry`, found by
+its identifier with `registryEntry`):
+
+- **Collision-bounded identity** (`CollisionBoundedIdentity`): a collision game
+  over every digest in scope, whether computed at setup, recomputed by the
+  verifier or given before the protocol (`DigestOrigin`), with its bound at
+  every budget.
+- **Authenticated configuration** (`AuthenticatedConfiguration`): the
+  configuration is fixed before the adversary is quantified, it comes from a
+  compile-time constant or a pinned asset (`Provenance`), and the security claim
+  holds at every attacker-selected parameter in its admissible range.
+- **Verification-key correctness** (`VerificationKeyCorrectness`): the key in use
+  is the intended one, by checked recomputation, a certificate or a realization
+  theorem (`KeyEvidence`).
 
 ## Imports from ArkLib's round-by-round soundness
 
@@ -1008,7 +1193,13 @@ one property, one provider and one class of bounded executions.
   and for statements each prover chooses after its queries
   (`randomized_adaptive_soundness_of_queryBound`); with a weighted budget, the
   mixture forms are `Typed.randomized_adaptive_soundness_weighted` and
-  `Typed.randomized_adaptive_soundness_charged`.
+  `Typed.randomized_adaptive_soundness_charged`. When the ideal failure of a
+  mixture is at most that of its worst prover (`Mixes`), a simulation at one
+  execution bound is a [stage relation](#stage-relations) from the ideal game,
+  provers admissible at their query count, to the concrete game, adversaries
+  admissible within a per-family budget (`Simulation.toRelation`): it
+  translates by drawing the tape and running the simulator, transports the
+  budget `q` to `cost q` and loses `loss q (expansion b)`.
 
 **Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
 [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
@@ -1047,15 +1238,20 @@ composes with `Typed.adaptive_soundness` rather than the fixed-statement bound
 above: with a certificate whose errors are at most `bound`, the concrete
 experiment accepts a false statement with probability at most
 `(q + queries) · bound + (q + V)² / |S|` (`concrete_soundness`; with pathwise
-charges, `concrete_soundness_weighted`). `Encoding` proves the byte framing
-injective and prefix-free and the three role tags pairwise non-prefix, and
-`byte_soundness` transfers the bound to a hash on bytes, given injective state
-encodings of one length, injective event encodings and `width ≤ 2^64`. The
-theorems assume `0 < width` and nonempty initial histories; every request has
-the same number of blocks. They are about the construction's byte-level chain
-model: that the compiled transcript handlers and the installed Keccak-256
-kernels implement that model, and that the suites' decoders are modelled ones,
-remain obligations.
+charges, `concrete_soundness_weighted`). Both are corollaries of the composed
+stage: the charged typed stage, the identification of the typed game with the
+simulation's ideal game, and the simulation's stage (`relation`), composed by
+`Relation.comp`, bound the concrete experiment by
+`q · bound + validatorCost + (q + V)² / |S|` for a charged certificate whose key
+charges are at most `bound` (`concrete_soundness_charged`). `Encoding` proves
+the byte framing injective and prefix-free and the three role tags pairwise
+non-prefix, and `byte_soundness` transfers the bound to a hash on bytes, given
+injective state encodings of one length, injective event encodings and
+`width ≤ 2^64`. The theorems assume `0 < width` and nonempty initial
+histories; every request has the same number of blocks. They are about the
+construction's byte-level chain model: that the compiled transcript handlers
+and the installed Keccak-256 kernels implement that model, and that the suites'
+decoders are modelled ones, remain obligations.
 
 ### The committed-opening experiment
 
@@ -1153,7 +1349,21 @@ committed tables by the typed certificate of its ideal reading.
   commits at most `rootBound` roots counting the statement's, the ideal reading's
   word operation carries every extracted entry, and a false statement's ideal
   reading is doomed.
-- **Proof.** One application of VCVio's weighted bad-query bound to the joint
+- **Charged certificates.** `soundness_charged` takes a charged certificate of
+  the ideal reading, whose doomed set and charge are indexed by the ideal
+  reading's absorbed history. That history contains tables where the concrete
+  history contains roots: an ideal history (`IdealHistory`) reads a concrete
+  history through an extraction, and `CommitDoomed` keeps the doomed set across a
+  commitment, which word messages give (`WordMessages.commitDoomed`). A
+  transcript key is charged a concrete-key charge that dominates the ideal
+  charge at the key's history read through every extraction; because the
+  checkpoint extraction is fixed before the key's answer, resampling the answer
+  stays bounded by the charge at the frozen extraction, and the all-table
+  resampling bound of the per-occurrence case carries over
+  (`bad_transcript_resample_charged`). `soundness_weighted` is its case for a
+  per-occurrence certificate (`IdealHistory.events`), and `soundness` is
+  unchanged.
+- **Proof.** One application of the keyed certificate (`keyed`) of the joint
   oracle. A transcript key is bad when, for a statement whose initial history
   begins the key's history, the replay of the statement's verifier along the rest
   of that history, with every root read as its checkpoint extraction, reaches a
@@ -1184,6 +1394,193 @@ committed tables by the typed certificate of its ideal reading.
   (`run_queryBound`).
 - **FRI.** [Committed words](fri-security.md#committed-words) applies the theorem
   to the FRI verifier.
+
+## Stage relations
+
+A verification stage relates two attack games (`ZkcSecurity.Stage`). A game
+(`Stage.Game`) packages an adversary class, budgets, the admissibility of an
+adversary at a budget, and the probability of the game's bad event for each
+adversary. A **stage relation** `Relation Src Tgt` bounds the target game by the
+source game: a target adversary admissible at `b` is translated, with private
+randomness allowed, into source adversaries admissible at the transported
+budget `budget b`, and its bad probability is at most the worst translated
+adversary's plus the loss `loss b`.
+
+```text
+Tgt.bad A ≤ ⨆ A' ∈ support (translate b A), Src.bad A' + loss b
+```
+
+The bound is against the worst adversary in the translation's support, not the
+average over the translation's randomness: a translation that succeeds with
+small probability can determine the supremum. This suffices for bounds that
+hold at every budget for every admissible adversary, which is how the stages
+are used; a stage that preserves a randomized translation's average success,
+as a computational reduction does, is not of this form.
+
+Composition runs the translations in sequence and transports budgets before
+evaluating the earlier stage's loss: the loss of `first.comp second` at `b` is
+`second.loss b + first.loss (second.budget b)` (`Relation.comp`, `comp_loss`).
+Composition has the identity relation as unit and is associative (`id_comp`,
+`comp_id`, `comp_assoc`). A bound on the source game transfers to the target at
+the transported budget with the loss added (`Relation.transfer`); a bound on a
+game is a relation from the trivial game (`Relation.ofBound`), so a chain of
+stages ending in an endpoint theorem is one relation from the trivial game whose
+loss is the end-to-end bound (`Relation.bounded`). Losses cannot be added
+without transporting budgets: in `TestsSecurity.StageComposition` a stage that
+counts its budget over two families has the budget map `b ↦ 2 · b`, the composed
+loss is the earlier bound at `2 · b`, an adversary attains it, and the earlier
+bound at the untransported budget is false.
+
+The stages of the Fiat–Shamir path are relations:
+
+- **Exact equalities and executable pruning** (`Relation.ofImage`,
+  `Relation.ofPrunesImage`): a target experiment that equals, or prunes by
+  results its event excludes, an outcome image of a source experiment is a
+  zero-loss stage with the identity translation and budget map. This is the one
+  transport lemma for verdicts,
+  `ZkcSecurity.VCVio.Pruning.prEvent_le_of_prunes_image` (`prEvent_le_of_image`
+  for an exact image), for any oracle implementation and initial state.
+- **The typed Fiat–Shamir theorems** (`typedRelation`, `chargedRelation`,
+  `weightedRelation`): the adaptive typed game is bounded from the trivial game,
+  at total query budgets or at pathwise weighted budgets.
+- **Provider simulations** (`Simulation.toRelation`), and the hash-chain
+  provider through composition (`HashChain.concrete_soundness_charged`).
+- **The commitment bridge** (`commitmentRelation`): the ideal reading enters as
+  a certificate, so the bridge is a relation from the trivial game to the joint
+  game (`jointGame`) whose loss at `q` prover queries is
+  `q · (siteBound + hashCharge q) + verifierCost q`, with
+  `hashCharge q = (rootBound + inputBound + 1) · (q + verifierQueries) / |Y|`.
+  It changes the statement interpretation: its event reads the statement
+  through the extraction at a checkpoint, which is frozen once the key is
+  queried (`checkpointTables_append`), and the event is false for a verifier
+  that queries nothing (`not_falseAcceptance_of_verifierLog_nil`).
+- **Transport between oracle key forms** (`Relation.ofRenaming`): a renaming of
+  oracle cells (`ZkcSecurity.Oracle.Renaming`) sends each source key to a target
+  cell, or answers it locally when its answer type has a single value, and reads
+  target answers back by an equivalence. An adversary translated through it has
+  the law of the source adversary's lazily sampled execution
+  (`Renaming.evalSPMF_translate`), arbitrary, malformed and empty keys included,
+  no more queries and the source weight of each key's target cell
+  (`translate_queryBound`, `translate_costBound`), so it is a zero-loss stage.
+  Pairs `(preceding, occurrence)` over event histories and the typed engine's
+  terminated histories are related by such renamings in both directions
+  (`ZkcSecurity.Oracle.pairToHistory`, `ZkcSecurity.Oracle.historyToPair`,
+  `historyToPair_weight`). The commitment bridge's joint keys, whose histories
+  contain committed roots and whose hash calls form a separate summand, are
+  related to history keys in the same way
+  (`ZkcSecurity.Commitment.jointToHistory`, `historyToJoint`): a pair is the
+  history ending with its occurrence, a hash call is itself, and the empty
+  history and histories ending with a root are answered locally. Sampling,
+  queries and charges transport (`prEvent_jointToHistory`,
+  `jointToHistory_costBound`, `historyToJoint_costBound`), and against a table
+  read back, the hash calls before a transcript key's first query are the same
+  in both forms (`checkpoint_jointToHistory`), so every checkpoint extraction
+  agrees.
+
+Knowledge claims stay outside: an extractor-based theorem concludes an
+extraction probability, not a bad-event bound, and keeps its own endpoint.
+
+### The joint stage of a commitment and a provider
+
+When a verifier with committed tables runs over a transcript provider and both
+call one primitive, their composition needs a contract
+(`ZkcSecurity.Stage.Joint.Contract`):
+
+- **Oracle namespaces and adversary access** (`Namespaces`): the commitment's
+  hash calls and the provider's chain calls are encoded as inputs of the shared
+  primitive, which the adversary may call on any input. Namespace separation is
+  an obligation, the joint injectivity of the two encodings (`separated`), not an
+  assumption that cells are fresh.
+- **Statement and history interpretation** (`Checkpoint`, `checkpointed`,
+  `implies`): the extraction for a key factors through the log entries
+  strictly before the first entry that queries the key (`Checkpoint.factors`),
+  so it is frozen afterwards (`Checkpoint.frozen`); the bridge's extraction is
+  one (`bridgeCheckpoint`). The joint game is the oracle game of a prover
+  experiment whose event is required to be the checkpoint event: the result is
+  false at the extraction of one of the verifier's transcript keys
+  (`checkpointed`); the bridge's false acceptance is of this form
+  (`falseAcceptance_iff_checkpoint`). An intended application event enters the
+  bound only through its implication of the concrete game's failure. The
+  implication is a required field, since the checkpoint event needs a
+  transcript query of the verifier.
+- **Adversary translation, verifier expansion, budgets and losses**
+  (`provider`): the provider stage, a stage relation from the joint game, in
+  which transcript keys and hash calls are cells of one oracle, to the concrete
+  game, with the verifier's expansion, initialization included, in its loss.
+
+The contract composes (`Contract.relation`, `Contract.bounded`): the intended
+event of a concrete adversary admissible at `b` has probability at most
+`provider.loss b + commitment.loss (provider.budget b)`.
+
+A provider stage over the joint oracle comes from a **frame** (`Frame`): a
+provider simulation together with the namespaces its simulator uses and the
+obligations of a joint provider theorem.
+
+- The simulator answers every hash call from its own ideal cell
+  (`passThrough`), lets no other call realize a hash cell (`separated`) and
+  realizes transcript cells only by chain calls (`chainOnly`), all at the
+  frame's encodings (`namespaces`).
+- A hash call's reply is its cell's answer read through a fixed range
+  equivalence (`hashRange`, `hashAnswer`).
+- The simulator's state has a provider-state projection (`chainState`) that
+  recording a hash answer leaves unchanged (`recordHash`). Every call that is
+  not a hash call reads the state only through that projection: its attempt
+  (`attemptChain`), the recorded answer of a transcript cell (`recordedChain`)
+  and its private reply (`respondChain`). It also moves the projection as a
+  function of the projection and its own inputs: after recording a transcript
+  answer (`recordTranscript`) and after a private reply (`respondState`). So
+  every handler step of such a call, answer and successor projection, is a
+  function of the projection (`Frame.handle_chain`), and a hash call's step
+  leaves the projection unchanged (`Frame.handle_hash`): no hash answer becomes
+  provider state, at that call or a later one.
+- The loss is charged over the joint trace and the joint budget, every call to
+  the shared primitive by the adversary in any family or by the verifier's
+  expansion counting towards one total (`joint`).
+
+A frame's contract (`Frame.contract`) takes its namespaces from the frame, so
+the namespaces the contract records are those the simulator uses. When the
+ideal failure of a mixture of provers is that of a random-oracle experiment
+after drawing the prover (`oracleMixture`, `oracleMixture_mixes`), the frame's
+simulation is a provider stage from that experiment's oracle game
+(`Frame.oracleRelation`). In `TestsSecurity.StageComposition` the committed
+verifier that reads one row at one drawn index composes with any such frame:
+its intended event is bounded by the simulation's loss, verifier expansion
+included, plus the commitment stage's loss at the simulation's transported query
+budget (`frame_composes`).
+
+A simulator answers a prover's repeated calls from its record, so the
+translated prover asks each key once. Against the lazily sampled oracle a
+memoizing front end is transparent (`ZkcSecurity.VCVio.Memo.coupling`): from a
+record equal to the oracle's cache, the direct and the memoized runs return the
+same result and leave the same cache, and the memoized run's log is the direct
+log restricted to keys not seen before (`unseen`), the direct log agreeing with
+the final cache. The bridge's event reads the prover's log through checkpoint
+extractions, so it is unchanged by the repeated entries when the extractor reads
+its record only through first matches (`Extractable.FirstMatch`), as the
+extractor of Merkle trees with hashed leaves does
+(`LeafHashing.scheme_firstMatch`): the hash calls before a key's first query are
+read through first matches of the whole log (`find?_hashEntries_beforeFirst`),
+and dropping repeated entries keeps every first match
+(`ZkcSecurity.VCVio.Memo.find?_unseen_append`), so the checkpoint tables and the
+event are unchanged (`checkpointTables_unseen`, `falseAcceptance_unseen`), and
+the bridge's event is at most as likely for a prover as for its memoized
+version (`falseAcceptance_le_memo`). `TestsSecurity.JointSimulation` constructs
+a frame from a tagged provider whose primitive inputs are the joint oracle's
+tagged keys: the simulator assigns every input to its own cell and answers
+repeated inputs from its record, a hash call keeps its answer, and the record
+of transcript cells is the provider-state projection, which hash answers do not
+change. The simulation is exact at the total budget, every frame obligation
+holds, and composing through the contract bounds the committed verifier's
+concrete false acceptance by the commitment stage's loss at the total budget
+(`tagged_soundness`). Its tags are the joint key's own summands, so it has no
+chain state that could collide; a provider that encodes tags in bytes composes
+with it through `Relation.ofRenaming`. The same module checks the state
+obligations with delayed transfers: a simulator that copies a recorded hash
+answer into provider state, at a private reply or at recording a transcript
+answer, meets every read obligation at its projection, yet a later private
+reply exposes the hash answer; no frame has its simulation, whatever the
+projection (`transfer_no_frame`), while the same simulator without the copy has
+one (`keptFrame`).
 
 ## Obligations
 

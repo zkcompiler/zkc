@@ -32,11 +32,11 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec
 
-variable {E Shape Value Query Y : Type} {R : List E → Type}
+variable {E Shape Value Query Y : Type} {Raw : E → Type}
 
 /-- A complete answer table of the joint oracle. -/
-abbrev JointTable (R : List E → Type) (Shape Y Query : Type) :=
-  (key : JointKey E Shape Y Query) → JointRange R Shape Y Query key
+abbrev JointTable (Raw : E → Type) (Shape Y Query : Type) :=
+  (key : JointKey E Shape Y Query) → JointRange Raw Shape Y Query key
 
 /-- The keys before the first occurrence of `key`; all of them when `key` does not occur. -/
 def beforeFirstKey [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
@@ -45,7 +45,7 @@ def beforeFirstKey [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [Decidabl
   keys.takeWhile fun other => decide (other ≠ key)
 
 /-- The hash calls of a key list with their answers in the table. -/
-def hashLog (table : JointTable R Shape Y Query) (keys : List (JointKey E Shape Y Query)) :
+def hashLog (table : JointTable Raw Shape Y Query) (keys : List (JointKey E Shape Y Query)) :
     HashLog Query Y :=
   keys.filterMap fun key =>
     match key with
@@ -58,18 +58,18 @@ def keyRoots (bound : ℕ) (key : TranscriptKey E Shape Y) : List Y :=
 
 /-- The labels a key adds to the targets. -/
 def keyTargets (scheme : Extractable Shape Value Query Y) (bound : ℕ)
-    (table : JointTable R Shape Y Query) : JointKey E Shape Y Query → List Y
+    (table : JointTable Raw Shape Y Query) : JointKey E Shape Y Query → List Y
   | .inl transcript => keyRoots bound transcript
   | .inr query => table (.inr query) :: scheme.inputs query
 
 /-- The targets of a record. -/
 def targets (scheme : Extractable Shape Value Query Y) (bound : ℕ)
-    (table : JointTable R Shape Y Query) (keys : List (JointKey E Shape Y Query)) : List Y :=
+    (table : JointTable Raw Shape Y Query) (keys : List (JointKey E Shape Y Query)) : List Y :=
   keys.flatMap (keyTargets scheme bound table)
 
 /-- Every hash call new to the record is answered outside the targets of the record before it. -/
 def GoodFrom (scheme : Extractable Shape Value Query Y) (bound : ℕ)
-    (table : JointTable R Shape Y Query) :
+    (table : JointTable Raw Shape Y Query) :
     List (JointKey E Shape Y Query) → List (JointKey E Shape Y Query) → Prop
   | _, [] => True
   | earlier, key :: rest =>
@@ -79,7 +79,7 @@ def GoodFrom (scheme : Extractable Shape Value Query Y) (bound : ℕ)
 
 section Lemmas
 variable (scheme : Extractable Shape Value Query Y) (bound : ℕ)
-  (table : JointTable R Shape Y Query)
+  (table : JointTable Raw Shape Y Query)
 
 @[simp] theorem hashLog_nil : hashLog table ([] : List (JointKey E Shape Y Query)) = [] := rfl
 

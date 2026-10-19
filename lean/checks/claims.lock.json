@@ -112,44 +112,44 @@
     "ZkcExamples.Construction.ChaumPedersenProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ChaumPedersenProof",
-      "structural": "91b7e4ad2b768ed9",
-      "explicit": "9aaba7b5e15e8852"
+      "structural": "61158e7a24050173",
+      "explicit": "4a574de00e568bad"
     },
     "ZkcExamples.Construction.ComposedSumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ComposedSumcheckProof",
-      "structural": "75f52ec7fb48bfaf",
-      "explicit": "87c29969a4378852"
+      "structural": "3b01a2b3ca565ab4",
+      "explicit": "1f21dd4053e5281f"
     },
     "ZkcExamples.Construction.GkrProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.GkrProof",
-      "structural": "dedb56cf69b405d7",
-      "explicit": "c9799520c1b87036"
+      "structural": "6ddb3498b64067bf",
+      "explicit": "24ec7b3cb289db05"
     },
     "ZkcExamples.Construction.OkamotoProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.OkamotoProof",
-      "structural": "25db89cc73f622f1",
-      "explicit": "9a6017a43dc4e1b1"
+      "structural": "8713495435c958c1",
+      "explicit": "591aa7c41bcf8b2f"
     },
     "ZkcExamples.Construction.SchnorrAndProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SchnorrAndProof",
-      "structural": "07d3ed8a559fe5ce",
-      "explicit": "1d3d5449cbd4bd07"
+      "structural": "dd96723f0e72e3df",
+      "explicit": "03c16cdc50b11017"
     },
     "ZkcExamples.Construction.SchnorrProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SchnorrProof",
-      "structural": "24dd57d664e8b98c",
-      "explicit": "5cdeb191a24e6fd5"
+      "structural": "111704ae01942fac",
+      "explicit": "a653884e5a3c148c"
     },
     "ZkcExamples.Construction.SumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SumcheckProof",
-      "structural": "9e8395b2edf9e6db",
-      "explicit": "1cff822c2c6f2fde"
+      "structural": "100bbe1127c637bb",
+      "explicit": "8407d908aa86bcd2"
     },
     "ZkcExamples.Executable.DeferredRounds.executable_validate": {
       "package": "main",
@@ -160,8 +160,8 @@
     "ZkcExamples.Executable.SchnorrProof.executable_transform": {
       "package": "main",
       "module": "ZkcExamples.Executable.SchnorrProof",
-      "structural": "63869e320f91b9c1",
-      "explicit": "39a8ba05966664b5"
+      "structural": "aa57c4577176dabf",
+      "explicit": "0fcd3c17782d0457"
     },
     "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted": {
       "package": "main",
@@ -316,14 +316,14 @@
     "ZkcSecurity.Commitment.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Commitment.Soundness",
-      "structural": "bdec61617a00b64f",
-      "explicit": "f16e683a760152d4"
+      "structural": "1843a0f3d367e2e2",
+      "explicit": "fe6ff8e32df88264"
     },
     "ZkcSecurity.Commitment.soundness_weighted": {
       "package": "arklib",
       "module": "ZkcSecurity.Commitment.Soundness",
-      "structural": "86c1e1948264ab98",
-      "explicit": "ac33dfd32f4f4959"
+      "structural": "c8c572c6e0b743bc",
+      "explicit": "64a843f7f500aeb4"
     },
     "ZkcSecurity.Examples.CausalSumcheck.Iteration.repeat_uniform_residual_soundness": {
       "package": "arklib",
@@ -358,20 +358,20 @@
     "ZkcSecurity.Examples.CommittedOpeningBridge.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CommittedOpeningBridge",
-      "structural": "f411e4dc9e7efb0c",
-      "explicit": "11387039ce4b0421"
+      "structural": "3eab6d069fdf428a",
+      "explicit": "b3871b2d5d64e890"
     },
     "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledGkrFiatShamir",
-      "structural": "7462813c2f0b57f8",
-      "explicit": "6602e6c93881367c"
+      "structural": "b195e9e03c75bba8",
+      "explicit": "d477f272033f2bc8"
     },
     "ZkcSecurity.Examples.CompiledGuessFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledGuessFiatShamir",
-      "structural": "db856f864ac58c59",
-      "explicit": "1c4c289216ec73ac"
+      "structural": "3fb1023f65ce8643",
+      "explicit": "9e77fecf3b954872"
     },
     "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness": {
       "package": "arklib",
@@ -382,14 +382,14 @@
     "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledSumcheckFiatShamir",
-      "structural": "4c7cfb80a56249d7",
-      "explicit": "a0234d91fd20c626"
+      "structural": "36d7cdf366080edf",
+      "explicit": "96149abd88bb195d"
     },
     "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledSumcheckFiatShamir",
-      "structural": "227e20d3af3f902d",
-      "explicit": "db9b254818129e99"
+      "structural": "f3edb829387ba691",
+      "explicit": "67755a6097387a8b"
     },
     "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness": {
       "package": "arklib",
@@ -406,14 +406,14 @@
     "ZkcSecurity.Examples.FriFiatShamir.fiatShamir_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.FriFiatShamir",
-      "structural": "9ff2eb136a81ba05",
-      "explicit": "623581c3d5faae4c"
+      "structural": "adb26221495a8c63",
+      "explicit": "d47c45f7a07eb5f0"
     },
     "ZkcSecurity.Examples.GkrFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.GkrFiatShamir",
-      "structural": "f39d4afdcf51e10b",
-      "explicit": "cff0d38cbca96e9d"
+      "structural": "a358bbef1fea7063",
+      "explicit": "4c19e4bf36de8d2a"
     },
     "ZkcSecurity.Examples.SchnorrAndSigma.knowledge_soundness": {
       "package": "arklib",
@@ -430,8 +430,8 @@
     "ZkcSecurity.Examples.SumcheckFiatShamir.compiled_adaptive_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.SumcheckFiatShamir",
-      "structural": "879a724302d4fb3d",
-      "explicit": "4e1bc3d7ff408373"
+      "structural": "db6e282b917b006a",
+      "explicit": "b6baf6d1ec0d3be8"
     },
     "ZkcSecurity.FiatShamir.Obligations.not_determines": {
       "package": "arklib",
@@ -442,32 +442,32 @@
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Typed",
-      "structural": "81ca260f6cbb599e",
-      "explicit": "ae619b44a6348d22"
+      "structural": "cc41e7a527528a08",
+      "explicit": "b4ea63c3eb64b1d8"
     },
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Typed",
-      "structural": "2fac876c2bc0e023",
-      "explicit": "00a224af7dea9f6d"
+      "structural": "25ee8d4f0e177a04",
+      "explicit": "aec857cc27459d26"
     },
     "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Upstream",
-      "structural": "d2e13c5669168604",
-      "explicit": "95120fbfc52d84ba"
+      "structural": "8c6aae762781d793",
+      "explicit": "54047805cbe1ea91"
     },
     "ZkcSecurity.FiatShamir.Upstream.worstCase_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Upstream",
-      "structural": "51de8ec4fbbd1a8d",
-      "explicit": "59299022c5f88c9f"
+      "structural": "2e1fe5e595c67c66",
+      "explicit": "b04b8290960c81ca"
     },
     "ZkcSecurity.FiatShamir.adaptive_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Soundness",
-      "structural": "5cb766a9f7ec1e39",
-      "explicit": "b4bcde4bab86bb0a"
+      "structural": "11818ff65fe95844",
+      "explicit": "4a524afa17fcbd4d"
     },
     "ZkcSecurity.HashChain.Encoding.frame_prefixFree": {
       "package": "arklib",
@@ -478,14 +478,14 @@
     "ZkcSecurity.HashChain.concrete_le_simulated": {
       "package": "arklib",
       "module": "ZkcSecurity.HashChain.Bound",
-      "structural": "33c0de9bd6e5d1fe",
-      "explicit": "f88a91d53fe52a9a"
+      "structural": "ea5efb0e53bbdaba",
+      "explicit": "d7094ccfea80cd3a"
     },
     "ZkcSecurity.HashChain.concrete_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.HashChain.Instance",
-      "structural": "5a883b16d7903a2a",
-      "explicit": "37bcd1bcd980ac20"
+      "structural": "6788c6374a88fc32",
+      "explicit": "ab906f31b08450fc"
     }
   }
 }

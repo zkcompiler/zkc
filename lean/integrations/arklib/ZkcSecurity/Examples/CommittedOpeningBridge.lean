@@ -71,7 +71,7 @@ the raw answer itself. -/
 def absorb (depth : ℕ) :
     Typed.Interface (signature Row depth) (Event Row) (List Row) (fun _ => Fin (2 ^ depth))
   | .table => .receive Event.table (recoverTable depth)
-  | .index => .query .index fun _ raw => some raw
+  | .index => .query .index fun raw => some raw
 
 /-- The ideal reading receives a committed table through its table operation. -/
 def words (depth : ℕ) (default : Row) : Words (signature Row depth) Unit Row where
@@ -150,7 +150,6 @@ def certificate (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (def
       simp
     · trivial
     · rw [withTables_validator]
-      intro preceding
       change Pr{let raw ← $ᵗ (Fin (2 ^ depth))}[∃ value, some raw = some value ∧
         ¬ Doomed accepts depth fraction default (.done (accepts (rows value)))] ≤ 1 - fraction
       refine (prEvent_mono _ _ (fun raw => accepts (rows raw) = true) fun raw escaping => ?_).trans ?_
@@ -212,7 +211,7 @@ theorem validator_queryBound (accepts : Row → Bool) (depth : ℕ) (root : Dige
       simp only
       rw [show depth + 2 - 1 = depth + 1 + 0 by omega]
       exact isTotalQueryBound_bind
-        (liftHash_queryBound (R := fun _ : List (Event Row) => Fin (2 ^ depth)) (Shape := Unit) _ _
+        (liftHash_queryBound (Raw := fun _ : Event Row => Fin (2 ^ depth)) (Shape := Unit) _ _
           (LeafHashing.authenticate_queryBound model depth root raw.val opening))
         fun accepted => by cases accepted <;> trivial
 
@@ -240,7 +239,7 @@ theorem validator_costBound (accepts : Row → Bool) (depth : ℕ) (fraction has
       simp only
       rw [← add_zero (((depth + 1 : ℕ) : ENNReal) * hashError)]
       exact WorstCaseCostBound.bind
-        (liftHash_costBound (R := fun _ : List (Event Row) => Fin (2 ^ depth)) (Shape := Unit)
+        (liftHash_costBound (Raw := fun _ : Event Row => Fin (2 ^ depth)) (Shape := Unit)
           (error fraction) hashError _ _
           (LeafHashing.authenticate_queryBound model depth root raw.val opening))
         fun accepted => by cases accepted <;> exact (worstCaseCostBound_pure _ _ _).mpr le_rfl
@@ -250,7 +249,7 @@ extracted at the checkpoint of its query is far with probability at most the pro
 `(1 - δ) + (depth + 1) · 4 (proverQueries + depth + 2) / |Digest|`. -/
 theorem soundness [Fintype Digest] (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal)
     (default : Row)
-    (prover : OracleComp (joint (fun _ : List (Event Row) => Fin (2 ^ depth)) Unit Digest Query)
+    (prover : OracleComp (joint (fun _ : Event Row => Fin (2 ^ depth)) Unit Digest Query)
       (Digest × Proof (List Row) Row Digest))
     (proverQueries : ℕ) (proverCount : IsTotalQueryBound prover proverQueries)
     (proverCost : ENNReal)

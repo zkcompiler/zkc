@@ -81,7 +81,8 @@ theorem cheat_compiled :
     compiledVerifier historyQuery raw 0 1 initial cheat = cheatDecision <$> historyQuery cheatKey := by
   rw [construction historyQuery raw 0 1 handle initial cheat, imported_plain]
   simp only [plain, validator, PIR.repeatN, verifierRound, afterLow, afterHigh, afterChallenge,
-    terminal, decision, PIR.Proc.bind, cheat, transform, Payload.value, ↓reduceIte, add_zero,
+    terminal, decision, PIR.Proc.bind, cheat, transform_eq_done, transform_eq_receive,
+    transform_eq_query, transform_eq_send, Payload.value, ↓reduceIte, add_zero,
     List.nil_append]
   rfl
 
@@ -153,7 +154,7 @@ theorem weak_compiled (challenge : Scalar) :
   rw [importedValidator_eq 1 admitted _ (chosenTable challenge)
       (TestsSecurity.SumcheckFiatShamir.chosen_decoded challenge)]
   simp only [validator, PIR.repeatN, verifierRound, afterLow, afterHigh, afterChallenge,
-    PIR.Proc.bind, cheat, transform, Payload.value, List.nil_append]
+    PIR.Proc.bind, cheat, transform_eq_receive, Payload.value, List.nil_append]
   rfl
 
 /-- The one-query prover is accepted by the compiled verifier on a false claim

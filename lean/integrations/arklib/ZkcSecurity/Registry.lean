@@ -232,12 +232,23 @@ def entries : List Entry := [
     "Proof bytes decode canonically to the typed messages in order."⟩,
   -- Binding obligations.
   ⟨"binding.statement-determination", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.Typed.Determined,
+    some `Zkc.Transcript.Determined,
     "The initial transcript of a statement, followed by any events, determines the \
     statement, malformed statements included."⟩,
   ⟨"binding.statement-determination.participant", .binding .statementDetermination,
     some `ZkcSecurity.FiatShamir.Determined,
     "Statement determination over the histories of the common participant actions."⟩,
+  ⟨"binding.statement-coverage", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.StatementBinding.Covers,
+    "Every policy statement false for the application is false in the model or denotes no \
+    model statement. Rejection of the latter is the separate obligation \
+    binding.unmapped-rejection."⟩,
+  ⟨"binding.unmapped-rejection", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.StatementBinding.RejectsUnmapped,
+    "The validator of every policy statement that denotes no model statement is doomed."⟩,
+  ⟨"binding.event-implication", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.EventImplication,
+    "The application's false-acceptance event implies the modeled event."⟩,
   ⟨"binding.serialization", .binding .serialization,
     some `ZkcSecurity.FiatShamir.Obligations.PrefixFreeEncoding,
     "The serialization of the typed public representation is injective and prefix-free."⟩,
@@ -290,9 +301,29 @@ def entries : List Entry := [
     "The local obligation of a history-indexed doomed set, with a charge per key."⟩,
   ⟨"family.typed-uniform-step", .familyProperty, some `ZkcSecurity.FiatShamir.Typed.UniformStep,
     "The uniform-sort local obligation of a history-indexed doomed set."⟩,
+  ⟨"family.typed-charged-step-to", .familyProperty,
+    some `ZkcSecurity.FiatShamir.Typed.ChargedStepTo,
+    "The local obligation of a history-indexed doomed set of sub-validator residuals with a \
+    postcondition on returned values, with a charge per key."⟩,
+  ⟨"family.typed-uniform-event-step", .familyProperty,
+    some `ZkcSecurity.FiatShamir.Typed.UniformEventStep,
+    "The uniform-sort local obligation of a doomed set that ignores the history."⟩,
+  ⟨"family.keyed-resample-bound", .familyProperty, some `ZkcSecurity.FiatShamir.ResampleBound,
+    "Under every answer table, resampling the answer at a key makes the key bad with \
+    probability at most its charge."⟩,
+  ⟨"family.commit-doomed", .familyProperty, some `ZkcSecurity.Commitment.CommitDoomed,
+    "A history-indexed doomed set of an ideal reading stays doomed across a commitment, read \
+    through every extraction."⟩,
+  ⟨"family.stage-bound", .familyProperty, some `ZkcSecurity.Stage.Game.Bounded,
+    "Every adversary admissible at a budget has bad probability at most the bound at that \
+    budget."⟩,
   ⟨"family.upstream-realization", .familyProperty, some `ZkcSecurity.FiatShamir.Upstream.Realizes,
     "A participant process realizes an upstream process-form residual operation by \
     operation."⟩,
+  ⟨"family.extractor-first-match", .familyProperty,
+    some `ZkcSecurity.Commitment.Extractable.FirstMatch,
+    "A commitment extractor reads its record only through first matches: records with the same \
+    first match for every predicate extract the same tables."⟩,
   ⟨"family.fri-round-by-round", .familyProperty, some `ZkcSecurity.ArkLib.Fri.RoundByRound,
     "The round-by-round soundness certificate of the FRI verifier at the ideal \
     interpretation, with errors per folding round and for the query block."⟩,
@@ -311,13 +342,15 @@ def entries : List Entry := [
   ⟨"family.sigma-special-hvzk", .familyProperty, some `ZkcSecurity.VCVio.SigmaAnd.SpecialHVZK,
     "Special honest-verifier zero knowledge of a Sigma protocol."⟩,
   -- Events: conditions on a claim's statement or outcome.
-  ⟨"event.accepted", .event, some `ZkcSecurity.FiatShamir.Accepted,
+  ⟨"event.accepted", .event, some `Zkc.Transcript.Accepted,
     "A returned value satisfies the acceptance predicate; stops never accept."⟩,
   ⟨"event.returned-satisfies", .event, some `ZkcSecurity.VCVio.Execution.returnedSatisfies,
     "An execution returned a value satisfying a predicate; stops are nonaccepting."⟩,
   ⟨"event.committed-false-acceptance", .event, some `ZkcSecurity.Commitment.FalseAcceptance,
     "The verifier accepts and the statement is false for its tables extracted at the \
     checkpoint of one of its transcript queries."⟩,
+  ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
+    "A policy statement denotes no model statement."⟩,
   ⟨"event.fri-far", .event, some `ZkcSecurity.ArkLib.Fri.Far,
     "A word at relative distance at least the radius from every codeword."⟩,
   ⟨"event.gkr-false-claim", .event, some `ZkcSecurity.ArkLib.Gkr.FalseClaim,
@@ -393,6 +426,12 @@ def entries : List Entry := [
   ⟨"wellformed.execution-same-distribution", .wellFormedness,
     some `ZkcSecurity.VCVio.Execution.SameDist,
     "Equality of two complete output distributions."⟩,
+  ⟨"wellformed.renaming-related", .wellFormedness, some `ZkcSecurity.Oracle.Renaming.Related,
+    "Two caches agree through a renaming of oracle cells: a source key with a target cell \
+    holds that cell's answer read back, and cells no source key reaches are empty."⟩,
+  ⟨"wellformed.obligation-discharged", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.ObligationStatus.Discharged,
+    "An obligation's status is a proof."⟩,
   ⟨"wellformed.provider-constituents", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Provider.Simulator.Constituents,
     "Calls that belong to one concrete attempt of a provider simulator."⟩,

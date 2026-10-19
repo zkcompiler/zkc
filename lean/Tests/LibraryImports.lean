@@ -203,6 +203,9 @@ import Zkc.Source.Structured.Table
 import Zkc.Source.Structured.UnitViews
 import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
+import Zkc.Transcript.Budget
+import Zkc.Transcript.Interface
+import Zkc.Transcript.Replay
 import Tests.CommonRegion
 import Tests.Component
 import Tests.ConstructionControls

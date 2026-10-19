@@ -50,7 +50,7 @@ namespace ZkcSecurity.Examples.CommittedFri
 
 open OracleComp OracleSpec Domain
 open ZkcSecurity.ArkLib.Fri ZkcSecurity.FiatShamir ZkcSecurity.Commitment
-open ZkcSecurity.Examples.FriFiatShamir (Block Event Answer absorb eventError typedCertificate)
+open ZkcSecurity.Examples.FriFiatShamir (Block Event Raw absorb eventError typedCertificate)
 
 variable {F : Type}
 
@@ -558,7 +558,7 @@ theorem soundness [SampleableType F] [Fintype F] [DecidableEq Query] [Sampleable
     (hD : ∀ i : Fin (2 ^ (N + 1)), D i = point roots shift (N + 1) i)
     (hcompat : Compatible roots (N + 1) (K + 1)) (θ δ : ℝ) (foldError : ℕ → ENNReal)
     (proximity : FoldingProximity t θ D (K + 1) foldError)
-    (prover : OracleComp (joint (Answer F block) Shape Digest Query)
+    (prover : OracleComp (joint (Raw F block) Shape Digest Query)
       (Digest × Proof (List F) F Digest))
     (proverQueries : ℕ) (proverCount : IsTotalQueryBound prover proverQueries)
     (proverCost : ENNReal)

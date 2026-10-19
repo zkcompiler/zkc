@@ -142,7 +142,8 @@ theorem cheat_transform :
     transform context historyQuery (plain 0) initial cheat =
       cheatDecision <$> historyQuery cheatKey := by
   simp only [plain, validator, PIR.repeatN, verifierRound, afterLow, afterHigh, afterChallenge,
-    terminal, decision, PIR.Proc.bind, cheat, transform, Payload.value, ↓reduceIte, add_zero,
+    terminal, decision, PIR.Proc.bind, cheat, transform_eq_done, transform_eq_receive,
+    transform_eq_query, transform_eq_send, Payload.value, ↓reduceIte, add_zero,
     List.nil_append]
   rfl
 
@@ -264,7 +265,7 @@ theorem weak_transform (challenge : Scalar) :
   have admitted : (1 : ℕ) ≤ 2 := by decide
   simp only [plainFamily, admitted, ↓reduceIte, chosenStatement, unbound, validator, PIR.repeatN,
     verifierRound, afterLow, afterHigh, afterChallenge, terminal, decision, PIR.Proc.bind, cheat,
-    transform,
+    transform_eq_done, transform_eq_receive, transform_eq_query, transform_eq_send,
     Payload.value, add_zero, List.nil_append, decodedQuery, id_map]
   rfl
 

@@ -960,6 +960,67 @@ axiom closures of its `typedCertificate`, `fiatShamir_soundness`,
 `koalaBear_queryPhase` are `propext`, `Classical.choice` and `Quot.sound`;
 `initial_determined` uses `propext` and `Quot.sound`.
 
+## Shared interface controls
+
+`TestsSecurity.HeterogeneousRequests` runs a validator whose three requests have
+different reply sorts, a field element, an index below a bound and a block of
+two field elements, through the transcript interface, the uniform-sort
+certificate, its lifting and the typed theorem. The index request reads a raw
+answer below twice its range modulo the range, an exact law. The validator's
+queries charge at most `1 / 5 + 1 / 3 + 1 / 5`, and the query-free prover that
+claims `0` is accepted with probability exactly `43 / 75`, below the bound
+`11 / 15`: every request contributes, and the bound is not vacuous.
+
+`TestsSecurity.StageComposition` checks that stage composition transports
+budgets. A game that counts its budget per family over two families is a
+zero-loss stage over a guessing game charged `a / 8` for `a` guesses; the
+composed loss at budget `b` is `2 · b / 8`, two guesses at budget one attain it,
+and the bound `b / 8` at the untransported budget is false
+(`untransported_fails`). The committed verifier that reads one row at one drawn
+index gives the commitment stage of its joint game, and with any frame the
+joint-stage contract composes (`frame_composes`); no compiled claim is made.
+
+`TestsSecurity.StatementBindings` relates a raw table, bound as one event, to
+its sum. The relation is functional, so equal initial histories determine equal
+sums, while a relation that lets a table denote every bound on its sum is not
+functional and two model statements share one initial history. With the empty
+relation every table is unmapped: a validator that accepts every table accepts
+a table with a nonzero sum that the modeled event cannot see, coverage holds
+only through unmapped statements (`empty_covers`), and the rejection of
+unmapped statements fails (`empty_not_rejected`). Coverage and rejection are
+separate registry entries with separate schemas (`coverage_not_rejection`). A
+reported assumption cites a registry entry of its own category, and the
+statement-determination entry cannot stand for the collision bound.
+
+`TestsSecurity.ChargedCommitment` bounds the committed-opening verifier through
+the charged bridge with an ideal charge that reads the extracted table: the
+draw is charged the smaller of the received table's accepted fraction and
+`1 - δ`, two extractions of one root give different charges
+(`idealCharge_reads_extraction`), the concrete charge `1 - δ` dominates the ideal
+charge through every extraction, and the prover's charge plus
+`(1 - δ) + (depth + 1) · hashError` bounds the verifier (`charged_soundness`).
+
+`TestsSecurity.JointSimulation` constructs a frame from a provider whose
+primitive inputs are the joint oracle's tagged keys. Its simulator is the
+memoizing front end, the simulation is exact at the total budget, every frame
+obligation holds, and composing through the contract bounds the committed
+verifier's concrete false acceptance by the commitment stage's loss at the total
+budget (`tagged_soundness`). Delayed-transfer controls check the frame's state
+obligations: simulators that copy a recorded hash answer into provider state, at
+a private reply or at recording a transcript answer, meet every read obligation
+of a frame at their projection (`transfer_reads`), yet a later private reply
+exposes the hash answer (`transfer_exposes`), and no frame has their
+simulation, whatever its projection (`transfer_no_frame`); the same simulator
+without the copy has one (`keptFrame`).
+
+Each of these modules audits its own declarations, and
+`TestsSecurity.InterfaceAxioms` audits the shared-interface modules with the
+dependency rules: the core transcript interface and path bounds, the keyed
+endpoint and its transformers, charged reductions, stage relations, the
+transport between oracle key forms, binding, memoization and the charged
+commitment bridge. Every declaration's axioms are within `propext`,
+`Classical.choice` and `Quot.sound`.
+
 ## Construction obligation counterexamples
 
 `TestsSecurity.Counterexamples` refutes, for each example, the property it
@@ -1023,15 +1084,14 @@ The declaration audit covers `ZkcSecurity.FiatShamir.{Obligations,ProviderSimula
 `TestsSecurity.ProviderSimulation`, and also
 `ZkcSecurity.FiatShamir.{Laws,Lifting,Binding}`, `TestsSecurity.LawRecords` and
 `TestsSecurity.BindingCodecs`.
-`TestsSecurity.CommitmentBridge` prints the axiom closures of the commitment
-bridge: `ZkcSecurity.Commitment.soundness_weighted` and `soundness` with the
-lemmas of their proof, the extractor laws of `MerkleTrees` and `LeafHashing`,
-`CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`, the cost and
-query bounds of the concrete reading (`run_costBound`, `run_queryBound`), and
-`CommittedFri.soundness` with its ideal-reading and budget lemmas. It asserts
-nothing itself; the declaration audit (`TestsSecurity.Audit`), which covers
-every declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed
-axioms.
+`TestsSecurity.CommitmentBridge` audits the commitment bridge's modules with the
+dependency rules: `ZkcSecurity.Commitment.soundness_weighted` and `soundness`
+with the lemmas of their proof, the extractor laws of `MerkleTrees` and
+`LeafHashing`, `CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`,
+the cost and query bounds of the concrete reading (`run_costBound`,
+`run_queryBound`), and `CommittedFri.soundness` with its ideal-reading and budget
+lemmas. The declaration audit (`TestsSecurity.Audit`), which covers every
+declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed axioms.
 The axiom closures of their theorems are subsets of `propext`,
 `Classical.choice` and `Quot.sound`; the counterexamples that compute with
 inverses in `ZMod 5` use `decide +kernel` on four or twenty-five cases.

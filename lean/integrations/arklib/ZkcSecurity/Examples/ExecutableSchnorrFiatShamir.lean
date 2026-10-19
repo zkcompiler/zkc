@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 public import ZkcExamples.Executable.SchnorrProof
+public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
 
@@ -125,20 +126,23 @@ theorem transform_rejects {m : Type → Type} [Monad m] [LawfulMonad m]
         (Zkc.Protocols.Schnorr.Common.experiment SchnorrProof.wiring base key handle) prior proof := by
   unfold Zkc.Protocols.Schnorr.Common.experiment
   rcases proof with _ | ⟨first, rest⟩
-  · simp [transform, accepted]
+  · simp [transform_eq_receive, accepted]
   · cases decodedFirst : first.value (.group SchnorrProof.wiring.groupDomain) with
-    | none => simp [transform, decodedFirst, accepted]
+    | none => simp [transform_eq_receive, decodedFirst, accepted]
     | some commitment =>
         have firstEq : first = .group groupDomain commitment := value_group decodedFirst
         rcases rest with _ | ⟨second, rest₂⟩
-        · simp [transform, decodedFirst, accepted, Payload.ofValue]
+        · simp [transform_eq_receive, transform_eq_query, transform_eq_send, decodedFirst, accepted,
+            Payload.ofValue]
         · cases decodedSecond : second.value (.field SchnorrProof.wiring.fieldDomain) with
-          | none => simp [transform, decodedFirst, decodedSecond, accepted, Payload.ofValue]
+          | none => simp [transform_eq_receive, transform_eq_query, transform_eq_send, decodedFirst,
+              decodedSecond, accepted, Payload.ofValue]
           | some response =>
               have secondEq : second = .field fieldDomain response := value_field decodedSecond
               rcases rest₂ with _ | ⟨third, rest₃⟩
               · exact absurd (by rw [firstEq, secondEq]) (bad commitment response)
-              · simp [transform, decodedFirst, decodedSecond, accepted, Payload.ofValue]
+              · simp [transform_eq_done, transform_eq_receive, transform_eq_query, transform_eq_send,
+                  decodedFirst, decodedSecond, accepted, Payload.ofValue]
 
 /-- Host validation of proof bytes, with the transcript oracle answering every
 challenge. -/
@@ -221,17 +225,6 @@ theorem validate_cases (decode : PhysicalType → List UInt8 → Option (Payload
 
 end Bytes
 
-/-- Pointwise dominated continuations bound the event after a common draw. -/
-theorem prEvent_bind_mono {m : Type → Type} [Monad m] [LawfulMonad m] [EvalDistSemantics m]
-    [LawfulEvalDistSemantics m] {α β : Type} (start : m α) (first second : α → m β) (event : β → Prop)
-    (dominated : ∀ value, Pr{let result ← first value}[event result] ≤
-      Pr{let result ← second value}[event result]) :
-    Pr{let result ← start >>= first}[event result] ≤
-      Pr{let result ← start >>= second}[event result] := by
-  let : MeasurableSpace α := ⊤
-  rw [prEvent_bind_eq_lintegral_of_discrete, prEvent_bind_eq_lintegral_of_discrete]
-  exact MeasureTheory.lintegral_mono dominated
-
 section Experiment
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
   [SampleableType F] [SampleableType G]
@@ -278,7 +271,7 @@ theorem acceptance_le (decode : PhysicalType → List UInt8 → Option (Payload 
       acceptance (decoded decode prover) application base key := by
   unfold acceptanceBytes acceptance runBytes CompiledSchnorrFiatShamir.run decoded
   simp only [bind_map_left, simulateQ_bind, StateT.run'_bind']
-  refine prEvent_bind_mono _ _ _ _ fun pair => ?_
+  refine ZkcSecurity.VCVio.Pruning.prEvent_bind_mono _ _ _ _ fun pair => ?_
   obtain ⟨bytes, cache⟩ := pair
   rcases validate_cases decode budget binding application base key bytes with same | ⟨β, rejecting, rejects⟩
   · rw [same]

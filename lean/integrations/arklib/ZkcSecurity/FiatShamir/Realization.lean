@@ -106,14 +106,9 @@ def Realizes.certificate {accepts : A → Prop} {accepts' : A' → Prop}
         exact fun value => ⟨next (read value), step (read value), realizes value⟩
     | query challengeRound read charged realizes =>
         rename_i round next site field arguments next'
-        simp only [Typed.Step, absorb, challengeRound, ↓reduceDIte,
-          Typed.Absorption.queryLast] at step
+        simp only [Typed.Step, absorb, challengeRound, ↓reduceDIte] at step
         simp only [Typed.Step, interface, id]
-        intro preceding
-        have source := step []
-        rw [Typed.prEvent_read (Raw pSpec StmtIn) [] (.challenge round) fun raw =>
-          ∃ value, some (decodeChallenge pSpec challengeRound raw) = some value ∧
-            ¬ certificate.doomed (next value)] at source
+        have source := step
         have toRaw := SampleableType.prEvent_uniformSample_equiv (α := ChallengeRaw pSpec round)
           (β := pSpec.Challenge ⟨round, challengeRound⟩)
           (Equiv.cast (challengeRaw_eq pSpec challengeRound))

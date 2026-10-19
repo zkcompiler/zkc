@@ -47,8 +47,11 @@ inductive Event where
   | gated
   deriving DecidableEq
 
-/-- Every history is answered by gate bits and a challenge. -/
-abbrev Raw : List Event → Type := fun _ => Fin 2 × Scalar
+/-- Every occurrence is answered by gate bits and a challenge. -/
+abbrev Raw : Event → Type := fun _ => Fin 2 × Scalar
+
+/-- The history oracle answers every history by gate bits and a challenge. -/
+abbrev Answer : List Event → Type := fun _ => Fin 2 × Scalar
 
 def recoverNonce : Event → Option (Fin 4)
   | .nonce value => some value
@@ -57,7 +60,7 @@ def recoverNonce : Event → Option (Fin 4)
 /-- The receive absorbs the nonce; the draw decodes the raw pair exactly. -/
 def absorb : Interface signature Event (Fin 4) Raw
   | .nonce => .receive Event.nonce recoverNonce
-  | .draw => .query .gated fun _ raw => some raw
+  | .draw => .query .gated fun raw => some raw
 
 /-- After the gated draw: reject unless the gate bits are zero, accept exactly at
 the challenge `2`. -/
@@ -82,8 +85,8 @@ theorem afterDraw_doomed (reply : Fin 2 × Scalar) :
   by_cases gate : reply.1 = 0 <;> by_cases challenge : reply.2 = 2 <;> simp [gate, challenge]
 
 /-- The gated occurrence's error: gate `1 / 2` times challenge `1 / 5`. -/
-theorem gated_error (preceding : List Event) :
-    Pr{let raw ← $ᵗ (Raw (preceding ++ [Event.gated]))}[
+theorem gated_error :
+    Pr{let raw ← $ᵗ (Raw Event.gated)}[
       ∃ value, (some raw : Option (Fin 2 × Scalar)) = some value ∧ ¬ doomed (afterDraw value)] ≤
       1 / 10 := by
   have reduced : ∀ raw : Fin 2 × Scalar,
@@ -129,7 +132,7 @@ theorem validator_bound : QueryBound absorb validator 1 := by
 
 /-- Every premise of the fixed-statement theorem holds together; the bound is
 `(queries + 1) / 10`. -/
-theorem premises (prover : OracleComp (OracleSpec.ofFn Raw) (List (Fin 4))) (queries : ℕ)
+theorem premises (prover : OracleComp (OracleSpec.ofFn Answer) (List (Fin 4))) (queries : ℕ)
     (bounded : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (fixedExperiment absorb validator [] prover)).run' ∅}[
       Accepted accepts result.1] ≤ (queries + 1) * (1 / 10) :=
@@ -137,17 +140,18 @@ theorem premises (prover : OracleComp (OracleSpec.ofFn Raw) (List (Fin 4))) (que
     queries bounded |>.trans (le_of_eq (by rw [Nat.cast_one]))
 
 /-- The query-free prover sends the nonce `0`. -/
-def cheater : OracleComp (OracleSpec.ofFn Raw) (List (Fin 4)) := pure [0]
+def cheater : OracleComp (OracleSpec.ofFn Answer) (List (Fin 4)) := pure [0]
 
 /-- The transform asks one key, at the nonce and the gated occurrence, and decides. -/
 theorem cheater_transform :
-    transform absorb answer validator [] [0] =
+    transform absorb ask validator [] [0] =
       (fun raw : Fin 2 × Scalar =>
         (if raw.1 = 0 then (PIR.Outcome.returned (decide (raw.2 = 2)), ([] : List (Fin 4)))
           else (.stopped .reject, []))) <$>
-        (answer (R := Raw) [Event.nonce 0, Event.gated]) := by
-  simp only [validator, gatedDraw, transform, absorb, recoverNonce, List.nil_append,
-    map_eq_bind_pure_comp, Function.comp_def]
+        (answer (R := Answer) [Event.nonce 0, Event.gated]) := by
+  simp only [validator, gatedDraw, Zkc.Transcript.transform, absorb, recoverNonce, List.nil_append,
+    ask, ReadsByOccurrence.read, Equiv.refl_apply, map_eq_bind_pure_comp, Function.comp_def,
+    bind_assoc, pure_bind]
   congr 1
   funext raw
   unfold afterDraw

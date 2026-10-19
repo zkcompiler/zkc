@@ -332,31 +332,24 @@ theorem historyFree_error_ge (error : LoopEvent → ℝ≥0∞)
     certificate.step _ doomed rfl
   by_cases continues : ∃ first, first ≠ 0 ∧ certificate.doomed (secondRound first)
   · obtain ⟨first, nonzero, doomed⟩ := continues
-    have step : Pr{let raw ← $ᵗ (ByLast LoopRaw ([] ++ [LoopEvent.draw]))}[
-        ∃ value, (LawRecord.identity (Fin 4)).decode (ByLast.read LoopRaw raw) = some value ∧
+    have step : Pr{let raw ← $ᵗ (LoopRaw LoopEvent.draw)}[
+        ∃ value, (LawRecord.identity (Fin 4)).decode raw = some value ∧
           ¬ certificate.doomed (.done (decide (first = 0 ∨ value.val < 2)))] ≤ error .draw :=
-      (certificate.step _ doomed) []
-    have read := prEvent_read LoopRaw [] LoopEvent.draw fun raw : Fin 4 =>
-      ∃ value, (LawRecord.identity (Fin 4)).decode raw = some value ∧
-        ¬ certificate.doomed (.done (decide (first = 0 ∨ value.val < 2)))
+      certificate.step _ doomed
     rw [← below_two]
-    refine (prEvent_mono _ _ _ fun draw below => ?_).trans ((le_of_eq read.symm).trans step)
+    refine (prEvent_mono _ _ _ fun draw below => ?_).trans step
     refine ⟨draw, rfl, ?_⟩
     have accepted : decide (first = 0 ∨ draw.val < 2) = true := by simp [below]
     rw [accepted]
     exact notTrue
-  · have step : Pr{let raw ← $ᵗ (ByLast LoopRaw ([] ++ [LoopEvent.draw]))}[
-        ∃ value, (LawRecord.identity (Fin 4)).decode (ByLast.read LoopRaw raw) = some value ∧
+  · have step : Pr{let raw ← $ᵗ (LoopRaw LoopEvent.draw)}[
+        ∃ value, (LawRecord.identity (Fin 4)).decode raw = some value ∧
           ¬ certificate.doomed (secondRound value)] ≤ error .draw :=
-      (certificate.step _ doomedLoop) []
-    have read := prEvent_read LoopRaw [] LoopEvent.draw fun raw : Fin 4 =>
-      ∃ value, (LawRecord.identity (Fin 4)).decode raw = some value ∧
-        ¬ certificate.doomed (secondRound value)
+      certificate.step _ doomedLoop
     calc (2 : ℝ≥0∞) / 4 ≤ 3 / 4 := ENNReal.div_le_div_right (by norm_num) _
       _ = Pr{let draw ← $ᵗ (Fin 4)}[draw ≠ 0] := nonzero_draw.symm
       _ ≤ error .draw :=
           (prEvent_mono _ _ _ fun draw nonzero =>
-            ⟨draw, rfl, fun doomed => continues ⟨draw, nonzero, doomed⟩⟩).trans
-            ((le_of_eq read.symm).trans step)
+            ⟨draw, rfl, fun doomed => continues ⟨draw, nonzero, doomed⟩⟩).trans step
 
 end TestsSecurity.LawRecords

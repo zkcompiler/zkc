@@ -19,6 +19,15 @@ disjoint from `rejects` with at most the probability of `second`
 acceptance of the decoded proof by rejections (`Zkc.Executable.validate_prunes`),
 so this bounds executable acceptance by ideal acceptance in every random-oracle
 experiment, at every budget.
+
+`prEvent_le_of_prunes_image` is the one transport lemma for verdicts: a
+computation that prunes an outcome image of another, by results its event
+excludes, hits its event at most as often as the other hits any event that every
+image hit comes from. It holds under every stateful oracle implementation, the
+lazily sampled random oracle and handlers alike. Acceptance inclusion through an
+exact image is the case without pruning (`prEvent_le_of_image`). Extraction and
+provider composition need stronger relations than acceptance inclusion and do
+not go through it.
 -/
 
 set_option autoImplicit false
@@ -58,5 +67,40 @@ theorem Prunes.prEvent_le {ι : Type} {spec : OracleSpec ι} {m : Type → Type}
   | bind first pruned original step ih =>
       simp only [simulateQ_bind, StateT.run'_bind']
       exact prEvent_bind_mono _ _ _ _ fun pair => ih pair.1 pair.2
+
+/-- Outcome image and pruning: when `compiled` prunes the image of `ideal` under
+`image`, by results its event excludes, and an image hitting the compiled event
+comes only from an ideal result hitting the ideal event, the compiled computation
+hits its event at most as often as the ideal one, simulated by any stateful oracle
+implementation from any state. -/
+theorem prEvent_le_of_prunes_image {ι : Type} {spec : OracleSpec ι} {m : Type → Type} [Monad m]
+    [LawfulMonad m] [EvalDistSemantics m] [LawfulEvalDistSemantics m] {σ : Type}
+    (implementation : QueryImpl spec (StateT σ m)) {α β : Type} (image : α → β)
+    {rejects event : β → Prop} {idealEvent : α → Prop}
+    (disjoint : ∀ result, rejects result → ¬ event result)
+    (preserves : ∀ result, event (image result) → idealEvent result)
+    {compiled : OracleComp spec β} {ideal : OracleComp spec α}
+    (pruned : Prunes rejects compiled (image <$> ideal)) (state : σ) :
+    Pr{let result ← (simulateQ implementation compiled).run' state}[event result] ≤
+      Pr{let result ← (simulateQ implementation ideal).run' state}[idealEvent result] := by
+  have mapped : (simulateQ implementation (image <$> ideal)).run' state =
+      image <$> (simulateQ implementation ideal).run' state := by
+    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
+  refine (Prunes.prEvent_le implementation disjoint pruned state).trans ?_
+  rw [mapped, prEvent_map]
+  exact prEvent_mono _ _ _ fun result hit => preserves result hit
+
+/-- Acceptance inclusion through an exact outcome image. -/
+theorem prEvent_le_of_image {ι : Type} {spec : OracleSpec ι} {m : Type → Type} [Monad m]
+    [LawfulMonad m] [EvalDistSemantics m] [LawfulEvalDistSemantics m] {σ : Type}
+    (implementation : QueryImpl spec (StateT σ m)) {α β : Type} (image : α → β)
+    {event : β → Prop} {idealEvent : α → Prop}
+    (preserves : ∀ result, event (image result) → idealEvent result)
+    {compiled : OracleComp spec β} {ideal : OracleComp spec α} (exact : compiled = image <$> ideal)
+    (state : σ) :
+    Pr{let result ← (simulateQ implementation compiled).run' state}[event result] ≤
+      Pr{let result ← (simulateQ implementation ideal).run' state}[idealEvent result] :=
+  prEvent_le_of_prunes_image implementation image (rejects := fun _ => False) (fun _ => False.elim)
+    preserves (exact ▸ Prunes.refl _) state
 
 end ZkcSecurity.VCVio.Pruning

@@ -16,7 +16,8 @@ the facts about such runs that the argument needs.
   differently changes nothing before its first query (`beforeFirst_update`): whatever is computed
   from the record before a query is fixed before that query's answer is sampled. This is the
   extraction checkpoint convention: extraction for a transcript query runs on the record before
-  its first query, so it cannot depend on that query's answer.
+  its first query, so it cannot depend on that query's answer. Once the key is queried, later
+  entries leave that part unchanged (`beforeFirst_append_of_mem`): the checkpoint is frozen.
 * Every entry of a table log carries the table's answer at its key (`tableQueryLog_consistent`).
 * Logging with `withQueryLog` returns the table log (`evalWithAnswerFn_withQueryLog`) and makes
   no other query (`tableQueryLog_withQueryLog`).
@@ -96,6 +97,26 @@ theorem eq_beforeFirst_append (key : D) :
           · exact ⟨entry, inTail, keyed⟩
         obtain ⟨answer, rest, split⟩ := eq_beforeFirst_append key tail later
         exact ⟨answer, rest, by rw [List.cons_append, ← split]⟩
+
+/-- Once `key` is queried, later entries leave the part before its first query unchanged: what
+precedes a key's first query is frozen. -/
+theorem beforeFirst_append_of_mem (key : D) (later : List ((d : D) × R d)) :
+    ∀ log : List ((d : D) × R d), (∃ entry ∈ log, entry.1 = key) →
+      beforeFirst key (log ++ later) = beforeFirst key log
+  | [] => by simp
+  | head :: tail => by
+      intro found
+      rw [List.cons_append, beforeFirst_cons, beforeFirst_cons]
+      by_cases here : head.1 = key
+      · simp only [here, ↓reduceIte]
+      · simp only [here, ↓reduceIte]
+        have inTail : ∃ entry ∈ tail, entry.1 = key := by
+          obtain ⟨entry, member, keyed⟩ := found
+          rcases List.mem_cons.mp member with same | inTail
+          · subst same
+            exact absurd keyed here
+          · exact ⟨entry, inTail, keyed⟩
+        rw [beforeFirst_append_of_mem key later tail inTail]
 
 /-- Answering `key` differently leaves everything before its first query unchanged. -/
 theorem beforeFirst_update (key : D) (answer : R key) :
