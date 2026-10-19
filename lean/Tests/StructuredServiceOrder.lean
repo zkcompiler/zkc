@@ -1,5 +1,5 @@
 import ZkcExamples.Structured.ServiceOrderControls
-import Lean
+import ZkcTools.DeclarationAudit
 
 /-! Audit the full-source service-order and wrapper claims separately from the
 independent provider controls. Ordinary Lean axioms remain reported by the
@@ -40,60 +40,15 @@ theorem complete_wrapper_protocol_source (definition : CheckedProtocol)
 
 end Tests.StructuredServiceOrder
 
+/-! Every declaration of the service-order and wrapper modules and of their
+controls, and both theorems above, has an axiom closure within `propext`,
+`Classical.choice` and `Quot.sound`. -/
+
 run_cmd do
-  for name in [
-      ``Tests.StructuredServiceOrder.complete_service_protocol_source,
-      ``Tests.StructuredServiceOrder.complete_wrapper_protocol_source,
-      ``ServiceOrderViews.kernel_admission,
-      ``ServiceOrderViews.exact_subject,
-      ``ServiceOrderViews.draw_signature,
-      ``ServiceOrderViews.run_signature,
-      ``ServiceOrderViews.draw_raw,
-      ``ServiceOrderViews.run_raw,
-      ``ServiceOrderViews.draw_member,
-      ``ServiceOrderViews.run_member,
-      ``ServiceOrderViews.entry_selection,
-      ``ServiceOrderViews.entry_signature,
-      ``ServiceOrderViews.entry_raw,
-      ``ApplicationWrapperViews.kernel_admission,
-      ``ApplicationWrapperViews.exact_subject,
-      ``ApplicationWrapperViews.outer_signature,
-      ``ApplicationWrapperViews.outer_raw,
-      ``ApplicationWrapperViews.draw_member,
-      ``ApplicationWrapperViews.run_member,
-      ``ApplicationWrapperViews.outer_member,
-      ``ApplicationWrapperViews.entry_selection,
-      ``ApplicationWrapperViews.entry_signature,
-      ``ApplicationWrapperViews.entry_raw,
-      ``ServiceOrder.draw_body_view,
-      ``ServiceOrder.run_body_view,
-      ``ServiceOrder.verifier_forget_marks,
-      ``ServiceOrder.receiver_forget_marks,
-      ``ServiceOrder.contextual_verifier,
-      ``ServiceOrder.contextual_receiver,
-      ``ServiceOrder.observed_verifier,
-      ``ServiceOrder.observed_receiver,
-      ``ServiceOrder.verifier_participant,
-      ``ServiceOrder.receiver_participant,
-      ``ServiceOrder.false_guard_observed,
-      ``ApplicationWrapper.run_body_view,
-      ``ApplicationWrapper.draw_body_view,
-      ``ApplicationWrapper.outer_body_view,
-      ``ApplicationWrapper.observed_verifier,
-      ``ApplicationWrapper.observed_receiver,
-      ``ApplicationWrapper.verifier_participant,
-      ``ApplicationWrapper.receiver_participant,
-      ``ApplicationWrapper.nested_exchange_site,
-      ``ApplicationWrapper.nested_qualification_is_not_right_associated,
-      ``ServiceOrderControls.same_owner_alias,
-      ``ServiceOrderControls.distinct_handles,
-      ``ServiceOrderControls.false_guard_keeps_first_draw,
-      ``ServiceOrderControls.second_child_draw_stops_prefix,
-      ``ServiceOrderControls.second_child_mismatch_unconsumed,
-      ``ServiceOrderControls.independently_received_value,
-      ``ServiceOrderControls.wrapper_receiver_retains_nested_site] do
-    let axioms ← Lean.collectAxioms name
-    for axiomName in axioms do
-      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
-        throwError "unexpected axiom in {name}: {axiomName}"
-    Lean.logInfo m!"{name}: {axioms.toList}"
+  ZkcTools.DeclarationAudit.check
+    [`ZkcExamples.Structured.ServiceOrder, `ZkcExamples.Structured.ServiceOrderViews,
+     `ZkcExamples.Structured.ApplicationWrapper, `ZkcExamples.Structured.ApplicationWrapperViews,
+     `ZkcExamples.Structured.ServiceOrderControls]
+    "SERVICE-ORDER-AUDIT-PASS" (exactModules := true)
+
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "SERVICE-ORDER-SOURCE-AXIOM-PASS"

@@ -71,13 +71,17 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
             developer.main()
     assert calls[0] == ([sys.executable, str(tmp_path / "lean/checks/check_library.py"),
                          "--integration", "clean"], None)
-    assert calls[1] == (["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
+    # The records of what is proved are checked with the Clean package before
+    # its committed control is compared.
+    assert calls[1] == ([sys.executable, str(tmp_path / "lean/checks/check_records.py"),
+                         "--integration", "clean"], None)
+    assert calls[2] == (["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
                         tmp_path / "lean/integrations/clean")
     if current:
-        assert calls[2][0][:5] == ["lake", "env", "lean", "--run", "CleanExamples.lean"]
-        assert calls[3][0][1:3] == [str(tmp_path / "compiler/adapters/clean/regenerate.py"), "check"]
-        assert calls[2][0][5] == calls[3][0][3]
-    assert len(calls) == (4 if current else 2)
+        assert calls[3][0][:5] == ["lake", "env", "lean", "--run", "CleanExamples.lean"]
+        assert calls[4][0][1:3] == [str(tmp_path / "compiler/adapters/clean/regenerate.py"), "check"]
+        assert calls[3][0][5] == calls[4][0][3]
+    assert len(calls) == (5 if current else 3)
     root, = (tmp_path / "reports/runs").iterdir()
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
 
