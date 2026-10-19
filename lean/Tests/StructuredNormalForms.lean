@@ -4,8 +4,9 @@ import ZkcExamples.Structured.SumcheckRoundNormalForms
 
 /-! Controls for the normalizer. The migrated generated modules are the
 positive controls; these cases show that the kernel refuses a form literal
-that is not the normalizer's result and that the normalizer refuses what is
-outside its fragment by name. -/
+that is not the normalizer's result, that the normalizer refuses what is
+outside its fragment by name, and that a law use is checked against the law's
+own helper. -/
 set_option autoImplicit false
 namespace Tests.StructuredNormalForms
 open Zkc.Source Zkc.Source.Structured NormalForm ZkcExamples.Structured
@@ -44,9 +45,34 @@ example : normalize {} SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalF
 
 /-- A law pinned to an input the call does not read is refused. -/
 example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns, [some 2, some 2, some 3]⟩,
-      ⟨MapFirstBodies.firstHelper, .returns, []⟩, ⟨SumcheckHelperBodies.appendHelper, .returns, []⟩], false⟩
+      ⟨MapFirstBodies.firstHelper, .returns, []⟩, ⟨SumcheckHelperBodies.appendHelper, .returns, []⟩], false, false⟩
     SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalForms.proverPattern = .error "law-pins" := by
   kernel_rfl
+
+/-- A helper with the Sumcheck sums helper's kind, inputs and outputs but another name. -/
+def renamedSums : Helper := { SumcheckHelperBodies.sumsHelper with name := "renamed" }
+
+/-- A signature whose only law is about the renamed helper. -/
+def renamedSignature (names : Bool) : Signature := ⟨[⟨renamedSums, .stops .reject, []⟩], false, names⟩
+
+/-- Choosing laws by signature presents the sums call by the renamed helper's law;
+the form records the helper actually called. -/
+noncomputable def renamedForm : Form (renamedSignature false).laws
+    SumcheckRoundNormalForms.proverEmptyPattern.scope SumcheckVerifierBodies.repeatState :=
+  .byLaw ⟨0, by decide⟩ SumcheckHelperBodies.sumsHelper (.halt .reject)
+
+example : normalize (renamedSignature false) SumcheckVerifierBodies.roundBody 0 1
+    SumcheckRoundNormalForms.proverEmptyPattern = .ok renamedForm := by kernel_rfl
+
+/-- The law-use check refuses that form: the called helper is not the law's. -/
+example : True := by
+  fail_if_success
+    have : renamedForm.CallsMatch := by kernel_rfl
+  trivial
+
+/-- Choosing laws by name finds no law for the call. -/
+example : normalize (renamedSignature true) SumcheckVerifierBodies.roundBody 0 1
+    SumcheckRoundNormalForms.proverEmptyPattern = .error "no-law" := by kernel_rfl
 
 /-- The Reduce body starts with a Math call, which may stop or depend on the
 helper body: it is refused, not presented as a total term. -/

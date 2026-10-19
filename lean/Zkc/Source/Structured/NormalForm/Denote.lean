@@ -158,6 +158,7 @@ def Form.denoteWith {A : Type}
       (Evaluation.operationOn model (.silent _) tables.closed op (Terms.eval results args binders)
         (op.calculationRegions allowed)).bind fun values =>
           next.denoteWith leaf (.cons values binders)
+  | _, .byLaw _ _ next, binders => next.denoteWith leaf binders
 
 /-- A form's process, returning its tuple of components. -/
 def Form.denote {Δ : Scope} (form : Form laws Δ out) (binders : Binders model Δ) :
@@ -197,6 +198,56 @@ def LawHolds {Γ₀ : List Ty} {I : PIR.Signature} (tables : Evaluation.Componen
 def LawsHold {Γ₀ : List Ty} {I : PIR.Signature} (tables : Evaluation.ComponentTablesOn model.toCarriers I)
     (results : LawResults model laws) (inputs : Values (Component model.Value) Γ₀) : Prop :=
   ∀ entry : Fin laws.length, LawHolds tables inputs laws[entry] (results.result entry)
+
+/-- Every law use of a form presents a call of the law's own helper. -/
+def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws Δ out → Prop
+  | _, .done _ => True
+  | _, .halt _ => True
+  | _, .send _ _ _ _ next => next.LawsMatch
+  | _, .receive _ _ _ next => next.LawsMatch
+  | _, .query _ _ _ next => next.LawsMatch
+  | _, .split _ absent present => absent.LawsMatch ∧ present.LawsMatch
+  | _, .guard _ _ _ next => next.LawsMatch
+  | _, .strict _ _ next => next.LawsMatch
+  | _, .compute _ _ _ next => next.LawsMatch
+  | _, .byLaw entry helper next => laws[entry].helper = helper ∧ next.LawsMatch
+
+/-- The law uses of a form with their called helpers, in order. -/
+def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws Δ out → List (Fin laws.length × Helper)
+  | _, .done _ => []
+  | _, .halt _ => []
+  | _, .send _ _ _ _ next => next.lawCalls
+  | _, .receive _ _ _ next => next.lawCalls
+  | _, .query _ _ _ next => next.lawCalls
+  | _, .split _ absent present => absent.lawCalls ++ present.lawCalls
+  | _, .guard _ _ _ next => next.lawCalls
+  | _, .strict _ _ next => next.lawCalls
+  | _, .compute _ _ _ next => next.lawCalls
+  | _, .byLaw entry helper next => (entry, helper) :: next.lawCalls
+
+/-- The law uses' helpers, as an equation of two lists: an instance checks it
+by definitional equality of helper terms, so equal helpers are recognized at
+once and the kernel never evaluates a comparison of their names. -/
+abbrev Form.CallsMatch {out : List Ty} {Δ : Scope} (form : Form laws Δ out) : Prop :=
+  form.lawCalls.map (fun call => laws[call.1].helper) = form.lawCalls.map Prod.snd
+
+theorem Form.lawsMatch_of_callsMatch {out : List Ty} :
+    {Δ : Scope} → (form : Form laws Δ out) → form.CallsMatch → form.LawsMatch
+  | _, .done _, _ => trivial
+  | _, .halt _, _ => trivial
+  | _, .send _ _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .receive _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .query _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .split _ absent present, same => by
+    simp only [Form.CallsMatch, Form.lawCalls, List.map_append] at same
+    have parts := List.append_inj same (by simp)
+    exact ⟨absent.lawsMatch_of_callsMatch parts.1, present.lawsMatch_of_callsMatch parts.2⟩
+  | _, .guard _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .strict _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .compute _ _ _ next, same => next.lawsMatch_of_callsMatch same
+  | _, .byLaw _ _ next, same => by
+    simp only [Form.CallsMatch, Form.lawCalls, List.map_cons, List.cons.injEq] at same
+    exact ⟨same.1, next.lawsMatch_of_callsMatch same.2⟩
 
 /-- Every other role of the roster is played by a different participant. -/
 def RosterDistinct (context : ProtocolContext) (role roster : Nat) : Prop :=

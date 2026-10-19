@@ -97,6 +97,7 @@ def formJson {out : List Ty} : {Δ : Scope} → Form laws Δ out → Json
   | _, .strict helper args next =>
     .arr #[.str "strict", .str helper.name, .arr (termsJson args).toArray, formJson next]
   | _, .compute op _ args next => .arr #[.str "compute", opJson op, .arr (termsJson args).toArray, formJson next]
+  | _, .byLaw entry helper next => .arr #[.str "byLaw", nat entry.val, .str helper.name, formJson next]
 
 /-! Requests. -/
 
@@ -150,10 +151,17 @@ def findRepeat (site : String) : {Γ out : List Ty} → Region protocolDialect �
       | _, _ => none
     inner.orElse fun _ => findRepeat site next
 
+/-- Whether every law use presents a call of the law's own helper. -/
+def callsMatch {laws : List LawKey} {Δ : Scope} {out : List Ty} (form : Form laws Δ out) : Bool :=
+  form.lawCalls.all fun call => decide (laws[call.1].helper = call.2)
+
 /-- The request `[protocol, repeat, role, roster, pattern, laws, strict]`: a
 protocol name, the site of the repeat whose callback is normalized (or
 `null`), the role and roster size, one input pattern entry per input of the
-body, the signature's laws and whether owned calls without a law are kept. -/
+body, the signature's laws and whether owned calls without a law are kept.
+Laws are chosen by signature first; if that presents a call by another
+helper's law, the run is repeated choosing by name too, and the reply says so
+(`names`), for the printed signature to ask for it. -/
 def run (program : Program) (request : Json) : Except String Json := do
   let [protocolName, repeatSite, role, roster, pattern, laws, strict] ← Format.array request
     | throw "normal-form-request"
@@ -171,8 +179,10 @@ def run (program : Program) (request : Json) : Except String Json := do
   let strict := strict == .bool true
   let ⟨inputs, _, region⟩ := body
   let pattern ← decodePattern inputs (← Format.array pattern)
-  let form ← normalize ⟨laws, strict⟩ region role roster pattern
+  let bySignature ← normalize ⟨laws, strict, false⟩ region role roster pattern
+  let (names, form) ← if callsMatch bySignature then pure (false, bySignature)
+    else pure (true, ← normalize ⟨laws, strict, true⟩ region role roster pattern)
   return .mkObj [("status", .str "normalized"), ("scope", .arr (pattern.scope.map slotJson).toArray),
-    ("form", formJson form)]
+    ("names", .bool names), ("form", formJson form)]
 
 end ZkcTools.StructuredSource.NormalForms

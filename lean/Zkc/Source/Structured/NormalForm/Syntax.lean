@@ -22,7 +22,10 @@ decided where an operation first needs them are components.
   result or a stop) or kept as the helper's own invocation on present
   arguments. A law names its helper; the soundness theorem asks for one
   premise per law, so every presented call is tied to the admitted helper it
-  is about.
+  is about. The form records the called helper wherever a law presents a call
+  (`byLaw`), and the soundness theorem asks that it be the law's own helper:
+  an instance checks this by definitional equality of the two helper terms,
+  never by comparing helper names in the kernel's evaluator.
 
 The normalizer (`Normalize`) computes forms from bodies, the denotation
 (`Denote`) gives them their participant meaning, and `Soundness` proves the
@@ -83,6 +86,11 @@ structure Signature where
   /-- Owned calls of the role's own helpers without a law are kept as the
   helper's invocation on present arguments (`true`) or refused (`false`). -/
   strict : Bool := false
+  /-- A law is chosen for a call by the called helper's kind, inputs and
+  outputs; with `names`, also by its name. Choosing never affects soundness,
+  because every law use is checked against the law's helper (`byLaw`); names
+  are needed only where two helpers of one signature meet in a body. -/
+  names : Bool := false
   deriving Repr
 
 /-- The decidable equalities a guard can compare. -/
@@ -148,6 +156,10 @@ inductive Form (laws : List LawKey) : Scope → List Ty → Type where
   | compute {Δ : Scope} {out : List Ty} (op : Op) (allowed : op.isCalculation = true)
       (args : Terms laws Δ op.arguments)
       (next : Form laws (.results op.results :: Δ) out) : Form laws Δ out
+  /-- A call of `helper` presented by the law `entry`: its results, if any,
+  are the law's terms in `next`, and a stopping law's stop is `next`. -/
+  | byLaw {Δ : Scope} {out : List Ty} (entry : Fin laws.length) (helper : Helper)
+      (next : Form laws Δ out) : Form laws Δ out
 
 /-- A named reason for not normalizing a body. -/
 abbrev Refusal := String

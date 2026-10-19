@@ -1628,6 +1628,9 @@ def lean_form(form, indent, helpers):
     if head == "strict":
         _, helper, args, rest = form
         return (f"{pad}.strict {helpers(helper)} {lean_terms(args)} <|\n" + lean_form(rest, indent, helpers))
+    if head == "byLaw":
+        _, entry, helper, rest = form
+        return (f"{pad}.byLaw ⟨{entry}, by decide⟩ {helpers(helper)} <|\n" + lean_form(rest, indent, helpers))
     raise GeneratorError(f"unsupported form node {head}")
 
 
@@ -1755,6 +1758,7 @@ class Module:
                    + lean_form(result["form"], 2, self.helper_term_of) + "\n")
         out.append(f"theorem {role_name}_normalized :\n    NormalForm.normalize {{}} {body} {role} {roster} "
                    f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
+        out.append(f"theorem {role_name}_lawsMatch : {form_name}.CallsMatch := by\n  kernel_rfl\n")
         out.append("/-- The form's process between the output masks is the readable process. -/")
         out.append(f"theorem {role_name}_presentation (tables : NormalForm.Tables (ringModel F G)) {binders}:\n"
                    f"    ({form_name}.denote (ringModel F G) tables ⟨fun entry => entry.elim0⟩ {{}}\n"
@@ -1764,7 +1768,7 @@ class Module:
         out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
                    f"({inputs_name} {arguments}) =\n      {application} :=\n"
                    f"  (NormalForm.participant_sound_uniform {program} {body} entry_raw {{}} {role} {roster}\n"
-                   f"    {pattern_name} {form_name} {role_name}_normalized ⟨fun entry => entry.elim0⟩\n"
+                   f"    {pattern_name} {form_name} {role_name}_normalized {role_name}_lawsMatch ⟨fun entry => entry.elim0⟩\n"
                    f"    ({tuple_literal_}) _ (by kernel_rfl) (fun entry => entry.elim0)).trans\n"
                    f"    ({role_name}_presentation _ {arguments})\n")
 
@@ -2662,7 +2666,8 @@ class Module:
                          f"{list_literal(['none' if pin is None else f'some {pin}' for pin in law['pins']])}⟩"
                          for law in laws)
         out.append(f"/-- The {name}'s laws as the normalizer reads them, keyed by helper. -/")
-        out.append(f"def {signature} : NormalForm.Signature :=\n  ⟨[{keys}], false⟩\n")
+        names_flag = "true" if result.get("names") else "false"
+        out.append(f"def {signature} : NormalForm.Signature :=\n  ⟨[{keys}], false, {names_flag}⟩\n")
         defaults = {"field": "0", "index": "0", "bool": "false", "vector": "[]", "group": "0", "service": "0"}
         cases = []
         for entry, law in enumerate(laws):
@@ -2689,6 +2694,7 @@ class Module:
                    + lean_form(result["form"], 2, self.helper_term_of) + "\n")
         out.append(f"theorem {name}_normalized :\n    NormalForm.normalize {signature} {spec['body']} {role} {roster} "
                    f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
+        out.append(f"theorem {name}_lawsMatch : {form_name}.CallsMatch := by\n  kernel_rfl\n")
         out.append(f"theorem {name}_finishes : {form_name}.finishes {finish_name} = true := by\n  kernel_rfl\n")
         binders_value = binders_literal(scope_names)
         scope_binders = self.scope_binders(scope_names, state, slots, captures, capture_specs)
@@ -2724,7 +2730,7 @@ class Module:
                    f"      ({application}).bind (fun {'result' if slots else '_'} => .done ({embedded})) := by\n"
                    f"  subst self\n"
                    f"  exact (NormalForm.callback_sound_uniform {signature} {spec['body']} {role} {roster} {pattern_name}\n"
-                   f"    {finish_name} {form_name} {name}_normalized {name}_finishes ctx {distinct}\n"
+                   f"    {finish_name} {form_name} {name}_normalized {name}_lawsMatch {name}_finishes ctx {distinct}\n"
                    f"    ({spec['tables']}) ({spec['protocols']}) {results_name} ({binders_value}) _\n"
                    f"    ({name}_environment {names_in_order}) ({laws_call})).trans\n"
                    f"    (congrArg₂ PIR.Proc.bind ({name}_presentation _ ctx {names_in_order})\n"

@@ -134,8 +134,9 @@ decimal strings, one input pattern entry per input (`"absent"`, `"present"`,
 `"optional"`, or a fixed `["index", "0"]`, `["field", "1"]` or `["bool", true]`),
 the laws (`[helper, "returns" | ["stops", reason], pins]`, a pin being `null` or
 an input position) and whether owned calls without a law are kept. It prints
-the compiled normalizer's form as JSON for `normal_forms.py`; the run is not
-trusted, since the kernel checks every printed form.
+the compiled normalizer's form as JSON for `normal_forms.py`, with `names` set
+when laws had to be chosen by helper name as well as by signature; the run is
+not trusted, since the kernel checks every printed form.
 
 Closed runs take and return typed input/output arrays. Open requests and
 results follow the native schema: optional ordered inputs, selected role,
@@ -383,9 +384,10 @@ inputs its call reads at every use), `<role>Results` (the results its laws
 present, from the request's templates), `<role>Finish` (the carried positions
 the role presents) and `<role>_laws` (each law premise discharged by the
 request's law term). The kernel alone checks `<role>_normalized` (the
-normalizer returns the literal), `<role>_presentation` (the literal's process is
-the readable one), `<role>_environment`, `<role>_finishes` and
-`<role>_embedding`. The statements of the readable definitions and of the
+normalizer returns the literal), `<role>_lawsMatch` (every law use in the
+literal is a call of the law's own helper, compared as terms rather than by
+name), `<role>_presentation` (the literal's process is the readable one),
+`<role>_environment`, `<role>_finishes` and `<role>_embedding`. The statements of the readable definitions and of the
 process equations are unchanged, and the masked-state theorems become
 instances of `NormalForm.maskValues_embed`. The compiled run is not trusted: a
 form it prints wrongly is a failed kernel check.

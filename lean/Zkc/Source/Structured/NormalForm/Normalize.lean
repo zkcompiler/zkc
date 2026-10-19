@@ -27,9 +27,16 @@ operation's arity, and no step unfolds a helper body or a protocol table.
   stop, undecided guard conditions, laws whose pins do not match, owned calls
   without a law when calls are not kept, and the shared-suffix `bind` form.
 
-Normalization never compares strings or sorts on a hot path. Helper
-structures are compared when a law is looked up, and sorts when a pin is
-decoded, once per law use. -/
+* Laws. A law is chosen for an owned call by the called helper's kind,
+  inputs and outputs, and by its name only when the signature asks for names.
+  The kernel evaluates a string comparison by encoding both strings, which for
+  the compiler's long helper names costs more than the rest of a small
+  normalization; the form instead records the called helper at the law use
+  (`byLaw`), and the instance checks it against the law's helper by
+  definitional equality, where two equal literals compare at once.
+
+Normalization never compares names on a hot path. Sorts are compared when a
+law is chosen and when a pin is decoded, once per law use. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured
@@ -203,13 +210,20 @@ def calculation {Δ : Scope} (op : Op) (total : op.total = true) (args : Terms l
   (constantResults op).getD
     (mapValues (fun position => .present (.calc op total args position)) (Operands.identity op.results))
 
-/-- The first law of the helper. -/
-def findLaw (helper : Helper) :
-    (laws : List LawKey) → Option (Σ' entry : Fin laws.length, laws[entry].helper = helper)
+/-- The first law whose helper has the called helper's kind, inputs and
+outputs, and its name when `names` is set. The equalities returned are those
+the law's terms need; that the law's helper is the called one is checked on the
+form (`Form.LawsMatch`). -/
+def findLaw (names : Bool) (helper : Helper) :
+    (laws : List LawKey) → Option (Σ' entry : Fin laws.length,
+      laws[entry].helper.inputs = helper.inputs ∧ laws[entry].helper.outputs = helper.outputs)
   | [] => none
   | key :: rest =>
-    if same : key.helper = helper then some ⟨⟨0, Nat.zero_lt_succ _⟩, same⟩
-    else (findLaw helper rest).map fun found => ⟨found.1.succ, found.2⟩
+    if key.helper.kind = helper.kind ∧ (names = false ∨ key.helper.name = helper.name) then
+      if same : key.helper.inputs = helper.inputs ∧ key.helper.outputs = helper.outputs then
+        some ⟨⟨0, Nat.zero_lt_succ _⟩, same⟩
+      else (findLaw names helper rest).map fun found => ⟨found.1.succ, found.2⟩
+    else (findLaw names helper rest).map fun found => ⟨found.1.succ, found.2⟩
 
 def Term.var? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option (Var Δ (.value ty))
   | .var binder => some binder
@@ -305,15 +319,18 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
         match presentTerms operands with
         | none => .error "undecided-operand"
         | some terms =>
-          match findLaw helper sig.laws with
-          | some ⟨entry, same⟩ =>
-            let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := same ▸ terms
+          match findLaw sig.names helper sig.laws with
+          | some ⟨entry, inputsSame, outputsSame⟩ =>
+            let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := inputsSame ▸ terms
             if pinsMatch state.inputs sig.laws[entry].pins lawArgs then
               match sig.laws[entry].shape with
-              | .returns =>
-                next (state.push (same ▸ mapValues (fun position => .present (.law entry lawArgs position))
-                  (Operands.identity sig.laws[entry].helper.outputs)))
-              | .stops reason => .ok (.halt reason)
+              | .returns => do
+                let lawResults : Values (Comp sig.laws Δ) sig.laws[entry].helper.outputs :=
+                  mapValues (fun position => .present (.law entry lawArgs position))
+                    (Operands.identity sig.laws[entry].helper.outputs)
+                let rest ← next (state.push (outputsSame ▸ lawResults : Values (Comp sig.laws Δ) helper.outputs))
+                pure (.byLaw entry helper rest)
+              | .stops reason => .ok (.byLaw entry helper (.halt reason))
             else .error "law-pins"
           | none =>
             if sig.strict then do
@@ -421,16 +438,26 @@ def InputPattern.scope : {Γ : List Ty} → InputPattern Γ → Scope
   | _ :: _, .cons (.field ..) rest => scope rest
   | _ :: _, .cons (.bool _) rest => scope rest
 
+/-- The inputs as components of the pattern's binders, placed in a scope by
+`lift`. Each binder is placed once, so the inputs cost one step each rather
+than a renaming of every later input. -/
+def InputPattern.initialIn {Δ : Scope} : {Γ : List Ty} → (pattern : InputPattern Γ) →
+    Rename pattern.scope Δ → Values (Comp laws Δ) Γ
+  | [], .nil, _ => .nil
+  | ty :: _, .cons .present rest, lift =>
+    let lift : Rename (.value ty :: InputPattern.scope rest) Δ := lift
+    .cons (.present (.var (lift .here))) (initialIn rest fun binder => lift binder.there)
+  | ty :: _, .cons .optional rest, lift =>
+    let lift : Rename (.component ty :: InputPattern.scope rest) Δ := lift
+    .cons (.input (lift .here)) (initialIn rest fun binder => lift binder.there)
+  | _ :: _, .cons .absent rest, lift => .cons .absent (initialIn rest lift)
+  | _ :: _, .cons (.index value) rest, lift => .cons (.present (.index value)) (initialIn rest lift)
+  | _ :: _, .cons (.field domain value) rest, lift => .cons (.present (.field domain value)) (initialIn rest lift)
+  | _ :: _, .cons (.bool value) rest, lift => .cons (.present (.bool value)) (initialIn rest lift)
+
 /-- The inputs as components of the pattern's binders. -/
-def InputPattern.initial : {Γ : List Ty} → (pattern : InputPattern Γ) →
-    Values (Comp laws pattern.scope) Γ
-  | [], .nil => .nil
-  | _ :: _, .cons .present rest => .cons (.present (.var .here)) (mapValues (Comp.rename .there) (initial rest))
-  | _ :: _, .cons .optional rest => .cons (.input .here) (mapValues (Comp.rename .there) (initial rest))
-  | _ :: _, .cons .absent rest => .cons .absent (initial rest)
-  | _ :: _, .cons (.index value) rest => .cons (.present (.index value)) (initial rest)
-  | _ :: _, .cons (.field domain value) rest => .cons (.present (.field domain value)) (initial rest)
-  | _ :: _, .cons (.bool value) rest => .cons (.present (.bool value)) (initial rest)
+def InputPattern.initial {Γ : List Ty} (pattern : InputPattern Γ) : Values (Comp laws pattern.scope) Γ :=
+  pattern.initialIn fun binder => binder
 
 /-- The inputs the pattern's binders give. -/
 def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →

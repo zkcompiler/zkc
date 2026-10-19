@@ -18,7 +18,8 @@ namespace Zkc.Source
 open Lean Meta Elab Tactic
 
 /-- Close `lhs = rhs`, or `∀ xs, lhs = rhs`, with `Eq.refl lhs` under the
-binders, checked only by the kernel. The local declarations the goal depends on
+binders, checked only by the kernel. The equation may be stated through
+reducible definitions. The local declarations the goal depends on
 are reverted first, so the checked statement is closed. As with `decide +kernel`, the proof is an
 auxiliary theorem; a failed kernel check is an ordinary error, never an
 assumption. -/
@@ -30,7 +31,7 @@ meta def kernelRflProof (statement : Expr) : MetaM Expr := do
   let proof ← mkFreshExprSyntheticOpaqueMVar statement
   let (_, body) ← proof.mvarId!.intros
   body.withContext do
-    let type ← instantiateMVars (← body.getType)
+    let type ← whnfR (← instantiateMVars (← body.getType))
     let some (α, lhs, _) := type.eq?
       | throwError "kernel_rfl: expected an equation under universal binders, got{indentExpr statement}"
     body.assign (mkApp2 (mkConst ``Eq.refl [← getLevel α]) α lhs)

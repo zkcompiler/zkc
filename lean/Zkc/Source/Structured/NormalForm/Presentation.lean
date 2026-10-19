@@ -213,6 +213,7 @@ def Form.finishes {out : List Ty} (spec : Values (fun _ => Carried) out) : {Δ :
   | _, .guard _ _ _ next => next.finishes spec
   | _, .strict _ _ next => next.finishes spec
   | _, .compute _ _ _ next => next.finishes spec
+  | _, .byLaw _ _ next => next.finishes spec
 
 section Finish
 variable (model) (tables : Tables model) (results : LawResults model laws) (context : ProtocolContext)
@@ -262,6 +263,7 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
   | _, .compute op allowed args next, finishes, binders => by
     simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
     exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+  | _, .byLaw _ _ next, finishes, binders => denote_finish spec next finishes binders
 
 end Finish
 
@@ -277,7 +279,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F]
 /-- `normalize_sound` for the uniform participant meaning. -/
 theorem sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
     (role roster : Nat) (pattern : InputPattern Γ) (form : Form sig.laws pattern.scope out)
-    (normalized : normalize sig body role roster pattern = .ok form)
+    (normalized : normalize sig body role roster pattern = .ok form) (matched : form.CallsMatch)
     (context : ProtocolContext) (distinct : RosterDistinct context role roster)
     (tables : Evaluation.ComponentTables F G (participantInterface F G))
     (protocols : ProtocolTable (assignment F G) (participantInterface F G))
@@ -290,14 +292,15 @@ theorem sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protoc
       form.denote (ringModel F G) tables.toOn results context binders := by
   subst environment
   rw [denote_participantMeaningWith_eq]
-  exact normalize_sound (protocols := protocols) sig body role roster pattern form normalized distinct results
-    binders lawsHold
+  exact normalize_sound (protocols := protocols) sig body role roster pattern form normalized matched distinct
+    results binders lawsHold
 
 /-- A repeat callback's process, factored through the role's presented tuple. -/
 theorem callback_sound_uniform (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
     (role roster : Nat) (pattern : InputPattern Γ) (spec : Values (fun _ => Carried) out)
     (form : Form sig.laws pattern.scope out)
-    (normalized : normalize sig body role roster pattern = .ok form) (finishes : form.finishes spec = true)
+    (normalized : normalize sig body role roster pattern = .ok form) (matched : form.CallsMatch)
+    (finishes : form.finishes spec = true)
     (context : ProtocolContext) (distinct : RosterDistinct context role roster)
     (tables : Evaluation.ComponentTables F G (participantInterface F G))
     (protocols : ProtocolTable (assignment F G) (participantInterface F G))
@@ -310,7 +313,7 @@ theorem callback_sound_uniform (sig : Signature) {Γ out : List Ty} (body : Regi
       (form.denoteWith (ringModel F G) tables.toOn results context
         (finishLeaf (ringModel F G) results spec) binders).bind
           fun tuple => .done (embed (ringModel F G).Value spec (Tuple.toValues tuple)) :=
-  (sound_uniform sig body role roster pattern form normalized context distinct tables protocols results
+  (sound_uniform sig body role roster pattern form normalized matched context distinct tables protocols results
     binders inputs environment lawsHold).trans
       (denote_finish (ringModel F G) tables.toOn results context spec form finishes binders)
 
@@ -320,7 +323,7 @@ theorem participant_sound_uniform (program : Program)
     (body : Region protocolDialect program.payload.entry.inputs program.payload.entry.outputs)
     (raw : program.payload.entry.raw = body.erase) (sig : Signature) (role roster : Nat)
     (pattern : InputPattern program.payload.entry.inputs) (form : Form sig.laws pattern.scope program.payload.entry.outputs)
-    (normalized : normalize sig body role roster pattern = .ok form)
+    (normalized : normalize sig body role roster pattern = .ok form) (matched : form.CallsMatch)
     (results : LawResults (ringModel F G) sig.laws) (binders : Binders (ringModel F G) pattern.scope)
     (inputs : Values (Component (assignment F G)) program.payload.entry.inputs)
     (environment : pattern.environment (ringModel F G) binders =
@@ -339,7 +342,7 @@ theorem participant_sound_uniform (program : Program)
       ⟨[], []⟩) program.payload.protocols program.payload.protocolsLinked program.payload.entry
     program.payload.entry_mem body raw {} role inputs).trans ?_
   simp only [ProtocolContext.mapScopes_root]
-  exact bind_congr_left (sound_uniform sig body role roster pattern form normalized {}
+  exact bind_congr_left (sound_uniform sig body role roster pattern form normalized matched {}
     (RosterDistinct.root role roster) _ (program.payload.plainProtocolTable F G) results binders _ environment
     lawsHold) _
 
