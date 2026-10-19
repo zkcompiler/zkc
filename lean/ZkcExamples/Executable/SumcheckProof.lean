@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckHelpers
+public import ZkcExamples.Executable.SumcheckFamily
 public import Zkc.Executable.NormalizationSoundness
 
 @[expose] public section
@@ -12,9 +13,16 @@ candidate that the native deployment of the Sumcheck example's `example::Proof`
 carries and the runtime admits. The lowering rule accepts it against the
 constructed validator that the composed transcript-construction and
 participant projection check accepted (`accepted`): it reads back as exactly
-those instructions, with the round loop of at most two iterations and the three
-helper calls, and its local functions of the called helpers implement the
-source's checked helpers (`SumcheckHelpers.prepared`).
+those instructions, with the round loop bounded by the Entry's static maximum
+(`maximum`) and the three helper calls, and its local functions of the called
+helpers implement the source's checked helpers (`SumcheckHelpers.prepared`).
+
+The kernel recognizes the pair as an artifact of the Sumcheck family
+(`artifact`, `ZkcExamples.Executable.SumcheckFamily.Artifact`): the family's
+shape with this Entry's names and maximum, the reading's code and receive
+plan, the occurrence templates the context names, and the helper meanings of
+the admitted original. The family's theorems for every round count up to the
+maximum then apply to it (`SumcheckCharges`, `SumcheckCompleteness`).
 
 For every challenge function in every lawful monad, decoder, budget, data
 input, initial transcript and proof byte string, the executable's observation
@@ -69,15 +77,24 @@ abbrev coordinate : PhysicalType := ⟨.data (.field "bls12-381.fr"), "arkworks.
 /-- The receive types of one round: its two message coordinates. -/
 abbrev round : List PhysicalType := [coordinate, coordinate]
 
+/-- The Entry's static maximum: the round loop's bound. -/
+def maximum : Nat := SumcheckShape.maximumOf SumcheckProof.participant.instructions
+
+/-- This Entry admits at most two rounds. -/
+theorem maximum_eq : maximum = 2 := by decide +kernel
+
+/-- The names of this Entry's sites, templates and helpers. -/
+def names : SumcheckShape.Names := SumcheckShape.Names.of SumcheckProof.participant.instructions
+
 set_option maxRecDepth 20000 in
-/-- The receive plan: a loop over the round count, at most two rounds, each
-receiving two coordinates. -/
-theorem plan_eq : lowered.plan = [.loop 2 2 [.receive coordinate, .receive coordinate]] := by
+/-- The receive plan: a loop over the round count, at most `maximum` rounds,
+each receiving two coordinates. -/
+theorem plan_eq : lowered.plan = [.loop 2 maximum [.receive coordinate, .receive coordinate]] := by
   decide +kernel
 
 /-- The receive types of a run: two field messages per admitted round. -/
 def receives (rounds : Nat) : List PhysicalType :=
-  if rounds ≤ 2 then (List.replicate rounds round).flatten else []
+  if rounds ≤ maximum then (List.replicate rounds round).flatten else []
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -85,7 +102,7 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem plan_types (values : List F) (claim : F) (rounds : Nat) :
     Plan.types (SumcheckProof.inputs (G := G) values claim rounds) lowered.plan = receives rounds := by
   rw [plan_eq]
-  by_cases admitted : rounds ≤ 2 <;>
+  by_cases admitted : rounds ≤ maximum <;>
     simp [Plan.types, SumcheckProof.inputs, receives, admitted, round]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
@@ -198,5 +215,62 @@ theorem executable_transform_prunes {m : Type → Type} [Monad m] [LawfulMonad m
   rw [← SumcheckProof.compiled_transform challenge values claim rounds handle initial, Functor.map_map]
   simp only [← accepts_eq]
   exact executable_prunes challenge decode budget binding values claim rounds initial bytes
+
+/-! ## The artifact -/
+
+theorem names_scalar : names.scalar = "bls12-381.fr" := by decide +kernel
+theorem names_empty : names.emptyHelper = ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name := by
+  decide +kernel
+theorem names_append : names.appendHelper = ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name := by
+  decide +kernel
+theorem names_check : names.checkHelper = ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name := by
+  decide +kernel
+
+set_option maxRecDepth 20000 in
+/-- The compiled Sumcheck validator of this Entry as an artifact of the family. -/
+def artifact : SumcheckFamily.Artifact where
+  validator := validator
+  participant := SumcheckProof.participant
+  context := SumcheckProof.context
+  program := SumcheckProof.program
+  lowered := lowered
+  accepted := accepted
+  names := names
+  maximum := maximum
+  small := by decide +kernel
+  shape := by decide +kernel
+  code := by decide +kernel
+  returned := rfl
+  sorts := by decide +kernel
+  coordinate := coordinate
+  plan := plan_eq
+  admitted := fun values claim rounds => by rw [names_scalar]; rfl
+  templates := by decide +kernel
+  emptyBound := by decide +kernel
+  roundCharges := by decide +kernel
+  empty_call := by rw [names_empty, names_scalar]; exact SumcheckHelpers.empty_call
+  append_call := fun point answer => by rw [names_append, names_scalar]; exact SumcheckHelpers.append_call point answer
+  check_call := fun xs point claim vectorBound pointBound => by
+    rw [names_check, names_scalar]; exact SumcheckHelpers.check_call vectorBound pointBound
+  check_cost := fun xs point claim small shaped => by
+    rw [names_check, names_scalar]; exact SumcheckHelpers.check_cost small shaped
+  prepared := prepared
+  helpersSorted := helpersSorted
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem artifact_inputs (values : List F) (claim : F) (rounds : Nat) :
+    artifact.inputs (G := G) values claim rounds = SumcheckProof.inputs values claim rounds := by
+  simp only [SumcheckFamily.Artifact.inputs, artifact, names_scalar]
+  rfl
+
+theorem artifact_receives (rounds : Nat) : artifact.receives rounds = receives rounds := rfl
+
+theorem artifact_validator : artifact.validator = validator := by unfold artifact; rfl
+theorem artifact_participant : artifact.participant = SumcheckProof.participant := by unfold artifact; rfl
+theorem artifact_context : artifact.context = SumcheckProof.context := by unfold artifact; rfl
+theorem artifact_program : artifact.program = SumcheckProof.program := by unfold artifact; rfl
+theorem artifact_lowered : artifact.lowered = lowered := by dsimp only [artifact]
+theorem artifact_maximum : artifact.maximum = maximum := by unfold artifact; rfl
+theorem artifact_coordinate : artifact.coordinate = coordinate := by unfold artifact; rfl
 
 end ZkcExamples.Executable.SumcheckProof
