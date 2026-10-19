@@ -416,7 +416,7 @@ theorem calculation_eval (results : LawResults model laws) {Δ : Scope} (binders
   case groupIdentity domain => cases terms; rfl
   all_goals
     exact comps_eval_positions results binders (fun position => Term.calc _ total terms position)
-      (Op.evalTotal model _ total (Terms.eval results terms binders)) fun _ => entryAt_eq_get _ _
+      (Op.evalTotal model _ total (Terms.eval results terms binders)) fun _ => rfl
 
 /-! The plain participant rules, one operation at a time. -/
 
@@ -743,7 +743,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
                   simp only [shape] at law
                   refine (bind_congr_left (bind_congr_left law _) _).trans ?_
                   exact continue_push sig results _ inputs nextRegion next sound state _ restForm rest restMatched
-                    binders inputsEq _ (comps_eval_positions results binders _ _ fun _ => entryAt_eq_get _ _)
+                    binders inputsEq _ (comps_eval_positions results binders _ _ fun _ => rfl)
                 · rename_i reason shape
                   cases normalized
                   obtain ⟨same, _⟩ := matched
@@ -767,7 +767,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
                   apply congrArg
                   funext values
                   exact continue_weaken_push sig results _ inputs nextRegion next sound state _ values _
-                    restForm rest matched binders inputsEq _ (comps_eval_positions results _ _ _ fun _ => entryAt_eq_get _ _)
+                    restForm rest matched binders inputsEq _ (comps_eval_positions results _ _ _ fun _ => rfl)
               · cases normalized
   | exchange ty sender receiver site =>
     rcases args with _ | ⟨arg, _ | _⟩

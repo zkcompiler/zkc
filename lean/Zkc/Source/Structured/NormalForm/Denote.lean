@@ -83,15 +83,15 @@ mutual
   def Term.eval (results : LawResults model laws) {Δ : Scope} {ty : Ty} :
       Term laws Δ ty → Binders model Δ → model.Value ty
     | .var binder, binders => entryAt (V := Slot.Value model) binders binder
-    | .result binder position, binders => entryAt (entryAt (V := Slot.Value model) binders binder) position
+    | .result binder position, binders => (entryAt (V := Slot.Value model) binders binder).get position
     | .index value, _ => value
     | .bool value, _ => value
     | .field domain value, _ => fieldLiteral model.toFieldModel domain value
     | .groupZero _, _ => 0
     | .calc op total args position, binders =>
-        entryAt (op.evalTotal model total (Terms.eval results args binders)) position
+        (op.evalTotal model total (Terms.eval results args binders)).get position
     | .law entry args position, binders =>
-        entryAt (results.result entry (Terms.eval results args binders)) position
+        (results.result entry (Terms.eval results args binders)).get position
 
   def Terms.eval (results : LawResults model laws) {Δ : Scope} {types : List Ty} :
       Terms laws Δ types → Binders model Δ → Values model.Value types
@@ -104,7 +104,7 @@ def Comp.eval (results : LawResults model laws) {Δ : Scope} {ty : Ty} :
   | .absent, _ => none
   | .present term, binders => some (term.eval results binders)
   | .input binder, binders => entryAt (V := Slot.Value model) binders binder
-  | .read binder position, binders => entryAt (entryAt (V := Slot.Value model) binders binder) position
+  | .read binder position, binders => (entryAt (V := Slot.Value model) binders binder).get position
 
 def Comps.eval (results : LawResults model laws) {Δ : Scope} :
     {types : List Ty} → Values (Comp laws Δ) types → Binders model Δ →
