@@ -16,7 +16,10 @@ instructions at that role, following the participant rules, and writes:
   * for a body that applies other protocols, the callee's generated normal
     form at the application's child context with its input and output masks,
     and the role's invocation at any caller context;
-  * named positions of carried repeat slots and of the return order.
+  * named positions of carried repeat slots and of the return order;
+  * a typed body whose repeats, nested ones included, run named callbacks
+    (`[bodies]` with `callbacks`, by repeat site), with each repeat's static
+    maximum named and the admitted declaration's raw equation.
 
 The output is ordinary Lean source. Every definition and equation is
 elaborated and checked by the kernel, so a generator error, a stale request or
@@ -1479,6 +1482,8 @@ class Module:
     def bodies(self, spec):
         """The typed body of one retained protocol, with its repeat callback named and its
         repeat maximum a parameter, so units that differ only in that maximum share it."""
+        if "callbacks" in spec:
+            return self.unit_bodies(spec)
         protocol = self.unit.function(spec["protocol"])
         name = spec["name"]
         callback_name = spec["callback"]
@@ -1535,14 +1540,84 @@ class Module:
                        f"  unfold {name}Body {callback_name}Body {name}Return\n  rfl\n")
         self.parts.append("\n".join(out))
 
-    def chain(self, block, roles, pad, last=None):
+    def unit_bodies(self, spec):
+        """The typed body of one retained protocol of this unit with every repeat callback
+        named, nested ones included, and protocol applications through the callee's declared
+        signature. Each repeat's static maximum is read from the export and named, so a
+        statement over the body need not spell it."""
+        protocol = self.unit.function(spec.get("protocol", self.unit.entry))
+        name = spec["name"]
+        callbacks = spec["callbacks"]
+        roles = protocol.roles
+        repeats = []
+
+        def collect(block):
+            # Post-order: a nested callback precedes the callback that repeats it.
+            for instruction in block[1]:
+                if instruction[0][0] == "protocol_repeat":
+                    collect(instruction[3][0][2])
+                    repeats.append(instruction)
+
+        collect(protocol.body)
+        sites = [instruction[4] for instruction in repeats]
+        if sorted(sites) != sorted(callbacks):
+            raise GeneratorError(f"the body repeats at sites {sites}; the request names callbacks for "
+                                 f"{sorted(callbacks)}")
+        out = [f"abbrev {name}Inputs : List Ty :=\n  {ty_list(protocol.inputs, True)}\n",
+               f"abbrev {name}Outputs : List Ty :=\n  {ty_list(protocol.outputs, True)}\n"]
+        for instruction in repeats:
+            (_, state_count, maximum, repeat_roles, scopes), site = instruction[0], instruction[4]
+            callback = callbacks[site]
+            callback_inputs, state, block = instruction[3][0]
+            captures = callback_inputs[1 + state_count:]
+            role_indices = list_literal([roles.index(role) for role in repeat_roles])
+            scope_indices = scope_literal([[roles.index(role) for role in scope] for scope in scopes])
+            out.append(f"/-- The slots the `{callback}` repeat carries, which precede its captures. -/")
+            out.append(f"abbrev {callback}State : List Ty :=\n  {ty_list(state, True)}\n")
+            out.append(f"/-- The values the `{callback}` callback captures unchanged. -/")
+            out.append(f"abbrev {callback}Captures : List Ty :=\n  {ty_list(captures, True)}\n")
+            out.append(f"/-- The static maximum of the `{callback}` repeat in this unit. -/")
+            out.append(f"abbrev {callback}Maximum : Nat := {int(maximum)}\n")
+            out.append(f"/-- The `{callback}` repeat: its state, captures, roster, state scopes and maximum. -/")
+            out.append(f"abbrev {callback}Spec : RepeatSpec :=\n"
+                       f"  ⟨{callback}State, {callback}Captures, {role_indices},\n"
+                       f"    {scope_indices}, {callback}Maximum⟩\n")
+            out.append(f"/-- One iteration of the `{callback}` repeat: every retained operation, with its "
+                       f"site mark. -/")
+            out.append(f"def {callback}Body : Region protocolDialect\n"
+                       f"    (.index :: ({callback}State ++ {callback}Captures)) {callback}State :=\n"
+                       f"{self.chain(block, roles, '  ', callbacks=callbacks)}\n")
+        out.append("/-- The whole body, every repeat through its named callback. -/")
+        out.append(f"def {name}Body : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
+                   f"    {ty_list(protocol.outputs, True)} :=\n"
+                   f"{self.chain(protocol.body, roles, '  ', callbacks=callbacks)}\n")
+        if "declaration" in spec:
+            views, declaration = spec["views"], spec["declaration"]
+            unfolds = " ".join([f"{name}Body"] + [f"{callbacks[site]}Body" for site in reversed(sites)])
+            out.append(f"/-- The admitted `{declaration}` declaration is this body. -/")
+            out.append(f"theorem {name}Body_raw : {views}.{declaration}Definition.raw =\n"
+                       f"    {name}Body.erase := by\n"
+                       f"  refine {views}.{declaration}_raw.trans ?_\n"
+                       f"  unfold {unfolds}\n  rfl\n")
+        self.parts.append("\n".join(out))
+
+    def chain(self, block, roles, pad, last=None, callbacks=None):
         lines = []
         frame = Frame(self.unit, roles, 0, "root", {}, self.helpers(), {}, {})
         evaluator = Evaluator(frame, Names(), None)
         for descriptor, operand_list, results, _, site in block[1]:
             lines.append(f"{pad}.letOp (.mark {json.dumps(site)}) .nil .nil <|")
-            op = typed_op(evaluator, descriptor, results, site, roles)
-            lines.append(f"{pad}.letOp {op} {paren(operands(operand_list))} .nil <|")
+            regions = ".nil"
+            if callbacks is not None and descriptor[0] == "protocol_repeat":
+                op = f"(.repeat {callbacks[site]}Spec {json.dumps(site)})"
+                regions = f"(.cons {callbacks[site]}Body .nil)"
+            elif callbacks is not None and descriptor[0] == "protocol_apply":
+                callee = self.unit.function(descriptor[1])
+                op = (f"(.protocolApply {self.signature_term(callee)} "
+                      f"{list_literal([roles.index(role) for role in descriptor[2]])} {json.dumps(site)})")
+            else:
+                op = typed_op(evaluator, descriptor, results, site, roles)
+            lines.append(f"{pad}.letOp {op} {paren(operands(operand_list))} {regions} <|")
         if last is not None:
             lines.append(last)
         else:

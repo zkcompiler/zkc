@@ -15,6 +15,9 @@ data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GkrProof.lean"
 
+[normal_forms]
+request = "lean/bridges/structured/normal-forms/gkr-source.toml"
+
 [family]
 module = "ZkcSecurity.FiatShamir.Composition"
 instance = "ZkcSecurity.Examples.CompiledGkrFiatShamir"

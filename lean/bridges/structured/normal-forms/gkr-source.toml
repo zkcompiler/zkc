@@ -1,0 +1,15 @@
+# The root of the original GKR Entry (`gkr::Gkr`): its typed body with the
+# output-point, layer and line-coefficient callbacks named, read from the
+# retained export of the admitted unit.
+fixture = "lean/bridges/structured/fixtures/gkr-source.json"
+output = "lean/ZkcExamples/Structured/GkrSourceNormalForms.lean"
+namespace = "ZkcExamples.Structured.GkrSourceNormalForms"
+summary = "The root of the original GKR Entry and its participants' normal forms"
+imports = ["ZkcExamples.Structured.GkrSourceViews"]
+helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
+
+[bodies]
+name = "gkr"
+callbacks = { s4 = "output", s23 = "layer", s48 = "coefficient" }
+views = "GkrSourceViews"
+declaration = "gkr"
