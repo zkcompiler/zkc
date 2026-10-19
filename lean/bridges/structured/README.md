@@ -295,6 +295,12 @@ retained export, JSON or constructor data from the fixture. Its
 [formal support](../../docs/support.md#okamoto-representation-proof) states what
 is proved over the generated declarations.
 
+[`fixtures/gkr-source.json`](fixtures/gkr-source.json) (with its MLIR) is the
+original GKR Entry's structured export that the construction bridge renders to
+`GkrSourceData`; no maintained check regenerates it. A stale copy cannot make
+a false theorem: the generated `GkrRoundsNormalForms` equations are checked
+against the admitted `GkrSourceViews` unit and fail instead.
+
 A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
 module to write, `namespace` its namespace, `imports` and `open` its imports
 and opened namespaces, `options` extra `set_option` lines, and `carrier` the

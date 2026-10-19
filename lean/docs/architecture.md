@@ -102,8 +102,12 @@ positional input builders, each participant's normal form with its process
 equation (definitional for a root; explicit operation steps citing named helper
 laws for a typed body several units share), carried-state embeddings, reply
 scripts and observed runs, and the relation binding and observed decision of a
-contract clause. Its output is ordinary source that the kernel checks; what it
-cannot derive (helper laws, premises, protocol mathematics) stays authored.
+contract clause. For a body that applies other protocols it substitutes the
+callee's generated normal form at the application's child context, between the
+callee's input and output masks (one generic step over the call substitution
+rule), and states each role's invocation at any caller context. Its output is
+ordinary source that the kernel checks; what it cannot derive (helper laws,
+premises, protocol mathematics) stays authored.
 
 `Source.RegionDerivation` and its tactics derive process correspondence from the
 same typed body using local rules. `Structured.ContractCalls` enumerates lexical

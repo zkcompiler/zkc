@@ -11,7 +11,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
 | [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcSecurity.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
-| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
+| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings, normal forms of roots that apply other protocols (the callee's generated normal form substituted at the application's child context), each role's invocation at any caller context, and named positions of carried repeat slots | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
 | [Structured primitives](#library-primitive-subjects) | Conditional u64 index arithmetic, list length/sum/split/append/equality laws and strict exec sequencing; complete library Shape/Table/Halves wrappers, an arithmetic/vector Sequence caller and a two-role pure-index caller | Library equations state their representation premises; logical lists, without host allocation or native resource correspondence; no observed Shape/Table/Halves site law |
 | [Retained protocol applications](#protocol-application-subjects) | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
@@ -410,7 +410,12 @@ all-present component equations for arbitrary values. The retained relation
 record names it through an explicit checked formula symbol, and the contract
 table retains every protocol's clauses. `ZkcExamples.Structured.SchnorrBinding`
 uses this metadata to select the actual target's ports, roles, decision and
-formula body; no association is inferred from names.
+formula body; no association is inferred from names. The binding, selectors,
+formula process and target are the generated declarations of
+`SchnorrInteractiveNormalForms` (from
+[`schnorr-interactive.toml`](../bridges/structured/normal-forms/schnorr-interactive.toml)),
+which also states both participants' processes and runs; `SchnorrBinding` keeps
+them under the names its consumers use.
 
 ## Sigma compositions
 
@@ -424,17 +429,21 @@ commits one nonce at both bases and sends one response. A
 site, which observes the verifier's actual returned decision for one
 transcript and the prover's actual ordered sends.
 
-For Chaum–Pedersen, these processes, the reply scripts and runs, and the
-binding below are generated (`ChaumPedersenNormalForms`, from
-`bridges/structured/normal-forms/chaum-pedersen.toml`); the authored modules
-keep their statements as consequences of the generated ones.
+For both protocols, these processes, the reply scripts and runs, and the
+binding below are generated (`SchnorrAndNormalForms` and
+`ChaumPedersenNormalForms`, from `bridges/structured/normal-forms/schnorr-and.toml`
+and `chaum-pedersen.toml`). `SchnorrAnd` and `ChaumPedersen` keep the prover-side
+names (sites, inputs, reply scripts and runs) that the Σ-protocol instantiations
+state their theorems with.
 
-`SchnorrAndBinding` and `ChaumPedersenBinding` bind the retained `knowledge`
-targets with `bind_contract`. The `DLogPair` target has two witness selectors on
-different prover ports; the `DLogEquality` target has one. Each module proves
-that its formula process is the conjunction of the two Schnorr equations, that
-the selected decision at the actual verifier boundary is the conjunction of the
-two verification equations, and that two accepting transcripts with common
+The generated modules bind the retained `knowledge` targets with
+`bind_contract`. The `DLogPair` target has two witness selectors on different
+prover ports; the `DLogEquality` target has one. Each proves that its formula
+process is the conjunction of the two Schnorr equations and that the selected
+decision at the actual verifier boundary is the conjunction of the two
+verification equations. `SchnorrAndBinding` and `ChaumPedersenBinding` restate
+the observed boundary and decision over a transcript given as its commitments,
+challenge and responses, and prove that two accepting transcripts with common
 commitments and distinct challenges make the target hold at the first run's
 boundary for a new extracted assignment: two witnesses for AND, one for
 Chaum–Pedersen.
@@ -540,7 +549,18 @@ P dimension, P width, P point, V point and V claim; the verifier embedding
 leaves the first four absent. The shared typed body (`SumcheckVerifierBodies`)
 and the verifier's round and whole-body normal forms with their process
 equations (`SumcheckRoundNormalForms`) are generated from the retained
-Reduction unit by `bridges/structured/normal_forms.py`.
+Reduction unit by `bridges/structured/normal_forms.py`, which also names each
+role's carried slots (`verifierPointSlot`, `proverEntriesPosition`, ...) and the
+return order (`reduceReturnIndices`). The roots' own normal forms are generated
+too (`SumcheckSourceNormalForms`, `SumcheckReductionNormalForms` and
+`SumcheckRepackedNormalForms`): at each role, the generated `Reduce` normal form
+is substituted at the application's child context (`reduceContext`), between
+the callee's input and output masks, and each role's invocation at any caller
+context and participant follow. The verifier equations of
+`SumcheckSourceVerifier`, `SumcheckReduceVerifier` and `SumcheckRepackedVerifier`
+are derived from these and the admitted repeat
+(`SumcheckVerifierPrelude.verifierReduce_rounds`); statements about each unit's
+maximum use the maximum read from its export (`reduceMaximum`).
 
 `Zkc.Source.DenotationLaws` provides operation-step proof rules for the
 Region interpreter. Its general bind rule retains an arbitrary operation process;
@@ -622,7 +642,19 @@ and dimension guards, the empty point and the six-slot return.
 `SumcheckProverRoots` gives the root equations of both complete units at the
 prover (`source_prover`, `reduction_prover`), including the checked table
 constructor, the masked verifier inputs and, for Reduction, the residual
-projection. Only present prover inputs are covered.
+projection, from the generated root normal forms at the prover and
+`SumcheckProverPrelude.proverReduce_honest`. Only present prover inputs are
+covered.
+
+The layer Sumcheck of the original GKR Entry (`gkr::Rounds`) has generated
+verifier normal forms over the admitted unit (`GkrRoundsNormalForms`, from
+[`gkr-rounds.toml`](../bridges/structured/normal-forms/gkr-rounds.toml) and the
+retained export [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json)):
+its typed body with the admitted declaration's raw equation, one round and the
+whole body at the verifier, and the verifier's invocation at any caller
+context. Helper calls stay as their participant rule. The GKR verifier root,
+whose layer loop applies the rounds twice and nests a further loop, is not
+generated; the compiled GKR theorems read the constructed instructions.
 
 `SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
 interaction phase records the challenges the prover receives at the delivery

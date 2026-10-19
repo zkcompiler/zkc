@@ -181,6 +181,18 @@
       "structural": "e98dac14395bb3d1",
       "explicit": "71819b6f6657fbc1"
     },
+    "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.GkrRoundsNormalForms",
+      "structural": "4f783f52e73012e0",
+      "explicit": "f1d64ddbd2ec670d"
+    },
+    "ZkcExamples.Structured.NormalFormSteps.apply_step": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.NormalFormSteps",
+      "structural": "39826b7bbf45dab0",
+      "explicit": "9ab9ed37cfdd2d92"
+    },
     "ZkcExamples.Structured.Okamoto.extract_representation": {
       "package": "main",
       "module": "ZkcExamples.Structured.Okamoto",
@@ -211,6 +223,12 @@
       "structural": "b57280928f4ffe21",
       "explicit": "0a9db410a499cb11"
     },
+    "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.SchnorrAndNormalForms",
+      "structural": "bd42fc07859bb2a0",
+      "explicit": "92137c2b4c8f12db"
+    },
     "ZkcExamples.Structured.SchnorrBinding.target_special_soundness": {
       "package": "main",
       "module": "ZkcExamples.Structured.SchnorrBinding",
@@ -234,6 +252,12 @@
       "module": "ZkcExamples.Structured.SumcheckProverLaws",
       "structural": "57bdc603d93f4f25",
       "explicit": "e530554f76a870ca"
+    },
+    "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.SumcheckSourceNormalForms",
+      "structural": "408770c0c37b1372",
+      "explicit": "e1d2aa716f4b3786"
     },
     "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness": {
       "package": "arklib",
