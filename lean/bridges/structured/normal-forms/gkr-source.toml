@@ -12,7 +12,8 @@ helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
 
 [bodies]
 name = "gkr"
-callbacks = { s4 = "output", s23 = "layer", s48 = "coefficient" }
+# Each callback is named by a source label one of its own actions carries.
+callbacks = { output = "output", layer = "left", coefficient = "line_coefficient" }
 views = "GkrSourceViews"
 declaration = "gkr"
 
@@ -24,7 +25,7 @@ program = "GkrSourceViews.program"
 
 # One output-point challenge: drawn by the verifier and delivered to the prover.
 [[shared]]
-repeat = "s4"
+repeat = "output"
 body = "outputBody"
 function = "outputFn"
 
@@ -46,7 +47,7 @@ strict = ["*"]
 
 # One further coefficient of a layer's line polynomial.
 [[shared]]
-repeat = "s48"
+repeat = "coefficient"
 body = "coefficientBody"
 function = "coefficientFn"
 
@@ -69,7 +70,7 @@ strict = ["*"]
 # One layer: the two layer Sumcheck applications, the line polynomial, the wiring
 # check and the line challenge.
 [[shared]]
-repeat = "s23"
+repeat = "layer"
 body = "layerBody"
 function = "layerFn"
 

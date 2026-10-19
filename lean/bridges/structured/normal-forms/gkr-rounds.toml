@@ -27,7 +27,7 @@ value = 4
 
 [[shared]]
 protocol = "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba"
-repeat = "s6"
+repeat = "round"
 body = "roundBody"
 function = "roundFn"
 repeat_spec = "repeatSpec 4"

@@ -18,8 +18,9 @@ instructions at that role, following the participant rules, and writes:
     and the role's invocation at any caller context;
   * named positions of carried repeat slots and of the return order;
   * a typed body whose repeats, nested ones included, run named callbacks
-    (`[bodies]` with `callbacks`, by repeat site), with each repeat's static
-    maximum named and the admitted declaration's raw equation.
+    (`[bodies]` with `callbacks`: each callback's name and a source label one
+    of its own actions carries), with each repeat's static maximum named and
+    the admitted declaration's raw equation.
 
 The output is ordinary Lean source. Every definition and equation is
 elaborated and checked by the kernel, so a generator error, a stale request or
@@ -29,7 +30,7 @@ whose checked body it is) are proved by explicit operation steps that use the
 helper laws named in the request.
 
 Within a body, a repeat whose callback the request states over (a `[[shared]]`
-entry with that repeat site) may stand anywhere: its returned state is bound
+entry whose `repeat` names it) may stand anywhere: its returned state is bound
 like an owned call's tuple. Applications may stand inside a repeat callback. A
 strict use of a component read from a bound tuple splits on its presence as on
 an optional input. A role's `strict` list (or `*` for every owned call without
@@ -190,6 +191,32 @@ def find_repeat(block, site):
             if found:
                 return found
     return None
+
+
+def repeat_with_label(block, label):
+    """The repeat whose own callback directly performs an action or application with this
+    source label, so a request can name a loop by what it does rather than by the
+    compiler's positional site."""
+    for instruction in block[1]:
+        if instruction[0][0] != "protocol_repeat":
+            continue
+        callback = instruction[3][0][2]
+        for inner in callback[1]:
+            decoded = decode_label(inner[4]) if inner[4] else None
+            if decoded and decoded[0] == label:
+                return instruction
+        found = repeat_with_label(callback, label)
+        if found:
+            return found
+    return None
+
+
+def locate_repeat(block, key):
+    """A repeat named by its site or by a source label its callback carries."""
+    instruction = find_repeat(block, key) or repeat_with_label(block, key)
+    if instruction is None:
+        raise GeneratorError(f"no repeat has site {key!r} or a callback action labelled {key!r}")
+    return instruction
 
 
 def action_sites(block, sites=None):
@@ -729,7 +756,7 @@ class Evaluator:
             spec, callback = self.frame.repeat_spec, self.frame.callback
         else:
             raise GeneratorError(f"the repeat at site {site!r} needs its callback: name it in the request's "
-                                 f"[bodies] callbacks and give it a [[shared]] entry with that repeat site")
+                                 f"[bodies] callbacks and give it a [[shared]] entry whose repeat names it")
         count, state, captures = args[0], args[1:1 + state_count], args[1 + state_count:]
         me = self.role_term(self.frame.role)
         typed_state = (f"({values_literal([value.component() for value in state])} : "
@@ -1553,13 +1580,33 @@ class Module:
         self.parts.append("\n".join(out))
         self.root_spec = (entry, sites, names, role_names, program)
 
+    def callback_sites(self):
+        """Repeat site -> callback name for the callbacks `[bodies]` names; each is given by
+        a source label its callback carries, or by the repeat's site."""
+        bodies = self.request.get("bodies", {})
+        if "callbacks" not in bodies:
+            return {}
+        protocol = self.unit.function(bodies.get("protocol", self.unit.entry))
+        return {locate_repeat(protocol.body, key)[4]: name for name, key in bodies["callbacks"].items()}
+
+    def repeat_site(self, spec):
+        """The site of the repeat a `[[shared]]` entry states over: a callback `[bodies]`
+        names, a source label its callback carries, or the repeat's site."""
+        key = spec["repeat"]
+        callbacks = self.request.get("bodies", {}).get("callbacks", {})
+        key = callbacks.get(key, key)
+        protocol = self.unit.function(spec.get("protocol", self.unit.entry))
+        return locate_repeat(protocol.body, key)[4]
+
     def repeat_terms(self):
         """Repeat site -> (spec, callback function) for the callbacks this request names in
-        `[bodies]` and states over in a `[[shared]]` entry with that repeat site."""
-        callbacks = self.request.get("bodies", {}).get("callbacks", {})
+        `[bodies]` and states over in a `[[shared]]` entry with that repeat."""
+        callbacks = self.callback_sites()
         terms = {}
         for spec in self.request.get("shared", []):
-            site = spec.get("repeat")
+            if not spec.get("repeat"):
+                continue
+            site = self.repeat_site(spec)
             if site in callbacks:
                 terms[site] = (f"{callbacks[site]}Spec", spec["function"])
         return terms
@@ -1568,12 +1615,10 @@ class Module:
         """Repeat site -> {slot position: name} for the slots this request names at `role`."""
         names = {}
         for spec in self.request.get("shared", []):
-            site = spec.get("repeat")
-            if not site:
+            if not spec.get("repeat"):
                 continue
+            site = self.repeat_site(spec)
             instruction = find_repeat(self.unit.function(spec.get("protocol", self.unit.entry)).body, site)
-            if instruction is None:
-                continue
             protocol_roles = self.unit.function(spec.get("protocol", self.unit.entry)).roles
             scopes = [[protocol_roles.index(owner) for owner in scope] for scope in instruction[0][4]]
             owned = [index for index, scope in enumerate(scopes) if role in scope]
@@ -1728,7 +1773,7 @@ class Module:
         statement over the body need not spell it."""
         protocol = self.unit.function(spec.get("protocol", self.unit.entry))
         name = spec["name"]
-        callbacks = spec["callbacks"]
+        callbacks = self.callback_sites()
         roles = protocol.roles
         repeats = []
 
@@ -2118,9 +2163,7 @@ class Module:
         unit = self.unit
         protocol = unit.function(spec.get("protocol", unit.entry))
         if spec.get("repeat"):
-            instruction = find_repeat(protocol.body, spec["repeat"])
-            if instruction is None:
-                raise GeneratorError(f"no repeat with site {spec['repeat']!r} in {protocol.name}")
+            instruction = find_repeat(protocol.body, self.repeat_site(spec))
             inputs, outputs, block = instruction[3][0]
             state_scopes = [[protocol.roles.index(role) for role in scope] for scope in instruction[0][4]]
             state_count = instruction[0][1]
@@ -2332,7 +2375,7 @@ class Module:
              result_type):
         """The repeat of a callback at one role of its roster, on an admitted count: the fold
         of the role's normal form over the iteration indices, by the generic embedding law."""
-        site = spec["repeat"]
+        site = self.repeat_site(spec)
         repeat = self.repeat_terms().get(site, (spec.get("repeat_spec"), None))[0]
         if not repeat:
             raise GeneratorError(f"{name}: a fold needs the repeat's spec; name the callback in [bodies] "
