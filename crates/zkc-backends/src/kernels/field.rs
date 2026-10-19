@@ -122,6 +122,7 @@ impl Coefficient for Binary64Ext3 {
     }
 }
 pub(crate) trait Family: crate::matrix::IdentityCoefficient {
+    type Packing: super::vector::Packing<Self>;
     /// Packed dot products also reduce their accumulator lanes, even at length zero.
     const DOT_SETUP_WORK: u64 = 1;
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
@@ -131,9 +132,7 @@ pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
         equal_len(a.len(), b.len())?;
         equal_len(a.len(), out.len())?;
-        for ((a, b), destination) in a.iter().zip(b).zip(out) {
-            *destination = *a * *b;
-        }
+        super::vector::mul::<Self>(a, b, out);
         Ok(())
     }
     fn field(v: &Value) -> Result<Self>;
@@ -147,8 +146,9 @@ pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn decimal(s: &str) -> Result<Self>;
 }
 macro_rules! family {
-    ($s:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
+    ($s:ty, $packing:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
         impl Family for $s {
+            type Packing = $packing;
             $($extra)*
             fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> {
                 if let Value::$matrix(v) = v {Ok(v)} else {Err(refused("kernel-operands"))}
@@ -198,6 +198,7 @@ macro_rules! family {
 }
 family!(
     crate::Bn254Scalar,
+    super::vector::Scalar,
     Bn254Field,
     Bn254Vector,
     Bn254Matrix,
@@ -205,11 +206,19 @@ family!(
     Bn254Round,
     |s| crate::parse_bn254_decimal(s).map_err(crate::ark)
 );
-family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
-    zkc_arkworks::parse_decimal(s).map_err(crate::ark)
-});
+family!(
+    Scalar,
+    super::vector::Scalar,
+    Field,
+    Vector,
+    Matrix,
+    Polynomial,
+    Round,
+    |s| { zkc_arkworks::parse_decimal(s).map_err(crate::ark) }
+);
 family!(
     RistrettoScalar,
+    super::vector::Scalar,
     RistrettoField,
     RistrettoVector,
     RistrettoMatrix,
@@ -220,6 +229,7 @@ family!(
 
 family!(
     KoalaBear,
+    super::vector::Extension<KoalaBear>,
     KoalaBearField,
     KoalaBearVector,
     KoalaBearMatrix,
@@ -229,14 +239,12 @@ family!(
     const DOT_SETUP_WORK: u64 = 1 + crate::plonky3::PACKING_WIDTH as u64;,
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         crate::plonky3::dot(a, b)
-    },
-    fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
-        crate::plonky3::mul_into(a, b, out)
     }
 );
 
 family!(
     KoalaBearExt8,
+    super::vector::Extension<KoalaBear>,
     KoalaBearExt8Field,
     KoalaBearExt8Vector,
     KoalaBearExt8Matrix,
@@ -247,6 +255,7 @@ family!(
 
 family!(
     KoalaBearExt4,
+    super::vector::Extension<KoalaBear>,
     KoalaBearExt4Field,
     KoalaBearExt4Vector,
     KoalaBearExt4Matrix,
@@ -257,6 +266,7 @@ family!(
 
 family!(
     Binary64,
+    super::vector::Extension<Binary64>,
     Binary64Field,
     Binary64Vector,
     Binary64Matrix,
@@ -267,6 +277,7 @@ family!(
 
 family!(
     Binary64Ext3,
+    super::vector::Extension<Binary64>,
     Binary64Ext3Field,
     Binary64Ext3Vector,
     Binary64Ext3Matrix,

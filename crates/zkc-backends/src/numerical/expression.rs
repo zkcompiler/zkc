@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 
 use super::{Call, memory::payload_bytes};
-use crate::kernels::field::Family;
+use crate::kernels::{field::Family, vector};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::mem::size_of;
 use zkc_runtime::ring::{Expression, Node};
@@ -32,6 +32,11 @@ const ROWS: u64 = 1_048_576;
 /// schedules. Temporary classification flags are also conservatively included.
 /// Parsing scratch is separately bounded by the 4096-byte carrier. This is not RSS.
 const PREPARED_BYTES: usize = 1024 * 1024;
+
+/// Bound the entire node workspace, rather than allocating whole intermediate
+/// columns. This target is independent of protocols, fields and expression shape.
+const WORKSPACE_BYTES: usize = 16 * 1024;
+const CHUNK_ROWS: usize = 256;
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -280,7 +285,12 @@ impl<S: Family> Plan<S> {
         })
     }
 
-    fn apply(&self, args: &[Value], i: &Invocation<'_>, policy: &Policy) -> Result<Vec<Value>> {
+    fn apply(
+        &self,
+        args: &[Value],
+        max_output_bytes: usize,
+        policy: &Policy,
+    ) -> Result<Vec<Value>> {
         let [Value::Index(rows), operands @ ..] = args else {
             return Err(refused("numerical-operands"));
         };
@@ -305,18 +315,30 @@ impl<S: Family> Plan<S> {
         } else {
             512
         };
-        policy.output(retained, i.max_output_bytes)?;
-        let call = Call::new(policy, i.max_output_bytes);
+        policy.output(retained, max_output_bytes)?;
+        let call = Call::new(policy, max_output_bytes);
         call.work_items(rows, self.per_row, self.setup)?;
-        let scratch_bytes = payload_bytes::<S>(self.expression.nodes().len())?
-            .checked_add(payload_bytes::<Operand<'_, S>>(operands.len())?)
+        let row_bytes = payload_bytes::<S>(self.expression.nodes().len())?;
+        let input_bytes = payload_bytes::<Operand<'_, S>>(operands.len())?;
+        let scratch_bytes = row_bytes
+            .checked_add(input_bytes)
             .ok_or_else(|| exhausted("numerical-bytes"))?;
         let staging = if map { payload_bytes::<S>(rows)? } else { 0 };
-        scratch_bytes
+        let minimum = scratch_bytes
             .checked_add(staging)
             .and_then(|n| n.checked_add(retained))
             .filter(|n| *n <= policy.max_numerical_bytes)
             .ok_or_else(|| exhausted("numerical-bytes"))?;
+        // Preserve the scalar working-space admission boundary. Extra workspace
+        // changes the chunk size, not the minimum policy allowance. Allocation
+        // failure remains distinct from policy admission.
+        let stride = if self.varying_nodes.is_empty() {
+            1
+        } else {
+            rows.clamp(1, CHUNK_ROWS)
+                .min((WORKSPACE_BYTES / row_bytes).max(1))
+                .min(1 + (policy.max_numerical_bytes - minimum) / row_bytes)
+        };
         // All requested managed storage and work have passed preflight. Extract
         // exact scalar/column operands once; each lane uses only native elements.
         let mut inputs = call.scratch(operands.len(), Operand::Scalar(S::zero()))?;
@@ -332,11 +354,18 @@ impl<S: Family> Plan<S> {
                 Operand::Column(S::vector(operand)?.as_ref())
             };
         }
-        let mut scratch = call.scratch(self.expression.nodes().len(), S::zero())?;
+        let mut scratch = call.scratch(self.expression.nodes().len() * stride, S::zero())?;
         let value = if map {
             let mut output = call.output(rows, S::zero(), retained)?;
-            for (row, destination) in output.as_mut_slice().iter_mut().enumerate() {
-                *destination = self.row(row, inputs.as_ref(), scratch.as_mut())?;
+            for (chunk, destination) in output.as_mut_slice().chunks_mut(stride).enumerate() {
+                let values = self.chunk(
+                    chunk * stride,
+                    destination.len(),
+                    stride,
+                    inputs.as_ref(),
+                    scratch.as_mut(),
+                )?;
+                destination.copy_from_slice(values);
             }
             output.finish(|values| Ok(S::vector_value(values.into())))?
         } else {
@@ -346,12 +375,20 @@ impl<S: Family> Plan<S> {
             } else {
                 S::one()
             };
-            for row in 0..rows {
-                let term = self.row(row, inputs.as_ref(), scratch.as_mut())?;
+            for row in (0..rows).step_by(stride) {
+                let values = self.chunk(
+                    row,
+                    stride.min(rows - row),
+                    stride,
+                    inputs.as_ref(),
+                    scratch.as_mut(),
+                )?;
                 accumulator = if matches!(self.mode, Mode::Sum) {
-                    accumulator + term
+                    values.iter().fold(accumulator, |sum, value| sum + *value)
                 } else {
-                    accumulator * term
+                    values
+                        .iter()
+                        .fold(accumulator, |product, value| product * *value)
                 };
             }
             output.finish(|| Ok(S::field_value(accumulator)))?
@@ -359,38 +396,53 @@ impl<S: Family> Plan<S> {
         Ok(vec![value])
     }
 
-    fn row(&self, row: usize, inputs: &[Operand<'_, S>], scratch: &mut [S]) -> Result<S> {
+    fn chunk<'a>(
+        &self,
+        row: usize,
+        len: usize,
+        stride: usize,
+        inputs: &[Operand<'_, S>],
+        scratch: &'a mut [S],
+    ) -> Result<&'a [S]> {
         // Initialize from this invocation's captures only when a row is reached,
         // after all preflight checks and destination reservations. An empty
         // domain never evaluates invariant arithmetic; no captures enter Plan.
         if row == 0 {
-            self.evaluate_nodes(&self.invariant_nodes, row, inputs, scratch)?;
+            for &index in &self.invariant_nodes {
+                let value = match self.expression.nodes()[index] {
+                    Node::Constant(..) => self.constants[index],
+                    Node::Input(input) => match inputs[input] {
+                        Operand::Scalar(value) => value,
+                        Operand::Column(_) => return Err(refused("numerical-expression")),
+                    },
+                    Node::Add(a, b) => scratch[a * stride] + scratch[b * stride],
+                    Node::Mul(a, b) => scratch[a * stride] * scratch[b * stride],
+                    Node::Neg(a) => -scratch[a * stride],
+                    Node::Embed(..) => return Err(refused("numerical-expression")),
+                };
+                scratch[index * stride..(index + 1) * stride].fill(value);
+            }
         }
-        self.evaluate_nodes(&self.varying_nodes, row, inputs, scratch)?;
-        Ok(scratch[self.expression.outputs()[0]])
-    }
-
-    fn evaluate_nodes(
-        &self,
-        nodes: &[usize],
-        row: usize,
-        inputs: &[Operand<'_, S>],
-        scratch: &mut [S],
-    ) -> Result<()> {
-        for &index in nodes {
-            scratch[index] = match self.expression.nodes()[index] {
-                Node::Constant(..) => self.constants[index],
+        for &index in &self.varying_nodes {
+            // Ring admission proves dependencies precede this node, so the
+            // initialized destination cannot alias either immutable input slice.
+            let (prefix, destination) = scratch.split_at_mut(index * stride);
+            let destination = &mut destination[..len];
+            let source = |node| &prefix[node * stride..node * stride + len];
+            match self.expression.nodes()[index] {
                 Node::Input(input) => match inputs[input] {
-                    Operand::Scalar(value) => value,
-                    Operand::Column(values) => values[row],
+                    Operand::Scalar(value) => destination.fill(value),
+                    Operand::Column(values) => destination.copy_from_slice(&values[row..row + len]),
                 },
-                Node::Add(a, b) => scratch[a] + scratch[b],
-                Node::Mul(a, b) => scratch[a] * scratch[b],
-                Node::Neg(a) => -scratch[a],
+                Node::Add(a, b) => vector::add::<S>(source(a), source(b), destination),
+                Node::Mul(a, b) => vector::mul::<S>(source(a), source(b), destination),
+                Node::Neg(a) => vector::neg::<S>(source(a), destination),
+                Node::Constant(..) => destination.fill(self.constants[index]),
                 Node::Embed(..) => return Err(refused("numerical-expression")),
-            };
+            }
         }
-        Ok(())
+        let root = self.expression.outputs()[0] * stride;
+        Ok(&scratch[root..root + len])
     }
 }
 
@@ -422,14 +474,14 @@ impl Prepared {
         policy: &Policy,
     ) -> Result<Vec<Value>> {
         match self {
-            Self::Bn254(plan) => plan.apply(args, i, policy),
-            Self::Bls12381(plan) => plan.apply(args, i, policy),
-            Self::Ristretto(plan) => plan.apply(args, i, policy),
-            Self::KoalaBear(plan) => plan.apply(args, i, policy),
-            Self::KoalaBearExt4(plan) => plan.apply(args, i, policy),
-            Self::KoalaBearExt8(plan) => plan.apply(args, i, policy),
-            Self::Binary64(plan) => plan.apply(args, i, policy),
-            Self::Binary64Ext3(plan) => plan.apply(args, i, policy),
+            Self::Bn254(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Bls12381(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Ristretto(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::KoalaBear(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::KoalaBearExt4(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::KoalaBearExt8(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Binary64(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Binary64Ext3(plan) => plan.apply(args, i.max_output_bytes, policy),
         }
     }
 }
@@ -437,6 +489,76 @@ impl Prepared {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn varying_memory_floor<S: Family>(field: Identity) {
+        let binding = OperationBinding {
+            contract: "numerical.map".into(),
+            arguments: vec![field.name().into(), "10".into()],
+            implementation: "test/numerical.map".into(),
+        };
+        let body = json!([
+            "zkc.ring/0",
+            [field.name(), field.name()],
+            [["input", 0], ["input", 1], ["mul", 1, 1], ["add", 0, 2]],
+            [3]
+        ])
+        .to_string();
+        for mode in [Mode::Map, Mode::Sum, Mode::Product] {
+            let plan = Plan::<S>::new(
+                Expression::parse(&body).unwrap(),
+                b"10",
+                mode,
+                body.len(),
+                &binding,
+            )
+            .unwrap();
+            for rows in [0, 1, 513] {
+                let map = matches!(mode, Mode::Map);
+                let retained = if map {
+                    size(rows, size_of::<S>()).unwrap()
+                } else {
+                    512
+                };
+                // Independent scalar-floor formula, including typed views and
+                // staging/final overlap. Do not discover this value by probing.
+                let minimum = 4 * size_of::<S>()
+                    + 2 * size_of::<Operand<'_, S>>()
+                    + if map { rows * size_of::<S>() } else { 0 }
+                    + retained;
+                let args = [
+                    Value::Index(rows as u64),
+                    S::vector_value(vec![S::one(); rows].into()),
+                    S::field_value(S::one()),
+                ];
+                let policy = Policy {
+                    max_numerical_bytes: minimum,
+                    ..Policy::default()
+                };
+                assert!(plan.apply(&args, retained, &policy).is_ok());
+                let below = Policy {
+                    max_numerical_bytes: minimum - 1,
+                    ..policy
+                };
+                assert_eq!(
+                    plan.apply(&args, retained, &below).err(),
+                    Some(exhausted("numerical-bytes"))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn varying_calls_keep_the_scalar_memory_floor_in_every_field() {
+        varying_memory_floor::<crate::Bn254Scalar>(Identity::Bn254Fr);
+        varying_memory_floor::<crate::Scalar>(Identity::Bls12381Fr);
+        varying_memory_floor::<crate::RistrettoScalar>(Identity::Ristretto255Scalar);
+        varying_memory_floor::<crate::KoalaBear>(Identity::KoalaBear);
+        varying_memory_floor::<crate::KoalaBearExt4>(Identity::KoalaBearExt4);
+        varying_memory_floor::<crate::KoalaBearExt8>(Identity::KoalaBearExt8);
+        varying_memory_floor::<crate::Binary64>(Identity::Binary64);
+        varying_memory_floor::<crate::Binary64Ext3>(Identity::Binary64Ext3);
+    }
 
     #[test]
     fn work_arithmetic_checks_overflow_before_use() {

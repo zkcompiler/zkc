@@ -106,10 +106,11 @@ Local functions are the executable output. Source symbol context and output
 binding allocation remain separate.
 Numerical realization chooses native contractions, compact pointwise expressions,
 bulk vector operations or a private standard SCF schedule before Local lowering.
-The native expression handlers borrow typed columns and scalar captures and
-construct private results through the existing numerical scope. They introduce
-no VM instruction or independent executable format. Writable-buffer layouts and
-target-specific vectorization remain future work.
+The native expression handlers borrow typed columns and scalar captures,
+evaluate bounded row chunks, and construct private results through the existing
+numerical scope. They share provider-packed slice arithmetic with dense vector
+kernels, without a new VM instruction or executable format. Compiler-generated
+writable-buffer layouts and target vector IR remain future work.
 Participant scheduling, transport and resource authority stay with their existing owners.
 Installed numerical and effectful operations share the binding mechanism;
 installation alone does not authorize extraction into a numerical unit.

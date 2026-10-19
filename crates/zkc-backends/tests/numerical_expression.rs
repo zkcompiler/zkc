@@ -92,7 +92,9 @@ fn exercise<F>(
     // Independent scalar formula: (x*x + k) * -(aliased_x + k).
     let expression = shared_capture_body(domain.field);
     let invariant = -(samples[3] * samples[3] + identity);
-    for rows in [0usize, 1, 3, 17, 33] {
+    for rows in [
+        0usize, 1, 3, 17, 31, 32, 33, 127, 128, 129, 255, 256, 257, 1025,
+    ] {
         let values: Vec<_> = (0..rows).map(|i| samples[i % samples.len()]).collect();
         let input = vector(values.clone());
         let terms: Vec<_> = values
@@ -143,6 +145,38 @@ fn exercise<F>(
             &vector(values.iter().map(|x| *x + *x).collect()),
         );
         assert_value(&input, &vector(values));
+    }
+
+    // Dense kernels and expression nodes share destination arithmetic. Check
+    // their public boundaries with full extension coordinates and scalar tails.
+    for rows in [0, 1, 7, 8, 15, 16, 17, 257] {
+        let a: Vec<_> = (0..rows).map(|i| samples[i % 4]).collect();
+        let b: Vec<_> = (0..rows).map(|i| samples[(i + 1) % 4]).collect();
+        for operation in ["sub", "mul", "scale"] {
+            let expected: Vec<_> = a
+                .iter()
+                .zip(&b)
+                .map(|(a, b)| match operation {
+                    "sub" => *a + -*b,
+                    "mul" => *a * *b,
+                    _ => *a * samples[2],
+                })
+                .collect();
+            let args = if operation == "scale" {
+                vec![vector(a.clone()), field(samples[2])]
+            } else {
+                vec![vector(a.clone()), vector(b.clone())]
+            };
+            let binding = OperationBinding {
+                contract: format!("vector.{operation}"),
+                arguments: vec![domain.field.name().into()],
+                implementation: format!("{}/vector.{operation}", domain.provider),
+            };
+            let result = one(backend(Policy::default()), binding, &[], args)
+                .0
+                .unwrap();
+            assert_value(&result[0], &vector(expected));
+        }
     }
 
     // Empty mask, capture-only body, and two leading scalar bits are distinct
@@ -1087,6 +1121,101 @@ fn even_unused_scalar_slots_reserve_typed_operand_storage() {
     );
     assert_eq!(result.unwrap_err(), "exhausted:numerical-bytes");
     assert!(driver.outputs.is_empty());
+}
+
+#[test]
+fn varying_calls_agree_at_minimum_intermediate_and_full_workspace() {
+    let rows = 513;
+    let input: Vec<_> = (0..rows).map(|i| Scalar::from(i as u64 + 1)).collect();
+    for deep in [false, true] {
+        let mut nodes = vec![
+            json!(["input", 0]),
+            json!(["input", 1]),
+            json!(["mul", 1, 1]),
+            json!(["add", 0, 2]),
+        ];
+        if deep {
+            // A long dependency chain shrinks the chunk size without selecting
+            // a different operation or field-specific evaluator.
+            for _ in 0..120 {
+                nodes.push(json!(["neg", nodes.len() - 1]));
+            }
+        }
+        let expression = body(Identity::Bls12381Fr, 2, json!(nodes), nodes.len() - 1);
+        for mode in ["map", "sum", "product"] {
+            let args = |capture| {
+                vec![
+                    Value::Index(rows as u64),
+                    Value::Vector(input.clone().into()),
+                    Value::Field(Scalar::from(capture)),
+                ]
+            };
+            let run = |budget| {
+                one(
+                    Caller::new(
+                        Policy {
+                            max_numerical_bytes: budget,
+                            ..Policy::default()
+                        },
+                        true,
+                    ),
+                    binding(domains::BLS, mode, "10"),
+                    &[&expression],
+                    args(7),
+                )
+                .0
+            };
+            // Locate the public admission boundary without depending on the
+            // private Operand enum's ABI. Every lower budget must refuse memory.
+            let (mut low, mut high) = (0, Policy::default().max_numerical_bytes);
+            assert!(run(high).is_ok());
+            while low + 1 < high {
+                let middle = low + (high - low) / 2;
+                match run(middle) {
+                    Ok(_) => high = middle,
+                    Err(error) => {
+                        assert_eq!(error, "exhausted:numerical-bytes");
+                        low = middle;
+                    }
+                }
+            }
+            assert_eq!(run(high - 1).unwrap_err(), "exhausted:numerical-bytes");
+            let row_bytes = nodes.len() * size_of::<Scalar>();
+            for budget in [
+                high,
+                high + row_bytes * 6,
+                Policy::default().max_numerical_bytes,
+            ] {
+                let mut caller = Caller::new(
+                    Policy {
+                        max_numerical_bytes: budget,
+                        ..Policy::default()
+                    },
+                    true,
+                );
+                for capture in [7u64, 19, 0] {
+                    let terms: Vec<_> = input
+                        .iter()
+                        .map(|x| *x + Scalar::from(capture * capture))
+                        .collect();
+                    let expected = match mode {
+                        "map" => Value::Vector(terms.into()),
+                        "sum" => Value::Field(terms.iter().copied().sum()),
+                        _ => Value::Field(terms.iter().copied().product()),
+                    };
+                    let (result, next) = one(
+                        caller,
+                        binding(domains::BLS, mode, "10"),
+                        &[&expression],
+                        args(capture),
+                    );
+                    assert_value(&result.unwrap()[0], &expected);
+                    assert_eq!(next.inner.active_frames(), 0);
+                    caller = next;
+                }
+            }
+        }
+    }
 }
 
 #[test]
