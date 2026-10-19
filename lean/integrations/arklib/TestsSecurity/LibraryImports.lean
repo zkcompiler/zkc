@@ -76,6 +76,14 @@ import ZkcSecurity.Examples.StructuredSchnorr
 import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
 import ZkcSecurity.Examples.StructuredSchnorrHonestView
 import ZkcSecurity.Examples.StructuredSchnorrSigma
+import ZkcSecurity.Examples.Subjects.Guess.Artifacts
+import ZkcSecurity.Examples.Subjects.Guess.Claims
+import ZkcSecurity.Examples.Subjects.Guess.Contract
+import ZkcSecurity.Examples.Subjects.Guess.Evidence
+import ZkcSecurity.Examples.Subjects.Schnorr.Artifacts
+import ZkcSecurity.Examples.Subjects.Schnorr.Claims
+import ZkcSecurity.Examples.Subjects.Schnorr.Contract
+import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
