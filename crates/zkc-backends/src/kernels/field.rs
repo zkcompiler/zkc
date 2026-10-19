@@ -229,7 +229,7 @@ family!(
 
 family!(
     KoalaBear,
-    super::vector::Extension<KoalaBear>,
+    super::vector::Plonky3,
     KoalaBearField,
     KoalaBearVector,
     KoalaBearMatrix,
@@ -244,7 +244,7 @@ family!(
 
 family!(
     KoalaBearExt8,
-    super::vector::Extension<KoalaBear>,
+    super::vector::Plonky3,
     KoalaBearExt8Field,
     KoalaBearExt8Vector,
     KoalaBearExt8Matrix,
@@ -255,7 +255,7 @@ family!(
 
 family!(
     KoalaBearExt4,
-    super::vector::Extension<KoalaBear>,
+    super::vector::Plonky3,
     KoalaBearExt4Field,
     KoalaBearExt4Vector,
     KoalaBearExt4Matrix,
@@ -266,7 +266,7 @@ family!(
 
 family!(
     Binary64,
-    super::vector::Extension<Binary64>,
+    super::vector::Plonky3,
     Binary64Field,
     Binary64Vector,
     Binary64Matrix,
@@ -277,7 +277,7 @@ family!(
 
 family!(
     Binary64Ext3,
-    super::vector::Extension<Binary64>,
+    super::vector::Plonky3,
     Binary64Ext3Field,
     Binary64Ext3Vector,
     Binary64Ext3Matrix,

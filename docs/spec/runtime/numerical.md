@@ -162,9 +162,9 @@ Only the remaining rows are evaluated in the final chunk. Sum and product consum
 roots in row order, and results are published only after the complete call.
 
 Expression nodes and ordinary dense vector operations share destination-slice
-arithmetic. Providers may pack independent rows using their own field APIs;
-extensions use extension packing with all coordinates preserved. Scalar tails
-and providers without packing use the same field operations. Packing introduces
+arithmetic. Each field uses its provider-declared packing for native element
+slices, preserving every extension coordinate. Scalar tails and fields whose
+provider declares scalar packing use the same field operations. Packing introduces
 no new binding, representation, work discount or permission to reorder effects.
 
 Kernel schedules continue to lower to Local control and installed operations.

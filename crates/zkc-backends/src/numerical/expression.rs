@@ -491,7 +491,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn varying_memory_floor<S: Family>(field: Identity) {
+    fn captured_square<S: Family>(field: Identity, mode: Mode) -> Plan<S> {
         let binding = OperationBinding {
             contract: "numerical.map".into(),
             arguments: vec![field.name().into(), "10".into()],
@@ -504,15 +504,19 @@ mod tests {
             [3]
         ])
         .to_string();
+        Plan::<S>::new(
+            Expression::parse(&body).unwrap(),
+            b"10",
+            mode,
+            body.len(),
+            &binding,
+        )
+        .unwrap()
+    }
+
+    fn varying_memory_floor<S: Family>(field: Identity) {
         for mode in [Mode::Map, Mode::Sum, Mode::Product] {
-            let plan = Plan::<S>::new(
-                Expression::parse(&body).unwrap(),
-                b"10",
-                mode,
-                body.len(),
-                &binding,
-            )
-            .unwrap();
+            let plan = captured_square::<S>(field, mode);
             for rows in [0, 1, 513] {
                 let map = matches!(mode, Mode::Map);
                 let retained = if map {
@@ -544,6 +548,62 @@ mod tests {
                     plan.apply(&args, retained, &below).err(),
                     Some(exhausted("numerical-bytes"))
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn distinct_rows_survive_packing_across_constrained_chunks() {
+        use crate::KoalaBear as S;
+        for mode in [Mode::Map, Mode::Sum, Mode::Product] {
+            let plan = captured_square::<S>(Identity::KoalaBear, mode);
+            for rows in [7, 8, 9, 31, 257, 513] {
+                let inputs: Vec<_> = (0..rows).map(|i| S::new(i as u32 + 1)).collect();
+                let map = matches!(mode, Mode::Map);
+                let retained = if map {
+                    size(rows, size_of::<S>()).unwrap()
+                } else {
+                    512
+                };
+                let row_bytes = 4 * size_of::<S>();
+                let minimum = row_bytes
+                    + 2 * size_of::<Operand<'_, S>>()
+                    + if map { rows * size_of::<S>() } else { 0 }
+                    + retained;
+                // Widths on either side of native packs, including repeated
+                // odd-sized chunks. Every row differs, exposing lane swaps.
+                for width in [1, 7, 8, 9, 13, 17, 256] {
+                    let policy = Policy {
+                        max_numerical_bytes: minimum + (width - 1) * row_bytes,
+                        ..Policy::default()
+                    };
+                    for capture in [3, 11] {
+                        let expected: Vec<_> = inputs
+                            .iter()
+                            .map(|x| *x + S::new(capture * capture))
+                            .collect();
+                        let args = [
+                            Value::Index(rows as u64),
+                            S::vector_value(inputs.clone().into()),
+                            S::field_value(S::new(capture)),
+                        ];
+                        let result = plan.apply(&args, retained, &policy).unwrap();
+                        match mode {
+                            Mode::Map => assert_eq!(
+                                S::vector(&result[0]).unwrap().as_ref(),
+                                expected.as_slice()
+                            ),
+                            Mode::Sum => assert_eq!(
+                                S::field(&result[0]).unwrap(),
+                                expected.iter().copied().sum::<S>()
+                            ),
+                            Mode::Product => assert_eq!(
+                                S::field(&result[0]).unwrap(),
+                                expected.iter().copied().product::<S>()
+                            ),
+                        }
+                    }
+                }
             }
         }
     }

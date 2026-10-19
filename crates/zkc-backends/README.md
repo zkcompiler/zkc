@@ -89,7 +89,7 @@ path. Other provider allocations retain their existing owners and limits.
 `numerical::expression` evaluates admitted Ring bodies in bounded chunks. Its
 node-major workspace stays local to the reached call; prepared plans retain no
 operand values. `kernels::vector` supplies destination-slice arithmetic shared
-by these expressions and dense kernels, including provider extension packing
+by these expressions and dense kernels, including provider-declared field packing
 and scalar tails. Chunking changes neither the Kernel/VM contract nor the
 minimum managed-memory allowance. CPU-specific packing follows build target
 features; portable builds remain supported.
