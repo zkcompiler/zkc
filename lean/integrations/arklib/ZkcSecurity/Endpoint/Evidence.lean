@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Endpoint.Compiled
+public import ZkcSecurity.Endpoint.Binding
 public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcSecurity.FiatShamir.Binding
 public import Zkc.Executable.NormalizationSoundness
@@ -41,9 +42,10 @@ certificate over the checked context's transcript interface, dooming the model
 validator of every false model statement), a cost bound of the original
 validator on every statement, and two requirements selected by the indices:
 
-- **binding**, required when the form is adaptive (`BindingRequirement`): a
-  binding codec of policy statements, which discharges statement determination,
-  and coverage of the application's false statements (`Coverage`): either every
+- **binding**, required when the form is adaptive (`BindingRequirement`): the
+  application context the host binds, so that every policy statement's initial
+  transcript is its policy-derived binding event, which discharges statement
+  determination (`policyCodec`), and coverage of the application's false statements (`Coverage`): either every
   application-false statement is false in the model or unmapped, with the
   validators of unmapped statements doomed, or the application's false-acceptance
   event implies the modeled one;
@@ -194,13 +196,22 @@ inductive Coverage {publics : List Ty} (relation : StatementRelation F G publics
         relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2)
       (fun result => relation.FalseStatement result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2))
 
-/-- Binding evidence of an adaptive claim: a binding codec of every policy
-statement, malformed ones included, as the initial transcript, and the coverage
+/-- Binding evidence of an adaptive claim: the application context the host
+binds, so that the initial transcript of every policy statement, malformed ones
+included, is its policy-derived binding event (`policyCodec`), and the coverage
 of the application's false statements. -/
 structure BindingEvidence {publics : List Ty} (relation : StatementRelation F G publics)
     (doomed : History F G → Values (assignment F G) publics → Prop) where
-  codec : BindingCodec (Values (assignment F G) publics) (Event F G)
-  coverage : Coverage relation codec fun statement => doomed (codec.encode statement) statement
+  application : String
+  coverage : Coverage relation (policyCodec publics application) fun statement =>
+    doomed ((policyCodec publics application).encode statement) statement
+
+/-- The binding codec of adaptive binding evidence: the policy-derived codec of
+its application context. -/
+abbrev BindingEvidence.codec {publics : List Ty} {relation : StatementRelation F G publics}
+    {doomed : History F G → Values (assignment F G) publics → Prop} (binding : BindingEvidence relation doomed) :
+    BindingCodec (Values (assignment F G) publics) (Event F G) :=
+  policyCodec publics binding.application
 
 /-- Binding evidence, required exactly when the statement is adaptive. -/
 def BindingRequirement {publics : List Ty} (relation : StatementRelation F G publics)

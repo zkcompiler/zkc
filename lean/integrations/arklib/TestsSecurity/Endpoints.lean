@@ -281,7 +281,7 @@ denoting itself. -/
 def guessBinding (application : String) :
     BindingEvidence (guessRelation (F := F) (G := G)) (fun initial statement =>
       (guessFamily (F := F) (G := G)).certificate.doomed initial (guessCompiled.original statement 0)) where
-  codec := policyCodec guessArtifacts.publics application
+  application := application
   coverage := .rejects (fun statement _ => .inl ⟨guessOffset statement, rfl, trivial⟩)
     fun statement unmapped => absurd rfl (unmapped (guessOffset statement))
 

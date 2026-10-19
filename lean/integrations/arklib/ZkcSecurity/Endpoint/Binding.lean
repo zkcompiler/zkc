@@ -1,6 +1,7 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.FiatShamir.Binding
+public import Zkc.Construction.Semantics
 
 @[expose] public section
 
