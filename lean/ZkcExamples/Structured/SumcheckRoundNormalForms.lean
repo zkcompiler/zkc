@@ -396,7 +396,7 @@ theorem verifierReduce_process (U : UnitPayload) (maximum : Nat) (bodies : Sumch
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 1) (U.plainProtocolTable F G) ctx
   unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
-  simp only [verifierReduceProcess, PIR.Proc.bind]
+  simp only [verifierReduceProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
   · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons none (.cons none (.cons none .nil))) = _
@@ -474,7 +474,7 @@ theorem proverReduce_process (U : UnitPayload) (maximum : Nat) (bodies : Sumchec
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 0) (U.plainProtocolTable F G) ctx
   unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
-  simp only [proverReduceProcess, PIR.Proc.bind]
+  simp only [proverReduceProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
   · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons (some entries) (.cons (some count) (.cons (some 1) .nil))) = _

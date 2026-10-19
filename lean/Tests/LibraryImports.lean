@@ -368,6 +368,7 @@ import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenNormalForms
 import ZkcExamples.Structured.ChaumPedersenViews
+import ZkcExamples.Structured.GkrRoundsNormalForms
 import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
 import ZkcExamples.Structured.GkrSourceLaws

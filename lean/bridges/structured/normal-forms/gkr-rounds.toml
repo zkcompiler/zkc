@@ -1,0 +1,62 @@
+# Normal forms of the layer Sumcheck (`gkr::Rounds`) of the original GKR Entry:
+# its typed body with the round callback named, and the verifier's normal forms
+# of one round and of the whole body. Helper calls stay as their participant rule.
+fixture = "lean/bridges/structured/fixtures/gkr-source.json"
+output = "lean/ZkcExamples/Structured/GkrRoundsNormalForms.lean"
+namespace = "ZkcExamples.Structured.GkrRoundsNormalForms"
+summary = "The layer Sumcheck of the original GKR Entry and its verifier's normal forms"
+imports = ["ZkcExamples.Structured.GkrSourceViews", "ZkcExamples.Structured.NormalFormSteps",
+           "ZkcExamples.Structured.SumcheckVerifierHelpers"]
+open = ["SumcheckVerifierHelpers"]
+helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
+
+[unit]
+name = "GkrSourceViews.unit"
+views = "GkrSourceViews"
+helpers = "plainHelpers (F := F) (G := G) GkrSourceViews.unit"
+program = "GkrSourceViews.program"
+
+[bodies]
+protocol = "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba"
+name = "rounds"
+callback = "round"
+views = "GkrSourceViews"
+declaration = "rounds"
+value = 4
+
+[[shared]]
+protocol = "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba"
+repeat = "s6"
+body = "roundBody"
+function = "roundFn"
+meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers GkrSourceViews.unit) self (GkrSourceViews.unit.plainProtocolTable F G) ctx"
+closed = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed"
+components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
+
+[[shared.roles]]
+role = 1
+name = "verifier"
+slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
+captures = [{ name = "service", mode = "optional" }]
+opaque = ["appendHelper"]
+
+[[shared]]
+protocol = "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba"
+body = "roundsBody 4"
+unfold = ["roundsBody", "roundsReturn"]
+function = "roundsFn"
+declaration = "rounds"
+raw = "roundsBody_raw"
+repeat_spec = "repeatSpec 4"
+callback = "roundFn"
+meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers GkrSourceViews.unit) self (GkrSourceViews.unit.plainProtocolTable F G) ctx"
+closed = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed"
+components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
+
+[[shared.roles]]
+role = 1
+name = "verifierRounds"
+inputs = [{ mode = "absent" }, { mode = "absent" }, { mode = "absent" }, { mode = "absent" },
+          { name = "claim", mode = "optional" }, { name = "rounds", mode = "optional" },
+          { name = "service", mode = "optional" }]
+opaque = ["emptyHelper"]

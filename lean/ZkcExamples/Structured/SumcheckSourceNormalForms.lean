@@ -114,7 +114,7 @@ theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckSource
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) (ctx.roles 1) (SumcheckSourceViews.unit.plainProtocolTable F G) ctx
   unfold runFn SumcheckSourceBodies.runBody
-  simp only [verifierProcess, PIR.Proc.bind]
+  simp only [verifierProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.indexConstant 1) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
   refine (Region.denote_letOp_done m (.mark "s1") _ _ _ _ .nil rfl).trans ?_
@@ -207,7 +207,7 @@ theorem prover_process (bodies : SumcheckUnitContracts.Bodies SumcheckSourceView
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) (ctx.roles 0) (SumcheckSourceViews.unit.plainProtocolTable F G) ctx
   unfold runFn SumcheckSourceBodies.runBody
-  simp only [proverProcess, PIR.Proc.bind]
+  simp only [proverProcess, PIR.Proc.bind, PIR.Proc.bind_assoc]
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
   refine (Region.denote_letOp_done m (.calculate (.indexConstant 1) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
   refine (Region.denote_letOp_done m (.mark "s1") _ _ _ _ .nil rfl).trans ?_

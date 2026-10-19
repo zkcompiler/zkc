@@ -49,6 +49,22 @@ theorem denote_letOp_bind {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d
   funext value
   exact continuation value
 
+/-- The same step under an outer bind, as in the normal form of a repeat callback
+followed by the embedding of its carried state. -/
+theorem denote_letOp_bind_after {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d I)
+    {Γ out : List d.Ty} (op : d.Op) (args : Operands Γ (d.arguments op))
+    (bodies : Regions d (d.regions op)) (next : Region d (d.results op ++ Γ) out)
+    (before : Values m.Value Γ) {A B : Type} (process : PIR.Proc I A)
+    (added : A → Values m.Value (d.results op)) (result : A → PIR.Proc I B)
+    (after : B → PIR.Proc I (Values m.Value out))
+    (operation : m.operation op (args.eval before.get) (bodies.denote m) =
+      process.bind (fun value => .done (added value)))
+    (continuation : ∀ value,
+      next.denote m ((added value).append before).get = (result value).bind after) :
+    (Region.letOp op args bodies next).denote m before.get = (process.bind result).bind after := by
+  rw [PIR.Proc.bind_assoc]
+  exact denote_letOp_bind m op args bodies next before process added _ operation continuation
+
 open Zkc.Source.Structured
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]

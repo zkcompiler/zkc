@@ -364,6 +364,24 @@ def render_process(node, indent):
     raise GeneratorError(f"unknown process node {node}")
 
 
+def has_bind(node):
+    """Whether a process tree binds an opaque process (a repeat, an application or a kept call)."""
+    if isinstance(node, Bind):
+        return True
+    if isinstance(node, Call):
+        return has_bind(node.next)
+    if isinstance(node, Match):
+        return has_bind(node.none) or has_bind(node.some)
+    if isinstance(node, If):
+        return has_bind(node.then) or has_bind(node.otherwise)
+    return False
+
+
+def associate(node):
+    """Bound processes nested under the role's outer bind need reassociation first."""
+    return ", PIR.Proc.bind_assoc" if has_bind(node) else ""
+
+
 def linear_actions(node):
     """The actions and final value of a branch-free process, or None."""
     actions = []
@@ -477,6 +495,7 @@ class Frame:
     rewrites: list = field(default_factory=list)
     callback: str = ""
     repeat_spec: str = ""
+    outer_bind: bool = False     # the stated process is followed by the role's embedding
     applications: dict = field(default_factory=dict)   # site -> Application
     opaque: tuple = ()           # helpers whose owned calls stay as they are
     role_name: str = ""
@@ -939,6 +958,9 @@ class Evaluator:
         added = [Sym("component", tuple(wire), f"{binder}.get {variable(position)}") if index in scope
                  else absent(wire)
                  for position, (wire, scope) in enumerate(zip(callee.outputs, callee.output_scopes))]
+        if self.shared and frame.outer_bind:
+            raise GeneratorError(f"application {app.name}: protocol applications inside a repeat callback "
+                                 f"are not supported")
         if self.shared:
             pad = " " * indent
             other = [role for role in range(len(roles)) if role != index]
@@ -1000,8 +1022,9 @@ class Evaluator:
             pad = " " * indent
             op = f"(.localCall {helper} rfl {self.frame.role} {json.dumps(site)})"
             expanded = values_literal([value.expr for value in values])
-            proof.append(f"{pad}refine NormalFormSteps.denote_letOp_bind m {op} _ _ _ _")
-            proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _ ?_ ?_")
+            lemma = "denote_letOp_bind_after" if self.frame.outer_bind else "denote_letOp_bind"
+            proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
+            proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _{' _' if self.frame.outer_bind else ''} ?_ ?_")
             proof.append(f"{pad}· refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) "
                          f"(funext fun {binder} => ?_))")
             cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
@@ -1408,6 +1431,8 @@ class Module:
                 prefix = namespace.removeprefix(parent) if namespace.startswith(parent) else namespace
                 for local, raw in re.findall(r"def (\w+) : ProtocolSignature where\s+name := \"([^\"]+)\"", text):
                     names.setdefault(raw, f"{prefix}.{local}")
+                for local, raw in re.findall(r"def (\w+) : ProtocolSignature :=\s*⟨\"([^\"]+)\"", text):
+                    names.setdefault(raw, f"{prefix}.{local}")
             names.update(self.request.get("signatures", {}))
             self.signature_names = names
         return self.signature_names
@@ -1496,6 +1521,14 @@ class Module:
         out.append(f"def {name}Body ({maximum} : Nat) : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
                    f"    {ty_list(protocol.outputs, True)} :=\n"
                    f"{self.chain(prelude, roles, '  ', last)}\n")
+        if "declaration" in spec:
+            # The admitted declaration's checked tree is this body at its own maximum.
+            views, declaration = spec["views"], spec["declaration"]
+            out.append(f"/-- The admitted `{declaration}` declaration is this body at maximum {spec['value']}. -/")
+            out.append(f"theorem {name}Body_raw : {views}.{declaration}Definition.raw =\n"
+                       f"    ({name}Body {spec['value']}).erase := by\n"
+                       f"  refine {views}.{declaration}_raw.trans ?_\n"
+                       f"  unfold {name}Body {callback_name}Body {name}Return\n  rfl\n")
         self.parts.append("\n".join(out))
 
     def chain(self, block, roles, pad, last=None):
@@ -1952,7 +1985,8 @@ class Module:
             env.append(optional(wire, capture["name"]) if mode == "optional" else present(wire, capture["name"]))
         frame = Frame(self.unit, protocol.roles, role, "shared", sites, self.helpers(),
                       load_laws(role_spec.get("laws")), dict(role_spec.get("guards", {})),
-                      separate="separate", closed=spec["closed"], components=spec.get("components", ""))
+                      separate="separate", closed=spec["closed"], components=spec.get("components", ""),
+                      opaque=tuple(role_spec.get("opaque", [])), role_name=name, outer_bind=True)
         free = [slot for slot in slots if "value" not in slot]
         result_names = [slot["name"] for slot in slots]
         names = Names(result_names + [capture["name"] for capture in capture_specs] + list(sites.values()))
@@ -2015,7 +2049,7 @@ class Module:
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind]\n"
+                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
                    + script + "\n")
 
     def shared_protocol_role(self, out, spec, role_spec, protocol, block, sites, function, parameter_names,
@@ -2091,7 +2125,7 @@ class Module:
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind]\n"
+                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
                    + script + "\n")
         self.role_infos[(function, name)] = {
             "role": role, "process": process, "process_binders": [variable for variable, _ in used],
