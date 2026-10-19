@@ -417,9 +417,13 @@ with a guarded verdict, each challenge round charged its own error, and a
 process-form certificate transports to a participant validator that realizes the
 process form: a worst-case round-by-round proof stated in ArkLib's framework
 (written for the example) bounds the compiled verifier of a guessing fixture
-Entry, and the bound is attained at zero queries. The import of ArkLib's interaction-stack soundness is deferred, blocked
-upstream by its execution prefixes in `Type 1`, its challenge models that sample
-arbitrary distributions and its private Sumcheck instance.
+Entry, and the bound is attained at zero queries. The import of ArkLib's
+interaction-stack soundness is outstanding adapter and instance work: the
+attempted implementation met its execution prefixes in `Type 1`, its challenge
+models that sample arbitrary distributions and its private Sumcheck instance,
+and a restricted route through a propositional realization relation is proposed
+but unchecked
+([imports](../lean/docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)).
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

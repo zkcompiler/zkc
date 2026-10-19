@@ -462,16 +462,28 @@ The averaged form `Verifier.rbrSoundness` is not imported: its bound is over a
 mixture of prefixes the prover samples, not a per-prefix step.
 
 The import of ArkLib's interaction-stack soundness (`OrdinaryState` and
-`LocalSoundness`) is deferred. It has three blockers, all upstream of zkc:
+`LocalSoundness`) is outstanding adapter and instance work. The implementation
+attempted so far met three obstacles:
 
 - its protocols are trees whose residuals and execution prefixes
   (`ExecutionPrefix`) live in `Type 1`, while a validator's operation signature
-  is in `Type`, so the import needs a process form over those trees;
+  is in `Type`, so a process form over those trees does not fit an operation
+  signature;
 - its challenge models (`ChallengeModel.sample`) sample an arbitrary
-  distribution rather than a uniform raw answer, so the import needs a
-  law-record premise relating each challenge model to a uniform raw answer;
+  distribution rather than a uniform raw answer;
 - the one interaction-stack instance, Sumcheck's local soundness model, is
   private to its module.
+
+These are obstacles of that implementation, not prerequisites of every
+adapter. A restricted route, not yet checked, keeps the upstream execution
+prefix inside a propositional realization relation instead of an operation
+signature, and defines the doomed participant residuals as those that realize
+the residual of some false upstream prefix, as `Realizes.certificate` does for
+process forms. It requires correspondence for messages, actual prefix
+extensions, challenge distributions, and rank and error charges. Non-uniform
+sampling stays an explicit law premise relating each challenge model to a
+uniform raw answer, and the private Sumcheck instance blocks only the reuse of
+that instance, not the generic adapter.
 
 ### Imported certificates for compiled verifiers
 
