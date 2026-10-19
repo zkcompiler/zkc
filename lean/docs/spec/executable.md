@@ -8,7 +8,8 @@ candidate, which the runtime admits and executes. A per-compile lowering rule
 relates the two, so that a theorem about the constructed validator transfers to
 the executable program. The modules are `Zkc.Executable.{Program, Execution,
 Installed, Refusal, Normalization, Lowering, Relation, Evaluation, Soundness,
-Pruning, Completeness, NormalizationSoundness, Cleanup}`.
+Pruning, Completeness, NormalizationSoundness, Cleanup, Helpers,
+HelperSoundness, Loops, Framing}`.
 
 ## Carrier
 
@@ -192,10 +193,41 @@ or stops in the class the helper stops in. Preparation is a premise of the
 soundness theorems for every helper the reading calls; a validator without
 helper calls needs none. The lowering rule reads a helper body only for its
 sorts and its freedom from transcript operations, so a changed helper body
-can pass the rule; what the body computes is the preparation proof, proved
-once per program from the program's function bodies and the original's
-checked helpers. The executable bridge requires the committed program data,
-which the proof is about, to be the rendering of the fresh program.
+can pass the rule; what the body computes is the obligation of the helper rule.
+The executable bridge requires the committed program data, which the
+obligation is about, to be the rendering of the fresh program.
+
+The helper rule `checkHelpers vocabulary validator program names` reads, for
+each named helper, the local function of that name against the typed body of
+the original's checked definition of the same name, one structured operation at
+a time, through a closed table of recipes (`Zkc.Executable.Helpers`):
+
+| Structured form | Executable form |
+|---|---|
+| Site mark | No step |
+| Operation without regions | One installed operation with the same meaning (`implements`): the same primitive, an index constant below the index limit, a carrier calculation, or index equality on operands known to be below the index limit |
+| Boolean constant | A constant step |
+| Invocation of a checked helper | That helper's body, inlined under the names of its actual operands |
+| Guard | A conditional that yields nothing on true and stops with reason `reject` on false |
+| Branch | A conditional on the same condition and captures, each region read as the corresponding callback |
+| Stop, return | An explicit stop for the same reason; the function's return of the returned names |
+
+Every name an executable step binds must be fresh, so that a name keeps the
+value it denotes; index names produced by checked index primitives and by index
+constants below the limit are tracked as bounded. A body outside the table is
+refused with a named reason (`HelperRefusal`): a missing function or
+definition, another signature, a structured operation without a recipe (loops,
+folds, maps and binds), a step that does not implement its operation, a
+rebound name, an unbounded index operand or another ending.
+
+`checkHelpers_sound` proves the rule once: every helper it accepts is
+`Prepared` against the program's helper table, for every argument list of the
+declared input sorts. The proof simulates the structured evaluation by the
+executable one, with the names the walk relates denoting the encodings of the
+structured values. A helper outside the table, such as one whose body iterates
+over a runtime bound, is prepared by a proof of its own; transferring a
+preparation between validators whose local function and bindings agree
+(`prepared_agrees`, decided by `bindingsAgree`) needs no further proof.
 
 ## Soundness
 
@@ -255,9 +287,54 @@ and a stop holds trivially. A run that stops needs no further budget.
 | `execute_sufficient` / `validate_sufficient` | Under `Sufficient` on the decoded proof, the executable's observation and challenge interaction are those of the reading's ideal meaning; with the expected header, host validation is the ideal acceptance of the decoded proof |
 
 A program's completeness then needs a charge bound for the inputs it admits and
-the ideal meaning's acceptance of the honest proof. For a program the rule
-accepts through [normalization](#normalization), the charges are those of the
-program's own reading, since normalization relates ideal meanings only.
+the ideal meaning's acceptance of the honest proof (`Zkc.Executable.Loops`). For
+a program the rule accepts through [normalization](#normalization), the
+charges are those of the program's own reading, since normalization relates
+ideal meanings only.
+
+*Charges by evaluation.* For code without loops, `Code.charges bound code` adds
+what each item charges, taking for each helper call the bound `bound` gives for
+its body; `helperBound` evaluates a cost bound of a local function's body
+without iterations, a conditional counted with its dearer region
+(`helperCost_le`). `FitsK.of_charges` turns the sum into `FitsK`, wherever the
+ideal meaning passes on. A helper whose body iterates has its charge on its
+actual arguments proved with its preparation.
+
+*Loops.* A loop charges its entry and then, for each iteration, its body and its
+yield. `FitsK.loop_invariant` bounds a loop whose runtime count is at most its
+static maximum by `used + 1 + chargeSum charge 0 count`, the sum of iteration
+charges, from an invariant indexed by the iteration on the carried values and
+the unread proof: the invariant holds at entry, each iteration from a state the
+invariant holds of fits within its charge and yields a state the invariant holds
+of next, and the continuation fits from every final state. The invariant states
+what each iteration consumes from the proof, the shape of what it carries, what
+its helper calls charge and where it may stop. `chargeSum_uniform` gives
+`count · (body + 1)` under a uniform body bound.
+
+*Passing.* `Passes` reads the ideal meaning in `Always`, with the challenge
+answers a relation admits and a postcondition for stops. With every answer and
+stops allowed it implies `Continues` (`continues_of_passes`), which the charge
+bound needs; with the answers of a challenge function and no stop allowed, the
+ideal meaning in `Id` passes on to a state `holds` holds of (`idealK_oracle`).
+One statement per iteration, on every proof and every answer, therefore serves
+both the charge bound and an honest run, and `iterateM_invariant` composes an
+honest run's iterations from a per-iteration invariant.
+
+*Honest proof bytes.* `messageBytes` frames messages of one receive type after
+the framing magic and the binding; when the decoder inverts the encoder at that
+type and every encoding fits in one proof, they decode to the messages
+(`decodeProof_messages`), and the header is the expected one.
+
+The rule refuses a program whose calculations come in another order than the
+constructed instructions. A normalization that reschedules pure, total
+calculations without crossing a transcript operation's inputs
+([normalization invariant](../../../docs/spec/verification/refinement.md#normalization-across-transcript-operations))
+preserves the ideal meaning's outcome and challenge interaction, but not where a
+bounded run stops: the metered meaning charges each instruction where it runs.
+A theorem about such a program's metered executions therefore needs its own
+pruning relation at every budget, as `metered_prunes` is for the lowering rule,
+or a budget of at least the total charge, under which `execute_ideal` and
+`validate_ideal` identify the metered meaning with the ideal one.
 
 ## The compiled Schnorr proof verifier
 
@@ -302,21 +379,41 @@ decoder, host budget and expected binding.
 `zkc.program/0` candidate of the Sumcheck example's `example::Proof`
 (`SumcheckProofProgramData`). The rule accepts it against the constructed
 validator of `ZkcExamples.Construction.SumcheckProof`: a helper call for the
-empty point, a loop over the round count of at most two rounds, each receiving
-its two message coordinates, observing them, checking the round sum, drawing and
-delivering the challenge, extending the point by a helper call and updating the
-claim, and finally the terminal check as a helper call. Its receive plan gives
-two scalar messages per admitted round (`plan_types`).
+empty point, a loop over the round count of at most the Entry's static maximum
+of rounds (`maximum`, two for this Entry), each receiving its two message
+coordinates, observing them, checking the round sum, drawing and delivering the
+challenge, extending the point by a helper call and updating the claim, and
+finally the terminal check as a helper call. Its receive plan gives two scalar
+messages per admitted round (`plan_types`).
 
 `ZkcExamples.Executable.SumcheckHelpers` proves the three helpers prepared
-against the admitted source's closed helper table: the empty point and the
-point extension by evaluating their one-operation bodies, and the terminal check
-by evaluating its body, which checks the authored table shape with a doubling
-loop and then folds the table over the point one coordinate at a time,
-interpolating its low and high halves. The fold is
+against the admitted source's closed helper table. The helper rule accepts the
+empty point and the point extension (`rule_accepted`). The terminal check
+iterates and is outside the rule's table (`check_outside`); its preparation
+(`check_prepared`) evaluates its body, which checks the authored table shape
+with a doubling loop and then folds the table over the point one coordinate at
+a time, interpolating its low and high halves. The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, and the source contract of
 the check (`SumcheckSourceContracts.check_equation` and the stop contracts for
-out-of-range lengths) gives the same result in every case.
+out-of-range lengths) gives the same result in every case. The same evaluation
+gives the check's charge, `62 + 22 · n` on a well-shaped table and a point of
+`n` coordinates (`check_cost`).
+
+`ZkcExamples.Executable.SumcheckFamily` proves the executable theorems once for
+every compiled validator of the Sumcheck family. An `Artifact` carries a
+constructed validator and its executable program with the facts the kernel
+checks per compile: the lowering rule's acceptance, the family's instructions
+(`ZkcExamples.Executable.SumcheckShape`) with the compile's names and static
+maximum, the reading's code and receive plan, the occurrence templates under the
+context, the bound of the empty point's body, and the helper meanings,
+preparation and result sorts of the admitted original. One statement describes a
+round (`round_passes`): on every proof and under every answer, the round either
+stops (refused when its two messages are not scalar coordinates, rejected when
+their sum is not the claim) or passes on to the point extended by the drawn
+answer, the claim updated by the answer and the transcript with both messages,
+the challenge and its delivery absorbed. Its charge (`roundCharge`) is computed
+from the reading by evaluation. Nothing in the family depends on the maximum.
+`ZkcExamples.Executable.SumcheckProof.artifact` is this Entry's artifact.
 
 `executable_metered` instantiates `execute_metered`. `executable_prunes` and
 `executable_transform_prunes` state that host validation of proof bytes prunes,
@@ -327,20 +424,28 @@ helpers return values of their declared result sorts (`helpersSorted`), since
 each call declares its checked helper's outputs.
 
 `ZkcExamples.Executable.SumcheckCharges` bounds the charges of a complete run on
-a table of `2 ^ rounds` values: `charge rounds = 68 + 61 · rounds`, with the
-terminal check charging `62 + 22 · rounds` on its actual arguments
-(`check_cost`), is `Sufficient` for every proof (`sufficient`).
+a table of `2 ^ rounds` values. The charge is derived from the reading
+(`Artifact.charge`): the empty point's call and body, the loop's entry, the sum
+of the rounds' charges and yields, the terminal check's call with what its body
+charges, and the return. The loop is bounded by `FitsK.loop_invariant` with the
+invariant that the carried point has one coordinate per completed round. For
+this Entry `charge rounds = 68 + 61 · rounds` (`charge_eq`): per round, 38
+instructions in the loop body, the point extension's body included, its yield,
+and 22 in the terminal check's fold. It is `Sufficient` for every proof and
+every round count (`sufficient`).
 `ZkcExamples.Executable.SumcheckCompleteness.honest_accepted` states
 honest-prover completeness of the executable: for every challenge function,
 codec whose decoder inverts its encoder on round messages of bounded length,
 budget of at least `charge rounds`, expected binding of 32 bytes, initial
-transcript and table of `2 ^ rounds` values with at most two rounds, the
-Entry's static maximum, host validation accepts the honest proof bytes of the
-table's sum. The honest
-producer absorbs what the verifier absorbs and draws what it draws, sending the
-sums of the low and high halves of its current table in each round and then
-restricting the table at the challenge. At two rounds the bound is 190
-instructions, the runtime's measured threshold.
+transcript and table of `2 ^ rounds` values with at most the Entry's static
+maximum of rounds, host validation accepts the honest proof bytes of the table's
+sum. The honest producer absorbs what the verifier absorbs and draws what it
+draws, sending the sums of the low and high halves of its current table in each
+round and then restricting the table at the challenge. Each honest round passes
+by the round statement with the challenge function's answers and no stop, and
+the rounds compose by the fold invariant: the claim is the sum of the table
+restricted at the point. At two rounds the bound is 190 instructions, the
+runtime's measured threshold.
 
 `ZkcSecurity.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
 Sumcheck bounds to provers of proof bytes. `decoded` decodes a byte prover's

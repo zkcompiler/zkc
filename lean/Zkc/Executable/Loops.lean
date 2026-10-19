@@ -13,9 +13,9 @@ bound `FitsK` of the code, given only where the ideal meaning passes on
 (`Passes` with every answer and stops allowed). A loop charges its entry and
 then, per iteration, its body and its yield: `FitsK.loop_invariant` bounds a
 loop of a runtime count `n` at most its static maximum by the sum of iteration
-charges (`chargeSum`), from a family-supplied invariant on the carried values
-and the unread proof (`LoopInvariant`); `chargeSum_uniform` is the corollary
-`n · (body + 1)` under a uniform body bound.
+charges (`chargeSum`), from a family-supplied invariant, indexed by the
+iteration, on the carried values and the unread proof; `chargeSum_uniform` is
+the corollary `n · (body + 1)` under a uniform body bound.
 
 Completeness follows one honest run. `Passes` reads the ideal meaning in the
 predicate-transformer monad `Always`, with the challenge answers a relation
