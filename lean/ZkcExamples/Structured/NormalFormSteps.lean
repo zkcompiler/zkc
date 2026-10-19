@@ -3,15 +3,17 @@ module
 public import Zkc.Source.Participant
 public import Zkc.Source.DenotationLaws
 public import Zkc.Source.Structured.ContractComposition
+public import Zkc.Source.Structured.RepeatLaws
 
 @[expose] public section
 
 /-! Steps cited by generated participant normal forms
 (`lean/bridges/structured/normal_forms.py`): an owned Local call whose helper
 law returns or stops behaves as that law at its owner; an operation whose
-meaning is a process followed by a returned tuple continues with that tuple; and
-an active protocol application continues with the callee's masked returned
-tuple, also under the outer bind of a repeat callback's normal form. -/
+meaning is a process followed by a returned tuple continues with that tuple; an
+active protocol application continues with the callee's masked returned
+tuple, also under the outer bind of a repeat callback's normal form; and a repeat
+whose callback has a role-local normal form is the fold of that form. -/
 namespace ZkcExamples.Structured.NormalFormSteps
 open Zkc.Source
 
@@ -165,5 +167,33 @@ theorem apply_step_after (payload : UnitPayload)
   rw [PIR.Proc.bind_assoc]
   exact apply_step payload definition member signature sameSignature body exactRaw roles site ctx self
     operands next before inside masked mask process callee added outputs _ continuation
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- A repeat on an admitted count at a participant of its roster, whose callback has a
+role-local normal form over an embedding of the participant's carried slots, is the
+fold of that normal form over the iteration indices followed by the embedding. The
+initial state need only agree with the embedding after the state masks. -/
+theorem repeat_embed {I : PIR.Signature} (spec : RepeatSpec) (ctx : ProtocolContext) (self : Nat)
+    (inside : (spec.roles.map ctx.roles).contains self = true)
+    (captures : Values (Component (assignment F G)) spec.captures)
+    (body : RegionFunction (Component (assignment F G)) I
+      (.index :: (spec.state ++ spec.captures), spec.state))
+    {S : Type} (embed : S → Values (Component (assignment F G)) spec.state)
+    (masked : ∀ value, maskValues self (ctx.mapScopes spec.stateScopes) (embed value) = embed value)
+    (process : S → Nat → PIR.Proc I S)
+    (equation : ∀ value index, body (.cons (some index) ((embed value).append captures)) =
+      (process value index).bind (fun result => .done (embed result)))
+    (count : Nat) (bounded : count ≤ spec.maximum)
+    (state : Values (Component (assignment F G)) spec.state) (initial : S)
+    (start : maskValues self (ctx.mapScopes spec.stateScopes) state = embed initial) :
+    denoteRepeat spec ctx self (some count) state captures body =
+      (Finite.fold process (List.range' 0 count) initial).bind (fun result => .done (embed result)) := by
+  rw [repeat_admitted spec ctx self state captures body count inside bounded, start]
+  apply Repeat.loop_embed
+  intro value index
+  rw [Repeat.step_equation, masked, equation, PIR.Proc.bind_assoc]
+  apply congrArg (PIR.Proc.bind _)
+  funext result
+  simp only [PIR.Proc.bind, masked]
 
 end ZkcExamples.Structured.NormalFormSteps

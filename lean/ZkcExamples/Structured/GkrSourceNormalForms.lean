@@ -494,7 +494,7 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 /-- Masking the carried state to its declared scopes keeps the proverCoefficient's components. -/
 theorem proverCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     :
-    maskValues self (ctx.mapScopes [[1]]) (proverCoefficientState (F := F) (G := G) ) =
+    maskValues self (ctx.mapScopes [[1]]) (proverCoefficientState (F := F) (G := G)) =
       proverCoefficientState := by
   subst self
   unfold proverCoefficientState
@@ -522,7 +522,7 @@ theorem proverCoefficient_process
     (separate : ctx.roles 1 ≠ self)
     (index : Nat) (line : Option (List F)) :
     coefficientFn (F := F) (G := G) ctx self (.cons (some index)
-      ((proverCoefficientState ).append (.cons line .nil))) =
+      ((proverCoefficientState).append (.cons line .nil))) =
       (proverCoefficientProcess ctx index line).bind (fun _ => .done (proverCoefficientState)) := by
   subst self
   let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (ctx.roles 0) (GkrSourceViews.unit.plainProtocolTable F G) ctx

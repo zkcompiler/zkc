@@ -35,7 +35,9 @@ strict use of a component read from a bound tuple splits on its presence as on
 an optional input. A role's `strict` list (or `*` for every owned call without
 a law) keeps those owned calls as the helper's own invocation on present
 arguments, so their results are present and later uses need no split; an
-application entry's `results` names the callee's results by position.
+application entry's `results` names the callee's results by position. A
+callback role with `fold = true` also gets `<role>_fold`: the repeat on an
+admitted count is the fold of the role's normal form over the iteration indices.
 
 Usage, from the repository root:
   python3 lean/bridges/structured/normal_forms.py REQUEST.toml [--check]
@@ -2208,7 +2210,7 @@ class Module:
                        f"/-- Masking the carried state to its declared scopes keeps the {name}'s components. -/")
             out.append(f"theorem {embed}_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
                        f"    {self.binders(pairs)}:\n"
-                       f"    maskValues self (ctx.mapScopes {scopes}) ({embed} (F := F) (G := G) {arguments}) =\n"
+                       f"    maskValues self (ctx.mapScopes {scopes}) ({f'{embed} (F := F) (G := G) {arguments}'.strip()}) =\n"
                        f"      {embed} {arguments} := by\n"
                        f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
                        f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
@@ -2313,13 +2315,65 @@ class Module:
                    f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
                    f"    (index : Nat) {theorem_binders}{premises}{' ' if premises else ''}:\n"
                    f"    {function} (F := F) (G := G) {parameter_names} ctx self (.cons (some index)\n"
-                   f"      (({embed} {' '.join(state_args)}).append {paren(values_literal(capture_components))})) =\n"
+                   f"      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append {paren(values_literal(capture_components))})) =\n"
                    f"      ({application}).bind {ends} := by\n"
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
                    f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
                    + script + "\n")
+        if role_spec.get("fold"):
+            self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
+                      parameter_names, state, slots, capture_binders, capture_components, used_pairs,
+                      uses_separate, result_type)
+
+    def fold(self, out, spec, role_spec, role, other, name, embed, process, theorem, function,
+             parameter_names, state, slots, capture_binders, capture_components, used_pairs, uses_separate,
+             result_type):
+        """The repeat of a callback at one role of its roster, on an admitted count: the fold
+        of the role's normal form over the iteration indices, by the generic embedding law."""
+        site = spec["repeat"]
+        repeat = self.repeat_terms().get(site, (spec.get("repeat_spec"), None))[0]
+        if not repeat:
+            raise GeneratorError(f"{name}: a fold needs the repeat's spec; name the callback in [bodies] "
+                                 f"callbacks or give the entry a repeat_spec")
+        if role_spec.get("premises") or role_spec.get("binders") or spec.get("parameters"):
+            raise GeneratorError(f"{name}: folds are stated for callbacks without parameters, binders or premises")
+        if any("value" in slot for slot in slots):
+            raise GeneratorError(f"{name}: folds are stated for callbacks whose slots are all free")
+        projections = self.projections(len(slots)) if slots else []
+        initial = [projection.replace("result", "initial", 1) for projection in projections]
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        names = {slot["name"]: projection for slot, projection in zip(slots, projections)}
+        arguments = " ".join(names.get(variable, variable) for variable, _ in used_pairs)
+        me = f"(ctx.roles {role})"
+        typed_state = f"Values (Component (assignment F G)) {ty_list(state, True)}"
+        named = [f"({variable} := {variable})" for variable, _ in capture_binders]
+        named += [f"({slot['name']} := {projection})" for slot, projection in zip(slots, projections)]
+        separate_binder = f" (separate : ctx.roles {other} ≠ ctx.roles {role})" if uses_separate else ""
+        separate_argument = " (separate := separate)" if uses_separate else ""
+        callback = f"{function} {parameter_names} ctx {me}".replace("  ", " ")
+        index = "index" if any(variable == "index" for variable, _ in used_pairs) else "_"
+        value = "result" if slots else "_"
+        out.append(f"/-- The repeat of `{function}` at the {name} on an admitted count: the fold of its normal\n"
+                   f"form over the iteration indices, from any state whose masked slots are `initial`. -/")
+        out.append(f"theorem {name}_fold (ctx : ProtocolContext){separate_binder}\n"
+                   f"    {self.binders(capture_binders)}(count : Nat) (bounded : count ≤ {paren(repeat)}.maximum)\n"
+                   f"    (state : {typed_state}) (initial : {result_type})\n"
+                   f"    (start : maskValues {me} (ctx.mapScopes {paren(repeat)}.stateScopes) state =\n"
+                   f"      {f'{embed} ' + ' '.join(initial) if initial else embed}) :\n"
+                   + f"    denoteRepeat {paren(repeat)} ctx {me} (some count) state\n"
+                   f"      {paren(values_literal(capture_components))} ({callback}) =\n"
+                   f"      (Finite.fold (fun {value} {index} => {process} {arguments}) "
+                   f"(List.range' 0 count) initial).bind\n"
+                   f"        (fun {'result' if slots else '_'} => .done ({embedded})) :=\n"
+                   f"  NormalFormSteps.repeat_embed {paren(repeat)} ctx {me} (by simp) _ _\n"
+                   f"    (fun {'result' if slots else '_'} => {embedded})\n"
+                   f"    (fun {value} => {f'{embed}_masked ctx _ rfl ' + ' '.join(projections) if projections else f'{embed}_masked ctx _ rfl'})\n"
+                   f"    _ (fun {'result' if slots else '_'} index => {theorem} (ctx := ctx) (self := {me}) (role := rfl)"
+                   f"{separate_argument}\n"
+                   f"      (index := index) {' '.join(named)})\n"
+                   f"    count bounded state initial start\n")
 
     def shared_protocol_role(self, out, spec, role_spec, protocol, block, sites, function, parameter_names,
                              applications=None):
