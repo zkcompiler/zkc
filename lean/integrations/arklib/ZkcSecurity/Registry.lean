@@ -241,7 +241,11 @@ def entries : List Entry := [
   ⟨"binding.statement-coverage", .binding .statementDetermination,
     some `ZkcSecurity.FiatShamir.StatementBinding.Covers,
     "Every policy statement false for the application is false in the model or denotes no \
-    model statement, and the latter are rejected."⟩,
+    model statement. Rejection of the latter is the separate obligation \
+    binding.unmapped-rejection."⟩,
+  ⟨"binding.unmapped-rejection", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.StatementBinding.RejectsUnmapped,
+    "The validator of every policy statement that denotes no model statement is doomed."⟩,
   ⟨"binding.event-implication", .binding .statementDetermination,
     some `ZkcSecurity.FiatShamir.EventImplication,
     "The application's false-acceptance event implies the modeled event."⟩,

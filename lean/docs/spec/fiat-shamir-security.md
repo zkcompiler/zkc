@@ -561,15 +561,18 @@ statement is unmapped and none is false in the model, so the modeled event
 cannot see an accepted statement the application calls false. An adaptive
 endpoint needs coverage of the application's false statements in one of two
 forms. Either every application-false policy statement is false in the model or
-unmapped (`StatementBinding.Covers`) and the validators of unmapped statements
-are doomed, which makes the validators of all application-false statements
-doomed when those of model-false statements are
+unmapped (`StatementBinding.Covers`) and, as a separate obligation, the
+validators of unmapped statements are doomed
+(`StatementBinding.RejectsUnmapped`), which together make the validators of all
+application-false statements doomed when those of model-false statements are
 (`StatementBinding.doomed_of_covers`); or the application's false-acceptance
 event implies the modeled event (`EventImplication`), which transfers the bound
-(`EventImplication.prEvent_le`). `TestsSecurity.StatementBindings` shows the
-gap with the empty relation and a validator that accepts every statement: an
-accepted false statement is invisible to the modeled event, coverage holds only
-through unmapped statements, and the rejection it then requires fails.
+(`EventImplication.prEvent_le`). Coverage and rejection are separate registry
+obligations with separate schemas, so evidence for coverage does not stand for
+rejection. `TestsSecurity.StatementBindings` shows the gap with the empty
+relation and a validator that accepts every statement: an accepted false
+statement is invisible to the modeled event, coverage holds only through
+unmapped statements, and the rejection it then requires fails.
 
 Statement determination is the first of four binding obligations. The other
 three are typed obligation structures, each with its claim and its status

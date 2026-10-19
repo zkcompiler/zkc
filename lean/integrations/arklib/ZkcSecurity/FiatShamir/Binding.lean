@@ -48,9 +48,13 @@ not only on well-formed statements.
   statement is unmapped and none is false in the model. An adaptive endpoint
   therefore needs coverage of the application's false statements, in one of two
   forms. Either every application-false policy statement is false in the model
-  or unmapped (`StatementBinding.Covers`), and unmapped statements are rejected:
-  then the validators of all application-false statements are doomed whenever
-  those of model-false statements are (`StatementBinding.doomed_of_covers`). Or
+  or unmapped (`StatementBinding.Covers`), and, as a separate obligation, the
+  validators of unmapped statements are doomed
+  (`StatementBinding.RejectsUnmapped`): then the validators of all
+  application-false statements are doomed whenever those of model-false
+  statements are (`StatementBinding.doomed_of_covers`). Coverage alone does not
+  reject anything: under the empty relation it holds while every statement is
+  accepted. Or
   the application's false-acceptance event implies the modeled event
   (`EventImplication`), which transfers the bound
   (`EventImplication.prEvent_le`).
@@ -174,17 +178,23 @@ theorem not_falsePolicy_of_unmapped (falseModel : Model → Prop) (policy : Poli
   fun ⟨model, denotes, _⟩ => unmapped model denotes
 
 /-- Coverage of the application's false statements: every policy statement false for the
-application is false in the model or unmapped. -/
+application is false in the model or unmapped. Coverage says nothing about how unmapped statements
+are treated; their rejection is `RejectsUnmapped`. -/
 def Covers (falseModel : Model → Prop) (applicationFalse : Policy → Prop) : Prop :=
   ∀ policy, applicationFalse policy →
     binding.falsePolicy falseModel policy ∨ binding.Unmapped policy
 
-/-- With coverage, the application's false statements are doomed whenever the model's false
-statements are and unmapped statements are rejected. -/
+/-- Rejection of unmapped statements: the validator of every policy statement that denotes no
+model statement is doomed. -/
+def RejectsUnmapped (doomed : Policy → Prop) : Prop :=
+  ∀ policy, binding.Unmapped policy → doomed policy
+
+/-- With coverage and the rejection of unmapped statements, the application's false statements are
+doomed whenever the model's false statements are. -/
 theorem doomed_of_covers {falseModel : Model → Prop} {applicationFalse : Policy → Prop}
     {doomed : Policy → Prop} (covers : binding.Covers falseModel applicationFalse)
     (modelDoomed : ∀ policy model, binding.models policy model → falseModel model → doomed policy)
-    (unmappedDoomed : ∀ policy, binding.Unmapped policy → doomed policy) :
+    (unmappedDoomed : binding.RejectsUnmapped doomed) :
     ∀ policy, applicationFalse policy → doomed policy := by
   intro policy falseForApplication
   rcases covers policy falseForApplication with ⟨model, denotes, falseAt⟩ | unmapped

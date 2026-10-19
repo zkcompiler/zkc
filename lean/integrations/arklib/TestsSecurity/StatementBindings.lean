@@ -16,7 +16,9 @@ model (`empty_unmapped`, `empty_never_false`), so the modeled event says nothing
 application: a validator that accepts every table accepts a table whose sum is nonzero, an
 application-false statement the modeled event cannot see (`empty_accepted_unseen`). Coverage holds
 only through unmapped statements (`empty_covers`), and the rejection of unmapped statements that
-the endpoint then requires fails for that validator (`empty_not_rejected`).
+the endpoint then requires, a separate obligation, fails for that validator
+(`empty_not_rejected`). The two are separate registry entries with separate schemas
+(`coverage_not_rejection`).
 
 Registry citations. A reported assumption cites a registry entry of the obligation's own
 category: the collision-bounded identity entry is found by its identifier (`collision_cited`),
@@ -85,12 +87,23 @@ theorem empty_accepted_unseen :
     applicationFalse [1] ∧ acceptsAll [1] = true ∧ ¬ empty.falsePolicy (fun sum => sum ≠ 0) [1] :=
   ⟨by simp [applicationFalse], rfl, empty_never_false _ _⟩
 
+/-- Coverage holds for the empty relation, through unmapped statements only. -/
 theorem empty_covers : empty.Covers (fun sum => sum ≠ 0) applicationFalse :=
   fun table _ => .inr (empty_unmapped table)
 
-/-- The rejection of unmapped statements fails for the accepting validator. -/
-theorem empty_not_rejected : ¬ ∀ table, empty.Unmapped table → acceptsAll table = false :=
+/-- The rejection of unmapped statements fails for the accepting validator, although coverage
+holds (`empty_covers`): coverage does not imply rejection. -/
+theorem empty_not_rejected : ¬ empty.RejectsUnmapped fun table => acceptsAll table = false :=
   fun rejects => absurd (rejects [1] (empty_unmapped [1])) (by decide)
+
+/-- Coverage and the rejection of unmapped statements are separate registry entries with separate
+schemas, so evidence for coverage does not stand for rejection. -/
+theorem coverage_not_rejection :
+    (registryEntry "binding.statement-coverage").bind (·.schema) =
+        some ``StatementBinding.Covers ∧
+      (registryEntry "binding.unmapped-rejection").bind (·.schema) =
+        some ``StatementBinding.RejectsUnmapped :=
+  ⟨rfl, rfl⟩
 
 /-- The collision-bounded identity entry, cited by its identifier. -/
 theorem collision_cited :
