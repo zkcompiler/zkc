@@ -490,6 +490,33 @@ impl Backend for Probe {
         {
             return self.inner.apply(operation, i, a);
         }
+        if self.mode == 0 {
+            // Probe both observe and challenge, including after a completed
+            // transition: preflight wins over a reached coordinate-count error.
+            let before = self.inner.observe(t(&a[0])).unwrap();
+            let mut bad_coordinates = a.to_vec();
+            *bad_coordinates.last_mut().unwrap() = Value::Indices(Vec::new().into());
+            let small = Invocation {
+                max_output_bytes: 0,
+                ..*i
+            };
+            assert_eq!(
+                self.inner
+                    .apply(operation, &small, &bad_coordinates)
+                    .unwrap_err()
+                    .code,
+                "exhausted:output-bytes"
+            );
+            assert_eq!(self.inner.observe(t(&a[0])).unwrap(), before);
+            assert_eq!(
+                self.inner
+                    .apply(operation, i, &bad_coordinates)
+                    .unwrap_err()
+                    .code,
+                "refused:transcript-origin"
+            );
+            assert_eq!(self.inner.observe(t(&a[0])).unwrap(), before);
+        }
         if !self.checked {
             self.checked = true;
             if self.mode == 0 {
@@ -568,7 +595,11 @@ fn active_views_preflight_and_post_transition_failure() {
         let (out, probe) = run(&nested(), probe, vec![token, f(7), Value::Index(4)]);
         let expected = match mode {
             0 => {
-                out.unwrap();
+                let out = out.unwrap();
+                let paths: Vec<_> = (0..4)
+                    .map(|i| json!([["repeat", "rounds", i.to_string()]]))
+                    .collect();
+                assert_eq!(scalar(&out[0]), direct(&root(), &paths, 7));
                 8
             }
             1 => {

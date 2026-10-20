@@ -113,8 +113,7 @@ pub fn uniform_index_bound(s: &str) -> Result<u64> {
     Ok(bound)
 }
 pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> Result<Vec<u8>> {
-    let encoded = native_origin_template(attrs, kind)?;
-    let mut tree = decode_tree(&encoded)?;
+    let (_, mut tree) = checked_native_origin(attrs, kind)?;
     let depth = tree[2]
         .as_array()
         .ok_or(CodecError("native-origin"))?
@@ -126,16 +125,17 @@ pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> R
     }
     tree[0] = json!("zkc.native-origin/0");
     tree[3] = json!(indices.iter().map(u64::to_string).collect::<Vec<_>>());
-    if tree_size(&tree)? > 4096 {
+    let prepared = Tree::Json(&tree).prepare()?;
+    if prepared.size() > 4096 {
         return Err(CodecError("native-origin-limit"));
     }
-    encode_tree(&tree)
+    prepared.to_vec()
 }
 /// A query template naming the source service method. Field challenges and
 /// UniformIndex transitions require `draw` and `index` respectively.
 pub fn native_query_template(attrs: &[String], method: &str) -> Result<Vec<u8>> {
-    let bytes = native_origin_template(attrs, "query")?;
-    if decode_tree(&bytes)?[4][5].as_str() != Some(method) {
+    let (bytes, tree) = checked_native_origin(attrs, "query")?;
+    if tree[4][5].as_str() != Some(method) {
         return Err(CodecError("native-origin"));
     }
     Ok(bytes)
@@ -143,6 +143,12 @@ pub fn native_query_template(attrs: &[String], method: &str) -> Result<Vec<u8>> 
 /// A source template contains ordered static apply/repeat steps and no dynamic
 /// coordinates. Coordinates are explicit operands of its indexed transition.
 pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
+    checked_native_origin(attrs, kind).map(|(bytes, _)| bytes)
+}
+
+/// Keep the validated tree for consumers that substitute dynamic coordinates.
+/// Canonical bytes and the complete template checks still share one owner.
+fn checked_native_origin(attrs: &[String], kind: &str) -> Result<(Vec<u8>, Value)> {
     if attrs.len() != 1 {
         return Err(CodecError("native-origin"));
     }
@@ -206,5 +212,5 @@ pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
     {
         return Err(CodecError("native-origin"));
     }
-    Ok(bytes)
+    Ok((bytes, tree))
 }

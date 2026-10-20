@@ -152,6 +152,21 @@ the first row is reached; an empty domain evaluates no arithmetic. Only varying
 nodes run for each later row. Captured values never enter immutable preparation.
 The conservative work score remains unchanged by this optimization.
 
+Evaluation may process contiguous row chunks in a node-major scratch slab.
+Chunk width is an invocation detail, bounded by the remaining managed-memory
+allowance. The minimum admission requirement remains one element per Ring node,
+typed operand views, map staging when present, and the conservative result charge.
+A tighter allowance reduces chunk width down to one row. All scratch remains
+charged; this preserves policy admission, not allocator success or process RSS.
+Only the remaining rows are evaluated in the final chunk. Sum and product consume
+roots in row order, and results are published only after the complete call.
+
+Expression nodes and ordinary dense vector operations share destination-slice
+arithmetic. Each field uses its provider-declared packing for native element
+slices, preserving every extension coordinate. Scalar tails and fields whose
+provider declares scalar packing use the same field operations. Packing introduces
+no new binding, representation, work discount or permission to reorder effects.
+
 Kernel schedules continue to lower to Local control and installed operations.
 These consumers do not implement arbitrary scheduled control or establish a
 native/source correspondence theorem. MLIR memory and bufferization interfaces

@@ -88,6 +88,15 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `sumcheck` | Public tables of 16–65,536 elements | Independent Rust algorithm; verifier includes linear public-table evaluation, no PCS |
 | `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `numerical` | Two columns and a scalar capture; map, collect and vector operations; vector, sum and product results; KoalaBear, BLS Fr and dense degree-eight extension; 0–8,192 elements | Matched arithmetic and inputs across forms; includes equality and Host costs, with independent Python expectations |
+| `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
+| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
+| `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
+| `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
+| `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
+| `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
+| `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
+| `merkle` | Poseidon2 base-row trees; separate height/row-width sweeps, single and pruned multi-openings | Independent expected rows and changed-row rejection; root/path authentication shares the provider |
+| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; existing JSON-to-native Host Run path, default capacities |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -97,10 +106,10 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `pairing` | 2/8/32 BN254 pairings and scalar multiplication | Bilinearity consistency, not Groth16/KZG or independent kernel validation |
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
-| `air` | Trace height, width and evaluation blowup vary separately, including 1,024-row traces at widths 1 and 4 | Quadratic recurrence with first/last/transition constraints; one table; default execution capacities |
+| `air` | Trace height, width and evaluation blowup vary separately, including original independent recurrences and new coupled quadratic/cubic columns | First/last/transition constraints; one table; default execution capacities |
 | `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
-| `machine` | LogUp/grand-product, optional memory absent/present | Correlated STARK library regression; small fixtures, not a production zkVM scaling study |
+| `machine` | LogUp/grand-product, optional memory absent/present; bounded CPU/program and memory heights | Existing `ThreeTableArgument` and external accumulator interpreter; same-stack proof checks, not production zkVM scale |
 
 The [source catalog](bench/coverage.py) records exact dimensions, operation mix,
 category and limitations. Each run also records its oracle, input identities and
@@ -111,6 +120,107 @@ collect–fold composition does not cross those boundaries.
 Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.
+
+### Fixed numerical panel
+
+The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, 12 `coset`, nine
+`curve_operation`, and ten coupled AIR/STARK cases. Existing identifiers,
+formulas and the smoke list stay unchanged. Case counts imply no suite weights.
+
+[`expressions.py`](bench/expressions.py) defines short/deep Horner, independent
+branches, shared intermediates, capture-heavy and input-heavy Math bodies with
+separate scalar oracles. Representative sizes include empty/singleton inputs,
+31/32/33 and 127/128/129 tails, and larger columns, across six fields. Extension
+coordinates are dense; binary fields use canonical hexadecimal inputs and the
+captured [Python reference](../tests/support/binary_reference.py).
+`difference-products` and `alternating-powers` have fixed
+`dimensions.role = validation-only`; keep them out of tuning. The role is
+metadata: `--suite expression` includes both roles. Inspect the captured lowered
+IR before attributing performance to the authored expression's shape.
+
+[`operations.py`](bench/operations.py) isolates named operations in source.
+Transform directions use independent Python evaluation, rather than validating
+a native roundtrip. Coset controls separately enumerate points and fold arbitrary
+evaluations over base, quartic and octic fields, using dense extension shifts.
+Their integer oracle follows the public subgroup convention and checks every
+coordinate; folding does not assert a degree bound. Curve controls use weaker
+scalar/group-law checks. Point generation, polynomial adaptation, validation and
+Host costs remain inside the SDK timer; these are **not kernel-only timings**.
+Separate hash/Merkle controls are described below.
+
+The `air-coupled-*` and `stark-coupled-*` pairs share Bundles and traces with
+simultaneous updates `next[j] = current[j]^(degree-1) * current[(j+1) % width] +
+current[(j-1) % width] + j+1`. First/last constraints cover every column.
+Quadratic cases vary height and width; the cubic case uses blowup eight.
+Ordinary Python arithmetic generates the trace independently of the Bundle.
+Negative controls check interior and boundary violations.
+
+Default capacities stay unchanged. Generator tests check arithmetic and input
+sizes; compilation, lowered-IR inspection and native resource admission are
+separate validation steps. Production-scale traces, Host-limit stress and
+larger multi-table scaling remain additional experiments.
+
+### Hash, commitment and input controls
+
+The added panel contains three `hash_bytes`, three `poseidon`, six `merkle`,
+seven bounded `machine`, and four `host_vector` cases. Existing case contracts,
+smoke lists and expression roles remain fixed. The catalog records category,
+dimensions and operation mix; generated Programs supply the captured oracle.
+
+[`commitments.py`](bench/commitments.py) uses the public byte hash, permutation
+and row-oracle APIs. SHA-256 checks every digest byte against `hashlib`.
+Poseidon2 repeats Plonky3 0.8.0's published KoalaBear answer across each batch;
+this is a retained known-answer control, not independent random-state coverage.
+Every Run also supplies an incorrect expected result to the acceptance gate.
+
+Merkle single-opening shapes `(height, row_width)` are `(16,1)`, `(256,1)`,
+`(16,8)`, `(16,9)` and `(13,9)`. These separate tree size from leaf payload,
+cross the eight-coordinate sponge rate, and include padding. A sixth case uses
+the `(256,1)` tree with four positions, including an out-of-order position and
+a duplicate. Each call commits, opens, checks every returned row against Python
+row-major expectations, authenticates it, and requires authentication of a
+canonical changed row to return false. Root/path checks use the same provider;
+there is no independent Merkle-root oracle or binding/security claim. Timings
+include commitment, opening, positive/negative authentication, equality and Host
+work; they do not isolate a tree-building or opening kernel.
+
+The machine additions reuse the fixture's source, captured Bundle, imperative
+interpreter and input preparation. Both LogUp and Product vary CPU/program
+height 8/16 with memory absent. Two LogUp cases hold CPU/program height 8 and
+the same four memory events fixed while varying present memory height 16/32.
+A matched arithmetic-only LogUp case enables an idle memory table while keeping
+the program, CPU witness and final value equal to the height-8 absent case. The
+active-memory cases also change the instruction mix and do not isolate presence.
+The existing profile stays at maximum log height 5, log domain size 6, five
+rounds, eight queries, eight attempts, two channels and shift 3. Changed-final
+statement and canonical-claim mutation checks use the existing proof controls.
+The Bundle supports CPU/program heights 4/8/16 and memory heights 8/16/32;
+larger heights or arbitrary table arity need a separate supported relation and
+profile. These controls keep fixed inputs and do not establish proof security.
+
+The large input controls use identical dense vectors for length and sum. Their
+Python expectations take linear work. Length exposes input adaptation and
+admission with minimal source work; sum adds one native reduction. The largest
+case reaches the default 65,536-element collection ceiling. JSON requests fit
+the existing 16 MiB document and 200,000-node bounds; no capacity is enlarged.
+Decode/request construction and SDK/Host execution retain their separate report
+boundaries. Worker-level native input transport and enlarged-capacity experiments
+remain separate work; these cases do not compare input transports.
+
+With the prebuilt tools from the Run section, select cases or suites explicitly:
+
+```sh
+python3 common/benchmarks/run.py run \
+  --case hash-sha256-8192 --case poseidon2-kb-states-256 \
+  --case merkle-poseidon2-h16-w9-single --case machine-logup-h8-m32-present \
+  --case host-vector-kb-sum-65536 \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks --output build/experiments/selected-controls
+```
+
+Use `--suite merkle` or `--suite host_vector` for their small dimensional panels.
+Normal runs execute validation gates before publishing timing summaries;
+source compilation and generator tests alone do not establish runtime admission.
 
 Broader coverage does not establish universal performance. Full Groth16/KZG,
 recursive proving, production zkVM traces, other fields/hash families,
@@ -299,7 +409,9 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 ```sh
 cargo test --locked -p zkc-benchmarks
 uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
-  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_protocol_measurements.py \
+  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
+  common/tests/harness/test_benchmark_execution.py \
+  common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py
 uv run --no-sync --locked ruff check common/benchmarks
 python3 common/tests/check_docs.py --all

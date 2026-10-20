@@ -58,9 +58,16 @@ proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};acce
 
 
 def recurrence(root, shape):
-    """The quadratic recurrence AIR shared by both STARK profiles: its Bundle,
-    boundary values and row-major trace."""
+    """Shared AIR Bundle and independently computed row-major trace.
+
+    The original independent quadratic recurrence stays the default. Coupled
+    columns read their cyclic neighbors in the same row; updates are simultaneous.
+    """
     height, width = shape['height'], shape['width']
+    coupled = shape.get('constraint') == 'coupled'
+    degree = shape.get('constraint_degree', 2)
+    if coupled and (width < 2 or degree not in (2, 3)):
+        raise ValueError('coupled AIR requires at least two columns and degree two or three')
     spec = importlib.util.spec_from_file_location('benchmark_ring_arena', root/'compiler/adapters/ring_arena.py')
     arena_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(arena_module)
@@ -71,8 +78,18 @@ def recurrence(root, shape):
         following = arena.input('koala-bear', ['read', 0, '1', col])
         initial = arena.input('koala-bear', ['public', col])
         final = arena.input('koala-bear', ['public', width+col])
-        for value, selector in ((current-initial, ['first']), (current-final, ['last']),
-                                (following-current*current-(col+1), ['interior', 0, 1])):
+        first_boundary, last_boundary = current-initial, current-final
+        if coupled:
+            neighbor = arena.input('koala-bear', ['read', 0, '0', (col+1) % width])
+            previous = arena.input('koala-bear', ['read', 0, '0', (col-1) % width])
+            product = current*neighbor
+            if degree == 3:
+                product = current*product
+            transition = following-product-previous-(col+1)
+        else:
+            transition = following-current*current-(col+1)
+        for value, selector in ((first_boundary, ['first']), (last_boundary, ['last']),
+                                (transition, ['interior', 0, 1])):
             assertions.append([len(outputs), selector])
             outputs.append(value)
     ring, bindings = arena.finish(outputs)
@@ -84,8 +101,17 @@ def recurrence(root, shape):
     for _ in range(height):
         trace.extend(current)
         final = current
-        current = [(x*x+i+1) % a.P for i, x in enumerate(current)]
+        if coupled:
+            current = [(pow(x, degree-1, a.P)*current[(i+1) % width]+current[(i-1) % width]+i+1) % a.P
+                       for i, x in enumerate(current)]
+        else:
+            current = [(x*x+i+1) % a.P for i, x in enumerate(current)]
     return bundle, initial, final, trace
+
+
+def trace_oracle(shape):
+    kind = f"coupled degree-{shape['constraint_degree']}" if shape.get('constraint') == 'coupled' else 'quadratic'
+    return f'Python {kind} trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification'
 
 
 def air(root, shape):
@@ -114,7 +140,7 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
     witness = {'trace': list(map(str, trace))}
     return Program(source, [{'public': public, 'witness': witness}], mutate_proof=mutate_claim,
                    entry='example::Proof', dependencies=('arguments.stark.single_table.koala_bear_octic',), assets={'trace': bundle}, proof=True,
-                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')
+                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))
 
 
 def library(root, shape):
@@ -146,4 +172,4 @@ proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
                    mutate_proof=partial(mutate_claim, tag=b'ZKCV\x00\x16', minimum=26),
                    entry='example::Proof', dependencies=('arguments.stark.single_table', 'arguments.stark.configurations.koala_bear_octic',
                                                         'arguments.stark.configurations.koala_bear_quartic'), assets={'trace': bundle}, proof=True,
-                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')
+                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))

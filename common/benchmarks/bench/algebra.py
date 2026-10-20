@@ -1,5 +1,8 @@
 """Untimed mathematical oracles, independent of the native backend libraries."""
 import random
+from functools import cache
+import importlib.util
+from pathlib import Path
 
 P = 2130706433
 FR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
@@ -16,7 +19,7 @@ def add(a, b):
 
 def mul(a, b):
     degree = len(a)
-    assert degree == len(b) and degree in (1, 8)
+    assert degree == len(b) and degree in (1, 4, 8)
     result = [0] * (2 * degree - 1)
     for i, x in enumerate(a):
         for j, y in enumerate(b):
@@ -62,3 +65,62 @@ def coset(coefficients, shift, size):
 
 def encode(value):
     return str(value[0]) if len(value) == 1 else list(map(str, value))
+
+
+BINARY = 'gf2-64.pentanomial-4-3-1'
+BINARY_CUBIC = BINARY + '.ext3-trinomial1'
+BINARY_REFERENCE = Path(__file__).resolve().parents[2]/'tests/support/binary_reference.py'
+
+
+@cache
+def binary_reference(path=BINARY_REFERENCE):
+    """Reuse the maintained shift-and-add oracle, also captured as an input."""
+    spec = importlib.util.spec_from_file_location('benchmark_binary_reference', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class FieldOracle:
+    """Scalar arithmetic and readable codecs, never an expression evaluator."""
+
+    def __init__(self, field, *, root=None):
+        self.degree = {'koala-bear': 1, 'bls12-381.fr': 1,
+                       'koala-bear.ext4-binomial3': 4, 'koala-bear.ext8-binomial3': 8,
+                       BINARY: 1, BINARY_CUBIC: 3}[field]
+        self.binary = field in (BINARY, BINARY_CUBIC)
+        self.modulus = (1 << 64) if self.binary else FR if field == 'bls12-381.fr' else P
+        self.zero = (0,) * self.degree
+        self.one = (1,) + (0,) * (self.degree - 1)
+        reference = BINARY_REFERENCE if root is None else root/'common/tests/support/binary_reference.py'
+        self.support = (reference,) if self.binary else ()
+
+    def add(self, x, y):
+        return tuple(u ^ v if self.binary else (u + v) % self.modulus
+                     for u, v in zip(x, y, strict=True))
+
+    def sub(self, x, y):
+        return self.add(x, y) if self.binary else tuple((u - v) % self.modulus
+                                                       for u, v in zip(x, y, strict=True))
+
+    def mul(self, x, y):
+        if self.binary:
+            ref = binary_reference(self.support[0])
+            return (ref.mul(x[0], y[0]),) if self.degree == 1 else tuple(ref.cubic_mul(x, y))
+        return (x[0] * y[0] % self.modulus,) if self.degree == 1 else mul(x, y)
+
+    def power(self, x, exponent):
+        result = self.one
+        while exponent:
+            if exponent & 1:
+                result = self.mul(result, x)
+            x, exponent = self.mul(x, x), exponent >> 1
+        return result
+
+    def dense(self, count, seed):
+        return dense(count, self.degree, seed, self.modulus)
+
+    def encode(self, value):
+        if self.binary:
+            return hex(value[0]) if self.degree == 1 else list(map(hex, value))
+        return encode(value)

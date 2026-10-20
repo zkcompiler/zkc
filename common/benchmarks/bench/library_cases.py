@@ -42,19 +42,44 @@ def bulletproofs(root, shape, directory):
                    support=(source, corpus), oracle='retained Monero conformance corpus; same-stack verification here, independent Monero comparison in the monero family')
 
 
+def machine_run(shape):
+    """A bounded linear program admitted by the existing accumulator adapter."""
+    height = shape['cpu_height']
+    if height not in (4, 8, 16):
+        raise ValueError('machine CPU/program height must be 4, 8 or 16')
+    if shape['memory_height'] not in (8, 16, 32) or shape['memory_height'] < 2*height:
+        raise ValueError('machine memory schedule must cover the run within 8, 16 or 32 rows')
+    instructions = []
+    for i in range(height-1):
+        if shape.get('memory_accesses', shape['memory_present']) and i % 3 in (1, 2):
+            instructions.append(['store' if i % 3 == 1 else 'load', str((i//3) % 2)])
+        else:
+            instructions.append(['add-immediate', str(i+1)])
+    return ['zkc.accumulator-machine-run/0', instructions + [['halt', '0']], '3']
+
+
 def machine(root, shape, directory, *, timeout):
     if shape['statement']:
         raise ValueError('machine regression fixtures support fixed inputs only')
     project = root/'common/tests/fixtures/projects/accumulator-machine'
-    fixture = root/'compiler/adapters/accumulator-machine/fixtures'/shape['fixture']/'run.json'
+    scaled = 'cpu_height' in shape
+    if scaled:
+        directory.mkdir(parents=True, exist_ok=True)
+        fixture = directory/'machine-run.json'
+        fixture.write_text(json.dumps(machine_run(shape), indent=2) + '\n')
+    else:
+        fixture = root/'compiler/adapters/accumulator-machine/fixtures'/shape['fixture']/'run.json'
     generated = directory/'machine-inputs'
     command = [sys.executable, project/'prepare.py', fixture, generated]
-    if shape['fixture'] == 'store-load':
+    if scaled:
+        command += ['--memory-clocks', str(shape['memory_height']//2),
+                    '--memory-present' if shape['memory_present'] else '--no-memory-present']
+    elif shape['fixture'] == 'store-load':
         command += ['--memory-clocks', '16', '--memory-present']
     Journal(directory/'generator', timeout).command(command, cwd=root)
     public, witness = [json.loads((generated/f'{name}.json').read_text()) for name in ('public', 'witness')]
     bundle = root/'compiler/adapters/accumulator-machine/fixtures/bundle.json'
-    return Program((project/'main.zkc').read_text(), [{'public': public, 'witness': witness}],
+    program = Program((project/'main.zkc').read_text(), [{'public': public, 'witness': witness}],
         entry=f'accumulator_machine::Proof{shape["reduction"]}',
         dependencies=('arguments.stark.configurations.koala_bear_octic', 'arguments.stark.whole_bundle', 'core.collections', 'relations.air'),
         assets={'machine': json.loads(bundle.read_text())}, proof=True,
@@ -63,3 +88,6 @@ def machine(root, shape, directory, *, timeout):
         support=(project/'main.zkc', project/'prepare.py', fixture, bundle,
                  root/'compiler/adapters/accumulator-machine/accumulator_machine.py', root/'compiler/adapters/ring_arena.py'),
         oracle='existing external machine adapter and same-stack verifier; correlated library regression, not an independent VM benchmark')
+    if scaled:
+        program.oracle = 'existing independent imperative accumulator interpreter supplies table witnesses; captured ThreeTableArgument with same-stack proof verification, not independent proof-system validation'
+    return program

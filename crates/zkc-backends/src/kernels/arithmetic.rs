@@ -527,9 +527,7 @@ fn dense<S: Family>(
             let x = f(1)?;
             // Load, multiply, initialize/write the destination, then freeze it.
             let mut out = destination(a.len(), S::zero(), 5)?;
-            for (value, destination) in a.iter().zip(out.as_mut_slice()) {
-                *destination = *value * x;
-            }
+            super::vector::scale::<S>(a, x, out.as_mut_slice());
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,
             ])
@@ -567,14 +565,10 @@ fn dense<S: Family>(
             let mut out = destination(a.len(), S::zero(), 6)?;
             if name == "vector.mul" {
                 S::product(a, b, out.as_mut_slice())?;
+            } else if name == "vector.add" {
+                super::vector::add::<S>(a, b, out.as_mut_slice());
             } else {
-                for ((a, b), destination) in a.iter().zip(b.iter()).zip(out.as_mut_slice()) {
-                    *destination = if name == "vector.add" {
-                        *a + *b
-                    } else {
-                        *a - *b
-                    };
-                }
+                super::vector::sub::<S>(a, b, out.as_mut_slice());
             }
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,

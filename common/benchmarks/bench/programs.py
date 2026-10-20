@@ -22,16 +22,17 @@ class Program:
     support: tuple = ()
 
 
-def increment_first(values, name, modulus):
+def increment_first(values, name, modulus, *, empty_value='1'):
     """Change one known field coordinate without changing its input type."""
     result = deepcopy(values)
     parent, key = result, name
     while isinstance(parent[key], list) and parent[key]:
         parent, key = parent[key], 0
     if isinstance(parent[key], list):
-        parent[key] = ['1']
+        parent[key] = [empty_value]
     else:
-        parent[key] = str((int(parent[key]) + 1) % modulus)
+        text = parent[key]
+        parent[key] = hex(int(text, 16) ^ 1) if text.startswith('0x') else str((int(text) + 1) % modulus)
     return result
 
 
@@ -44,7 +45,7 @@ domain F = field("FIELD");
 '''
 
 
-def local(field, parameters, body, inputs):
+def local(field, parameters, body, inputs, *, root=None):
     source = HEADER.replace('FIELD', field) + f'''
 fn compute({parameters})->bool {{ {body} }}
 protocol Work roles(P)({parameters.replace(', ', ' @P, ')} @P)->(accepted:bool @P) {{
@@ -52,7 +53,10 @@ protocol Work roles(P)({parameters.replace(', ', ' @P, ')} @P)->(accepted:bool @
 }}
 run Demo = Work;
 '''
-    return Program(source, [{'P': inputs}], incorrect={'P': increment_first(inputs, 'expected', a.FR if field == 'bls12-381.fr' else a.P)})
+    oracle = a.FieldOracle(field, root=root)
+    return Program(source, [{'P': inputs}], support=oracle.support,
+                   incorrect={'P': increment_first(inputs, 'expected', oracle.modulus,
+                                                   empty_value=oracle.encode(oracle.one))})
 
 
 def finite(shape):

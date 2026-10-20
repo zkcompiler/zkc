@@ -121,14 +121,6 @@ pub fn dot(a: &[KoalaBear], b: &[KoalaBear]) -> Result<KoalaBear> {
 pub fn mul_into(a: &[KoalaBear], b: &[KoalaBear], out: &mut [KoalaBear]) -> Result<()> {
     crate::kernels::arithmetic::equal_len(a.len(), b.len())?;
     crate::kernels::arithmetic::equal_len(a.len(), out.len())?;
-    let (a, a_tail) = Packed::pack_slice_with_suffix(a);
-    let (b, b_tail) = Packed::pack_slice_with_suffix(b);
-    let (out, out_tail) = Packed::pack_slice_with_suffix_mut(out);
-    for ((a, b), out) in a.iter().zip(b).zip(out) {
-        *out = *a * *b;
-    }
-    for ((a, b), out) in a_tail.iter().zip(b_tail).zip(out_tail) {
-        *out = *a * *b;
-    }
+    crate::kernels::vector::mul::<KoalaBear>(a, b, out);
     Ok(())
 }

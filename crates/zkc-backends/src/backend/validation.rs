@@ -428,16 +428,25 @@ impl Core {
         // The invocation allowance bounds newly allocated storage. Include
         // nested operand backings so an accessor returning an existing child
         // does not need room for a second copy of that child.
-        let mut held = HashSet::new();
-        for argument in args {
-            argument.retained_parts(&mut |backing| {
-                !i.retained.contains(backing) && held.insert(backing)
-            });
-        }
+        // Inline results and already-retained aliases need no operand walk.
+        // Build the invocation-local set only at the first unretained backing.
+        let mut held = None;
         let mut fresh = 0u128;
         for value in &values {
             let owned = value.retained_parts(&mut |backing| {
-                if i.retained.contains(backing) || !held.insert(backing) {
+                if i.retained.contains(backing) {
+                    return false;
+                }
+                let held = held.get_or_insert_with(|| {
+                    let mut held = HashSet::new();
+                    for argument in args {
+                        argument.retained_parts(&mut |backing| {
+                            !i.retained.contains(backing) && held.insert(backing)
+                        });
+                    }
+                    held
+                });
+                if !held.insert(backing) {
                     return false;
                 }
                 fresh += backing.bytes() as u128;
@@ -450,3 +459,7 @@ impl Core {
         Ok(values)
     }
 }
+
+#[cfg(test)]
+#[path = "validation_tests.rs"]
+mod tests;

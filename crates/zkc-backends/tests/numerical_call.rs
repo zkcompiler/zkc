@@ -264,6 +264,174 @@ fn sample<E: ExtensionField<KoalaBear>>(seed: usize) -> E {
     })
 }
 
+fn domain_points_checks<E: ExtensionField<KoalaBear>>(identity: Identity, field: fn(E) -> Value) {
+    let binding = |name: &str| OperationBinding {
+        contract: name.into(),
+        arguments: vec![identity.name().into()],
+        implementation: format!("plonky3/{name}"),
+    };
+    let (scalar_tag, vector_tag) = match identity {
+        Identity::KoalaBear => (19, 20),
+        Identity::KoalaBearExt4 => (21, 22),
+        Identity::KoalaBearExt8 => (26, 27),
+        _ => unreachable!(),
+    };
+    // Independent integer arithmetic in each canonical basis coordinate. The
+    // root convention is specified in docs/spec/domains/polynomials.md.
+    const MODULUS: u64 = 2_130_706_433;
+    let shift_coordinates: Vec<_> = (0..E::DIMENSION)
+        .map(|i| MODULUS - 17 - 31 * i as u64)
+        .collect();
+    let shift = E::from_basis_coefficients_fn(|i| KoalaBear::new(shift_coordinates[i] as u32));
+    let scalar_bytes = |coordinates: &[u64]| {
+        let mut bytes = b"ZKCV\0".to_vec();
+        bytes.push(scalar_tag);
+        for coordinate in coordinates {
+            bytes.extend_from_slice(&(*coordinate as u32).to_le_bytes());
+        }
+        bytes
+    };
+    let codec = backend(Policy::default());
+    for n in [1usize, 2, 8, 32] {
+        let mut root = 1_791_270_792u64;
+        for _ in n.trailing_zeros()..24 {
+            root = root * root % MODULUS;
+        }
+        let mut root_coordinates = vec![0; E::DIMENSION];
+        root_coordinates[0] = root;
+        let result = one(
+            backend(Policy::default()),
+            binding("poly.domain_root"),
+            &[],
+            vec![Value::Index(n as u64)],
+        )
+        .0
+        .unwrap();
+        assert_eq!(
+            codec.encode_native_value(&result[0]).unwrap(),
+            scalar_bytes(&root_coordinates)
+        );
+
+        let result = one(
+            backend(Policy::default()),
+            binding("poly.domain_points"),
+            &[],
+            vec![field(shift), Value::Index(n as u64)],
+        )
+        .0
+        .unwrap();
+        let mut expected = b"ZKCV\0".to_vec();
+        expected.push(vector_tag);
+        expected.extend_from_slice(&(n as u32).to_le_bytes());
+        let mut coordinates = shift_coordinates.clone();
+        for i in 0..n {
+            let point = one(
+                backend(Policy::default()),
+                binding("poly.domain_point"),
+                &[],
+                vec![field(shift), Value::Index(n as u64), Value::Index(i as u64)],
+            )
+            .0
+            .unwrap();
+            let bytes = scalar_bytes(&coordinates);
+            assert_eq!(codec.encode_native_value(&point[0]).unwrap(), bytes);
+            expected.extend_from_slice(&bytes[6..]);
+            for coordinate in &mut coordinates {
+                *coordinate = *coordinate * root % MODULUS;
+            }
+        }
+        assert_eq!(coordinates, shift_coordinates);
+        assert_eq!(codec.encode_native_value(&result[0]).unwrap(), expected);
+    }
+
+    let retained = 8 * size_of::<E>() + 256;
+    // This installed operation uses output/allocation preflight, rather than
+    // the managed numerical Call budget. Pin its existing exact allowances.
+    for (n, shift, max_elements, max_bytes, available, error) in [
+        (8, shift, 8, 8 * retained, retained, None),
+        (
+            8,
+            shift,
+            8,
+            8 * retained,
+            retained - 1,
+            Some("exhausted:output-bytes"),
+        ),
+        (
+            8,
+            shift,
+            8,
+            8 * retained - 1,
+            retained,
+            Some("exhausted:output-bytes"),
+        ),
+        (0, E::ZERO, 8, 8 * retained, 0, Some("refused:coset-size")),
+        (3, E::ZERO, 8, 8 * retained, 0, Some("refused:coset-size")),
+        (
+            1 << 25,
+            E::ZERO,
+            8,
+            8 * retained,
+            0,
+            Some("refused:coset-size"),
+        ),
+        (
+            16,
+            E::ZERO,
+            8,
+            8 * retained,
+            0,
+            Some("refused:coset-element-limit"),
+        ),
+        (
+            8,
+            E::ZERO,
+            8,
+            8 * retained,
+            0,
+            Some("refused:coset-zero-shift"),
+        ),
+    ] {
+        let mut driver = Controlled::new(backend(Policy {
+            max_table_elements: max_elements,
+            max_value_bytes: max_bytes,
+            max_numerical_work: 0,
+            max_numerical_bytes: 0,
+            ..Policy::default()
+        }));
+        driver.output_limit = Some(available);
+        let (result, driver) = one(
+            driver,
+            binding("poly.domain_points"),
+            &[],
+            vec![field(shift), Value::Index(n)],
+        );
+        if let Some(error) = error {
+            assert_eq!(result.unwrap_err(), error);
+            assert!(driver.outputs.is_empty());
+        } else {
+            assert_eq!(result.unwrap().len(), 1);
+            assert_eq!(driver.outputs.len(), 1);
+        }
+        assert_eq!(driver.inner.active_frames(), 0);
+    }
+}
+
+#[test]
+fn base_installed_domain_points_and_allowances() {
+    domain_points_checks::<KoalaBear>(Identity::KoalaBear, Value::KoalaBearField);
+}
+
+#[test]
+fn quartic_installed_domain_points_and_allowances() {
+    domain_points_checks::<KoalaBearExt4>(Identity::KoalaBearExt4, Value::KoalaBearExt4Field);
+}
+
+#[test]
+fn octic_installed_domain_points_and_allowances() {
+    domain_points_checks::<KoalaBearExt8>(Identity::KoalaBearExt8, Value::KoalaBearExt8Field);
+}
+
 fn quotient_checks<E: ExtensionField<KoalaBear>>(
     identity: Identity,
     field: fn(E) -> Value,
