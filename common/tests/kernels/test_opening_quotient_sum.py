@@ -76,6 +76,35 @@ run Demo=Work;
         check(f'empty-{height}', data | {'selected': [], 'points': [], 'claims': [],
                                         'weights': [], 'shift': f.encode(f.zero)}, initial)
 
+    # Run boundaries and a return to a replaced point exercise reuse and
+    # recomputation with the same immutable inputs. Zero weights still take
+    # part in the complete validation performed before any accumulation.
+    point_runs = [(name, [scalar(f, seed) for seed in seeds])
+                  for name, seeds in [('same', [9] * 6), ('mixed', [9, 9, 11, 9, 11, 11]),
+                                      ('distinct', [9, 11, 13, 15, 17, 19])]]
+    point = scalar(f, 9)
+    rotated = f.mul(point, f.mul(domain[1], f.power(shift, f.modulus ** f.degree - 2)))
+    assert rotated != point and f.power(rotated, height) == f.power(point, height)
+    point_runs.append(('equal-powers', [point, rotated, rotated, point, point, rotated]))
+    if f.degree > 1:
+        # Equal base coordinates must not make distinct extension points alias.
+        other = (point[0], (point[1] + 1) % f.modulus, *point[2:])
+        point_runs.append(('equal-base-coordinate', [point, other, other, point, point, other]))
+    for name, points in point_runs:
+        selected = [2, 0, 2, 1, 0, 1]
+        claims = [scalar(f, 37 + j) for j in range(6)]
+        weights = [scalar(f, 53), f.zero, f.one, scalar(f, 59), f.zero, scalar(f, 61)]
+        assert not any(point in domain for point in points)
+        expected = list(initial)
+        for column, point, claim, weight in zip(selected, points, claims, weights, strict=True):
+            for row, x in enumerate(domain):
+                inverse = f.power(f.sub(x, point), f.modulus ** f.degree - 2)
+                expected[row] = f.add(expected[row],
+                                      f.mul(weight, f.mul(f.sub(columns[column][row], claim), inverse)))
+        check(f'point-runs-{name}', data | {'selected': selected,
+              'points': list(map(f.encode, points)), 'claims': list(map(f.encode, claims)),
+              'weights': list(map(f.encode, weights))}, expected)
+
     def refuse(name, changes, cause):
         report = entry.run(name, data | changes, refuses='entry-run-incomplete')
         assert report['execution']['roles'][0]['after'][1]['cause'] == [

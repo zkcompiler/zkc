@@ -146,6 +146,9 @@ mod tests {
         let shape = OpeningQuotientSumShape::new(8, 2, 4, 3, [3; 3], 4).unwrap();
         let retained = size(4, 32).unwrap();
         let managed = 256 + 4 * 4 * 32;
+        // Pin the published worst-case floors independently of provider reuse.
+        assert_eq!(retained, 384);
+        assert_eq!(shape.work().unwrap(), 25_089);
         assert_eq!(shape.managed_bytes(32).unwrap(), managed);
         let exact = Policy {
             max_numerical_bytes: managed,

@@ -452,9 +452,9 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
         })
     }
 
-    /// Reuse denominators and prefixes across all selected columns. The existing
-    /// serial inversion helper invokes the accumulation in reverse row order;
-    /// descriptor order is preserved at every row. No allocation or column copy.
+    /// Reuse the inverse vector while consecutive descriptors share a point.
+    /// A changed point replaces it in the same two scratch arrays. Descriptor
+    /// order is preserved at every row; no allocation or column copy is needed.
     pub(crate) fn write_into(
         &self,
         initial: &[E],
@@ -469,6 +469,7 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
             return Err(Error::EvaluationCount);
         }
         destination.copy_from_slice(initial);
+        let mut previous_point = None;
         for (j, &column) in self.columns.iter().enumerate() {
             // The constructor establishes these bounds before any writes;
             // retain checked host arithmetic when deriving the borrowed slice.
@@ -480,6 +481,13 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
                 .checked_add(self.domain.size)
                 .ok_or(Error::SizeOverflow)?;
             let selected = &self.values[offset..end];
+            if previous_point == Some(self.points[j]) {
+                for (row, &inverse) in prefixes.iter().enumerate() {
+                    destination[row] +=
+                        self.weights[j] * (selected[row] - self.claims[j]) * inverse;
+                }
+                continue;
+            }
             let mut x = self.domain.shift;
             for denominator in denominators.iter_mut() {
                 *denominator = x - self.points[j];
@@ -489,6 +497,7 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
                 destination[row] += self.weights[j] * (selected[row] - self.claims[j]) * inverse;
                 inverse
             })?;
+            previous_point = Some(self.points[j]);
         }
         Ok(())
     }

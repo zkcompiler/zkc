@@ -15,7 +15,7 @@ from coset_reference import CosetReference
 
 
 ROOT = Path(__file__).resolve().parents[3]
-FAMILIES = {'kzg': 28, 'curve_family': 24, 'sparse_matrix': 22, 'opening_quotient': 48}
+FAMILIES = {'kzg': 28, 'curve_family': 24, 'sparse_matrix': 22, 'opening_quotient': 72}
 FR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 DALEK = 2**252 + 27742317777372353535851937790883648493
 
@@ -163,7 +163,7 @@ def test_sparse_directions_match_dense_contractions_and_exact_occupancy(bench, d
 
 
 @pytest.mark.parametrize('degree', [1, 4, 8])
-@pytest.mark.parametrize('kind,count', [('repeated', 4), ('distinct', 4), ('repeated', 0)])
+@pytest.mark.parametrize('kind,count', [('repeated', 4), ('distinct', 4), ('mixed', 8), ('repeated', 0)])
 def test_opening_forms_match_lagrange_claims_and_rational_quotients_in_all_coordinates(
         bench, degree, kind, count):
     shape = {'extension_degree': degree, 'height': 8, 'width': 4,
@@ -182,7 +182,7 @@ def test_opening_forms_match_lagrange_claims_and_rational_quotients_in_all_coord
     assert not set(points) & set(domain)
     if count:
         assert len(set(selected)) == 4
-        assert len(set(points)) == (1 if kind == 'repeated' else count)
+        assert len(set(points)) == {'repeated': 1, 'distinct': count, 'mixed': 3}[kind]
     claimed = list(map(decode, inputs['claimed']))
     for column, point, claim in zip(selected, points, claimed, strict=True):
         assert claim == ref.lagrange(columns[column], domain, point)

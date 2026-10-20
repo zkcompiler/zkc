@@ -41,19 +41,26 @@ pub fn unit<F: Field>(n: index, m: index) -> Vector<F> effects(stop) where () {
   return vec::concat(ones, vec::fill<F>(0, n - m - 1));
 }
 
+// Outside the domain, inverses[i] = 1 / (points[i] - z) and vanishing = 1 - z^n.
+fn barycentric_value<F: Field>(points: Vector<F>, values: Vector<F>,
+    inverses: Vector<F>, vanishing: F, n: index) -> F effects(stop) where () {
+  let sum = vec::dot(vec::hadamard(points, inverses), values);
+  return sum * vanishing * scalar::inverse(scalar::from_index<F>(n));
+}
+
 // p(z). Inside the domain this is the stored value; outside it is the
-// barycentric formula p(z) = (z^n - 1) / n * sum_i values[i] points[i] / (z - points[i]).
+// barycentric formula p(z) = (1 - z^n) / n * sum_i values[i] points[i] / (points[i] - z).
 pub fn evaluate<F: Field>(input: Evaluations<F>, z: F) -> F effects(stop) where () {
   let unity = evaluation::evaluation_domain(input);
   let points = evaluation::points(unity);
   let values = evaluation::values(input);
   let n = evaluation::size(unity);
-  return if in_domain(unity, z) {
+  let vanishing = 1 - scalar::power(z, n);
+  return if vanishing == 0 {
     vec::get(values, position_in_points(points, z))
   } else {
-    let inverses = vec::inverse(vec::subtract(vec::fill(z, n), points));
-    let sum = vec::dot(vec::hadamard(inverses, points), values);
-    sum * (scalar::power(z, n) - 1) * scalar::inverse(scalar::from_index<F>(n))
+    let inverses = vec::inverse(vec::subtract(points, vec::fill(z, n)));
+    barycentric_value(points, values, inverses, vanishing, n)
   };
 }
 
@@ -66,20 +73,24 @@ pub fn quotient<F: Field>(input: Evaluations<F>, z: F) -> (Vector<F>, F) effects
   let points = evaluation::points(unity);
   let values = evaluation::values(input);
   let n = evaluation::size(unity);
-  let y = evaluate(input, z);
-  let shifted = vec::subtract(values, vec::fill(y, n));
-  let result = if in_domain(unity, z) {
+  let vanishing = 1 - scalar::power(z, n);
+  return if vanishing == 0 {
+    let m = position_in_points(points, z);
+    let y = vec::get(values, m);
+    let shifted = vec::subtract(values, vec::fill(y, n));
     // shifted[m] = values[m] - y = 0, so a unit placeholder denominator at m
     // contributes nothing and avoids inverting zero.
-    let m = position_in_points(points, z);
     let single = unit<F>(n, m);
     let away = vec::add(vec::subtract(points, vec::fill(z, n)), single);
     let rest = vec::hadamard(shifted, vec::inverse(away));
-    let scaled = vec::add(vec::scale(vec::subtract(vec::fill(z, n), points), z), single);
-    let at = vec::dot(vec::hadamard(shifted, points), vec::inverse(scaled));
-    vec::add(rest, vec::scale(single, at))
+    // rest[m] = 0. The missing quotient value is p'(z) = -sum_i rest[i] points[i] / z.
+    // A domain root is nonzero, including the singleton root 1.
+    let at = (0 - vec::dot(rest, points)) * scalar::inverse(z);
+    (vec::add(rest, vec::scale(single, at)), y)
   } else {
-    vec::hadamard(shifted, vec::inverse(vec::subtract(points, vec::fill(z, n))))
+    let inverses = vec::inverse(vec::subtract(points, vec::fill(z, n)));
+    let y = barycentric_value(points, values, inverses, vanishing, n);
+    let shifted = vec::subtract(values, vec::fill(y, n));
+    (vec::hadamard(shifted, inverses), y)
   };
-  return (result, y);
 }

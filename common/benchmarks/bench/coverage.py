@@ -272,7 +272,9 @@ def cases():
                 'Matched distribution and direction controls; SDK/run includes typed admission and equality, default capacities.')
     opening_panel = [(8, 1, 1, 'repeated'), (32, 4, 4, 'repeated'), (32, 4, 4, 'distinct'),
                      (128, 4, 4, 'distinct'), (32, 8, 6, 'distinct'), (8, 4, 0, 'repeated'),
-                     (1024, 4, 8, 'distinct'), (4096, 1, 8, 'distinct')]
+                     (1024, 4, 8, 'distinct'), (4096, 1, 8, 'distinct'),
+                     (1024, 4, 8, 'repeated'), (4096, 1, 8, 'repeated'),
+                     (32, 4, 6, 'mixed'), (1024, 4, 8, 'mixed')]
     for degree in (1, 4, 8):
         for height, width, count, kind in opening_panel:
             for form in ('library', 'reference'):

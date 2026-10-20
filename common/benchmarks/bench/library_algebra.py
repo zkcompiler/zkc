@@ -188,7 +188,7 @@ def opening_quotient(shape, *, root):
     degree, height, width, count = (shape[key] for key in
                                    ('extension_degree', 'height', 'width', 'openings'))
     kind, form = shape['point_kind'], shape['form']
-    if kind not in ('repeated', 'distinct') or form not in ('library', 'reference'):
+    if kind not in ('repeated', 'distinct', 'mixed') or form not in ('library', 'reference'):
         raise ValueError('unknown opening point kind or form')
     if count > height or width < 1 or count < 0:
         raise ValueError('invalid opening count or width')
@@ -200,7 +200,9 @@ def opening_quotient(shape, *, root):
     coefficients = [f.dense(height, 432+column) for column in range(width)]
     columns = [a.coset(cs, shift, height) for cs in coefficients]
     selected = [(3*i+width-1) % width for i in range(count)]
-    rotations = [0 if kind == 'repeated' else i for i in range(count)]
+    pattern = (0, 0, 1, 0, 1, 1, 2, 2)
+    rotations = [0 if kind == 'repeated' else pattern[i % len(pattern)] if kind == 'mixed' else i
+                 for i in range(count)]
     omega = pow(1791270792, (1 << 24)//height, a.P)
     points = [tuple(x*pow(omega, rotation, a.P) % a.P for x in zeta) for rotation in rotations]
     claims = [_horner(f, coefficients[column], point)

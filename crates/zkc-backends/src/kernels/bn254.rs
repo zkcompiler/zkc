@@ -277,6 +277,7 @@ fn opening_quotient_sum(args: &[Value], available: usize, policy: &Policy) -> Re
         let mut denominators = call.scratch(shape.height, F::zero())?;
         let mut prefixes = call.scratch(shape.height, F::zero())?;
         output.as_mut_slice().copy_from_slice(initial);
+        let mut previous_point = None;
         for (j, &column) in columns.iter().enumerate() {
             let column = usize::try_from(column).map_err(|_| refused("coset-coordinate"))?;
             let offset = column
@@ -286,12 +287,20 @@ fn opening_quotient_sum(args: &[Value], available: usize, policy: &Policy) -> Re
                 .checked_add(shape.height)
                 .ok_or_else(|| exhausted("size-overflow"))?;
             let selected = &values[offset..end];
+            if previous_point == Some(points[j]) {
+                for (row, &inverse) in prefixes.as_ref().iter().enumerate() {
+                    output.as_mut_slice()[row] +=
+                        weights[j] * (selected[row] - claims[j]) * inverse;
+                }
+                continue;
+            }
             for (denominator, x) in denominators.as_mut().iter_mut().zip(domain.elements()) {
                 *denominator = x - points[j];
             }
             serial_batch_inverse_into(denominators.as_ref(), prefixes.as_mut(), |row, inverse| {
                 output.as_mut_slice()[row] += weights[j] * (selected[row] - claims[j]) * inverse;
             })?;
+            previous_point = Some(points[j]);
         }
     } else {
         output.as_mut_slice().copy_from_slice(initial);
@@ -316,10 +325,11 @@ fn serial_batch_inverse_into(
     let mut inverse = product
         .inverse()
         .ok_or_else(|| refused("coset-opening-point"))?;
-    for (row, (prefix, denominator)) in prefixes.iter().zip(denominators).enumerate().rev() {
+    for (row, (prefix, denominator)) in prefixes.iter_mut().zip(denominators).enumerate().rev() {
         let denominator_inverse = *prefix * inverse;
         inverse *= denominator;
         finish(row, denominator_inverse);
+        *prefix = denominator_inverse;
     }
     Ok(())
 }
@@ -385,8 +395,11 @@ mod tests {
 
     #[test]
     fn opening_sum_matches_scalar_divisions_and_exact_managed_limits() {
-        for height in [1, 4, 16] {
-            let args = opening_args(height);
+        for (height, repeated) in [1, 4, 16].into_iter().flat_map(|h| [(h, false), (h, true)]) {
+            let mut args = opening_args(height);
+            if repeated {
+                args[5] = Value::Bn254Vector(vec![F::zero(); 4].into());
+            }
             let aliases = args.clone();
             let snapshots = [0, 5, 6, 7, 8].map(|i| vector(&args[i]).to_vec());
             let d = domain(height, F::from(7), &Policy::default()).unwrap();

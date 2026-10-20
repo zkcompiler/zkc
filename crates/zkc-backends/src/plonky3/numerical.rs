@@ -423,8 +423,11 @@ mod tests {
         )
     }
 
-    fn opening_native_checks<E: Family>() {
-        let args = opening_args::<E>();
+    fn opening_native_checks<E: Family>(repeated: bool) {
+        let mut args = opening_args::<E>();
+        if repeated {
+            args[5] = E::vector_value(vec![E::ZERO; 3]);
+        }
         let aliases = args.clone();
         let snapshots = [0, 5, 6, 7, 8].map(|i| E::vector(&args[i]).unwrap().to_vec());
         let values = E::vector(&args[0]).unwrap();
@@ -500,9 +503,11 @@ mod tests {
 
     #[test]
     fn native_opening_sums_preserve_coordinates_aliases_and_exact_limits() {
-        opening_native_checks::<KoalaBear>();
-        opening_native_checks::<KoalaBearExt4>();
-        opening_native_checks::<KoalaBearExt8>();
+        for repeated in [false, true] {
+            opening_native_checks::<KoalaBear>(repeated);
+            opening_native_checks::<KoalaBearExt4>(repeated);
+            opening_native_checks::<KoalaBearExt8>(repeated);
+        }
     }
 
     #[test]

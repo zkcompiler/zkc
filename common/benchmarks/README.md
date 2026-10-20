@@ -175,7 +175,7 @@ larger multi-table scaling remain additional experiments.
 ### Public algebra library panels
 
 [`library_algebra.py`](bench/library_algebra.py) adds 28 `kzg`, 24
-`curve_family`, 22 `sparse_matrix` and 48 `opening_quotient` cases. These are
+`curve_family`, 22 `sparse_matrix` and 72 `opening_quotient` cases. These are
 selected panels, without aggregate weights. All earlier cases and `SMOKE`
 remain unchanged. Select these families with `--suite kzg`, `--suite curve_family`,
 `--suite sparse_matrix` or `--suite opening_quotient`.
@@ -217,14 +217,13 @@ controls through the public matrix APIs. An all-zero `(17,31,0)` pair and a
 uniform `(128,257,1024)` pair separate empty input and nnz growth from dimensions.
 Python contractions check every output entry, including zeros.
 
-Opening cases use current checked coset, column-batch, opening-descriptor,
-bound-opening and accumulator APIs. The eight `(height, width, openings, points)`
-shapes are `(8,1,1,repeated)`, `(32,4,4,repeated)`, `(32,4,4,distinct)`,
-`(128,4,4,distinct)`, `(32,8,6,distinct)`, `(8,4,0,repeated)`,
-`(1024,4,8,distinct)` and `(4096,1,8,distinct)`, each over
-KB, Ext4 and Ext8 with matched `library`/`reference` forms. Selected columns use
-an explicit deterministic ordering; point rotations are all zero or successive
-distinct rotations. All points lie outside the evaluation coset. Nonzero dense
+Opening cases use checked coset, column-batch, opening-descriptor, bound-opening
+and accumulator APIs over KB, Ext4 and Ext8 with matched `library`/`reference`
+forms. Heights range from 8 to 4096, widths from 1 to 8 and opening counts from
+0 to 8, with separate singleton and empty controls. Points are all repeated,
+all distinct, or mixed runs that also revisit earlier points; the catalog fixes
+the individual shapes. Selected columns and rotations use explicit deterministic
+orderings. All points lie outside the evaluation coset. Nonzero dense
 initial values, first weight and ratio exercise accumulation and final-weight
 progression. The reference explicitly loops over `coset::opening_quotient` and
 `vector::accumulate`; the library calls `opening::deep_columns`. Both construct
