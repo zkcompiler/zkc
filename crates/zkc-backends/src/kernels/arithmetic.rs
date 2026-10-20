@@ -78,10 +78,7 @@ pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
     }
 }
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
-    let mut v = Vec::new();
-    v.try_reserve_exact(n)
-        .map_err(|_| exhausted("allocation"))?;
-    Ok(v)
+    crate::allocation::reserve(n).map_err(|_| exhausted("allocation"))
 }
 pub(crate) fn equal_len(a: usize, b: usize) -> Result<()> {
     if a != b {

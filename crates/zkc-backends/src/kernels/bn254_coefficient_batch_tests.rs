@@ -70,6 +70,27 @@ fn coefficient_batches_match_pinned_fft_and_scalar_horner() {
 }
 
 #[test]
+fn coefficient_batch_allocation_failures_publish_nothing_and_preserve_inputs() {
+    let policy = Policy::default();
+    let values: Vec<_> = (1u64..=9).map(F::from).collect();
+    let arguments = args(values.clone(), 3, 3, 8);
+    let aliases = [arguments[0].clone(), arguments[0].clone()];
+    // First the private destination, then the reusable FFT scratch vector.
+    for successful in [0, 1] {
+        let failure = crate::allocation::failure::after(successful);
+        assert_eq!(
+            run(&arguments, &policy, usize::MAX).unwrap_err().code,
+            "exhausted:allocation"
+        );
+        drop(failure);
+        for alias in &aliases {
+            assert_eq!(vector(alias), values);
+        }
+        assert!(run(&arguments, &policy, usize::MAX).is_ok());
+    }
+}
+
+#[test]
 fn coefficient_batch_exact_output_workspace_and_work_boundaries() {
     let policy = Policy::default();
     let values: Vec<_> = (1u64..=9).map(F::from).collect();

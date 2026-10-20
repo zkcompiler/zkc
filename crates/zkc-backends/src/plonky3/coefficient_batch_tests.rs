@@ -86,6 +86,50 @@ fn coefficient_batches_match_pinned_dft_and_horner_in_every_coordinate() {
     provider_and_horner_checks::<KoalaBearExt8>();
 }
 
+fn allocation_failure_checks<E: Family>() {
+    let policy = Policy::default();
+    let values: Vec<_> = (0..9).map(sample::<E>).collect();
+    let arguments = args(values.clone(), 3, 3, 8);
+    let aliases = [arguments[0].clone(), arguments[0].clone()];
+    // First the private destination, then the adapter's transform matrix.
+    for successful in [0, 1] {
+        let failure = crate::allocation::failure::after(successful);
+        assert_eq!(
+            run::<E>(&arguments, &policy, usize::MAX).unwrap_err().code,
+            "exhausted:allocation"
+        );
+        drop(failure);
+        for alias in &aliases {
+            assert_eq!(E::vector(alias).unwrap(), values);
+        }
+        assert!(run::<E>(&arguments, &policy, usize::MAX).is_ok());
+    }
+    // The lower adapter also leaves its caller's destination untouched when
+    // the mandatory matrix reservation fails, before any transform work.
+    let mut destination = vec![sample::<E>(99); 24];
+    let before = destination.clone();
+    let failure = crate::allocation::failure::after(0);
+    assert_eq!(
+        Kernels::default().coset_evaluate_batch_into(
+            &values,
+            3,
+            3,
+            Domain::new(8, sample::<E>(3), 32).unwrap(),
+            &mut destination,
+        ),
+        Err(polynomial::Error::Allocation)
+    );
+    drop(failure);
+    assert_eq!(destination, before);
+}
+
+#[test]
+fn coefficient_batch_allocation_failures_publish_nothing_and_preserve_inputs() {
+    allocation_failure_checks::<KoalaBear>();
+    allocation_failure_checks::<KoalaBearExt4>();
+    allocation_failure_checks::<KoalaBearExt8>();
+}
+
 fn boundary_checks<E: Family>() {
     let policy = Policy::default();
     let values: Vec<_> = (0..9).map(sample::<E>).collect();

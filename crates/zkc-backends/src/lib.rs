@@ -1,5 +1,6 @@
 //! Concrete mathematical adapters for the independent interactive role runtime.
 //! Ark PCS is nonhiding; setup honesty and protocol soundness remain premises.
+mod allocation;
 mod backend;
 mod bindings;
 mod codec;

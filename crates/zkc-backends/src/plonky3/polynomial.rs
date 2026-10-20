@@ -120,10 +120,7 @@ impl Kernels {
         if width == 0 {
             return Ok(());
         }
-        let mut scaled = Vec::new();
-        scaled
-            .try_reserve_exact(output_len)
-            .map_err(|_| Error::Allocation)?;
+        let mut scaled = crate::allocation::reserve(output_len).map_err(|_| Error::Allocation)?;
         scaled.resize(output_len, E::ZERO);
         let mut power = E::ONE;
         for row in 0..coefficient_height.min(domain.size) {
@@ -167,9 +164,7 @@ impl Kernels {
         // P3 matrices are row-major internally. Every matrix element is E,
         // retaining all extension coordinates through algebra DFTs. Reserve
         // adapter allocations fallibly; provider internals own their caches.
-        let mut rows = Vec::new();
-        rows.try_reserve_exact(input_len)
-            .map_err(|_| Error::Allocation)?;
+        let mut rows = crate::allocation::reserve(input_len).map_err(|_| Error::Allocation)?;
         rows.resize(input_len, E::ZERO);
         for row in 0..input.size {
             for col in 0..width {
@@ -186,10 +181,7 @@ impl Kernels {
         {
             return Err(Error::CoefficientCount);
         }
-        let mut scaled = Vec::new();
-        scaled
-            .try_reserve_exact(output_len)
-            .map_err(|_| Error::Allocation)?;
+        let mut scaled = crate::allocation::reserve(output_len).map_err(|_| Error::Allocation)?;
         scaled.resize(output_len, E::ZERO);
         let ratio = output.shift / input.shift;
         let mut power = E::ONE;
