@@ -1,5 +1,6 @@
 //! In-process invocation data. These descriptions confer no execution authority.
 use super::material::ProverMaterial;
+use std::sync::Arc;
 use zkc_backends::Value;
 
 /// One native entry operand. Immutable data may be supplied without encoding;
@@ -8,7 +9,8 @@ use zkc_backends::Value;
 pub enum InputValue {
     /// Immutable data satisfying its upstream scalar/group library invariants.
     Native(Box<Value>),
-    Wire(Vec<u8>),
+    /// Shared wire bytes; each invocation still performs ordinary admission.
+    Wire(Arc<Vec<u8>>),
     /// Application-owned decoded data with a retained canonical encoding.
     Prepared(super::data::PreparedData),
     /// Opened native frame; its exact bytes must match the declared digest.
@@ -44,7 +46,7 @@ impl InputValue {
     /// Available wire storage. A Wire variant still requires ordinary admission.
     pub(crate) fn wire_bytes(&self) -> Option<&[u8]> {
         match self {
-            Self::Wire(bytes) => Some(bytes),
+            Self::Wire(bytes) => Some(bytes.as_slice()),
             Self::Prepared(data) => Some(data.canonical_bytes()),
             _ => None,
         }

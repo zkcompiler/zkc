@@ -10,7 +10,7 @@ import shutil
 import sys
 
 from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_preparation_limits, validate_worker
+from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_preparation_limits, validate_worker, validate_ingress
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
@@ -84,10 +84,7 @@ def execute_job(job, directory, plan, timeout):
     require(report['build'].get('execution_counts', False) is job.execution_counts,
             'worker execution-counts feature differs from the requested observation')
     if job.backend.get('kind') in ('host', 'run'):
-        count = len(job.backend['inputs']) if job.backend['kind'] == 'host' else 1
-        require([c['input_index'] for c in report['lifecycle']['calls']] ==
-                [i % count for i in range((plan['warmups']+plan['samples'])*plan['iterations'])],
-                'worker changed the input schedule')
+        validate_ingress(report['lifecycle'], job.backend)
     if job.backend.get('kind') == 'host':
         validate_preparation_limits(report['lifecycle']['preparation_limits'], job.backend)
     if job.operation == 'run':
@@ -130,7 +127,7 @@ def run_suite(args, prepare):
     manifest = {'format': FORMAT, 'status': 'running', 'phase': 'preparation', 'results': [], 'contracts': {},
                 'plan': {'samples': args.samples, 'warmups': args.warmups, 'iterations': args.iterations},
                 'processes': args.processes, 'seed': args.seed, 'label': args.label,
-                'compiler_options': args.compiler_option,
+                'compiler_options': args.compiler_option, 'ingress': args.ingress,
                 'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
     try:
@@ -144,6 +141,8 @@ def run_suite(args, prepare):
         manifest['threads'] = args.threads
         jobs, check = prepare(args, output, capture, manifest)
         require(jobs, 'empty benchmark matrix')
+        require(all(j.backend.get('ingress') == args.ingress for j in jobs
+                    if j.backend.get('kind') in ('host', 'run')), 'job ingress mismatch')
         require(all(j.execution_counts == args.execution_counts for j in jobs), 'job observation mismatch')
         if args.execution_counts:
             require(all(j.backend.get('kind') in ('host', 'run') for j in jobs),
@@ -236,6 +235,8 @@ def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=
     require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
             and report.get('status') in allowed, 'negative control failed outside verification')
 
+    if job.backend.get('kind') in ('host', 'run'):
+        require(report.get('ingress') == job.backend['ingress'], 'refusal ingress differs from the request')
     if completed is not None:
         require(report.get('completed_calls') == completed, 'negative control failed before the intended invocation')
     if classes is not None and report['status'] == 'rejected':

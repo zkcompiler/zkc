@@ -6,6 +6,7 @@ from pathlib import Path
 
 P = 2130706433
 FR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+BN254 = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 DALEK_SCALAR = 2**252 + 27742317777372353535851937790883648493
 
 
@@ -86,12 +87,13 @@ class FieldOracle:
     """Scalar arithmetic and readable codecs, never an expression evaluator."""
 
     def __init__(self, field, *, root=None):
-        self.degree = {'koala-bear': 1, 'bls12-381.fr': 1, 'ristretto255.scalar': 1,
+        self.degree = {'koala-bear': 1, 'bls12-381.fr': 1, 'bn254.fr': 1, 'ristretto255.scalar': 1,
                        'koala-bear.ext4-binomial3': 4, 'koala-bear.ext8-binomial3': 8,
                        BINARY: 1, BINARY_CUBIC: 3}[field]
         self.binary = field in (BINARY, BINARY_CUBIC)
         self.modulus = ((1 << 64) if self.binary else
-                        {'bls12-381.fr': FR, 'ristretto255.scalar': DALEK_SCALAR}.get(field, P))
+                        {'bls12-381.fr': FR, 'bn254.fr': BN254,
+                         'ristretto255.scalar': DALEK_SCALAR}.get(field, P))
         self.zero = (0,) * self.degree
         self.one = (1,) + (0,) * (self.degree - 1)
         reference = BINARY_REFERENCE if root is None else root/'common/tests/support/binary_reference.py'

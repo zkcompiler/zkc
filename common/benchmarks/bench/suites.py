@@ -139,7 +139,7 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
         write_json(directory / filename, content)
         capture.add(directory / filename)
     public_path, witness_path = directory / 'public.json', directory / 'witness.json'
-    host = {'kind': 'host', 'package': str(package), 'sha256': digest(package),
+    host = {'kind': 'host', 'ingress': args.ingress, 'package': str(package), 'sha256': digest(package),
             'inputs': [{'public': str(public_path), 'witness': str(witness_path)}], 'preparation': True}
     reference = {'kind': suite, 'public': str(public_path)}
     if protocol.witness: reference['witness'] = str(witness_path)
@@ -149,6 +149,7 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
     manifest['contracts'][name] = {'protocol': suite, 'size': size, 'field': protocol.field,
         'transcript': protocol.transcript, 'encoding': protocol.encoding, 'public_sha256': digest(public_path),
         'witness_sha256': digest(witness_path), 'threads': args.threads,
+        'ingress_policy': {'zkc': args.ingress, 'reference': 'reference defaults'},
         'input_policy': 'repeated fixed statement; fresh internal prover randomness where used',
         'comparison': 'complete implementation stacks; input validation and primitive implementations may differ',
         'verification': protocol.verification, 'randomized_prover': protocol.randomized,

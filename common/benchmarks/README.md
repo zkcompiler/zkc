@@ -94,15 +94,18 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
 | `coset_batch` | Matched per-column and library extension; KB/Ext4/Ext8, widths 1/4/16/64, separate height and row-layout controls | Independent integer transforms; every coordinate checked; row-layout cases include both transposes and SDK/run includes Host and equality costs |
 | `coset_point` | Direct opening claims, repeated native interpolation/evaluation, and coefficient reuse for multiple points | Full point-major output check; on/off-domain controls; SDK timing includes setup, validation and output construction |
+| `quotient_split` | Matched library batch and explicit per-block coefficient evaluation; base, quartic and octic KoalaBear; varying input height, block width and count | Independent coefficient/block-evaluation oracle; includes interpolation, padding, output checks and Host costs; no divisibility proof |
+| `literal` | Constants versus operand captures in ordered Local loops across all installed fields; zero, first and repeated reach | Independent repeated-addition oracle; inspect exported reached literal counts; SDK/run includes Host and checking |
+| `relation_rows` | Actual table residuals for quadratic and coupled constraints; varying height/width, valid and perturbed traces | Independent complete residual oracle, including inactive slots; Bundle admission, result checks and Host costs included |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `kzg` | Generic KZG evaluation/quotient on checked roots-of-unity evaluations; on/off-domain, BLS Fr sizes 1/8/64/256/1,024, a bit-reversed control and KoalaBear size 32 | Independent coefficients, Horner and synthetic division; every quotient entry checked, including the derivative at an on-domain point; no pairing or commitment |
-| `curve_family` | BLS12-381 G1/G2, Ristretto and prime Edwards; fixed-base source multiplication, shared-scalar/per-point scaling and MSM | Python scalar expectations plus shared-provider group-law self-consistency; includes point construction and checks, without an independent curve-coordinate oracle |
-| `sparse_matrix` | Controlled dimensions/nnz and uniform, clustered or empty-row distributions; forward and transpose multiplication | Independent Python contractions, every output checked; no full R1CS proof or enlarged capacities |
+| `curve_family` | BLS12-381 and BN254 G1/G2, Ristretto and prime Edwards; fixed-base source multiplication, shared-scalar/per-point scaling and MSM; 257-point scaling controls cross the Arkworks chunk boundary | Python scalar expectations plus shared-provider group-law self-consistency; includes point construction and checks, without an independent curve-coordinate oracle |
+| `sparse_matrix` | Controlled dimensions/nnz and uniform, clustered or empty-row distributions; forward, transpose and bilinear contractions; prime, extension and binary fields | Independent complete-output Python contractions with dense extension coordinates; bilinear includes singleton/long-row controls; no full R1CS proof or enlarged capacities |
 | `opening_quotient` | Current `deep_columns` versus explicit per-opening quotient/accumulate; KB/Ext4/Ext8, selected columns, repeated/distinct off-domain points | Identical inputs; independent coefficient/Horner/quotient expectations, all accumulated coordinates and final weight checked; checked setup and output construction inside SDK/run |
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
 | `merkle` | Poseidon2 base-row trees; separate height/row-width sweeps, single and pruned multi-openings | Independent expected rows and changed-row rejection; root/path authentication shares the provider |
-| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; existing JSON-to-native Host Run path, default capacities |
+| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; selected Host/Run ingress, default capacities |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -129,11 +132,10 @@ controls explicitly use weaker algebraic consistency checks.
 
 ### Fixed numerical panel
 
-The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, 12 `coset`, nine
-`curve_operation`, and ten coupled AIR/STARK cases. Existing identifiers,
-formulas and the smoke list stay unchanged. Case counts imply no suite weights.
+The numerical panels vary expression shape, field operations, transforms, cosets,
+curves and coupled AIR/STARK constraints. Case counts imply no suite weights.
 
-The `coset_batch` panel adds 42 cases with identical inputs across its two source
+The `coset_batch` panel uses identical inputs across its two source
 forms. It separates batch width, transform height and layout conversion. The
 per-column form retains explicit interpolation/evaluation and concatenation;
 the library form follows the current column-extension implementation. These are
@@ -174,11 +176,10 @@ larger multi-table scaling remain additional experiments.
 
 ### Public algebra library panels
 
-[`library_algebra.py`](bench/library_algebra.py) adds 28 `kzg`, 24
-`curve_family`, 22 `sparse_matrix` and 72 `opening_quotient` cases. These are
-selected panels, without aggregate weights. All earlier cases and `SMOKE`
-remain unchanged. Select these families with `--suite kzg`, `--suite curve_family`,
-`--suite sparse_matrix` or `--suite opening_quotient`.
+[`library_algebra.py`](bench/library_algebra.py) generates the public algebra
+panels, including `quotient_split` and `relation_rows`;
+[`operations.py`](bench/operations.py) supplies `literal` loops. Select families
+with `--suite`; the catalog owns exact dimensions, without aggregate weights.
 
 KZG calls the actual [generic library](../../libraries/commitments/kzg/README.md),
 separately measuring `evaluate` and `quotient`. Every call constructs an admitted
@@ -194,11 +195,12 @@ including the derivative entry on domain. Quotient cases check both the returned
 value and every quotient entry. This is evaluation/quotient algebra, without
 commitments, trusted setup, pairings or a KZG security claim.
 
-Curve cases cover `bls12-381.g1`, `bls12-381.g2`, `ristretto255.group` and
-`edwards25519.prime`, using each group's associated scalar field. All four
-forms use 17 points in each group; BLS G1 and Edwards add singleton and 64-point
-shared-scalar/MSM controls. Fixed-base means an authored `curve::collect` of
-generator multiplications; it selects no dedicated fixed-base native kernel.
+Curve cases cover BLS12-381 and BN254 G1/G2, Ristretto and prime Edwards, using
+each group's associated scalar field. The common small-vector panel covers all
+four forms; separate size controls include 257-point shared-scalar/per-point
+scaling across the Arkworks chunk boundary. Fixed-base means an authored
+`curve::collect` of generator multiplications; it selects no dedicated fixed-base
+native kernel.
 Shared-scalar uses `curve::scale`, per-point uses `curve::scale_each`, and MSM
 uses `curve::msm`. Points are generated inside the call, with zero/unit factors
 in the larger cases. Python computes the expected scalar of every result;
@@ -207,15 +209,14 @@ These are explicitly **shared-provider self-consistency** oracles, without
 independent curve coordinates, timing benefits or security claims. Ristretto and
 Edwards remain distinct nominal groups despite sharing a scalar field.
 
-Sparse cases hold exact dimensions and nonzero-entry count fixed while varying
-distribution. The matched shapes `(rows, columns, nnz)` are `(17,31,68)`,
-`(128,257,512)` and `(257,33,512)`. Uniform occupancy balances row counts;
-clustered occupancy fills contiguous hot row/column blocks first; empty-row
-occupancy uses only even rows. Coordinates are unique and sorted, and every
-stored coefficient is nonzero. Each shape/distribution has forward and transpose
-controls through the public matrix APIs. An all-zero `(17,31,0)` pair and a
-uniform `(128,257,1024)` pair separate empty input and nnz growth from dimensions.
-Python contractions check every output entry, including zeros.
+Sparse cases vary dimensions, nonzero count and uniform/clustered/empty-row
+distributions through the public matrix APIs. BLS Fr includes matched forward,
+transpose and bilinear contractions, empty matrices, and singleton/long-row
+bilinear controls. Cross-field clustered panels exercise all three contractions
+over BN254 Fr, KoalaBear and its extensions, and both binary fields. Coordinates
+are unique and sorted; stored coefficients are nonzero. Independent Python
+contractions check complete outputs, including zeros and dense extension
+coordinates.
 
 Opening cases use checked coset, column-batch, opening-descriptor, bound-opening
 and accumulator APIs over KB, Ext4 and Ext8 with matched `library`/`reference`
@@ -243,10 +244,9 @@ admission remain separate checks required before publishing measurements.
 
 ### Hash, commitment and input controls
 
-The added panel contains three `hash_bytes`, three `poseidon`, six `merkle`,
-seven bounded `machine`, and four `host_vector` cases. Existing case contracts,
-smoke lists and expression roles remain fixed. The catalog records category,
-dimensions and operation mix; generated Programs supply the captured oracle.
+The catalog records category, dimensions and operation mix for hash, permutation,
+Merkle, bounded machine and Host input controls; generated Programs supply the
+captured oracle.
 
 [`commitments.py`](bench/commitments.py) uses the public byte hash, permutation
 and row-oracle APIs. SHA-256 checks every digest byte against `hashlib`.
@@ -285,8 +285,8 @@ admission with minimal source work; sum adds one native reduction. The largest
 case reaches the default 65,536-element collection ceiling. JSON requests fit
 the existing 16 MiB document and 200,000-node bounds; no capacity is enlarged.
 Decode/request construction and SDK/Host execution retain their separate report
-boundaries. Worker-level native input transport and enlarged-capacity experiments
-remain separate work; these cases do not compare input transports.
+boundaries. Select `--ingress` for matched input-ownership comparisons under these
+same capacities.
 
 With the prebuilt tools from the Run section, select cases or suites explicitly:
 
@@ -344,13 +344,55 @@ ordered permutations. Distinct public statements are checked before timing.
 External comparison families retain their fixed-statement contracts and default
 preparation policy.
 
+## Input ingress
+
+`--ingress json|wire|native|prepared` selects Host/Run input ownership (default
+`json`), independently of `--preparation`. All modes use the captured named input
+documents and the admitted interface's default physical codecs.
+
+| Mode | Input construction |
+|---|---|
+| `json` | Bounded named decoding before every call |
+| `wire` | Decode once per statement before warmups; retain canonical frames in shared `Arc<Vec<u8>>` owners |
+| `native` | Decode once, then use the native decoder and validator to retain typed immutable Values |
+| `prepared` | Decode once, then use `PreparedData::from_wire` to retain decoded data and its canonical encoding |
+
+Preowned modes retain one input tree per statement, run `Entry::check_inputs`
+during construction, and share data owners when constructing each request.
+Every SDK call still performs ordinary binding, quota, loading and authority
+checks. No execution plan or protocol result is retained by ingress selection.
+Conversion preserves products, associated values and active variants. Native
+and Prepared conversion require duplicable, wire-encodable, setup-independent
+leaves; resource/key descriptions retain their existing constructors. The worker
+Decoder has no file resolver; unsupported conversions refuse. Document/inline
+limits apply across the input groups of each statement; execution capacities are
+unchanged.
+
+The current `zkc.benchmark/0` manifest requires `ingress`.
+`zkc.benchmark-worker/0` requires Host/Run backend `ingress`, report
+`lifecycle.ingress`, `lifecycle.input_setup`, and each call's `input_index`,
+`decode_ns` and `request_ns`. JSON has an empty `input_setup` and numeric
+`decode_ns`; preowned modes have null `decode_ns` and one ordered setup row per
+statement. Each row contains `input_index`, `construction_ns` (decoding,
+conversion and input preflight) and `retained_payload_bytes`. Payload sums
+ordinary converted leaves: Wire frame lengths, Native retained-value bytes, or
+Prepared decoded-plus-canonical bytes. It excludes constructor material, input
+documents, proof buffers, request-tree metadata and allocator overhead. It is
+neither RSS nor allocation traffic and does not deduplicate shared occurrences.
+
+External reference workers keep their existing ingress defaults; only their
+Host counterpart receives the selector. Contracts and reports record this
+asymmetry as `reference defaults`.
+
 ## Measurement boundaries
 
 | Metric | Boundary |
 |---|---|
 | Package capture | Authentication/capture after reading package bytes |
 | Admission | Native Entry admission after capture; the existing `admission_ns` total is capture + admission |
-| Decode/call | Fresh JSON decoding and request construction from preloaded bytes, before every Host call |
+| Input construction | Preowned `input_setup[].construction_ns`, once per statement before warmups |
+| Decode/call | Bounded named JSON decoding from preloaded bytes; `decode_ns` is null for preowned modes |
+| Request/call | `request_ns`: named request construction, including sharing the preowned input tree where selected |
 | SDK call | Input adaptation/admission, execution, service lifecycle and named output reconstruction; source controls also execute their result checks |
 | First call / first visit | First invocation in a worker / first invocation for each statement, including warmup calls |
 | Final diagnostics | One materialization after the last SDK call, measured separately |

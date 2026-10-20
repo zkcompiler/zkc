@@ -75,6 +75,14 @@ validation point. Unexecuted branches cannot acquire invocation failures through
 preparation. Scratch arguments are cleared on success and failure; only empty
 buffer capacity survives between calls.
 
+The native backend prepares typed `field.constant` values at that reached
+attribute checkpoint. Reuse requires the exact operation binding, bound physical
+signature, attribute rule and complete attribute strings. A failed decode
+publishes no replacement and refuses the current call. Each use checks 512
+output bytes against current limits and retains a fresh inline scalar charge;
+normal result validation and instruction accounting still apply. These static
+facts confer no policy, setup or resource authority.
+
 The instance checks output arity, complete physical types, backend validity and
 capacity before retaining results. Shared validation evidence applies only to
 unchanged immutable backing. It never substitutes for capability issuance,

@@ -11,17 +11,19 @@ pub struct Preparation {
 #[derive(Serialize)]
 pub struct Call {
     pub input_index: usize,
-    pub decode_ns: u128,
+    pub decode_ns: Option<u128>,
+    pub request_ns: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_counts: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preparation: Option<Preparation>,
 }
 impl Call {
-    pub fn decoded(input_index: usize, decode_ns: u128) -> Self {
+    pub fn constructed(input_index: usize, decode_ns: Option<u128>, request_ns: u128) -> Self {
         Self {
             input_index,
             decode_ns,
+            request_ns,
             execution_counts: None,
             preparation: None,
         }
@@ -30,6 +32,8 @@ impl Call {
 
 #[derive(Serialize)]
 pub struct Lifecycle {
+    pub ingress: crate::ingress::Ingress,
+    pub input_setup: Vec<InputSetup>,
     pub preparation_limits: Option<Limits>,
     pub capture_ns: u128,
     pub admit_ns: u128,
@@ -37,6 +41,14 @@ pub struct Lifecycle {
     pub diagnostics_ns: u128,
     pub peak_rss_before_diagnostics: Option<u64>,
     pub peak_rss_after_diagnostics: Option<u64>,
+}
+
+/// Logical payload only; excludes input documents, proof buffers and metadata.
+#[derive(Serialize)]
+pub struct InputSetup {
+    pub input_index: usize,
+    pub construction_ns: u128,
+    pub retained_payload_bytes: usize,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]

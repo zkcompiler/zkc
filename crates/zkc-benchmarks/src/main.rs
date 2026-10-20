@@ -1,5 +1,6 @@
 //! Development-only benchmark client. Production execution stays in the Host.
 mod host;
+mod ingress;
 mod measure;
 mod observation;
 mod run_entry;
@@ -14,6 +15,10 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub enum Failure {
+    Ingress {
+        policy: ingress::Ingress,
+        cause: Box<Failure>,
+    },
     Failed(String),
     Rejected(String),
     InputBounds(String),
@@ -56,6 +61,7 @@ pub enum Operation {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Backend {
     Host {
+        ingress: ingress::Ingress,
         package: PathBuf,
         sha256: String,
         inputs: Vec<host::Input>,
@@ -64,6 +70,7 @@ enum Backend {
         preparation_bytes: Option<usize>,
     },
     Run {
+        ingress: ingress::Ingress,
         package: PathBuf,
         sha256: String,
         roles: std::collections::BTreeMap<String, PathBuf>,
@@ -86,6 +93,15 @@ struct Request {
     operation: Operation,
     plan: Plan,
     proof: PathBuf,
+}
+
+impl Request {
+    fn ingress(&self) -> Result<ingress::Ingress> {
+        match &self.backend {
+            Backend::Host { ingress, .. } | Backend::Run { ingress, .. } => Ok(*ingress),
+            _ => Err("backend has no Host ingress policy".into()),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -170,8 +186,9 @@ fn run() -> Result<Report> {
     {
         return Err("execution counts permit at most 128 calls per worker".into());
     }
-    let mut report = match &request.backend {
+    let mut report = (match &request.backend {
         Backend::Host {
+            ingress: _,
             package,
             sha256,
             inputs,
@@ -186,21 +203,29 @@ fn run() -> Result<Report> {
             *preparation,
             *preparation_entries,
             *preparation_bytes,
-        )?,
+        ),
         Backend::Run {
+            ingress: _,
             package,
             sha256,
             roles,
             accept_role,
-        } => run_entry::run(&request, package, sha256, roles, accept_role)?,
+        } => run_entry::run(&request, package, sha256, roles, accept_role),
         Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
-            schnorr::run(&request, public, witness.as_deref())?
+            schnorr::run(&request, public, witness.as_deref())
         }
         Backend::Sumcheck { public } if request.operation != Operation::Run => {
-            sumcheck::run(&request, public)?
+            sumcheck::run(&request, public)
         }
-        _ => return Err("backend does not support this operation".into()),
-    };
+        _ => Err("backend does not support this operation".into()),
+    })
+    .map_err(|cause| match request.ingress() {
+        Ok(policy) => Failure::Ingress {
+            policy,
+            cause: Box::new(cause),
+        },
+        Err(_) => cause,
+    })?;
     report.process_peak_rss_bytes = peak_rss();
     let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
     let status_value = |key: &str| {
@@ -224,6 +249,10 @@ fn main() {
     match run() {
         Ok(report) => println!("{}", serde_json::to_string(&report).unwrap()),
         Err(error) => {
+            let (ingress, error) = match error {
+                Failure::Ingress { policy, cause } => (Some(policy), *cause),
+                other => (None, other),
+            };
             let (completed_calls, preparation, preparation_limits, error) = match error {
                 Failure::Invocation {
                     completed,
@@ -257,13 +286,42 @@ fn main() {
                     "incorrect-result",
                     "run did not return the expected true acceptance output".into(),
                 ),
-                Failure::Invocation { .. } => unreachable!("invocations are attributed once"),
+                Failure::Invocation { .. } | Failure::Ingress { .. } => {
+                    unreachable!("failures are attributed once")
+                }
             };
             println!(
                 "{}",
-                json!({"format":"zkc.benchmark-worker/0", "status":status, "error":error, "completed_calls":completed_calls,"refusal":refusal,"preparation":preparation,"preparation_limits":preparation_limits})
+                json!({"format":"zkc.benchmark-worker/0", "ingress":ingress, "status":status, "error":error, "completed_calls":completed_calls,"refusal":refusal,"preparation":preparation,"preparation_limits":preparation_limits})
             );
             std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::*;
+
+    #[test]
+    fn ingress_is_explicit_in_the_current_backend_contract() {
+        for kind in ["host", "run"] {
+            let mut backend = if kind == "host" {
+                json!({"kind":kind,"package":"package","sha256":"pin","inputs":[],
+                    "preparation":true,"preparation_entries":null,"preparation_bytes":null})
+            } else {
+                json!({"kind":kind,"package":"package","sha256":"pin","roles":{},"accept_role":"P"})
+            };
+            assert!(serde_json::from_value::<Backend>(backend.clone()).is_err());
+            for ingress in ["json", "wire", "native", "prepared"] {
+                backend["ingress"] = json!(ingress);
+                assert!(serde_json::from_value::<Backend>(backend.clone()).is_ok());
+            }
+            backend["ingress"] = json!("both");
+            assert!(serde_json::from_value::<Backend>(backend.clone()).is_err());
+            backend["ingress"] = json!("json");
+            backend["unknown"] = json!(true);
+            assert!(serde_json::from_value::<Backend>(backend).is_err());
         }
     }
 }

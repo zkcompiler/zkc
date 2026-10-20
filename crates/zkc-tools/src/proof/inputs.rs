@@ -67,7 +67,7 @@ impl ProofInputs {
                 {
                     return Err("native-proof-public-inputs".into());
                 }
-                Ok(InputValue::Wire(host.capacity.wire(&row[2])?))
+                Ok(InputValue::Wire(host.capacity.wire(&row[2])?.into()))
             })
             .collect::<Result<Vec<_>>>()?;
         let inputs = data_rows
@@ -85,7 +85,7 @@ impl ProofInputs {
                     return Err("native-proof-role-input-kind".into());
                 }
                 Ok(match kind {
-                    "wire" => InputValue::Wire(host.capacity.wire(&spec[1])?),
+                    "wire" => InputValue::Wire(host.capacity.wire(&spec[1])?.into()),
                     "nonce" | "rng" => InputValue::Resource {
                         budget: budget(&spec[1])?,
                     },
@@ -238,7 +238,9 @@ pub(super) fn prepare(
         let key = imports.import(bytes, pin, "native-proof-canonical-key")?;
         let id = admission.add(Input::Ready(Value::VerifierKey(key.clone())))?;
         public_ids.insert(port.original, id);
-        material.entry(bytes).or_insert_with(|| key.clone());
+        material
+            .entry(bytes.as_slice())
+            .or_insert_with(|| key.clone());
         keys.insert(port.original, key);
     }
     let registry = zkc_backends::SetupRegistry::new(

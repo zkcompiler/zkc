@@ -175,11 +175,11 @@ def test_command_intervals_survive_failure(modules, tmp_path):
 
 
 def lifecycle_worker(times=(10, 100, 30, 300)):
-    calls = [{'input_index': i % 2, 'decode_ns': 5, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
+    calls = [{'input_index': i % 2, 'decode_ns': 5, 'request_ns': 2, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'admitted_entry_call',
         'proof_bytes': 4, 'admission_ns': 3, 'process_peak_rss_bytes': 100, 'proofs': [],
         'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {}, 'timer_floor_ns': 1,
-        'diagnostics': {}, 'lifecycle': {'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
+        'diagnostics': {}, 'lifecycle': {'ingress': 'json', 'input_setup': [], 'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
             'peak_rss_before_diagnostics': 80, 'peak_rss_after_diagnostics': 100, 'calls': calls},
         'samples': [{'phase': 'warmup' if i < 2 else 'sample', 'index': i, 'iterations': 1,
                      'elapsed_ns': t, 'cpu_ns': t, 'first_call_ns': t} for i, t in enumerate(times)]}
@@ -252,7 +252,7 @@ def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, 
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({response!r}))\n')
     executable.chmod(0o755)
-    backend = {'kind': 'host', 'inputs': [{}, {}], 'preparation': enabled,
+    backend = {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': enabled,
                'preparation_entries': entries, 'preparation_bytes': capacity}
     job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend,
                                tmp_path/'proof', 'admitted_entry_call')
@@ -266,8 +266,8 @@ def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, 
 
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'preparation': True}}
-    manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
+           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+    manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
                             for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
@@ -278,9 +278,9 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
 
 
 @pytest.mark.parametrize('backend', [
-    {'kind': 'host', 'preparation': True, 'preparation_entries': 512},
-    {'kind': 'host', 'preparation': True, 'preparation_bytes': 64 << 20},
-    {'kind': 'host', 'preparation': False},
+    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True, 'preparation_entries': 512},
+    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True, 'preparation_bytes': 64 << 20},
+    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': False},
     None, 'absent',
 ])
 def test_saved_manifest_checks_requested_limits(modules, backend):
@@ -288,7 +288,7 @@ def test_saved_manifest_checks_requested_limits(modules, backend):
            'boundary': 'admitted_entry_call'}
     if backend != 'absent':
         job['backend'] = backend
-    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
+    manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'passed', 'processes': 1,
                 'compiler_options': [], 'observation': 'timing',
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
@@ -310,7 +310,7 @@ def test_workers_receive_only_declared_environment(modules, monkeypatch):
 @pytest.mark.parametrize('completed', [None, 0, 1, 2])
 def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, completed):
     executable = tmp_path/'worker'
-    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'completed_calls': completed}
+    response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'completed_calls': completed}
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
@@ -325,7 +325,7 @@ def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, co
 def test_refusal_preparation_respects_requested_contract(modules, tmp_path, fault):
     limits = {'entries': 512, 'bytes': 64 << 20, 'default_entries': 128, 'default_bytes': 8 << 20}
     stats = {phase: {'entries': 200, 'retained_bytes': 9 << 20, 'hits': 1} for phase in ('before', 'after')}
-    backend = {'kind': 'host', 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
+    backend = {'kind': 'host', 'ingress': 'json', 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
     if fault == 'before_entries': stats['before']['entries'] = 513
     elif fault == 'after_bytes': stats['after']['retained_bytes'] = (64 << 20) + 1
     elif fault == 'hits': stats['after']['hits'] = 0
@@ -334,7 +334,7 @@ def test_refusal_preparation_respects_requested_contract(modules, tmp_path, faul
         limits[bound] = backend[f'preparation_{bound}'] = 0
         for observation in stats.values(): observation.update(entries=0, retained_bytes=0)
     elif fault == 'request': limits['entries'] = 256
-    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'completed_calls': 1,
+    response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'completed_calls': 1,
                 'preparation': stats, 'preparation_limits': limits}
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
@@ -380,7 +380,7 @@ def test_stark_claim_mutation_preserves_framing_and_canonical_coordinates(module
 @pytest.mark.parametrize('observed', ['format', 'binding', 'verification', None])
 def test_semantic_control_cannot_pass_at_the_format_layer(modules, tmp_path, observed):
     executable = tmp_path/'worker'
-    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'refusal': {'class': observed}}
+    response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'refusal': {'class': observed}}
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
@@ -416,8 +416,8 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
 def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     from copy import deepcopy
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'preparation': True}}
-    baseline = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
+           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+    baseline = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
@@ -445,7 +445,7 @@ sys.path.insert(0, {str(root/'common/benchmarks')!r})
 from bench import io, runner
 io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
 args = SimpleNamespace(output=Path({str(output)!r}), exclusive=True, samples=1, warmups=0, iterations=1,
-    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False, compiler_option=[])
+    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, ingress='json', execution_counts=False, compiler_option=[])
 def prepare(*args):
     os.kill(os.getpid(), signal.SIGTERM)
 raise SystemExit(runner.run(args, prepare))
@@ -471,8 +471,8 @@ def counted_manifest():
     for call in worker['lifecycle']['calls']:
         call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'preparation': True}}
-    return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
+           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+    return {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},
             'results': [job | {'status': 'passed', 'repetition': 0, 'worker': worker}]}

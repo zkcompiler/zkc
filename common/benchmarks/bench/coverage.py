@@ -16,7 +16,7 @@ class Case:
 
     def generate(self, root, directory, statement=0, *, timeout=300):
         shape = self.shape | {'statement': statement}
-        if self.name in ('kzg', 'curve_family', 'sparse_matrix', 'opening_quotient'):
+        if self.name in ('kzg', 'curve_family', 'sparse_matrix', 'opening_quotient', 'quotient_split', 'relation_rows'):
             return getattr(library_algebra, self.name)(shape, root=root)
         if self.name == 'machine':
             return library_cases.machine(root, shape, directory, timeout=timeout)
@@ -28,8 +28,8 @@ class Case:
             return stark.library(root, shape)
         if self.name == 'expression':
             return expressions.expression(shape, root=root)
-        if self.name == 'field_vector':
-            return operations.field_vector(shape, root=root)
+        if self.name in ('field_vector', 'literal'):
+            return getattr(operations, self.name)(shape, root=root)
         if self.name == 'host_vector':
             return operations.host_vector(shape)
         if self.name in ('hash_bytes', 'poseidon', 'merkle'):
@@ -251,6 +251,8 @@ def cases():
                    for form in ('fixed-base', 'shared-scalar', 'per-point', 'msm')]
     curve_panel += [(curve, n, form) for curve in ('bls-g1', 'edwards') for n in (1, 64)
                     for form in ('shared-scalar', 'msm')]
+    curve_panel += [(curve, 257, form) for curve in ('bls-g1', 'bls-g2', 'bn-g1', 'bn-g2')
+                    for form in ('shared-scalar', 'per-point')]
     for curve, n, form in curve_panel:
         group, field = library_algebra.CURVES[curve]
         add(f'curve-family-{curve}-{form}-{n}', 'curve_family',
@@ -270,6 +272,34 @@ def cases():
                 'operation', ('typed sparse matrix', direction+' contraction', distribution),
                 'Exact nnz and dimensions, unique nonzero entries; independent integer oracle checks all rows/columns. '
                 'Matched distribution and direction controls; SDK/run includes typed admission and equality, default capacities.')
+    extra_sparse = [('fr', 'bls12-381.fr', r, c, n, d, 'bilinear')
+                    for r, c, n, d in sparse_panel]
+    extra_sparse += [('fr', 'bls12-381.fr', 17, 31, 17, 'uniform', 'bilinear'),
+                     ('fr', 'bls12-381.fr', 2, 257, 512, 'clustered', 'bilinear')]
+    for short, field in [('bn', 'bn254.fr'), ('kb', 'koala-bear'),
+                          ('ext4', 'koala-bear.ext4-binomial3'),
+                          ('ext8', 'koala-bear.ext8-binomial3'),
+                          ('binary', a.BINARY), ('binary-ext3', a.BINARY_CUBIC)]:
+        extra_sparse += [(short, field, 32, 33, 256, 'clustered', direction)
+                         for direction in ('forward', 'transpose', 'bilinear')]
+    for short, field, rows, columns, nnz, distribution, direction in extra_sparse:
+        add(f'sparse-matrix-{short}-{rows}x{columns}-nnz{nnz}-{distribution}-{direction}', 'sparse_matrix',
+            {'rows': rows, 'columns': columns, 'nnz': nnz, 'distribution': distribution,
+             'direction': direction, 'field': field}, 'operation',
+            ('typed sparse matrix', direction+' contraction', distribution),
+            'Independent finite-field complete-output contraction, including dense extension coordinates. '
+            'Bilinear returns one scalar; singleton/long rows are explicit controls. SDK/run includes admission and checking.')
+    for short, field in [('fr', 'bls12-381.fr'), ('bn', 'bn254.fr'), ('dalek', 'ristretto255.scalar'),
+                          ('kb', 'koala-bear'), ('ext4', 'koala-bear.ext4-binomial3'),
+                          ('ext8', 'koala-bear.ext8-binomial3'),
+                          ('binary', a.BINARY), ('binary-ext3', a.BINARY_CUBIC)]:
+        for trips in (0, 1, 1024):
+            for form in ('constant', 'operand'):
+                add(f'literal-{short}-{trips}-{form}', 'literal',
+                    {'field': field, 'trips': trips, 'form': form}, 'operation',
+                    ('ordered Local loop', form, 'field addition'),
+                    'Independent repeated-addition oracle. Confirm exported reached literal counts; '
+                    'zero trips, first reach and repeated reach are separate cases; SDK/run includes checking and Host.')
     opening_panel = [(8, 1, 1, 'repeated'), (32, 4, 4, 'repeated'), (32, 4, 4, 'distinct'),
                      (128, 4, 4, 'distinct'), (32, 8, 6, 'distinct'), (8, 4, 0, 'repeated'),
                      (1024, 4, 8, 'distinct'), (4096, 1, 8, 'distinct'),
@@ -285,6 +315,25 @@ def cases():
                     'Current deep_columns versus authored per-opening quotient+accumulate; identical inputs and nonzero initial state. '
                     'Independent coefficient/Horner/synthetic-division oracle checks every coordinate and final weight; '
                     'SDK/run includes checked setup, validation and output construction; no performance/security claim.')
+    for degree in (1, 4, 8):
+        for n, width, count in ((32, 8, 4), (1024, 256, 4), (1024, 256, 8)):
+            for form in ('library', 'reference'):
+                add(f'quotient-split-ext{degree}-n{n}-w{width}-c{count}-{form}', 'quotient_split',
+                    {'extension_degree': degree, 'elements': n, 'block_width': width,
+                     'blocks': count, 'form': form}, 'composition',
+                    ('interpolation', 'coefficient blocks', 'coset evaluation', 'output assembly'),
+                    'Independent integer coefficients and full block evaluation oracle. Includes padding, '
+                    'interpolation, output validation and Host costs; no divisibility proof.')
+    for height, width, constraint, degree in ((1, 1, 'quadratic', 2), (32, 1, 'quadratic', 2),
+                                             (1024, 1, 'quadratic', 2), (32, 8, 'quadratic', 2),
+                                             (1024, 8, 'quadratic', 2), (1024, 8, 'coupled', 3)):
+        for data in ('valid', 'perturbed'):
+            add(f'relation-rows-h{height}-w{width}-{constraint}-{data}', 'relation_rows',
+                {'height': height, 'width': width, 'constraint': constraint,
+                 'constraint_degree': degree, 'data': data}, 'operation',
+                ('actual table rows', constraint, 'scoped assertions', data+' trace'),
+                'Independent complete residual oracle including inactive slots. Includes Bundle admission, '
+                'result validation and Host; one row and growing segments separate fixed setup from traversal.')
     return result
 
 

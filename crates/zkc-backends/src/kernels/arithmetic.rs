@@ -205,7 +205,9 @@ fn dense<S: Family>(
         p.output(512, i.max_output_bytes)?;
     }
     match name {
-        "field.constant" => scalar(S::decimal(&i.attributes[0])?),
+        "field.constant" => {
+            super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p)
+        }
         "field.add" => scalar(f(0)? + f(1)?),
         "field.sub" => scalar(f(0)? - f(1)?),
         "field.mul" => scalar(f(0)? * f(1)?),

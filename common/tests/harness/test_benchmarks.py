@@ -44,8 +44,8 @@ def test_statistics_use_processes_not_pooled_calls(bench):
     workers = [report(plan), report(plan)]
     for worker, times in zip(workers, ([999999, 10, 20, 1000], [999999, 30, 40, 50])):
         for sample, time in zip(worker['samples'], times): sample.update(elapsed_ns=time, first_call_ns=min(time, 50))
-    manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
-                'matrix': [{'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'boundary': 'test_call'}], 'results': [
+    manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
+                'matrix': [{'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'boundary': 'test_call', 'backend': {'kind': 'schnorr'}}], 'results': [
         {'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'status': 'passed', 'worker': w, 'repetition': i}
         for i, w in enumerate(workers)]}
     row = bench.results.summarize(manifest)[0]
@@ -80,7 +80,7 @@ def worker(tmp_path, plan, suffix='', response=None):
 
 def arguments(tmp_path):
     return SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=2, warmups=1, iterations=1,
-                           execution_counts=False, compiler_option=[], processes=2, seed=17,
+                           ingress='json', execution_counts=False, compiler_option=[], processes=2, seed=17,
                            cpu=None, threads=1, label='test', timeout=1)
 
 
@@ -91,7 +91,7 @@ def prepared(bench, tmp_path, executable, check=lambda *args: None):
         capture.add(executable)
         capture.add(proof)
         manifest['contracts'] = {'case': {'protocol': 'test'}}
-        jobs = [bench.runner.Job('case', name, 'verify', executable, {}, proof, 'test_call')
+        jobs = [bench.runner.Job('case', name, 'verify', executable, {'kind': 'schnorr'}, proof, 'test_call')
                 for name in ('left', 'right')]
         return jobs, check
     return prepare
@@ -143,9 +143,9 @@ def test_fixed_seed_and_thread_environment_are_explicit(bench, tmp_path, monkeyp
 
 def completed_manifest():
     plan = {'warmups': 0, 'samples': 1, 'iterations': 1}
-    matrix = [{'case': 'case', 'implementation': impl, 'operation': 'verify', 'boundary': 'test_call'}
+    matrix = [{'case': 'case', 'implementation': impl, 'operation': 'verify', 'boundary': 'test_call', 'backend': {'kind': 'schnorr'}}
               for impl in ('left', 'right')]
-    return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
+    return {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
             'matrix': matrix, 'host': {'cpu': 'one'},
             'contracts': {'case': {'boundaries': {'left': 'test_call', 'right': 'test_call'}}},
             'comparisons': [{'case': 'case', 'operation': 'verify', 'numerator': 'left', 'denominator': 'right'}],
@@ -211,7 +211,7 @@ print(json.dumps(report))
             if fault == 'check': raise bench.io.MeasurementError('independent proof rejected')
             if fault == 'unexpected': raise TypeError('unexpected adapter error')
             gate.observe(proof)
-        return [bench.runner.Job('case', 'test', 'prove', executable, {}, output/'unused', 'test_call')], check
+        return [bench.runner.Job('case', 'test', 'prove', executable, {'kind': 'schnorr'}, output/'unused', 'test_call')], check
     assert bench.runner.run(args, prepare) == 1
     manifest = json.loads((args.output/'manifest.json').read_text())
     assert all(r['status'] == 'failed' for r in manifest['results'])
@@ -241,7 +241,7 @@ def test_negative_gate_requires_structured_rejection(bench, tmp_path, status, tr
     value = {'format': 'zkc.benchmark-worker/0', 'status': status, 'error': 'resource limit'}
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({value!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
-    job = bench.runner.Job('case', 'reference', 'verify', executable, {}, tmp_path/'proof', 'test_call')
+    job = bench.runner.Job('case', 'reference', 'verify', executable, {'kind': 'schnorr'}, tmp_path/'proof', 'test_call')
     if status == 'rejected' or truncated and status == 'input-bounds':
         bench.suites.refuse(job, tmp_path/'negative', 1, truncated=truncated)
     else:
@@ -276,9 +276,9 @@ def test_worker_must_observe_requested_settings(bench, tmp_path, monkeypatch, se
     assert all(r['status'] == 'failed' and 'differs' in r['error'] for r in manifest['results'])
 
 
-@pytest.mark.parametrize('document', [[], {'format': 'zkc.benchmark/0', 'status': 'passed'},
-    {'format': 'zkc.benchmark/0', 'status': 'failed', 'results': None},
-    {'format': 'zkc.benchmark/0', 'status': 'interrupted', 'results': [], 'matrix': [None]}])
+@pytest.mark.parametrize('document', [[], {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'passed'},
+    {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'failed', 'results': None},
+    {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'interrupted', 'results': [], 'matrix': [None]}])
 def test_report_rejects_malformed_evidence_before_creating_output(bench, tmp_path, document, capsys):
     from harness import load
     cli = load('benchmark_report_cli', 'common/benchmarks/run.py')
@@ -293,7 +293,7 @@ def test_report_rejects_malformed_evidence_before_creating_output(bench, tmp_pat
 @pytest.mark.parametrize('cell', [False, True])
 @pytest.mark.parametrize('error', [None, [], {}])
 def test_failure_descriptions_are_checked_before_publication(bench, cell, error):
-    document = {'format': 'zkc.benchmark/0', 'status': 'failed', 'results': []}
+    document = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'failed', 'results': []}
     if cell:
         document['results'] = [{'case': 'x', 'implementation': 'zkc', 'operation': 'run',
                                 'status': 'failed', 'repetition': 0, 'error': error}]
@@ -325,7 +325,7 @@ report['proofs']=[artifact]
 print(json.dumps(report))
 ''')
     executable.chmod(0o755)
-    job = bench.runner.Job('case', 'test', 'prove', executable, {}, tmp_path/'unused', 'test_call')
+    job = bench.runner.Job('case', 'test', 'prove', executable, {'kind': 'schnorr'}, tmp_path/'unused', 'test_call')
     if fault is None:
         assert bench.runner.execute_job(job, tmp_path/'run', plan, 5)['worker']['proofs'][0]['bytes'] == 3
     else:

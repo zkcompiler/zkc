@@ -5,6 +5,36 @@ from . import algebra as a
 from .programs import local
 
 
+def literal(shape, *, root):
+    """Repeated reached literal sites versus already decoded operands."""
+    f = a.FieldOracle(shape['field'], root=root)
+    trips, form = shape['trips'], shape['form']
+    if trips < 0 or form not in ('constant', 'operand'):
+        raise ValueError('invalid literal control')
+    value = f.dense(1, 481)[0]
+    # Decimal literals in prime extensions denote a base-field embedding.
+    if not f.binary:
+        value = (value[0],) + (0,)*(f.degree-1)
+        attribute = str(value[0])
+    else:
+        attribute = a.binary_reference(f.support[0]).literal(list(value) if f.degree > 1 else value[0])
+    expected = f.zero
+    for _ in range(trips):
+        expected = f.add(expected, value)
+    expression = f'kernel<F>("field.constant"; "{attribute}")' if form == 'constant' else 'value'
+    program = local(shape['field'], 'value:F, trips:index, expected:F',
+                    f'''let mut total:F=0;
+                      for i in 0..trips {{ total=total+{expression}; }}
+                      return total==expected;''',
+                    {'value': f.encode(value), 'trips': str(trips), 'expected': f.encode(expected)},
+                    root=root)
+    program.oracle = ('Independent finite-field repeated addition; same literal value and trip count '
+                      'across source forms. Ordered Local loop; exported call counts must confirm '
+                      'whether the compiler retained the literal site. New SDK calls reset reached-site '
+                      'preparation; includes arithmetic, result checking and Host costs, not parse-only time')
+    return program
+
+
 def host_vector(shape):
     """Matched large inputs with minimal length work or one linear reduction."""
     n, operation = shape['elements'], shape['operation']

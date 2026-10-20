@@ -8,6 +8,7 @@ from .io import require, write_json
 from .observations import validate_counts, summarize_counts
 
 FORMAT = 'zkc.benchmark/0'
+INGRESS = ('json', 'wire', 'native', 'prepared')
 
 
 def validate_preparation(stats, limits=None, previous_hits=0):
@@ -34,6 +35,38 @@ def validate_preparation_limits(limits, request=None):
         require(value is None or type(value) is int and value >= 0, 'invalid requested preparation limit')
         expected.append((limits[f'default_{name}'] if value is None else value) if request['preparation'] else 0)
     require((limits['entries'], limits['bytes']) == tuple(expected), 'preparation limits differ from the request')
+
+
+def validate_backend(backend, ingress=None, boundary=None):
+    require(isinstance(backend, dict),
+            'missing preparation request' if boundary == 'admitted_entry_call' else 'invalid matrix backend')
+    require(backend.get('kind') in ('host', 'run', 'schnorr', 'sumcheck'), 'invalid matrix backend kind')
+    kind = ('host' if boundary == 'admitted_entry_call' else
+            'run' if boundary == 'admitted_run_call' else None)
+    require(kind is None or backend.get('kind') == kind, 'invalid ingress backend')
+    if backend.get('kind') in ('host', 'run'):
+        require(boundary is None or kind == backend['kind'], 'invalid ingress boundary')
+        require(backend.get('ingress') in INGRESS, 'invalid backend ingress')
+        if ingress is not None:
+            require(backend['ingress'] == ingress, 'manifest ingress differs from the job')
+
+
+def validate_ingress(lifecycle, backend):
+    validate_backend(backend)
+    require(backend.get('kind') in ('host', 'run'), 'invalid ingress backend')
+    policy = backend['ingress']
+    require(lifecycle['ingress'] == policy, 'worker ingress differs from the request')
+    if backend['kind'] == 'host':
+        inputs = backend.get('inputs')
+        require(isinstance(inputs, list) and inputs, 'missing captured ingress inputs')
+        count = len(inputs)
+    else:
+        count = 1
+    calls = lifecycle['calls']
+    require([c['input_index'] for c in calls] == [i % count for i in range(len(calls))],
+            'worker changed the input schedule')
+    require(len(lifecycle['input_setup']) == (0 if policy == 'json' else count),
+            'ingress setup differs from the captured statements')
 
 
 def validate_worker(report, plan, boundary):
@@ -82,7 +115,16 @@ def validate_worker(report, plan, boundary):
         require(isinstance(lifecycle, dict), 'missing Host lifecycle measurements')
     if lifecycle is not None:
         require(isinstance(lifecycle, dict) and set(lifecycle) == {'capture_ns', 'admit_ns', 'calls',
-                'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics', 'preparation_limits'}, 'invalid lifecycle fields')
+                'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics', 'preparation_limits', 'ingress', 'input_setup'}, 'invalid lifecycle fields')
+        policy = lifecycle['ingress']
+        require(policy in INGRESS, 'invalid ingress policy')
+        setup = lifecycle['input_setup']
+        require(isinstance(setup, list), 'invalid ingress setup')
+        for index, record in enumerate(setup):
+            require(isinstance(record, dict) and set(record) == {
+                'input_index', 'construction_ns', 'retained_payload_bytes'}
+                and all(type(v) is int and v >= 0 for v in record.values())
+                and record['input_index'] == index, 'invalid ingress setup record')
         limits = lifecycle['preparation_limits']
         if boundary == 'admitted_entry_call':
             validate_preparation_limits(limits)
@@ -97,10 +139,12 @@ def validate_worker(report, plan, boundary):
         require(isinstance(calls, list) and len(calls) == len(values)*plan['iterations'], 'incomplete lifecycle calls')
         previous_hits = 0
         for call in calls:
-            require(isinstance(call, dict) and {'input_index', 'decode_ns'} <= call.keys()
-                    and not (call.keys() - {'input_index', 'decode_ns', 'preparation', 'execution_counts'}), 'invalid lifecycle call')
+            require(isinstance(call, dict) and {'input_index', 'decode_ns', 'request_ns'} <= call.keys()
+                    and not (call.keys() - {'input_index', 'decode_ns', 'request_ns', 'preparation', 'execution_counts'}), 'invalid lifecycle call')
             require(type(call['input_index']) is int and call['input_index'] >= 0
-                    and type(call['decode_ns']) is int and call['decode_ns'] >= 0, 'invalid lifecycle call values')
+                    and type(call['request_ns']) is int and call['request_ns'] >= 0, 'invalid lifecycle call values')
+            require((policy == 'json' and type(call['decode_ns']) is int and call['decode_ns'] >= 0)
+                    or (policy != 'json' and call['decode_ns'] is None), 'decode observation differs from ingress')
             if boundary == 'admitted_entry_call':
                 require('preparation' in call, 'missing preparation statistics')
             if 'preparation' in call:
@@ -112,6 +156,7 @@ def validate_worker(report, plan, boundary):
                 validate_counts(call['execution_counts'])
         count = len({c['input_index'] for c in calls})
         require([c['input_index'] for c in calls] == [i % count for i in range(len(calls))], 'invalid lifecycle input order')
+        require(len(setup) == (0 if policy == 'json' else count), 'incomplete per-statement ingress setup')
         if count > 1:
             require(plan['iterations'] == 1 and plan['warmups'] % count == 0 and plan['samples'] % count == 0,
                     'incomplete changing-input cycles')
@@ -123,7 +168,7 @@ def validate_manifest(manifest):
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
     require(not (set(manifest) - {'format', 'status', 'phase', 'results', 'contracts', 'plan', 'processes',
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
-                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation', 'compiler_options'}), 'unknown manifest fields')
+                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation', 'compiler_options', 'ingress'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
     require(isinstance(manifest.get('error', ''), str), 'invalid failure description')
     matrix, results = manifest.get('matrix', []), manifest.get('results')
@@ -135,12 +180,15 @@ def validate_manifest(manifest):
         require(isinstance(result.get('error', ''), str), 'invalid failure description')
         require(type(result.get('repetition')) is int and result['repetition'] >= 0
                 and result.get('status') in ('failed', 'measured', 'passed'), 'invalid measurement state')
+    require(manifest.get('ingress') in INGRESS, 'invalid manifest ingress')
     require(manifest.get('observation') in ('timing', 'execution_counts'), 'invalid observation mode')
     options = manifest.get('compiler_options')
     require(isinstance(options, list) and all(isinstance(value, str) and value in (
         '--no-simplify', '--no-finite-bulk', '--release-storage',
         '--fuse-vector-reductions', '--fuse-collect-fold') for value in options),
         'invalid compiler options')
+    for job in matrix:
+        validate_backend(job.get('backend'), manifest['ingress'], job.get('boundary'))
     if manifest['status'] != 'passed':
         return
     processes, plan = manifest.get('processes'), manifest.get('plan')
@@ -168,11 +216,27 @@ def validate_manifest(manifest):
         job = expected[key]
         validate_worker(result.get('worker'), plan, job['boundary'])
         if job['boundary'] == 'admitted_entry_call':
-            require(isinstance(job.get('backend'), dict), 'missing preparation request')
             validate_preparation_limits(result['worker']['lifecycle']['preparation_limits'], job['backend'])
+        if job['boundary'] in ('admitted_entry_call', 'admitted_run_call'):
+            validate_ingress(result['worker']['lifecycle'], job['backend'])
+            if job['operation'] == 'prove':
+                validate_proofs(result, plan)
         require(result['worker']['build'].get('execution_counts', False) is (manifest['observation'] == 'execution_counts'),
                 'manifest observation capability mismatch')
     require(seen == expected.keys(), 'incomplete successful measurement matrix')
+
+
+def validate_proofs(result, plan):
+    expected = (plan['warmups'] + plan['samples']) * plan['iterations']
+    proofs = result['worker']['proofs']
+    require(len(proofs) == expected, 'worker did not retain every produced proof')
+    require(type(result.get('validated_proofs')) is int and result['validated_proofs'] == expected,
+            'incomplete produced proof validation')
+    require(all(isinstance(proof, dict) and type(proof.get('input_index')) is int for proof in proofs),
+            'invalid proof input identity')
+    require([proof['input_index'] for proof in proofs] ==
+            [call['input_index'] for call in result['worker']['lifecycle']['calls']],
+            'proof input identity differs from the captured schedule')
 
 
 def distribution(values):
@@ -190,7 +254,10 @@ def summarize(manifest):
         groups[result['case'], result['implementation'], result['operation']].append(result)
     rows = []
     for (case, implementation, operation), results in groups.items():
+        backend = next((job.get('backend', {}) for job in manifest.get('matrix', [])
+            if (job['case'], job['implementation'], job['operation']) == (case, implementation, operation)), {})
         row = {'case': case, 'implementation': implementation, 'operation': operation,
+               'ingress': backend['ingress'] if backend.get('kind') in ('host', 'run') else 'reference defaults',
                'processes': len(results), 'status': 'failed'}
         # Missing workers, later correctness failures and changed inputs invalidate timings.
         if manifest['status'] == 'passed' and len(results) == manifest['processes'] and all(
@@ -223,8 +290,14 @@ def summarize_lifecycle(results, plan):
     if all(life is not None for life in lifecycles):
         row['lifecycle'] = {name: distribution([life[name] for life in lifecycles]) if all(life[name] is not None for life in lifecycles) else None
             for name in ('capture_ns', 'admit_ns', 'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics')}
-        row['decode_ns_per_call'] = distribution([statistics.median(c['decode_ns'] for c in life['calls'][
-            plan['warmups']*plan['iterations']:]) for life in lifecycles])
+        row['ingress'] = lifecycles[0]['ingress']
+        for name in ('decode_ns', 'request_ns'):
+            row[f'{name}_per_call'] = (distribution([statistics.median(c[name] for c in life['calls'][
+                plan['warmups']*plan['iterations']:]) for life in lifecycles])
+                if name != 'decode_ns' or row['ingress'] == 'json' else None)
+        row['input_setup'] = [dict(input_index=index, **{name: distribution([life['input_setup'][index][name]
+            for life in lifecycles]) for name in ('construction_ns', 'retained_payload_bytes')})
+            for index in range(len(lifecycles[0]['input_setup']))]
         if all('preparation' in life['calls'][-1] for life in lifecycles):
             row['preparation'] = {name: distribution([life['calls'][-1]['preparation'][name] for life in lifecycles])
                                   for name in ('entries', 'retained_bytes', 'hits')}
@@ -249,22 +322,22 @@ def publish(directory, manifest):
     rows = summarize(manifest)
     comparisons = paired_comparisons(manifest)
     write_json(directory / 'manifest.json', manifest)
-    write_json(directory / 'summary.json', {'format': FORMAT, 'status': manifest['status'], 'rows': rows,
+    write_json(directory / 'summary.json', {'format': FORMAT, 'status': manifest['status'], 'ingress': manifest['ingress'], 'rows': rows,
                                            'comparisons': comparisons})
     with (directory / 'summary.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=['case', 'implementation', 'operation', 'status',
-                                                   'processes', 'boundary', 'median_ns', 'mad_ns',
+                                                   'processes', 'boundary', 'ingress', 'median_ns', 'mad_ns',
                                                    'proof_bytes', 'peak_rss_bytes'])
         writer.writeheader()
         for row in rows:
             writer.writerow({k: row[k] for k in ('case', 'implementation', 'operation', 'status', 'processes')}
-                            | {'boundary': row.get('boundary'),
+                            | {'boundary': row.get('boundary'), 'ingress': row['ingress'],
                                'median_ns': row.get('ns_per_call', {}).get('median'),
                                'mad_ns': row.get('ns_per_call', {}).get('mad'),
                                'proof_bytes': (row.get('proof_bytes') or {}).get('median'),
                                'peak_rss_bytes': (row.get('process_peak_rss_bytes') or {}).get('median')})
     if manifest['observation'] == 'execution_counts':
-        lines = ['# Execution counts', '', f"Run status: **{manifest['status']}**.", '',
+        lines = ['# Execution counts', '', f"Run status: **{manifest['status']}**. Host/Run ingress: `{manifest['ingress']}`.", '',
                  'Instrumented execution: timing comparisons are intentionally omitted.',
                  'See summary.json for distinct count vectors, input identities, first visits and multiplicities.',
                  'counts_repeatable compares complete ordered count sequences across processes (null with one process); false requires investigation before fitting a deterministic cost model.',
@@ -272,7 +345,7 @@ def publish(directory, manifest):
         lines += failure_lines(manifest)
         (directory / 'report.md').write_text('\n'.join(lines))
         return
-    lines = ['# Execution measurements', '', f"Run status: **{manifest['status']}**.", '',
+    lines = ['# Execution measurements', '', f"Run status: **{manifest['status']}**. Host/Run ingress: `{manifest['ingress']}`.", '',
              'Repeated-call times are medians of process medians; ranges span those process medians.',
              'First call is the first invocation, including the first warmup when warmups are enabled.', '',
              '| Case | Implementation | Operation | Repeated (ms) | Range (ms) | First (ms) | Proof bytes |',
@@ -299,17 +372,28 @@ def publish(directory, manifest):
                      f"{row['cpu_ns_per_call']['median']/row['ns_per_call']['median']:.3f} | {rss} |")
     lines += ['', '## Host lifecycle', '',
               'Separate boundaries; do not add their medians to estimate end-to-end latency. Diagnostics are materialized once after the final call.', '',
-              '| Case | Implementation | Operation | Capture (ms) | Admit (ms) | Decode/call (ms) | Diagnostics (ms) | RSS before/after diagnostics (MiB) |',
-              '|---|---|---|---:|---:|---:|---:|---|']
+              '| Case | Implementation | Operation | Capture (ms) | Admit (ms) | Ingress | JSON decode/call (ms) | Request/call (ms) | Diagnostics (ms) | RSS before/after diagnostics (MiB) |',
+              '|---|---|---|---:|---:|---|---:|---:|---:|---|']
     for row in successful:
         if 'lifecycle' not in row:
             continue
         life = row['lifecycle']
-        times = [life['capture_ns'], life['admit_ns'], row['decode_ns_per_call'], life['diagnostics_ns']]
+        times = [life['capture_ns'], life['admit_ns']]
+        calls = [row['decode_ns_per_call'], row['request_ns_per_call'], life['diagnostics_ns']]
         rss = [life[n] for n in ('peak_rss_before_diagnostics', 'peak_rss_after_diagnostics')]
         lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | "
-                     + ' | '.join(f"{v['median']/1e6:.6f}" for v in times) + ' | '
+                     + ' | '.join(f"{v['median']/1e6:.6f}" for v in times) + f" | {row['ingress']} | "
+                     + ' | '.join(f"{v['median']/1e6:.6f}" if v else '—' for v in calls) + ' | '
                      + ' / '.join(f"{v['median']/2**20:.2f}" if v else '—' for v in rss) + ' |')
+    lines += ['', '## Preowned input construction', '',
+              'One construction per captured statement before warmups. Retained payload excludes documents, proof buffers, metadata and allocator overhead; it is separate from RSS.', '',
+              '| Case | Implementation | Operation | Ingress | Input | Construction (ms) | Retained payload (bytes) |',
+              '|---|---|---|---|---:|---:|---:|']
+    for row in successful:
+        for setup in row.get('input_setup', []):
+            lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | {row['ingress']} | "
+                         f"{setup['input_index']} | {setup['construction_ns']['median']/1e6:.6f} | "
+                         f"{setup['retained_payload_bytes']['median']} |")
     prepared = [row for row in successful if 'preparation' in row]
     if prepared:
         lines += ['', '## Preparation store', '',
@@ -387,7 +471,7 @@ def compare(baseline, current):
         require(document['observation'] == 'timing', 'timing comparison refuses instrumented execution')
         require(document.get('status') == 'passed',
                 'comparison requires two successful complete runs')
-    for name in ('contracts', 'plan', 'processes', 'host'):
+    for name in ('contracts', 'plan', 'processes', 'host', 'ingress'):
         require(baseline[name] == current[name], f'comparison {name} differ')
     def limits(document):
         return {tuple(r[name] for name in ('case', 'implementation', 'operation', 'repetition')):

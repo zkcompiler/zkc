@@ -2,16 +2,21 @@
 use crate::{Result, ark, refused};
 use zkc_runtime::vm::{AttributeRule, BoundSignature, Invocation, OperationBinding};
 
-/// Backend-owned static call facts. Values, custody, setup and budgets are never
-/// cached here. A direct caller can reuse this only for equal rules/attributes;
-/// numerical plans additionally require equal declarations and representations.
-/// Policy, domain, setup and live values belong to the checked invocation path.
+/// Backend-owned static call facts, including immutable decoded scalar literals.
+/// Typed payloads require equal declarations, signatures and attributes. Actual
+/// operands, policy, domain, setup, custody and budgets remain invocation facts.
 pub struct NativeCall {
     rule: AttributeRule,
     attributes: Box<[String]>,
     // A decoded payload only; the reached invocation still checks its binding.
     unsigned64: Option<u64>,
     expression: Option<Box<ExpressionCall>>,
+    literal: Option<Box<LiteralCall>>,
+}
+struct LiteralCall {
+    binding: OperationBinding,
+    signature: BoundSignature,
+    value: crate::Value,
 }
 struct ExpressionCall {
     binding: OperationBinding,
@@ -22,6 +27,19 @@ struct ExpressionCall {
 impl NativeCall {
     pub(super) fn prepare_invocation(slot: &mut Option<Self>, i: &Invocation<'_>) -> Result<()> {
         let rule = i.binding.signature().attributes;
+        // The linked signature already fixes attribute interpretation. Keep
+        // attribute-free operations on the ordinary preparation fast path.
+        if rule == AttributeRule::None {
+            return Self::prepare(slot, rule, i.attributes);
+        }
+        if i.binding.declaration().contract == "field.constant" {
+            return Self::prepare_literal(
+                slot,
+                i.binding.declaration(),
+                i.binding.signature(),
+                i.attributes,
+            );
+        }
         if rule != AttributeRule::NumericalExpression {
             return Self::prepare(slot, rule, i.attributes);
         }
@@ -31,6 +49,51 @@ impl NativeCall {
             i.binding.signature(),
             i.attributes,
         )
+    }
+
+    fn prepare_literal(
+        slot: &mut Option<Self>,
+        binding: &OperationBinding,
+        signature: &BoundSignature,
+        attributes: &[String],
+    ) -> Result<()> {
+        if slot.as_ref().is_some_and(|call| {
+            call.rule == signature.attributes
+                && call.attributes.as_ref() == attributes
+                && call.literal.as_ref().is_some_and(|literal| {
+                    literal.binding == *binding && literal.signature == *signature
+                })
+        }) {
+            return Ok(());
+        }
+        let field = signature
+            .outputs
+            .first()
+            .ok_or_else(|| refused("kernel-operands"))?
+            .logical()
+            .identity();
+        let value = crate::kernels::field::decode_literal(field, attributes)?;
+        // Failed decoding must neither publish a partial replacement nor use
+        // the previous successful scalar for this invocation.
+        *slot = Some(Self {
+            rule: signature.attributes,
+            attributes: attributes.into(),
+            unsigned64: None,
+            expression: None,
+            literal: Some(Box::new(LiteralCall {
+                binding: binding.clone(),
+                signature: signature.clone(),
+                value,
+            })),
+        });
+        Ok(())
+    }
+
+    pub(super) fn literal(&self) -> Result<&crate::Value> {
+        self.literal
+            .as_ref()
+            .map(|literal| &literal.value)
+            .ok_or_else(|| refused("kernel-preparation"))
     }
 
     fn prepare_expression(
@@ -59,6 +122,7 @@ impl NativeCall {
                 signature: signature.clone(),
                 plan,
             })),
+            literal: None,
         });
         Ok(())
     }
@@ -103,10 +167,24 @@ impl NativeCall {
             attributes: attributes.into(),
             unsigned64,
             expression: None,
+            literal: None,
         });
         Ok(())
     }
     pub(super) fn check(rule: AttributeRule, attributes: &[String]) -> Result<()> {
+        use zkc_runtime::vm::Identity;
+        let field = match rule {
+            AttributeRule::FieldDecimal => Some(Identity::Bls12381Fr),
+            AttributeRule::Bn254Decimal => Some(Identity::Bn254Fr),
+            AttributeRule::RistrettoDecimal => Some(Identity::Ristretto255Scalar),
+            AttributeRule::KoalaBearDecimal => Some(Identity::KoalaBear),
+            AttributeRule::Binary64Literal => Some(Identity::Binary64),
+            AttributeRule::Binary64Ext3Literal => Some(Identity::Binary64Ext3),
+            _ => None,
+        };
+        if let Some(field) = field {
+            return crate::kernels::field::decode_literal(field, attributes).map(|_| ());
+        }
         match rule {
             AttributeRule::None if attributes.is_empty() => (),
             AttributeRule::Unsigned64 => {
@@ -130,9 +208,6 @@ impl NativeCall {
                 for literal in attributes {
                     crate::parse_bn254_decimal(literal).map_err(ark)?;
                 }
-            }
-            AttributeRule::Bn254Decimal if attributes.len() == 1 => {
-                crate::parse_bn254_decimal(&attributes[0]).map_err(ark)?;
             }
             AttributeRule::FieldDecimals => {
                 for literal in attributes {
@@ -166,15 +241,6 @@ impl NativeCall {
                         .iter()
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok())
                     && matches!(attributes[2].as_str(), "0" | "1") => {}
-            AttributeRule::KoalaBearDecimal if attributes.len() == 1 => {
-                let _ = crate::plonky3::parse_decimal(&attributes[0])?;
-            }
-            AttributeRule::Binary64Literal if attributes.len() == 1 => {
-                let _ = crate::plonky3::binary::parse_literal(&attributes[0])?;
-            }
-            AttributeRule::Binary64Ext3Literal if attributes.len() == 1 => {
-                let _ = crate::plonky3::binary::parse_ext3_literal(&attributes[0])?;
-            }
             AttributeRule::Binary64Literals => {
                 for literal in attributes {
                     let _ = crate::plonky3::binary::parse_literal(literal)?;
@@ -184,9 +250,6 @@ impl NativeCall {
                 for literal in attributes {
                     let _ = crate::plonky3::binary::parse_ext3_literal(literal)?;
                 }
-            }
-            AttributeRule::RistrettoDecimal if attributes.len() == 1 => {
-                crate::parse_ristretto_decimal(&attributes[0])?;
             }
             AttributeRule::NativeMessageTemplate => {
                 zkc_runtime::logical::native_origin_template(attributes, "message")
@@ -203,14 +266,15 @@ impl NativeCall {
                     .map_err(|_| refused("kernel-attributes"))?;
             }
 
-            AttributeRule::FieldDecimal if attributes.len() == 1 => {
-                zkc_arkworks::parse_decimal(&attributes[0]).map_err(ark)?;
-            }
             _ => return Err(refused("kernel-attributes")),
         }
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "literal_tests.rs"]
+mod literal_tests;
 
 #[cfg(test)]
 mod tests {

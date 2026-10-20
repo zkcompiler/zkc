@@ -408,7 +408,7 @@ fn authored(directory: &Path) {
             let leaf = |n| {
                 if wire {
                     LogicalValue::from(InputValue::Wire(
-                        codec.encode_native_value(&field(n)).unwrap(),
+                        codec.encode_native_value(&field(n)).unwrap().into(),
                     ))
                 } else {
                     field(n).into()
