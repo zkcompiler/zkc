@@ -383,9 +383,10 @@ impl Core {
         &self,
         i: &Invocation<'_>,
         args: &[Value],
-        signature: &zkc_runtime::vm::BoundSignature,
+        binding: &std::sync::Arc<super::CallBinding>,
         call: Option<&mut Option<super::NativeCall>>,
     ) -> Result<()> {
+        let signature = &binding.signature;
         if i.binding.signature() != signature
             || args.len() != signature.inputs.len()
             || args
@@ -396,7 +397,7 @@ impl Core {
             return Err(refused("kernel-operands"));
         }
         if let Some(call) = call {
-            super::NativeCall::prepare_invocation(call, i)?;
+            super::NativeCall::prepare_invocation(call, binding, i.attributes)?;
         } else {
             super::NativeCall::check(signature.attributes, i.attributes)?;
         }

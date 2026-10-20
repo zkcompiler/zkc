@@ -1,8 +1,9 @@
 //! Scalar counterparts of the index_preparation Runner and boundary probes.
-use super::NativeCall;
+use super::{CallBinding, CallPayload, NativeCall};
 use crate::kernels::field::LITERAL_DECODES;
 use crate::{Domain, EntryPolicy, NativeBackend, NativeOperation, Policy, Result, Value};
 use serde_json::{Value as Json, json};
+use std::sync::Arc;
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, BoundSignature, CallContext, Frame, FrameExit, FrameKind, Identity,
@@ -151,7 +152,7 @@ impl Backend for Caller {
                 .prepare_binding(self.operation.as_ref().unwrap_or(i.binding.declaration()))
                 .expect("installed test binding");
             if let Some(signature) = &self.signature {
-                replacement.signature = signature.clone();
+                Arc::make_mut(&mut replacement.binding).signature = signature.clone();
             }
             replacement
         });
@@ -322,6 +323,155 @@ fn small(field: &str, one: bool) -> Value {
     }
 }
 
+// Use the VM's real per-site slots while observing the installed owner and the
+// returned scalar. The ordinary Caller above deliberately probes one reused slot.
+struct RecordingBackend {
+    inner: NativeBackend,
+    reached: Vec<(String, Arc<CallBinding>, Value)>,
+}
+impl Backend for RecordingBackend {
+    type Value = Value;
+    type Operation = NativeOperation;
+    type Call = NativeCall;
+    type Checkpoint = ();
+
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<NativeOperation> {
+        self.inner.prepare_binding(binding)
+    }
+    fn validate_value(&self, value: &Value) -> Result<()> {
+        self.inner.validate_value(value)
+    }
+    fn enter_frame(&mut self, frame: &Frame, args: &[Value]) -> Result<()> {
+        self.inner.enter_frame(frame, args)
+    }
+    fn leave_frame(&mut self, frame: &Frame, exit: FrameExit, outputs: &[Value]) -> Result<()> {
+        self.inner.leave_frame(frame, exit, outputs)
+    }
+    fn apply(
+        &mut self,
+        operation: &NativeOperation,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.inner.apply(operation, i, args)
+    }
+    fn apply_prepared(
+        &mut self,
+        operation: &NativeOperation,
+        call: &mut Option<NativeCall>,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        let outputs = self.inner.apply_prepared(operation, call, i, args)?;
+        let CallPayload::Literal(literal) = &call.as_ref().unwrap().payload else {
+            panic!("prepared literal");
+        };
+        assert!(Arc::ptr_eq(&literal.binding, &operation.binding));
+        self.reached.push((
+            i.site.into(),
+            Arc::clone(&literal.binding),
+            outputs[0].clone(),
+        ));
+        Ok(outputs)
+    }
+}
+
+#[test]
+fn distinct_literal_sites_share_installed_metadata_and_keep_instance_preparation_independent() {
+    let index = Value::Index(0).physical_type();
+    let bytes = program(
+        &[binding("koala-bear", "field.constant")],
+        &[index.clone(), index],
+        vec![json!([
+            "for",
+            "repeat",
+            "i",
+            "a0",
+            "a1",
+            [],
+            [],
+            [
+                ["op", "zero", "b0", ["0"], [], ["z"]],
+                ["op", "one", "b0", ["1"], [], ["o"]],
+                ["yield", []]
+            ],
+            []
+        ])],
+        &[],
+        &[],
+    );
+    let admitted = Program::decode(&bytes).unwrap();
+    LITERAL_DECODES.set(0);
+    let mut runners: Vec<_> = (0..2)
+        .map(|_| {
+            Runner::new(
+                &admitted,
+                "main",
+                "P",
+                "session",
+                RecordingBackend {
+                    inner: backend(),
+                    reached: vec![],
+                },
+                vec![Value::Index(0), Value::Index(3)],
+            )
+            .unwrap_or_else(|e| panic!("{}", e.error))
+        })
+        .collect();
+    // Installing both instances must leave even valid literal attributes dormant.
+    assert_eq!(LITERAL_DECODES.get(), 0);
+    let mut observations = vec![];
+    for (instance, runner) in runners.iter_mut().enumerate() {
+        loop {
+            match runner.poll() {
+                Action::Local(action) => runner.execute_local(&action.cut).unwrap(),
+                Action::Returned(values) => {
+                    assert!(values.is_empty());
+                    break;
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        assert_eq!(LITERAL_DECODES.get(), 2 * (instance + 1));
+    }
+    for runner in runners {
+        let recorder = runner.into_backend();
+        assert_eq!(recorder.inner.active_frames(), 0);
+        assert_eq!(recorder.reached.len(), 6);
+        for (visit, (site, owner, value)) in recorder.reached.iter().enumerate() {
+            assert_eq!(site, if visit % 2 == 0 { "zero" } else { "one" });
+            equal(value, &small("koala-bear", visit % 2 == 1));
+            assert!(Arc::ptr_eq(owner, &recorder.reached[0].1));
+        }
+        observations.push(recorder.reached);
+    }
+    assert!(!Arc::ptr_eq(&observations[0][0].1, &observations[1][0].1));
+    assert!(observations[0][0].1 == observations[1][0].1);
+}
+
+#[test]
+fn separately_installed_equal_literal_metadata_reuses_the_retained_value() {
+    let declaration = binding("koala-bear", "field.constant");
+    let first = backend().prepare_binding(&declaration).unwrap();
+    let second = backend().prepare_binding(&declaration).unwrap();
+    assert!(!Arc::ptr_eq(&first.binding, &second.binding));
+    let mut slot = None;
+    let attributes = ["1".into()];
+    LITERAL_DECODES.set(0);
+    NativeCall::prepare_literal(&mut slot, &first.binding, &attributes).unwrap();
+    let value = std::ptr::from_ref(slot.as_ref().unwrap().literal().unwrap());
+    NativeCall::prepare_literal(&mut slot, &second.binding, &attributes).unwrap();
+    assert_eq!(LITERAL_DECODES.get(), 1);
+    assert_eq!(
+        value,
+        std::ptr::from_ref(slot.as_ref().unwrap().literal().unwrap())
+    );
+    equal(
+        slot.as_ref().unwrap().literal().unwrap(),
+        &small("koala-bear", true),
+    );
+}
+
 #[test]
 fn all_scalar_families_decode_once_per_retained_key_and_once_per_direct_call() {
     for case in cases() {
@@ -480,7 +630,8 @@ fn one_slot_distinguishes_nominal_fields_and_provider_implementations() {
             .as_ref()
             .map(|call| std::ptr::from_ref(call.literal().unwrap()));
         let same = caller.call.as_ref().is_some_and(|call| {
-            call.literal.as_ref().unwrap().binding == binding(case.field, "field.constant")
+            matches!(&call.payload, CallPayload::Literal(literal)
+                if literal.binding.declaration == binding(case.field, "field.constant"))
         });
         LITERAL_DECODES.set(0);
         let (result, next) = one(caller, case.field, "1");
@@ -503,23 +654,30 @@ fn one_slot_distinguishes_nominal_fields_and_provider_implementations() {
 fn exact_prepared_signature_and_binding_are_required_for_a_hit() {
     use zkc_runtime::vm::AttributeRule;
     let (_, mut caller) = one(Caller::new(true), "koala-bear", "1");
-    for changed in 0..4 {
+    for changed in 0..6 {
         // Perturb only the retained key. The next invocation is still valid;
         // it must decode again rather than accepting partial-key equality.
-        let literal = caller.call.as_mut().unwrap().literal.as_mut().unwrap();
+        let CallPayload::Literal(literal) = &mut caller.call.as_mut().unwrap().payload else {
+            panic!("prepared literal");
+        };
+        let mut owner = Arc::clone(&literal.binding);
+        let snapshot = Arc::make_mut(&mut owner);
         match changed {
-            0 => literal.signature.attributes = AttributeRule::None,
-            1 => literal
+            0 => snapshot.signature.attributes = AttributeRule::None,
+            1 => snapshot
                 .signature
                 .inputs
                 .push(Value::Index(0).physical_type()),
             2 => {
-                literal.signature.outputs[0] =
+                snapshot.signature.outputs[0] =
                     small("koala-bear.ext4-binomial3", true).physical_type()
             }
-            3 => literal.binding.implementation = "other/field.constant".into(),
+            3 => snapshot.declaration.implementation = "other/field.constant".into(),
+            4 => snapshot.declaration.contract = "field.add".into(),
+            5 => snapshot.declaration.arguments[0] = "koala-bear.ext4-binomial3".into(),
             _ => unreachable!(),
         }
+        literal.binding = owner;
         LITERAL_DECODES.set(0);
         let (result, next) = one(caller, "koala-bear", "1");
         equal(&result.unwrap()[0], &small("koala-bear", true));

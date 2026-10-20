@@ -12,15 +12,24 @@ mod work;
 use crate::SetupRegistry;
 use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
 pub use policy::{EntryPolicy, PortConstraint};
+use std::sync::Arc;
 use validation::Core;
 use zkc_arkworks::{Metadata, VerifierKey};
 use zkc_runtime::vm::{Backend, Frame, FrameExit, Invocation};
 
+// Immutable installed facts shared by reached typed call payloads. Arc equality
+// compares the complete declaration and signature even for distinct owners.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(test, derive(Clone))]
+struct CallBinding {
+    declaration: zkc_runtime::vm::OperationBinding,
+    signature: zkc_runtime::vm::BoundSignature,
+}
+
 /// Immutable implementation selection, independently resolved by this backend.
 /// Dynamic policy, inputs, resource custody and work limits are checked at use.
 pub struct NativeOperation {
-    declaration: zkc_runtime::vm::OperationBinding,
-    signature: zkc_runtime::vm::BoundSignature,
+    binding: Arc<CallBinding>,
     handler: registry::Handler,
     prepared_handler: Option<registry::PreparedHandler>,
     read_extent: work::ReadExtent,
@@ -29,7 +38,7 @@ pub struct NativeOperation {
 }
 impl zkc_runtime::vm::InstalledOperation for NativeOperation {
     fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
-        &self.signature
+        &self.binding.signature
     }
     fn deterministic(&self) -> bool {
         self.deterministic
@@ -58,7 +67,7 @@ impl NativeBackend {
         args: &[Value],
     ) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;
-        if operation.declaration != *i.binding.declaration() {
+        if operation.binding.declaration != *i.binding.declaration() {
             return Err(crate::refused("kernel-binding"));
         }
         if operation.sequence {
@@ -72,7 +81,7 @@ impl NativeBackend {
             call = Some(&mut temporary);
         }
         self.core
-            .invoke(i, args, &operation.signature, call.as_deref_mut())?;
+            .invoke(i, args, &operation.binding, call.as_deref_mut())?;
         let outputs = match operation.prepared_handler {
             None => (operation.handler)(self, i, args)?,
             Some(handler) => handler(
@@ -394,8 +403,10 @@ impl Backend for NativeBackend {
                 .iter()
                 .any(|(_, contract)| *contract == binding.contract);
         Some(NativeOperation {
-            declaration: binding.clone(),
-            signature,
+            binding: Arc::new(CallBinding {
+                declaration: binding.clone(),
+                signature,
+            }),
             handler: implementation.handler,
             prepared_handler: implementation.prepared_handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),

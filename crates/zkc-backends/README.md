@@ -77,6 +77,9 @@ loading its owned backend. Operations include effectful resource and transcript
 calls as well as numerical kernels. Calls retain input, attribute,
 resource, policy and output validation; a handle for another binding is refused.
 Operation attributes and transcript occurrences stay invocation-specific.
+Reached typed call payloads share the installed declaration and signature;
+reuse still compares their complete content and exact attributes. Each VM
+instance owns its preparation, including when instances share an admitted program.
 
 `numerical` owns checked row-major views and scoped construction for the
 [native numerical-call contract](../../docs/spec/runtime/numerical.md).
