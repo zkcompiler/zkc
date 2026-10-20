@@ -1756,11 +1756,14 @@ registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
   prover after its oracle queries;
 - the **application claim**: for ordinary soundness, which policy statements the
   application counts as false (`ApplicationFalse`); for knowledge soundness, the
-  application's witness relation. Neither is chosen by the evidence: it is the
-  formula the admitted original retains for its target clause, recovered from
-  the export by `bind_contract` and read at the policy's published inputs, whose
-  selectors and publication order the kernel checks. No false statement is
-  required to exist;
+  application's witness relation. Each subject's `Contract` module defines it as
+  the formula the admitted original retains for its target clause, recovered
+  from the export by `bind_contract` and read at the policy's published inputs,
+  whose selectors and publication order the kernel checks. The evidence
+  structures take this predicate as a parameter: they do not themselves derive
+  it from the retained contract, so that the predicate is the retained formula
+  is a property of each subject's `Contract` module, not of the evidence type.
+  No false statement is required to exist;
 - the **regime** (`Regime`): the oracle's answer type and the decoding of a
   challenge from it, exactly uniform field elements at `Regime.exact`.
 
@@ -1786,7 +1789,10 @@ every initial transcript. Together they make the original validator of every
 application-false statement doomed (`SoundnessEvidence.original_doomed`), which
 is all the endpoints use of the application claim. A family therefore cannot
 narrow the claim to the statements it models: a malformed statement the
-application counts as false must be rejected by the original validator itself.
+application counts as false must be doomed for the original validator itself,
+so its acceptance is charged in the bound rather than dropped from it. Doomed
+is not rejection: a doomed validator may still accept with the charged
+probability.
 Two requirements are selected by the indices, so they cannot be omitted: an
 adaptive claim requires binding evidence (`BindingEvidence`), the application
 context whose policy-derived codec (`policyCodec`: one typed public-value

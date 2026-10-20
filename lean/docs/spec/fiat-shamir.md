@@ -207,7 +207,10 @@ plain GKR verifier on well-formed statements
 guessing Entry's bound is imported from a worst-case round-by-round proof
 stated in ArkLib's framework (written for the example)
 ([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
-The composed Sumcheck and Sigma proof Entries have no security theorem.
+The composed Sumcheck Entry has no security theorem. The compiled
+Chaum–Pedersen, two-proof AND and Okamoto proof Entries have fixed-statement
+knowledge soundness as applications of the registered knowledge endpoint
+([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)).
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any

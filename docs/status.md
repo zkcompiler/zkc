@@ -352,8 +352,10 @@ construction and their [participant projection](../lean/docs/spec/participant-pr
 against the original exports and proves that each compiled verifier's ideal
 meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
 transform of its original verifier; other Entries, suites and programmable
-constructions have no such check. The composed Sumcheck and the Sigma proof
-Entries have this transform equation only; no security theorem covers them. The
+constructions have no such check. The composed Sumcheck Entry has this
+transform equation only; no security theorem covers it. The compiled Sigma proof
+Entries (Chaum–Pedersen, two-proof AND, Okamoto) also have fixed-statement
+knowledge soundness through the registered endpoints. The
 exporter repeats the native proof check before printing the validator; it is
 reviewed native code, not a proved component. For Schnorr it proves
 fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
