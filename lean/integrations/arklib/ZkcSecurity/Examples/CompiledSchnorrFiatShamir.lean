@@ -39,8 +39,10 @@ Named assumptions, beyond the checked equations:
 
 The module routes every history injectively to an oracle key of VCVio's
 Fiat–Shamir transform (`route`) and shows that the routed experiment is exactly
-VCVio's (`run_eq`). The theorem itself is the registered knowledge endpoint
-applied to the subject's evidence (`ZkcSecurity.Examples.Subjects.Schnorr`):
+VCVio's (`run_eq`). The theorem itself follows from the Sigma bridge of the
+subject's evidence (`ZkcSecurity.Examples.Subjects.Schnorr`,
+`KnowledgeEvidence.knowledge`, the bridge the registered knowledge endpoints
+apply):
 this module's routing, routed prover, verifier and experiment are those of the
 Schnorr family package at the subject's checked context (`route_eq_shape`,
 `reduce_eq_shape`, `verify_eq_evidence`, `acceptance_eq_endpoint`).

@@ -222,7 +222,8 @@ injective. `route_verify` shows that the routed compiled verifier is VCVio's
 Fiat–Shamir verifier for the Schnorr Sigma protocol, and `run_eq` that the whole
 experiment equals VCVio's verification run for the routed prover, because the
 routed cache restricted to histories is the history cache. `knowledge_soundness`
-is the registered knowledge endpoint applied to the subject's evidence
+follows from the Sigma bridge of the subject's evidence, the bridge the
+registered knowledge endpoints apply
 ([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)):
 this module's routing, routed prover, compiled verifier and experiment are those
 of the Schnorr family package at the subject's checked context (`route_eq_shape`,

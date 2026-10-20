@@ -1757,7 +1757,9 @@ registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
 - the **application claim**: for ordinary soundness, which policy statements the
   application counts as false (`ApplicationFalse`); for knowledge soundness, the
   application's witness relation. Each subject's `Contract` module defines it as
-  the formula the admitted original retains for its target clause, recovered
+  the formula the admitted original retains for its target clause (the guessing
+  fixture, which retains none, uses the language of the imported ArkLib
+  soundness statement instead), recovered
   from the export by `bind_contract` and read at the policy's published inputs,
   whose selectors and publication order the kernel checks. The evidence
   structures take this predicate as a parameter: they do not themselves derive

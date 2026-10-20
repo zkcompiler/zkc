@@ -234,7 +234,12 @@ application of another theorem, a hypothesis under the wrong schema of its
 category, an assumption bundled into the evidence's parameters and a premise
 no hypothesis names each make a report `unresolved`, and a refused check makes
 it `refused`. An established control report lists its assumptions and models
-and renders the instantiated bound.
+and renders the instantiated bound. Records reused from a saved directory (`--records`) carry
+declaration hashes but no identity of the sources they were emitted from, so a
+report built from them is `unresolved`. The application audit also runs on
+declarations Lean emitted (`TestsSecurity.ReportControls`): an application with
+no premise of its own passes, and an explicit `False`, an implicit `False` and a
+`Fact False` instance premise are each reported as omitted.
 
 ## Claims ledger and generated tables
 

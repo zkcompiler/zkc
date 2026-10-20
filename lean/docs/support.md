@@ -109,7 +109,7 @@ One row per subject manifest, from its generated [assurance report](spec/assuran
 | okamoto | `` |  |  |  |  | unresolved: the manifest claims no property |
 | schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
 | schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: no pipeline evidence connects the generated data to the source, export and program bytes |
+| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
 <!-- END GENERATED subject-rows -->
 
 ## Finite fold subjects
@@ -1077,12 +1077,13 @@ statement, and its validator is doomed by the terminal's shape check or by the
 refusal before any action. The guessing fixture retains no target clause, so its
 claim is the imported ArkLib verifier's language, which is empty.
 
-`CompiledSchnorrFiatShamir.knowledge_soundness` is the knowledge endpoint
-applied to the Schnorr subject's evidence: the module's routing, routed prover,
+`CompiledSchnorrFiatShamir.knowledge_soundness` follows from the Sigma bridge of
+the Schnorr subject's evidence (`KnowledgeEvidence.knowledge`, the bridge the
+registered knowledge endpoints apply): the module's routing, routed prover,
 compiled verifier and experiment are those of the Schnorr family package
 (`route_eq_shape`, `reduce_eq_shape`, `verify_eq_evidence`,
 `acceptance_eq_endpoint`), so its statement is unchanged and its proof is the
-endpoint's. `TestsSecurity.Endpoints` relates the evidence to the other earlier
+evidence's. `TestsSecurity.Endpoints` relates the evidence to the other earlier
 compiled theorems and holds the Lean controls:
 
 - **Guessing Entry.** The generated fixed-statement application gives back the
@@ -1104,10 +1105,8 @@ compiled theorems and holds the Lean controls:
   guessing export (`mismatched_artifacts`), so no evidence exists for that pair.
 
 With the subject pipeline's evidence, the assurance reports of schnorr,
-chaum-pedersen, schnorr-and, okamoto-proof and guess are `established`. The
-Sumcheck report is `unresolved`: the committed Sumcheck program data differs
-from what the current compiler emits, so the pipeline does not validate the
-subject. The composed Sumcheck and GKR Entries retain no target clause. Every
+chaum-pedersen, schnorr-and, okamoto-proof, guess and sumcheck are
+`established`. The composed Sumcheck and GKR Entries retain no target clause. Every
 declaration's axioms are within `propext`, `Classical.choice` and `Quot.sound`.
 
 ## Construction obligation counterexamples

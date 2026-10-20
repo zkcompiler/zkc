@@ -66,9 +66,10 @@ verifier with a random oracle on all transcript histories, through the core
 [participant projection](../../docs/spec/participant-projection.md) rules.
 Injective routing of histories (`Oracle/Encoding`) makes the experiment exactly
 VCVio's Fiat–Shamir verification run; its knowledge-soundness bound, under named
-assumptions and for the relation retained by the Proof Entry's own export, is
-the registered knowledge endpoint applied to the subject's evidence
-(`Examples/Subjects/Schnorr`). `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
+assumptions and for the relation retained by the Proof Entry's own export,
+follows from the Sigma bridge of the subject's evidence
+(`Examples/Subjects/Schnorr`), the bridge the registered knowledge endpoints
+apply. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
 of proof bytes for the validator program the runtime admits, through the core
 [lowering rule](../../docs/spec/executable.md).
 
