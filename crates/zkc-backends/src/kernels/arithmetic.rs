@@ -565,12 +565,10 @@ fn dense<S: Family>(
             let mut out = destination(a.len(), S::zero(), 6)?;
             if name == "vector.mul" {
                 S::product(a, b, out.as_mut_slice())?;
+            } else if name == "vector.add" {
+                super::vector::add::<S>(a, b, out.as_mut_slice());
             } else {
-                if name == "vector.add" {
-                    super::vector::add::<S>(a, b, out.as_mut_slice());
-                } else {
-                    super::vector::sub::<S>(a, b, out.as_mut_slice());
-                }
+                super::vector::sub::<S>(a, b, out.as_mut_slice());
             }
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,

@@ -316,6 +316,13 @@ fn packed_product_and_dot_match_integer_reference_including_suffixes() {
     );
     assert_eq!(out[0].as_canonical_u32(), 7);
     assert_eq!(
+        plonky3::mul_into(&[KoalaBear::ONE], &[], &mut out)
+            .unwrap_err()
+            .code,
+        "refused:length-mismatch"
+    );
+    assert_eq!(out[0].as_canonical_u32(), 7);
+    assert_eq!(
         plonky3::dot(&[], &[KoalaBear::ONE]).unwrap_err().code,
         "refused:length-mismatch"
     );
