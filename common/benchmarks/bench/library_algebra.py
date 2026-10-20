@@ -13,6 +13,8 @@ from .programs import local
 CURVES = {
     'bls-g1': ('bls12-381.g1', 'bls12-381.fr'),
     'bls-g2': ('bls12-381.g2', 'bls12-381.fr'),
+    'bn-g1': ('bn254.g1', 'bn254.fr'),
+    'bn-g2': ('bn254.g2', 'bn254.fr'),
     'ristretto': ('ristretto255.group', 'ristretto255.scalar'),
     'edwards': ('edwards25519.prime', 'ristretto255.scalar'),
 }
@@ -39,6 +41,49 @@ def _quotient_coefficients(f, coefficients, point):
         result[i] = carry
         carry = f.add(coefficients[i], f.mul(point, carry))
     return result
+
+
+def relation_rows(shape, *, root):
+    """Actual table residuals, including nonzero and inactive assertion slots."""
+    from . import stark
+
+    height, width = shape['height'], shape['width']
+    if height < 1 or width < 1 or shape['data'] not in ('valid', 'perturbed'):
+        raise ValueError('invalid relation row control')
+    bundle, initial, final, trace = stark.recurrence(root, shape)
+    trace = trace.copy()
+    if shape['data'] == 'perturbed':
+        trace[(height//2)*width] = (trace[(height//2)*width]+1) % a.P
+    expected = []
+    for row in range(height):
+        for col in range(width):
+            current = trace[row*width+col]
+            if row+1 < height:
+                following = trace[(row+1)*width+col]
+                if shape.get('constraint') == 'coupled':
+                    neighbor = trace[row*width+(col+1) % width]
+                    previous = trace[row*width+(col-1) % width]
+                    transition = following-pow(current, shape['constraint_degree']-1, a.P)*neighbor-previous-col-1
+                else:
+                    transition = following-current*current-col-1
+            else:
+                transition = 0
+            expected.extend(((current-initial[col]) % a.P if row == 0 else 0,
+                             (current-final[col]) % a.P if row+1 == height else 0,
+                             transition % a.P))
+    program = local('koala-bear',
+                    'trace:Vector<F>, public_data:Vector<F>, height:index, expected:Vector<F>',
+                    '''let out=kernel<F,0>("relation.table_rows",trace,v::empty<F>(),public_data,height;Trace);
+                      return v::equal(out,expected);''',
+                    {'trace': list(map(str, trace)), 'public_data': list(map(str, initial+final)),
+                     'height': str(height), 'expected': list(map(str, expected))}, root=root)
+    _imports(program, 'domain Trace=bundle(asset trace);', ('core.collections',))
+    program.assets = {'trace': bundle}
+    program.support = (root/'compiler/adapters/ring_arena.py',)
+    program.oracle = ('Independent complete row-major boundary/transition residuals from the input trace; '
+                      'inactive slots are zero, perturbed traces retain nonzero residuals. Actual Bundle '
+                      'table evaluator; includes admission, full result checking and Host, not a proof or kernel-only time')
+    return program
 
 
 def kzg(shape, *, root):
@@ -140,6 +185,53 @@ def curve_family(shape, *, root):
     return program
 
 
+def quotient_split(shape, *, root):
+    """Coefficient blocks checked by an independent integer transform in Python."""
+    degree, n, width, count = (shape[key] for key in
+                              ('extension_degree', 'elements', 'block_width', 'blocks'))
+    form = shape['form']
+    if form not in ('library', 'reference'):
+        raise ValueError('unknown quotient split form')
+    if degree not in (1, 4, 8) or n < 1 or n & (n-1) or width < 0 or count < 0:
+        raise ValueError('invalid quotient split shape')
+    if width*count < n:
+        raise ValueError('quotient split capacity')
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = a.FieldOracle(field, root=root)
+    shift = f.dense(1, 471)[0]
+    coefficients = f.dense(n, 472)
+    values = a.coset(coefficients, shift, n)
+    padded = coefficients + [f.zero] * (width*count-n)
+    expected = [value for block in range(count)
+                for value in a.coset(padded[block*width:(block+1)*width], shift, n)]
+    if form == 'library':
+        body = 'let out=air_poly::split_quotient(values,shift,n,width,count);'
+    else:
+        # Keep the original source form as an explicit dataflow control.
+        body = '''let coefficients=polynomial::coefficients(coset::interpolate(coset::word(values,shift)));
+          let capacity=width*count;
+          require !(zkc::indices::less(capacity,v::length(coefficients)));
+          let padded=v::concat(coefficients,v::fill<F>(0,capacity-v::length(coefficients)));
+          let mut out=v::empty<F>();
+          for block in 0..count {
+            let p=polynomial::from_coefficients(v::slice(padded,block*width,width));
+            out=v::concat(out,coset::values(coset::evaluate_coset(p,shift,n)));
+          }'''
+    program = local(field, 'values:Vector<F>, shift:F, n:index, width:index, count:index, expected:Vector<F>',
+                    body+'return v::equal(out,expected);',
+                    {'values': list(map(f.encode, values)), 'shift': f.encode(shift), 'n': str(n),
+                     'width': str(width), 'count': str(count), 'expected': list(map(f.encode, expected))},
+                    root=root)
+    _imports(program, 'use air::polynomial as air_poly;\nuse zkc::coset as coset;\n'
+             'use zkc::polynomial as polynomial;', ('relations.air',))
+    program.oracle = ('Independent integer polynomial coefficients and coset transforms of each '
+                      'coefficient block; every coordinate checked, including representation padding. '
+                      'Current split_quotient versus authored per-block evaluation and growing concatenation. '
+                      'SDK/run includes interpolation, adaptation, full result check and Host costs; '
+                      'no quotient divisibility or degree proof')
+    return program
+
+
 def sparse_matrix(shape, *, root):
     """Exact nnz with balanced, clustered or deliberately empty-row patterns."""
     rows, columns, nnz = (shape[key] for key in ('rows', 'columns', 'nnz'))
@@ -160,26 +252,44 @@ def sparse_matrix(shape, *, root):
         raise ValueError(f'unknown sparse distribution: {distribution}')
     if nnz > len(coordinates):
         raise ValueError('nnz exceeds the selected distribution capacity')
-    if direction not in ('forward', 'transpose'):
+    if direction not in ('forward', 'transpose', 'bilinear'):
         raise ValueError(f'unknown sparse direction: {direction}')
+    field = shape.get('field', 'bls12-381.fr')
+    f = a.FieldOracle(field, root=root)
     rng = Random(421)
-    entries = [(r, c, rng.randrange(1, a.FR)) for r, c in sorted(coordinates[:nnz])]
-    xs = [x[0] for x in a.dense(columns if direction == 'forward' else rows,
-                               seed=422, modulus=a.FR)]
-    expected = [0] * (rows if direction == 'forward' else columns)
+    def coefficient():
+        value = (rng.randrange(1, f.modulus),) + tuple(rng.randrange(f.modulus)
+                                                     for _ in range(f.degree-1))
+        return value
+    entries = [(r, c, coefficient()) for r, c in sorted(coordinates[:nnz])]
+    xs = f.dense(rows if direction == 'transpose' else columns, 422)
+    expected = [f.zero] * (columns if direction == 'transpose' else rows)
     for r, c, value in entries:
-        output, source = (r, c) if direction == 'forward' else (c, r)
-        expected[output] = (expected[output] + value*xs[source]) % a.FR
-    operation = 'multiply' if direction == 'forward' else 'transpose_multiply'
-    program = local('bls12-381.fr', 'matrix:mat::Matrix<F>, xs:Vector<F>, expected:Vector<F>',
-                    f'let out=mat::{operation}(matrix,xs); return v::equal(out,expected);',
-                    {'matrix': {'rows': str(rows), 'columns': str(columns),
-                                'entries': [list(map(str, entry)) for entry in entries]},
-                     'xs': list(map(str, xs)), 'expected': list(map(str, expected))}, root=root)
+        output, source = (c, r) if direction == 'transpose' else (r, c)
+        expected[output] = f.add(expected[output], f.mul(value, xs[source]))
+    inputs = {'matrix': {'rows': str(rows), 'columns': str(columns),
+                         'entries': [[str(r), str(c), f.encode(value)] for r, c, value in entries]},
+              'xs': list(map(f.encode, xs))}
+    parameters = 'matrix:mat::Matrix<F>, xs:Vector<F>'
+    if direction == 'bilinear':
+        left = f.dense(rows, 423)
+        total = f.zero
+        for x, y in zip(left, expected, strict=True):
+            total = f.add(total, f.mul(x, y))
+        expected = [total]
+        inputs['left'] = list(map(f.encode, left))
+        parameters += ', left:Vector<F>'
+        expression = 'v::fill(mat::bilinear(matrix,left,xs),1)'
+    else:
+        operation = 'multiply' if direction == 'forward' else 'transpose_multiply'
+        expression = f'mat::{operation}(matrix,xs)'
+    inputs['expected'] = list(map(f.encode, expected))
+    program = local(field, parameters+', expected:Vector<F>',
+                    f'let out={expression}; return v::equal(out,expected);', inputs, root=root)
     _imports(program, 'use zkc::matrix as mat;', ('core.collections',))
-    program.oracle = ('Independent Python sparse contraction; exact dimensions and nonzero-entry count, '
+    program.oracle = ('Independent Python finite-field sparse contraction; exact dimensions and nonzero-entry count, '
                       'unique sorted coordinates, all output entries including empty rows/columns checked; '
-                      'public matrix multiply/transpose_multiply with default capacities, not an R1CS proof')
+                      'public matrix contraction with default capacities, not an R1CS proof')
     return program
 
 

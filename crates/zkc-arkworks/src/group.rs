@@ -11,6 +11,7 @@ pub const GROUP_BYTES: usize = 48;
 /// Identity and zero scalar multiplication are legitimate group operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GroupPoint(pub(crate) G1Affine);
+crate::scaling::impl_scaling!(GroupPoint, ark_bls12_381::g1::Config);
 impl GroupPoint {
     /// Standard arkworks G1 generator.
     pub fn generator() -> Self {

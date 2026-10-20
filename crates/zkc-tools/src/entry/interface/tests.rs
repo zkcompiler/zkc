@@ -860,6 +860,7 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
         assert_eq!(error.path,path);
     }
 }
+mod arguments;
 mod unicode;
 
 #[test]

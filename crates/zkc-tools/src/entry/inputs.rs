@@ -336,7 +336,7 @@ impl Decoder {
                     )
                     .map_err(|e| error(e.into()))?;
                     self.inline_bytes += bytes.len();
-                    InputValue::Wire(bytes).into()
+                    InputValue::Wire(bytes.into()).into()
                 }
             }
             _ => return Err(error("entry-input-shape".into())),

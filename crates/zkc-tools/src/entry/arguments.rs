@@ -46,7 +46,8 @@ pub(super) fn values<'a>(
                     InputValue::Wire(
                         keys.get(&port.native[0])
                             .ok_or("entry-setup-material")?
-                            .to_vec(),
+                            .to_vec()
+                            .into(),
                     )
                 } else {
                     InputValue::VerifierKey
@@ -107,7 +108,7 @@ pub(super) fn proof_inputs(
     let private = values(interface.named_inputs(role), private, None)?;
     let mut private = private.into_iter();
     let mut inputs = Vec::new();
-    let mut copied = 0usize;
+    let mut public_wire_bytes = 0usize;
     for port in interface.input_ports(role) {
         if port.key == Some(zkc_runtime::vm::Type::VerifierKey) {
             inputs.push(InputValue::VerifierKey);
@@ -119,7 +120,7 @@ pub(super) fn proof_inputs(
                 let physical =
                     PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
                 crate::host::admission::check_native_data(&physical, input, capacity)?;
-                inputs.push(duplicate(input, capacity, &mut copied)?);
+                inputs.push(duplicate(input, capacity, &mut public_wire_bytes)?);
             }
         } else {
             inputs.extend(private.by_ref().take(port.native.len()));
@@ -130,12 +131,15 @@ pub(super) fn proof_inputs(
 fn duplicate(
     input: &InputValue,
     capacity: crate::host::capacity::Capacity,
-    copied: &mut usize,
+    public_wire_bytes: &mut usize,
 ) -> Result<InputValue, String> {
     Ok(match input {
         InputValue::Wire(bytes) => {
-            *copied = copied.checked_add(bytes.len()).ok_or("entry-input-limit")?;
-            if *copied > capacity.values.live_bytes.min(capacity.values.total_bytes) {
+            // Public statement quotas count every occurrence, including shared owners.
+            *public_wire_bytes = public_wire_bytes
+                .checked_add(bytes.len())
+                .ok_or("entry-input-limit")?;
+            if *public_wire_bytes > capacity.values.live_bytes.min(capacity.values.total_bytes) {
                 return Err("entry-input-limit".into());
             }
             InputValue::Wire(bytes.clone())
@@ -153,7 +157,7 @@ fn duplicate(
             alternative: *alternative,
             payload: payload
                 .iter()
-                .map(|p| duplicate(p, capacity, copied))
+                .map(|p| duplicate(p, capacity, public_wire_bytes))
                 .collect::<Result<_, _>>()?,
         },
         _ => return Err("entry-input-public".into()),

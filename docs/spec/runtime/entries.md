@@ -170,8 +170,15 @@ field names follow the declared payload order. The checked schema supplies all
 native slices and nominal descriptors; display type strings are not executable
 layout descriptions.
 
-Ordinary leaves use `entry::Value::Leaf` with `InputValue::Native`, `Wire`, or
-`WireFile`. `WireFile` retains an opened regular descriptor and an expected
+Ordinary leaves use `entry::Value::Leaf` with `InputValue::Native`, `Wire`,
+`Prepared`, or `WireFile`. `Wire` owns shared `Arc<Vec<u8>>` bytes; public-to-role
+duplication shares that owner. Every occurrence, including nested/repeated
+aliases, retains its ordinary quota and loading charges. Canonical content and
+the admitted physical type determine agreement; pointer identity grants no
+authority. Loaded native values own their storage independently of the request
+and Wire owners. `Prepared` retains decoded immutable data with its canonical
+encoding; each invocation still checks type, policy, setup and loading limits.
+`WireFile` retains an opened regular descriptor and an expected
 SHA-256; common Host preparation reads and authenticates it under input limits.
 The admitted source schema's `constructible` authority applies recursively
 through products and alternative payloads. A matching native representation does

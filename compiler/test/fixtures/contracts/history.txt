@@ -108,6 +108,7 @@ poly.coefficient_count 0
 poly.coefficients 0
 poly.coset_evaluate 0
 poly.coset_extend 0
+poly.coset_evaluate_batch 0
 poly.coset_evaluate_at 0
 poly.opening_quotient_sum 0
 poly.coset_interpolate 0
@@ -222,3 +223,4 @@ vector.bit_reverse_rows 0
 hash.poseidon2_16 0
 oracle.open_many 0
 oracle.check_many 0
+vector.find_last 0

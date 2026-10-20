@@ -63,6 +63,7 @@ mod error;
 mod field;
 mod pcs;
 mod random;
+mod scaling;
 mod table;
 mod table_msb;
 
@@ -72,6 +73,7 @@ pub use error::Error;
 pub use field::{SCALAR_BYTES, decode_scalar, encode_scalar, parse_decimal};
 pub use pcs::{Commitment, CommittedTable, Keys, Metadata, OpeningProof, ProverKey, VerifierKey};
 pub use random::RandomSource;
+pub use scaling::SCALING_CHUNK_CAP;
 pub use table::Table;
 pub use table_msb::MsbTable;
 

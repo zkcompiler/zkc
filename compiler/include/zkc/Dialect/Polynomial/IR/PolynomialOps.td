@@ -18,6 +18,8 @@ def CoefficientsOp : BoundOp<PolynomialDialect, "exec.coefficients", [OpPolyCoef
 
 def CosetEvaluateOp : BoundOp<PolynomialDialect, "exec.coset_evaluate", [OpPolyCosetEvaluate]>;
 
+def CosetEvaluateBatchOp : BoundOp<PolynomialDialect, "exec.coset_evaluate_batch", [OpPolyCosetEvaluateBatch]>;
+
 def CosetEvaluateAtOp : BoundOp<PolynomialDialect, "exec.coset_evaluate_at", [OpPolyCosetEvaluateAt]>;
 
 def CosetExtendOp : BoundOp<PolynomialDialect, "exec.coset_extend", [OpPolyCosetExtend]>;

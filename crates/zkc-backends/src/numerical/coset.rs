@@ -51,6 +51,57 @@ impl CosetBatchShape {
         Ok(retained)
     }
 
+    /// Discard only representation zeros, never reduce modulo a domain polynomial.
+    pub(crate) fn check_coefficient_tails<T: PartialEq>(
+        self,
+        coefficients: &[T],
+        zero: T,
+    ) -> Result<()> {
+        if self.height > self.output_height
+            && coefficients
+                .chunks_exact(self.height)
+                .any(|column| column[self.output_height..].iter().any(|c| c != &zero))
+        {
+            return Err(refused("coset-coefficient-count"));
+        }
+        Ok(())
+    }
+
+    /// One forward DFT per coefficient column, including shared shift powers,
+    /// tail checks, initialization/copies and conservative domain/provider setup.
+    /// Unlike extension_work, coefficient height may be zero or non-two-adic.
+    pub(crate) fn coefficient_evaluation_work(self, degree: usize) -> Result<u64> {
+        if self.width == 0 {
+            return Ok(1);
+        }
+        let logarithm = self
+            .output_height
+            .checked_ilog2()
+            .ok_or_else(|| refused("coset-size"))? as usize;
+        let checked = || {
+            let arithmetic = degree.checked_mul(degree)?;
+            let transforms = self
+                .output_len
+                .checked_mul(logarithm)?
+                .checked_mul(16)?
+                .checked_mul(degree)?;
+            let per_element = arithmetic.checked_mul(8)?.checked_add(16)?;
+            let linear = self
+                .input_len
+                .checked_add(self.output_len)?
+                .checked_mul(per_element)?;
+            let setup = self
+                .width
+                .checked_add(1)?
+                .checked_mul(4096)?
+                .checked_mul(arithmetic)?;
+            transforms.checked_add(linear)?.checked_add(setup)
+        };
+        checked()
+            .and_then(|n| u64::try_from(n).ok())
+            .ok_or_else(|| exhausted("size-overflow"))
+    }
+
     /// Shared weights cost O(height), followed by O(width * height) dot products.
     /// Count initialization, copies, domain powers and complete extension
     /// multiplication conservatively in base-coordinate units. Providers supply
@@ -118,5 +169,52 @@ impl CosetBatchShape {
         checked()
             .and_then(|n| u64::try_from(n).ok())
             .ok_or_else(|| exhausted("size-overflow"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coefficient_work_has_an_independent_zero_height_safe_score() {
+        let shape = CosetBatchShape::new(9, 3, 3, 8).unwrap();
+        for degree in [1, 4, 8] {
+            let expected = 16 * degree * 24 * 3
+                + (9 + 24) * (8 * degree * degree + 16)
+                + 4 * 4096 * degree * degree;
+            assert_eq!(
+                shape.coefficient_evaluation_work(degree).unwrap(),
+                expected as u64
+            );
+        }
+        assert!(
+            CosetBatchShape::new(0, 3, 0, 8)
+                .unwrap()
+                .coefficient_evaluation_work(8)
+                .is_ok()
+        );
+        assert_eq!(
+            CosetBatchShape::new(0, 0, usize::MAX, 0)
+                .unwrap()
+                .coefficient_evaluation_work(8)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            CosetBatchShape::new(0, 3, 0, 0)
+                .unwrap()
+                .coefficient_evaluation_work(8)
+                .unwrap_err()
+                .code,
+            "refused:coset-size"
+        );
+        assert_eq!(
+            shape
+                .coefficient_evaluation_work(usize::MAX)
+                .unwrap_err()
+                .code,
+            "exhausted:size-overflow"
+        );
     }
 }

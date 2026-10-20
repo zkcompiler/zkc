@@ -107,6 +107,8 @@ macro_rules! group {
 }
 group!(G1, ark_bn254::G1Affine, ark_bn254::G1Projective, 32);
 group!(G2, ark_bn254::G2Affine, ark_bn254::G2Projective, 64);
+crate::scaling::impl_scaling!(G1, ark_bn254::g1::Config);
+crate::scaling::impl_scaling!(G2, ark_bn254::g2::Config);
 /// Product of pairings equals one. Empty product is one; lengths must match.
 /// The caller bounds workload and preparation memory before entering arkworks.
 pub fn pairing_check(a: &[G1], b: &[G2]) -> Result<bool, Error> {

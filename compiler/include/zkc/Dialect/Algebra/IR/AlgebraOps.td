@@ -255,6 +255,7 @@ def FieldArrayGetOp : BoundOp<AlgebraDialect, "exec.field_array_get", [OpFieldAr
 def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 def PairingApplyOp : BoundOp<AlgebraDialect, "exec.pairing", [OpPairingApply]>;
 def VectorEqualOp : BoundOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual]>;
+def VectorFindLastOp : BoundOp<AlgebraDialect, "exec.vector_find_last", [OpVectorFindLast]>;
 
 class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
     [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {

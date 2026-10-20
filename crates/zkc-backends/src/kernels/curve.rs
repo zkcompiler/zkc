@@ -18,6 +18,32 @@ trait Group: Copy + PartialEq {
     fn add(self, other: Self) -> Self;
     fn neg(self) -> Self;
     fn scale(self, scalar: Self::Scalar) -> Self;
+    fn scaling_workspace_bytes(_chunk_len: usize) -> Option<usize> {
+        None
+    }
+    fn scale_many(
+        points: &[Self],
+        scalar: Self::Scalar,
+        output: &mut Vec<Self>,
+        _chunk_len: usize,
+    ) -> Result<()> {
+        output.extend(points.iter().map(|point| point.scale(scalar)));
+        Ok(())
+    }
+    fn scale_each(
+        scalars: &[Self::Scalar],
+        points: &[Self],
+        output: &mut Vec<Self>,
+        _chunk_len: usize,
+    ) -> Result<()> {
+        output.extend(
+            points
+                .iter()
+                .zip(scalars)
+                .map(|(point, scalar)| point.scale(*scalar)),
+        );
+        Ok(())
+    }
     fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self>;
     fn point(v: &Value) -> Result<Self>;
     fn points(v: &Value) -> Result<&Arc<[Self]>>;
@@ -28,8 +54,119 @@ trait Group: Copy + PartialEq {
     fn limit(p: &Policy, n: usize) -> Result<()>;
     fn width() -> usize;
 }
+// The destination has already passed the historical group/output preflights
+// and exact reservation. Only arkworks needs an initialized affine destination.
+macro_rules! ark_scaling {
+    () => {
+        fn scaling_workspace_bytes(chunk_len: usize) -> Option<usize> {
+            Self::scaling_workspace_bytes(chunk_len)
+        }
+        fn scale_many(
+            points: &[Self],
+            scalar: Self::Scalar,
+            output: &mut Vec<Self>,
+            chunk_len: usize,
+        ) -> Result<()> {
+            output.resize(points.len(), Self::identity());
+            Self::scale_many_into(points, scalar, output, chunk_len).map_err(crate::ark)
+        }
+        fn scale_each(
+            scalars: &[Self::Scalar],
+            points: &[Self],
+            output: &mut Vec<Self>,
+            chunk_len: usize,
+        ) -> Result<()> {
+            output.resize(points.len(), Self::identity());
+            Self::scale_each_into(scalars, points, output, chunk_len).map_err(crate::ark)
+        }
+    };
+}
+
+fn with_scaling_workspace<G: Group>(
+    len: usize,
+    policy: &Policy,
+    available: usize,
+    scale: impl FnOnce(usize) -> Result<()>,
+) -> Result<()> {
+    // Existing output storage retains its historical owner and admission order.
+    // Call accounts only for optional, scoped projective/Z/prefix payload. These
+    // operations historically have no numerical work charge; do not add one.
+    let call = crate::numerical::Call::new(policy, available);
+    let chunk_len = G::scaling_workspace_bytes(1)
+        .filter(|bytes| *bytes != 0)
+        .map(|bytes| {
+            len.min(zkc_arkworks::SCALING_CHUNK_CAP)
+                .min(policy.max_numerical_bytes / bytes)
+        })
+        .unwrap_or(0);
+    let workspace = if chunk_len >= 2 {
+        G::scaling_workspace_bytes(chunk_len)
+            .and_then(|bytes| call.reserve_workspace::<u8>(bytes).ok())
+    } else {
+        None
+    };
+    // The guard outlives every adapter vector, including on error or unwind.
+    scale(if workspace.is_some() { chunk_len } else { 0 })
+}
+
+#[cfg(test)]
+mod scaling_workspace_tests {
+    use super::*;
+
+    fn check<G: Group>() {
+        let unit = G::scaling_workspace_bytes(1).unwrap();
+        for (len, bytes, expected) in [
+            (0, usize::MAX, 0),
+            (1, usize::MAX, 0),
+            (257, 0, 0),
+            (257, 2 * unit - 1, 0),
+            (257, 2 * unit, 2),
+            (257, 17 * unit, 17),
+            (257, 256 * unit - 1, 255),
+            (257, 256 * unit, 256),
+            (3, usize::MAX, 3),
+        ] {
+            let policy = Policy {
+                max_numerical_bytes: bytes,
+                max_numerical_work: 0,
+                ..Policy::default()
+            };
+            // No output or work floor is attached to this optional scope.
+            with_scaling_workspace::<G>(len, &policy, 0, |chunk_len| {
+                assert_eq!(chunk_len, expected);
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn public_length_group_and_scratch_allowance_select_bounded_chunks() {
+        check::<GroupPoint>();
+        check::<crate::Bls12381G2>();
+        check::<crate::Bn254G1>();
+        check::<crate::Bn254G2>();
+    }
+
+    #[test]
+    fn dalek_never_requests_arkworks_workspace() {
+        for len in [0, 1, 257] {
+            with_scaling_workspace::<RistrettoPoint>(len, &Policy::default(), 0, |chunk| {
+                assert_eq!(chunk, 0);
+                Ok(())
+            })
+            .unwrap();
+            with_scaling_workspace::<crate::EdwardsPrime>(len, &Policy::default(), 0, |chunk| {
+                assert_eq!(chunk, 0);
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+}
 impl Group for GroupPoint {
     type Scalar = Scalar;
+    ark_scaling!();
     fn generator() -> Self {
         Self::generator()
     }
@@ -217,6 +354,7 @@ macro_rules! bn_group {
     ($t:ty,$one:ident,$many:ident) => {
         impl Group for $t {
             type Scalar = crate::Bn254Scalar;
+            ark_scaling!();
             fn generator() -> Self {
                 Self::generator()
             }
@@ -282,6 +420,7 @@ bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
 bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
 impl Group for crate::Bls12381G2 {
     type Scalar = Scalar;
+    ark_scaling!();
     fn generator() -> Self {
         Self::generator()
     }
@@ -491,7 +630,9 @@ fn dense<G: Group>(
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
-            out.extend(b.iter().zip(s).map(|(b, s)| b.scale(*s)));
+            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |chunk_len| {
+                G::scale_each(s, b, &mut out, chunk_len)
+            })?;
             G::values(out.into())
         }
         "curve.append" => {
@@ -510,7 +651,9 @@ fn dense<G: Group>(
             let b = points(0)?;
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
-            out.extend(b.iter().map(|b| b.scale(x)));
+            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |chunk_len| {
+                G::scale_many(b, x, &mut out, chunk_len)
+            })?;
             G::values(out.into())
         }
         "curve.vector_add" | "curve.concat" => {

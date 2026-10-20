@@ -10,7 +10,17 @@ use crate::{
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use zkc_runtime::vm::{Identity, Invocation};
+
+#[cfg(test)]
+#[path = "bn254_coefficient_batch_tests.rs"]
+mod coefficient_batch_tests;
 fn domain(n: usize, shift: F, p: &Policy) -> Result<Radix2EvaluationDomain<F>> {
+    validate_domain(n, shift, p)?;
+    Radix2EvaluationDomain::<F>::new(n)
+        .and_then(|d| d.get_coset(shift))
+        .ok_or_else(|| refused("coset-size"))
+}
+fn validate_domain(n: usize, shift: F, p: &Policy) -> Result<()> {
     if !n.is_power_of_two() || n.trailing_zeros() > F::TWO_ADICITY {
         return Err(refused("coset-size"));
     }
@@ -20,9 +30,7 @@ fn domain(n: usize, shift: F, p: &Policy) -> Result<Radix2EvaluationDomain<F>> {
     if shift.is_zero() {
         return Err(refused("coset-zero-shift"));
     }
-    Radix2EvaluationDomain::<F>::new(n)
-        .and_then(|d| d.get_coset(shift))
-        .ok_or_else(|| refused("coset-size"))
+    Ok(())
 }
 pub(crate) fn apply(
     name: &str,
@@ -35,6 +43,7 @@ pub(crate) fn apply(
         || !matches!(
             name,
             "poly.coset_evaluate"
+                | "poly.coset_evaluate_batch"
                 | "poly.coset_evaluate_at"
                 | "poly.coset_extend"
                 | "poly.coset_interpolate"
@@ -118,6 +127,45 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
                 out.pop();
             }
             Value::Bn254Polynomial(out.into())
+        }
+        "poly.coset_evaluate_batch" => {
+            let coefficients = v(0)?;
+            let shape = CosetBatchShape::new(coefficients.len(), ix(1)?, ix(2)?, ix(4)?)?;
+            let shift = f(3)?;
+            if shape.width != 0 {
+                validate_domain(shape.output_height, shift, p)?;
+            }
+            let retained = shape.admit(p, 32, available)?;
+            shape.check_coefficient_tails(coefficients, F::zero())?;
+            let call = Call::new(p, available);
+            call.work(shape.coefficient_evaluation_work(1)?)?;
+            let workspace = if shape.width == 0 {
+                0
+            } else {
+                shape.output_height
+            };
+            let _workspace = call.reserve_workspace::<F>(workspace)?;
+            let mut output = call.output(shape.output_len, F::zero(), retained)?;
+            if shape.width != 0 {
+                let domain = domain(shape.output_height, shift, p)?;
+                let mut scratch = reserve(workspace)?;
+                // Keep the allocation at output height across every column,
+                // including empty blocks and shrinking representation padding.
+                scratch.resize(workspace, F::zero());
+                for (column, destination) in output
+                    .as_mut_slice()
+                    .chunks_exact_mut(shape.output_height)
+                    .enumerate()
+                {
+                    scratch.fill(F::zero());
+                    let count = shape.height.min(shape.output_height);
+                    let begin = column * shape.height;
+                    scratch[..count].copy_from_slice(&coefficients[begin..begin + count]);
+                    domain.fft_in_place(&mut scratch);
+                    destination.copy_from_slice(&scratch);
+                }
+            }
+            output.finish(|values| Ok(Value::Bn254Vector(values.into())))?
         }
         "poly.coset_evaluate_at" => {
             let values = v(0)?;

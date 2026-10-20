@@ -17,6 +17,7 @@ fn resolve(
     if matches!(
         binding.contract.as_str(),
         "poly.coset_evaluate"
+            | "poly.coset_evaluate_batch"
             | "poly.coset_extend"
             | "poly.coset_evaluate_at"
             | "poly.coset_interpolate"
@@ -46,6 +47,16 @@ fn resolve(
 pub(crate) const COSET_CONTRACTS: &[crate::bindings::Contract] = {
     use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
+        operation(
+            "poly.coset_evaluate_batch",
+            &[Vector, Index, Index, Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/poly.coset_evaluate_batch",
+            "plonky3/poly.coset_evaluate_batch",
+        ]),
         operation(
             "poly.coset_evaluate_at",
             &[Vector, Index, Index, Field, Field],

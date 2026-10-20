@@ -400,7 +400,7 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     truncate = edited(directory, ROOT / 'libraries/relations/air/polynomial.zkc', [(
         '  require boolean::negate(less(capacity, actual));\n'
         '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
-        '  let padded = if less(capacity, actual) { slice(coefficients, 0, capacity) }\n'
+        '  let padded = if less(capacity, actual) { zkc::vector::slice(coefficients, 0, capacity) }\n'
         '    else { concat(coefficients, fill<F>(0, capacity - actual)) };')],
         'polynomial.zkc')
     package = dishonest(toolchain, journal, directory, 'truncated', {'air::polynomial': truncate})

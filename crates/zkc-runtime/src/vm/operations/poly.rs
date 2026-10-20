@@ -50,6 +50,18 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "plonky3/poly.coset_evaluate",
     ]),
     Contract::selectable(
+        "poly.coset_evaluate_batch",
+        (
+            &[Vector, Index, Index, Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&[
+        "arkworks/poly.coset_evaluate_batch",
+        "plonky3/poly.coset_evaluate_batch",
+    ]),
+    Contract::selectable(
         "poly.coset_extend",
         (
             &[Vector, Index, Index, Field, Field, Index],
@@ -268,6 +280,7 @@ fn resolve(
     if matches!(
         binding.contract.as_str(),
         "poly.coset_evaluate"
+            | "poly.coset_evaluate_batch"
             | "poly.coset_extend"
             | "poly.coset_evaluate_at"
             | "poly.coset_interpolate"

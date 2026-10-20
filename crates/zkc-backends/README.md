@@ -77,14 +77,21 @@ loading its owned backend. Operations include effectful resource and transcript
 calls as well as numerical kernels. Calls retain input, attribute,
 resource, policy and output validation; a handle for another binding is refused.
 Operation attributes and transcript occurrences stay invocation-specific.
+Reached typed call payloads share the installed declaration and signature;
+reuse still compares their complete content and exact attributes. Each VM
+instance owns its preparation, including when instances share an admitted program.
 
 `numerical` owns checked row-major views and scoped construction for the
 [native numerical-call contract](../../docs/spec/runtime/numerical.md).
 Its private initialized destinations and scratch share checked memory and work
 limits. Exact field adapters and table storage owners supply interpretation;
 the scope grants no resource authority or mutation of published inputs.
-Dense matvec/split, BLS table fold and KoalaBear opening quotient exercise this
-path. Other provider allocations retain their existing owners and limits.
+Dense matvec/split, BLS table fold, KoalaBear opening quotient and coefficient
+batch coset evaluation exercise this path. `poly.coset_evaluate_batch` builds
+one column-major result from coefficient blocks, with provider-owned transform
+workspace; it has its own authored work/storage contract as specified in the
+[polynomial contract](../../docs/spec/domains/polynomials.md). Other provider
+allocations retain their existing owners and limits.
 
 `numerical::expression` evaluates admitted Ring bodies in bounded chunks. Its
 node-major workspace stays local to the reached call; prepared plans retain no
@@ -93,6 +100,21 @@ by these expressions and dense kernels, including provider-declared field packin
 and scalar tails. Chunking changes neither the Kernel/VM contract nor the
 minimum managed-memory allowance. CPU-specific packing follows build target
 features; portable builds remain supported.
+
+`curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
+results for BLS12-381 and BN254 G1/G2 while retaining affine-base `mul_bigint`.
+Public length and the numerical scratch allowance bound chunks to at most 256;
+insufficient scratch or failed scratch reservation selects the scalar loop.
+Existing output preflight and charges remain in place, with no added numerical
+work charge. Dalek multiplication paths and their timing properties are unchanged;
+Arkworks remains variable-time.
+
+Sparse matrices remain immutable canonical COO. Forward and bilinear kernels
+contract occupied rows; transpose scatters entries in stored order without a
+second layout. Actual relation-row evaluation reuses node scratch within each
+active segment and precomputes output positions. It preserves selected node
+order, first input-fetch order, reached constant/embedding failures and existing
+work charges; preparation performs no arithmetic or dormant evaluation.
 
 Private custody checks visit active variant payloads and sequence elements in
 declaration order without collecting a temporary leaf list. Each capability is

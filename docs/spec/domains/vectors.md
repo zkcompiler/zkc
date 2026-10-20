@@ -334,3 +334,18 @@ local kernel, realized by an installed scalar provider. It allows authored
 constraint checks over complete columns without passing a captured vector
 through a scalar loop for every row. It establishes no timing or constant-time
 property and does not erase preceding failures or resource charges.
+
+## Ordered equality search
+
+`vector.find_last<F>(values,value)` returns the greatest matching position, or
+`length(values)` when no entry matches, including zero for an empty vector.
+Equality compares the complete nominal field element, including every extension
+coordinate. The domain requires `CommRing`. All entries are visited in stored
+order; duplicate values are allowed. Inputs and repeated aliases are immutable.
+This authored operation does not assert constant-time behavior or preserve the
+resource-exhaustion prefix of a source loop.
+
+The native handler checks input extent and the conservative 512-byte index
+result allowance, then admits `length(values)+1` numerical work units and
+512 managed bytes
+before scanning. It creates no mask, temporary vector or retained lookup table.

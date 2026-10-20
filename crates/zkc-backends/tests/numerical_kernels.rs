@@ -1,7 +1,7 @@
 #[path = "domains/support.rs"]
 mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
-use support::{assert_value, backend, one};
+use support::{Controlled, assert_value, backend, one};
 use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, domains};
 use zkc_runtime::vm::{Backend, OperationBinding, Type};
 
@@ -30,6 +30,35 @@ fn vector(ns: &[u32]) -> Value {
             .collect::<Vec<_>>()
             .into(),
     )
+}
+
+#[test]
+fn batch_inverse_preserves_zero_before_output_refusal() {
+    for (values, allowance, expected) in [
+        (&[0, 2, 3][..], 0, Some("refused:zero-inverse")),
+        (&[2, 0, 3][..], 0, Some("refused:zero-inverse")),
+        (&[2, 3, 0][..], 0, Some("refused:zero-inverse")),
+        (&[2, 3, 4][..], 0, Some("exhausted:output-bytes")),
+        (&[][..], 255, Some("exhausted:output-bytes")),
+        (&[][..], 256, None),
+    ] {
+        let mut driver = Controlled::new(backend(Policy::default()));
+        driver.output_limit = Some(allowance);
+        let (result, driver) = one(
+            driver,
+            binding("vector.inverse", domains::KOALA_BEAR),
+            &[],
+            vec![vector(values)],
+        );
+        if let Some(code) = expected {
+            assert_eq!(result.unwrap_err(), code);
+            assert!(driver.outputs.is_empty());
+        } else {
+            assert_value(&result.unwrap()[0], &vector(&[]));
+            assert_eq!(driver.outputs.len(), 1);
+        }
+        assert_eq!(driver.inner.active_frames(), 0);
+    }
 }
 #[test]
 fn dynamic_sequences_preserve_order_and_prefix_conventions() {

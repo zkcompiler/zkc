@@ -78,6 +78,11 @@ extensions. It constructs one private column-major output and retains non-base
 shifts; shrinking checks each column's actual normalized degree. Compiler,
 runtime admission and native signatures independently declare the operation.
 The single-word domain analysis does not yet transfer flattened batch facts.
+Batched coefficient evaluation is installed on the same four fields. It shares
+one ordered output domain and constructs one private column-major vector;
+coefficient blocks may have zero or non-power-of-two height. Shrinking admits
+only zero discarded tails. AIR quotient splitting retains source interpolation,
+capacity and padding checks before invoking the batch operation once.
 Direct coset point evaluation is installed on the same four fields, sharing
 weights across columns without reconstructing coefficients. It handles on-domain
 points and arbitrary evaluation words; neither path proves a degree bound or

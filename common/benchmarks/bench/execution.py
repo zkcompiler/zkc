@@ -80,16 +80,17 @@ def prepare_case(args, output, capture, manifest, case):
         'operation_mix': case.mix, 'oracle': program.oracle, 'inputs': identities,
         'source_sha256': hashlib.sha256(program.source.encode()).hexdigest(),
         'assets_sha256': hashlib.sha256(json.dumps(program.assets, sort_keys=True).encode()).hexdigest(),
+        'ingress_policy': args.ingress,
         'input_policy': 'round-robin distinct inputs' if len(inputs) > 1 else 'fixed inputs',
         'preparation_policy': args.preparation if program.proof else 'run entry defaults',
         'requested_preparation_entries': args.preparation_entries if program.proof else None,
         'requested_preparation_bytes': args.preparation_bytes if program.proof else None,
-        'notes': [case.limitation, 'SDK timing includes result checking in the source; excludes input JSON decoding, final diagnostics and proof-file writes.',
+        'notes': [case.limitation, 'SDK timing includes result checking in the source; excludes readable decoding, preowned input setup, per-call request construction, final diagnostics and proof-file writes.',
                   'Generated-project compilation is a single compiler-process observation, excluding source generation.'],
         'boundaries': {},
     }
     boundary = 'admitted_entry_call' if program.proof else 'admitted_run_call'
-    base = {'package': str(package), 'sha256': digest(package)}
+    base = {'package': str(package), 'sha256': digest(package), 'ingress': args.ingress}
     if not program.proof:
         backend = base | {'kind': 'run', 'roles': files[0], 'accept_role': 'P'}
         job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary, execution_counts=args.execution_counts)
@@ -107,6 +108,7 @@ def prepare_case(args, output, capture, manifest, case):
             'backend': backend | {'roles': bad_roles}, 'proof': str(directory/'unused')})
         record = Journal(directory/'incorrect', args.timeout).command([args.worker, request], cwd=directory, expected=None)
         report = json.loads(Path(record['stdout']).read_text())
+        require(report.get('ingress') == args.ingress, 'incorrect-result ingress differs from the request')
         require(record['returncode'] > 0 and report.get('status') == 'incorrect-result',
                 'incorrect result did not fail at the acceptance gate')
         jobs = [job]

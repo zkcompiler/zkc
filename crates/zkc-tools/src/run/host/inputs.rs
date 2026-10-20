@@ -181,7 +181,7 @@ pub(super) fn decode(host: &RunHost, bytes: &[u8]) -> Result<RunInputs> {
                 "rng" | "nonce" => InputValue::Resource {
                     budget: budget(&spec[1])?,
                 },
-                "wire" => InputValue::Wire(host.limits.capacity.wire(&spec[1])?),
+                "wire" => InputValue::Wire(host.limits.capacity.wire(&spec[1])?.into()),
                 "verifier_key" => {
                     if host
                         .authority

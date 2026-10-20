@@ -1,8 +1,9 @@
 //! Generic source Entry benchmark. No protocol-specific interpretation.
 use crate::{
     Failure, Operation, Report, Request, Result,
+    ingress::{Ingress, Owner},
     measure::measure,
-    observation::{Call, Lifecycle, Limits, Preparation},
+    observation::{Call, InputSetup, Lifecycle, Limits, Preparation},
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -13,7 +14,8 @@ use std::{
 };
 use zkc_runtime::vm::StopKind;
 use zkc_tools::entry::{
-    BindingPolicy, Package, ProofEntry, ProofOptions, ProofRequest, inputs::Decoder,
+    BindingPolicy, NamedValues, Package, ProofEntry, ProofOperation, ProofOptions, ProofRequest,
+    inputs::Decoder,
 };
 
 fn rejection(error: Option<&str>, stop: Option<&StopKind>) -> Option<&'static str> {
@@ -64,6 +66,15 @@ pub fn capture(path: &Path, sha256: &str) -> Result<(Package, u128)> {
     Ok((package, start.elapsed().as_nanos()))
 }
 
+fn make_request(public: NamedValues, private: NamedValues) -> ProofRequest {
+    let mut request = ProofRequest {
+        public,
+        ..Default::default()
+    };
+    request.private.inputs = private;
+    request
+}
+
 pub fn run(
     job: &Request,
     path: &Path,
@@ -73,6 +84,7 @@ pub fn run(
     preparation_entries: Option<usize>,
     preparation_bytes: Option<usize>,
 ) -> Result<Report> {
+    let ingress = job.ingress()?;
     if job.operation == Operation::Run || inputs.is_empty() {
         return Err("proof worker requires proof inputs and a proof operation".into());
     }
@@ -141,6 +153,68 @@ pub fn run(
         .iter()
         .find(|group| group.name() == "witness")
         .ok_or("missing witness input group")?;
+    let decode = |index: usize| {
+        let (public, witness, _) = &data[index];
+        let mut decoder = Decoder::new(options.capacity)?;
+        let public = decoder
+            .decode(public_group, public, None)
+            .map_err(|e| e.to_string())?;
+        let private = if job.operation == Operation::Prove {
+            decoder
+                .decode(witness_group, witness.as_deref().unwrap_or(b"{}"), None)
+                .map_err(|e| e.to_string())?
+        } else {
+            Default::default()
+        };
+        Ok::<_, Failure>((public, private))
+    };
+    let mut input_setup = Vec::new();
+    let owners = if ingress == Ingress::Json {
+        None
+    } else {
+        Some(
+            (0..data.len())
+                .map(|index| {
+                    let start = Instant::now();
+                    let (public, private) = decode(index)?;
+                    let public = Owner::new(
+                        public,
+                        public_group,
+                        entry.interface(),
+                        ingress,
+                        options.capacity,
+                    )?;
+                    let private = Owner::new(
+                        private,
+                        witness_group,
+                        entry.interface(),
+                        ingress,
+                        options.capacity,
+                    )?;
+                    // Check exact admitted types, binding and aggregate loading
+                    // without issuing randomness, a transcript or capabilities.
+                    entry
+                        .check_inputs(
+                            make_request(public.share()?, private.share()?),
+                            if job.operation == Operation::Prove {
+                                ProofOperation::Prove
+                            } else {
+                                ProofOperation::Verify
+                            },
+                            None,
+                        )
+                        .map_err(|e| format!("benchmark-ingress: input admission: {e}"))?;
+                    input_setup.push(InputSetup {
+                        input_index: index,
+                        construction_ns: start.elapsed().as_nanos(),
+                        retained_payload_bytes: public.retained_payload_bytes
+                            + private.retained_payload_bytes,
+                    });
+                    Ok((public, private))
+                })
+                .collect::<Result<Vec<_>>>()?,
+        )
+    };
     let total = (job.plan.warmups + job.plan.samples) * job.plan.iterations;
     let calls = RefCell::new(Vec::with_capacity(total));
     let completed = Cell::new(0);
@@ -149,24 +223,24 @@ pub fn run(
     let prepare = || {
         let index = next % data.len();
         next += 1;
-        let (public, witness, _) = &data[index];
-        let start = Instant::now();
-        let mut decoder = Decoder::new(options.capacity)?;
-        let public = decoder
-            .decode(public_group, public, None)
-            .map_err(|e| e.to_string())?;
-        let mut request = ProofRequest {
-            public,
-            ..Default::default()
+        let (decoded, decode_ns) = if owners.is_none() {
+            let start = Instant::now();
+            let values = decode(index)?;
+            (Some(values), Some(start.elapsed().as_nanos()))
+        } else {
+            (None, None)
         };
-        if job.operation == Operation::Prove {
-            request.private.inputs = decoder
-                .decode(witness_group, witness.as_deref().unwrap_or(b"{}"), None)
-                .map_err(|e| e.to_string())?;
-        }
+        let start = Instant::now();
+        let (public, private) = if let Some(owners) = &owners {
+            (owners[index].0.share()?, owners[index].1.share()?)
+        } else {
+            decoded.unwrap()
+        };
+        let request = make_request(public, private);
+        let request_ns = start.elapsed().as_nanos();
         calls
             .borrow_mut()
-            .push(Call::decoded(index, start.elapsed().as_nanos()));
+            .push(Call::constructed(index, decode_ns, request_ns));
         Ok((index, request))
     };
     let mut last = None;
@@ -255,6 +329,8 @@ pub fn run(
     report.diagnostics = last.native.diagnostics();
     let diagnostics_ns = start.elapsed().as_nanos();
     report.lifecycle = Some(Lifecycle {
+        ingress,
+        input_setup,
         preparation_limits: Some(observed_limits),
         capture_ns,
         admit_ns,

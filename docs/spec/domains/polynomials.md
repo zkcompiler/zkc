@@ -84,6 +84,28 @@ of degree below `length(v)` on that coset. Interpolation is not a low-degree tes
 `poly.coefficient_count<F>` counts the normalized coefficients; the zero
 polynomial has count zero. It requires only the polynomial coefficient domain.
 
+`poly.coset_evaluate_batch<F>(a,w,h,s,n)` evaluates `w` coefficient blocks on
+one ordered coset. Input has exactly `w*h` elements and output has `w*n`:
+`out[c*n+j] = sum_{i=0}^{h-1} a[c*h+i] * (s*g_n^j)^i`.
+Both extents use checked arithmetic; malformed input refuses with
+`coset-batch-shape`. Coefficient height `h` may be zero or non-power-of-two.
+For positive width, `n` must be an admitted nonempty two-adic size and `s` must
+be nonzero. Zero height denotes `w` zero polynomials on that checked domain.
+If `h > n`, every discarded coefficient `a[c*h+i]`, `i >= n`, must be zero,
+otherwise the call refuses with `coset-coefficient-count`. This preserves the
+normalized polynomial; it does not reduce a high-degree polynomial modulo the
+domain's vanishing polynomial. Representation padding is supplied by the caller.
+
+Zero width requires empty input and returns empty without interpreting the
+unused domain size or shift. Exact nominal types still apply. Input aliases
+remain immutable and all extension coordinates are retained. Structural domain,
+whole-vector and output checks, discarded-tail checks, numerical work and
+workspace admission precede domain arithmetic and transforms. The complete
+column-major result is private until success. The flattened batch carries no
+single-word Coset facet. This authored operation has its own
+[work and workspace contract](../runtime/numerical.md); source use does not
+promise the cumulative exhaustion point of separate polynomial evaluations.
+
 `poly.coset_extend<F>(v,w,h,s,t,n)` re-evaluates `w` independent columns
 between two cosets. Both vectors use column-major order: input element
 `v[c*h+i]` lies at `s*g_h^i`, and result element `out[c*n+j]` lies at

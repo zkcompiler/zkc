@@ -42,11 +42,94 @@ fn native_values_match_wire_execution_without_decoding_or_request_borrow() {
     };
     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
     assert_eq!(plan.execute().json(), expected);
-    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0]));
+    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0].into()));
     assert_eq!(
         host.prepare_typed(&wire).unwrap().execute().json(),
         expected
     );
+}
+
+#[test]
+fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
+    use crate::execution::PreparedData;
+    let logical = zkc_test_support::variants::logical(
+        "Vectors",
+        json!([["pair", ["vector:bls12-381.fr", "vector:bls12-381.fr"]]]),
+    );
+    let (raw, _) = fixture(&logical);
+    let host = host(&raw, HostLimits::default());
+    let source: Arc<[zkc_backends::Scalar]> = [0u64, 1, 7, 19]
+        .into_iter()
+        .map(zkc_backends::Scalar::from)
+        .collect::<Vec<_>>()
+        .into();
+    let ty = zkc_runtime::vm::LogicalType::parse(&logical).unwrap();
+    let value = Value::Variant(
+        zkc_backends::Variant::new(
+            ty.variant_descriptor().unwrap().clone(),
+            0,
+            vec![Value::Vector(source.clone()), Value::Vector(source.clone())],
+        )
+        .unwrap(),
+    );
+    let prepared = PreparedData::from_value(value.clone(), Capacity::default()).unwrap();
+    for constructor in ["wire", "native", "prepared"] {
+        crate::host::admission::DECODE_COUNT.set(0);
+        let plan = {
+            let owner: Arc<Vec<u8>> = prepared.canonical_bytes().to_vec().into();
+            let weak = Arc::downgrade(&owner);
+            let inputs = request(|| match constructor {
+                "wire" => InputValue::Wire(owner.clone()),
+                "native" => value.clone().into(),
+                _ => prepared.clone().into(),
+            });
+            let plan = host.prepare_typed(&inputs).unwrap();
+            drop(inputs);
+            drop(owner);
+            assert!(weak.upgrade().is_none());
+            plan
+        };
+        assert_eq!(
+            crate::host::admission::DECODE_COUNT.get(),
+            if constructor == "wire" { 2 } else { 0 }
+        );
+        let outputs: Vec<_> = {
+            let report = plan.execute();
+            assert_eq!(
+                report.execution.as_ref().unwrap().outcome,
+                Outcome::Completed
+            );
+            assert!(report.cleanup_errors.is_empty());
+            report
+                .execution
+                .as_ref()
+                .unwrap()
+                .roles
+                .iter()
+                .map(|role| role.outputs[0].clone())
+                .collect()
+        };
+        assert_eq!(outputs.len(), 2);
+        let mut role_backings = Vec::new();
+        for output in &outputs {
+            assert_eq!(output.physical_type(), value.physical_type());
+            let Value::Variant(pair) = output else {
+                panic!("expected pair")
+            };
+            let [Value::Vector(a), Value::Vector(b)] = pair.payload() else {
+                panic!("expected vectors")
+            };
+            assert_eq!(a.as_ref(), source.as_ref());
+            assert_eq!(b.as_ref(), source.as_ref());
+            assert_eq!(Arc::ptr_eq(a, b), constructor != "wire");
+            assert_eq!(Arc::ptr_eq(a, &source), constructor != "wire");
+            role_backings.push(a.clone());
+        }
+        assert_eq!(
+            Arc::ptr_eq(&role_backings[0], &role_backings[1]),
+            constructor != "wire"
+        );
+    }
 }
 
 #[test]
@@ -55,7 +138,7 @@ fn prepared_data_reuses_decode_but_preserves_invocation_charges() {
     let (raw, _) = fixture("bool");
     let capacity = crate::execution::Capacity::default();
     let prepared = PreparedData::from_value(Value::Bool(false), capacity).unwrap();
-    let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec()));
+    let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec().into()));
     let cached = request(|| InputValue::Prepared(prepared.clone()));
     let host = self::host(&raw, HostLimits::default());
     let expected = host.prepare_typed(&wire).unwrap().execute().json();
@@ -101,7 +184,7 @@ fn prepared_collections_respect_the_current_policy() {
                 .is_ok()
         );
         let prepared = PreparedData::from_value(value, Default::default()).unwrap();
-        let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec()));
+        let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec().into()));
         let cached = request(|| prepared.clone().into());
         for restriction in 0..4 {
             let mut limits = HostLimits::default();
@@ -156,7 +239,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     let mut limits = HostLimits::default();
     limits.capacity.wire_bytes = 6;
     let bounded = self::host(&raw, limits);
-    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0]));
+    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0].into()));
     assert_eq!(refusal(&bounded, &wire), "native-capacity-wire");
     // Wire limits govern transport, not already constructed immutable data.
     assert!(bounded.prepare_typed(&inputs).is_ok());
@@ -265,7 +348,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                 payload: vec![if native {
                     value.clone().into()
                 } else {
-                    InputValue::Wire(wire.clone())
+                    InputValue::Wire(wire.clone().into())
                 }],
             });
             wrapped.setups = BTreeMap::from([
@@ -301,7 +384,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                 if native {
                     InputValue::from(value.clone())
                 } else {
-                    InputValue::Wire(wire.clone())
+                    InputValue::Wire(wire.clone().into())
                 }
             });
             inputs.setups = BTreeMap::from([
@@ -348,7 +431,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                         .unwrap(),
                     );
                     inputs.roles[0].inputs[0] =
-                        InputValue::Wire(backend.encode_native_value(&good).unwrap());
+                        InputValue::Wire(backend.encode_native_value(&good).unwrap().into());
                     crate::host::admission::DECODE_COUNT.set(0);
                     assert_eq!(refusal(&host, &inputs), "native-proof-input-setup");
                     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
@@ -381,7 +464,7 @@ fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
     let mut limits = HostLimits::default();
     limits.capacity.elements = 4; // each vector and the node count fit; their sum does not.
     let host = host(&raw, limits);
-    let wire = request(|| InputValue::Wire(bytes.clone()));
+    let wire = request(|| InputValue::Wire(bytes.clone().into()));
     assert_eq!(refusal(&host, &wire), "native-wire-limit");
     let native = request(|| InputValue::from(value.clone()));
     assert_eq!(refusal(&host, &native), "native-wire-limit");
@@ -412,7 +495,7 @@ fn request_structure_and_all_setup_lengths_precede_material_import() {
     assert_eq!(refusal(&host, &inputs), "native-input-type");
     inputs.roles[0].inputs[0] = InputValue::Resource { budget: 1 };
     assert_eq!(refusal(&host, &inputs), "bundle-input-kind");
-    inputs.roles[0].inputs[0] = InputValue::Wire(vec![0; 5]);
+    inputs.roles[0].inputs[0] = InputValue::Wire(vec![0; 5].into());
     assert_eq!(refusal(&host, &inputs), "native-capacity-wire");
 
     let (raw, _) = fixture("rng:bls12-381.fr");
@@ -433,7 +516,7 @@ fn typed_wire_work_is_reserved_before_scanning() {
     let mut limits = HostLimits::default();
     limits.capacity.values.total_bytes = 1;
     let host = host(&raw, limits);
-    let inputs = request(|| InputValue::Wire(vec![0; 10]));
+    let inputs = request(|| InputValue::Wire(vec![0; 10].into()));
     // The work refusal precedes even framing of this malformed input.
     assert_eq!(refusal(&host, &inputs), "artifact-input-work-limit");
 }
@@ -496,7 +579,7 @@ fn typed_key_imports_use_explicit_authorized_constructors() {
             Value::VerifierKey(Arc::new(keys.verifier_key().clone())).into()
         };
         assert_eq!(refusal(&host, &inputs), "native-input-private");
-        inputs.roles[0].inputs[0] = InputValue::Wire(vec![]);
+        inputs.roles[0].inputs[0] = InputValue::Wire(vec![].into());
         assert_eq!(refusal(&host, &inputs), "bundle-input-kind");
     }
 }
@@ -514,7 +597,7 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
         payload: vec![
             InputValue::Variant {
                 alternative: 1,
-                payload: vec![InputValue::Wire(b"ZKCV\x00\x05\x01".to_vec())],
+                payload: vec![InputValue::Wire(b"ZKCV\x00\x05\x01".to_vec().into())],
             },
             Value::Index(9).into(),
         ],
@@ -532,7 +615,7 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
     let expected = backend
         .encode_native_value(&execution.roles[0].outputs[0])
         .unwrap();
-    let wire = self::request(|| InputValue::Wire(expected.clone()));
+    let wire = self::request(|| InputValue::Wire(expected.clone().into()));
     assert_eq!(
         host.prepare_typed(&wire).unwrap().execute().json(),
         report.json()
@@ -586,7 +669,7 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
     wire.extend_from_slice(&[255; 96]);
     let inputs = request(|| InputValue::Variant {
         alternative: 0,
-        payload: vec![InputValue::Wire(wire.clone()), vector()],
+        payload: vec![InputValue::Wire(wire.clone().into()), vector()],
     });
     crate::host::admission::DECODE_COUNT.set(0);
     assert_eq!(refusal(&host, &inputs), "native-wire-limit");

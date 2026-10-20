@@ -227,7 +227,7 @@ fn main() {
     let scalar = |n:u8| -> zkc_tools::entry::Value {
         let mut frame=b"ZKCV\x00\x01".to_vec();
         let mut bytes=[0u8;32]; bytes[0]=n; frame.extend_from_slice(&bytes);
-        zkc_tools::execution::InputValue::Wire(frame).into()
+        zkc_tools::execution::InputValue::Wire(frame.into()).into()
     };
     // Public API construction, independent of private zkc-tools modules. The
     // actual setup-bearing calls are separately exercised across CLI processes.

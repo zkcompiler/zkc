@@ -36,7 +36,10 @@ the unchanged values and weight.
 `vanishing(height, begin, end, x)` evaluates the subgroup product on `[begin,end)`.
 The vector form evaluates the same polynomial on a coset. Both use complement
 products where valid and direct products at removable poles. `split_quotient`
-checks the coefficient capacity before padding into blocks. `recombine` uses
+checks the coefficient capacity before padding into blocks, then evaluates all
+blocks through one `coset::evaluate_batch` call. Its authored resource contract
+does not preserve the cumulative exhaustion point of the former per-block calls.
+`recombine` uses
 increasing powers of `x^height`; an empty list gives zero.
 
 `interaction::Reduction<F>` specifies auxiliary layouts, scoped equations,

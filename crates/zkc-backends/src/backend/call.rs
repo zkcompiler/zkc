@@ -1,62 +1,119 @@
 //! Static attribute validation at the reached invocation's original check point.
+use super::CallBinding;
 use crate::{Result, ark, refused};
-use zkc_runtime::vm::{AttributeRule, BoundSignature, Invocation, OperationBinding};
+use std::sync::Arc;
+use zkc_runtime::vm::AttributeRule;
 
-/// Backend-owned static call facts. Values, custody, setup and budgets are never
-/// cached here. A direct caller can reuse this only for equal rules/attributes;
-/// numerical plans additionally require equal declarations and representations.
-/// Policy, domain, setup and live values belong to the checked invocation path.
+/// Backend-owned static call facts, including immutable decoded scalar literals.
+/// Typed payloads require equal declarations, signatures and attributes. Actual
+/// operands, policy, domain, setup, custody and budgets remain invocation facts.
 pub struct NativeCall {
     rule: AttributeRule,
     attributes: Box<[String]>,
+    payload: CallPayload,
+}
+enum CallPayload {
+    Attributes,
     // A decoded payload only; the reached invocation still checks its binding.
-    unsigned64: Option<u64>,
-    expression: Option<Box<ExpressionCall>>,
+    Unsigned64(u64),
+    Expression(Box<ExpressionCall>),
+    Literal(Box<LiteralCall>),
+}
+struct LiteralCall {
+    binding: Arc<CallBinding>,
+    value: crate::Value,
 }
 struct ExpressionCall {
-    binding: OperationBinding,
-    signature: BoundSignature,
+    binding: Arc<CallBinding>,
     plan: crate::numerical::expression::Prepared,
 }
 
 impl NativeCall {
-    pub(super) fn prepare_invocation(slot: &mut Option<Self>, i: &Invocation<'_>) -> Result<()> {
-        let rule = i.binding.signature().attributes;
-        if rule != AttributeRule::NumericalExpression {
-            return Self::prepare(slot, rule, i.attributes);
+    pub(super) fn prepare_invocation(
+        slot: &mut Option<Self>,
+        binding: &Arc<CallBinding>,
+        attributes: &[String],
+    ) -> Result<()> {
+        let rule = binding.signature.attributes;
+        // The linked signature already fixes attribute interpretation. Keep
+        // attribute-free operations on the ordinary preparation fast path.
+        if rule == AttributeRule::None {
+            return Self::prepare(slot, rule, attributes);
         }
-        Self::prepare_expression(
-            slot,
-            i.binding.declaration(),
-            i.binding.signature(),
-            i.attributes,
-        )
+        if binding.declaration.contract == "field.constant" {
+            return Self::prepare_literal(slot, binding, attributes);
+        }
+        if rule != AttributeRule::NumericalExpression {
+            return Self::prepare(slot, rule, attributes);
+        }
+        Self::prepare_expression(slot, binding, attributes)
+    }
+
+    fn prepare_literal(
+        slot: &mut Option<Self>,
+        binding: &Arc<CallBinding>,
+        attributes: &[String],
+    ) -> Result<()> {
+        let signature = &binding.signature;
+        if slot.as_ref().is_some_and(|call| {
+            call.rule == signature.attributes
+                && call.attributes.as_ref() == attributes
+                && matches!(&call.payload, CallPayload::Literal(literal)
+                    if literal.binding == *binding)
+        }) {
+            return Ok(());
+        }
+        let field = signature
+            .outputs
+            .first()
+            .ok_or_else(|| refused("kernel-operands"))?
+            .logical()
+            .identity();
+        let value = crate::kernels::field::decode_literal(field, attributes)?;
+        // Failed decoding must neither publish a partial replacement nor use
+        // the previous successful scalar for this invocation.
+        *slot = Some(Self {
+            rule: signature.attributes,
+            attributes: attributes.into(),
+            payload: CallPayload::Literal(Box::new(LiteralCall {
+                binding: Arc::clone(binding),
+                value,
+            })),
+        });
+        Ok(())
+    }
+
+    pub(super) fn literal(&self) -> Result<&crate::Value> {
+        match &self.payload {
+            CallPayload::Literal(literal) => Ok(&literal.value),
+            _ => Err(refused("kernel-preparation")),
+        }
     }
 
     fn prepare_expression(
         slot: &mut Option<Self>,
-        binding: &OperationBinding,
-        signature: &BoundSignature,
+        binding: &Arc<CallBinding>,
         attributes: &[String],
     ) -> Result<()> {
         let rule = AttributeRule::NumericalExpression;
         if slot.as_ref().is_some_and(|call| {
             call.rule == rule
                 && call.attributes.as_ref() == attributes
-                && call.expression.as_ref().is_some_and(|expression| {
-                    expression.binding == *binding && expression.signature == *signature
-                })
+                && matches!(&call.payload, CallPayload::Expression(expression)
+                    if expression.binding == *binding)
         }) {
             return Ok(());
         }
-        let plan = crate::numerical::expression::prepare(binding, signature, attributes)?;
+        let plan = crate::numerical::expression::prepare(
+            &binding.declaration,
+            &binding.signature,
+            attributes,
+        )?;
         *slot = Some(Self {
             rule,
             attributes: attributes.into(),
-            unsigned64: None,
-            expression: Some(Box::new(ExpressionCall {
-                binding: binding.clone(),
-                signature: signature.clone(),
+            payload: CallPayload::Expression(Box::new(ExpressionCall {
+                binding: Arc::clone(binding),
                 plan,
             })),
         });
@@ -64,14 +121,17 @@ impl NativeCall {
     }
 
     pub(super) fn expression(&self) -> Result<&crate::numerical::expression::Prepared> {
-        self.expression
-            .as_ref()
-            .map(|expression| &expression.plan)
-            .ok_or_else(|| refused("kernel-preparation"))
+        match &self.payload {
+            CallPayload::Expression(expression) => Ok(&expression.plan),
+            _ => Err(refused("kernel-preparation")),
+        }
     }
 
     pub(super) fn unsigned64(&self) -> Result<u64> {
-        self.unsigned64.ok_or_else(|| refused("kernel-preparation"))
+        match &self.payload {
+            CallPayload::Unsigned64(value) => Ok(*value),
+            _ => Err(refused("kernel-preparation")),
+        }
     }
 
     pub(super) fn prepare(
@@ -89,24 +149,36 @@ impl NativeCall {
         {
             return Ok(());
         }
-        let unsigned64 = if rule == AttributeRule::Unsigned64 {
-            Some(
+        let payload = if rule == AttributeRule::Unsigned64 {
+            CallPayload::Unsigned64(
                 crate::kernels::indices::decode_unsigned64(attributes)
                     .ok_or_else(|| refused("kernel-attributes"))?,
             )
         } else {
             Self::check(rule, attributes)?;
-            None
+            CallPayload::Attributes
         };
         *slot = Some(Self {
             rule,
             attributes: attributes.into(),
-            unsigned64,
-            expression: None,
+            payload,
         });
         Ok(())
     }
     pub(super) fn check(rule: AttributeRule, attributes: &[String]) -> Result<()> {
+        use zkc_runtime::vm::Identity;
+        let field = match rule {
+            AttributeRule::FieldDecimal => Some(Identity::Bls12381Fr),
+            AttributeRule::Bn254Decimal => Some(Identity::Bn254Fr),
+            AttributeRule::RistrettoDecimal => Some(Identity::Ristretto255Scalar),
+            AttributeRule::KoalaBearDecimal => Some(Identity::KoalaBear),
+            AttributeRule::Binary64Literal => Some(Identity::Binary64),
+            AttributeRule::Binary64Ext3Literal => Some(Identity::Binary64Ext3),
+            _ => None,
+        };
+        if let Some(field) = field {
+            return crate::kernels::field::decode_literal(field, attributes).map(|_| ());
+        }
         match rule {
             AttributeRule::None if attributes.is_empty() => (),
             AttributeRule::Unsigned64 => {
@@ -130,9 +202,6 @@ impl NativeCall {
                 for literal in attributes {
                     crate::parse_bn254_decimal(literal).map_err(ark)?;
                 }
-            }
-            AttributeRule::Bn254Decimal if attributes.len() == 1 => {
-                crate::parse_bn254_decimal(&attributes[0]).map_err(ark)?;
             }
             AttributeRule::FieldDecimals => {
                 for literal in attributes {
@@ -166,15 +235,6 @@ impl NativeCall {
                         .iter()
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok())
                     && matches!(attributes[2].as_str(), "0" | "1") => {}
-            AttributeRule::KoalaBearDecimal if attributes.len() == 1 => {
-                let _ = crate::plonky3::parse_decimal(&attributes[0])?;
-            }
-            AttributeRule::Binary64Literal if attributes.len() == 1 => {
-                let _ = crate::plonky3::binary::parse_literal(&attributes[0])?;
-            }
-            AttributeRule::Binary64Ext3Literal if attributes.len() == 1 => {
-                let _ = crate::plonky3::binary::parse_ext3_literal(&attributes[0])?;
-            }
             AttributeRule::Binary64Literals => {
                 for literal in attributes {
                     let _ = crate::plonky3::binary::parse_literal(literal)?;
@@ -184,9 +244,6 @@ impl NativeCall {
                 for literal in attributes {
                     let _ = crate::plonky3::binary::parse_ext3_literal(literal)?;
                 }
-            }
-            AttributeRule::RistrettoDecimal if attributes.len() == 1 => {
-                crate::parse_ristretto_decimal(&attributes[0])?;
             }
             AttributeRule::NativeMessageTemplate => {
                 zkc_runtime::logical::native_origin_template(attributes, "message")
@@ -203,14 +260,15 @@ impl NativeCall {
                     .map_err(|_| refused("kernel-attributes"))?;
             }
 
-            AttributeRule::FieldDecimal if attributes.len() == 1 => {
-                zkc_arkworks::parse_decimal(&attributes[0]).map_err(ark)?;
-            }
             _ => return Err(refused("kernel-attributes")),
         }
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "literal_tests.rs"]
+mod literal_tests;
 
 #[cfg(test)]
 mod tests {
@@ -263,50 +321,65 @@ mod tests {
         assert!(call.is_none());
     }
 
+    fn expression_binding(field: &str, provider: &str) -> Arc<CallBinding> {
+        let declaration = zkc_runtime::vm::OperationBinding {
+            contract: "numerical.map".into(),
+            arguments: vec![field.into(), "1".into()],
+            implementation: format!("{provider}/numerical.map"),
+        };
+        Arc::new(CallBinding {
+            signature: declaration.signature().unwrap(),
+            declaration,
+        })
+    }
+
+    fn expression_snapshot(call: &NativeCall) -> &Arc<CallBinding> {
+        let CallPayload::Expression(expression) = &call.payload else {
+            panic!("prepared expression");
+        };
+        &expression.binding
+    }
+
     #[test]
     fn expression_preparation_refuses_representation_changes_and_preserves_warmed_plan() {
         use serde_json::json;
         use zkc_runtime::vm::{PhysicalType, Representation};
 
-        let binding = OperationBinding {
-            contract: "numerical.map".into(),
-            arguments: vec!["bls12-381.fr".into(), "1".into()],
-            implementation: "arkworks/numerical.map".into(),
-        };
+        let binding = expression_binding("bls12-381.fr", "arkworks");
         let attributes =
             vec![json!(["zkc.ring/0", ["bls12-381.fr"], [["input", 0]], [0]]).to_string()];
-        let ports = binding.signature().unwrap();
         let mut slot = None;
-        NativeCall::prepare_expression(&mut slot, &binding, &ports, &attributes).unwrap();
+        NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         let storage = slot.as_ref().unwrap().attributes.as_ptr();
         let plan = std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap());
-        NativeCall::prepare_expression(&mut slot, &binding, &ports, &attributes).unwrap();
+        NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         assert_eq!(
             plan,
             std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap())
         );
 
         for input in [true, false] {
-            let mut wrong_ports = ports.clone();
+            let mut wrong_binding = Arc::clone(&binding);
+            let signature = &mut Arc::make_mut(&mut wrong_binding).signature;
             let port = if input {
-                &mut wrong_ports.inputs[1]
+                &mut signature.inputs[1]
             } else {
-                &mut wrong_ports.outputs[0]
+                &mut signature.outputs[0]
             };
             let original = port.clone();
             *port = PhysicalType::new(original.logical(), Representation::FrDiagonal).unwrap();
             assert_eq!(port.logical(), original.logical());
             assert_ne!(*port, original);
             assert_eq!(
-                NativeCall::prepare_expression(&mut slot, &binding, &wrong_ports, &attributes),
+                NativeCall::prepare_expression(&mut slot, &wrong_binding, &attributes),
                 Err(refused("numerical-binding"))
             );
             let retained = slot.as_ref().unwrap();
             assert_eq!(storage, retained.attributes.as_ptr());
             assert_eq!(plan, std::ptr::from_ref(retained.expression().unwrap()));
-            assert_eq!(retained.expression.as_ref().unwrap().signature, ports);
+            assert!(Arc::ptr_eq(expression_snapshot(retained), &binding));
 
-            NativeCall::prepare_expression(&mut slot, &binding, &ports, &attributes).unwrap();
+            NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
             assert_eq!(
                 plan,
                 std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap())
@@ -317,28 +390,56 @@ mod tests {
     #[test]
     fn expression_preparation_keys_exact_binding_body_and_representations() {
         use serde_json::json;
-        let mut binding = OperationBinding {
-            contract: "numerical.map".into(),
-            arguments: vec!["koala-bear".into(), "1".into()],
-            implementation: "plonky3/numerical.map".into(),
-        };
+        let binding = expression_binding("koala-bear", "plonky3");
         let attributes =
             vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string()];
-        let ports = binding.signature().unwrap();
         let mut slot = None;
-        NativeCall::prepare_expression(&mut slot, &binding, &ports, &attributes).unwrap();
+        NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
         let storage = slot.as_ref().unwrap().attributes.as_ptr();
-        NativeCall::prepare_expression(&mut slot, &binding, &ports, &attributes).unwrap();
+        let plan = std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap());
+        let equal_owner = Arc::new((*binding).clone());
+        assert!(!Arc::ptr_eq(&binding, &equal_owner));
+        NativeCall::prepare_expression(&mut slot, &equal_owner, &attributes).unwrap();
         assert_eq!(storage, slot.as_ref().unwrap().attributes.as_ptr());
-        let mut wrong_ports = ports.clone();
-        wrong_ports.outputs[0] = ports.inputs[0].clone();
-        assert!(
-            NativeCall::prepare_expression(&mut slot, &binding, &wrong_ports, &attributes).is_err()
+        assert_eq!(
+            plan,
+            std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap())
         );
-        assert_eq!(storage, slot.as_ref().unwrap().attributes.as_ptr());
+        assert!(Arc::ptr_eq(
+            expression_snapshot(slot.as_ref().unwrap()),
+            &binding
+        ));
+
+        for changed in 0..6 {
+            let mut wrong_binding = Arc::clone(&binding);
+            let snapshot = Arc::make_mut(&mut wrong_binding);
+            match changed {
+                0 => snapshot.declaration.contract = "numerical.sum".into(),
+                1 => snapshot.declaration.arguments[1] = "0".into(),
+                2 => snapshot.declaration.implementation = "other/numerical.map".into(),
+                3 => snapshot.signature.attributes = AttributeRule::None,
+                4 => snapshot.signature.inputs[1] = snapshot.signature.inputs[0].clone(),
+                5 => snapshot.signature.outputs[0] = snapshot.signature.inputs[0].clone(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                NativeCall::prepare_expression(&mut slot, &wrong_binding, &attributes),
+                Err(refused("numerical-binding"))
+            );
+            assert_eq!(storage, slot.as_ref().unwrap().attributes.as_ptr());
+            assert_eq!(
+                plan,
+                std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap())
+            );
+            assert!(Arc::ptr_eq(
+                expression_snapshot(slot.as_ref().unwrap()),
+                &binding
+            ));
+        }
+
         let changed =
             vec![attributes[0].replace("[\"input\",0]", "[\"constant\",\"koala-bear\",\"1\"]")];
-        NativeCall::prepare_expression(&mut slot, &binding, &ports, &changed).unwrap();
+        NativeCall::prepare_expression(&mut slot, &binding, &changed).unwrap();
         assert_ne!(storage, slot.as_ref().unwrap().attributes.as_ptr());
         assert_eq!(
             slot.as_ref().unwrap().attributes.as_ref(),
@@ -346,49 +447,71 @@ mod tests {
         );
 
         // Equal body text and field do not identify the operand roles or sink.
-        let previous = slot.as_ref().unwrap().attributes.as_ptr();
-        binding.arguments[1] = "0".into();
-        NativeCall::prepare_expression(
-            &mut slot,
-            &binding,
-            &binding.signature().unwrap(),
-            &changed,
-        )
-        .unwrap();
-        assert_ne!(previous, slot.as_ref().unwrap().attributes.as_ptr());
-        let previous = slot.as_ref().unwrap().attributes.as_ptr();
-        binding.contract = "numerical.sum".into();
-        binding.implementation = "plonky3/numerical.sum".into();
-        NativeCall::prepare_expression(
-            &mut slot,
-            &binding,
-            &binding.signature().unwrap(),
-            &changed,
-        )
-        .unwrap();
-        assert_ne!(previous, slot.as_ref().unwrap().attributes.as_ptr());
+        let mut binding = Arc::clone(&binding);
+        for sum in [false, true] {
+            let previous = slot.as_ref().unwrap().attributes.as_ptr();
+            let snapshot = Arc::make_mut(&mut binding);
+            if sum {
+                snapshot.declaration.contract = "numerical.sum".into();
+                snapshot.declaration.implementation = "plonky3/numerical.sum".into();
+            } else {
+                snapshot.declaration.arguments[1] = "0".into();
+            }
+            snapshot.signature = snapshot.declaration.signature().unwrap();
+            NativeCall::prepare_expression(&mut slot, &binding, &changed).unwrap();
+            assert_ne!(previous, slot.as_ref().unwrap().attributes.as_ptr());
+            assert!(Arc::ptr_eq(
+                expression_snapshot(slot.as_ref().unwrap()),
+                &binding
+            ));
+        }
 
         let previous = slot.as_ref().unwrap().attributes.as_ptr();
-        binding.arguments[0] = "koala-bear.ext4-binomial3".into();
-        assert!(
-            NativeCall::prepare_expression(
-                &mut slot,
-                &binding,
-                &binding.signature().unwrap(),
-                &changed
-            )
-            .is_err()
-        );
+        let snapshot = Arc::make_mut(&mut binding);
+        snapshot.declaration.arguments[0] = "koala-bear.ext4-binomial3".into();
+        snapshot.signature = snapshot.declaration.signature().unwrap();
+        assert!(NativeCall::prepare_expression(&mut slot, &binding, &changed).is_err());
         assert_eq!(previous, slot.as_ref().unwrap().attributes.as_ptr());
         assert_eq!(
-            slot.as_ref()
-                .unwrap()
-                .expression
-                .as_ref()
-                .unwrap()
-                .binding
+            expression_snapshot(slot.as_ref().unwrap())
+                .declaration
                 .arguments[0],
             "koala-bear"
         );
+    }
+
+    #[test]
+    fn expression_preparation_rechecks_every_retained_metadata_field() {
+        use serde_json::json;
+        let binding = expression_binding("koala-bear", "plonky3");
+        let attributes =
+            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string()];
+        let mut slot = None;
+        NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
+        for changed in 0..6 {
+            let CallPayload::Expression(expression) = &mut slot.as_mut().unwrap().payload else {
+                panic!("prepared expression");
+            };
+            let snapshot = Arc::make_mut(&mut expression.binding);
+            match changed {
+                0 => snapshot.declaration.contract = "numerical.sum".into(),
+                1 => snapshot.declaration.arguments[1] = "0".into(),
+                2 => snapshot.declaration.implementation = "other/numerical.map".into(),
+                3 => snapshot.signature.attributes = AttributeRule::None,
+                4 => snapshot.signature.inputs[1] = snapshot.signature.inputs[0].clone(),
+                5 => snapshot.signature.outputs[0] = snapshot.signature.inputs[0].clone(),
+                _ => unreachable!(),
+            }
+            let plan = std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap());
+            NativeCall::prepare_expression(&mut slot, &binding, &attributes).unwrap();
+            assert_ne!(
+                plan,
+                std::ptr::from_ref(slot.as_ref().unwrap().expression().unwrap())
+            );
+            assert!(Arc::ptr_eq(
+                expression_snapshot(slot.as_ref().unwrap()),
+                &binding
+            ));
+        }
     }
 }

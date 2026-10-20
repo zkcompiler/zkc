@@ -19,7 +19,10 @@ so its one request has a fixed shape. The row and path follow the last request:
 they are terminal messages, which the native construction absorbs like every
 other message.
 
-```sh
+Run from this project directory with `zkc` and `zkc-compile` on `PATH`.
+
+```sh zkc-example
+zkc check
 zkc prove example::Proof
 zkc verify example::Proof
 ```

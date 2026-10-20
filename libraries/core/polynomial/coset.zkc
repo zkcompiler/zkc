@@ -85,6 +85,14 @@ pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index
   return Word<F> { data: data, shift: shift };
 }
 
+// Each exact coefficient block denotes an independent polynomial. Only zero
+// representation tails may be discarded when the output domain is smaller.
+pub fn evaluate_batch<F: Field>(coefficients: Vector<F>, columns: index,
+    coefficient_height: index, shift: F, output_height: index) -> Vector<F>
+    effects(stop) where zkc::algebra::TwoAdicField(F) {
+  return raw::evaluate_batch(coefficients, columns, coefficient_height, shift, output_height);
+}
+
 pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
     height: index, shift: F, size: index) -> Vector<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
   require length(columns) == height * count;

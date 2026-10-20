@@ -1582,33 +1582,75 @@ pub struct Evaluation {
     pub range_failures: Vec<(usize, usize, u32)>,
 }
 
+/// One selected schedule's reusable node values. Input occurrences refer to
+/// their first node, so the node buffer also caches each fetched input. Neither
+/// the mapping nor value scratch is indexed by the original input number.
+struct RowInterpreter<'a, V> {
+    arena: &'a Expression,
+    input_sources: Vec<usize>,
+    values: Vec<V>,
+}
+impl<'a, V: Clone> RowInterpreter<'a, V> {
+    fn new(arena: &'a Expression) -> Self {
+        let mut first = BTreeMap::new();
+        let input_sources = arena
+            .nodes()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, node)| match node {
+                Node::Input(input) => Some(*first.entry(*input).or_insert(i)),
+                _ => None,
+            })
+            .collect();
+        drop(first);
+        Self {
+            arena,
+            input_sources,
+            values: Vec::with_capacity(arena.nodes().len()),
+        }
+    }
+    /// Refill in node order. Constants and embeddings remain reached, fallible
+    /// operations on every row; preparation performs no Algebra calls.
+    fn evaluate<A: Algebra<Value = V>>(
+        &mut self,
+        algebra: &A,
+        fetch: &mut dyn FnMut(usize) -> Result<V>,
+    ) -> Result<&[V]> {
+        self.values.clear();
+        let mut sources = self.input_sources.iter();
+        for (i, node) in self.arena.nodes().iter().enumerate() {
+            let field = self.arena.facts()[i].field;
+            let v = match node {
+                Node::Constant(f, literal) => algebra.constant(*f, literal)?,
+                Node::Input(j) => {
+                    let source = *sources.next().expect("input occurrence");
+                    if source == i {
+                        fetch(*j)?
+                    } else {
+                        self.values[source].clone()
+                    }
+                }
+                Node::Add(a, b) => algebra.add(field, &self.values[*a], &self.values[*b]),
+                Node::Mul(a, b) => algebra.mul(field, &self.values[*a], &self.values[*b]),
+                Node::Neg(a) => algebra.neg(field, &self.values[*a]),
+                Node::Embed(to, a) => {
+                    algebra.embed(self.arena.facts()[*a].field, *to, &self.values[*a])?
+                }
+            };
+            self.values.push(v);
+        }
+        Ok(&self.values)
+    }
+}
+
 /// Interpret a selected arena for one row: nodes in order, inputs fetched once.
 fn interpret<A: Algebra>(
     arena: &Expression,
     algebra: &A,
     fetch: &mut dyn FnMut(usize) -> Result<A::Value>,
 ) -> Result<Vec<A::Value>> {
-    let mut values: Vec<A::Value> = Vec::with_capacity(arena.nodes().len());
-    let mut inputs: BTreeMap<usize, A::Value> = BTreeMap::new();
-    for (i, node) in arena.nodes().iter().enumerate() {
-        let field = arena.facts()[i].field;
-        let v = match node {
-            Node::Constant(f, literal) => algebra.constant(*f, literal)?,
-            Node::Input(j) => match inputs.get(j) {
-                Some(v) => v.clone(),
-                None => {
-                    let v = fetch(*j)?;
-                    inputs.insert(*j, v.clone());
-                    v
-                }
-            },
-            Node::Add(a, b) => algebra.add(field, &values[*a], &values[*b]),
-            Node::Mul(a, b) => algebra.mul(field, &values[*a], &values[*b]),
-            Node::Neg(a) => algebra.neg(field, &values[*a]),
-            Node::Embed(to, a) => algebra.embed(arena.facts()[*a].field, *to, &values[*a])?,
-        };
-        values.push(v);
-    }
+    let mut interpreter = RowInterpreter::new(arena);
+    let values = interpreter.evaluate(algebra, fetch)?;
     Ok(arena.outputs().iter().map(|o| values[*o].clone()).collect())
 }
 
@@ -1733,8 +1775,26 @@ impl Bundle {
                     .collect();
                 let positions: Vec<usize> = needed.into_iter().collect();
                 let selected = table.arena.select(&positions)?;
-                let slot =
-                    |output: usize| positions.binary_search(&output).expect("selected output");
+                // Each interaction emits its tuple, including repeats, then
+                // its count. Store the node positions once for the segment.
+                let mut emission_nodes = Vec::new();
+                let emissions: Vec<_> = active
+                    .iter()
+                    .map(|(assertion, index, _)| {
+                        let start = emission_nodes.len();
+                        let mut emit = |output| {
+                            let slot = positions.binary_search(&output).expect("selected output");
+                            emission_nodes.push(selected.outputs()[slot]);
+                        };
+                        if *assertion {
+                            emit(table.assertions[*index].output);
+                        } else {
+                            table.interactions[*index].output_indices().for_each(emit);
+                        }
+                        (*assertion, *index, start..emission_nodes.len())
+                    })
+                    .collect();
+                let mut interpreter = RowInterpreter::new(&selected);
                 for r in from..to {
                     let mut fetch = |input: usize| -> Result<A::Value> {
                         match table.inputs[input] {
@@ -1756,14 +1816,13 @@ impl Bundle {
                             }
                         }
                     };
-                    let values = interpret(&selected, algebra, &mut fetch)?;
-                    for (assertion, index, _) in &active {
+                    let values = interpreter.evaluate(algebra, &mut fetch)?;
+                    for (assertion, index, range) in &emissions {
+                        let nodes = &emission_nodes[range.clone()];
                         if *assertion {
                             let a = &table.assertions[*index];
-                            let value = algebra.coordinates(
-                                self.facts[t][a.output].field,
-                                &values[slot(a.output)],
-                            );
+                            let value = algebra
+                                .coordinates(self.facts[t][a.output].field, &values[nodes[0]]);
                             result.satisfied &= is_zero(&value);
                             residuals[*index].push(Residual {
                                 table: t,
@@ -1774,12 +1833,14 @@ impl Bundle {
                             continue;
                         }
                         let interaction = &table.interactions[*index];
-                        let (channel, locality, _, tuple, count) = interaction.parts();
+                        let (channel, locality, _, _, _) = interaction.parts();
                         let c = &self.channels[channel];
-                        let tuple: Vec<Columns> = tuple
+                        let (count_node, tuple_nodes) =
+                            nodes.split_last().expect("interaction count");
+                        let tuple: Vec<Columns> = tuple_nodes
                             .iter()
                             .zip(&c.tuple)
-                            .map(|(p, f)| algebra.coordinates(*f, &values[slot(*p)]))
+                            .map(|(node, f)| algebra.coordinates(*f, &values[*node]))
                             .collect();
                         let local = match locality {
                             Locality::Global => None,
@@ -1806,7 +1867,7 @@ impl Bundle {
                                 None,
                             )
                         });
-                        let value = &values[slot(count)];
+                        let value = &values[*count_node];
                         match interaction {
                             Interaction::FieldBalance { .. } => {
                                 entry.1 = Some(match &entry.1 {
@@ -2827,8 +2888,15 @@ impl Staged {
                         .into_iter()
                         .collect();
                     let selected = table.arena.select(&positions)?;
-                    let slot =
-                        |output: usize| positions.binary_search(&output).expect("selected output");
+                    let emissions: Vec<_> = active
+                        .iter()
+                        .map(|&index| {
+                            let output = table.assertions[index].output;
+                            let slot = positions.binary_search(&output).expect("selected output");
+                            (index, selected.outputs()[slot])
+                        })
+                        .collect();
+                    let mut interpreter = RowInterpreter::new(&selected);
                     for r in from..to {
                         let mut fetch = |input: usize| -> Result<A::Value> {
                             let StagedInput::Read {
@@ -2860,13 +2928,11 @@ impl Staged {
                                 .expect("present")[group];
                             element(algebra, *field, *width, columns, read, column)
                         };
-                        let values = interpret(&selected, algebra, &mut fetch)?;
-                        for &i in &active {
+                        let values = interpreter.evaluate(algebra, &mut fetch)?;
+                        for &(i, node) in &emissions {
                             let output = table.assertions[i].output;
-                            let value = algebra.coordinates(
-                                output_field(&table.arena, output),
-                                &values[slot(output)],
-                            );
+                            let value = algebra
+                                .coordinates(output_field(&table.arena, output), &values[node]);
                             result.satisfied &= is_zero(&value);
                             residuals[i].push(StagedResidual {
                                 phase: p as u32 + 1,

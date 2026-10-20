@@ -1350,3 +1350,6 @@ fn remaining_bundle_refusals() {
 
 #[path = "relation_staged_tests.rs"]
 mod staged;
+
+#[path = "relation_row_tests.rs"]
+mod rows;

@@ -191,6 +191,8 @@ macro_rules! family {
                 Value::$poly(v)
             }
             fn decimal(s: &str) -> Result<Self> {
+                #[cfg(test)]
+                LITERAL_DECODES.with(|count| count.set(count.get() + 1));
                 ($parse)(s)
             }
         }
@@ -327,6 +329,37 @@ macro_rules! with_field {
     };
 }
 pub(crate) use with_field;
+
+// Count actual decoder entries, including validation and ordinary execution.
+// Thread-local storage keeps parallel tests independent without production cost.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static LITERAL_DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn literal<S: Family>(attributes: &[String]) -> Result<Value> {
+    let [text] = attributes else {
+        return Err(refused("kernel-attributes"));
+    };
+    Ok(S::field_value(S::decimal(text)?))
+}
+
+pub(crate) fn decode_literal(
+    field: zkc_runtime::vm::Identity,
+    attributes: &[String],
+) -> Result<Value> {
+    with_field!(field, |S| literal::<S>(attributes))
+}
+
+pub(crate) fn publish_literal(
+    value: &Value,
+    i: &zkc_runtime::vm::Invocation<'_>,
+    policy: &crate::Policy,
+) -> Result<Vec<Value>> {
+    // These are inline scalars: every result retains its ordinary fresh charge.
+    policy.output(512, i.max_output_bytes)?;
+    Ok(vec![value.clone()])
+}
 
 #[cfg(test)]
 mod tests {

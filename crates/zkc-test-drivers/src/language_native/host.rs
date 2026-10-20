@@ -28,7 +28,7 @@ fn data(arm: usize, wire: bool) -> Value {
         let mut scalar = [0; 32];
         scalar[0] = 7;
         bytes.extend_from_slice(&scalar);
-        InputValue::Wire(bytes).into()
+        InputValue::Wire(bytes.into()).into()
     } else {
         scalar(7)
     };

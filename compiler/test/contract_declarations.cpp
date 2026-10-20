@@ -110,6 +110,21 @@ int main() {
     consumeError(std::move(unexpected));
   }
   requires("poly.coset_evaluate", "TwoAdicField");
+  requires("poly.coset_evaluate_batch", "TwoAdicField");
+  const auto &coefficientBatch = signature("poly.coset_evaluate_batch");
+  check(coefficientBatch.inputs.size() == 5 &&
+            coefficientBatch.outputs.size() == 1 &&
+            type(coefficientBatch.inputs[0], "vector", {0}) &&
+            type(coefficientBatch.inputs[1], "index", {}) &&
+            type(coefficientBatch.inputs[2], "index", {}) &&
+            type(coefficientBatch.inputs[3], "field", {0}) &&
+            type(coefficientBatch.inputs[4], "index", {}) &&
+            type(coefficientBatch.outputs[0], "vector", {0}),
+        "coefficient batch has exact nominal vector/index/shift ports");
+  const auto *coefficientBatchFacets =
+      operationContracts("poly.coset_evaluate_batch");
+  check(coefficientBatchFacets && !coefficientBatchFacets->coset,
+        "a flattened coefficient batch is not one coset word");
   requires("random.draw", "Field");
   requires("random.index", "IndexRandomness");
   check(parameterContract("field.constant")->fieldTerm == 0 &&

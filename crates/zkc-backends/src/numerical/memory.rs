@@ -54,9 +54,7 @@ pub(super) struct Buffer<'a, T> {
 
 impl<'a, T: Clone> Buffer<'a, T> {
     pub(super) fn new(len: usize, initial: T, reservation: Reservation<'a>) -> Result<Self> {
-        let mut data = Vec::new();
-        data.try_reserve_exact(len)
-            .map_err(|_| exhausted("allocation"))?;
+        let mut data = crate::allocation::reserve(len).map_err(|_| exhausted("allocation"))?;
         data.resize(len, initial);
         Ok(Self { data, reservation })
     }

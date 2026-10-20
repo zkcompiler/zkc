@@ -283,6 +283,16 @@ codec validates subgroup membership, requires exact consumption, and rejects
 noncanonical exceptional encodings. Identity and zero scalar arithmetic are
 allowed. Raw upstream coordinates cannot construct this wrapper.
 
+The BLS12-381 and BN254 G1/G2 wrappers also provide `scale_many_into`,
+`scale_each_into` and `scaling_workspace_bytes`. They check exact slice lengths
+before writing a caller-owned initialized private destination. Multiplication
+retains affine-base `mul_bigint` dispatch; projective results are batch-normalized
+in chunks capped at `SCALING_CHUNK_CAP` (256). Projective, Z and inversion-prefix
+scratch is fallibly reserved once and reused. A chunk below two or scratch
+allocation failure uses the scalar loop. Callers account for the reported
+workspace payload separately from output storage. Inputs remain immutable and
+Arkworks retains its variable-time arithmetic behavior.
+
 `scalar_from_wide_be(&[u8; 64])` is the named transcript sampler adapter: an
 existing arkworks big-endian integer reduction modulo Fr, including zero. It is
 separate from strict ordinary `decode_scalar`, which admits only canonical

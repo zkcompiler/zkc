@@ -1,7 +1,7 @@
 module air::polynomial;
 use zkc::vector as vector;
 use zkc::boolean as boolean;
-use zkc::vector::{Vector, length, empty, concat, slice, fill, scale};
+use zkc::vector::{Vector, length, concat, fill, scale};
 
 use zkc::polynomial as polynomial;
 use zkc::coset as coset;
@@ -9,7 +9,7 @@ use zkc::scalar::{inverse, power};
 use zkc::indices::{less, maximum, divide};
 use zkc::boolean::{both};
 
-use zkc::coset::{point, interpolate, evaluate_coset};
+use zkc::coset::{point, interpolate};
 
 use zkc::finite_math as total;
 
@@ -56,12 +56,7 @@ pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
   let capacity = width * count;
   require boolean::negate(less(capacity, actual));
   let padded = concat(coefficients, fill<F>(0, capacity - actual));
-  let mut columns = empty<F>();
-  for block in 0..count {
-    let block_polynomial = polynomial::from_coefficients(slice(padded, block * width, width));
-    columns = concat(columns, coset::values(evaluate_coset(block_polynomial, shift, size)));
-  }
-  return columns;
+  return coset::evaluate_batch(padded, count, width, shift, size);
 }
 pub fn recombine<F: Field>(claims: Vector<F>, height: index, x: F) -> F effects(stop) where () {
   let stride = power(x, height);

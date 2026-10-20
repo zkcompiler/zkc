@@ -89,7 +89,7 @@ impl<'a> Admission<'a> {
                 Ok((input, size))
             }
             InputValue::Wire(bytes) => {
-                self.plan_wire(backend, ty, Cow::Borrowed(bytes), None, selected)
+                self.plan_wire(backend, ty, Cow::Borrowed(bytes.as_slice()), None, selected)
             }
             InputValue::WireFile { file, sha256 } => {
                 let bytes = self.file_wire(file, sha256, backend.policy().max_wire_bytes)?;

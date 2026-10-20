@@ -37,6 +37,15 @@ pub struct Domain<E> {
 }
 impl<E: ExtensionField<KoalaBear>> Domain<E> {
     pub fn new(size: usize, shift: E, max_elements: usize) -> Result<Self, Error> {
+        Self::validate(size, shift, max_elements)?;
+        Ok(Self {
+            size,
+            shift,
+            generator: KoalaBear::two_adic_generator(size.trailing_zeros() as usize),
+        })
+    }
+    /// Structural admission without domain powers or field arithmetic.
+    pub(crate) fn validate(size: usize, shift: E, max_elements: usize) -> Result<(), Error> {
         if !size.is_power_of_two() || size.trailing_zeros() as usize > KoalaBear::TWO_ADICITY {
             return Err(Error::DomainSize);
         }
@@ -46,11 +55,7 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
         if shift == E::ZERO {
             return Err(Error::ZeroShift);
         }
-        Ok(Self {
-            size,
-            shift,
-            generator: KoalaBear::two_adic_generator(size.trailing_zeros() as usize),
-        })
+        Ok(())
     }
     pub fn size(&self) -> usize {
         self.size
@@ -94,6 +99,48 @@ pub struct Kernels {
 }
 
 impl Kernels {
+    /// Evaluate admitted column-major coefficient blocks with shared shift
+    /// powers and one provider batch. The caller checks discarded tails and
+    /// reserves the owned matrix plus private destination before arithmetic.
+    pub(crate) fn coset_evaluate_batch_into<E: ExtensionField<KoalaBear>>(
+        &self,
+        coefficients: &[E],
+        width: usize,
+        coefficient_height: usize,
+        domain: Domain<E>,
+        destination: &mut [E],
+    ) -> Result<(), Error> {
+        let input_len = width
+            .checked_mul(coefficient_height)
+            .ok_or(Error::SizeOverflow)?;
+        let output_len = width.checked_mul(domain.size).ok_or(Error::SizeOverflow)?;
+        if coefficients.len() != input_len || destination.len() != output_len {
+            return Err(Error::BatchShape);
+        }
+        if width == 0 {
+            return Ok(());
+        }
+        let mut scaled = crate::allocation::reserve(output_len).map_err(|_| Error::Allocation)?;
+        scaled.resize(output_len, E::ZERO);
+        let mut power = E::ONE;
+        for row in 0..coefficient_height.min(domain.size) {
+            for column in 0..width {
+                scaled[row * width + column] =
+                    coefficients[column * coefficient_height + row] * power;
+            }
+            power *= domain.shift;
+        }
+        let evaluations = self
+            .dft
+            .dft_algebra_batch(RowMajorMatrix::new(scaled, width));
+        for column in 0..width {
+            for row in 0..domain.size {
+                destination[column * domain.size + row] = evaluations.values[row * width + column];
+            }
+        }
+        Ok(())
+    }
+
     /// Extend independent column-major evaluation vectors into a fixed private
     /// destination. The caller admits output and transform workspace first.
     /// Neither the borrowed input nor published values are modified. The
@@ -117,9 +164,7 @@ impl Kernels {
         // P3 matrices are row-major internally. Every matrix element is E,
         // retaining all extension coordinates through algebra DFTs. Reserve
         // adapter allocations fallibly; provider internals own their caches.
-        let mut rows = Vec::new();
-        rows.try_reserve_exact(input_len)
-            .map_err(|_| Error::Allocation)?;
+        let mut rows = crate::allocation::reserve(input_len).map_err(|_| Error::Allocation)?;
         rows.resize(input_len, E::ZERO);
         for row in 0..input.size {
             for col in 0..width {
@@ -136,10 +181,7 @@ impl Kernels {
         {
             return Err(Error::CoefficientCount);
         }
-        let mut scaled = Vec::new();
-        scaled
-            .try_reserve_exact(output_len)
-            .map_err(|_| Error::Allocation)?;
+        let mut scaled = crate::allocation::reserve(output_len).map_err(|_| Error::Allocation)?;
         scaled.resize(output_len, E::ZERO);
         let ratio = output.shift / input.shift;
         let mut power = E::ONE;

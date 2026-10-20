@@ -424,3 +424,9 @@ def OpVectorEqual : ZKC_Operation<"vector.equal", [OpVectorEqualF],
     [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityCommRing, [OpVectorEqualF]>]> {
   int ordinal = 159;
 }
+
+// Ordered equality search; the input extent is the absent-value sentinel.
+def OpVectorFindLastF : ZKC_Root<"F", FieldDomain>;
+def OpVectorFindLast : ZKC_Operation<"vector.find_last", [OpVectorFindLastF],
+    [ZKC_Apply<TypeVector, [OpVectorFindLastF]>, ZKC_Apply<TypeField, [OpVectorFindLastF]>],
+    [ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityCommRing, [OpVectorFindLastF]>]>;

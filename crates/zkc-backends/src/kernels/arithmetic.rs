@@ -6,17 +6,21 @@ use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_runtime::vm::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation, Value as _};
 
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
 /// remains delegated to the selected field library.
-fn invert_nonzero<S: Coefficient>(values: &[S], out: &mut Vec<S>) -> Result<()> {
+fn invert_nonzero<S: Coefficient>(
+    values: &[S],
+    allocate: impl FnOnce() -> Result<Vec<S>>,
+) -> Result<Vec<S>> {
     if values.iter().any(|x| *x == S::zero()) {
         return Err(refused("zero-inverse"));
     }
+    let mut out = allocate()?;
     if values.is_empty() {
-        return Ok(());
+        return Ok(out);
     }
     let mut product = S::one();
     for x in values {
@@ -28,7 +32,7 @@ fn invert_nonzero<S: Coefficient>(values: &[S], out: &mut Vec<S>) -> Result<()> 
         *prefix = *prefix * inverse;
         inverse = inverse * *x;
     }
-    Ok(())
+    Ok(out)
 }
 
 pub(crate) fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
@@ -37,6 +41,28 @@ pub(crate) fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
 pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
     coefficients.first().copied().unwrap_or_else(S::zero)
         + coefficients.iter().fold(S::zero(), |a, c| a + *c)
+}
+fn find_last<S: Coefficient>(
+    values: &[S],
+    needle: S,
+    policy: &Policy,
+    available: usize,
+) -> Result<Value> {
+    policy.vector_width(values.len(), std::mem::size_of::<S>())?;
+    let retained = Value::Index(0).retained_bytes();
+    policy.output(retained, available)?;
+    let call = crate::numerical::Call::new(policy, available);
+    call.work_items(values.len(), 1, 1)?;
+    let output = call.scalar(retained)?;
+    // Visit the complete ordered vector; no mask or value cache is needed.
+    let mut found = values.len();
+    for (position, value) in values.iter().enumerate() {
+        if *value == needle {
+            found = position;
+        }
+    }
+    let found = u64::try_from(found).map_err(|_| exhausted("size-overflow"))?;
+    output.finish(|| Ok(Value::Index(found)))
 }
 pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
     coefficients.last().is_none_or(|c| *c != S::zero())
@@ -52,10 +78,7 @@ pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
     }
 }
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
-    let mut v = Vec::new();
-    v.try_reserve_exact(n)
-        .map_err(|_| exhausted("allocation"))?;
-    Ok(v)
+    crate::allocation::reserve(n).map_err(|_| exhausted("allocation"))
 }
 pub(crate) fn equal_len(a: usize, b: usize) -> Result<()> {
     if a != b {
@@ -179,7 +202,9 @@ fn dense<S: Family>(
         p.output(512, i.max_output_bytes)?;
     }
     match name {
-        "field.constant" => scalar(S::decimal(&i.attributes[0])?),
+        "field.constant" => {
+            super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p)
+        }
         "field.add" => scalar(f(0)? + f(1)?),
         "field.sub" => scalar(f(0)? - f(1)?),
         "field.mul" => scalar(f(0)? * f(1)?),
@@ -440,14 +465,11 @@ fn dense<S: Family>(
         }
         "vector.prefix_product" | "vector.prefix_sum" | "vector.inverse" => {
             let a = v(0)?;
-            if name == "vector.inverse" && a.iter().any(|x| *x == S::zero()) {
-                return Err(refused("zero-inverse"));
-            }
-            let mut out = allocation(a.len())?;
             if name == "vector.inverse" {
-                invert_nonzero(a, &mut out)?;
+                let out = invert_nonzero(a, || allocation(a.len()))?;
                 return Ok(vec![S::vector_value(out.into())]);
             }
+            let mut out = allocation(a.len())?;
             let mut acc = if name == "vector.prefix_product" {
                 S::one()
             } else {
@@ -495,6 +517,7 @@ fn dense<S: Family>(
                 .ok_or_else(|| refused("vector-index"))?,
         ),
         "vector.equal" => boolean(v(0)? == v(1)?),
+        "vector.find_last" => Ok(vec![find_last(v(0)?, f(1)?, p, i.max_output_bytes)?]),
         "vector.length_check" => boolean(v(0)?.len() == natural(i.attributes, 0)?),
         "vector.split" => {
             let a = v(0)?;
@@ -808,6 +831,17 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.transpose",
             "dalek/vector.transpose",
             "plonky3/vector.transpose",
+        ]),
+        field::operation(
+            "vector.find_last",
+            &[Vector, Field],
+            &[Index],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.find_last",
+            "dalek/vector.find_last",
+            "plonky3/vector.find_last",
         ]),
         field::operation("vector.length", &[Vector], &[Index], AttributeRule::None).implemented_by(
             &[
@@ -1343,8 +1377,7 @@ mod batch_inversion_tests {
     fn check_values<S: Coefficient>(mut element: impl FnMut(usize) -> S) {
         for n in [0, 1, 2, 17, 257] {
             let values: Vec<_> = (0..n).map(&mut element).collect();
-            let mut output = Vec::with_capacity(n);
-            invert_nonzero(&values, &mut output).unwrap();
+            let output = invert_nonzero(&values, || Ok(Vec::with_capacity(n))).unwrap();
             assert_eq!(output.len(), n);
             assert!(values.iter().zip(&output).all(|(x, y)| *x * *y == S::one()));
             for index in [0, n / 2, n.saturating_sub(1)] {
@@ -1353,9 +1386,13 @@ mod batch_inversion_tests {
                 }
                 let mut with_zero = values.clone();
                 with_zero[index] = S::zero();
-                output.clear();
-                assert!(invert_nonzero(&with_zero, &mut output).is_err());
-                assert!(output.is_empty());
+                assert_eq!(
+                    invert_nonzero(&with_zero, || panic!("zero must precede allocation"))
+                        .err()
+                        .unwrap()
+                        .code,
+                    "refused:zero-inverse"
+                );
             }
         }
     }
@@ -1371,5 +1408,67 @@ mod batch_inversion_tests {
         // In characteristic two, one plus one is zero: use bit patterns instead.
         check_values(|k| crate::plonky3::binary::from_bits(k as u64 + 2));
         check_values(|k| crate::plonky3::binary::ext3_from_bits([3, k as u64, 5]));
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    #[test]
+    fn ordered_search_obeys_exact_result_work_and_memory_floors() {
+        let values = [Scalar::from(3), Scalar::from(7), Scalar::from(3)];
+        let policy = Policy {
+            max_numerical_work: 4,
+            max_numerical_bytes: 512,
+            ..Policy::default()
+        };
+        assert!(matches!(
+            find_last(&values, values[0], &policy, 512).unwrap(),
+            Value::Index(2)
+        ));
+        for (limited, available, code) in [
+            (
+                Policy {
+                    max_numerical_work: 3,
+                    ..policy
+                },
+                512,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: 511,
+                    ..policy
+                },
+                512,
+                "exhausted:numerical-bytes",
+            ),
+            (policy, 511, "exhausted:output-bytes"),
+            (
+                Policy {
+                    max_table_elements: 2,
+                    ..policy
+                },
+                512,
+                "exhausted:element-limit",
+            ),
+        ] {
+            assert_eq!(
+                find_last(&values, values[0], &limited, available)
+                    .unwrap_err()
+                    .code,
+                code
+            );
+        }
+        assert!(matches!(
+            find_last(&[], Scalar::from(9), &policy, 512).unwrap(),
+            Value::Index(0)
+        ));
+        assert!(matches!(
+            find_last(&values, Scalar::from(9), &policy, 512).unwrap(),
+            Value::Index(3)
+        ));
+        assert_eq!(values, [Scalar::from(3), Scalar::from(7), Scalar::from(3)]);
     }
 }

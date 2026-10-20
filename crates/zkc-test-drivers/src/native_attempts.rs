@@ -244,7 +244,7 @@ fn run(directory: &Path, case: &Json) {
             .as_array()
             .unwrap()
             .iter()
-            .map(|row| InputValue::Wire(decode_hex(&row[2])))
+            .map(|row| InputValue::Wire(decode_hex(&row[2]).into()))
             .collect(),
         inputs: producer[2]
             .as_array()

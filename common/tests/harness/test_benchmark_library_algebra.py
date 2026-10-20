@@ -15,7 +15,8 @@ from coset_reference import CosetReference
 
 
 ROOT = Path(__file__).resolve().parents[3]
-FAMILIES = {'kzg': 28, 'curve_family': 24, 'sparse_matrix': 22, 'opening_quotient': 72}
+FAMILIES = {'kzg': 28, 'curve_family': 40, 'sparse_matrix': 53, 'opening_quotient': 72,
+            'quotient_split': 18, 'literal': 48, 'relation_rows': 12}
 FR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 DALEK = 2**252 + 27742317777372353535851937790883648493
 
@@ -92,11 +93,12 @@ def test_generic_kzg_matches_lagrange_polynomial_and_derivative(bench, field, n,
         assert 'v::equal(out,expected)' in program.source
 
 
-@pytest.mark.parametrize('curve', ['bls-g1', 'bls-g2', 'ristretto', 'edwards'])
+@pytest.mark.parametrize('curve', ['bls-g1', 'bls-g2', 'bn-g1', 'bn-g2', 'ristretto', 'edwards'])
 @pytest.mark.parametrize('form', ['fixed-base', 'shared-scalar', 'per-point', 'msm'])
 def test_curve_forms_check_every_scalar_with_explicit_shared_provider_scope(bench, curve, form):
     group, field = bench['library_algebra'].CURVES[curve]
-    modulus = DALEK if field == 'ristretto255.scalar' else FR
+    modulus = {'ristretto255.scalar': DALEK, 'bls12-381.fr': FR,
+               'bn254.fr': 21888242871839275222246405745257275088548364400416034343698204186575808495617}[field]
     f = bench['algebra'].FieldOracle(field)
     assert f.modulus == modulus
     assert f.mul((modulus-2,), (modulus-3,)) == (6,)
@@ -160,6 +162,28 @@ def test_sparse_directions_match_dense_contractions_and_exact_occupancy(bench, d
     left, right = [p.inputs[0]['P'] for p in programs]
     assert sum(int(x)*int(y) for x, y in zip(left['expected'], right['xs'], strict=True)) % FR == \
            sum(int(x)*int(y) for x, y in zip(left['xs'], right['expected'], strict=True)) % FR
+
+
+@pytest.mark.parametrize('degree', [1, 4, 8])
+@pytest.mark.parametrize('blocks', [4, 8])
+def test_quotient_blocks_match_direct_horner_with_padding(bench, degree, blocks):
+    shape = {'extension_degree': degree, 'elements': 8, 'block_width': 2, 'blocks': blocks}
+    programs = [bench['library_algebra'].quotient_split(shape | {'form': form}, root=ROOT)
+                for form in ('library', 'reference')]
+    assert programs[0].inputs == programs[1].inputs
+    inputs = programs[0].inputs[0]['P']
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    ref = CosetReference(field)
+    coefficients = bench['algebra'].FieldOracle(field).dense(8, 472)
+    shift = decode(inputs['shift'])
+    domain = ref.domain(shift, 8)
+    assert list(map(decode, inputs['values'])) == [ref.horner(coefficients, x) for x in domain]
+    coefficients += [ref.zero] * (2*blocks-8)
+    expected = [ref.horner(coefficients[2*b:2*b+2], x) for b in range(blocks) for x in domain]
+    assert list(map(decode, inputs['expected'])) == expected
+    assert 'air_poly::split_quotient' in programs[0].source
+    assert 'out=v::concat(out' in programs[1].source
+    assert 'v::equal(out,expected)' in programs[0].source
 
 
 @pytest.mark.parametrize('degree', [1, 4, 8])
@@ -236,6 +260,38 @@ def test_catalog_preserves_old_cases_and_keeps_new_panels_bounded(bench):
         assert len([s for s in openings if s == shape | {'form': 'reference'}]) == 1
 
 
+@pytest.mark.parametrize('field', ['bls12-381.fr', 'bn254.fr', 'koala-bear',
+                                 'koala-bear.ext4-binomial3', 'koala-bear.ext8-binomial3',
+                                 'gf2-64.pentanomial-4-3-1',
+                                 'gf2-64.pentanomial-4-3-1.ext3-trinomial1'])
+def test_bilinear_and_literal_controls_use_complete_field_elements(bench, field):
+    f = bench['algebra'].FieldOracle(field, root=ROOT)
+    def element(value):
+        return tuple(int(x, 16) if x.startswith('0x') else int(x)
+                     for x in (value if isinstance(value, list) else [value]))
+    shape = {'rows': 7, 'columns': 13, 'nnz': 29,
+             'distribution': 'clustered', 'direction': 'bilinear', 'field': field}
+    matrix = bench['library_algebra'].sparse_matrix(shape, root=ROOT)
+    inputs = matrix.inputs[0]['P']
+    expected = f.zero
+    for r, c, coefficient in inputs['matrix']['entries']:
+        expected = f.add(expected, f.mul(element(inputs['left'][int(r)]),
+                              f.mul(element(coefficient), element(inputs['xs'][int(c)]))))
+    assert inputs['expected'] == [f.encode(expected)]
+    assert 'mat::bilinear(matrix,left,xs)' in matrix.source
+    operations = importlib.import_module('bench.operations')
+    programs = [operations.literal({'field': field, 'trips': 17, 'form': form}, root=ROOT)
+                for form in ('constant', 'operand')]
+    assert programs[0].inputs == programs[1].inputs
+    value = element(programs[0].inputs[0]['P']['value'])
+    expected = f.zero
+    for _ in range(17):
+        expected = f.add(expected, value)
+    assert programs[0].inputs[0]['P']['expected'] == f.encode(expected)
+    assert 'kernel<F>("field.constant";' in programs[0].source
+    assert 'field.constant' not in programs[1].source
+
+
 def test_every_new_case_has_canonical_output_only_negatives_and_bounded_inputs(bench):
     def nodes(value):
         if isinstance(value, dict):
@@ -251,29 +307,51 @@ def test_every_new_case_has_canonical_output_only_negatives_and_bounded_inputs(b
         program = case.generate(ROOT, ROOT/'unused')
         good, bad = program.inputs[0]['P'], program.incorrect['P']
         assert {key for key in good if good[key] != bad[key]} == {'expected'}
-        modulus = DALEK if case.shape.get('field') == 'ristretto255.scalar' else \
-                  FR if case.shape.get('field') == 'bls12-381.fr' else 2130706433
+        field = case.shape.get('field', 'koala-bear')
+        oracle = bench['algebra'].FieldOracle(field, root=ROOT)
+        modulus = oracle.modulus
         before, after = deepcopy(good['expected']), deepcopy(bad['expected'])
+        def number(value):
+            return int(value, 16) if value.startswith('0x') else int(value)
         def differences(left, right):
             if isinstance(left, list):
                 assert isinstance(right, list) and len(left) == len(right)
                 return sum(differences(x, y) for x, y in zip(left, right, strict=True))
             assert isinstance(left, str) and isinstance(right, str)
-            assert 0 <= int(left) < modulus and 0 <= int(right) < modulus
+            assert 0 <= number(left) < modulus and 0 <= number(right) < modulus
             return int(left != right)
         assert differences(before, after) == 1
-        while isinstance(before[0], list):
+        while isinstance(before, list) and isinstance(before[0], list):
             before, after = before[0], after[0]
-        assert len(before) == len(after)
-        assert int(after[0]) == (int(before[0])+1) % modulus
-        assert before[1:] == after[1:]
+        if isinstance(before, list):
+            assert len(before) == len(after)
+            assert before[1:] == after[1:]
+            before, after = before[0], after[0]
+        assert number(after) == (number(before) ^ 1 if oracle.binary else (number(before)+1) % modulus)
         assert nodes(program.inputs[0]) < 200_000 and nodes(program.incorrect) < 200_000
         # Keep the full pretty-printed request below the Host's 16 MiB input
         # ceiling; the larger octic panel needs more than 1 MiB.
         assert len(json.dumps(program.inputs[0], indent=2).encode()) < 4 << 20
         assert len(json.dumps(program.incorrect, indent=2).encode()) < 4 << 20
-        assert program.support == ()  # Self-contained oracle; no undeclared data files.
+        assert program.support == ((ROOT/'compiler/adapters/ring_arena.py',)
+                                   if case.name == 'relation_rows' else oracle.support)
         assert case.generate(ROOT, ROOT/'unused').inputs == program.inputs
+
+
+def test_relation_row_oracle_checks_nonzero_and_inactive_residuals(bench, monkeypatch):
+    stark = importlib.import_module('bench.stark')
+    shape = {'height': 3, 'width': 1, 'data': 'valid'}
+    bundle, *_ = stark.recurrence(ROOT, shape)
+    # This deliberately is not a valid recurrence. Hand-calculated residuals
+    # expose omission of transition assertions, scopes or zero inactive slots.
+    monkeypatch.setattr(stark, 'recurrence', lambda root, shape: (bundle, [2], [11], [2, 6, 11]))
+    for data, expected in [('valid', [0, 0, 1, 0, 0, 2130706433-26, 0, 0, 0]),
+                           ('perturbed', [0, 0, 2, 0, 0, 2130706433-39, 0, 0, 0])]:
+        program = bench['library_algebra'].relation_rows(shape | {'data': data}, root=ROOT)
+        assert list(map(int, program.inputs[0]['P']['expected'])) == expected
+        assert '"relation.table_rows"' in program.source
+        assert program.assets == {'trace': bundle}
+        assert 'inactive slots are zero' in program.oracle
 
 
 def test_selected_source_library_closure_is_captured_without_running_a_real_compiler(bench, tmp_path):
@@ -282,9 +360,13 @@ def test_selected_source_library_closure_is_captured_without_running_a_real_comp
     shutil.copy(ROOT/'zkc.workspace.toml', selected/'zkc.workspace.toml')
     shutil.copytree(ROOT/'libraries/core', selected/'libraries/core')
     shutil.copytree(ROOT/'libraries/commitments/kzg', selected/'libraries/commitments/kzg')
+    shutil.copytree(ROOT/'libraries/relations/air', selected/'libraries/relations/air')
+    (selected/'compiler/adapters').mkdir(parents=True)
+    shutil.copy(ROOT/'compiler/adapters/ring_arena.py', selected/'compiler/adapters/ring_arena.py')
     owners = ['libraries/commitments/kzg/lib.zkc', 'libraries/core/polynomial/coset.zkc',
               'libraries/core/polynomial/opening.zkc', 'libraries/core/algebra/curve.zkc',
-              'libraries/core/primitives/collections/matrix.zkc']
+              'libraries/core/primitives/collections/matrix.zkc',
+              'libraries/relations/air/polynomial.zkc']
     for owner in owners:
         path = selected/owner
         path.write_text(path.read_text()+'\n// Selected-source capture sentinel.\n')

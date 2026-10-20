@@ -11,14 +11,14 @@ fn request(input: &Json) -> ProofInputs {
             .as_array()
             .unwrap()
             .iter()
-            .map(|row| InputValue::Wire(bytes(&row[2])))
+            .map(|row| InputValue::Wire(bytes(&row[2]).into()))
             .collect(),
         inputs: input[2]
             .as_array()
             .unwrap()
             .iter()
             .map(|row| match row[1][0].as_str().unwrap() {
-                "wire" => InputValue::Wire(bytes(&row[1][1])),
+                "wire" => InputValue::Wire(bytes(&row[1][1]).into()),
                 "verifier_key" => InputValue::VerifierKey,
                 "prover_key_file" => InputValue::ProverKeyFile {
                     path: row[1][1][0].as_str().unwrap().into(),
@@ -40,7 +40,7 @@ pub(super) fn preflight(deployment: &NativeDeployment, envelope: &Json, input: &
         .position(|p| p[2].as_str().unwrap().starts_with("verifier_key:"))
         .unwrap();
     let mut bad = request(input);
-    bad.public[key] = InputValue::Wire(vec![]);
+    bad.public[key] = InputValue::Wire(vec![].into());
     bad.inputs[0] = Value::Bool(true).into();
     assert_eq!(
         deployment
@@ -50,7 +50,7 @@ pub(super) fn preflight(deployment: &NativeDeployment, envelope: &Json, input: &
         "native-input-type"
     );
     bad = request(input);
-    bad.public[key] = InputValue::Wire(vec![]);
+    bad.public[key] = InputValue::Wire(vec![].into());
     let mut capacity = deployment.capacity();
     capacity.wire_bytes = 0;
     let limited = deployment.clone().with_capacity(capacity).unwrap();

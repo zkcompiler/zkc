@@ -219,6 +219,17 @@ pub(super) fn installed() -> Result<&'static Registry> {
             r.pure_shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(super::execute::PCS_CONTRACTS, basic)?;
             r.pure_shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
+            // Reuse the owning contract row, including all installed providers.
+            let constants = crate::kernels::arithmetic::CONTRACTS
+                .iter()
+                .find(|row| row.name == "field.constant")
+                .expect("field constant contract");
+            for implementation in constants.implementations {
+                r.entries
+                    .get_mut(*implementation)
+                    .expect("installed field constant")
+                    .prepared_handler = Some(prepared_field_constant);
+            }
             r.prepared_family(
                 crate::numerical::expression::IMPLEMENTATIONS,
                 Signature::Custom(crate::numerical::expression::signature),
@@ -355,6 +366,14 @@ fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resu
         i,
         &b.core.policy,
     )
+}
+fn prepared_field_constant(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    _args: &[Value],
+    call: &super::NativeCall,
+) -> Result<Vec<Value>> {
+    crate::kernels::field::publish_literal(call.literal()?, i, &b.core.policy)
 }
 fn expression(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::numerical::expression::prepare(
