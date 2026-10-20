@@ -84,7 +84,7 @@ def main():
     packages = ["main", *dict.fromkeys(args.integration)]
     subject_manifests = manifests(args.manifests or SUBJECTS)
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = []
+    details = list(controls.EMITTED_APPLICATIONS) if "arklib" in packages else []
     for path in subject_manifests + samples:
         names = reports.claim_names(reports.load_manifest(path))
         for name in (names["instance"], names["application"]):
@@ -140,7 +140,7 @@ def main():
     report_directory = output / "reports"
     report_directory.mkdir(exist_ok=True)
     for path in subject_manifests + samples:
-        report = reports.build(path, records, claims, args.evidence)
+        report = reports.build(path, records, claims, args.evidence, reused_records=args.records)
         name = ("sample-" if path in samples else "") + report["subject"]
         (report_directory / f"{name}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
         if path in subject_manifests:
@@ -163,6 +163,10 @@ def main():
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
     control_rows = controls.run()
+    if "arklib" in packages:
+        emitted_rows, emitted_failures = controls.run_emitted(records)
+        control_rows += emitted_rows
+        failures += emitted_failures
     summary = {
         "status": "fail" if failures else "pass",
         "packages": {package: records.headers[package].get("declarations") for package in packages},

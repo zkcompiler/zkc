@@ -196,6 +196,7 @@ import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
 import TestsSecurity.MultilinearSumcheck
 import TestsSecurity.ProviderSimulation
+import TestsSecurity.ReportControls
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.StageComposition

@@ -12,8 +12,10 @@ instance of its entry's schema, a parameter of the evidence that is neither
 a type, an allowed instance nor a registered premise, a premise of the
 application itself, a manifest field that names a declaration outside the
 claims namespace, a claims namespace of another subject, an application declared
-outside the subject's generated claims module, and evidence without the
-pipeline's claim-application check. A control that would pass
+outside the subject's generated claims module, evidence without the
+pipeline's claim-application check, and declaration records reused from a saved
+directory. `run_emitted` applies the same application audit to declarations Lean
+emitted (`TestsSecurity.ReportControls`). A control that would pass
 on the unchanged input is checked on that input too, so a control cannot pass
 vacuously.
 """
@@ -276,10 +278,57 @@ def run():
         elsewhere = report(fresh("elsewhere"), records(module="Sample.Elsewhere"))
         expect("report-application-elsewhere", elsewhere["outcome"] == "unresolved" and
                mentions(elsewhere, "is declared in Sample.Elsewhere"), elsewhere)
+        manifest, folder = subject(fresh("reused"))
+        reused = reports.build(manifest, records(), evidence_directory=folder, reused_records="saved-records")
+        expect("report-reused-records", reused["outcome"] == "unresolved" and
+               mentions(reused, "the declaration records were reused"), reused)
         unbuilt = report(fresh("unbuilt"), records(), claim_application=False)
         expect("report-without-claim-application", unbuilt["outcome"] == "unresolved" and
                mentions(unbuilt, "no accepted claim-application check"), unbuilt)
 
+    run_ledger_controls(rows, expect)
+
+    return rows
+
+
+# Applications in `TestsSecurity.ReportControls`: the registered knowledge
+# endpoint applied to the Schnorr subject's evidence, with no premise of its own
+# or with one premise the registry does not know, and the binder of that premise.
+EMITTED_APPLICATIONS = {
+    "TestsSecurity.ReportControls.clean": None,
+    "TestsSecurity.ReportControls.explicit_false": "explicit",
+    "TestsSecurity.ReportControls.implicit_false": "implicit",
+    "TestsSecurity.ReportControls.instance_premise": "instance",
+}
+
+
+def run_emitted(data):
+    """The report's audit of an application's own telescope, on declarations Lean
+    emitted: the application without a premise passes, and each added premise is
+    reported as omitted with its binder."""
+    entries, endpoints = data.registry()
+    registry = reports.Registry(entries, endpoints)
+    rows, failures = [], []
+    for name, binder in EMITTED_APPLICATIONS.items():
+        record = data.get(name)
+        if record is None or not record.get("detail"):
+            failures.append(f"records control emitted-{name} failed: the declaration was not emitted in detail")
+            continue
+        _, reasons = reports.telescope(record, registry, "application")
+        reasons += reports.binder_reasons(record, "application")
+        if binder is None:
+            passed = reasons == []
+        else:
+            passed = any(reason.startswith(f"omitted premise: {binder} premise") for reason in reasons)
+        label = "emitted-" + name.rsplit(".", 1)[1].replace("_", "-")
+        if passed:
+            rows.append(label)
+        else:
+            failures.append(f"records control {label} failed: {reasons}")
+    return rows, failures
+
+
+def run_ledger_controls(rows, expect):
     # The ledger: a renamed headline, a changed statement and a theorem that
     # depends on sorryAx each fail; the unchanged ledger passes.
     claims = {"schema": ledger.LEDGER_SCHEMA, "proved": [

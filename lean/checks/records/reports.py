@@ -569,7 +569,7 @@ def context(manifest, ledger, records, registry):
     return rows
 
 
-def build(manifest_path, records, ledger=None, evidence_directory=None):
+def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
     manifest = load_manifest(manifest_path)
     entries, endpoints = records.registry()
     registry = Registry(entries, endpoints)
@@ -580,6 +580,11 @@ def build(manifest_path, records, ledger=None, evidence_directory=None):
     reasons = []
     if entries is None:
         reasons.append("the registry was not emitted: the security package was not selected")
+    if reused_records is not None:
+        # Records carry declaration hashes but no identity of the sources they were
+        # emitted from, so reused records are not tied to the validated sources.
+        reasons.append(f"the declaration records were reused from {reused_records}, not emitted from this "
+                       "checkout, so they are not tied to the sources the pipeline validated")
     properties = list((manifest.get("claims") or {}).get("properties", []))
     if not properties:
         reasons.append("the manifest claims no property")
