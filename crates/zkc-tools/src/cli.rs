@@ -24,7 +24,7 @@ macro_rules! entry_options {
         ]
     };
     ($($extra:expr),* $(,)?) => {
-        entry_options!(@inspection Opt::new("--no-simplify"),
+        entry_options!(@inspection Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), $($extra),*)
     };
@@ -35,6 +35,11 @@ Outside a project, input and proof paths must be explicit unless the input group
 Run sessions are generated when omitted. Use run --no-results to skip result publication.";
 const COMMANDS: &[Command] = &[
     Command {
+        name: "test", summary: "Run manifest test recipes through ordinary consumer Entries", positional: "[TEST]",
+        options: &[Opt::new("--project=FILE"), Opt::new("--compiler=PATH"), Opt::new("--profile=NAME"), Opt::new("--report=DIRECTORY")],
+        description: "Run all root [test.NAME] recipes, or one named recipe. Expected failures match exact diagnostic codes. Compilation and execution use the ordinary checked CLI/Host.",
+    },
+    Command {
         name: "check",
         summary: "Check source definitions and optionally a selected Entry",
         positional: "[ENTRY]",
@@ -42,6 +47,7 @@ const COMMANDS: &[Command] = &[
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            Opt::new("--report=DIRECTORY"),
             Opt::new("--declarations"),
             Opt::new("--api"),
             Opt::new("--notations"),
@@ -70,7 +76,7 @@ not capture-preserving rewrites.\nChecking does not execute the protocol or esta
             Opt::new("--output=PACKAGE"),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
-            Opt::new("--no-simplify"),
+            Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"),
@@ -105,7 +111,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         name: "inspect",
         summary: "Show a checked Entry interface and input schema",
         positional: "[ENTRY]",
-        options: entry_options!(@inspection),
+        options: entry_options!(@inspection Opt::new("--view=entry|project|api|placement|toolchain"), Opt::new("--profile=NAME")),
         description: ENTRY,
     },
     Command {
@@ -143,6 +149,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         summary: "Compile and execute a run Entry",
         positional: "[ENTRY]",
         options: entry_options!(
+            Opt::new("--instrument=counts"),
             Opt::new("--session=LABEL"),
             Opt::new("--input=ROLE=FILE").repeated(),
             Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
@@ -160,6 +167,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         summary: "Compile a proof Entry and produce a proof",
         positional: "[ENTRY]",
         options: entry_options!(
+            Opt::new("--instrument=counts"),
             Opt::new("--public=FILE"),
             Opt::new("--witness=FILE"),
             Opt::new("--output=PROOF"),
@@ -181,6 +189,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         summary: "Verify a proof with independently supplied public inputs",
         positional: "[ENTRY]",
         options: entry_options!(
+            Opt::new("--instrument=counts"),
             Opt::new("--public=FILE"),
             Opt::new("--proof=FILE"),
             Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
@@ -321,22 +330,56 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
             "phase":"arguments", "code":"cli-option",
             "message":"notation visibility options require --notations"});
     }
-    match name {
+    if let Some(instrument) = args.value("--instrument")
+        && (instrument != "counts" || !zkc_runtime::vm::ExecutionCounts::ENABLED)
+    {
+        return serde_json::json!({"status":"refused","phase":"arguments","code":"instrument-unavailable"});
+    }
+    let directory = match args
+        .value("--report")
+        .map(crate::project::observation::ReportDirectory::create)
+        .transpose()
+    {
+        Ok(directory) => directory,
+        Err(code) => {
+            return serde_json::json!({"status":"refused","phase":"observation","code":code});
+        }
+    };
+    let started = std::time::Instant::now();
+    let mut report = match name {
+        "test" => crate::project::testing::run(&args),
+        "inspect" if args.value("--view").is_some_and(|view| view != "entry") => {
+            crate::project::cli::inspect(&args)
+        }
         "compile" | "check" => crate::project::cli::run(name, &args),
         "run-bundle" => crate::run::cli::run(&args),
         "prove-bundle" | "verify-bundle" => crate::proof::cli::run(name == "prove-bundle", &args),
         _ => crate::entry::cli::run(name, &args),
+    };
+    if directory.is_some() || args.has("--instrument") {
+        report["command_microseconds"] = serde_json::json!(started.elapsed().as_micros());
+        report["measurement"] = serde_json::json!({"clock":"wall","inclusive":true,"instrument":args.value("--instrument"),"counts_build":zkc_runtime::vm::ExecutionCounts::ENABLED});
     }
+    if let Some(directory) = directory
+        && let Err(code) = directory.publish(&mut report)
+    {
+        report["report_error"] = serde_json::json!(code);
+    }
+    report
 }
 /// Successful exit requires the requested operation and all requested publications.
 pub fn succeeded(report: &serde_json::Value) -> bool {
+    if report.get("report_error").is_some() {
+        return false;
+    }
     if report["format"] == "zkc.bundle-result/0" {
         report["status"] == "executed" && report["outcome"][0] == "completed"
     } else {
         matches!(
             report["status"].as_str(),
             Some(
-                "checked"
+                "tested"
+                    | "checked"
                     | "compiled"
                     | "inspected"
                     | "executed"

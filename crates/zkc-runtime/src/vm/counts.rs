@@ -51,6 +51,8 @@ pub struct ExecutionCounts {
     events: std::collections::BTreeMap<&'static str, u64>,
     #[cfg(feature = "execution-counts")]
     operations: std::collections::BTreeMap<String, u64>,
+    #[cfg(feature = "execution-counts")]
+    bindings: std::collections::BTreeMap<super::OperationBinding, u64>,
 }
 impl ExecutionCounts {
     /// Reflects the runtime's resolved Cargo features, including unification.
@@ -64,6 +66,10 @@ impl ExecutionCounts {
                 let count = self.events.entry(key).or_default();
                 *count = count.saturating_add(value);
             }
+            for (binding, &value) in &other.bindings {
+                let count = self.bindings.entry(binding.clone()).or_default();
+                *count = count.saturating_add(value);
+            }
             for (key, &value) in &other.operations {
                 let count = self.operations.entry(key.clone()).or_default();
                 *count = count.saturating_add(value);
@@ -73,9 +79,25 @@ impl ExecutionCounts {
         let _ = other;
     }
 
-    /// Materialize only outside measured execution. Labels are operation
-    /// contracts and fixed event names, without operands or source names.
-    /// Counts can reveal reached control flow.
+    /// Static installed binding context, materialized after execution. Counts
+    /// aggregate equal bindings; they do not attribute time or retain values,
+    /// dynamic shapes, source names, or native Origin bytes.
+    pub fn binding_contexts(&self) -> Option<serde_json::Value> {
+        #[cfg(feature = "execution-counts")]
+        return Some(serde_json::Value::Array(
+            self.bindings
+                .iter()
+                .map(|(binding, count)| {
+                    serde_json::json!({"contract":binding.contract,"arguments":binding.arguments,
+                "implementation":binding.implementation,"calls":count})
+                })
+                .collect(),
+        ));
+        #[cfg(not(feature = "execution-counts"))]
+        None
+    }
+    /// Materialize outside measured execution. Labels contain no operands or
+    /// source names. Counts can reveal reached control flow.
     pub fn json(&self) -> Option<serde_json::Value> {
         #[cfg(feature = "execution-counts")]
         return Some(serde_json::json!({"events": self.events, "operations": self.operations}));
@@ -156,6 +178,11 @@ impl Counts {
             };
             for (binding, count) in bindings.iter().zip(&self.operations) {
                 if count.get() != 0 {
+                    let calls = result
+                        .bindings
+                        .entry(binding.declaration().clone())
+                        .or_default();
+                    *calls = calls.saturating_add(count.get());
                     let entry = result
                         .operations
                         .entry(binding.declaration().contract.clone())

@@ -34,6 +34,25 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     }
     report
 }
+/// Inclusive wall times describe existing Host boundaries; they are not additive
+/// kernel timings and do not require changing protocol provenance.
+fn measured<T>(
+    args: &Arguments<'_>,
+    report: &mut Json,
+    stage: &str,
+    action: impl FnOnce(&mut Json) -> T,
+) -> T {
+    let clock = (args.has("--report") || args.has("--instrument")).then(std::time::Instant::now);
+    let result = action(report);
+    if let Some(clock) = clock {
+        if report.get("host_stages").is_none() {
+            report["host_stages"] = json!({});
+        }
+        report["host_stages"][stage] =
+            json!({"inclusive_microseconds": clock.elapsed().as_micros()});
+    }
+    result
+}
 fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     if matches!(command, "init" | "new") {
         return initialize::project(command, args, report);
@@ -73,7 +92,9 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         return Ok(());
     }
     report["phase"] = json!("compilation");
-    let package = target.compile(name, operation.map(Operation::kind), report)?;
+    let package = measured(args, report, "compilation_and_capture", |report| {
+        target.compile(name, operation.map(Operation::kind), report)
+    })?;
     if command == "bindings" {
         let source = super::bindings::rust(&package)?;
         let mut destinations = Outputs::new(&[args.value("--output").unwrap()], &[])?;
@@ -114,18 +135,23 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     report["phase"] = json!("admission");
     let mut documents = files::Documents::new(options.proof.capacity)?;
     if operation == Operation::Run {
-        let host = RunEntry::admit(package, options.run, options.setups.clone())?;
+        let host = measured(args, report, "admission", |_| {
+            RunEntry::admit(package, options.run, options.setups.clone())
+        })?;
         invocation.check_results(host.output_types())?;
         report["entry"] = json!(host.interface().entry());
         report["capacity"] = host.limits().capacity.record();
         report["phase"] = json!("inputs");
-        let Request::Run(request) = options.request(
-            host.interface(),
-            &invocation,
-            operation,
-            &mut documents,
-            report,
-        )?
+        let Request::Run(request) =
+            measured(args, report, "input_decoding_and_validation", |report| {
+                options.request(
+                    host.interface(),
+                    &invocation,
+                    operation,
+                    &mut documents,
+                    report,
+                )
+            })?
         else {
             unreachable!()
         };
@@ -147,10 +173,24 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             } else {
                 Default::default()
             };
-            let prepared = host.prepare_with(request, &mut imports)?;
-            let result = prepared.execute();
+            let prepared = measured(args, report, "preparation", |_| {
+                host.prepare_with(request, &mut imports)
+            })?;
+            let result = measured(args, report, "sdk_execution", |_| prepared.execute());
             report["phase"] = json!("execution");
-            report["execution"] = result.native.diagnostics();
+            if args.has("--instrument") {
+                let mut counts = zkc_runtime::vm::ExecutionCounts::default();
+                if let Some(execution) = &result.native.execution {
+                    for role in &execution.roles {
+                        counts.merge(&role.execution_counts);
+                    }
+                }
+                report["execution_counts"] = json!(counts.json());
+                report["binding_contexts"] = json!(counts.binding_contexts());
+            }
+            report["execution"] = measured(args, report, "diagnostic_materialization", |_| {
+                result.native.diagnostics()
+            });
             if let Some(error) = result.output_error {
                 return Err(error);
             }
@@ -161,15 +201,20 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
                     .unwrap_or_else(|| "entry-run-incomplete".into())
             })?;
             if invocation.results.is_some() {
-                report["phase"] = json!("results");
-                let encoded = files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
-                report["phase"] = json!("publication");
-                destinations.publish(&[("results", &encoded)], report)?;
+                measured(args, report, "output_encoding_and_publication", |report| {
+                    report["phase"] = json!("results");
+                    let encoded =
+                        files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
+                    report["phase"] = json!("publication");
+                    destinations.publish(&[("results", &encoded)], report)
+                })?;
             }
             report["status"] = json!("executed");
         }
     } else {
-        let host = ProofEntry::admit(package, options.proof, options.setups.clone())?;
+        let host = measured(args, report, "admission", |_| {
+            ProofEntry::admit(package, options.proof, options.setups.clone())
+        })?;
         invocation.check_results(
             host.output_types(if operation == Operation::Prove {
                 ProofOperation::Prove
@@ -186,13 +231,16 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         });
         report["capacity"] = options.proof.capacity.record();
         report["phase"] = json!("inputs");
-        let Request::Proof(request) = options.request(
-            host.interface(),
-            &invocation,
-            operation,
-            &mut documents,
-            report,
-        )?
+        let Request::Proof(request) =
+            measured(args, report, "input_decoding_and_validation", |report| {
+                options.request(
+                    host.interface(),
+                    &invocation,
+                    operation,
+                    &mut documents,
+                    report,
+                )
+            })?
         else {
             unreachable!()
         };
@@ -238,10 +286,18 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             if let Some(bytes) = &proof {
                 report["proof_sha256"] = json!(hex(&Sha256::digest(bytes)));
             }
-            let result =
-                host.execute_with(request, proof.as_deref(), options.attempts, &mut imports)?;
+            let result = measured(args, report, "sdk_execution_including_preparation", |_| {
+                host.execute_with(request, proof.as_deref(), options.attempts, &mut imports)
+            })?;
             report["phase"] = json!("execution");
-            report["execution"] = result.native.diagnostics();
+            if args.has("--instrument") {
+                report["execution_counts"] = json!(result.native.execution_counts.json());
+                report["binding_contexts"] =
+                    json!(result.native.execution_counts.binding_contexts());
+            }
+            report["execution"] = measured(args, report, "diagnostic_materialization", |_| {
+                result.native.diagnostics()
+            });
             if !result.is_success() {
                 return Err(result
                     .output_error
@@ -250,18 +306,20 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             }
             let proof = (operation == Operation::Prove)
                 .then(|| result.native.outcome.as_ref().unwrap().as_slice());
-            publish_proof(&destinations, proof, report, || {
-                invocation
-                    .results
-                    .is_some()
-                    .then(|| {
-                        files::proof_outputs(
-                            result.outputs.as_ref().unwrap(),
-                            options.proof.capacity,
-                            output_setups,
-                        )
-                    })
-                    .transpose()
+            measured(args, report, "output_encoding_and_publication", |report| {
+                publish_proof(&destinations, proof, report, || {
+                    invocation
+                        .results
+                        .is_some()
+                        .then(|| {
+                            files::proof_outputs(
+                                result.outputs.as_ref().unwrap(),
+                                options.proof.capacity,
+                                output_setups,
+                            )
+                        })
+                        .transpose()
+                })
             })?;
             report["status"] = json!(if operation == Operation::Prove {
                 "produced"

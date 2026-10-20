@@ -28,6 +28,9 @@ impl Target {
                             | "--module"
                             | "--asset"
                             | "--compiler"
+                            | "--profile"
+                            | "--cache"
+                            | "--dump"
                             | "--no-simplify"
                             | "--release-storage"
                             | "--fuse-vector-reductions"
@@ -80,10 +83,7 @@ impl Target {
     ) -> Result<Package> {
         let package = match self {
             Self::Package { package, .. } => package.clone(),
-            Self::Project(source) => source
-                .compiler
-                .compile(&source.project, Selection { name, kind }, source.options)
-                .map_err(|e| compiler_error(report, e))?,
+            Self::Project(source) => source.compile(Selection { name, kind }, report)?,
         };
         report["package_sha256"] = json!(hex(package.identity()));
         Ok(package)

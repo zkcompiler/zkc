@@ -76,6 +76,7 @@ pub struct Error {
     pub code: String,
     pub diagnostics: Option<String>,
     pub diagnostics_truncated: bool,
+    pub structured: Option<serde_json::Value>,
 }
 impl From<String> for Error {
     fn from(code: String) -> Self {
@@ -83,6 +84,7 @@ impl From<String> for Error {
             code,
             diagnostics: None,
             diagnostics_truncated: false,
+            structured: None,
         }
     }
 }
@@ -148,6 +150,18 @@ impl Compiler {
         selection: Selection<'_>,
         extra: &[&str],
     ) -> Result<Vec<u8>> {
+        self.invoke_observed(project, command, selection, extra, None)
+            .map(|r| r.bytes)
+    }
+    fn invoke_observed(
+        &self,
+        project: &Project,
+        command: &str,
+        selection: Selection<'_>,
+        extra: &[&str],
+        observations: Option<&ObservationRequest>,
+    ) -> Result<Invocation> {
+        let toolchain = observations.map(|_| self.capabilities()).transpose()?;
         for source in project.paths() {
             crate::host::io::open_regular(source).map_err(|_| "artifact-io")?;
         }
@@ -162,8 +176,25 @@ impl Compiler {
         if let Some(kind) = selection.kind {
             process.arg(format!("--entry-kind={}", kind.name()));
         }
-        process.args(&project.flags).args(extra);
         let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
+        let observation_path = directory.path().join("observations.json");
+        process.arg(format!(
+            "--{}={}",
+            if observations.is_some() {
+                "observations"
+            } else {
+                "diagnostics"
+            },
+            observation_path.display()
+        ));
+        let trace_path = directory.path().join("time-trace.json");
+        if let Some(request) = observations {
+            process.arg(format!("--time-trace={}", trace_path.display()));
+            if !request.dumps.is_empty() {
+                process.arg(format!("--dump={}", request.dumps.join(",")));
+            }
+        }
+        process.args(&project.flags).args(extra);
         let captured = crate::host::process::capture(
             &mut process,
             directory.path(),
@@ -176,28 +207,65 @@ impl Compiler {
             crate::host::process::Error::OutputLimit => "source-compiler-limit",
             _ => "source-compiler-io",
         })?;
+        use std::io::Read;
+        let mut diagnostics = Vec::new();
+        captured
+            .stderr
+            .as_ref()
+            .unwrap()
+            .reopen()
+            .map_err(|_| "source-compiler-io")?
+            .take(65537)
+            .read_to_end(&mut diagnostics)
+            .map_err(|_| "source-compiler-io")?;
+        let truncated = diagnostics.len() > 65536;
+        diagnostics.truncate(65536);
+        let diagnostics =
+            (!diagnostics.is_empty()).then(|| String::from_utf8_lossy(&diagnostics).into_owned());
+        let mut observation: Option<serde_json::Value> =
+            crate::host::inputs::read_regular(&observation_path, 32 * 1024 * 1024)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .filter(|record| {
+                    record.is_object()
+                        && record["format"] == "zkc.compilation-observation/0"
+                        && record["completed"] == captured.status.success()
+                });
+        if let Some(observation) = &mut observation
+            && observations.is_some()
+        {
+            if Some(self.capabilities()?) != toolchain {
+                return Err("source-compiler-changed".into());
+            }
+            observation["toolchain"] = toolchain.unwrap();
+            let trace = crate::host::inputs::read_regular(&trace_path, 8 * 1024 * 1024)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+            observation["time_trace_status"] = serde_json::json!(if trace.is_some() {
+                "collected"
+            } else {
+                "unavailable-invalid-or-over-limit"
+            });
+            observation["time_trace"] = trace.unwrap_or(serde_json::Value::Null);
+        }
         if !captured.status.success() {
-            use std::io::Read;
-            let mut bytes = Vec::new();
-            captured
-                .stderr
-                .as_ref()
-                .unwrap()
-                .reopen()
-                .map_err(|_| "source-compiler-io")?
-                .take(65537)
-                .read_to_end(&mut bytes)
-                .map_err(|_| "source-compiler-io")?;
-            let truncated = bytes.len() > 65536;
-            bytes.truncate(65536);
             return Err(Error {
                 code: "source-compilation".into(),
-                diagnostics: Some(String::from_utf8_lossy(&bytes).into_owned()),
+                diagnostics,
                 diagnostics_truncated: truncated,
+                structured: observation,
             });
         }
-        crate::host::inputs::read_regular(captured.stdout.path(), Package::MAX_BYTES)
-            .map_err(Into::into)
+        if observations.is_some() && observation.is_none() {
+            return Err("source-observation-format".into());
+        }
+        let bytes = crate::host::inputs::read_regular(captured.stdout.path(), Package::MAX_BYTES)?;
+        Ok(Invocation {
+            bytes,
+            diagnostics,
+            diagnostics_truncated: truncated,
+            observation,
+        })
     }
     pub fn check(
         &self,
@@ -271,33 +339,114 @@ impl Compiler {
         selection: Selection<'_>,
         options: CompileOptions,
     ) -> Result<Package> {
-        let mut flags = Vec::new();
-        if !options.simplify {
-            flags.push("--no-simplify");
+        self.build(CompilationRequest {
+            project,
+            selection,
+            options,
+            observations: None,
+            cache: None,
+        })
+        .map(|r| r.package)
+    }
+    pub fn build(&self, request: CompilationRequest<'_>) -> Result<CompilationResult> {
+        if let Some(cache) = request.cache {
+            return cache.build(self, request);
         }
-        if options.release_storage {
-            flags.push("--release-storage");
-        }
-        if !options.finite_bulk {
-            flags.push("--no-finite-bulk");
-        }
-        if options.fuse_vector_reductions {
-            flags.push("--fuse-vector-reductions");
-        }
-        if options.fuse_collect_fold {
-            flags.push("--fuse-collect-fold");
-        }
-        if !options.calculation_batching {
-            flags.push("--no-calculation-batching");
-        }
-        let bytes = self.invoke(project, "language-package", selection, &flags)?;
-        let pin = Sha256::digest(&bytes).into();
+        let CompilationRequest {
+            project,
+            selection,
+            options,
+            observations,
+            ..
+        } = request;
+        let flags = options.flags();
+        let invocation =
+            self.invoke_observed(project, "language-package", selection, &flags, observations)?;
+        let mut result = Self::captured(&invocation.bytes, selection, options)?;
+        result.observation = invocation.observation;
+        result.diagnostics = invocation.diagnostics;
+        result.diagnostics_truncated = invocation.diagnostics_truncated;
+        Ok(result)
+    }
+    pub(super) fn captured(
+        bytes: &[u8],
+        selection: Selection<'_>,
+        options: CompileOptions,
+    ) -> Result<CompilationResult> {
+        let pin = Sha256::digest(bytes).into();
         let package =
-            Package::capture(&bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
+            Package::capture(bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
         let view = crate::entry::BoundInterface::read(&package).map_err(|e| e.to_string())?;
         if !selection.matches(&view) || package.options() != options {
             return Err("source-entry-selection".into());
         }
-        Ok(package)
+        Ok(CompilationResult {
+            package,
+            observation: None,
+            diagnostics: None,
+            diagnostics_truncated: false,
+            cache: None,
+        })
     }
+    /// Query the actual selected executable, even outside a project.
+    pub fn capabilities(&self) -> Result<serde_json::Value> {
+        let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
+        let captured = crate::host::process::capture(
+            Command::new(&self.path).arg("--capabilities"),
+            directory.path(),
+            |elapsed| elapsed >= Duration::from_secs(30),
+            65536,
+            true,
+        )
+        .map_err(|_| "source-compiler-io")?;
+        if !captured.status.success() {
+            return Err("source-compiler-capabilities".into());
+        }
+        let bytes = crate::host::inputs::read_regular(captured.stdout.path(), 65536)?;
+        let mut result: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|_| "source-compiler-capabilities")?;
+        if result["format"] != "zkc.compiler-capabilities/0" {
+            return Err("source-compiler-capabilities".into());
+        }
+        let mut binary = std::fs::File::open(&self.path).map_err(|_| "source-compiler-io")?;
+        let mut hash = Sha256::new();
+        use std::io::Read;
+        let mut buffer = [0u8; 65536];
+        loop {
+            let size = binary.read(&mut buffer).map_err(|_| "source-compiler-io")?;
+            if size == 0 {
+                break;
+            }
+            hash.update(&buffer[..size]);
+        }
+        result["binary_sha256"] = serde_json::json!(crate::host::inputs::hex(&hash.finalize()));
+        result["path"] = serde_json::json!(self.path);
+        result["execution_counts"] = serde_json::json!(zkc_runtime::vm::ExecutionCounts::ENABLED);
+        Ok(result)
+    }
+}
+/// Sidecars are opt-in and never become part of executable identity.
+#[derive(Clone, Debug, Default)]
+pub struct ObservationRequest {
+    pub dumps: Vec<String>,
+}
+pub struct CompilationRequest<'a> {
+    pub project: &'a Project,
+    pub selection: Selection<'a>,
+    pub options: CompileOptions,
+    pub observations: Option<&'a ObservationRequest>,
+    pub cache: Option<&'a super::CompilationCache>,
+}
+pub struct CompilationResult {
+    pub cache: Option<serde_json::Value>,
+    pub package: Package,
+    pub observation: Option<serde_json::Value>,
+    pub diagnostics: Option<String>,
+    pub diagnostics_truncated: bool,
+}
+struct Invocation {
+    bytes: Vec<u8>,
+    diagnostics: Option<String>,
+    diagnostics_truncated: bool,
+    observation: Option<serde_json::Value>,
 }

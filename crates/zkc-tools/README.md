@@ -32,9 +32,16 @@ admission path. Human output and `--json` render the same command report.
 `NotationOptions` selects private and installation records. These are diagnostic
 views and do not change execution semantics.
 
+`Project::settings()` resolves root build/profile/request settings with provenance.
+`Compiler::build(CompilationRequest)` returns the package, optional observations,
+success diagnostics and local reuse status. `CompilationCache` is an explicit,
+quota-bound local store; report requests recompute. These share the CLI's
+[tooling contracts](../../docs/compiler/tooling.md). No cached result replaces
+Host admission or trusted deployment configuration.
+
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 
-- `new`, `init`, `prepare`, `check`, `compile`, `inspect`, `inputs init`, `inputs check`.
+- `new`, `init`, `prepare`, `check`, `test`, `compile`, `inspect`, `inputs init`, `inputs check`.
 - `run`, `prove`, `verify`, `bindings`.
 - `run-bundle`, `prove-bundle`, `verify-bundle`.
 

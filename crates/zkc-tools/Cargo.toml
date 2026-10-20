@@ -26,6 +26,7 @@ name = "zkc"
 path = "src/main.rs"
 
 [features]
+execution-counts = ["zkc-runtime/execution-counts"]
 test-utils = ["zkc-backends/test-utils"]
 
 [target.'cfg(unix)'.dependencies]

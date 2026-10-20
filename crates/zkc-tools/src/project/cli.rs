@@ -13,7 +13,10 @@ pub(crate) struct Source {
     pub project: Project,
     pub compiler: Compiler,
     pub options: CompileOptions,
+    pub settings: super::ResolvedSettings,
     pub compiler_argument: String,
+    pub observations: Option<super::ObservationRequest>,
+    pub cache: Option<super::CompilationCache>,
 }
 impl Source {
     pub fn load(args: &Arguments<'_>) -> Result<Self> {
@@ -21,15 +24,9 @@ impl Source {
         let mut modules = BTreeMap::new();
         let mut assets = BTreeMap::new();
         let mut compiler = "zkc-compile";
-        let mut options = CompileOptions {
-            simplify: true,
-            release_storage: false,
-            finite_bulk: true,
-            fuse_vector_reductions: false,
-            fuse_collect_fold: false,
-            calculation_batching: true,
-        };
+        let mut overrides = super::BuildSettings::default();
         for &(key, value) in &args.options {
+            overrides.set_flag(key);
             let value = value.unwrap_or("");
             let duplicate = match key {
                 "--project" => {
@@ -38,30 +35,6 @@ impl Source {
                 }
                 "--compiler" => {
                     compiler = value;
-                    false
-                }
-                "--no-simplify" => {
-                    options.simplify = false;
-                    false
-                }
-                "--release-storage" => {
-                    options.release_storage = true;
-                    false
-                }
-                "--no-finite-bulk" => {
-                    options.finite_bulk = false;
-                    false
-                }
-                "--no-calculation-batching" => {
-                    options.calculation_batching = false;
-                    false
-                }
-                "--fuse-vector-reductions" => {
-                    options.fuse_vector_reductions = true;
-                    false
-                }
-                "--fuse-collect-fold" => {
-                    options.fuse_collect_fold = true;
                     false
                 }
                 "--module" => {
@@ -96,12 +69,75 @@ impl Source {
             None if explicit => Project::explicit(modules, assets)?,
             None => Project::discover()?,
         };
+        let settings = project.settings(args.value("--profile"), &overrides)?;
+        let options = settings.options();
+        let dumps = args
+            .value("--dump")
+            .map(|s| s.split(',').map(str::to_owned).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if dumps
+            .iter()
+            .any(|s| !["protocol", "participant", "exec", "physical"].contains(&s.as_str()))
+        {
+            return Err("source-dump-phase".into());
+        }
+        if !dumps.is_empty() && !args.has("--report") {
+            return Err("source-report-required".into());
+        }
         Ok(Self {
+            cache: args
+                .value("--cache")
+                .map(|p| super::CompilationCache::new(p, 256 * 1024 * 1024))
+                .transpose()
+                .map_err(|e| e.code)?,
+            observations: args
+                .has("--report")
+                .then_some(super::ObservationRequest { dumps }),
+            settings,
             project,
             compiler: Compiler::new(compiler).map_err(|e| e.code)?,
             options,
             compiler_argument: compiler.into(),
         })
+    }
+    pub fn compile(
+        &self,
+        selection: Selection<'_>,
+        report: &mut Json,
+    ) -> Result<crate::entry::Package> {
+        let started = std::time::Instant::now();
+        let result = self
+            .compiler
+            .build(super::CompilationRequest {
+                project: &self.project,
+                selection,
+                options: self.options,
+                observations: self.observations.as_ref(),
+                cache: self.cache.as_ref(),
+            })
+            .map_err(|e| compiler_error(report, e))?;
+        if let Some(cache) = result.cache {
+            report["cache"] = cache;
+        }
+        report["compilation_microseconds"] = json!(started.elapsed().as_micros());
+        if let Some(mut observation) = result.observation {
+            observation["package_sha256"] = json!(hex(result.package.identity()));
+            observation["published_options"] = json!({
+                "simplify":result.package.options().simplify,
+                "release_storage":result.package.options().release_storage,
+                "finite_bulk":result.package.options().finite_bulk,
+                "fuse_vector_reductions":result.package.options().fuse_vector_reductions,
+                "fuse_collect_fold":result.package.options().fuse_collect_fold,
+                "calculation_batching":result.package.options().calculation_batching});
+            if self.observations.is_some() {
+                report["compilation"] = observation;
+            }
+        }
+        if let Some(diagnostics) = result.diagnostics {
+            report["diagnostics"] = json!(diagnostics);
+            report["diagnostics_truncated"] = json!(result.diagnostics_truncated);
+        }
+        Ok(result.package)
     }
     pub fn protect(&self, outputs: &mut Outputs) -> Result<()> {
         outputs.protect(self.project.paths())?;
@@ -113,6 +149,7 @@ impl Source {
         Ok(())
     }
     pub fn describe(&self, report: &mut Json) {
+        report["settings"] = json!(self.settings);
         report["mode"] = json!("project");
         report["compiler"] = json!(self.compiler.path());
         report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions,"fuse_collect_fold":self.options.fuse_collect_fold,"calculation_batching":self.options.calculation_batching});
@@ -122,6 +159,9 @@ impl Source {
     }
 }
 pub(crate) fn compiler_error(report: &mut Json, error: super::Error) -> String {
+    if let Some(structured) = error.structured {
+        report["compiler_diagnostics"] = structured;
+    }
     if let Some(diagnostics) = error.diagnostics {
         report["diagnostics"] = json!(diagnostics);
         report["diagnostics_truncated"] = json!(error.diagnostics_truncated);
@@ -175,17 +215,13 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             });
             report["status"] = json!("checked");
         } else {
-            let package = source
-                .compiler
-                .compile(
-                    &source.project,
-                    Selection {
-                        name: entry,
-                        kind: None,
-                    },
-                    source.options,
-                )
-                .map_err(|e| compiler_error(&mut report, e))?;
+            let package = source.compile(
+                Selection {
+                    name: entry,
+                    kind: None,
+                },
+                &mut report,
+            )?;
             let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
             report["entry"] = json!(view.entry());
             report["toolchain"] = json!(view.toolchain());
@@ -219,6 +255,73 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         } else {
             &code
         });
+    }
+    report
+}
+
+/// Read-only views use existing semantic inventories, never a second parser.
+pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
+    let mut report =
+        json!({"format":"zkc.tool-inspection/0","status":"refused","phase":"inspection"});
+    let result = (|| -> Result<()> {
+        let view = args.value("--view").unwrap();
+        if args.has("--package") || args.has("--sha256") {
+            return Err("cli-usage".into());
+        }
+        report["view"] = json!(view);
+        if view == "toolchain" {
+            if !args.positional.is_empty()
+                || args.has("--project")
+                || args.has("--module")
+                || args.has("--asset")
+                || args.has("--profile")
+            {
+                return Err("cli-usage".into());
+            }
+            report["toolchain"] = Compiler::new(args.value("--compiler").unwrap_or("zkc-compile"))
+                .map_err(|e| e.code)?
+                .capabilities()
+                .map_err(|e| compiler_error(&mut report, e))?;
+        } else {
+            let source = Source::load(args)?;
+            source.describe(&mut report);
+            match view {
+                "project" => {
+                    if !args.positional.is_empty() {
+                        return Err("cli-usage".into());
+                    }
+                    report["project_graph"] =
+                        json!(source.project.graph().ok_or("source-project-required")?);
+                }
+                "api" | "placement" => {
+                    let checked = source
+                        .compiler
+                        .check(
+                            &source.project,
+                            args.positional.first().copied(),
+                            CheckOptions {
+                                api: view == "api",
+                                declarations: true,
+                                notations: None,
+                            },
+                        )
+                        .map_err(|e| compiler_error(&mut report, e))?;
+                    report["checked"] = json!(checked);
+                    if view == "placement" {
+                        report["placement_scope"] = json!(
+                            "completed callable contracts; local expression placement is retained in Protocol IR dumps"
+                        );
+                    }
+                }
+                _ => return Err("cli-view".into()),
+            }
+        }
+        report["status"] = json!("inspected");
+        report["phase"] = json!("complete");
+        Ok(())
+    })();
+    if let Err(code) = result {
+        report["code"] = json!(code);
     }
     report
 }
