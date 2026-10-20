@@ -11,6 +11,7 @@ use ark_serialize::CanonicalSerialize;
 /// compression, infinity and sign flags in the three most significant bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct G2(G2Affine);
+crate::scaling::impl_scaling!(G2, ark_bls12_381::g2::Config);
 impl G2 {
     /// Canonical compressed byte width.
     pub const BYTES: usize = 96;

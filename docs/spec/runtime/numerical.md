@@ -89,6 +89,15 @@ The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
+Arkworks curve vector scaling uses a scoped reservation only for optional
+projective, Z-coordinate and inversion-prefix scratch, in chunks of at most
+256 points. The existing output checks and allocation precede this scope.
+Insufficient scratch allowance or a failed optional allocation selects the
+existing per-point path before writing results; these calls acquire no new
+numerical work or mandatory memory floor. Both paths retain affine-base scalar
+multiplication and private complete-output publication. Dalek scaling keeps its
+existing constant-time provider calls and does not use this scratch.
+
 `poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
 quartic/octic extensions. Shape and domain checks precede numerical admission;
 the whole input/output vectors must fit the element policy. Work admission
