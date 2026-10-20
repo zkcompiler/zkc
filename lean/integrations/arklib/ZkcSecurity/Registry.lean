@@ -348,6 +348,14 @@ def entries : List Entry := [
   ⟨"family.sumcheck-doomed-any", .familyProperty,
     some `ZkcSecurity.Examples.SumcheckFiatShamir.DoomedAny,
     "The doomed residuals of the Sumcheck certificate for every table and claim."⟩,
+  ⟨"family.sumcheck-rejecting", .familyProperty,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.Rejecting,
+    "The residuals of the Sumcheck rounds followed by a terminal that never accepts, at a point \
+    of the round count's length."⟩,
+  ⟨"family.sumcheck-doomed-all", .familyProperty,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.DoomedAll,
+    "The doomed set of the contract-connected Sumcheck certificate: the residuals of every table \
+    and claim, the refused verifier and the rejecting runs."⟩,
   ⟨"family.sigma-special-hvzk", .familyProperty, some `ZkcSecurity.VCVio.SigmaAnd.SpecialHVZK,
     "Special honest-verifier zero knowledge of a Sigma protocol."⟩,
   ⟨"family.sigma-correspondence", .familyProperty, some `ZkcSecurity.Endpoint.Sigma.Corresponds,
@@ -365,6 +373,12 @@ def entries : List Entry := [
     "A policy statement denotes no model statement."⟩,
   ⟨"event.false-statement", .event, some `ZkcSecurity.Endpoint.ApplicationFalse,
     "A policy statement the claim's application contract counts as false."⟩,
+  ⟨"event.unmapped-statement", .event, some `ZkcSecurity.Endpoint.ModelRelation.Unmapped,
+    "A policy statement that denotes no model statement under the evidence's statement relation."⟩,
+  ⟨"event.sumcheck-false-statement", .event,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.Contract.falseStatement,
+    "A Sumcheck policy statement whose claim the retained formula does not confirm as the total of \
+    its vector."⟩,
   ⟨"event.fri-far", .event, some `ZkcSecurity.ArkLib.Fri.Far,
     "A word at relative distance at least the radius from every codeword."⟩,
   ⟨"event.gkr-false-claim", .event, some `ZkcSecurity.ArkLib.Gkr.FalseClaim,
