@@ -7,6 +7,7 @@ publication.
 
 | Responsibility | Guide |
 |---|---|
+| Settings, reports, tests and local reuse | [Tooling](tooling.md) |
 | Profiles, dialects and lowering | [Pipeline](pipeline.md) |
 | Formation and source-relative comparisons | [Verification](verification.md) |
 | Algebra, polynomials and structured values | [Mathematics and data](mathematics.md) |

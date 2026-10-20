@@ -582,3 +582,12 @@ ordinary STARK libraries. LogUp admits signed field balance as well as Boolean
 multisets; grand product remains restricted to the latter. Native controls and
 complete proof runs cover this path; the existing Lean flat-fragment theorem
 does not cover the native adapter. Full Clean ensembles remain outside it.
+
+## Compiler tooling
+
+Root build profiles, shared CLI/SDK requests, structured diagnostics, optional
+phase/pass/decision reports, LLVM time traces, feature-gated runtime counts,
+manifest consumer tests and bounded captured-input compilation reuse are
+implemented. The optional MLIR LSP uses the upstream server with installed zkc
+dialects. Source editing, persistent query caching and automatic policy search
+remain separate work. See [tooling](compiler/tooling.md) for supported boundaries.

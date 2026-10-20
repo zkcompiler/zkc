@@ -156,3 +156,8 @@ bytes and never opens a diagnostic path.
 The separate [notation inspection view](notation.md#inspect-notation-and-locations)
 describes source syntax and visibility, with private/local and installation data
 explicitly requested. It carries no native Entry interface authority.
+
+Build settings and named implementation profiles belong to the consuming root
+manifest; dependencies do not impose them. Root `[test.NAME]` recipes invoke
+ordinary consumer Entries. See [compiler tooling](../compiler/tooling.md) for
+configuration, precedence and test workflows.

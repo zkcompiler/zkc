@@ -10,6 +10,7 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 |---|---|
 | Write a protocol and select an Entry | [Language](language/README.md), [libraries](../libraries/README.md), [projects](../examples/projects/README.md) |
 | Run an Entry or integrate an application | [Runtime and Hosts](runtime/README.md) |
+| Inspect builds, profiles or compiler decisions | [Compiler tooling](compiler/tooling.md) |
 | Work on the compiler | [Compiler](compiler/README.md) |
 | Find exact syntax, IR or artifact rules | [Specification](spec/README.md) |
 | Check implemented capabilities | [Status](status.md) |
