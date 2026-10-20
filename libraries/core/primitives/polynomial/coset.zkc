@@ -8,6 +8,7 @@ pub fn root<F:Field>(size:index)->F = primitive("poly.domain_root");
 pub fn points<F:Field>(shift:F,size:index)->Vector<F> = primitive("poly.domain_points");
 pub fn interpolate<F:Field>(values:Vector<F>,shift:F)->Polynomial<F> = primitive("poly.coset_interpolate");
 pub fn evaluate<F:Field>(value:Polynomial<F>,shift:F,size:index)->Vector<F> = primitive("poly.coset_evaluate");
+pub fn evaluate_batch<F:Field>(coefficients:Vector<F>,columns:index,coefficient_height:index,shift:F,output_height:index)->Vector<F> = primitive("poly.coset_evaluate_batch");
 pub fn extend<F:Field>(values:Vector<F>,width:index,height:index,input_shift:F,output_shift:F,size:index)->Vector<F> = primitive("poly.coset_extend");
 pub fn evaluate_at<F:Field>(values:Vector<F>,width:index,height:index,shift:F,position:F)->Vector<F> = primitive("poly.coset_evaluate_at");
 pub fn fold<F:Field>(values:Vector<F>,shift:F,beta:F)->Vector<F> = primitive("poly.even_odd_fold");

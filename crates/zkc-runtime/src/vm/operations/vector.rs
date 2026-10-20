@@ -4,6 +4,15 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "vector.find_last",
+        (&[Vector, Field], &[Index], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/vector.find_last",
+        "dalek/vector.find_last",
+        "plonky3/vector.find_last",
+    ]),
+    Contract::selectable(
         "vector.get",
         (&[Vector, Index], &[Field], AttributeRule::None),
     )

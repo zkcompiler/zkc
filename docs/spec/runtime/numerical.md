@@ -101,6 +101,34 @@ Every column must succeed before publication, including when a later column
 fails a shrinking-degree check. The operation has its own resource profile;
 the library's use of it does not promise the exhaustion point of separate calls.
 
+`poly.coset_evaluate_batch` uses this scope on the same four fields for exact
+column-major coefficient blocks. Let `w` be the number of columns, `h` the
+coefficient height, `n` the output height, `I=w*h`, `O=w*n`, `d` the extension
+degree over the installed base field and `e=sizeof(F)`. Retained output is
+`R=256+O*e` bytes. Zero width costs one work unit and 256 managed bytes, and
+does not inspect unused domains. For positive width, the conservative score is
+`16*d*O*log2(n) + (I+O)*(8*d*d+16) + (w+1)*4096*d*d`.
+Coefficient height zero is admitted without taking its logarithm.
+
+Typed operands and checked exact extents precede structural domain admission
+(size, installed element bound, nonzero shift), whole-vector and fresh-output
+admission, then discarded-tail validation. Numerical work is admitted next,
+followed by explicit workspace and destination reservations. Domain powers,
+provider setup and transform arithmetic begin only after these checks.
+All size, byte and work calculations use checked arithmetic. A failed call
+publishes no result. Existing operations keep their own resource floors.
+
+Plonky3 scales a row-major matrix by powers of the full extension-valued shift,
+sharing each power across columns, and calls the pinned algebra batch DFT.
+The matrix reserves `O*e` bytes; staging/final output overlap gives a managed
+bound of `256+3*O*e`. BN254 reuses one capacity-preserving `n`-element vector for
+all columns and the existing Arkworks FFT, for `256+(2*O+n)*e` managed bytes.
+Provider-internal conversions, transform scratch, twiddle caches and allocator
+overhead remain outside managed storage. No value-dependent preparation survives
+the call. Source quotient splitting supplies its own interpolation, capacity
+check and coefficient padding, then calls this authored operation once; this
+does not assert identical exhaustion behavior to the former sequence of calls.
+
 `poly.coset_evaluate_at` uses the same scoped output ownership on those four
 fields. Its exact column-major shape and domain are checked before numerical
 admission. One result per column is constructed privately; point-dependent

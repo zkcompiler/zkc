@@ -165,7 +165,7 @@ def verify(toolchain, journal, variant, name, public, proof, *, refuses=None):
 TRUNCATION = ('air::polynomial',
               '  require boolean::negate(less(capacity, actual));\n'
               '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
-              '  let padded = slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
+              '  let padded = zkc::vector::slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
 
 
 def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journal, directory):

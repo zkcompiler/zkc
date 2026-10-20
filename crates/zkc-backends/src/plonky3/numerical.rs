@@ -10,6 +10,10 @@ use crate::{
 use p3_field::ExtensionField;
 use zkc_runtime::vm::{Identity, Invocation};
 
+#[cfg(test)]
+#[path = "coefficient_batch_tests.rs"]
+mod coefficient_batch_tests;
+
 fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     match error {
         Error::SizeOverflow => return exhausted("size-overflow"),
@@ -105,6 +109,7 @@ pub(crate) fn apply(
     if !matches!(
         name,
         "poly.coset_evaluate"
+            | "poly.coset_evaluate_batch"
             | "poly.coset_evaluate_at"
             | "poly.coset_extend"
             | "poly.coset_interpolate"
@@ -196,6 +201,34 @@ fn execute<E: Family>(
             let d = domain(v.len(), field(1)?)?;
             allocation(v.len())?;
             E::polynomial_value(kernels.interpolate(v, d).map_err(failure)?)
+        }
+        "poly.coset_evaluate_batch" => {
+            let coefficients = vector(0)?;
+            let shape = CosetBatchShape::new(coefficients.len(), index(1)?, index(2)?, index(4)?)?;
+            let shift = field(3)?;
+            let limit = policy.max_table_elements.min(1 << 20);
+            if shape.width != 0 {
+                Domain::validate(shape.output_height, shift, limit).map_err(failure)?;
+            }
+            let retained = shape.admit(policy, width, available)?;
+            shape.check_coefficient_tails(coefficients, E::ZERO)?;
+            let call = Call::new(policy, available);
+            call.work(shape.coefficient_evaluation_work(E::DIMENSION)?)?;
+            let _workspace = call.reserve_workspace::<E>(shape.output_len)?;
+            let mut output = call.output(shape.output_len, E::ZERO, retained)?;
+            if shape.width != 0 {
+                let domain = Domain::new(shape.output_height, shift, limit).map_err(failure)?;
+                kernels
+                    .coset_evaluate_batch_into(
+                        coefficients,
+                        shape.width,
+                        shape.height,
+                        domain,
+                        output.as_mut_slice(),
+                    )
+                    .map_err(failure)?;
+            }
+            output.finish(|values| Ok(E::vector_value(values)))?
         }
         "poly.coset_evaluate_at" => {
             let values = vector(0)?;

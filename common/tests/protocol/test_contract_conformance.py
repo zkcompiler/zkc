@@ -465,7 +465,9 @@ def test_alternative_eligibility_boundaries(inventory, drivers, physical_drivers
             requests.append({**request, "implementation": implementation + "/unknown"})
             requests.append({**request, "contract": contract + ".unknown"})
             requests.append({**request, "arguments": ["unknown.domain", *request["arguments"][1:]]})
-    assert len(requests) < 50000, "review alternative negative probe growth"
+    # The reviewed coefficient-batch and ordered-search contracts expand the
+    # closed-domain cross product to 50,130 probes; retain an explicit bound.
+    assert len(requests) < 60000, "review alternative negative probe growth"
     actual = query(drivers, requests, directory)
     failures = [{"consumer": consumer, "request": request, "unexpected_acceptance": response}
                 for consumer, rows in actual.items() for request, response in zip(requests, rows)
@@ -549,12 +551,21 @@ def test_explicit_semantic_witnesses(drivers, directory):
                         "koala-bear.ext4-binomial3")),
         ("poly.univariate_evaluate", ["bls12-381.fr"],
          ["polynomial:bls12-381.fr", "field:bls12-381.fr"], ["field:bls12-381.fr"]),
+        *(("poly.coset_evaluate_batch", [field],
+           [f"vector:{field}", "index", "index", f"field:{field}", "index"],
+           [f"vector:{field}"])
+          for field in ("bn254.fr", "koala-bear", "koala-bear.ext4-binomial3",
+                        "koala-bear.ext8-binomial3")),
         ("poly.evaluate", ["bls12-381.fr"],
          ["table:bls12-381.fr", "point:bls12-381.fr"], ["field:bls12-381.fr"]),
         ("curve.scale", ["bn254.g2"], ["group:bn254.g2", "field:bn254.fr"], ["group:bn254.g2"]),
         ("pairing.check", ["bn254.fr"], ["groups:bn254.g1", "groups:bn254.g2"], ["bool"]),
         ("pairing.apply", ["bn254.fr"], ["group:bn254.g1", "group:bn254.g2"], ["group:bn254.gt"]),
         ("vector.equal", ["bn254.fr"], ["vector:bn254.fr", "vector:bn254.fr"], ["bool"]),
+        *(("vector.find_last", [field], [f"vector:{field}", f"field:{field}"], ["index"])
+          for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar", "koala-bear",
+                        "koala-bear.ext4-binomial3", "koala-bear.ext8-binomial3",
+                        "gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1")),
         ("pcs.check", ["multilinear.kzg.bls12-381/0"],
          ["verifier_key:multilinear.kzg.bls12-381/0", "commitment:multilinear.kzg.bls12-381/0",
           "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"], ["bool"]),
@@ -623,6 +634,11 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
                                                       "field:bls12-381.fr", "invented.codec"]),
             ("resource_unit.create", ["0bad"]),
             ("field.add", ["koala-bear", "koala-bear"]),
+            ("poly.coset_evaluate_batch", []),
+            ("poly.coset_evaluate_batch", ["koala-bear", "8"]),
+            ("poly.coset_evaluate_batch", ["bls12-381.fr"]),
+            ("poly.coset_evaluate_batch", ["ristretto255.scalar"]),
+            ("poly.coset_evaluate_batch", ["gf2-64.pentanomial-4-3-1"]),
         ]:
             requests.append(binding(contract, args, "plonky3/" + contract if physical else "", physical))
         requests.append(binding("fixed_vector.dot", ["koala-bear", "4"], "unknown/fixed_vector.dot", physical))

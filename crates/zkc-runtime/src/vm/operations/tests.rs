@@ -268,14 +268,14 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
     use std::collections::BTreeSet;
     let expected = "
         field.from_index field.sub field.neg field.inverse field.constant field.add field.mul field.equal
-        vector.transpose vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
+        vector.transpose vector.equal vector.find_last vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
         vector.bit_reverse vector.bit_reverse_rows
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
         matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension matrix.get matrix.row_dot matrix.column_dot
-        poly.coefficient_count poly.coset_evaluate poly.coset_extend poly.coset_evaluate_at poly.coset_interpolate poly.domain_point poly.domain_root
+        poly.coefficient_count poly.coset_evaluate poly.coset_evaluate_batch poly.coset_extend poly.coset_evaluate_at poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.opening_quotient_sum poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
         ring.point ring.rows ring.coefficients ring.affine_sum
@@ -437,7 +437,9 @@ fn independent_history_classification_matches_installed_inventory() {
     let native = "numerical.map 0
 numerical.sum 0
 numerical.product 0
+vector.find_last 0
 poly.coset_extend 0
+poly.coset_evaluate_batch 0
 poly.coset_evaluate_at 0
 poly.opening_quotient_sum 0
 matrix.row_dot 0

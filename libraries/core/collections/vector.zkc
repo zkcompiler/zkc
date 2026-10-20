@@ -1,7 +1,7 @@
 module zkc::vector;
 
 pub use zkc::primitives::vector::{
-  Vector, empty, append, length, get, sum, product, split, add, hadamard, scale, dot, fill, elements, indices, at, subtract, inverse, geometric, rotate, bit_reverse, bit_reverse_rows, equal, prefix_sum, prefix_product
+  Vector, empty, append, length, get, sum, product, split, add, hadamard, scale, dot, fill, elements, indices, at, subtract, inverse, geometric, rotate, bit_reverse, bit_reverse_rows, equal, find_last, prefix_sum, prefix_product
 };
 
 pub fn has_length<F: Field, N: nat>(values: Vector<F>) -> bool effects(stop) where () {

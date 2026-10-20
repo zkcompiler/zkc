@@ -6,7 +6,7 @@ use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_runtime::vm::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation, Value as _};
 
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
@@ -37,6 +37,28 @@ pub(crate) fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
 pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
     coefficients.first().copied().unwrap_or_else(S::zero)
         + coefficients.iter().fold(S::zero(), |a, c| a + *c)
+}
+fn find_last<S: Coefficient>(
+    values: &[S],
+    needle: S,
+    policy: &Policy,
+    available: usize,
+) -> Result<Value> {
+    policy.vector_width(values.len(), std::mem::size_of::<S>())?;
+    let retained = Value::Index(0).retained_bytes();
+    policy.output(retained, available)?;
+    let call = crate::numerical::Call::new(policy, available);
+    call.work_items(values.len(), 1, 1)?;
+    let output = call.scalar(retained)?;
+    // Visit the complete ordered vector; no mask or value cache is needed.
+    let mut found = values.len();
+    for (position, value) in values.iter().enumerate() {
+        if *value == needle {
+            found = position;
+        }
+    }
+    let found = u64::try_from(found).map_err(|_| exhausted("size-overflow"))?;
+    output.finish(|| Ok(Value::Index(found)))
 }
 pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
     coefficients.last().is_none_or(|c| *c != S::zero())
@@ -495,6 +517,7 @@ fn dense<S: Family>(
                 .ok_or_else(|| refused("vector-index"))?,
         ),
         "vector.equal" => boolean(v(0)? == v(1)?),
+        "vector.find_last" => Ok(vec![find_last(v(0)?, f(1)?, p, i.max_output_bytes)?]),
         "vector.length_check" => boolean(v(0)?.len() == natural(i.attributes, 0)?),
         "vector.split" => {
             let a = v(0)?;
@@ -808,6 +831,17 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.transpose",
             "dalek/vector.transpose",
             "plonky3/vector.transpose",
+        ]),
+        field::operation(
+            "vector.find_last",
+            &[Vector, Field],
+            &[Index],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.find_last",
+            "dalek/vector.find_last",
+            "plonky3/vector.find_last",
         ]),
         field::operation("vector.length", &[Vector], &[Index], AttributeRule::None).implemented_by(
             &[
@@ -1371,5 +1405,67 @@ mod batch_inversion_tests {
         // In characteristic two, one plus one is zero: use bit patterns instead.
         check_values(|k| crate::plonky3::binary::from_bits(k as u64 + 2));
         check_values(|k| crate::plonky3::binary::ext3_from_bits([3, k as u64, 5]));
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    #[test]
+    fn ordered_search_obeys_exact_result_work_and_memory_floors() {
+        let values = [Scalar::from(3), Scalar::from(7), Scalar::from(3)];
+        let policy = Policy {
+            max_numerical_work: 4,
+            max_numerical_bytes: 512,
+            ..Policy::default()
+        };
+        assert!(matches!(
+            find_last(&values, values[0], &policy, 512).unwrap(),
+            Value::Index(2)
+        ));
+        for (limited, available, code) in [
+            (
+                Policy {
+                    max_numerical_work: 3,
+                    ..policy
+                },
+                512,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: 511,
+                    ..policy
+                },
+                512,
+                "exhausted:numerical-bytes",
+            ),
+            (policy, 511, "exhausted:output-bytes"),
+            (
+                Policy {
+                    max_table_elements: 2,
+                    ..policy
+                },
+                512,
+                "exhausted:element-limit",
+            ),
+        ] {
+            assert_eq!(
+                find_last(&values, values[0], &limited, available)
+                    .unwrap_err()
+                    .code,
+                code
+            );
+        }
+        assert!(matches!(
+            find_last(&[], Scalar::from(9), &policy, 512).unwrap(),
+            Value::Index(0)
+        ));
+        assert!(matches!(
+            find_last(&values, Scalar::from(9), &policy, 512).unwrap(),
+            Value::Index(3)
+        ));
+        assert_eq!(values, [Scalar::from(3), Scalar::from(7), Scalar::from(3)]);
     }
 }

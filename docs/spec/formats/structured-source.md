@@ -527,6 +527,7 @@ spellings are exact, not an extensible prefix convention.
 | `algebra.exec.vector_split` | `vector.split` | `[V] → [V,V]` | `[]` |
 | `algebra.exec.vector_append` | `vector.append` | `[V,F] → [V]` | `[]` |
 | `algebra.exec.vector_equal` | `vector.equal` | `[V,V] → [B]` | `[]` |
+| `algebra.exec.vector_find_last` | `vector.find_last` | `[V,F] → [I]` | `[]` |
 | `algebra.exec.field_equal` | `field.equal` | `[F,F] → [B]` | `[]` |
 
 `n` matches `0|[1-9][0-9]*` and denotes a value at most

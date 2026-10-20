@@ -42,6 +42,13 @@ bound. `evaluate_at(word, point)` evaluates one checked word directly;
 `evaluate_columns(batch, point)` shares domain/point weights across all columns.
 Points on the coset return the corresponding row. Coefficient interpolation
 remains available for algorithms that reuse coefficients.
+`coset::evaluate_batch(coefficients, columns, coefficient_height, shift, output_height)`
+evaluates exact column-major coefficient blocks with one private output.
+Coefficient height can be zero or non-power-of-two; shrinking permits only zero
+discarded tails in every block. Zero columns ignore the unused domain, while
+positive columns require a valid domain even for zero-height blocks. The caller
+supplies representation padding. This authored operation has its own numerical
+work and workspace admission.
 `opening_claims::checked` preserves ordered,
 possibly repeated column/rotation/value descriptors. `opening::bind_openings`
 binds those descriptors to one coset, width, admitted trace height and zeta,

@@ -50,6 +50,9 @@ pub fn bit_reverse_rows<F: Field>(values: Vector<F>, width: index) -> Vector<F>
 
 pub fn equal<F: Field>(left: Vector<F>, right: Vector<F>) -> bool = primitive("vector.equal");
 
+// Last matching position, or length(values) when no entry matches.
+pub fn find_last<F: Field>(values: Vector<F>, value: F) -> index = primitive("vector.find_last");
+
 pub fn prefix_sum<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_sum");
 
 pub fn prefix_product<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_product");

@@ -22,6 +22,16 @@ def OpPolyCosetInterpolate : ZKC_Operation<"poly.coset_interpolate", [OpPolyCose
   let facets = [ZKC_Coset<1, 0, 1, -1, 0>];
 }
 
+// Coefficient blocks share one ordered output coset. Representation padding
+// belongs to the caller; a flattened batch has no single-word Coset facet.
+def OpPolyCosetEvaluateBatchF : ZKC_Root<"F", FieldDomain>;
+def OpPolyCosetEvaluateBatch : ZKC_Operation<"poly.coset_evaluate_batch", [OpPolyCosetEvaluateBatchF],
+    [ZKC_Apply<TypeVector, [OpPolyCosetEvaluateBatchF]>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeField, [OpPolyCosetEvaluateBatchF]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeVector, [OpPolyCosetEvaluateBatchF]>],
+    [ZKC_Holds<CapabilityTwoAdicField, [OpPolyCosetEvaluateBatchF]>]>;
+
 // Each column has its own interpolant, in canonical column-major order.
 // A flattened batch is not one evaluation word: the single-word Coset facet
 // must not associate its total length with either column domain.

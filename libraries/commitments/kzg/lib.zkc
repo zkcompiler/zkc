@@ -23,10 +23,7 @@ pub fn in_domain<F: Field>(input: EvaluationDomain<F>, z: F) -> bool effects(sto
 // The position of a domain point, found by scanning the domain.
 fn position_in_points<F: Field>(points: Vector<F>, z: F) -> index {
   let n = vec::length(points);
-  let mut found: index = n;
-  for i in 0..n {
-    if vec::get(points, i) == z { found = i; }
-  }
+  let found = vec::find_last(points, z);
   require indices::less(found, n);
   return found;
 }

@@ -16,7 +16,7 @@ from test_machine_stark import (EXAMPLE, FIXTURES, alter_vector, assert_refused,
 TRUNCATE = ('air::polynomial',
             '  require boolean::negate(less(capacity, actual));\n'
             '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
-            '  let padded = slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
+            '  let padded = zkc::vector::slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
 
 
 def guards(package):
