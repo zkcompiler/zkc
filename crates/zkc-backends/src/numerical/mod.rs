@@ -7,6 +7,7 @@
 pub(crate) mod coset;
 pub(crate) mod expression;
 mod memory;
+pub(crate) mod opening;
 mod views;
 
 pub(crate) use views::RowMajor;

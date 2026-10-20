@@ -17,6 +17,9 @@ the corresponding value; elsewhere it uses the barycentric identity
 `quotient(input, z)` computes that value itself and returns `(quotient, y)`.
 The caller cannot supply an inconsistent `y`. The quotient retains the same
 domain order, including the derivative value at a domain point.
+Evaluation and quotient construction share domain classification and denominator
+inverses. At a domain point, quotient construction scans for its position once
+and derives the missing derivative entry from the other quotient entries.
 
 `in_domain` and `position` accept an admitted `EvaluationDomain`. General
 root-list admission checks nonempty size, nonzero field image of the size,
@@ -28,4 +31,6 @@ installed two-adic generator and preserves a construction's selected generator.
 [Independent polynomial tests](../../../common/tests/kernels/test_polynomial_views.py)
 cover arbitrary root order, natural and bit-reversed order, singleton domains,
 points inside and outside the domain, malformed domains and constructor privacy.
+The [quotient controls](../../../common/tests/kernels/test_evaluation_domain_quotient.py)
+also compare every entry with coefficient arithmetic across installed fields.
 These are algebra and admission checks, not a KZG security proof.

@@ -140,6 +140,25 @@ returns pointwise `(v_i-y)/(x_i-z)`, refusing `z` on the coset; it does not asse
 that `v` has low degree or that `y` is a valid evaluation. The distinction matters
 when a verifier consumes hostile messages.
 
+`poly.opening_quotient_sum<F>(v,w,h,s,columns,points,claims,weights,initial)`
+forms a weighted sum of off-domain quotients over selected column-major words.
+The input has exactly `w*h` elements, `initial` has `h`, and the four descriptor
+collections have the same length. For `x_i=s*g_h^i`, its result is
+`initial[i] + sum_j weights[j]*(v[columns[j]*h+i]-claims[j])/(x_i-points[j])`.
+Repeated columns and points are allowed. Claims are arbitrary field elements;
+this arithmetic establishes neither valid openings nor degree or authentication.
+
+Extent and descriptor shapes are checked first (`coset-batch-shape` and
+`coset-opening-shape`); each selected column must be below `w`
+(`coset-coordinate`). For a nonempty descriptor list the domain is admitted and
+every point must be off-domain (`coset-opening-point`), including zero-weight
+terms. Empty descriptors return the initial vector after shape checks without
+inspecting the unused domain or shift. Inputs remain immutable and no partial
+result is published. The operation has its own numerical work and workspace
+admission; replacing separate quotient and accumulation calls does not promise
+identical metered exhaustion. A result is one word of height `h`; the flattened
+input is not one coset word.
+
 An opening-quotient combination for source degree below `n` should have degree
 at most `n-2`. FRI terminal capacity below `n` leaves one degree of slack if it
 tests that combination directly. Multiplication by `X` alone is also insufficient:

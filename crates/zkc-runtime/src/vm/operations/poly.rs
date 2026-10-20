@@ -124,6 +124,20 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "plonky3/poly.opening_quotient",
     ]),
     Contract::selectable(
+        "poly.opening_quotient_sum",
+        (
+            &[
+                Vector, Index, Index, Field, Indices, Vector, Vector, Vector, Vector,
+            ],
+            &[Vector],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&[
+        "arkworks/poly.opening_quotient_sum",
+        "plonky3/poly.opening_quotient_sum",
+    ]),
+    Contract::selectable(
         "poly.equality_weights",
         (&[Point], &[Vector], AttributeRule::None),
     )
@@ -262,6 +276,7 @@ fn resolve(
             | "poly.domain_points"
             | "poly.even_odd_fold"
             | "poly.opening_quotient"
+            | "poly.opening_quotient_sum"
     ) && !matches!(
         field,
         Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4

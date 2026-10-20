@@ -139,7 +139,8 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let gammaP @P = K::challenge(gammaSent);
   let slotsP @P = inputs<K::Extension,Table,B>(heightP);
   let chunk_openingsP @P = same_rotation(factsP.chunks, 0);
-  let reads @P = read_quotients(slotsP, trace_extension, proposed, heightP, shift_extensionP, sizeP,
+  let witness_batch @P = coset::column_batch(geometryP, factsP.witness, trace_extension);
+  let reads @P = read_quotients(slotsP, witness_batch, proposed, heightP,
     zetaP, gammaP, fill<K::Extension>(0, sizeP), 1);
   let chunk_batch @P = coset::column_batch(geometryP, factsP.chunks, chunks);
   let chunk_bounds @P = opening_context::bind_openings(geometryP, factsP.chunks, heightP, zetaP,

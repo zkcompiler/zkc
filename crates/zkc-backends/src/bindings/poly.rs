@@ -25,6 +25,7 @@ fn resolve(
             | "poly.domain_points"
             | "poly.even_odd_fold"
             | "poly.opening_quotient"
+            | "poly.opening_quotient_sum"
     ) && !matches!(
         domain.field,
         Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
@@ -114,6 +115,18 @@ pub(crate) const COSET_CONTRACTS: &[crate::bindings::Contract] = {
         .implemented_by(&[
             "arkworks/poly.opening_quotient",
             "plonky3/poly.opening_quotient",
+        ]),
+        operation(
+            "poly.opening_quotient_sum",
+            &[
+                Vector, Index, Index, Field, Indices, Vector, Vector, Vector, Vector,
+            ],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/poly.opening_quotient_sum",
+            "plonky3/poly.opening_quotient_sum",
         ]),
     ]
 };

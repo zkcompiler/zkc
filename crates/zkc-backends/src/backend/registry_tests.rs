@@ -1305,6 +1305,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "poly.fold",
         "poly.from_coefficients",
         "poly.opening_quotient",
+        "poly.opening_quotient_sum",
         "poly.product_round",
         "poly.product_sum",
         "poly.table_arity",

@@ -247,21 +247,29 @@ pub fn identity<F: Field, Table: nat, B: Bundle>(assignments: Vector<F>,
 // commitment column is used for every offset. Known configuration/public
 // columns were checked directly and need no probabilistic opening reduction.
 // Terms continue the caller's running sum and power of rho.
-pub fn read_quotients<F: Field>(slots: Inputs, witness: Vector<F>,
-    assignments: Vector<F>, height: index, shift: F, size: index, zeta: F, rho: F,
+pub fn read_quotients<F: Field>(slots: Inputs, witness: coset::ColumnBatch<F>,
+    assignments: Vector<F>, height: index, zeta: F, rho: F,
     initial: Vector<F>, first_weight: F) -> (Vector<F>, F) effects(stop) where zkc::algebra::TwoAdicField(F) {
   require length(assignments) == indices::length(slots.kind);
-  let mut result = initial;
+  // Validate the trace domain even when there are no witness reads. The batch
+  // reduction checks every selected column and off-domain point.
+  let generator = coset::root<F>(height);
+  require !(generator == 0);
+  let mut selected = indices::empty();
+  let mut positions = empty<F>();
+  let mut values = empty<F>();
+  let mut coefficients = empty<F>();
   let mut weight = first_weight;
   for slot in 0..indices::length(slots.kind) {
     if indices::get(slots.kind, slot) == 1 {
-      let column = slice(witness, indices::get(slots.column, slot) * size, size);
-      let x = shifted_point(height, indices::get(slots.rotation, slot), zeta);
-      let reduced = coset::opening_quotient(column, shift, x, get(assignments, slot));
-      result = accumulate(result, reduced, weight);
+      selected = indices::append(selected, indices::get(slots.column, slot));
+      positions = append(positions, shifted_point(height, indices::get(slots.rotation, slot), zeta));
+      values = append(values, get(assignments, slot));
+      coefficients = append(coefficients, weight);
       weight = weight * rho;
     }
   }
+  let result = coset::opening_quotient_sum(witness, selected, positions, values, coefficients, initial);
   return (result, weight);
 }
 pub fn deep_reads<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
@@ -269,7 +277,8 @@ pub fn deep_reads<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
     initial: Vector<F>, first_weight: F) -> (Vector<F>, F) effects(stop) where zkc::algebra::TwoAdicField(F) {
   let facts = shape<F,Table,B>(height);
   require both(length(assignments) == facts.inputs, length(witness) == facts.witness * size);
-  return read_quotients(inputs<F,Table,B>(height), witness, assignments, height, shift, size,
+  let columns = coset::column_batch(coset::coset_domain(shift, size), facts.witness, witness);
+  return read_quotients(inputs<F,Table,B>(height), columns, assignments, height,
     zeta, rho, initial, first_weight);
 }
 pub fn read_values<F: Field>(slots: Inputs, witness_row: Vector<F>,

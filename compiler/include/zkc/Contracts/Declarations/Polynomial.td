@@ -91,6 +91,22 @@ def OpPolyOpeningQuotient : ZKC_Operation<"poly.opening_quotient", [OpPolyOpenin
   let facets = [ZKC_Coset<1, 0, 1, 0, 0>];
 }
 
+// A weighted rational combination of selected column-major words. Its result
+// has one domain's height, not the flattened input's length. No opening,
+// authentication or degree claim follows from this arithmetic operation.
+def OpPolyOpeningQuotientSumF : ZKC_Root<"F", FieldDomain>;
+def OpPolyOpeningQuotientSum : ZKC_Operation<"poly.opening_quotient_sum", [OpPolyOpeningQuotientSumF],
+    [ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeField, [OpPolyOpeningQuotientSumF]>,
+     ZKC_Apply<TypeIndices, []>,
+     ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>,
+     ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>,
+     ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>,
+     ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>],
+    [ZKC_Apply<TypeVector, [OpPolyOpeningQuotientSumF]>],
+    [ZKC_Holds<CapabilityTwoAdicField, [OpPolyOpeningQuotientSumF]>]>;
+
 def OpPolyEqualityWeightsF : ZKC_Root<"F", FieldDomain>;
 def OpPolyEqualityWeights : ZKC_Operation<"poly.equality_weights", [OpPolyEqualityWeightsF],
     [ZKC_Apply<TypePoint, [OpPolyEqualityWeightsF]>],

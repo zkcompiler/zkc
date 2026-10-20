@@ -48,6 +48,8 @@ def MLEEvaluateOp : BoundOp<PolynomialDialect, "exec.mle_evaluate", [OpPolyEvalu
 
 def OpeningQuotientOp : BoundOp<PolynomialDialect, "exec.opening_quotient", [OpPolyOpeningQuotient]>;
 
+def OpeningQuotientSumOp : BoundOp<PolynomialDialect, "exec.opening_quotient_sum", [OpPolyOpeningQuotientSum]>;
+
 def PointFromVectorOp : BoundOp<PolynomialDialect, "exec.point_from_vector", [OpVectorToPoint]>;
 
 def PointToVectorOp : BoundOp<PolynomialDialect, "exec.point_to_vector", [OpVectorFromPoint]>;

@@ -113,6 +113,27 @@ including extension arithmetic. On-domain evaluation returns the selected row;
 it is a mathematical case of the operation, not a constant-time guarantee.
 The operation does not retain values or weights across invocations.
 
+`poly.opening_quotient_sum` constructs one weighted sum of selected off-domain
+column quotients on those same four fields. All descriptors, including zero
+weights, must pass column and pole checks before result construction. Complete
+input vectors pass element and byte admission first. Domain construction and the
+ordered column/pole scan then precede numerical work admission; a zero work
+allowance does not prevent this bounded validation arithmetic. An invalid
+descriptor takes precedence over output, workspace or execution-work exhaustion.
+The scan costs `O(m log n)` field operations for `m` admitted descriptors and
+height `n`. The adapter borrows selected columns and owns one private result plus
+two height-sized arrays, reused across terms. Both providers account for prefix
+storage explicitly; there is no per-term vector publication. Consecutive equal
+points reuse the inverse vector in that workspace. A changed point replaces it;
+nonconsecutive repeats are recomputed, without sorting or retaining a point map.
+Reuse depends on point equality; descriptor order and conservative work admission
+are unchanged. Empty descriptors copy initial after shape and input admission
+without interpreting an unused domain. Managed storage includes result staging/final overlap:
+`4*n*sizeof(F)+256` bytes for nonempty descriptors,
+`2*n*sizeof(F)+256` otherwise. Work uses bounded native-field operations and scalar
+loop steps, as for the single-opening operation; it is not elapsed time or a
+constant-time claim. This authored operation has its own admission profile.
+
 ## Pointwise expressions
 
 The compiler-generated `numerical.map`, `numerical.sum` and
