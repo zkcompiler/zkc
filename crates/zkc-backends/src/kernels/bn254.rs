@@ -2,7 +2,7 @@
 use crate::{
     Bn254Scalar as F, Policy, Result, Value, exhausted,
     kernels::arithmetic::reserve,
-    numerical::{Call, transform::CosetBatch},
+    numerical::{Call, coset::CosetBatchShape},
     refused,
     value::size,
 };
@@ -34,6 +34,7 @@ pub(crate) fn apply(
         || !matches!(
             name,
             "poly.coset_evaluate"
+                | "poly.coset_evaluate_at"
                 | "poly.coset_extend"
                 | "poly.coset_interpolate"
                 | "poly.domain_point"
@@ -116,47 +117,74 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             }
             Value::Bn254Polynomial(out.into())
         }
+        "poly.coset_evaluate_at" => {
+            let values = v(0)?;
+            let shape = CosetBatchShape::new(values.len(), ix(1)?, ix(2)?, 1)?;
+            let domain = if shape.width == 0 {
+                None
+            } else {
+                Some(domain(shape.height, f(3)?, p)?)
+            };
+            let retained = shape.admit(p, 32, available)?;
+            let call = Call::new(p, available);
+            // The explicit serial provider routine uses one inversion, so
+            // admission is independent of the caller's Rayon thread pool.
+            call.work(shape.evaluation_work(1, 1)?)?;
+            let mut output = call.output(shape.output_len, F::zero(), retained)?;
+            if let Some(domain) = domain {
+                let point = f(4)?;
+                let mut weights = call.scratch(shape.height, F::zero())?;
+                // Only the adapter-owned weights are managed. Arkworks 0.6.0
+                // allocates height * 32 payload bytes for prefix products
+                // internally, scoped to this call and outside managed storage.
+                coset_evaluate_at_into(
+                    values,
+                    domain,
+                    point,
+                    weights.as_mut(),
+                    output.as_mut_slice(),
+                );
+            }
+            output.finish(|values| Ok(Value::Bn254Vector(values.into())))?
+        }
         "poly.coset_extend" => {
             let values = v(0)?;
-            let shape = CosetBatch::new(values.len(), ix(1)?, ix(2)?, ix(5)?)?;
+            let shape = CosetBatchShape::new(values.len(), ix(1)?, ix(2)?, ix(5)?)?;
             let domains = if shape.width == 0 {
                 None
             } else {
                 let input = domain(shape.height, f(3)?, p)?;
-                let output = domain(shape.size, f(4)?, p)?;
+                let output = domain(shape.output_height, f(4)?, p)?;
                 Some((input, output))
             };
-            p.vector(shape.input_len)?;
-            p.vector(shape.output_len)?;
-            let retained = size(shape.output_len, 32)?;
-            p.output(retained, available)?;
+            let retained = shape.admit(p, 32, available)?;
             let call = Call::new(p, available);
-            call.work(shape.work(1)?)?;
+            call.work(shape.extension_work(1)?)?;
             // One capacity-preserving Vec serves both transforms per column.
             // Internal Arkworks twiddle/work allocations are provider-owned.
             let workspace = if domains.is_some() {
-                shape.height.max(shape.size)
+                shape.height.max(shape.output_height)
             } else {
                 0
             };
-            let _workspace = call.transform_workspace::<F>(workspace)?;
+            let _workspace = call.reserve_workspace::<F>(workspace)?;
             let mut output = call.output(shape.output_len, F::zero(), retained)?;
             if let Some((input_domain, output_domain)) = domains {
                 let mut scratch = reserve(workspace)?;
                 for (column, destination) in values
                     .chunks_exact(shape.height)
-                    .zip(output.as_mut_slice().chunks_exact_mut(shape.size))
+                    .zip(output.as_mut_slice().chunks_exact_mut(shape.output_height))
                 {
                     scratch.clear();
                     scratch.extend_from_slice(column);
                     input_domain.ifft_in_place(&mut scratch);
                     if scratch
-                        .get(shape.size..)
+                        .get(shape.output_height..)
                         .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
                     {
                         return Err(refused("coset-coefficient-count"));
                     }
-                    scratch.resize(shape.size, F::zero());
+                    scratch.resize(shape.output_height, F::zero());
                     output_domain.fft_in_place(&mut scratch);
                     destination.copy_from_slice(&scratch);
                 }
@@ -202,9 +230,308 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
     Ok(vec![result])
 }
 
+/// Provider arithmetic only; the native adapter has checked geometry and owns
+/// the admitted private destination and scoped weights. No transform is used.
+fn coset_evaluate_at_into(
+    values: &[F],
+    domain: Radix2EvaluationDomain<F>,
+    point: F,
+    weights: &mut [F],
+    destination: &mut [F],
+) {
+    for (row, (x, denominator)) in domain.elements().zip(weights.iter_mut()).enumerate() {
+        if point == x {
+            for (column, result) in values.chunks_exact(domain.size()).zip(destination) {
+                *result = column[row];
+            }
+            return;
+        }
+        *denominator = point - x;
+    }
+    ark_ff::serial_batch_inversion_and_mul(weights, &F::one());
+    let scale = domain.evaluate_vanishing_polynomial(point)
+        * domain.size_inv
+        * domain.offset_inv.pow([domain.size() as u64]);
+    for (inverse, x) in weights.iter_mut().zip(domain.elements()) {
+        *inverse *= scale * x;
+    }
+    for (column, result) in values.chunks_exact(domain.size()).zip(destination) {
+        *result = column
+            .iter()
+            .zip(weights.iter())
+            .fold(F::zero(), |sum, (value, weight)| sum + *value * *weight);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn point_args(values: Vec<F>, width: u64, height: u64, shift: F, point: F) -> Vec<Value> {
+        vec![
+            Value::Bn254Vector(values.into()),
+            Value::Index(width),
+            Value::Index(height),
+            Value::Bn254Field(shift),
+            Value::Bn254Field(point),
+        ]
+    }
+
+    fn run_point(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+        execute("poly.coset_evaluate_at", args, available, policy)
+    }
+
+    fn horner(coefficients: &[F], point: F) -> F {
+        coefficients
+            .iter()
+            .rev()
+            .fold(F::zero(), |sum, c| sum * point + c)
+    }
+
+    #[test]
+    fn direct_coset_points_match_horner_and_arbitrary_word_interpolants() {
+        let policy = Policy::default();
+        let shift = F::from(7);
+        for width in [0, 1, 4, 16] {
+            for height in [1, 2, 8, 32] {
+                let domain = domain(height, shift, &policy).unwrap();
+                assert!(!domain.evaluate_vanishing_polynomial(F::from(19)).is_zero());
+                let points: Vec<_> = [F::zero(), F::from(19)]
+                    .into_iter()
+                    .chain(domain.elements())
+                    .collect();
+                for kind in 0..4 {
+                    let mut values = Vec::new();
+                    let mut coefficients = Vec::new();
+                    for col in 0..width {
+                        let count = match kind {
+                            0 => 0,
+                            1 => 1,
+                            _ => height,
+                        };
+                        let coeff: Vec<_> = (0..count)
+                            .map(|j| F::from((17 * col + 5 * j + 1) as u64))
+                            .collect();
+                        let column: Vec<_> = domain
+                            .elements()
+                            .enumerate()
+                            .map(|(row, x)| {
+                                if kind == 3 {
+                                    F::from((23 * col + row * row + 5 * row + 1) as u64)
+                                } else {
+                                    horner(&coeff, x)
+                                }
+                            })
+                            .collect();
+                        let recovered = execute(
+                            "poly.coset_interpolate",
+                            &[
+                                Value::Bn254Vector(column.clone().into()),
+                                Value::Bn254Field(shift),
+                            ],
+                            usize::MAX,
+                            &policy,
+                        )
+                        .unwrap();
+                        let Value::Bn254Polynomial(recovered) = &recovered[0] else {
+                            panic!("expected polynomial")
+                        };
+                        if kind != 3 {
+                            assert_eq!(recovered.as_ref(), coeff);
+                        }
+                        coefficients.push(recovered.to_vec());
+                        values.extend(column);
+                    }
+                    for point in points.iter().copied() {
+                        let args =
+                            point_args(values.clone(), width as u64, height as u64, shift, point);
+                        let alias = args[0].clone();
+                        let result = run_point(&args, &policy, usize::MAX).unwrap();
+                        let actual = vector(&result[0]);
+                        let expected: Vec<_> =
+                            coefficients.iter().map(|c| horner(c, point)).collect();
+                        assert_eq!(
+                            actual, expected,
+                            "width={width}, height={height}, kind={kind}"
+                        );
+                        for row in 0..height {
+                            if point == domain.element(row) {
+                                for (col, result) in actual.iter().enumerate() {
+                                    assert_eq!(*result, values[col * height + row]);
+                                }
+                            }
+                        }
+                        if kind == 3 {
+                            // Independent Lagrange products check arbitrary words
+                            // without using an inverse FFT as the sole oracle.
+                            for (column, result) in values.chunks_exact(height).zip(actual) {
+                                let mut expected = F::zero();
+                                for (row, value) in column.iter().enumerate() {
+                                    let x = domain.element(row);
+                                    let (mut numerator, mut denominator) = (F::one(), F::one());
+                                    for other in 0..height {
+                                        if other != row {
+                                            let y = domain.element(other);
+                                            numerator *= point - y;
+                                            denominator *= x - y;
+                                        }
+                                    }
+                                    expected += *value * numerator / denominator;
+                                }
+                                assert_eq!(*result, expected);
+                            }
+                        }
+                        assert_eq!(vector(&alias), values);
+                        if width != 0 {
+                            assert_ne!(actual.as_ptr(), vector(&alias).as_ptr());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn direct_coset_point_managed_limits_and_aliases() {
+        let policy = Policy::default();
+        let values = vec![F::from(5); 32];
+        let args = point_args(values.clone(), 4, 8, F::from(7), F::zero());
+        let shape = CosetBatchShape::new(32, 4, 8, 1).unwrap();
+        let retained = size(4, 32).unwrap();
+        // Adapter weights and result staging, plus reserved final storage.
+        // Arkworks' hidden prefix products are outside the managed facade.
+        let managed = retained + (4 + 8) * std::mem::size_of::<F>();
+        let work = shape.evaluation_work(1, 1).unwrap();
+        for (policy, available, expected) in [
+            (
+                Policy {
+                    max_numerical_work: work - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: managed - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-bytes",
+            ),
+            (
+                Policy {
+                    max_numerical_work: 0,
+                    ..policy
+                },
+                retained - 1,
+                "exhausted:output-bytes",
+            ),
+            (
+                Policy {
+                    max_table_elements: 4,
+                    ..policy
+                },
+                retained,
+                "refused:coset-element-limit",
+            ),
+            (
+                Policy {
+                    max_table_elements: 16,
+                    ..policy
+                },
+                retained,
+                "exhausted:element-limit",
+            ),
+        ] {
+            let alias = args[0].clone();
+            assert_eq!(
+                run_point(&args, &policy, available).unwrap_err().code,
+                expected
+            );
+            assert_eq!(vector(&alias), values);
+        }
+        let exact = Policy {
+            max_numerical_work: work,
+            max_numerical_bytes: managed,
+            ..policy
+        };
+        assert!(run_point(&args, &exact, retained).is_ok());
+        let mut on_domain = args.clone();
+        on_domain[4] = Value::Bn254Field(domain(8, F::from(7), &policy).unwrap().element(7));
+        assert!(run_point(&on_domain, &exact, retained).is_ok());
+    }
+
+    #[test]
+    fn direct_coset_point_shape_domain_and_empty_precedence() {
+        let policy = Policy::default();
+        for (len, width, height, shift, expected) in [
+            (1, 0, 0, F::zero(), "refused:coset-batch-shape"),
+            (3, 1, 4, F::zero(), "refused:coset-batch-shape"),
+            (5, 1, 4, F::one(), "refused:coset-batch-shape"),
+            (0, u64::MAX, 2, F::zero(), "exhausted:size-overflow"),
+            (0, u64::MAX, 0, F::zero(), "refused:coset-size"),
+            (0, 1, 0, F::zero(), "refused:coset-size"),
+            (3, 1, 3, F::one(), "refused:coset-size"),
+            (2, 1, 2, F::zero(), "refused:coset-zero-shift"),
+        ] {
+            let args = point_args(vec![F::one(); len], width, height, shift, F::zero());
+            let alias = args[0].clone();
+            assert_eq!(
+                run_point(&args, &policy, usize::MAX).unwrap_err().code,
+                expected
+            );
+            assert_eq!(vector(&alias), vec![F::one(); len]);
+            if width == 1 && len as u64 == height {
+                let old = execute(
+                    "poly.coset_interpolate",
+                    &[args[0].clone(), args[3].clone()],
+                    usize::MAX,
+                    &policy,
+                );
+                assert_eq!(old.unwrap_err().code, expected);
+            }
+        }
+        for height in [0, 3, u64::MAX] {
+            let args = point_args(vec![], 0, height, F::zero(), F::zero());
+            let exact = Policy {
+                max_numerical_work: 1,
+                max_numerical_bytes: 256,
+                ..policy
+            };
+            assert!(vector(&run_point(&args, &exact, 256).unwrap()[0]).is_empty());
+            assert_eq!(
+                run_point(
+                    &args,
+                    &Policy {
+                        max_numerical_work: 0,
+                        ..exact
+                    },
+                    256
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:numerical-work"
+            );
+            assert_eq!(
+                run_point(
+                    &args,
+                    &Policy {
+                        max_numerical_bytes: 255,
+                        ..exact
+                    },
+                    256
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:numerical-bytes"
+            );
+            assert_eq!(
+                run_point(&args, &exact, 255).unwrap_err().code,
+                "exhausted:output-bytes"
+            );
+        }
+    }
 
     fn args(values: Vec<F>, width: u64, height: u64, size: u64) -> Vec<Value> {
         vec![
@@ -310,14 +637,22 @@ mod tests {
     }
 
     #[test]
+    fn direct_large_word_fits_default_admission_with_one_inversion() {
+        let policy = Policy::default();
+        let args = point_args(vec![F::from(11); 16384], 1, 16384, F::from(7), F::from(19));
+        let result = run_point(&args, &policy, usize::MAX).unwrap();
+        assert_eq!(vector(&result[0]), &[F::from(11)]);
+    }
+
+    #[test]
     fn batch_preflight_checks_resources_and_preserves_aliases() {
         let policy = Policy::default();
         let values = vec![F::one(); 16];
         let args = args(values.clone(), 4, 4, 8);
-        let shape = CosetBatch::new(16, 4, 4, 8).unwrap();
+        let shape = CosetBatchShape::new(16, 4, 4, 8).unwrap();
         let retained = size(32, 32).unwrap();
         let managed = retained + (32 + 8) * std::mem::size_of::<F>();
-        let work = shape.work(1).unwrap();
+        let work = shape.extension_work(1).unwrap();
         for (policy, available, expected) in [
             (
                 Policy {

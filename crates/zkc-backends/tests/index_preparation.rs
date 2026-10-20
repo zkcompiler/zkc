@@ -7,8 +7,9 @@ use support::{backend, program};
 use zkc_backends::{NativeBackend, NativeCall, NativeOperation, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
-    Action, Backend, BackendError, CallContext, Frame, FrameExit, Invocation, OperationBinding,
-    Program, Stop, Usage, Value as RuntimeValue, ValueBudget, WorkBudget,
+    Action, Backend, BackendError, CallContext, Frame, FrameExit, Invocation, LocalContext,
+    OperationBinding, Origin, PathElement, Program, Stop, StopKind, Usage, Value as RuntimeValue,
+    ValueBudget, WorkBudget,
 };
 
 fn binding(name: &str) -> OperationBinding {
@@ -304,6 +305,75 @@ fn dormant_constants_do_not_validate_backend_attributes_before_reach() {
     }
 }
 
+// Fixed observations anchor charging and failure prefixes independently of the
+// prepared handler. Deriving both limits and expectations from that handler
+// would hide a shared accounting regression.
+fn repeated_observation(fail: bool, budget_case: usize) -> (Usage, Option<Stop>) {
+    let literal_limit = budget_case == 1 || (!fail && budget_case == 3);
+    let (instructions, total_value_bytes, logical_bytes) = if literal_limit {
+        (9, 5632, 1536)
+    } else {
+        match (fail, budget_case) {
+            (false, 0) => (12, 6144, 2048),
+            (false, 2) | (true, 3) => (11, 6144, 2048),
+            (true, 0) => (11, 6144, 3072),
+            (true, 2) => (10, 6144, 2048),
+            _ => panic!("unknown observation"),
+        }
+    };
+    let usage = Usage {
+        instructions,
+        iterations: 4,
+        total_value_bytes,
+        logical_bytes,
+        ..Usage::default()
+    };
+    if !fail && budget_case == 0 {
+        return (usage, None);
+    }
+    let mut stop = Stop {
+        origin: Origin {
+            session: "session".into(),
+            entry: "main".into(),
+            instance: "instance".into(),
+            path: vec![],
+        },
+        role: "P".into(),
+        site: None,
+        kind: StopKind::Limit,
+        cleanup_errors: vec![],
+        local: None,
+    };
+    if literal_limit {
+        stop.origin.path.push(PathElement::For {
+            site: "repeat".into(),
+            index: 3,
+        });
+        stop.site = Some("literal".into());
+        stop.kind = StopKind::Backend(BackendError {
+            code: "exhausted:output-bytes".into(),
+        });
+        stop.local = Some(Box::new(LocalContext {
+            site: "local".into(),
+            function: "testfn".into(),
+            instruction: Some("literal".into()),
+        }));
+    } else if fail {
+        stop.site = Some("local".into());
+        stop.local = Some(Box::new(LocalContext {
+            site: "local".into(),
+            function: "testfn".into(),
+            instruction: None,
+        }));
+        if budget_case == 0 {
+            stop.kind = StopKind::Backend(BackendError {
+                code: "refused:index-zero-divisor".into(),
+            });
+        }
+    }
+    (usage, Some(stop))
+}
+
 #[test]
 fn repeated_sites_preserve_work_output_charging_and_failure_prefixes() {
     let index = Value::Index(0).physical_type();
@@ -330,14 +400,8 @@ fn repeated_sites_preserve_work_output_charging_and_failure_prefixes() {
             &[],
         );
         let inputs = || vec![Value::Index(0), Value::Index(4)];
-        let (_, full, _) = run(
-            Caller::new(false, Policy::default()),
-            &bytes,
-            inputs(),
-            Default::default(),
-            Default::default(),
-        );
-        for (values, work) in [
+        let (full, _) = repeated_observation(fail, 0);
+        for (budget_case, (values, work)) in [
             (ValueBudget::default(), WorkBudget::default()),
             (
                 ValueBudget {
@@ -360,7 +424,10 @@ fn repeated_sites_preserve_work_output_charging_and_failure_prefixes() {
                     ..Default::default()
                 },
             ),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let (expected, expected_usage, direct) = run(
                 Caller::new(false, Policy::default()),
                 &bytes,
@@ -378,27 +445,20 @@ fn repeated_sites_preserve_work_output_charging_and_failure_prefixes() {
             // A real NativeBackend also exercises the VM-owned per-site slots.
             let (native, native_usage, native_backend) =
                 run(backend(Policy::default()), &bytes, inputs(), values, work);
-            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
-            assert_eq!(format!("{native:?}"), format!("{expected:?}"));
-            assert_eq!(actual_usage, expected_usage);
-            assert_eq!(native_usage, expected_usage);
+            let (usage, stop) = repeated_observation(fail, budget_case);
+            let outcome = stop.as_ref().map_or(Ok(0), Err);
+            for (result, observed_usage) in [
+                (&expected, expected_usage),
+                (&actual, actual_usage),
+                (&native, native_usage),
+            ] {
+                assert_eq!(result.as_ref().map(Vec::len), outcome);
+                assert_eq!(observed_usage, usage);
+            }
             assert_eq!(warmed.attempts, direct.attempts);
             assert_eq!(warmed.inner.active_frames(), 0);
             assert_eq!(direct.inner.active_frames(), 0);
             assert_eq!(native_backend.active_frames(), 0);
-            if values == ValueBudget::default() && work == WorkBudget::default() {
-                assert!(warmed.attempts >= 4);
-                if fail {
-                    let stop = actual.unwrap_err();
-                    assert_eq!(support::code(&stop), "refused:index-zero-divisor");
-                    // The Runner reports the enclosing Local action site.
-                    assert_eq!(stop.site.as_deref(), Some("local"));
-                } else {
-                    assert!(actual.is_ok());
-                }
-            } else {
-                assert!(actual.is_err());
-            }
         }
     }
 }

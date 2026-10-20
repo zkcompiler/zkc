@@ -108,6 +108,7 @@ poly.coefficient_count 0
 poly.coefficients 0
 poly.coset_evaluate 0
 poly.coset_extend 0
+poly.coset_evaluate_at 0
 poly.coset_interpolate 0
 poly.degree_check 0
 poly.divide_opening 0

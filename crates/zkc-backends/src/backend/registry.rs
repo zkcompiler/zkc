@@ -228,7 +228,7 @@ pub(super) fn installed() -> Result<&'static Registry> {
             r.pure_shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
             r.pure_shaped(crate::kernels::curve::CONTRACTS, curve)?;
             r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
-            r.pure_shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
+            r.pure_shaped(crate::bindings::poly::COSET_CONTRACTS, numerical)?;
             r.pure_family(
                 crate::kernels::encoding::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::encoding::signature),

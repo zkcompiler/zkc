@@ -101,6 +101,18 @@ Every column must succeed before publication, including when a later column
 fails a shrinking-degree check. The operation has its own resource profile;
 the library's use of it does not promise the exhaustion point of separate calls.
 
+`poly.coset_evaluate_at` uses the same scoped output ownership on those four
+fields. Its exact column-major shape and domain are checked before numerical
+admission. One result per column is constructed privately; point-dependent
+weights and adapter-owned inversion scratch are call-local and charged before
+allocation. Plonky3 uses two managed arrays; BN254 uses one managed weight array
+and Arkworks' serial inversion routine. Arkworks' internal prefix products remain
+provider-owned and outside the managed reservation.
+The work bound covers domain traversal, inversion setup and all column products,
+including extension arithmetic. On-domain evaluation returns the selected row;
+it is a mathematical case of the operation, not a constant-time guarantee.
+The operation does not retain values or weights across invocations.
+
 ## Pointwise expressions
 
 The compiler-generated `numerical.map`, `numerical.sum` and

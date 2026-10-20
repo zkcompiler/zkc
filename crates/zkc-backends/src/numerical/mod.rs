@@ -4,9 +4,9 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) mod coset;
 pub(crate) mod expression;
 mod memory;
-pub(crate) mod transform;
 mod views;
 
 pub(crate) use views::RowMajor;
@@ -97,6 +97,13 @@ impl Call {
         Ok(Scratch {
             buffer: Buffer::new(len, initial, reservation)?,
         })
+    }
+
+    /// Reserve adapter-owned typed workspace without allocating a second buffer.
+    /// Keep the guard alive through the corresponding vectors' destruction.
+    /// Provider caches, allocator overhead and hidden scratch are outside this scope.
+    pub(crate) fn reserve_workspace<T>(&self, elements: usize) -> Result<impl Drop + '_> {
+        self.reserve_memory(payload_bytes::<T>(elements)?)
     }
 
     fn reserve_memory(&self, bytes: usize) -> Result<Reservation<'_>> {

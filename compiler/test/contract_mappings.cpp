@@ -145,6 +145,7 @@ constexpr ExpectedMapping expected[] = {
     {"poly.coefficient_count", "poly.exec.coefficient_count"},
     {"poly.coset_evaluate", "poly.exec.coset_evaluate"},
     {"poly.coset_extend", "poly.exec.coset_extend"},
+    {"poly.coset_evaluate_at", "poly.exec.coset_evaluate_at"},
     {"poly.coset_interpolate", "poly.exec.coset_interpolate"},
     {"poly.domain_point", "poly.exec.domain_point"},
     {"poly.domain_root", "poly.exec.domain_root"},

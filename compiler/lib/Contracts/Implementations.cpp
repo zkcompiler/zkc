@@ -248,6 +248,7 @@ constexpr ContractRow contractRows[] = {
     {"poly.coefficient_count", Arithmetic},
     {"poly.coset_evaluate", Arkworks | Plonky3},
     {"poly.coset_extend", Arkworks | Plonky3},
+    {"poly.coset_evaluate_at", Arkworks | Plonky3},
     {"poly.coset_interpolate", Arkworks | Plonky3},
     {"poly.domain_point", Arkworks | Plonky3},
     {"poly.domain_root", Arkworks | Plonky3},

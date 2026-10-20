@@ -275,7 +275,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
         matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension matrix.get matrix.row_dot matrix.column_dot
-        poly.coefficient_count poly.coset_evaluate poly.coset_extend poly.coset_interpolate poly.domain_point poly.domain_root
+        poly.coefficient_count poly.coset_evaluate poly.coset_extend poly.coset_evaluate_at poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
         ring.point ring.rows ring.coefficients ring.affine_sum
@@ -438,6 +438,7 @@ fn independent_history_classification_matches_installed_inventory() {
 numerical.sum 0
 numerical.product 0
 poly.coset_extend 0
+poly.coset_evaluate_at 0
 matrix.row_dot 0
 matrix.column_dot 0
 transcript.native.indexed.challenge 1

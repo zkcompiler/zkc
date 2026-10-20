@@ -2,12 +2,11 @@
 
 import pytest
 
-from binomial_reference import FIELDS, OCTIC, P
+from binomial_reference import P
+from coset_reference import CosetReference
 from entry import Entry
 from source_modules import library_modules
 
-
-BN254 = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
 
 @pytest.mark.parametrize('field', ['bn254.fr', 'koala-bear', 'koala-bear.ext4-binomial3',
@@ -15,34 +14,18 @@ BN254 = 218882428718392752222464057452572750885483644004160343436982041865758084
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_coset_batches_preserve_columns_shifts_degree_checks_and_inputs(
         toolchain, journal, directory, field, flags):
-    extension = '.ext' in field
-    arithmetic = FIELDS[field] if extension else OCTIC
-    modulus = BN254 if field == 'bn254.fr' else P
-    degree = arithmetic.degree if extension else 1
+    reference = CosetReference(field)
+    modulus, degree = reference.modulus, reference.degree
 
     def scalar(seed):
         return tuple((seed*seed+7*seed+11*i+1) % modulus for i in range(degree))
 
-    zero, one = (0,)*degree, (1,)+(0,)*(degree-1)
-    add = arithmetic.add if extension else lambda x, y: ((x[0]+y[0]) % modulus,)
-    mul = arithmetic.mul if extension else lambda x, y: (x[0]*y[0] % modulus,)
-
-    def encode(x):
-        return list(map(str, x)) if extension else str(x[0])
-
-    def evaluate(coefficients, point):
-        result = zero
-        for coefficient in reversed(coefficients):
-            result = add(mul(result, point), coefficient)
-        return result
+    zero, one = reference.zero, reference.one
+    encode = reference.encode
 
     def word(coefficients, shift, size):
-        root = (pow(5, (modulus-1)//size, modulus) if field == 'bn254.fr' else
-                pow(1791270792, (1 << 24)//size, modulus))
-        assert pow(root, size, modulus) == 1
-        assert size == 1 or pow(root, size//2, modulus) != 1
-        return [evaluate(coefficients, mul(shift, (pow(root, i, modulus),)+(0,)*(degree-1)))
-                for i in range(size)]
+        return [reference.horner(coefficients, point)
+                for point in reference.domain(shift, size)]
 
     source = f'''module sample;
 domain F=field("{field}");

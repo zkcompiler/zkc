@@ -97,7 +97,7 @@ impl Kernels {
     /// destination. The caller admits output and transform workspace first.
     /// Neither the borrowed input nor published values are modified. The
     /// destination remains private until the complete batch succeeds.
-    pub fn coset_extend_into<E: ExtensionField<KoalaBear>>(
+    pub(crate) fn coset_extend_into<E: ExtensionField<KoalaBear>>(
         &self,
         values: &[E],
         width: usize,
@@ -205,6 +205,81 @@ pub fn evaluate_at<E: Field>(coefficients: &[E], point: E) -> E {
         .iter()
         .rev()
         .fold(E::ZERO, |value, c| value * point + *c)
+}
+
+/// Evaluate column-major words at one point of their unique interpolants.
+/// Scratch is supplied by the policy-owning adapter; this routine allocates
+/// nothing and shares one set of barycentric weights across every column.
+/// A domain point selects its matching input row before any inversion.
+pub(crate) fn coset_evaluate_at_into<E: ExtensionField<KoalaBear>>(
+    values: &[E],
+    domain: Domain<E>,
+    point: E,
+    denominators: &mut [E],
+    weights: &mut [E],
+    destination: &mut [E],
+) -> Result<(), Error> {
+    let input_len = destination
+        .len()
+        .checked_mul(domain.size)
+        .ok_or(Error::SizeOverflow)?;
+    if values.len() != input_len
+        || denominators.len() != domain.size
+        || weights.len() != domain.size
+    {
+        return Err(Error::BatchShape);
+    }
+    if destination.is_empty() {
+        return Ok(());
+    }
+    let mut x = domain.shift;
+    for (row, denominator) in denominators.iter_mut().enumerate() {
+        if point == x {
+            for (column, result) in values.chunks_exact(domain.size).zip(destination) {
+                *result = column[row];
+            }
+            return Ok(());
+        }
+        *denominator = point - x;
+        x *= domain.generator;
+    }
+    let shift_power = domain.shift.exp_u64(domain.size as u64);
+    let scale = (point.exp_u64(domain.size as u64) - shift_power)
+        / (E::from(KoalaBear::from_usize(domain.size)) * shift_power);
+    batch_inverse_into(denominators, weights, |row, inverse| {
+        scale * (point - denominators[row]) * inverse
+    })?;
+    for (column, result) in values.chunks_exact(domain.size).zip(destination) {
+        *result = column
+            .iter()
+            .zip(weights.iter())
+            .fold(E::ZERO, |sum, (value, weight)| sum + *value * *weight);
+    }
+    Ok(())
+}
+
+/// The scoped Montgomery prefix mechanism also used by opening quotients.
+/// `finish` consumes each inverse in reverse row order without extra storage.
+fn batch_inverse_into<E: Field>(
+    denominators: &[E],
+    destination: &mut [E],
+    mut finish: impl FnMut(usize, E) -> E,
+) -> Result<(), Error> {
+    if denominators.len() != destination.len() {
+        return Err(Error::EvaluationCount);
+    }
+    let mut product = E::ONE;
+    for (prefix, denominator) in destination.iter_mut().zip(denominators) {
+        *prefix = product;
+        product *= *denominator;
+    }
+    let mut inverse = product.try_inverse().ok_or(Error::PointOnDomain)?;
+    for (row, (out, denominator)) in destination.iter_mut().zip(denominators).enumerate().rev() {
+        let denominator_inverse = *out * inverse;
+        inverse *= *denominator;
+        *out = finish(row, denominator_inverse);
+    }
+    Ok(())
 }
 
 pub fn normalize<E: Field>(coefficients: &mut Vec<E>) {
@@ -320,23 +395,9 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
             *denominator = x - self.point;
             x *= self.domain.generator;
         }
-        let mut product = E::ONE;
-        for (prefix, denominator) in destination.iter_mut().zip(denominators.iter()) {
-            *prefix = product;
-            product *= *denominator;
-        }
-        let mut inverse = product.try_inverse().ok_or(Error::PointOnDomain)?;
-        for ((out, denominator), evaluation) in destination
-            .iter_mut()
-            .zip(denominators.iter())
-            .zip(self.values)
-            .rev()
-        {
-            let denominator_inverse = *out * inverse;
-            inverse *= *denominator;
-            *out = (*evaluation - self.value) * denominator_inverse;
-        }
-        Ok(())
+        batch_inverse_into(denominators, destination, |row, inverse| {
+            (self.values[row] - self.value) * inverse
+        })
     }
 }
 
