@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
@@ -71,6 +72,7 @@ struct NativeProofOptions {
   std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
+  CompilationObservation *observations = nullptr;
 };
 struct CompiledNativeProof {
   Compilation compilation;

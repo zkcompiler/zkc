@@ -6,6 +6,7 @@
 #include <optional>
 
 namespace zkc::mathematical {
+struct RealizationTrace;
 // Private construction authority, valid only while its MLIR context lives.
 // No mutable operation view escapes: snapshots are independent clones, and
 // projection consumes the owned prepared subject. Public passes admit their
@@ -17,7 +18,8 @@ class PreparedProtocol {
 
 public:
   static std::optional<PreparedProtocol>
-  prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {});
+  prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {},
+          RealizationTrace *trace = nullptr);
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;
 };

@@ -68,6 +68,19 @@ endforeach()
 target_link_libraries(zkc-opt PRIVATE ZkcCompiler MLIRMlirOptMain)
 target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
+option(ZKC_ENABLE_MLIR_LSP "Build the MLIR language server with zkc dialects" OFF)
+if(ZKC_ENABLE_MLIR_LSP)
+  if(NOT TARGET MLIRLspServerLib)
+    message(FATAL_ERROR "MLIR LSP library is unavailable in the selected toolchain")
+  endif()
+  add_executable(zkc-lsp tools/zkc-lsp.cpp)
+  target_link_libraries(zkc-lsp PRIVATE ZkcIR MLIRLspServerLib)
+  target_compile_options(zkc-lsp PRIVATE -Wall -Wextra -Werror)
+  set_target_properties(zkc-lsp PROPERTIES
+    INSTALL_RPATH_USE_LINK_PATH TRUE INSTALL_RPATH "$ORIGIN/../lib")
+  install(TARGETS zkc-lsp RUNTIME DESTINATION bin)
+endif()
+
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
 set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES

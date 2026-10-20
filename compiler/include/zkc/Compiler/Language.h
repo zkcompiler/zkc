@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_LANGUAGE_H
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Translation/Language.h"
 #include <memory>
@@ -63,6 +64,7 @@ struct EntryOptions {
   bool simplify = true;
   bool releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
+  CompilationObservation *observations = nullptr;
 };
 using EntryArtifact = std::variant<CompiledRun, CompiledNativeProof>;
 class CompiledEntry {
@@ -78,7 +80,9 @@ private:
   CompiledEntry(CheckedOriginal source, EntryArtifact compiled,
                 EntryOptions options)
       : source(std::move(source)), compiled(std::move(compiled)),
-        configuration(options) {}
+        configuration(options) {
+    configuration.observations = nullptr;
+  }
   CheckedOriginal source;
   EntryArtifact compiled;
   EntryOptions configuration;

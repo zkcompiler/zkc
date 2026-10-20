@@ -22,6 +22,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -56,8 +57,14 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            bool releaseStorage,
                            MathematicalSelectionPolicy mathematicalSelection,
                            LinearContractionStats &statistics,
-                           json::Array *stages = nullptr) {
+                           json::Array *stages = nullptr,
+                           CompilationObservation *observations = nullptr) {
+  TimeTraceScope timing("zkc.lower-participants");
   PassManager pipeline(module.getContext());
+  mathematical::RealizationTrace trace;
+  trace.eventLimit = 4096;
+  if (observations)
+    observations->instrument(pipeline);
   auto add = [&](std::unique_ptr<Pass> pass) {
     if (stages)
       stages->push_back(pass->getArgument().str());
@@ -67,10 +74,17 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
     add(protocol::createSimplifyParticipantPass());
   if (fixPolynomials)
     add(protocol::createFixPolynomialFactorsPass());
-  add(protocol::createLowerMathPass(mathematicalSelection));
+  add(protocol::createLowerMathPass(mathematicalSelection,
+                                    observations ? &trace : nullptr));
   add(protocol::createSelectPhysicalPass({}, false, releaseStorage,
                                          &statistics));
-  return pipeline.run(module);
+  auto outcome = pipeline.run(module);
+  if (observations) {
+    observations->decisions(module, trace);
+    if (succeeded(outcome))
+      observations->phase("physical", module);
+  }
+  return outcome;
 }
 } // namespace
 Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
@@ -86,6 +100,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (!parsed)
     return parsed.takeError();
   result->module = std::move(*parsed);
+  if (options.observations)
+    options.observations->phase("protocol", *result->module);
   std::optional<json::Value> publicCoin;
   if (options.publicCoinRequirement) {
     auto checked =
@@ -103,8 +119,16 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   OwningOpRef<ModuleOp> original;
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
-  auto preparation = mathematical::PreparedProtocol::prepare(
-      *result->module, options.mathematicalSelection);
+  mathematical::RealizationTrace preparationTrace;
+  preparationTrace.eventLimit = 4096;
+  auto preparation = [&] {
+    TimeTraceScope timing("zkc.prepare-protocol");
+    return mathematical::PreparedProtocol::prepare(
+        *result->module, options.mathematicalSelection,
+        options.observations ? &preparationTrace : nullptr);
+  }();
+  if (options.observations)
+    options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
   auto prepared = preparation->snapshot();
@@ -131,11 +155,13 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       return diagnostics.failure(error("polynomial-correspondence-entry"));
     correspondence = std::move(*checked);
   }
+  if (options.observations)
+    options.observations->phase("participant", *result->module);
   json::Array loweringStages;
   if (failed(lowerProgram(*result->module, options.simplify,
                           options.fixPolynomialFactors, options.releaseStorage,
                           options.mathematicalSelection, result->statistics,
-                          &loweringStages)) ||
+                          &loweringStages, options.observations)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto bundle =
@@ -243,6 +269,8 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!parsed)
     return parsed.takeError();
   auto original = std::move(*parsed);
+  if (options.observations)
+    options.observations->phase("protocol", *original);
   if (!policy) {
     auto selected = selectNativeProofDraws(
         *original, std::get<NativeProofSelection>(options.policy).policy,
@@ -256,9 +284,11 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
   result->module = std::move(constructed->module);
+  if (options.observations)
+    options.observations->phase("participant", *result->module);
   if (failed(lowerProgram(*result->module, options.simplify, false,
                           options.releaseStorage, options.mathematicalSelection,
-                          result->statistics)) ||
+                          result->statistics, nullptr, options.observations)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);
