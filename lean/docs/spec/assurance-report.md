@@ -78,9 +78,11 @@ the claim's declarations are named; and `assumptions.requested`, the registry
 identifiers the author expects. In a claims namespace `N`, the artifacts are
 `N.artifacts`, the contract is `N.Contract.falseStatement` for ordinary
 soundness and `N.Contract.holds` for knowledge soundness, the evidence instance
-is `N.evidence` and the application is `N.<endpoint theorem>`; the fields
-`claims.artifacts`, `claims.contract`, `family.instance` and
-`claims.application` name them explicitly instead.
+is `N.evidence` and the application is `N.<endpoint theorem>`. These names
+derive from `N` alone: a manifest field that names one of them otherwise
+(`claims.artifacts`, `claims.contract`, `claims.application`,
+`family.instance`) is a conflicting override, and the pipeline's manifest
+schema rejects those fields.
 
 ## Pipeline evidence
 
@@ -149,21 +151,35 @@ erase its conditions:
    theorem leaves the claim unresolved.
 3. **Evidence.** The evidence instance must be the property's evidence
    structure indexed by the subject's artifacts and contract.
-4. **Telescope audit.** Every premise of the application's property and of the
-   evidence instance, read from their fully elaborated telescopes with implicit
-   and instance binders, is classified by the registry through its head
-   constant. A premise that is not a registered assumption is an omitted
+4. **Join.** The claim's declarations must belong to this subject's validated
+   artifacts: the manifest's generated `artifacts` and `claims` modules are the
+   `Artifacts` and `Claims` modules of its claims namespace, both among the
+   modules the pipeline regenerated and compared for this subject (see
+   *Connection*); the application and the evidence instance are declared in that
+   `Claims` module; and the pipeline's evidence records an accepted
+   `claim-application` check that built that module with that application. A
+   manifest without a claims namespace, a conflicting override, a claims
+   namespace whose generated modules are not this subject's, a declaration in
+   another module, or evidence without that check leaves the claim unresolved.
+   Without the join, a mutually consistent application, evidence, artifacts and
+   contract of one subject could be reported for another whose own generated
+   modules are connected.
+5. **Telescope audit.** Every premise of the application declaration itself,
+   of its property and of the evidence instance, read from their fully
+   elaborated telescopes with implicit and instance binders, is classified by
+   the registry through its head constant. A generated application has no
+   premise of its own, so one it states is an assumption like any other. A premise that is not a registered assumption is an omitted
    premise. Every other binder must be a type, an allowed instance or the
    application context; any other parameter, such as a structure bundling
    assumptions, is a hidden parameter. Classified premises become assumptions
    with their instantiated statements.
-5. **Named hypotheses.** Each hypothesis the evidence lists cites a registry
+6. **Named hypotheses.** Each hypothesis the evidence lists cites a registry
    identifier; its proposition must be an instance of that entry's schema (a
    proposition of the same category under another schema is a wrong schema),
    and its status is a proof, a premise of the evidence, or an assumption
    citing the same entry. A premise of the evidence that no hypothesis names is
    an omitted assumption.
-6. **Required links.** The trusted links every claim about the covered endpoint
+7. **Required links.** The trusted links every claim about the covered endpoint
    rests on are listed as assumptions unless a premise already carries them:
 
    | Covered endpoint | Required trusted links |
@@ -171,19 +187,19 @@ erase its conditions:
    | `ideal-meaning` | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` |
    | `executable-bytes` | `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` |
 
-7. **Models.** The registered model definitions the endpoint, the application
+8. **Models.** The registered model definitions the endpoint, the application
    and the evidence reach are recorded.
-8. **Artifacts.** A digest attached to generated data is not evidence that the
+9. **Artifacts.** A digest attached to generated data is not evidence that the
    data came from the source, export and program bytes. The connection holds
    when the pipeline evidence is for this subject and this manifest, every
    generated module equals the module the run regenerated, and every digest a
    module records is one the run produced. Anything else is a mismatched
    artifact, or unresolved without evidence.
-9. **Axioms.** An endpoint theorem, application or evidence instance whose
+10. **Axioms.** An endpoint theorem, application or evidence instance whose
    closure leaves the allowed set, for example one that depends on `sorryAx`,
    leaves the claim unresolved. Dependency and axiom audits are secondary
    checks; the telescope audit decides premise completeness.
-10. **Outcome.** A refused or unsupported validation is reported as such.
+11. **Outcome.** A refused or unsupported validation is reported as such.
     Otherwise the claim is `established` only when validation accepted and no
     reason remains; it is `unresolved` otherwise. A report is `established`
     when every claim is.

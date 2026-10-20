@@ -8,8 +8,12 @@ mismatched artifact or an unsupported endpoint claim make a report
 `unresolved`, as do an application of the endpoint to valid evidence of another
 subject, an application stated at other artifacts or another relation, an
 application of another theorem, a named hypothesis whose claim is not an
-instance of its entry's schema, and a parameter of the evidence that is neither
-a type, an allowed instance nor a registered premise. A control that would pass
+instance of its entry's schema, a parameter of the evidence that is neither
+a type, an allowed instance nor a registered premise, a premise of the
+application itself, a manifest field that names a declaration outside the
+claims namespace, a claims namespace of another subject, an application declared
+outside the subject's generated claims module, and evidence without the
+pipeline's claim-application check. A control that would pass
 on the unchanged input is checked on that input too, so a control cannot pass
 vacuously.
 """
@@ -27,7 +31,8 @@ PROPERTY = "soundness"
 EVIDENCE = "ZkcSecurity.Endpoint.SoundnessEvidence"
 THEOREM = "Sample.Endpoint.soundness"
 CLAIM = "Sample.Endpoint.Soundness"
-APPLICATION = "Sample.Examples.claim"
+NAMESPACE = "Sample.Examples"
+APPLICATION = "Sample.Examples.fixed_soundness_bytes"
 INSTANCE = "Sample.Examples.evidence"
 ARTIFACTS = "Sample.Examples.artifacts"
 CONTRACT = "Sample.Examples.Contract.falseStatement"
@@ -41,8 +46,9 @@ def arguments(*names):
     return [{"head": name, "text": name} for name in names]
 
 
-def record(name, *, kind="theorem", axioms=("propext",), premises=(), detail=None, hashes=("1", "2")):
-    value = {"name": name, "module": name.rsplit(".", 1)[0], "kind": kind,
+def record(name, *, kind="theorem", axioms=("propext",), premises=(), detail=None, hashes=("1", "2"),
+           module=None):
+    value = {"name": name, "module": module or name.rsplit(".", 1)[0], "kind": kind,
              "statement": {"structural": hashes[0], "explicit": hashes[1]},
              "axioms": list(axioms), "doc": None, "tags": [], "package": "sample"}
     if premises:
@@ -67,7 +73,7 @@ def registry_entries():
 
 
 def records(*, endpoint_axioms=("propext",), instance_premises=None, extra=(), application=None,
-            instance=None, hypotheses=None):
+            instance=None, hypotheses=None, module=f"{NAMESPACE}.Claims"):
     """The registered endpoint, the subject's application and its evidence.
     `application` and `instance` override fields of their details."""
     endpoint_detail = {"statement": "∀ e, Sample.Endpoint.Soundness e", "premises": ["Evidence"],
@@ -104,8 +110,8 @@ def records(*, endpoint_axioms=("propext",), instance_premises=None, extra=(), a
                        "registered": []}
     instance_detail.update(instance or {})
     declarations = [record(THEOREM, axioms=endpoint_axioms, detail=endpoint_detail),
-                    record(APPLICATION, detail=application_detail),
-                    record(INSTANCE, kind="definition", detail=instance_detail)] + list(extra)
+                    record(APPLICATION, detail=application_detail, module=module),
+                    record(INSTANCE, kind="definition", detail=instance_detail, module=module)] + list(extra)
     header = {"format": "zkc.declarations/0", "toolchain": "sample", "registry": registry_entries(),
               "endpoints": [{"endpoint": "executable-bytes", "property": PROPERTY, "statement": "fixed",
                              "theorem": THEOREM}]}
@@ -113,28 +119,42 @@ def records(*, endpoint_axioms=("propext",), instance_premises=None, extra=(), a
 
 
 def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_digest=None,
-            checks=(("construction", "accepted"),), evidence=True):
-    """A manifest, one generated module and the pipeline's evidence."""
+            checks=(("construction", "accepted"),), evidence=True, namespace=NAMESPACE, overrides="",
+            claim_application=True):
+    """A manifest, its generated data, artifacts and claims modules, and the
+    pipeline's evidence. The generated claims modules lie at the path of the
+    `Sample.Examples` namespace; `namespace` is what the manifest names."""
     directory = Path(directory)
     digest = "a" * 64
     module = directory / "SampleData.lean"
     module.write_text(f'def snapshot : String := "x"\n  source := "sha256:{recorded or digest}"\n')
+    folder_path = directory.joinpath(*NAMESPACE.split("."))
+    folder_path.mkdir(parents=True, exist_ok=True)
+    artifacts_module, claims_module = folder_path / "Artifacts.lean", folder_path / "Claims.lean"
+    artifacts_module.write_text("def artifacts : Nat := 0\n")
+    claims_module.write_text("theorem fixed_soundness_bytes : True := trivial\n")
     manifest = directory / "sample.toml"
     manifest.write_text(
         'schema = "zkc.subject/0"\nname = "sample"\n[entries]\nproof = "example::Proof"\n'
-        f'[generated]\ndata = "{module}"\n[family]\ninstance = "{INSTANCE}"\nkind = "certificate"\n'
-        f'[claims]\nendpoint = "{endpoint}"\nproperties = ["{PROPERTY}"]\nstatement = "fixed"\n'
-        f'regime = "exact-uniform challenges"\napplication = "{APPLICATION}"\nartifacts = "{ARTIFACTS}"\n'
-        f'contract = "{CONTRACT}"\nunknown_future_field = 1\n[assumptions]\nrequested = ["sample.acceptance"]\n')
+        f'[generated]\ndata = "{module}"\nartifacts = "{artifacts_module}"\nclaims = "{claims_module}"\n'
+        '[family]\nkind = "certificate"\n'
+        f'[claims]\nnamespace = "{namespace}"\nendpoint = "{endpoint}"\nproperties = ["{PROPERTY}"]\n'
+        f'statement = "fixed"\nregime = "exact-uniform challenges"\n{overrides}unknown_future_field = 1\n'
+        '[assumptions]\nrequested = ["sample.acceptance"]\n')
     folder = directory / "evidence"
     folder.mkdir(exist_ok=True)
     if evidence:
+        rows = [{"name": name, "outcome": outcome} for name, outcome in checks]
+        if claim_application:
+            rows.append({"name": "claim-application", "outcome": "accepted", "module": f"{NAMESPACE}.Claims",
+                         "application": APPLICATION})
         (folder / "sample.json").write_text(json.dumps({
             "format": reports.EVIDENCE_FORMAT, "subject": "sample",
             "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
             "artifacts": {"source": f"sha256:{evidence_digest or digest}"},
-            "generated": {str(module): {"sha256": hashlib.sha256(module.read_bytes()).hexdigest()}},
-            "checks": [{"name": name, "outcome": outcome} for name, outcome in checks]}))
+            "generated": {str(path): {"sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                          for path in (module, artifacts_module, claims_module)},
+            "checks": rows}))
     return manifest, folder
 
 
@@ -225,6 +245,40 @@ def run():
         unnamed = report(fresh("unnamed"), records(hypotheses=[]))
         expect("report-unnamed-assumption", unnamed["outcome"] == "unresolved" and
                mentions(unnamed, "omitted assumption"), unnamed)
+        assumed = report(fresh("application-premise"), records(application={
+            "premises": ["F", "Field F", "h : False"],
+            "premise_telescope": [{"binder": "implicit", "premise": False},
+                                  {"binder": "instance", "premise": False},
+                                  {"binder": "explicit", "premise": True, "head": "False"}],
+            "binders": TYPES + [{"binder": "explicit", "premise": True, "type_head": "False"}]}))
+        expect("report-application-premise", assumed["outcome"] == "unresolved" and
+               mentions(assumed, "omitted premise: explicit premise h : False of application"), assumed)
+        overridden = report(fresh("override"), records(), overrides='application = "Sample.Other.claim"\n')
+        expect("report-conflicting-override", overridden["outcome"] == "unresolved" and
+               mentions(overridden, "conflicting override: claims.application"), overridden)
+        # Another subject's application, evidence, artifacts and contract, each
+        # consistent with the others and kernel-checked, named through the claims
+        # namespace of a manifest whose own generated modules are this subject's.
+        other = "Sample.Other"
+        renamed = {APPLICATION: f"{other}.fixed_soundness_bytes", INSTANCE: f"{other}.evidence",
+                   ARTIFACTS: f"{other}.artifacts", CONTRACT: f"{other}.Contract.falseStatement"}
+        substituted_records = records(module=f"{other}.Claims", application={
+            "type_arguments": arguments(renamed[ARTIFACTS], renamed[CONTRACT], REGIME, renamed[INSTANCE]),
+            "value_arguments": arguments(renamed[INSTANCE])}, instance={
+            "type_arguments": arguments(renamed[ARTIFACTS], renamed[CONTRACT], REGIME)})
+        for declaration in substituted_records.declarations:
+            declaration["name"] = renamed.get(declaration["name"], declaration["name"])
+        substituted_records = Records(substituted_records.headers, substituted_records.declarations)
+        crossed = report(fresh("cross-subject"), substituted_records, namespace=other)
+        expect("report-cross-subject-substitution", crossed["outcome"] == "unresolved" and
+               mentions(crossed, "mismatched artifact: the manifest's generated claims module") and
+               mentions(crossed, "no accepted claim-application check"), crossed)
+        elsewhere = report(fresh("elsewhere"), records(module="Sample.Elsewhere"))
+        expect("report-application-elsewhere", elsewhere["outcome"] == "unresolved" and
+               mentions(elsewhere, "is declared in Sample.Elsewhere"), elsewhere)
+        unbuilt = report(fresh("unbuilt"), records(), claim_application=False)
+        expect("report-without-claim-application", unbuilt["outcome"] == "unresolved" and
+               mentions(unbuilt, "no accepted claim-application check"), unbuilt)
 
     # The ledger: a renamed headline, a changed statement and a theorem that
     # depends on sorryAx each fail; the unchanged ledger passes.

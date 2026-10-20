@@ -42,11 +42,9 @@ root.
 | `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check` |
 | `family` | `module`, `kind` | family package; `sigma`, `certificate` or `upstream` |
 | `family` | `construction` | the subject's evidence constructor in its claims namespace |
-| `family` | `instance` | the evidence instance (default: `evidence` in the claims namespace) |
 | `claims` | `endpoint` | `ideal-meaning` or `executable-bytes` |
 | `claims` | `properties`, `statement`, `regime` | claimed properties, `fixed` or `adaptive`, expected parameter regime |
-| `claims` | `namespace` | namespace of the claim's modules in the security integration |
-| `claims` | `artifacts`, `contract`, `application` | the claim's declarations (default: `artifacts`, `Contract.falseStatement` or `Contract.holds`, and the endpoint theorem's name, in the claims namespace) |
+| `claims` | `namespace` | namespace of the claim's modules in the security integration; the claim's declarations are its `artifacts`, `Contract.falseStatement` or `Contract.holds`, `evidence`, and the endpoint theorem's name, all in this namespace |
 | `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |

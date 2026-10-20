@@ -50,9 +50,10 @@ VARIABLES = {
 
 
 def names(manifest):
-    """The declarations a subject's claim consists of, by convention from its
-    namespace; explicit manifest fields take precedence."""
-    claims, family = manifest.get("claims") or {}, manifest.get("family") or {}
+    """The declarations a subject's claim consists of, all derived from its claims
+    namespace, so the generated application and the report name the same
+    declarations."""
+    claims = manifest.get("claims") or {}
     namespace = claims.get("namespace")
     if namespace is None:
         return {}
@@ -60,10 +61,10 @@ def names(manifest):
     prop = properties[0] if len(properties) == 1 else None
     endpoint = ENDPOINTS.get((claims.get("endpoint"), prop, claims.get("statement")))
     return {"namespace": namespace,
-            "artifacts": claims.get("artifacts", f"{namespace}.artifacts"),
-            "contract": claims.get("contract", f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}"),
-            "instance": family.get("instance", f"{namespace}.evidence"),
-            "application": claims.get("application", f"{namespace}.{endpoint[0]}" if endpoint else None)}
+            "artifacts": f"{namespace}.artifacts",
+            "contract": f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}",
+            "instance": f"{namespace}.evidence",
+            "application": f"{namespace}.{endpoint[0]}" if endpoint else None}
 
 
 def module_path(namespace, leaf):

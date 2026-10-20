@@ -27,7 +27,6 @@ glue = "lean/ZkcExamples/Construction/SchnorrProof.lean"
 
 [family]
 module = "ZkcSecurity.Families.Schnorr"
-instance = "ZkcSecurity.Examples.Schnorr.evidence"
 kind = "sigma"
 
 [claims]

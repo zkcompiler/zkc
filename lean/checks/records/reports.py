@@ -246,23 +246,71 @@ ENDPOINT_NAMES = {
 CONTRACTS = {"soundness": "falseStatement", "knowledge-soundness": "holds"}
 
 
+# Manifest fields that once named a claim's declarations directly. The names
+# now derive from the claims namespace alone; a field that names anything else
+# would let a report join one subject's artifacts to another's application.
+OVERRIDES = (("claims", "artifacts"), ("claims", "contract"), ("claims", "application"),
+             ("family", "instance"))
+
+
 def claim_names(manifest):
-    """The declarations of a subject's claim: by convention from its claims
-    namespace, explicit manifest fields first."""
-    section, family = manifest.get("claims") or {}, manifest.get("family") or {}
+    """The declarations of a subject's claim, all derived from its claims
+    namespace: the artifacts, the contract, the evidence and the application."""
+    section = manifest.get("claims") or {}
     namespace = section.get("namespace")
     properties = section.get("properties") or []
     prop = properties[0] if len(properties) == 1 else None
     short = ENDPOINT_NAMES.get((section.get("endpoint"), prop, section.get("statement")))
-    derived = {} if namespace is None else {
-        "artifacts": f"{namespace}.artifacts",
-        "contract": f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}",
-        "instance": f"{namespace}.evidence",
-        "application": f"{namespace}.{short}" if short else None}
-    return {"artifacts": section.get("artifacts", derived.get("artifacts")),
-            "contract": section.get("contract", derived.get("contract")),
-            "instance": family.get("instance", derived.get("instance")),
-            "application": section.get("application", derived.get("application"))}
+    if namespace is None:
+        return {"namespace": None, "artifacts": None, "contract": None, "instance": None, "application": None}
+    return {"namespace": namespace,
+            "artifacts": f"{namespace}.artifacts",
+            "contract": f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}",
+            "instance": f"{namespace}.evidence",
+            "application": f"{namespace}.{short}" if short else None}
+
+
+def module_suffix(namespace, leaf):
+    """The path suffix of a claims namespace's generated module."""
+    return "/".join(namespace.split(".")) + f"/{leaf}.lean"
+
+
+def join_reasons(manifest, names, evidence, records):
+    """Why the claim's declarations are not joined to this subject's validated
+    artifacts: each name derives from the subject's claims namespace, the
+    namespace's generated artifacts and claims modules are among the modules the
+    pipeline regenerated for this subject, the application and its evidence are
+    declared in that claims module, and the pipeline built that module as the
+    claim's application."""
+    reasons = []
+    namespace = names["namespace"]
+    if namespace is None:
+        return ["the manifest names no claims namespace, so no generated application belongs to it"]
+    for table, field in OVERRIDES:
+        value = (manifest.get(table) or {}).get(field)
+        derived = names["instance" if field == "instance" else field]
+        if value is not None and value != derived:
+            reasons.append(f"conflicting override: {table}.{field} names {value}, not the subject's {derived}")
+    generated = manifest.get("generated") or {}
+    for key, leaf in (("artifacts", "Artifacts"), ("claims", "Claims")):
+        path = generated.get(key)
+        if not isinstance(path, str) or not Path(path).as_posix().endswith(module_suffix(namespace, leaf)):
+            reasons.append(f"mismatched artifact: the manifest's generated {key} module is not "
+                           f"{module_suffix(namespace, leaf)} of the claims namespace")
+    claims_module = f"{namespace}.Claims"
+    for key in ("application", "instance"):
+        name = names[key]
+        record = records.get(name) if name else None
+        if record is not None and record.get("module") != claims_module:
+            reasons.append(f"mismatched artifact: {key} {name} is declared in {record.get('module')}, not in the "
+                           f"subject's generated claims module {claims_module}")
+    built = [check for check in ((evidence or {}).get("checks") or [])
+             if check.get("name") == "claim-application" and check.get("outcome") == "accepted"]
+    if not any(check.get("module") == claims_module and check.get("application") == names["application"]
+               for check in built):
+        reasons.append(f"the pipeline recorded no accepted claim-application check that built {claims_module} "
+                       f"with the application {names['application']}")
+    return reasons
 
 
 def heads(arguments):
@@ -346,11 +394,11 @@ def hypotheses(record, registry):
 
 
 def application_check(section, prop, family, theorem, records, registry):
-    names = claim_names({"claims": section, "family": family})
     """The claim's application declaration: the registered endpoint applied to the
     manifest's evidence, stated at the subject's artifacts, contract and regime.
-    Returns the facts, the assumptions its property's premises carry, and the
-    reasons it cannot establish the claim."""
+    Returns the facts, the assumptions its own premises and its property's
+    premises carry, and the reasons it cannot establish the claim."""
+    names = claim_names({"claims": section, "family": family})
     name = names["application"]
     if name is None:
         return None, [], ["the manifest names no application declaration"]
@@ -386,9 +434,14 @@ def application_check(section, prop, family, theorem, records, registry):
         if regime is None or regime not in stated:
             reasons.append(f"application {name} is not stated at the manifest's regime {section.get('regime')!r}")
     reasons += binder_reasons(record, "application")
+    # The application's own premises: a generated application has none, so any
+    # premise it states is an assumption the report must classify.
+    outer, outer_reasons = telescope(record, registry, "application")
+    reasons += outer_reasons
     property_detail = detail.get("property") or {}
     found, omitted = premises_of(property_detail.get("premise_telescope") or [], [], registry,
                                  f"the property of {name}")
+    found = outer + found
     reasons += omitted
     if facts is not None:
         facts["bound"] = property_detail.get("statement")
@@ -424,7 +477,7 @@ def evidence_check(section, prop, family, records, registry):
     return facts, found + named, discharged, reasons
 
 
-def claim(manifest, prop, records, registry, evidence_validation, connected_reasons):
+def claim(manifest, prop, records, registry, evidence_validation, connected_reasons, evidence=None):
     section = manifest.get("claims") or {}
     endpoint, statement = section.get("endpoint"), section.get("statement")
     family = manifest.get("family") or {}
@@ -459,6 +512,7 @@ def claim(manifest, prop, records, registry, evidence_validation, connected_reas
         if identifier not in registry.by_identifier:
             reasons.append(f"requested assumption {identifier} is not a registry identifier")
     names = claim_names(manifest)
+    reasons += join_reasons(manifest, names, evidence, records)
     models = []
     for name in (theorem, names["application"], names["instance"]):
         record = records.get(name) if name else None
@@ -529,7 +583,8 @@ def build(manifest_path, records, ledger=None, evidence_directory=None):
     properties = list((manifest.get("claims") or {}).get("properties", []))
     if not properties:
         reasons.append("the manifest claims no property")
-    claims = [claim(manifest, prop, records, registry, checks, connected_reasons) for prop in properties]
+    claims = [claim(manifest, prop, records, registry, checks, connected_reasons, evidence)
+              for prop in properties]
     verdicts = [c["outcome"] for c in claims]
     if reasons or not claims or "unresolved" in verdicts:
         outcome = "unresolved"
