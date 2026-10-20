@@ -51,6 +51,7 @@
       "poly.even_odd_fold",
       "poly.divide_opening",
       "poly.opening_quotient",
+      "poly.opening_quotient_sum",
       "field.sub",
       "field.neg",
       "field.inverse",

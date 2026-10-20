@@ -255,6 +255,7 @@ constexpr ContractRow contractRows[] = {
     {"poly.domain_points", Arkworks | Plonky3},
     {"poly.even_odd_fold", Arkworks | Plonky3},
     {"poly.opening_quotient", Arkworks | Plonky3},
+    {"poly.opening_quotient_sum", Arkworks | Plonky3},
     {"poly.divide_opening", Arithmetic},
     {"poly.equality_weights", Arkworks},
     {"poly.from_coefficients", Arithmetic},

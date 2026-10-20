@@ -23,6 +23,16 @@ configuration columns and public columns retain their verifier authority.
 Witness openings remain obligations until an enclosing protocol authenticates
 and checks them. Shape records are ordinary values, not proof certificates.
 
+`table::read_quotients(slots, witness, assignments, height, zeta, rho, initial,
+first_weight)` takes a checked `coset::ColumnBatch` for `witness`. Construct it
+with `coset::column_batch(coset::coset_domain(shift, size), width, values)`.
+Only witness slots (kind 1) contribute quotients and consume weights, in declared
+read order; the returned weight is `first_weight * rho^witness_count`. Rotated
+points are constructed before the native column/pole scan. Known reads retain
+their separate verifier checks. Even an empty witness selection checks the
+trace-rotation domain, checked batch geometry and initial extent before returning
+the unchanged values and weight.
+
 `vanishing(height, begin, end, x)` evaluates the subgroup product on `[begin,end)`.
 The vector form evaluates the same polynomial on a coset. Both use complement
 products where valid and direct products at removable poles. `split_quotient`

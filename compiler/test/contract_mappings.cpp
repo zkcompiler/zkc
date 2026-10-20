@@ -153,6 +153,7 @@ constexpr ExpectedMapping expected[] = {
     {"poly.even_odd_fold", "poly.exec.even_odd_fold"},
     {"poly.divide_opening", "poly.exec.divide_opening"},
     {"poly.opening_quotient", "poly.exec.opening_quotient"},
+    {"poly.opening_quotient_sum", "poly.exec.opening_quotient_sum"},
     {"field.sub", "algebra.exec.field_subtract"},
     {"field.neg", "algebra.exec.field_negate"},
     {"field.inverse", "algebra.exec.field_inverse"},

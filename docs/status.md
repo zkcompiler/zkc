@@ -59,7 +59,8 @@ standard SCF loops and are independently checked before Local lowering.
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and
-KoalaBear opening quotient. Compiler-generated pointwise expressions pass
+KoalaBear opening quotient and a weighted sum of selected off-domain column
+quotients on BN254 Fr and the three KoalaBear fields. Compiler-generated pointwise expressions pass
 borrowed columns and scalar captures through ordinary installed bindings.
 Compiler buffer lowering, target-specific vectorization and JIT/AOT engines remain
 unimplemented. These execution boundaries do not establish formal native
@@ -84,7 +85,9 @@ authentication. Source controls check independent integer expectations and refus
 
 Polynomial opening APIs bind canonical cosets, column batches, descriptors and
 accumulators in private checked views; row evaluation derives its point from
-the admitted query index. These are mathematical context checks.
+the admitted query index. These are mathematical context checks. Column reduction uses one private weighted
+quotient result with reusable call-local denominator/prefix arrays. AIR witness
+reads select the same core reduction in read order; known reads consume no weights.
 Commands accept unique short or qualified Entry names. Execution filters omitted
 names by run/proof kind; inspection and compilation require a single Entry.
 `new` and `init` create separate protocol and Entry files with input templates;

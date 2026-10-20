@@ -2,6 +2,7 @@
 //! preparation; no protocol value or transcript state lives in this cache.
 use super::polynomial::{self, Domain, Error, Kernels};
 use crate::numerical::coset::CosetBatchShape;
+use crate::numerical::opening::OpeningQuotientSumShape;
 use crate::{
     KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, numerical::Call,
     refused, value::size,
@@ -26,6 +27,7 @@ fn failure(error: Error) -> zkc_runtime::vm::BackendError {
         Error::PointOnDomain => "coset-opening-point",
         Error::OpeningValue => "polynomial-opening-value",
         Error::BatchShape => "coset-batch-shape",
+        Error::OpeningShape => "coset-opening-shape",
         Error::SizeOverflow | Error::Allocation => unreachable!(),
     })
 }
@@ -111,6 +113,7 @@ pub(crate) fn apply(
             | "poly.domain_points"
             | "poly.even_odd_fold"
             | "poly.opening_quotient"
+            | "poly.opening_quotient_sum"
     ) {
         return Err(refused("kernel-operands"));
     }
@@ -288,9 +291,86 @@ fn execute<E: Family>(
             }
             output.finish(|values| Ok(E::vector_value(values)))?
         }
+        "poly.opening_quotient_sum" => opening_quotient_sum::<E>(args, policy, available)?,
         _ => return Err(refused("coset-operation")),
     };
     Ok(vec![output])
+}
+
+fn opening_quotient_sum<E: Family>(
+    args: &[Value],
+    policy: &Policy,
+    available: usize,
+) -> Result<Value> {
+    let [
+        values,
+        Value::Index(width),
+        Value::Index(height),
+        shift,
+        Value::Indices(columns),
+        points,
+        claims,
+        weights,
+        initial,
+    ] = args
+    else {
+        return Err(refused("kernel-operands"));
+    };
+    // All operands retain their exact nominal field, including an unused shift.
+    let values = E::vector(values)?;
+    let shift = E::field(shift)?;
+    let points = E::vector(points)?;
+    let claims = E::vector(claims)?;
+    let weights = E::vector(weights)?;
+    let initial = E::vector(initial)?;
+    let shape = OpeningQuotientSumShape::new(
+        values.len(),
+        usize::try_from(*width).map_err(|_| exhausted("size-overflow"))?,
+        usize::try_from(*height).map_err(|_| exhausted("size-overflow"))?,
+        columns.len(),
+        [points.len(), claims.len(), weights.len()],
+        initial.len(),
+    )?;
+    shape.admit_inputs(policy, std::mem::size_of::<E>())?;
+    let quotient = if columns.is_empty() {
+        None
+    } else {
+        let domain = Domain::new(shape.height, shift, policy.max_table_elements.min(1 << 20))
+            .map_err(failure)?;
+        Some(
+            polynomial::OpeningQuotientSum::new(
+                values,
+                shape.width,
+                domain,
+                columns,
+                points,
+                claims,
+                weights,
+            )
+            .map_err(failure)?,
+        )
+    };
+    // The complete descriptor list is valid before charging execution work,
+    // allocating any result/workspace, or copying initial.
+    let retained = shape.admit(policy, std::mem::size_of::<E>(), available)?;
+    let call = Call::new(policy, available);
+    call.work(shape.work()?)?;
+    let mut output = call.output(shape.height, E::ZERO, retained)?;
+    if let Some(quotient) = quotient {
+        let mut denominators = call.scratch(shape.height, E::ZERO)?;
+        let mut prefixes = call.scratch(shape.height, E::ZERO)?;
+        quotient
+            .write_into(
+                initial,
+                denominators.as_mut(),
+                prefixes.as_mut(),
+                output.as_mut_slice(),
+            )
+            .map_err(failure)?;
+    } else {
+        output.as_mut_slice().copy_from_slice(initial);
+    }
+    output.finish(|values| Ok(E::vector_value(values)))
 }
 
 fn opening_quotient_work(len: usize) -> Result<u64> {
@@ -312,6 +392,300 @@ fn opening_quotient_work(len: usize) -> Result<u64> {
 mod tests {
     use super::*;
     use p3_field::PrimeCharacteristicRing;
+
+    fn opening_args<E: Family>() -> Vec<Value> {
+        let element =
+            |i: usize| E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+        vec![
+            E::vector_value((0..12).map(element).collect()),
+            Value::Index(3),
+            Value::Index(4),
+            E::field_value(element(3)),
+            Value::Indices(vec![2, 0, 2].into()),
+            E::vector_value(vec![E::ZERO, element(19), E::ZERO]),
+            E::vector_value(vec![element(5), element(9), element(15)]),
+            E::vector_value(vec![element(7), E::ZERO, element(11)]),
+            E::vector_value((0..4).map(|i| element(41 + i)).collect()),
+        ]
+    }
+
+    fn run_opening<E: Family>(
+        args: &[Value],
+        policy: &Policy,
+        available: usize,
+    ) -> Result<Vec<Value>> {
+        execute::<E>(
+            "poly.opening_quotient_sum",
+            args,
+            policy,
+            available,
+            &Kernels::default(),
+        )
+    }
+
+    fn opening_native_checks<E: Family>() {
+        let args = opening_args::<E>();
+        let aliases = args.clone();
+        let snapshots = [0, 5, 6, 7, 8].map(|i| E::vector(&args[i]).unwrap().to_vec());
+        let values = E::vector(&args[0]).unwrap();
+        let points = E::vector(&args[5]).unwrap();
+        let claims = E::vector(&args[6]).unwrap();
+        let weights = E::vector(&args[7]).unwrap();
+        let initial = E::vector(&args[8]).unwrap();
+        let domain = Domain::new(4, E::field(&args[3]).unwrap(), 4).unwrap();
+        let expected: Vec<_> = (0..4)
+            .map(|row| {
+                [2, 0, 2]
+                    .iter()
+                    .enumerate()
+                    .fold(initial[row], |sum, (j, column)| {
+                        sum + weights[j] * (values[column * 4 + row] - claims[j])
+                            / (domain.point(row).unwrap() - points[j])
+                    })
+            })
+            .collect();
+        let shape = OpeningQuotientSumShape::new(12, 3, 4, 3, [3; 3], 4).unwrap();
+        let bytes = std::mem::size_of::<E>();
+        let retained = size(4, bytes).unwrap();
+        let managed = shape.managed_bytes(bytes).unwrap();
+        let work = shape.work().unwrap();
+        let policy = Policy {
+            max_numerical_work: work,
+            max_numerical_bytes: managed,
+            ..Policy::default()
+        };
+        let result = run_opening::<E>(&args, &policy, retained).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(E::vector(&result[0]).unwrap(), expected);
+        assert_ne!(E::vector(&result[0]).unwrap().as_ptr(), initial.as_ptr());
+        for (limited, available, expected) in [
+            (
+                Policy {
+                    max_numerical_work: work - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: managed - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-bytes",
+            ),
+            (policy, retained - 1, "exhausted:output-bytes"),
+            (
+                Policy {
+                    max_table_elements: 11,
+                    ..policy
+                },
+                retained,
+                "exhausted:element-limit",
+            ),
+        ] {
+            assert_eq!(
+                run_opening::<E>(&args, &limited, available)
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+        }
+        for (i, snapshot) in [0, 5, 6, 7, 8].into_iter().zip(snapshots) {
+            assert_eq!(E::vector(&args[i]).unwrap(), snapshot);
+            assert_eq!(E::vector(&aliases[i]).unwrap(), snapshot);
+        }
+    }
+
+    #[test]
+    fn native_opening_sums_preserve_coordinates_aliases_and_exact_limits() {
+        opening_native_checks::<KoalaBear>();
+        opening_native_checks::<KoalaBearExt4>();
+        opening_native_checks::<KoalaBearExt8>();
+    }
+
+    #[test]
+    fn native_opening_sum_validates_the_final_descriptor_before_admission() {
+        let policy = Policy {
+            max_numerical_work: 0,
+            max_numerical_bytes: 0,
+            ..Policy::default()
+        };
+        let original = opening_args::<KoalaBearExt8>();
+        let snapshots = [0, 6, 8].map(|i| KoalaBearExt8::vector(&original[i]).unwrap().to_vec());
+        let domain = Domain::new(4, KoalaBearExt8::field(&original[3]).unwrap(), 4).unwrap();
+        for (columns, points, expected) in [
+            (
+                vec![2, 0, 3],
+                vec![KoalaBearExt8::ZERO; 3],
+                "refused:coset-coordinate",
+            ),
+            (
+                vec![2, 0, 2],
+                vec![
+                    KoalaBearExt8::ZERO,
+                    KoalaBearExt8::ZERO,
+                    domain.point(3).unwrap(),
+                ],
+                "refused:coset-opening-point",
+            ),
+            (
+                vec![2, 0, 3],
+                vec![
+                    domain.point(0).unwrap(),
+                    KoalaBearExt8::ZERO,
+                    KoalaBearExt8::ZERO,
+                ],
+                "refused:coset-opening-point",
+            ),
+        ] {
+            let mut args = original.clone();
+            args[4] = Value::Indices(columns.into());
+            args[5] = KoalaBearExt8::vector_value(points);
+            args[7] = KoalaBearExt8::vector_value(vec![KoalaBearExt8::ZERO; 3]);
+            assert_eq!(
+                run_opening::<KoalaBearExt8>(&args, &policy, 0)
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+            for (i, snapshot) in [0, 6, 8].into_iter().zip(&snapshots) {
+                assert_eq!(
+                    KoalaBearExt8::vector(&args[i]).unwrap(),
+                    snapshot.as_slice()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_opening_sum_exact_operands_shapes_and_empty_semantics() {
+        let policy = Policy::default();
+        let original = opening_args::<KoalaBear>();
+        let mut extra = original.clone();
+        extra.push(Value::Index(0));
+        for args in [&original[..8], extra.as_slice()] {
+            assert_eq!(
+                run_opening::<KoalaBear>(args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                "refused:kernel-operands"
+            );
+        }
+        for i in 0..9 {
+            let mut args = original.clone();
+            args[i] = Value::Bn254Field(crate::Bn254Scalar::from(1));
+            assert_eq!(
+                run_opening::<KoalaBear>(&args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                "refused:kernel-operands"
+            );
+        }
+        for (index, replacement, expected) in [
+            (
+                0,
+                KoalaBear::vector_value(vec![KoalaBear::ONE; 11]),
+                "refused:coset-batch-shape",
+            ),
+            (
+                5,
+                KoalaBear::vector_value(vec![KoalaBear::ZERO; 2]),
+                "refused:coset-opening-shape",
+            ),
+            (
+                6,
+                KoalaBear::vector_value(vec![KoalaBear::ZERO; 2]),
+                "refused:coset-opening-shape",
+            ),
+            (
+                7,
+                KoalaBear::vector_value(vec![KoalaBear::ZERO; 2]),
+                "refused:coset-opening-shape",
+            ),
+            (
+                8,
+                KoalaBear::vector_value(vec![KoalaBear::ZERO; 3]),
+                "refused:coset-opening-shape",
+            ),
+            (1, Value::Index(u64::MAX), "exhausted:size-overflow"),
+            (
+                3,
+                KoalaBear::field_value(KoalaBear::ZERO),
+                "refused:coset-zero-shift",
+            ),
+        ] {
+            let mut args = original.clone();
+            args[index] = replacement;
+            assert_eq!(
+                run_opening::<KoalaBear>(&args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+        }
+        for (width, height) in [(0, 0), (usize::MAX, 0), (0, 3), (2, 3)] {
+            let initial = vec![KoalaBear::from_usize(7); height];
+            let mut args = vec![
+                KoalaBear::vector_value(vec![KoalaBear::ONE; width * height]),
+                Value::Index(width as u64),
+                Value::Index(height as u64),
+                KoalaBear::field_value(KoalaBear::ZERO),
+                Value::Indices(vec![].into()),
+                KoalaBear::vector_value(vec![]),
+                KoalaBear::vector_value(vec![]),
+                KoalaBear::vector_value(vec![]),
+                KoalaBear::vector_value(initial.clone()),
+            ];
+            let result = run_opening::<KoalaBear>(&args, &policy, usize::MAX).unwrap();
+            assert_eq!(KoalaBear::vector(&result[0]).unwrap(), initial);
+            if height > 0 {
+                assert_ne!(
+                    KoalaBear::vector(&result[0]).unwrap().as_ptr(),
+                    KoalaBear::vector(&args[8]).unwrap().as_ptr()
+                );
+            }
+            args[8] = KoalaBear::vector_value(vec![KoalaBear::ONE; height + 1]);
+            assert_eq!(
+                run_opening::<KoalaBear>(&args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                "refused:coset-opening-shape"
+            );
+        }
+        // A nonempty descriptor list still needs a nonempty valid domain.
+        for height in [0, 3] {
+            let mut args = original.clone();
+            args[0] = KoalaBear::vector_value(vec![KoalaBear::ONE; 3 * height]);
+            args[2] = Value::Index(height as u64);
+            args[8] = KoalaBear::vector_value(vec![KoalaBear::ONE; height]);
+            assert_eq!(
+                run_opening::<KoalaBear>(&args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                "refused:coset-size"
+            );
+        }
+        let mut no_columns = original.clone();
+        no_columns[0] = KoalaBear::vector_value(vec![]);
+        no_columns[1] = Value::Index(0);
+        assert_eq!(
+            run_opening::<KoalaBear>(&no_columns, &policy, usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:coset-coordinate"
+        );
+        // The same immutable owner may supply both values and initial.
+        let mut args = original;
+        args[0] = args[8].clone();
+        args[1] = Value::Index(1);
+        args[4] = Value::Indices(vec![0, 0, 0].into());
+        let snapshot = KoalaBear::vector(&args[8]).unwrap().to_vec();
+        assert!(run_opening::<KoalaBear>(&args, &policy, usize::MAX).is_ok());
+        assert_eq!(KoalaBear::vector(&args[0]).unwrap(), snapshot);
+        assert_eq!(KoalaBear::vector(&args[8]).unwrap(), snapshot);
+    }
 
     fn point_args<E: Family>(
         values: Vec<E>,
@@ -346,7 +720,7 @@ mod tests {
     fn point_evaluation_checks<E: Family>() {
         let policy = Policy::default();
         let element =
-            |i| E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+            |i: usize| E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
         let shift = element(3);
         for width in [0, 1, 4, 16] {
             for height in [1, 2, 8, 32] {

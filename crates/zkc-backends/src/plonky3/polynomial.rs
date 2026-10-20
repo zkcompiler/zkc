@@ -22,6 +22,7 @@ pub enum Error {
     PointOnDomain,
     OpeningValue,
     BatchShape,
+    OpeningShape,
     SizeOverflow,
     Allocation,
 }
@@ -401,6 +402,98 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
     }
 }
 
+/// A rational linear combination of selected column openings. Claims are
+/// arbitrary scalars: this helper asserts neither degree nor authentication.
+/// Every descriptor is checked before the caller supplies writable storage.
+pub(crate) struct OpeningQuotientSum<'a, E> {
+    values: &'a [E],
+    domain: Domain<E>,
+    columns: &'a [u64],
+    points: &'a [E],
+    claims: &'a [E],
+    weights: &'a [E],
+}
+
+impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
+    pub(crate) fn new(
+        values: &'a [E],
+        width: usize,
+        domain: Domain<E>,
+        columns: &'a [u64],
+        points: &'a [E],
+        claims: &'a [E],
+        weights: &'a [E],
+    ) -> Result<Self, Error> {
+        let expected = width.checked_mul(domain.size).ok_or(Error::SizeOverflow)?;
+        if values.len() != expected {
+            return Err(Error::BatchShape);
+        }
+        if [points.len(), claims.len(), weights.len()] != [columns.len(); 3] {
+            return Err(Error::OpeningShape);
+        }
+        // Validate in descriptor order, including zero-weight descriptors.
+        let excluded = domain.shift.exp_u64(domain.size as u64);
+        for (&column, &point) in columns.iter().zip(points) {
+            usize::try_from(column)
+                .ok()
+                .filter(|column| *column < width)
+                .ok_or(Error::Coordinate)?;
+            if point.exp_u64(domain.size as u64) == excluded {
+                return Err(Error::PointOnDomain);
+            }
+        }
+        Ok(Self {
+            values,
+            domain,
+            columns,
+            points,
+            claims,
+            weights,
+        })
+    }
+
+    /// Reuse denominators and prefixes across all selected columns. The existing
+    /// serial inversion helper invokes the accumulation in reverse row order;
+    /// descriptor order is preserved at every row. No allocation or column copy.
+    pub(crate) fn write_into(
+        &self,
+        initial: &[E],
+        denominators: &mut [E],
+        prefixes: &mut [E],
+        destination: &mut [E],
+    ) -> Result<(), Error> {
+        if initial.len() != self.domain.size || destination.len() != self.domain.size {
+            return Err(Error::OpeningShape);
+        }
+        if denominators.len() != self.domain.size || prefixes.len() != self.domain.size {
+            return Err(Error::EvaluationCount);
+        }
+        destination.copy_from_slice(initial);
+        for (j, &column) in self.columns.iter().enumerate() {
+            // The constructor establishes these bounds before any writes;
+            // retain checked host arithmetic when deriving the borrowed slice.
+            let column = usize::try_from(column).map_err(|_| Error::Coordinate)?;
+            let offset = column
+                .checked_mul(self.domain.size)
+                .ok_or(Error::SizeOverflow)?;
+            let end = offset
+                .checked_add(self.domain.size)
+                .ok_or(Error::SizeOverflow)?;
+            let selected = &self.values[offset..end];
+            let mut x = self.domain.shift;
+            for denominator in denominators.iter_mut() {
+                *denominator = x - self.points[j];
+                x *= self.domain.base_generator();
+            }
+            batch_inverse_into(denominators, prefixes, |row, inverse| {
+                destination[row] += self.weights[j] * (selected[row] - self.claims[j]) * inverse;
+                inverse
+            })?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +502,143 @@ mod tests {
     fn sample(i: usize) -> E {
         E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(3 * i * i + 7 * i + j + 1))
     }
+
+    fn opening_sum_scalar_checks<F: ExtensionField<KoalaBear>>() {
+        let element =
+            |i| F::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+        for height in [1, 2, 8, 32] {
+            let domain = Domain::new(height, element(3), 32).unwrap();
+            let values: Vec<_> = (0..3 * height).map(element).collect();
+            let initial: Vec<_> = (0..height).map(|i| element(41 + i)).collect();
+            let columns = [2, 0, 2, 1];
+            let points = [F::ZERO, element(19), element(19), F::ZERO];
+            let claims = [element(5), element(9), element(15), element(13)];
+            let weights = [element(7), F::ZERO, element(11), element(17)];
+            assert!(points.iter().all(|point| !domain.contains(*point)));
+            let expected: Vec<_> = (0..height)
+                .map(|row| {
+                    let x = domain.point(row).unwrap();
+                    (0..columns.len()).fold(initial[row], |sum, j| {
+                        // Independent scalar divisions, without batch inversion or
+                        // a polynomial/interpolation assumption on values/claims.
+                        sum + weights[j] * (values[columns[j] as usize * height + row] - claims[j])
+                            / (x - points[j])
+                    })
+                })
+                .collect();
+            let sum =
+                OpeningQuotientSum::new(&values, 3, domain, &columns, &points, &claims, &weights)
+                    .unwrap();
+            let mut denominators = vec![F::ZERO; height];
+            let mut prefixes = vec![F::ZERO; height];
+            let mut actual = vec![element(99); height];
+            sum.write_into(&initial, &mut denominators, &mut prefixes, &mut actual)
+                .unwrap();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn opening_sums_match_scalar_divisions_in_every_coordinate() {
+        opening_sum_scalar_checks::<KoalaBear>();
+        opening_sum_scalar_checks::<crate::KoalaBearExt4>();
+        opening_sum_scalar_checks::<crate::KoalaBearExt8>();
+    }
+
+    #[test]
+    fn opening_sum_checks_all_descriptors_and_storage_before_writes() {
+        let domain = Domain::new(2, sample(3), 2).unwrap();
+        let values = [sample(1), sample(2), sample(3), sample(4)];
+        let initial = [sample(7); 2];
+        let claims = [sample(9); 2];
+        let weights = [E::ONE, E::ZERO];
+        let on_domain = domain.point(1).unwrap();
+        for (columns, points, expected) in [
+            ([0, 2], [E::ZERO, E::ZERO], Error::Coordinate),
+            ([0, 1], [E::ZERO, on_domain], Error::PointOnDomain),
+            ([0, 2], [E::ZERO, on_domain], Error::Coordinate),
+            ([0, 2], [on_domain, E::ZERO], Error::PointOnDomain),
+        ] {
+            let mut denominators = [sample(31); 2];
+            let mut prefixes = [sample(37); 2];
+            let mut destination = [sample(41); 2];
+            let result =
+                OpeningQuotientSum::new(&values, 2, domain, &columns, &points, &claims, &weights)
+                    .and_then(|sum| {
+                        sum.write_into(&initial, &mut denominators, &mut prefixes, &mut destination)
+                    });
+            assert_eq!(result, Err(expected));
+            assert_eq!(denominators, [sample(31); 2]);
+            assert_eq!(prefixes, [sample(37); 2]);
+            assert_eq!(destination, [sample(41); 2]);
+        }
+        let columns = [0, 1];
+        let points = [E::ZERO; 2];
+        let sum = OpeningQuotientSum::new(&values, 2, domain, &columns, &points, &claims, &weights)
+            .unwrap();
+        for short in 0..4 {
+            let mut denominators = [sample(31); 2];
+            let mut prefixes = [sample(37); 2];
+            let mut destination = [sample(41); 2];
+            let lengths: [usize; 4] = std::array::from_fn(|i| if i == short { 1 } else { 2 });
+            assert_eq!(
+                sum.write_into(
+                    &initial[..lengths[0]],
+                    &mut denominators[..lengths[1]],
+                    &mut prefixes[..lengths[2]],
+                    &mut destination[..lengths[3]]
+                ),
+                Err(if short == 0 || short == 3 {
+                    Error::OpeningShape
+                } else {
+                    Error::EvaluationCount
+                })
+            );
+            assert_eq!(denominators, [sample(31); 2]);
+            assert_eq!(prefixes, [sample(37); 2]);
+            assert_eq!(destination, [sample(41); 2]);
+        }
+        assert!(matches!(
+            OpeningQuotientSum::new(
+                &values,
+                usize::MAX,
+                domain,
+                &columns,
+                &points,
+                &claims,
+                &weights
+            ),
+            Err(Error::SizeOverflow)
+        ));
+        assert!(matches!(
+            OpeningQuotientSum::new(
+                &values[..3],
+                2,
+                domain,
+                &columns,
+                &points,
+                &claims,
+                &weights
+            ),
+            Err(Error::BatchShape)
+        ));
+        for short in 0..3 {
+            let lengths: [usize; 3] = std::array::from_fn(|i| if i == short { 1 } else { 2 });
+            assert!(matches!(
+                OpeningQuotientSum::new(
+                    &values,
+                    2,
+                    domain,
+                    &columns,
+                    &points[..lengths[0]],
+                    &claims[..lengths[1]],
+                    &weights[..lengths[2]]
+                ),
+                Err(Error::OpeningShape)
+            ));
+        }
+    }
+
     fn base_action_matches_embedding<F: ExtensionField<KoalaBear>>() {
         for log_n in 1..=6 {
             let n = 1 << log_n;

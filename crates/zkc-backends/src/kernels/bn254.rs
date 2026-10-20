@@ -2,6 +2,7 @@
 use crate::{
     Bn254Scalar as F, Policy, Result, Value, exhausted,
     kernels::arithmetic::reserve,
+    numerical::opening::{OpeningQuotientSumShape, column_index},
     numerical::{Call, coset::CosetBatchShape},
     refused,
     value::size,
@@ -42,6 +43,7 @@ pub(crate) fn apply(
                 | "poly.domain_points"
                 | "poly.even_odd_fold"
                 | "poly.opening_quotient"
+                | "poly.opening_quotient_sum"
         )
     {
         return Err(refused("kernel-operands"));
@@ -225,9 +227,101 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             }
             Value::Bn254Vector(out.into())
         }
+        "poly.opening_quotient_sum" => opening_quotient_sum(args, available, p)?,
         _ => return Err(refused("coset-operation")),
     };
     Ok(vec![result])
+}
+
+fn opening_quotient_sum(args: &[Value], available: usize, policy: &Policy) -> Result<Value> {
+    let [
+        Value::Bn254Vector(values),
+        Value::Index(width),
+        Value::Index(height),
+        Value::Bn254Field(shift),
+        Value::Indices(columns),
+        Value::Bn254Vector(points),
+        Value::Bn254Vector(claims),
+        Value::Bn254Vector(weights),
+        Value::Bn254Vector(initial),
+    ] = args
+    else {
+        return Err(refused("kernel-operands"));
+    };
+    let shape = OpeningQuotientSumShape::new(
+        values.len(),
+        usize::try_from(*width).map_err(|_| exhausted("size-overflow"))?,
+        usize::try_from(*height).map_err(|_| exhausted("size-overflow"))?,
+        columns.len(),
+        [points.len(), claims.len(), weights.len()],
+        initial.len(),
+    )?;
+    shape.admit_inputs(policy, std::mem::size_of::<F>())?;
+    let domain = if columns.is_empty() {
+        None
+    } else {
+        let domain = domain(shape.height, *shift, policy)?;
+        for (&column, &point) in columns.iter().zip(points.iter()) {
+            column_index(column, shape.width).ok_or_else(|| refused("coset-coordinate"))?;
+            if domain.evaluate_vanishing_polynomial(point).is_zero() {
+                return Err(refused("coset-opening-point"));
+            }
+        }
+        Some(domain)
+    };
+    let retained = shape.admit(policy, std::mem::size_of::<F>(), available)?;
+    let call = Call::new(policy, available);
+    call.work(shape.work()?)?;
+    let mut output = call.output(shape.height, F::zero(), retained)?;
+    if let Some(domain) = domain {
+        let mut denominators = call.scratch(shape.height, F::zero())?;
+        let mut prefixes = call.scratch(shape.height, F::zero())?;
+        output.as_mut_slice().copy_from_slice(initial);
+        for (j, &column) in columns.iter().enumerate() {
+            let column = usize::try_from(column).map_err(|_| refused("coset-coordinate"))?;
+            let offset = column
+                .checked_mul(shape.height)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            let end = offset
+                .checked_add(shape.height)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            let selected = &values[offset..end];
+            for (denominator, x) in denominators.as_mut().iter_mut().zip(domain.elements()) {
+                *denominator = x - points[j];
+            }
+            serial_batch_inverse_into(denominators.as_ref(), prefixes.as_mut(), |row, inverse| {
+                output.as_mut_slice()[row] += weights[j] * (selected[row] - claims[j]) * inverse;
+            })?;
+        }
+    } else {
+        output.as_mut_slice().copy_from_slice(initial);
+    }
+    output.finish(|values| Ok(Value::Bn254Vector(values.into())))
+}
+
+/// Serial Montgomery inversion with explicitly supplied prefix storage. Unlike
+/// Arkworks' allocating convenience routine, both arrays belong to Call and
+/// remain accounted for. No provider-private Vec or Rayon scratch is involved.
+fn serial_batch_inverse_into(
+    denominators: &[F],
+    prefixes: &mut [F],
+    mut finish: impl FnMut(usize, F),
+) -> Result<()> {
+    debug_assert_eq!(denominators.len(), prefixes.len());
+    let mut product = F::one();
+    for (prefix, denominator) in prefixes.iter_mut().zip(denominators) {
+        *prefix = product;
+        product *= denominator;
+    }
+    let mut inverse = product
+        .inverse()
+        .ok_or_else(|| refused("coset-opening-point"))?;
+    for (row, (prefix, denominator)) in prefixes.iter().zip(denominators).enumerate().rev() {
+        let denominator_inverse = *prefix * inverse;
+        inverse *= denominator;
+        finish(row, denominator_inverse);
+    }
+    Ok(())
 }
 
 /// Provider arithmetic only; the native adapter has checked geometry and owns
@@ -266,6 +360,244 @@ fn coset_evaluate_at_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn opening_args(height: usize) -> Vec<Value> {
+        vec![
+            Value::Bn254Vector(
+                (0..3 * height)
+                    .map(|i| F::from((11 * i + 1) as u64))
+                    .collect(),
+            ),
+            Value::Index(3),
+            Value::Index(height as u64),
+            Value::Bn254Field(F::from(7)),
+            Value::Indices(vec![2, 0, 2, 1].into()),
+            Value::Bn254Vector(vec![F::zero(), F::from(19), F::from(19), F::zero()].into()),
+            Value::Bn254Vector(vec![F::from(5), F::from(9), F::from(15), F::from(13)].into()),
+            Value::Bn254Vector(vec![F::from(7), F::zero(), F::from(11), F::from(17)].into()),
+            Value::Bn254Vector((0..height).map(|i| F::from((41 + i) as u64)).collect()),
+        ]
+    }
+
+    fn run_opening(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+        execute("poly.opening_quotient_sum", args, available, policy)
+    }
+
+    #[test]
+    fn opening_sum_matches_scalar_divisions_and_exact_managed_limits() {
+        for height in [1, 4, 16] {
+            let args = opening_args(height);
+            let aliases = args.clone();
+            let snapshots = [0, 5, 6, 7, 8].map(|i| vector(&args[i]).to_vec());
+            let d = domain(height, F::from(7), &Policy::default()).unwrap();
+            let values = vector(&args[0]);
+            let points = vector(&args[5]);
+            let claims = vector(&args[6]);
+            let weights = vector(&args[7]);
+            let initial = vector(&args[8]);
+            let expected: Vec<_> = (0..height)
+                .map(|row| {
+                    [2, 0, 2, 1]
+                        .iter()
+                        .enumerate()
+                        .fold(initial[row], |sum, (j, column)| {
+                            sum + weights[j] * (values[column * height + row] - claims[j])
+                                / (d.element(row) - points[j])
+                        })
+                })
+                .collect();
+            let shape =
+                OpeningQuotientSumShape::new(3 * height, 3, height, 4, [4; 3], height).unwrap();
+            let retained = size(height, 32).unwrap();
+            let managed = shape.managed_bytes(32).unwrap();
+            let work = shape.work().unwrap();
+            let exact = Policy {
+                max_numerical_work: work,
+                max_numerical_bytes: managed,
+                ..Policy::default()
+            };
+            let result = run_opening(&args, &exact, retained).unwrap();
+            assert_eq!(result.len(), 1);
+            assert_eq!(vector(&result[0]), expected);
+            assert_ne!(vector(&result[0]).as_ptr(), initial.as_ptr());
+            for (limited, available, expected) in [
+                (
+                    Policy {
+                        max_numerical_work: work - 1,
+                        ..exact
+                    },
+                    retained,
+                    "exhausted:numerical-work",
+                ),
+                (
+                    Policy {
+                        max_numerical_bytes: managed - 1,
+                        ..exact
+                    },
+                    retained,
+                    "exhausted:numerical-bytes",
+                ),
+                (exact, retained - 1, "exhausted:output-bytes"),
+            ] {
+                assert_eq!(
+                    run_opening(&args, &limited, available).unwrap_err().code,
+                    expected
+                );
+            }
+            for (i, snapshot) in [0, 5, 6, 7, 8].into_iter().zip(snapshots) {
+                assert_eq!(vector(&args[i]), snapshot);
+                assert_eq!(vector(&aliases[i]), snapshot);
+            }
+        }
+    }
+
+    #[test]
+    fn opening_sum_validates_every_descriptor_before_admission_or_mutation() {
+        let original = opening_args(4);
+        let snapshots = [0, 6, 8].map(|i| vector(&original[i]).to_vec());
+        let on_domain = domain(4, F::from(7), &Policy::default())
+            .unwrap()
+            .element(3);
+        let policy = Policy {
+            max_numerical_work: 0,
+            max_numerical_bytes: 0,
+            ..Policy::default()
+        };
+        for (columns, points, expected) in [
+            (
+                vec![2, 0, 2, 3],
+                vec![F::zero(); 4],
+                "refused:coset-coordinate",
+            ),
+            (
+                vec![2, 0, 2, 1],
+                vec![F::zero(), F::zero(), F::zero(), on_domain],
+                "refused:coset-opening-point",
+            ),
+            (
+                vec![2, 0, 2, 3],
+                vec![on_domain, F::zero(), F::zero(), F::zero()],
+                "refused:coset-opening-point",
+            ),
+        ] {
+            let mut args = original.clone();
+            args[4] = Value::Indices(columns.into());
+            args[5] = Value::Bn254Vector(points.into());
+            args[7] = Value::Bn254Vector(vec![F::zero(); 4].into());
+            assert_eq!(run_opening(&args, &policy, 0).unwrap_err().code, expected);
+            for (i, snapshot) in [0, 6, 8].into_iter().zip(&snapshots) {
+                assert_eq!(vector(&args[i]), snapshot.as_slice());
+            }
+        }
+    }
+
+    #[test]
+    fn opening_sum_checks_exact_operands_shapes_and_empty_domains() {
+        let policy = Policy::default();
+        let original = opening_args(4);
+        let mut extra = original.clone();
+        extra.push(Value::Index(0));
+        for args in [&original[..8], extra.as_slice()] {
+            assert_eq!(
+                run_opening(args, &policy, usize::MAX).unwrap_err().code,
+                "refused:kernel-operands"
+            );
+        }
+        for i in 0..9 {
+            let mut args = original.clone();
+            args[i] = Value::KoalaBearField(crate::KoalaBear::default());
+            assert_eq!(
+                run_opening(&args, &policy, usize::MAX).unwrap_err().code,
+                "refused:kernel-operands"
+            );
+        }
+        for (index, replacement, expected) in [
+            (
+                0,
+                Value::Bn254Vector(vec![F::one(); 11].into()),
+                "refused:coset-batch-shape",
+            ),
+            (
+                5,
+                Value::Bn254Vector(vec![F::zero(); 3].into()),
+                "refused:coset-opening-shape",
+            ),
+            (
+                6,
+                Value::Bn254Vector(vec![F::zero(); 3].into()),
+                "refused:coset-opening-shape",
+            ),
+            (
+                7,
+                Value::Bn254Vector(vec![F::zero(); 3].into()),
+                "refused:coset-opening-shape",
+            ),
+            (
+                8,
+                Value::Bn254Vector(vec![F::zero(); 3].into()),
+                "refused:coset-opening-shape",
+            ),
+            (1, Value::Index(u64::MAX), "exhausted:size-overflow"),
+            (3, Value::Bn254Field(F::zero()), "refused:coset-zero-shift"),
+        ] {
+            let mut args = original.clone();
+            args[index] = replacement;
+            assert_eq!(
+                run_opening(&args, &policy, usize::MAX).unwrap_err().code,
+                expected
+            );
+        }
+        for (width, height) in [(0, 0), (usize::MAX, 0), (0, 3), (2, 3)] {
+            let mut args = vec![
+                Value::Bn254Vector(vec![F::one(); width * height].into()),
+                Value::Index(width as u64),
+                Value::Index(height as u64),
+                Value::Bn254Field(F::zero()),
+                Value::Indices(vec![].into()),
+                Value::Bn254Vector(vec![].into()),
+                Value::Bn254Vector(vec![].into()),
+                Value::Bn254Vector(vec![].into()),
+                Value::Bn254Vector(vec![F::from(7); height].into()),
+            ];
+            let result = run_opening(&args, &policy, usize::MAX).unwrap();
+            assert_eq!(vector(&result[0]), vec![F::from(7); height]);
+            if height > 0 {
+                assert_ne!(vector(&result[0]).as_ptr(), vector(&args[8]).as_ptr());
+            }
+            args[8] = Value::Bn254Vector(vec![F::one(); height + 1].into());
+            assert_eq!(
+                run_opening(&args, &policy, usize::MAX).unwrap_err().code,
+                "refused:coset-opening-shape"
+            );
+        }
+        for height in [0, 3] {
+            let mut args = original.clone();
+            args[0] = Value::Bn254Vector(vec![F::one(); 3 * height].into());
+            args[2] = Value::Index(height as u64);
+            args[8] = Value::Bn254Vector(vec![F::one(); height].into());
+            assert_eq!(
+                run_opening(&args, &policy, usize::MAX).unwrap_err().code,
+                "refused:coset-size"
+            );
+        }
+        let mut no_columns = original.clone();
+        no_columns[0] = Value::Bn254Vector(vec![].into());
+        no_columns[1] = Value::Index(0);
+        assert_eq!(
+            run_opening(&no_columns, &policy, usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:coset-coordinate"
+        );
+        let mut args = original;
+        args[0] = args[8].clone();
+        args[1] = Value::Index(1);
+        args[4] = Value::Indices(vec![0; 4].into());
+        let snapshot = vector(&args[8]).to_vec();
+        assert!(run_opening(&args, &policy, usize::MAX).is_ok());
+        assert_eq!(vector(&args[0]), snapshot);
+        assert_eq!(vector(&args[8]), snapshot);
+    }
 
     fn point_args(values: Vec<F>, width: u64, height: u64, shift: F, point: F) -> Vec<Value> {
         vec![

@@ -1,6 +1,6 @@
 module zkc::opening;
 use zkc::vector as vector;
-use zkc::vector::{Vector, length, empty, append, get, accumulate};
+use zkc::vector::{Vector, length, empty, append, get};
 use zkc::indices::{Indices};
 use zkc::indices as indices;
 use zkc::coset as coset;
@@ -114,16 +114,14 @@ pub fn deep_columns<F: Field>(columns: ColumnBatch<F>, input: BoundOpenings<F>,
   require coset::same_domain(initial.geometry, input.geometry);
   require coset::batch_width(columns) == input.width;
   let selected = input.selected;
-  let values = input.claimed;
-  let mut result = initial.values;
-  let mut weights = initial.weights;
-  for opening in 0..indices::length(selected) {
-    let column = coset::batch_column(columns, indices::get(selected, opening));
-    let reduced = coset::opening_quotient(column, coset::domain_shift(input.geometry),
-      get(input.points, opening), get(values, opening));
-    result = accumulate(result, reduced, weights.next);
-    weights = advance(weights);
-  }
+  let count = indices::length(selected);
+  let coefficients = vector::scale(vector::geometric(initial.weights.ratio, count),
+    initial.weights.next);
+  let next_weight = if count == 0 { initial.weights.next }
+    else { get(coefficients, count - 1) * initial.weights.ratio };
+  let weights = GeometricWeights<F> { ratio: initial.weights.ratio, next: next_weight };
+  let result = coset::opening_quotient_sum(columns, selected, input.points,
+    input.claimed, coefficients, initial.values);
   return VectorAccumulator<F> { geometry: input.geometry, weights: weights, values: result };
 }
 

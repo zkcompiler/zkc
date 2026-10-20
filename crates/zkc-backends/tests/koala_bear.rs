@@ -273,7 +273,9 @@ fn scalar_arithmetic_matches_integer_modular_reference_and_zero_inverse_refuses(
 #[test]
 fn packed_product_and_dot_match_integer_reference_including_suffixes() {
     #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
-    assert!(plonky3::PACKING_WIDTH >= 8);
+    const {
+        assert!(plonky3::PACKING_WIDTH >= 8)
+    };
     let p = u64::from(plonky3::MODULUS);
     for n in [0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 65, 257] {
         let a = (0..n)

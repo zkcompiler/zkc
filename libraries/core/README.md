@@ -53,6 +53,13 @@ the next weight. `QueryRow` fixes a coset, a bounded query index and an exact ro
 width; its point is derived from this context. `ScalarAccumulator` carries the
 matching coset and query index with the same weight recurrence.
 
+`coset::opening_quotient_sum` combines selected columns with explicit points,
+claims, weights and an initial vector. `opening::deep_columns` uses it with the
+accumulator's geometric weights, borrowing columns and constructing one private
+result. Zero weights still require off-domain points. This authored bulk
+operation has its own resource profile; it preserves the mathematical result,
+not the exhaustion points of separate quotient and accumulation calls.
+
 ```text
 let geometry = coset::coset_domain(shift, size);
 let columns = coset::column_batch(geometry, width, data);
