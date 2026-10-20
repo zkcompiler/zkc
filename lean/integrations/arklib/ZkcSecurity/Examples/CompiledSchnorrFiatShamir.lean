@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Construction.SchnorrProof
 public import ZkcExamples.Construction.SchnorrProofBinding
 public import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
+public import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
 public import ZkcSecurity.Oracle.Encoding
 public import VCVio.OracleComp.SimSemantics.StateT.StateProjection
 public import VCVio.OracleComp.SimSemantics.QueryImpl.Compose
@@ -36,9 +37,13 @@ Named assumptions, beyond the checked equations:
 * Native correctness. The export reproduces the checked candidate, and native
   field, group and transcript kernels implement their mathematical meanings.
 
-The proof routes every history injectively to an oracle key of VCVio's
-Fiat–Shamir transform (`route`), shows that the routed experiment is exactly
-VCVio's (`run_eq`), and applies its replay extraction.
+The module routes every history injectively to an oracle key of VCVio's
+Fiat–Shamir transform (`route`) and shows that the routed experiment is exactly
+VCVio's (`run_eq`). The theorem itself is the registered knowledge endpoint
+applied to the subject's evidence (`ZkcSecurity.Examples.Subjects.Schnorr`):
+this module's routing, routed prover, verifier and experiment are those of the
+Schnorr family package at the subject's checked context (`route_eq_shape`,
+`reduce_eq_shape`, `verify_eq_evidence`, `acceptance_eq_endpoint`).
 -/
 
 namespace ZkcSecurity.Examples.CompiledSchnorrFiatShamir
@@ -327,31 +332,6 @@ theorem run_eq (prover : Prover F G) (application : String) (base key : G) :
               historyOracle, QueryImpl.withCaching_run_none _ viewed]
             simp [map_eq_bind_pure_comp, view_cacheQuery route route_injective]
 
-omit [Field F] [DecidableEq F] [Module F G] [DecidableEq G] [SampleableType F]
-  [SampleableType G] in
-/-- Routing issues exactly one Fiat–Shamir oracle query per history query and no
-other oracle query. -/
-theorem reduce_bound (prover : Prover F G) (key : G) (message : History F G) (budget : Nat)
-    (bounded : IsQueryBoundP (prover key message) (· matches .inr _) budget) :
-    _root_.FiatShamir.nmaHashQueryBound (M := History F G ⊕ History F G)
-      (reduce prover key (.inl message)) budget := by
-  unfold _root_.FiatShamir.nmaHashQueryBound reduce
-  refine IsQueryBoundP.simulateQ_of_step bounded ?_ ?_
-  · intro query oracle
-    cases query with
-    | inl n => cases oracle
-    | inr history =>
-        change IsQueryBoundP (liftM ((KeySpec F G).query (.inr (route history))) :
-          OracleComp (KeySpec F G) F) _ 1
-        simp
-  · intro query notOracle
-    cases query with
-    | inl n =>
-        change IsQueryBoundP (liftM ((KeySpec F G).query (.inl n)) :
-          OracleComp (KeySpec F G) (Fin (n + 1))) _ 0
-        simp
-    | inr history => exact absurd rfl notOracle
-
 local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
   fun _ => ⊤
 local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
@@ -359,10 +339,70 @@ local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrapped
 noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
   IsUniformMeasureSpec.ofFiniteNonempty _
 
+omit [DecidableEq F] in
+/-- The commitment events and challenge occurrence of the Schnorr family's
+transcript shape, at the checked context of the subject's evidence
+(`Subjects.Schnorr.family`), are this module's. -/
+theorem shape_events (commitment : G) :
+    (Subjects.Schnorr.family (F := F) (G := G)).shape.commitments commitment ++
+        [(Subjects.Schnorr.family (F := F) (G := G)).shape.challenge] =
+      [.message commitmentOrigin (.group groupDomain commitment), .challenge challengeOrigin] :=
+  rfl
+
+/-- This module's challenge keys are the family shape's. -/
+theorem challengeKey_eq_shape (history : History F G) :
+    challengeKey history = (Subjects.Schnorr.family (F := F) (G := G)).shape.challengeKey history := by
+  cases old : challengeKey history with
+  | some key =>
+      obtain ⟨prior, commitment⟩ := key
+      rw [challengeKey_some old, ← shape_events, ← List.append_assoc,
+        ZkcSecurity.Endpoint.Sigma.Shape.challengeKey_append]
+  | none =>
+      cases new : (Subjects.Schnorr.family (F := F) (G := G)).shape.challengeKey history with
+      | none => rfl
+      | some key =>
+          obtain ⟨prior, commitment⟩ := key
+          rw [ZkcSecurity.Endpoint.Sigma.Shape.challengeKey_some _ new, List.append_assoc,
+            shape_events, challengeKey_append] at old
+          cases old
+
+/-- This module's routing is the family shape's. -/
+theorem route_eq_shape : route (F := F) (G := G) = (Subjects.Schnorr.family (F := F) (G := G)).shape.route := by
+  funext history
+  unfold route ZkcSecurity.Endpoint.Sigma.Shape.route
+  rw [challengeKey_eq_shape]
+  cases (Subjects.Schnorr.family (F := F) (G := G)).shape.challengeKey history <;> rfl
+
+/-- This module's routed prover is the family shape's. -/
+theorem reduce_eq_shape (prover : Prover F G) :
+    reduce prover = (Subjects.Schnorr.family (F := F) (G := G)).shape.reduce prover := by
+  unfold reduce ZkcSecurity.Endpoint.Sigma.Shape.reduce routeQueries
+    ZkcSecurity.Endpoint.Sigma.Shape.routeQueries
+  rw [route_eq_shape]
+
+/-- The subject's evidence verifies with this module's compiled verifier. -/
+theorem verify_eq_evidence (application : String) (base key : G) (proof : G × F) :
+    (Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning PUnit.unit).verify
+        (.cons base (.cons key .nil)) (initial application base key) proof =
+      verify application base key proof := by
+  unfold ZkcSecurity.Endpoint.KnowledgeEvidence.verify verify ZkcSecurity.Endpoint.Compiled.verifier
+  rw [Functor.map_map]
+  rfl
+
 /-- Probability that the compiled verifier accepts the prover's proof. -/
 noncomputable def acceptance (prover : Prover F G) (application : String) (base key : G) :
     ENNReal :=
   Pr{let result ← run prover application base key}[result = true]
+
+/-- The knowledge experiment of the subject's evidence is this module's. -/
+theorem acceptance_eq_endpoint (prover : Prover F G) (application : String) (base key : G) :
+    (Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning PUnit.unit).acceptance prover
+        (.cons base (.cons key .nil)) (initial application base key) =
+      acceptance prover application base key := by
+  unfold ZkcSecurity.Endpoint.KnowledgeEvidence.acceptance ZkcSecurity.Endpoint.Sigma.acceptance acceptance
+    ZkcSecurity.Endpoint.Sigma.run run
+  simp only [verify_eq_evidence]
+  rfl
 
 variable [Fintype F] [Inhabited F]
 
@@ -383,17 +423,13 @@ theorem knowledge_soundness (prover : Prover F G) (application : String) (base k
           (generable base) (History F G ⊕ History F G) (reduce prover)
           (.inl (initial application base key)) budget key}[
         ZkcExamples.Construction.SchnorrProofBinding.Relation base key witness] := by
-  have upstream := _root_.FiatShamir.knowledgeExtractor_success (_root_.Schnorr.sigma F G base)
-    (generable base) (History F G ⊕ History F G) (_root_.Schnorr.sigma_speciallySound F G base)
-    (reduce prover) key (.inl (initial application base key)) budget
-    (reduce_bound prover key _ budget bounded)
-  have same : acceptance prover application base key =
-      _root_.FiatShamir.knowledgeAcceptance (_root_.Schnorr.sigma F G base) (generable base)
-        (History F G ⊕ History F G) (reduce prover) key (.inl (initial application base key)) := by
-    unfold acceptance _root_.FiatShamir.knowledgeAcceptance
-    rw [run_eq]
-  simp only [same]
-  simpa only [ZkcExamples.Construction.SchnorrProofBinding.relation_eq] using upstream
+  intro accepting
+  have endpoint := ZkcSecurity.Endpoint.KnowledgeEvidence.knowledge
+    (Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning PUnit.unit)
+    (.cons base (.cons key .nil)) (initial application base key) prover budget bounded
+  rw [acceptance_eq_endpoint] at endpoint
+  rw [reduce_eq_shape]
+  exact endpoint
 
 end Experiment
 

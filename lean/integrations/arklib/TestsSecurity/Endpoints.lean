@@ -1,15 +1,11 @@
 import ZkcSecurity.Examples.Subjects.Schnorr.Claims
 import ZkcSecurity.Examples.Subjects.Guess.Claims
 import ZkcSecurity.Examples.Subjects.Sumcheck.Claims
-import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 
 /-! Controls for the endpoints and the subjects' evidence.
 
-- **Schnorr.** The subject's evidence runs the compiled verifier of
-  `CompiledSchnorrFiatShamir` (`schnorr_verify_eq`), so the registered claim is
-  about that compiled verifier.
 - **Guessing Entry.** The subject's evidence at the fixed form gives back
   `CompiledGuessFiatShamir.soundness` for that theorem's verifier
   (`guess_verify_eq`, `guess_fixed_soundness`), a bound attained at zero queries
@@ -39,22 +35,6 @@ open ZkcExamples.Construction
 open scoped ENNReal NNReal
 
 set_option smartUnfolding false
-
-section Schnorr
-variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-  [SampleableType F] [SampleableType G]
-
-/-- The subject's evidence runs the compiled verifier of `CompiledSchnorrFiatShamir`. -/
-theorem schnorr_verify_eq (application : String) (base key : G) (proof : G × F) :
-    (ZkcSecurity.Examples.Subjects.Schnorr.knowledge .idealMeaning PUnit.unit).verify
-        (.cons base (.cons key .nil))
-        (ZkcSecurity.Examples.CompiledSchnorrFiatShamir.initial application base key) proof =
-      ZkcSecurity.Examples.CompiledSchnorrFiatShamir.verify application base key proof := by
-  unfold KnowledgeEvidence.verify ZkcSecurity.Examples.CompiledSchnorrFiatShamir.verify Compiled.verifier
-  rw [Functor.map_map]
-  rfl
-
-end Schnorr
 
 section Guess
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]

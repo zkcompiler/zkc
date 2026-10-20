@@ -219,8 +219,13 @@ injective. `route_verify` shows that the routed compiled verifier is VCVio's
 Fiat–Shamir verifier for the Schnorr Sigma protocol, and `run_eq` that the whole
 experiment equals VCVio's verification run for the routed prover, because the
 routed cache restricted to histories is the history cache. `knowledge_soundness`
-then applies `FiatShamir.knowledgeExtractor_success`: for every prover whose
-oracle queries number at most `Q`,
+is the registered knowledge endpoint applied to the subject's evidence
+([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)):
+this module's routing, routed prover, compiled verifier and experiment are those
+of the Schnorr family package at the subject's checked context (`route_eq_shape`,
+`reduce_eq_shape`, `verify_eq_evidence`, `acceptance_eq_endpoint`), and the
+endpoint's Sigma bridge applies `FiatShamir.knowledgeExtractor_success`: for
+every prover whose oracle queries number at most `Q`,
 
 ```text
 acc * (acc / (Q + 1) - 1 / |F|) <= Pr[extractor finds w with key = w • base]

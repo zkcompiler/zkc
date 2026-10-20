@@ -1077,11 +1077,14 @@ statement, and its validator is doomed by the terminal's shape check or by the
 refusal before any action. The guessing fixture retains no target clause, so its
 claim is the imported ArkLib verifier's language, which is empty.
 
-`TestsSecurity.Endpoints` relates the evidence to the earlier compiled theorems
-and holds the Lean controls:
+`CompiledSchnorrFiatShamir.knowledge_soundness` is the knowledge endpoint
+applied to the Schnorr subject's evidence: the module's routing, routed prover,
+compiled verifier and experiment are those of the Schnorr family package
+(`route_eq_shape`, `reduce_eq_shape`, `verify_eq_evidence`,
+`acceptance_eq_endpoint`), so its statement is unchanged and its proof is the
+endpoint's. `TestsSecurity.Endpoints` relates the evidence to the other earlier
+compiled theorems and holds the Lean controls:
 
-- **Schnorr.** The subject's evidence runs the compiled verifier of
-  `CompiledSchnorrFiatShamir` (`schnorr_verify_eq`).
 - **Guessing Entry.** The generated fixed-statement application gives back the
   bound of `CompiledGuessFiatShamir.soundness` for that theorem's verifier
   (`guess_fixed_soundness`), attained at zero queries. Statement determination
