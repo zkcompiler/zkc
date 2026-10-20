@@ -95,6 +95,10 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `coset_batch` | Matched per-column and library extension; KB/Ext4/Ext8, widths 1/4/16/64, separate height and row-layout controls | Independent integer transforms; every coordinate checked; row-layout cases include both transposes and SDK/run includes Host and equality costs |
 | `coset_point` | Direct opening claims, repeated native interpolation/evaluation, and coefficient reuse for multiple points | Full point-major output check; on/off-domain controls; SDK timing includes setup, validation and output construction |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
+| `kzg` | Generic KZG evaluation/quotient on checked roots-of-unity evaluations; on/off-domain, BLS Fr sizes 1/8/64/256/1,024, a bit-reversed control and KoalaBear size 32 | Independent coefficients, Horner and synthetic division; every quotient entry checked, including the derivative at an on-domain point; no pairing or commitment |
+| `curve_family` | BLS12-381 G1/G2, Ristretto and prime Edwards; fixed-base source multiplication, shared-scalar/per-point scaling and MSM | Python scalar expectations plus shared-provider group-law self-consistency; includes point construction and checks, without an independent curve-coordinate oracle |
+| `sparse_matrix` | Controlled dimensions/nnz and uniform, clustered or empty-row distributions; forward and transpose multiplication | Independent Python contractions, every output checked; no full R1CS proof or enlarged capacities |
+| `opening_quotient` | Current `deep_columns` versus explicit per-opening quotient/accumulate; KB/Ext4/Ext8, selected columns, repeated/distinct off-domain points | Identical inputs; independent coefficient/Horner/quotient expectations, all accumulated coordinates and final weight checked; checked setup and output construction inside SDK/run |
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
 | `merkle` | Poseidon2 base-row trees; separate height/row-width sweeps, single and pruned multi-openings | Independent expected rows and changed-row rejection; root/path authentication shares the provider |
@@ -167,6 +171,76 @@ Default capacities stay unchanged. Generator tests check arithmetic and input
 sizes; compilation, lowered-IR inspection and native resource admission are
 separate validation steps. Production-scale traces, Host-limit stress and
 larger multi-table scaling remain additional experiments.
+
+### Public algebra library panels
+
+[`library_algebra.py`](bench/library_algebra.py) adds 28 `kzg`, 24
+`curve_family`, 22 `sparse_matrix` and 48 `opening_quotient` cases. These are
+selected panels, without aggregate weights. All earlier cases and `SMOKE`
+remain unchanged. Select these families with `--suite kzg`, `--suite curve_family`,
+`--suite sparse_matrix` or `--suite opening_quotient`.
+
+KZG calls the actual [generic library](../../libraries/commitments/kzg/README.md),
+separately measuring `evaluate` and `quotient`. Every call constructs an admitted
+`EvaluationDomain` using `two_adic` or `two_adic_bit_reversed` and an
+`Evaluations` view with equal extent.
+Both constructors execute inside the SDK call. The off-domain point is 13;
+the on-domain point is the middle stored root. BLS Fr sizes are 1, 8, 64, 256 and
+1,024; a size-256 bit-reversed panel checks stored-root order, and a KoalaBear
+size-32 control exercises the generic field boundary. Dense
+coefficients independently generate inputs and Horner claims. Synthetic division
+generates quotient coefficients, then evaluates them at every stored root,
+including the derivative entry on domain. Quotient cases check both the returned
+value and every quotient entry. This is evaluation/quotient algebra, without
+commitments, trusted setup, pairings or a KZG security claim.
+
+Curve cases cover `bls12-381.g1`, `bls12-381.g2`, `ristretto255.group` and
+`edwards25519.prime`, using each group's associated scalar field. All four
+forms use 17 points in each group; BLS G1 and Edwards add singleton and 64-point
+shared-scalar/MSM controls. Fixed-base means an authored `curve::collect` of
+generator multiplications; it selects no dedicated fixed-base native kernel.
+Shared-scalar uses `curve::scale`, per-point uses `curve::scale_each`, and MSM
+uses `curve::msm`. Points are generated inside the call, with zero/unit factors
+in the larger cases. Python computes the expected scalar of every result;
+source checks each point through a group-law identity involving the generator.
+These are explicitly **shared-provider self-consistency** oracles, without
+independent curve coordinates, timing benefits or security claims. Ristretto and
+Edwards remain distinct nominal groups despite sharing a scalar field.
+
+Sparse cases hold exact dimensions and nonzero-entry count fixed while varying
+distribution. The matched shapes `(rows, columns, nnz)` are `(17,31,68)`,
+`(128,257,512)` and `(257,33,512)`. Uniform occupancy balances row counts;
+clustered occupancy fills contiguous hot row/column blocks first; empty-row
+occupancy uses only even rows. Coordinates are unique and sorted, and every
+stored coefficient is nonzero. Each shape/distribution has forward and transpose
+controls through the public matrix APIs. An all-zero `(17,31,0)` pair and a
+uniform `(128,257,1024)` pair separate empty input and nnz growth from dimensions.
+Python contractions check every output entry, including zeros.
+
+Opening cases use current checked coset, column-batch, opening-descriptor,
+bound-opening and accumulator APIs. The eight `(height, width, openings, points)`
+shapes are `(8,1,1,repeated)`, `(32,4,4,repeated)`, `(32,4,4,distinct)`,
+`(128,4,4,distinct)`, `(32,8,6,distinct)`, `(8,4,0,repeated)`,
+`(1024,4,8,distinct)` and `(4096,1,8,distinct)`, each over
+KB, Ext4 and Ext8 with matched `library`/`reference` forms. Selected columns use
+an explicit deterministic ordering; point rotations are all zero or successive
+distinct rotations. All points lie outside the evaluation coset. Nonzero dense
+initial values, first weight and ratio exercise accumulation and final-weight
+progression. The reference explicitly loops over `coset::opening_quotient` and
+`vector::accumulate`; the library calls `opening::deep_columns`. Both construct
+the checked views inside the SDK call and compare every result coordinate plus
+the final weight. The library uses one private weighted-quotient result; the
+reference retains per-opening intermediates. The panel includes no
+protocol-specific kernel or quotient-coefficient splitting.
+
+All Python oracles run outside the SDK timer. They load no external data or
+oracle files. The scheduler captures the executing generator and arithmetic
+module, generated inputs, and transitive library modules/manifests from the
+selected `--source` root. Incorrect controls change one expected field coordinate
+and preserve typed inputs and lengths. The panels stay below the default Host
+input/collection ceilings without capacity overrides. Generator checks establish
+bounded input sizes and arithmetic; real compilation and native resource
+admission remain separate checks required before publishing measurements.
 
 ### Hash, commitment and input controls
 
@@ -418,6 +492,7 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 cargo test --locked -p zkc-benchmarks
 uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
   common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
+  common/tests/harness/test_benchmark_library_algebra.py \
   common/tests/harness/test_benchmark_execution.py \
   common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py

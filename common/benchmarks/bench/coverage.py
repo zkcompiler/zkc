@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 
 from . import algebra as a
-from . import commitments, expressions, library_cases, operations, programs, stark
+from . import commitments, expressions, library_algebra, library_cases, operations, programs, stark
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,8 @@ class Case:
 
     def generate(self, root, directory, statement=0, *, timeout=300):
         shape = self.shape | {'statement': statement}
+        if self.name in ('kzg', 'curve_family', 'sparse_matrix', 'opening_quotient'):
+            return getattr(library_algebra, self.name)(shape, root=root)
         if self.name == 'machine':
             return library_cases.machine(root, shape, directory, timeout=timeout)
         if self.name == 'bulletproofs':
@@ -232,6 +234,55 @@ def cases():
                 {'field': 'koala-bear', 'elements': n, 'operation': operation, 'input_path': 'json-host-run'},
                 'operation', ('typed vector input', operation, 'scalar equality'),
                 'Matched inputs across length/sum, linear Python expectations, default capacities. Decode and SDK/Host boundaries stay separate; no transport-only timing.')
+    # Bounded public-library panels. Existing cases and SMOKE stay fixed.
+    kzg_panel = [('fr', n, 'natural') for n in (1, 8, 64, 256, 1024)]
+    kzg_panel += [('kb', 32, 'natural'), ('fr', 256, 'bit-reversed')]
+    for short, n, order in kzg_panel:
+        for kind in ('on-domain', 'off-domain'):
+            for operation in ('evaluate', 'quotient'):
+                suffix = '-bit-reversed' if order == 'bit-reversed' else ''
+                add(f'kzg-{short}-{operation}-{kind}-{n}{suffix}', 'kzg',
+                    {'field': fields[short], 'elements': n, 'operation': operation,
+                     'point_kind': kind, 'order': order},
+                    'composition', ('checked evaluation domain', 'generic KZG '+operation, kind),
+                    'Actual commitments/kzg library; independent coefficient/Horner/quotient oracle and full result check. '
+                    'SDK/run includes checked-carrier setup and validation; no commitment, pairing or KZG security claim.')
+    curve_panel = [(curve, 17, form) for curve in library_algebra.CURVES
+                   for form in ('fixed-base', 'shared-scalar', 'per-point', 'msm')]
+    curve_panel += [(curve, n, form) for curve in ('bls-g1', 'edwards') for n in (1, 64)
+                    for form in ('shared-scalar', 'msm')]
+    for curve, n, form in curve_panel:
+        group, field = library_algebra.CURVES[curve]
+        add(f'curve-family-{curve}-{form}-{n}', 'curve_family',
+            {'curve': curve, 'group': group, 'field': field, 'elements': n, 'form': form},
+            'operation', ('point construction', form, 'per-result group-law validation'),
+            'Shared-provider group-law self-consistency with Python scalar expectations; not independent curve coordinates. '
+            'Fixed-base is authored generator multiplication. SDK/run includes setup and checking; no timing or security claim.')
+    sparse_panel = [(rows, columns, nnz, distribution)
+                    for rows, columns, nnz in ((17, 31, 68), (128, 257, 512), (257, 33, 512))
+                    for distribution in ('uniform', 'clustered', 'empty-rows')]
+    sparse_panel += [(17, 31, 0, 'uniform'), (128, 257, 1024, 'uniform')]
+    for rows, columns, nnz, distribution in sparse_panel:
+        for direction in ('forward', 'transpose'):
+            add(f'sparse-matrix-{rows}x{columns}-nnz{nnz}-{distribution}-{direction}', 'sparse_matrix',
+                {'rows': rows, 'columns': columns, 'nnz': nnz, 'distribution': distribution,
+                 'direction': direction, 'field': 'bls12-381.fr'},
+                'operation', ('typed sparse matrix', direction+' contraction', distribution),
+                'Exact nnz and dimensions, unique nonzero entries; independent integer oracle checks all rows/columns. '
+                'Matched distribution and direction controls; SDK/run includes typed admission and equality, default capacities.')
+    opening_panel = [(8, 1, 1, 'repeated'), (32, 4, 4, 'repeated'), (32, 4, 4, 'distinct'),
+                     (128, 4, 4, 'distinct'), (32, 8, 6, 'distinct'), (8, 4, 0, 'repeated'),
+                     (1024, 4, 8, 'distinct'), (4096, 1, 8, 'distinct')]
+    for degree in (1, 4, 8):
+        for height, width, count, kind in opening_panel:
+            for form in ('library', 'reference'):
+                add(f'opening-quotient-ext{degree}-h{height}-w{width}-o{count}-{kind}-{form}',
+                    'opening_quotient', {'extension_degree': degree, 'height': height, 'width': width,
+                                         'openings': count, 'point_kind': kind, 'form': form},
+                    'composition', ('checked coset/openings', 'weighted quotient sum', form, kind+' off-domain points'),
+                    'Current deep_columns versus authored per-opening quotient+accumulate; identical inputs and nonzero initial state. '
+                    'Independent coefficient/Horner/synthetic-division oracle checks every coordinate and final weight; '
+                    'SDK/run includes checked setup, validation and output construction; no performance/security claim.')
     return result
 
 
