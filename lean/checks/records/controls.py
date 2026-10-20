@@ -280,8 +280,13 @@ def run():
                mentions(elsewhere, "is declared in Sample.Elsewhere"), elsewhere)
         manifest, folder = subject(fresh("reused"))
         reused = reports.build(manifest, records(), evidence_directory=folder, reused_records="saved-records")
-        expect("report-reused-records", reused["outcome"] == "unresolved" and
-               mentions(reused, "the declaration records were reused"), reused)
+        row = reports.render_subjects([reused]).splitlines()[-1]
+        expect("report-reused-records", reused["outcome"] == "unresolved" and reused["claims"] and
+               all(item["outcome"] == "unresolved" and
+                   any("the declaration records were reused" in reason for reason in item["reasons"])
+                   for item in reused["claims"]) and
+               "unresolved: the declaration records were reused" in row and "established" not in row,
+               reused)
         unbuilt = report(fresh("unbuilt"), records(), claim_application=False)
         expect("report-without-claim-application", unbuilt["outcome"] == "unresolved" and
                mentions(unbuilt, "no accepted claim-application check"), unbuilt)

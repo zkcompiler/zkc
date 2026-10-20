@@ -477,7 +477,8 @@ def evidence_check(section, prop, family, records, registry):
     return facts, found + named, discharged, reasons
 
 
-def claim(manifest, prop, records, registry, evidence_validation, connected_reasons, evidence=None):
+def claim(manifest, prop, records, registry, evidence_validation, connected_reasons, evidence=None,
+          reused_records=None):
     section = manifest.get("claims") or {}
     endpoint, statement = section.get("endpoint"), section.get("statement")
     family = manifest.get("family") or {}
@@ -513,6 +514,8 @@ def claim(manifest, prop, records, registry, evidence_validation, connected_reas
             reasons.append(f"requested assumption {identifier} is not a registry identifier")
     names = claim_names(manifest)
     reasons += join_reasons(manifest, names, evidence, records)
+    if reused_records is not None:
+        reasons.append(reused_reason(reused_records))
     models = []
     for name in (theorem, names["application"], names["instance"]):
         record = records.get(name) if name else None
@@ -569,6 +572,15 @@ def context(manifest, ledger, records, registry):
     return rows
 
 
+def reused_reason(directory):
+    """Records carry declaration hashes but no identity of the sources they were
+    emitted from, so records reused from a saved directory are not tied to the
+    sources the pipeline validated. The report and every claim it holds are then
+    unresolved."""
+    return (f"the declaration records were reused from {directory}, not emitted from this checkout, so they are "
+            "not tied to the sources the pipeline validated")
+
+
 def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
     manifest = load_manifest(manifest_path)
     entries, endpoints = records.registry()
@@ -581,14 +593,11 @@ def build(manifest_path, records, ledger=None, evidence_directory=None, reused_r
     if entries is None:
         reasons.append("the registry was not emitted: the security package was not selected")
     if reused_records is not None:
-        # Records carry declaration hashes but no identity of the sources they were
-        # emitted from, so reused records are not tied to the validated sources.
-        reasons.append(f"the declaration records were reused from {reused_records}, not emitted from this "
-                       "checkout, so they are not tied to the sources the pipeline validated")
+        reasons.append(reused_reason(reused_records))
     properties = list((manifest.get("claims") or {}).get("properties", []))
     if not properties:
         reasons.append("the manifest claims no property")
-    claims = [claim(manifest, prop, records, registry, checks, connected_reasons, evidence)
+    claims = [claim(manifest, prop, records, registry, checks, connected_reasons, evidence, reused_records)
               for prop in properties]
     verdicts = [c["outcome"] for c in claims]
     if reasons or not claims or "unresolved" in verdicts:
