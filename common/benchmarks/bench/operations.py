@@ -79,6 +79,128 @@ def transform(shape):
                   'expected': list(map(a.encode, expected))})
 
 
+def coset_batch(shape):
+    """Matched authored columns and library batching, with explicit layout costs."""
+    degree, height, width = shape['extension_degree'], shape['height'], shape['width']
+    size, layout, form = shape['evaluation_size'], shape['layout'], shape['form']
+    if layout not in ('columns', 'rows') or form not in ('columns', 'library'):
+        raise ValueError('unknown coset batch layout or form')
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = a.FieldOracle(field)
+    shift, = f.dense(1, 301)
+    coefficients = [f.dense(height, 302+column) for column in range(width)]
+    source = [a.coset(cs, f.one, height) for cs in coefficients]
+    target = [a.coset(cs, shift, size) for cs in coefficients]
+
+    def flatten(columns, rows):
+        return ([value for column in columns for value in column] if layout == 'columns' else
+                [columns[column][row] for row in range(rows) for column in range(width)])
+
+    prefix = 'let columns=xs;' if layout == 'columns' else 'let columns=v::transpose(xs,height,width);'
+    if form == 'library':
+        body = 'let out=coset::extend_columns(columns,width,height,shift,size);'
+    else:
+        body = '''let mut out=v::empty<F>();
+          for column in 0..width {
+            let values=v::slice(columns,column*height,height);
+            let p=coset::interpolate(coset::word(values,1));
+            out=v::concat(out,coset::values(coset::evaluate_coset(p,shift,size)));
+          }'''
+    suffix = 'return v::equal(out,expected);' if layout == 'columns' else \
+             'return v::equal(v::transpose(out,width,size),expected);'
+    program = local(field, 'xs:Vector<F>, width:index, height:index, shift:F, size:index, expected:Vector<F>',
+                    prefix+body+suffix,
+                    {'xs': list(map(f.encode, flatten(source, height))), 'width': str(width),
+                     'height': str(height), 'shift': f.encode(shift), 'size': str(size),
+                     'expected': list(map(f.encode, flatten(target, size)))})
+    program.source = program.source.replace('fn compute(', 'use zkc::coset as coset;\nfn compute(')
+    program.dependencies = ('core.collections', 'core.polynomial')
+    program.oracle = 'Independent integer radix-two evaluation of dense coefficients; every output and extension coordinate checked; no native roundtrip oracle'
+    return program
+
+
+def coset_point(shape):
+    """Matched point-major results for three explicit algorithm strategies.
+
+    ``coefficients`` repeats interpolation for every point and column.
+    ``reused-coefficients`` interpolates once per column, evaluates all points,
+    and transposes its column-major results. Both use native Horner. The library
+    form uses opening_claims, which delegates to evaluate_columns. All source
+    forms start with the same evaluation words and include their own setup.
+    """
+    degree, height, width = shape['extension_degree'], shape['height'], shape['width']
+    count, form, kind = shape['points'], shape['form'], shape['point_kind']
+    if form not in ('coefficients', 'library', 'reused-coefficients'):
+        raise ValueError(f'unknown coset point form: {form}')
+    if kind not in ('off-domain', 'on-domain'):
+        raise ValueError(f'unknown coset point kind: {kind}')
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = a.FieldOracle(field)
+    shift, = f.dense(1, 311)
+    coefficients = [f.dense(height, 312 + column) for column in range(width)]
+    columns = [a.coset(cs, shift, height) for cs in coefficients]
+    if kind == 'on-domain':
+        if count > height:
+            raise ValueError('on-domain point count exceeds height')
+        root = pow(1791270792, (1 << 24) // height, a.P)
+        points = [tuple(x * pow(root, row, a.P) % a.P for x in shift)
+                  for row in range(count)]
+    else:
+        points = f.dense(count, 331)
+        assert len(set(points)) == count
+        assert all(f.power(point, height) != f.power(shift, height) for point in points)
+
+    def horner(cs, point):
+        result = f.zero
+        for coefficient in reversed(cs):
+            result = f.add(f.mul(result, point), coefficient)
+        return result
+
+    expected = [horner(cs, point) for point in points for cs in coefficients]
+    interpolate = '''let values=v::slice(xs,column*height,height);
+      let p=coset::interpolate(coset::word(values,shift));'''
+    if form == 'library':
+        body = '''let batch=coset::column_batch(coset::coset_domain(shift,height),width,xs);
+          let mut out=v::empty<F>();
+          for i in 0..v::length(points) {
+            out=v::concat(out,opening::opening_claims(batch,v::get(points,i)));
+          }'''
+    elif form == 'coefficients':
+        body = '''let mut out=v::empty<F>();
+          for i in 0..v::length(points) {
+            let point=v::get(points,i);
+            for column in 0..width {''' + interpolate + '''
+              out=v::append(out,polynomial::evaluate(p,point));
+            }
+          }'''
+    else:
+        body = '''let mut columns=v::empty<F>();
+          for column in 0..width {''' + interpolate + '''
+            for i in 0..v::length(points) {
+              columns=v::append(columns,polynomial::evaluate(p,v::get(points,i)));
+            }
+          }
+          let out=v::transpose(columns,width,v::length(points));'''
+    program = local(field, 'xs:Vector<F>, width:index, height:index, shift:F, points:Vector<F>, expected:Vector<F>',
+                    body + 'return v::equal(out,expected);',
+                    {'xs': [f.encode(x) for column in columns for x in column],
+                     'width': str(width), 'height': str(height), 'shift': f.encode(shift),
+                     'points': list(map(f.encode, points)), 'expected': list(map(f.encode, expected))})
+    program.source = program.source.replace('fn compute(',
+        'use zkc::coset as coset;\nuse zkc::opening as opening;\n'
+        'use zkc::polynomial as polynomial;\nfn compute(')
+    program.dependencies = ('core.collections', 'core.polynomial')
+    strategies = {
+        'coefficients': 'repeated interpolation per point and column, then native Horner',
+        'library': 'direct opening_claims per point on one checked batch',
+        'reused-coefficients': 'one interpolation per column, many native Horner evaluations and output transpose',
+    }
+    program.oracle = ('Independent integer coefficients, coset inputs and Horner expectations; '
+                      'every coordinate checked in point-major order; ' + strategies[form] +
+                      '; SDK/run includes setup, validation, output construction and Host costs')
+    return program
+
+
 def coset(shape):
     """Separate subgroup traversal and folding with arbitrary coset shifts."""
     degree, n, operation = shape['extension_degree'], shape['elements'], shape['operation']

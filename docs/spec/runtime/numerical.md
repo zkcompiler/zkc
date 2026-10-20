@@ -89,6 +89,30 @@ The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
+`poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
+quartic/octic extensions. Shape and domain checks precede numerical admission;
+the whole input/output vectors must fit the element policy. Work admission
+counts both transform lengths, base coordinates, complete extension shift
+arithmetic and construction. Adapter-owned transform payloads are reserved
+before allocation without allocating duplicate accounting buffers. The private
+output includes its staging/final overlap. Provider twiddle caches, hidden
+provider scratch and allocator overhead remain outside that reservation.
+Every column must succeed before publication, including when a later column
+fails a shrinking-degree check. The operation has its own resource profile;
+the library's use of it does not promise the exhaustion point of separate calls.
+
+`poly.coset_evaluate_at` uses the same scoped output ownership on those four
+fields. Its exact column-major shape and domain are checked before numerical
+admission. One result per column is constructed privately; point-dependent
+weights and adapter-owned inversion scratch are call-local and charged before
+allocation. Plonky3 uses two managed arrays; BN254 uses one managed weight array
+and Arkworks' serial inversion routine. Arkworks' internal prefix products remain
+provider-owned and outside the managed reservation.
+The work bound covers domain traversal, inversion setup and all column products,
+including extension arithmetic. On-domain evaluation returns the selected row;
+it is a mathematical case of the operation, not a constant-time guarantee.
+The operation does not retain values or weights across invocations.
+
 ## Pointwise expressions
 
 The compiler-generated `numerical.map`, `numerical.sum` and

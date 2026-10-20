@@ -32,7 +32,7 @@ class Case:
             return operations.host_vector(shape)
         if self.name in ('hash_bytes', 'poseidon', 'merkle'):
             return getattr(commitments, self.name)(shape)
-        if self.name in ('transform', 'coset', 'curve_operation'):
+        if self.name in ('transform', 'coset', 'coset_batch', 'coset_point', 'curve_operation'):
             return getattr(operations, self.name)(shape)
         return getattr(programs, self.name)(shape)
 
@@ -143,12 +143,43 @@ def cases():
                 {'extension_degree': degree, 'elements': n, 'operation': operation}, 'operation', (operation,),
                 'One direction, unit shift, dense full-degree coefficients; independent Python oracle. Includes polynomial adaptation, equality and Host costs.')
     for degree in (1, 4, 8):
+        # Width, transform length and conversion cost vary separately. Both
+        # forms consume identical inputs and check every output coordinate.
+        for height, width, layout in [(32, w, 'columns') for w in (1, 4, 16, 64)] + [
+                (1024, 1, 'columns'), (256, 4, 'columns'), (32, 4, 'rows')]:
+            for form in ('columns', 'library'):
+                add(f'coset-batch-ext{degree}-h{height}-w{width}-{layout}-{form}', 'coset_batch',
+                    {'extension_degree': degree, 'height': height, 'width': width,
+                     'evaluation_size': height*2, 'layout': layout, 'form': form},
+                    'operation', ('coset extension', 'batch output construction', layout+' layout', 'vector equality'),
+                    'Independent integer transforms and full output comparison. Column loop and library share inputs; row layout includes both transposes. SDK/run includes validation and Host costs.')
         for n in (32, 8192):
             for operation in ('points', 'fold'):
                 add(f'coset-ext{degree}-{operation}-{n}', 'coset',
                     {'extension_degree': degree, 'elements': n, 'operation': operation},
                     'operation', ('coset shift', operation, 'vector equality'),
                     'Independent integer field oracle; dense extension coordinates and arbitrary fold inputs. Includes equality and Host costs, not a low-degree test.')
+    # Fixed point-evaluation panel: vary width and height separately, then
+    # compare repeated interpolation with coefficient reuse for many points.
+    # Keep small controls even when interpolation is the faster strategy.
+    point_panel = [(32, 1, 1), (32, 4, 1), (32, 16, 1), (1024, 1, 1), (1024, 4, 1),
+                   (4096, 1, 1), (4096, 4, 1), (32, 4, 8), (1024, 1, 8), (4096, 1, 8)]
+    for degree in (1, 4, 8):
+        domains = [(height, width, points, 'off-domain') for height, width, points in point_panel]
+        for height, width, points, kind in domains + [(4, 4, 4, 'on-domain')]:
+            forms = ('coefficients', 'library', 'reused-coefficients') if points > 1 else \
+                    ('coefficients', 'library')
+            for form in forms:
+                strategy = {'coefficients': 'Interpolation repeated per point and column, then native Horner.',
+                            'library': 'Library opening_claims per point on one checked batch.',
+                            'reused-coefficients': 'Interpolation once per column, native Horner per point; includes output transpose.'}[form]
+                add(f'coset-point-ext{degree}-h{height}-w{width}-p{points}-{kind}-{form}', 'coset_point',
+                    {'extension_degree': degree, 'height': height, 'width': width,
+                     'points': points, 'point_kind': kind, 'form': form},
+                    'operation', ('coset point evaluation', form, kind, 'point-major vector equality'),
+                    'Independent full-degree coefficients and Horner expectations; identical words, shifts and points across forms. '
+                    + strategy + ' Repeated interpolation and coefficient reuse are distinct strategies. '
+                    'SDK/run includes setup, output construction, equality and Host costs; default capacities.')
     for n in (1, 33, 128):
         for operation in ('vector-scale', 'scale-each', 'msm'):
             add(f'curve-operation-{operation}-{n}', 'curve_operation',

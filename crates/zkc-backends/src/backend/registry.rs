@@ -228,7 +228,7 @@ pub(super) fn installed() -> Result<&'static Registry> {
             r.pure_shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
             r.pure_shaped(crate::kernels::curve::CONTRACTS, curve)?;
             r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
-            r.pure_shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
+            r.pure_shaped(crate::bindings::poly::COSET_CONTRACTS, numerical)?;
             r.pure_family(
                 crate::kernels::encoding::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::encoding::signature),
@@ -253,6 +253,12 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 crate::kernels::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::indices::signature),
                 indices,
+            )?;
+            r.prepared_family(
+                crate::kernels::indices::CONSTANT_IMPLEMENTATIONS,
+                Signature::Custom(crate::kernels::indices::signature),
+                indices,
+                prepared_index_constant,
             )?;
             r.pure_family(
                 crate::external_kernels::IMPLEMENTATIONS,
@@ -458,6 +464,16 @@ fn indices(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<
         &b.core.policy,
         i.max_output_bytes,
     )
+}
+fn prepared_index_constant(
+    _b: &mut NativeBackend,
+    _i: &Invocation<'_>,
+    _args: &[Value],
+    call: &super::NativeCall,
+) -> Result<Vec<Value>> {
+    // Core checked the exact binding, signature and attributes at this reach;
+    // its ordinary output checks still run after constructing the fresh value.
+    Ok(vec![Value::Index(call.unsigned64()?)])
 }
 fn external(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::external_kernels::apply(

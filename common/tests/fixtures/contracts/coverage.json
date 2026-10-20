@@ -42,6 +42,8 @@
       "field.from_index",
       "poly.coefficient_count",
       "poly.coset_evaluate",
+      "poly.coset_extend",
+      "poly.coset_evaluate_at",
       "poly.coset_interpolate",
       "poly.domain_point",
       "poly.domain_root",

@@ -104,13 +104,7 @@ pub math fn scalar_weight<F: Field>(input: ScalarAccumulator<F>) -> F where () {
 
 pub fn opening_claims<F: Field>(columns: ColumnBatch<F>, zeta: F) -> Vector<F>
     effects(stop) where zkc::algebra::TwoAdicField(F) {
-  let geometry = coset::batch_domain(columns);
-  let mut result = empty<F>();
-  for column in 0..coset::batch_width(columns) {
-    let word = coset::word(coset::batch_column(columns, column), coset::domain_shift(geometry));
-    result = append(result, zkc::polynomial::evaluate(coset::interpolate(word), zeta));
-  }
-  return result;
+  return coset::evaluate_columns(columns, zeta);
 }
 
 pub fn deep_columns<F: Field>(columns: ColumnBatch<F>, input: BoundOpenings<F>,

@@ -8,6 +8,7 @@
 use p3_dft::{Radix2DitParallel, TwoAdicSubgroupDft};
 use p3_field::{ExtensionField, Field, PrimeCharacteristicRing, TwoAdicField};
 use p3_koala_bear::KoalaBear;
+use p3_matrix::dense::RowMajorMatrix;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -20,6 +21,9 @@ pub enum Error {
     FoldSize,
     PointOnDomain,
     OpeningValue,
+    BatchShape,
+    SizeOverflow,
+    Allocation,
 }
 
 /// A checked multiplicative coset. The generator is the installed base-field
@@ -87,7 +91,75 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
 pub struct Kernels {
     dft: Radix2DitParallel<KoalaBear>,
 }
+
 impl Kernels {
+    /// Extend independent column-major evaluation vectors into a fixed private
+    /// destination. The caller admits output and transform workspace first.
+    /// Neither the borrowed input nor published values are modified. The
+    /// destination remains private until the complete batch succeeds.
+    pub(crate) fn coset_extend_into<E: ExtensionField<KoalaBear>>(
+        &self,
+        values: &[E],
+        width: usize,
+        input: Domain<E>,
+        output: Domain<E>,
+        destination: &mut [E],
+    ) -> Result<(), Error> {
+        let input_len = width.checked_mul(input.size).ok_or(Error::SizeOverflow)?;
+        let output_len = width.checked_mul(output.size).ok_or(Error::SizeOverflow)?;
+        if values.len() != input_len || destination.len() != output_len {
+            return Err(Error::BatchShape);
+        }
+        if width == 0 {
+            return Ok(());
+        }
+        // P3 matrices are row-major internally. Every matrix element is E,
+        // retaining all extension coordinates through algebra DFTs. Reserve
+        // adapter allocations fallibly; provider internals own their caches.
+        let mut rows = Vec::new();
+        rows.try_reserve_exact(input_len)
+            .map_err(|_| Error::Allocation)?;
+        rows.resize(input_len, E::ZERO);
+        for row in 0..input.size {
+            for col in 0..width {
+                rows[row * width + col] = values[col * input.size + row];
+            }
+        }
+        let coefficients = self
+            .dft
+            .idft_algebra_batch(RowMajorMatrix::new(rows, width));
+        if output.size < input.size
+            && coefficients.values[output_len..]
+                .iter()
+                .any(|c| *c != E::ZERO)
+        {
+            return Err(Error::CoefficientCount);
+        }
+        let mut scaled = Vec::new();
+        scaled
+            .try_reserve_exact(output_len)
+            .map_err(|_| Error::Allocation)?;
+        scaled.resize(output_len, E::ZERO);
+        let ratio = output.shift / input.shift;
+        let mut power = E::ONE;
+        for row in 0..input.size.min(output.size) {
+            for col in 0..width {
+                scaled[row * width + col] = coefficients.values[row * width + col] * power;
+            }
+            power *= ratio;
+        }
+        drop(coefficients);
+        let evaluations = self
+            .dft
+            .dft_algebra_batch(RowMajorMatrix::new(scaled, width));
+        for col in 0..width {
+            for row in 0..output.size {
+                destination[col * output.size + row] = evaluations.values[row * width + col];
+            }
+        }
+        Ok(())
+    }
+
     pub fn evaluate<E: ExtensionField<KoalaBear>>(
         &self,
         coefficients: &[E],
@@ -133,6 +205,81 @@ pub fn evaluate_at<E: Field>(coefficients: &[E], point: E) -> E {
         .iter()
         .rev()
         .fold(E::ZERO, |value, c| value * point + *c)
+}
+
+/// Evaluate column-major words at one point of their unique interpolants.
+/// Scratch is supplied by the policy-owning adapter; this routine allocates
+/// nothing and shares one set of barycentric weights across every column.
+/// A domain point selects its matching input row before any inversion.
+pub(crate) fn coset_evaluate_at_into<E: ExtensionField<KoalaBear>>(
+    values: &[E],
+    domain: Domain<E>,
+    point: E,
+    denominators: &mut [E],
+    weights: &mut [E],
+    destination: &mut [E],
+) -> Result<(), Error> {
+    let input_len = destination
+        .len()
+        .checked_mul(domain.size)
+        .ok_or(Error::SizeOverflow)?;
+    if values.len() != input_len
+        || denominators.len() != domain.size
+        || weights.len() != domain.size
+    {
+        return Err(Error::BatchShape);
+    }
+    if destination.is_empty() {
+        return Ok(());
+    }
+    let mut x = domain.shift;
+    for (row, denominator) in denominators.iter_mut().enumerate() {
+        if point == x {
+            for (column, result) in values.chunks_exact(domain.size).zip(destination) {
+                *result = column[row];
+            }
+            return Ok(());
+        }
+        *denominator = point - x;
+        x *= domain.generator;
+    }
+    let shift_power = domain.shift.exp_u64(domain.size as u64);
+    let scale = (point.exp_u64(domain.size as u64) - shift_power)
+        / (E::from(KoalaBear::from_usize(domain.size)) * shift_power);
+    batch_inverse_into(denominators, weights, |row, inverse| {
+        scale * (point - denominators[row]) * inverse
+    })?;
+    for (column, result) in values.chunks_exact(domain.size).zip(destination) {
+        *result = column
+            .iter()
+            .zip(weights.iter())
+            .fold(E::ZERO, |sum, (value, weight)| sum + *value * *weight);
+    }
+    Ok(())
+}
+
+/// The scoped Montgomery prefix mechanism also used by opening quotients.
+/// `finish` consumes each inverse in reverse row order without extra storage.
+fn batch_inverse_into<E: Field>(
+    denominators: &[E],
+    destination: &mut [E],
+    mut finish: impl FnMut(usize, E) -> E,
+) -> Result<(), Error> {
+    if denominators.len() != destination.len() {
+        return Err(Error::EvaluationCount);
+    }
+    let mut product = E::ONE;
+    for (prefix, denominator) in destination.iter_mut().zip(denominators) {
+        *prefix = product;
+        product *= *denominator;
+    }
+    let mut inverse = product.try_inverse().ok_or(Error::PointOnDomain)?;
+    for (row, (out, denominator)) in destination.iter_mut().zip(denominators).enumerate().rev() {
+        let denominator_inverse = *out * inverse;
+        inverse *= *denominator;
+        *out = finish(row, denominator_inverse);
+    }
+    Ok(())
 }
 
 pub fn normalize<E: Field>(coefficients: &mut Vec<E>) {
@@ -248,23 +395,9 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
             *denominator = x - self.point;
             x *= self.domain.generator;
         }
-        let mut product = E::ONE;
-        for (prefix, denominator) in destination.iter_mut().zip(denominators.iter()) {
-            *prefix = product;
-            product *= *denominator;
-        }
-        let mut inverse = product.try_inverse().ok_or(Error::PointOnDomain)?;
-        for ((out, denominator), evaluation) in destination
-            .iter_mut()
-            .zip(denominators.iter())
-            .zip(self.values)
-            .rev()
-        {
-            let denominator_inverse = *out * inverse;
-            inverse *= *denominator;
-            *out = (*evaluation - self.value) * denominator_inverse;
-        }
-        Ok(())
+        batch_inverse_into(denominators, destination, |row, inverse| {
+            (self.values[row] - self.value) * inverse
+        })
     }
 }
 
@@ -313,6 +446,123 @@ mod tests {
         base_action_matches_embedding::<KoalaBear>();
         base_action_matches_embedding::<crate::KoalaBearExt4>();
         base_action_matches_embedding::<crate::KoalaBearExt8>();
+    }
+
+    fn batch_extension_matches_independent_columns<F: ExtensionField<KoalaBear>>() {
+        let kernels = Kernels::default();
+        let element =
+            |i| F::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+        for width in [1, 4, 16] {
+            for (height, size) in [(1, 1), (1, 4), (4, 1), (4, 2), (4, 8), (8, 4), (8, 16)] {
+                let input = Domain::new(height, element(3), 32).unwrap();
+                let output = Domain::new(size, element(5), 32).unwrap();
+                let mut values = Vec::new();
+                let mut expected = Vec::new();
+                for col in 0..width {
+                    // Distinct columns include zero and constant polynomials.
+                    let coefficients: Vec<_> = (0..(col % (height.min(size) + 1)))
+                        .map(|i| element(13 * col + i))
+                        .collect();
+                    let column = kernels.evaluate(&coefficients, input).unwrap();
+                    let recovered = kernels.interpolate(&column, input).unwrap();
+                    let evaluated = kernels.evaluate(&recovered, output).unwrap();
+                    for (row, value) in evaluated.iter().enumerate() {
+                        assert_eq!(
+                            *value,
+                            evaluate_at(&coefficients, output.point(row).unwrap())
+                        );
+                    }
+                    values.extend(column);
+                    expected.extend(evaluated);
+                }
+                let original = values.clone();
+                let mut result = vec![element(71); width * size];
+                kernels
+                    .coset_extend_into(&values, width, input, output, &mut result)
+                    .unwrap();
+                assert_eq!(result, expected, "{width} columns: {height} -> {size}");
+                assert_eq!(values, original);
+            }
+            // Arbitrary full-height evaluations exercise nonzero high coefficients.
+            let input = Domain::new(4, element(7), 32).unwrap();
+            let output = Domain::new(16, element(9), 32).unwrap();
+            let values: Vec<_> = (0..width * 4).map(element).collect();
+            let expected: Vec<_> = values
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .flat_map(|column| {
+                    kernels
+                        .evaluate(&kernels.interpolate(column, input).unwrap(), output)
+                        .unwrap()
+                })
+                .collect();
+            let mut result = vec![F::ZERO; width * 16];
+            kernels
+                .coset_extend_into(&values, width, input, output, &mut result)
+                .unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn batch_extension_retains_every_extension_coordinate() {
+        batch_extension_matches_independent_columns::<KoalaBear>();
+        batch_extension_matches_independent_columns::<crate::KoalaBearExt4>();
+        batch_extension_matches_independent_columns::<crate::KoalaBearExt8>();
+    }
+
+    #[test]
+    fn batch_extension_refuses_actual_high_coefficients_and_bad_shapes() {
+        let kernels = Kernels::default();
+        let input = Domain::new(4, sample(3), 16).unwrap();
+        let output = Domain::new(2, sample(5), 16).unwrap();
+        let low = kernels.evaluate(&[sample(1), sample(2)], input).unwrap();
+        for coefficient in [
+            sample(8),
+            E::from_basis_coefficients_fn(|j| {
+                if j == 7 {
+                    KoalaBear::ONE
+                } else {
+                    KoalaBear::ZERO
+                }
+            }),
+        ] {
+            let high = kernels
+                .evaluate(&[E::ZERO, E::ZERO, coefficient], input)
+                .unwrap();
+            for values in [high.clone(), [low.clone(), high.clone()].concat()] {
+                let mut destination = vec![E::ZERO; values.len() / 2];
+                assert_eq!(
+                    kernels.coset_extend_into(
+                        &values,
+                        values.len() / 4,
+                        input,
+                        output,
+                        &mut destination,
+                    ),
+                    Err(Error::CoefficientCount)
+                );
+            }
+        }
+        let mut destination = [sample(11); 2];
+        assert_eq!(
+            kernels.coset_extend_into(&low[..3], 1, input, output, &mut destination,),
+            Err(Error::BatchShape)
+        );
+        assert_eq!(destination, [sample(11); 2]);
+        assert_eq!(
+            kernels.coset_extend_into(&low, 1, input, output, &mut destination[..1],),
+            Err(Error::BatchShape)
+        );
+        assert_eq!(destination, [sample(11); 2]);
+        assert_eq!(
+            kernels.coset_extend_into(&[], usize::MAX, input, output, &mut [],),
+            Err(Error::SizeOverflow)
+        );
+        kernels
+            .coset_extend_into(&[], 0, input, output, &mut [])
+            .unwrap();
     }
     #[test]
     fn cosets_interpolation_fold_and_opening() {

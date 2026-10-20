@@ -72,6 +72,16 @@ correspondence.
 Explicit local workspace catalogs select leaf packages alongside path
 dependencies, preserve capture identity, and report selected-edge provenance in
 `check --api`. The installed package includes the catalog and library sources.
+Batch coset extension is installed on BN254 Fr, KoalaBear and its quartic/octic
+extensions. It constructs one private column-major output and retains non-base
+shifts; shrinking checks each column's actual normalized degree. Compiler,
+runtime admission and native signatures independently declare the operation.
+The single-word domain analysis does not yet transfer flattened batch facts.
+Direct coset point evaluation is installed on the same four fields, sharing
+weights across columns without reconstructing coefficients. It handles on-domain
+points and arbitrary evaluation words; neither path proves a degree bound or
+authentication. Source controls check independent integer expectations and refusals.
+
 Polynomial opening APIs bind canonical cosets, column batches, descriptors and
 accumulators in private checked views; row evaluation derives its point from
 the admitted query index. These are mathematical context checks.

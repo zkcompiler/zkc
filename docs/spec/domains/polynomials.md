@@ -84,6 +84,43 @@ of degree below `length(v)` on that coset. Interpolation is not a low-degree tes
 `poly.coefficient_count<F>` counts the normalized coefficients; the zero
 polynomial has count zero. It requires only the polynomial coefficient domain.
 
+`poly.coset_extend<F>(v,w,h,s,t,n)` re-evaluates `w` independent columns
+between two cosets. Both vectors use column-major order: input element
+`v[c*h+i]` lies at `s*g_h^i`, and result element `out[c*n+j]` lies at
+`t*g_n^j`. The input must have exactly `w*h` elements; extents use checked
+arithmetic. For nonzero width, both domains must be admitted. Each column has
+its own unique degree-below-`h` interpolant, whose normalized coefficient count
+must fit `n`. Thus shrinking to a smaller domain admits zero and sufficiently
+low-degree columns; rectangular padding is not a degree claim. A malformed
+extent refuses with `coset-batch-shape`, and a nonzero coefficient beyond the
+output capacity refuses with `coset-coefficient-count`.
+
+An empty, zero-width batch returns an empty vector without inspecting unused
+domain sizes or shifts. Native results are constructed privately and published
+only when all columns succeed. Extension-valued shifts retain every coordinate;
+provider matrix layouts cannot change logical column or point order. This is an
+authored operation with its own numerical work and workspace admission, not an
+automatic replacement promising identical resource-exhaustion points for a loop
+of separate transforms. The flattened result is a batch of words, so the
+compiler's single-word coset facet does not associate its total length with one
+column domain.
+
+`poly.coset_evaluate_at<F>(v,w,h,s,z)` returns one evaluation per column of
+an exact column-major `w*h` word. Result `c` is the value at `z` of the unique
+degree-below-`h` polynomial interpolating `v[c*h+i]` at `s*g_h^i`. An arbitrary
+word has this meaning; the operation asserts neither a protocol degree bound
+nor authentication. Points on the domain return the corresponding input row;
+other points use the same interpolant. All extension coordinates of `s` and `z`
+are retained. Shape checks precede domain admission; zero-width empty inputs
+ignore unused domains and return empty, as for batch extension.
+
+The implementation can share domain/point weights across columns within one
+call. This is an authored operation with its own resource profile; replacing
+library interpolation and evaluation does not assert identical metered failure
+prefixes. Coefficient-based evaluation remains available when coefficients are
+needed elsewhere or reused across many points. Neither point evaluation nor
+batch extension changes challenge order or opening verification obligations.
+
 `poly.even_odd_fold` additionally requires `CharacteristicNotTwo(F)`: its
 division by two is not a generic field law. For an even-sized coset,
 `poly.even_odd_fold<F>(v,s,beta)` pairs positions `i` and

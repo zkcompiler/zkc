@@ -92,6 +92,8 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
 | `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
+| `coset_batch` | Matched per-column and library extension; KB/Ext4/Ext8, widths 1/4/16/64, separate height and row-layout controls | Independent integer transforms; every coordinate checked; row-layout cases include both transposes and SDK/run includes Host and equality costs |
+| `coset_point` | Direct opening claims, repeated native interpolation/evaluation, and coefficient reuse for multiple points | Full point-major output check; on/off-domain controls; SDK timing includes setup, validation and output construction |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
@@ -126,6 +128,12 @@ controls explicitly use weaker algebraic consistency checks.
 The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, 12 `coset`, nine
 `curve_operation`, and ten coupled AIR/STARK cases. Existing identifiers,
 formulas and the smoke list stay unchanged. Case counts imply no suite weights.
+
+The `coset_batch` panel adds 42 cases with identical inputs across its two source
+forms. It separates batch width, transform height and layout conversion. The
+per-column form retains explicit interpolation/evaluation and concatenation;
+the library form follows the current column-extension implementation. These are
+source-to-execution comparisons, not isolated provider transform timings.
 
 [`expressions.py`](bench/expressions.py) defines short/deep Horner, independent
 branches, shared intermediates, capture-heavy and input-heavy Math bodies with

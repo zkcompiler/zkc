@@ -22,6 +22,29 @@ def OpPolyCosetInterpolate : ZKC_Operation<"poly.coset_interpolate", [OpPolyCose
   let facets = [ZKC_Coset<1, 0, 1, -1, 0>];
 }
 
+// Each column has its own interpolant, in canonical column-major order.
+// A flattened batch is not one evaluation word: the single-word Coset facet
+// must not associate its total length with either column domain.
+def OpPolyCosetExtendF : ZKC_Root<"F", FieldDomain>;
+def OpPolyCosetExtend : ZKC_Operation<"poly.coset_extend", [OpPolyCosetExtendF],
+    [ZKC_Apply<TypeVector, [OpPolyCosetExtendF]>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeField, [OpPolyCosetExtendF]>,
+     ZKC_Apply<TypeField, [OpPolyCosetExtendF]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeVector, [OpPolyCosetExtendF]>],
+    [ZKC_Holds<CapabilityTwoAdicField, [OpPolyCosetExtendF]>]>;
+
+// Point evaluation shares one ordered domain across independent columns.
+// A flattened batch does not carry a single-word Coset facet.
+def OpPolyCosetEvaluateAtF : ZKC_Root<"F", FieldDomain>;
+def OpPolyCosetEvaluateAt : ZKC_Operation<"poly.coset_evaluate_at", [OpPolyCosetEvaluateAtF],
+    [ZKC_Apply<TypeVector, [OpPolyCosetEvaluateAtF]>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeField, [OpPolyCosetEvaluateAtF]>,
+     ZKC_Apply<TypeField, [OpPolyCosetEvaluateAtF]>],
+    [ZKC_Apply<TypeVector, [OpPolyCosetEvaluateAtF]>],
+    [ZKC_Holds<CapabilityTwoAdicField, [OpPolyCosetEvaluateAtF]>]>;
+
 def OpPolyDomainPointF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDomainPoint : ZKC_Operation<"poly.domain_point", [OpPolyDomainPointF],
     [ZKC_Apply<TypeField, [OpPolyDomainPointF]>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],

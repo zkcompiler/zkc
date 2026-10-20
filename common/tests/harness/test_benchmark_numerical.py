@@ -10,6 +10,7 @@ import pytest
 
 import binary_reference as binary
 from binomial_reference import Binomial
+from coset_reference import CosetReference
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -214,6 +215,134 @@ def test_transform_directions_have_complete_independent_expectations(bench, degr
     assert backward.incorrect['P']['expected'] != data['xs']
 
 
+@pytest.mark.parametrize('degree', (1, 4, 8))
+@pytest.mark.parametrize('layout', ('columns', 'rows'))
+def test_batch_coset_forms_match_direct_integer_evaluation_and_layout(bench, degree, layout):
+    a = bench['algebra']
+    shape = {'extension_degree': degree, 'height': 4, 'width': 3,
+             'evaluation_size': 8, 'layout': layout}
+    programs = [bench['operations'].coset_batch(shape | {'form': form})
+                for form in ('columns', 'library')]
+    assert programs[0].inputs == programs[1].inputs
+    data = programs[0].inputs[0]['P']
+    shift = decode(data['shift'])
+    coefficients = [a.dense(4, degree, 302+column) for column in range(3)]
+    root = pow(1791270792, (1 << 24)//8, a.P)
+    columns = [[a.horner(cs, tuple(c*pow(root, i, a.P) % a.P for c in shift))
+                for i in range(8)] for cs in coefficients]
+    expected = ([x for column in columns for x in column] if layout == 'columns' else
+                [columns[column][row] for row in range(8) for column in range(3)])
+    assert list(map(decode, data['expected'])) == expected
+    assert all(p.incorrect['P']['expected'] != data['expected'] for p in programs)
+    assert 'v::concat' in programs[0].source
+    assert 'coset::extend_columns' in programs[1].source
+
+
+@pytest.mark.parametrize('degree', (1, 4, 8))
+@pytest.mark.parametrize('kind', ('off-domain', 'on-domain'))
+def test_coset_point_forms_have_independent_point_major_expectations_and_mutation_controls(
+        bench, degree, kind):
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = CosetReference(field)
+    shape = {'extension_degree': degree, 'height': 4, 'width': 3,
+             'points': 3, 'point_kind': kind}
+    forms = ('coefficients', 'library', 'reused-coefficients')
+    programs = {form: bench['operations'].coset_point(shape | {'form': form}) for form in forms}
+    first = programs['coefficients']
+    assert all(program.inputs == first.inputs for program in programs.values())
+    assert len({program.source for program in programs.values()}) == 3
+    data = first.inputs[0]['P']
+    height, width = int(data['height']), int(data['width'])
+    words = list(map(decode, data['xs']))
+    points, shift = list(map(decode, data['points'])), decode(data['shift'])
+    assert len(words) == height * width and len(points) == shape['points']
+    assert len(set(words)) == len(words) and len(set(points)) == len(points)
+    if degree > 1:
+        assert all(shift[1:]) and all(all(point[1:]) for point in points)
+        assert all(all(value[1:]) for value in words)
+
+    def evaluate(values, at, offset):
+        domain = f.domain(offset, height)
+        return [f.lagrange(values[column * height:(column + 1) * height], domain, point)
+                for point in at for column in range(width)]
+
+    # Generic Lagrange basis products only consume the supplied word, unlike
+    # the generator's coefficient Horner oracle and radix-two input transform.
+    expected = evaluate(words, points, shift)
+    assert list(map(decode, data['expected'])) == expected
+    domain = f.domain(shift, height)
+    assert all((point in domain) == (kind == 'on-domain') for point in points)
+    if kind == 'on-domain':
+        assert expected == [words[column * height + row]
+                            for row in range(len(points)) for column in range(width)]
+
+    changed_words = words.copy()
+    changed_words[height + 1] = f.add(changed_words[height + 1], f.one)
+    changed = evaluate(changed_words, points, shift)
+    assert changed != expected
+    assert all(changed[i] == expected[i] for i in range(len(expected)) if i % width != 1)
+    assert evaluate(words, [f.add(points[0], f.one), *points[1:]], shift) != expected
+    assert evaluate(words, points, f.mul(shift, f.embed(2))) != expected
+    swapped = [*words[height:2 * height], *words[:height], *words[2 * height:]]
+    assert evaluate(swapped, points, shift) != expected
+
+    for form, program in programs.items():
+        wrong = program.incorrect['P']
+        assert {k: v for k, v in wrong.items() if k != 'expected'} == {
+            k: v for k, v in data.items() if k != 'expected'}
+        assert len(wrong['expected']) == len(expected)
+        assert list(map(decode, wrong['expected'])) != expected
+        assert all(len(decode(value)) == degree for value in wrong['expected'])
+        assert all(0 <= coordinate < f.modulus
+                   for value in wrong['expected'] for coordinate in decode(value))
+        assert program.dependencies == ('core.collections', 'core.polynomial')
+        assert ('opening::opening_claims' in program.source) == (form == 'library')
+        assert ('polynomial::evaluate' in program.source) == (form != 'library')
+        before = deepcopy(program.inputs)
+        wrong['expected'][0] = f.encode(f.zero)
+        assert program.inputs == before
+        assert bench['operations'].coset_point(shape | {'form': form}).inputs == before
+    assert 'repeated interpolation per point and column' in first.oracle
+    assert 'one interpolation per column' in programs['reused-coefficients'].oracle
+
+
+def test_coset_point_catalog_keeps_fixed_matched_strategies_and_separate_domain_controls(bench):
+    cases = [case for case in bench['coverage'].cases() if case.name == 'coset_point']
+    assert len(cases) == 78
+    assert len({case.identifier for case in cases}) == len(cases)
+    assert {case.shape['extension_degree'] for case in cases} == {1, 4, 8}
+    off_domain = [case for case in cases if case.shape['point_kind'] == 'off-domain']
+    assert {case.shape['height'] for case in off_domain} == {32, 1024, 4096}
+    assert {case.shape['width'] for case in off_domain} == {1, 4, 16}
+    assert {case.shape['points'] for case in off_domain} == {1, 8}
+    groups = {}
+    for case in cases:
+        key = tuple(sorted((k, v) for k, v in case.shape.items() if k != 'form'))
+        groups.setdefault(key, set()).add(case.shape['form'])
+        assert case.category == 'operation'
+        assert case.shape['form'] in case.mix
+        if case.shape['point_kind'] == 'on-domain':
+            assert (case.shape['height'], case.shape['width'], case.shape['points']) == (4, 4, 4)
+            generated = case.generate(ROOT, ROOT/'unused')
+            assert generated.inputs == bench['operations'].coset_point(case.shape).inputs
+    for key, forms in groups.items():
+        count = dict(key)['points']
+        assert forms == ({'coefficients', 'library'} if count == 1 else
+                         {'coefficients', 'library', 'reused-coefficients'})
+
+
+def test_coset_point_generator_refuses_unknown_forms_and_point_kinds(bench):
+    shape = {'extension_degree': 1, 'height': 4, 'width': 1,
+             'points': 1, 'point_kind': 'off-domain', 'form': 'library'}
+    generate = bench['operations'].coset_point
+    with pytest.raises(ValueError, match='unknown coset point form'):
+        generate(shape | {'form': 'automatic'})
+    with pytest.raises(ValueError, match='unknown coset point kind'):
+        generate(shape | {'point_kind': 'mixed'})
+    with pytest.raises(ValueError, match='on-domain point count exceeds height'):
+        generate(shape | {'point_kind': 'on-domain', 'points': 5})
+
+
 @pytest.mark.parametrize('operation', ('vector-scale', 'scale-each', 'msm'))
 def test_separate_curve_operations_check_all_scalar_expectations(bench, operation):
     program = bench['operations'].curve_operation({'elements': 33, 'operation': operation})
@@ -296,20 +425,21 @@ def test_added_catalog_inputs_fit_conservative_default_size_envelope(bench):
         if isinstance(value, dict):
             return 1 + len(value) + sum(map(nodes, value.values()))
         if isinstance(value, list):
-            assert len(value) <= 4096
+            assert len(value) <= 16_384
             return 1 + sum(map(nodes, value))
         return 1
 
     largest = 0
     for case in bench['coverage'].cases():
-        if case.name not in ('expression', 'field_vector', 'transform', 'curve_operation'):
+        if case.name not in ('expression', 'field_vector', 'transform', 'coset_point', 'curve_operation'):
             continue
         program = case.generate(ROOT, ROOT/'unused')
-        # Stay below 1 MiB even though the current document ceiling is larger;
+        # Keep formatted fixtures below 4 MiB; the document ceiling is 16 MiB.
         # this is not an execution-work or intermediate-allocation proof.
         for values in (program.inputs[0], program.incorrect):
-            largest = max(largest, len(json.dumps(values).encode()))
-            assert len(json.dumps(values).encode()) < 1 << 20
+            encoded = json.dumps(values, indent=2).encode()
+            largest = max(largest, len(encoded))
+            assert len(encoded) < 4 << 20
             assert nodes(values) < 200_000
             assert 'capacity' not in values and 'limits' not in values
         before = deepcopy(program.inputs)

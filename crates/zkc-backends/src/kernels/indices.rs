@@ -44,6 +44,18 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     })
 }
 
+/// Decode the single canonical decimal shared by attribute validation and the
+/// ordinary constant handler. The caller retains its own refusal identifier.
+pub(crate) fn decode_unsigned64(attributes: &[String]) -> Option<u64> {
+    let [literal] = attributes else {
+        return None;
+    };
+    literal
+        .parse::<u64>()
+        .ok()
+        .filter(|value| value.to_string() == *literal)
+}
+
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -56,13 +68,9 @@ pub(crate) fn apply(
     }
     use Value::{Bool, Index, Indices};
     let output = match (name, args) {
-        ("index.constant", []) => Index(
-            attributes
-                .first()
-                .and_then(|n| n.parse::<u64>().ok().filter(|v| v.to_string() == *n))
-                .filter(|_| attributes.len() == 1)
-                .ok_or_else(|| refused("index-constant"))?,
-        ),
+        ("index.constant", []) => {
+            Index(decode_unsigned64(attributes).ok_or_else(|| refused("index-constant"))?)
+        }
         ("index.add", [Index(a), Index(b)]) => {
             Index(a.checked_add(*b).ok_or_else(|| refused("index-overflow"))?)
         }
@@ -111,8 +119,10 @@ pub(crate) fn apply(
     Ok(vec![output])
 }
 
+pub(crate) const CONSTANT_IMPLEMENTATIONS: &[(&str, &str)] =
+    &[("native/index.constant", "index.constant")];
+
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
-    ("native/index.constant", "index.constant"),
     ("native/index.add", "index.add"),
     ("native/index.sub", "index.sub"),
     ("native/index.mul", "index.mul"),
@@ -131,6 +141,51 @@ mod tests {
     use super::*;
     fn run(name: &str, args: &[Value]) -> Result<Vec<Value>> {
         apply(name, args, &[], &Policy::default(), usize::MAX)
+    }
+    #[test]
+    fn ordinary_constants_keep_canonical_syntax_and_operand_error_precedence() {
+        for (literal, expected) in [("0", 0), ("12", 12), ("18446744073709551615", u64::MAX)] {
+            assert!(matches!(
+                apply("index.constant", &[], &[literal.into()], &Policy::default(), usize::MAX)
+                    .unwrap()[0],
+                Value::Index(actual) if actual == expected
+            ));
+        }
+        for attributes in [
+            vec![],
+            vec!["".into()],
+            vec!["00".into()],
+            vec!["+1".into()],
+            vec!["-1".into()],
+            vec![" 1".into()],
+            vec!["1\n".into()],
+            vec!["1_0".into()],
+            vec!["18446744073709551616".into()],
+            vec!["1".into(), "2".into()],
+        ] {
+            assert_eq!(
+                apply(
+                    "index.constant",
+                    &[],
+                    &attributes,
+                    &Policy::default(),
+                    usize::MAX
+                )
+                .unwrap_err(),
+                refused("index-constant")
+            );
+            assert_eq!(
+                apply(
+                    "index.constant",
+                    &[Value::Index(1)],
+                    &attributes,
+                    &Policy::default(),
+                    usize::MAX
+                )
+                .unwrap_err(),
+                refused("index-operands")
+            );
+        }
     }
     #[test]
     fn arithmetic_is_checked_not_modular() {

@@ -34,7 +34,15 @@ admitted observations without permitting replacement of private fields.
 
 `coset::coset_domain(shift, size)` admits one canonical natural-order two-adic
 coset. `ColumnBatch` fixes its width and exact column-major extent, with checked
-index arithmetic before slicing. `opening_claims::checked` preserves ordered,
+index arithmetic before slicing. `extend_batch(input, output_domain)` re-evaluates
+each column on the target coset with one private result; `extend_columns` is the
+unit-input-shift convenience function. Shrinking requires every interpolant to
+fit the target size. These functions do not establish a cryptographic degree
+bound. `evaluate_at(word, point)` evaluates one checked word directly;
+`evaluate_columns(batch, point)` shares domain/point weights across all columns.
+Points on the coset return the corresponding row. Coefficient interpolation
+remains available for algorithms that reuse coefficients.
+`opening_claims::checked` preserves ordered,
 possibly repeated column/rotation/value descriptors. `opening::bind_openings`
 binds those descriptors to one coset, width, admitted trace height and zeta,
 checks bounds, and excludes every derived opening point from the evaluation
