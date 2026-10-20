@@ -260,15 +260,26 @@ pub(crate) fn mul<S: Coefficient>(
     p.output(size(output, std::mem::size_of::<S>())?, available)?;
     let mut result = reserve(output)?;
     result.resize(output, S::zero());
-    for &(r, c, a) in m.entries.iter() {
-        let (i, j) = if transpose {
-            (c as usize, r as usize)
-        } else {
-            (r as usize, c as usize)
-        };
-        result[i] = result[i] + a * x[j];
+    if transpose {
+        for row in m.entries.chunk_by(|a, b| a.0 == b.0) {
+            let weight = x[row[0].0 as usize];
+            for &(_, c, a) in row {
+                result[c as usize] = result[c as usize] + a * weight;
+            }
+        }
+    } else {
+        for row in m.entries.chunk_by(|a, b| a.0 == b.0) {
+            result[row[0].0 as usize] = contract_row(row, x);
+        }
     }
     Ok(result)
+}
+fn contract_row<S: Coefficient>(entries: &[(u32, u32, S)], x: &[S]) -> S {
+    entries
+        .iter()
+        .map(|&(_, c, a)| a * x[c as usize])
+        .reduce(|sum, term| sum + term)
+        .unwrap_or_else(S::zero)
 }
 /// Contract only the selected row. Sorted COO gives a contiguous range, found
 /// without reading coefficients in other rows or allocating a dense vector.
@@ -281,9 +292,7 @@ pub(crate) fn row_dot<S: Coefficient>(m: &SparseCoo<S>, x: &[S], row: usize) -> 
     }
     let start = m.entries.partition_point(|&(r, _, _)| (r as usize) < row);
     let end = start + m.entries[start..].partition_point(|&(r, _, _)| (r as usize) == row);
-    Ok(m.entries[start..end]
-        .iter()
-        .fold(S::zero(), |sum, &(_, c, a)| sum + a * x[c as usize]))
+    Ok(contract_row(&m.entries[start..end], x))
 }
 
 /// Row-major COO has no contiguous column range. Scan its existing nonzeros,
@@ -301,13 +310,17 @@ pub(crate) fn column_dot<S: Coefficient>(m: &SparseCoo<S>, y: &[S], column: usiz
         .fold(S::zero(), |sum, &(r, _, a)| sum + a * y[r as usize]))
 }
 
+/// Distributivity applies the left weight once per occupied row, without
+/// materializing the forward product or changing the stored entry order.
 pub(crate) fn bilinear<S: Coefficient>(m: &SparseCoo<S>, y: &[S], x: &[S]) -> Result<S> {
     if y.len() != m.rows || x.len() != m.columns {
         return Err(refused("matrix-shape"));
     }
-    Ok(m.entries.iter().fold(S::zero(), |s, &(r, c, a)| {
-        s + y[r as usize] * a * x[c as usize]
-    }))
+    Ok(m.entries
+        .chunk_by(|a, b| a.0 == b.0)
+        .fold(S::zero(), |sum, row| {
+            sum + y[row[0].0 as usize] * contract_row(row, x)
+        }))
 }
 
 pub(crate) trait Wire: Coefficient {
@@ -509,3 +522,6 @@ constructor!(
 );
 
 constructor!(bn254_matrix, Bn254Matrix, crate::Bn254Scalar);
+
+#[cfg(test)]
+mod tests;

@@ -32,8 +32,8 @@ and preflights every reachable reference, including untaken branches.
 All public slots and the selected table's groups and assertion results must
 have field `F`. Needed arena nodes may also use its base field through explicit
 embedding. This view does not promote base-field trace columns to extension
-values. The native provider supports KoalaBear and Ext8; the relation carrier
-itself remains independent of that provider.
+values. The native provider supports KoalaBear, Ext4 and Ext8; the relation
+carrier itself remains independent of that provider.
 
 Each vector concatenates groups of its authority in declaration order, with
 each group stored row-major. `public_data` starts with all Bundle public slots,

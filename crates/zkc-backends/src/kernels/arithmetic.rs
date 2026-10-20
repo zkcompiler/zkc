@@ -11,12 +11,16 @@ use zkc_runtime::vm::{Identity, Invocation, Value as _};
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
 /// remains delegated to the selected field library.
-fn invert_nonzero<S: Coefficient>(values: &[S], out: &mut Vec<S>) -> Result<()> {
+fn invert_nonzero<S: Coefficient>(
+    values: &[S],
+    allocate: impl FnOnce() -> Result<Vec<S>>,
+) -> Result<Vec<S>> {
     if values.iter().any(|x| *x == S::zero()) {
         return Err(refused("zero-inverse"));
     }
+    let mut out = allocate()?;
     if values.is_empty() {
-        return Ok(());
+        return Ok(out);
     }
     let mut product = S::one();
     for x in values {
@@ -28,7 +32,7 @@ fn invert_nonzero<S: Coefficient>(values: &[S], out: &mut Vec<S>) -> Result<()> 
         *prefix = *prefix * inverse;
         inverse = inverse * *x;
     }
-    Ok(())
+    Ok(out)
 }
 
 pub(crate) fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
@@ -462,14 +466,11 @@ fn dense<S: Family>(
         }
         "vector.prefix_product" | "vector.prefix_sum" | "vector.inverse" => {
             let a = v(0)?;
-            if name == "vector.inverse" && a.iter().any(|x| *x == S::zero()) {
-                return Err(refused("zero-inverse"));
-            }
-            let mut out = allocation(a.len())?;
             if name == "vector.inverse" {
-                invert_nonzero(a, &mut out)?;
+                let out = invert_nonzero(a, || allocation(a.len()))?;
                 return Ok(vec![S::vector_value(out.into())]);
             }
+            let mut out = allocation(a.len())?;
             let mut acc = if name == "vector.prefix_product" {
                 S::one()
             } else {
@@ -1377,8 +1378,7 @@ mod batch_inversion_tests {
     fn check_values<S: Coefficient>(mut element: impl FnMut(usize) -> S) {
         for n in [0, 1, 2, 17, 257] {
             let values: Vec<_> = (0..n).map(&mut element).collect();
-            let mut output = Vec::with_capacity(n);
-            invert_nonzero(&values, &mut output).unwrap();
+            let output = invert_nonzero(&values, || Ok(Vec::with_capacity(n))).unwrap();
             assert_eq!(output.len(), n);
             assert!(values.iter().zip(&output).all(|(x, y)| *x * *y == S::one()));
             for index in [0, n / 2, n.saturating_sub(1)] {
@@ -1387,9 +1387,13 @@ mod batch_inversion_tests {
                 }
                 let mut with_zero = values.clone();
                 with_zero[index] = S::zero();
-                output.clear();
-                assert!(invert_nonzero(&with_zero, &mut output).is_err());
-                assert!(output.is_empty());
+                assert_eq!(
+                    invert_nonzero(&with_zero, || panic!("zero must precede allocation"))
+                        .err()
+                        .unwrap()
+                        .code,
+                    "refused:zero-inverse"
+                );
             }
         }
     }

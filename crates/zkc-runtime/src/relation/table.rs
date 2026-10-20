@@ -245,6 +245,16 @@ impl TableView<'_> {
                 .into_iter()
                 .collect();
             let selected = t.arena.select(&positions)?;
+            let emissions: Vec<_> = active
+                .iter()
+                .map(|&index| {
+                    let output = positions
+                        .binary_search(&t.assertions[index].output)
+                        .expect("selected output");
+                    (index, selected.outputs()[output])
+                })
+                .collect();
+            let mut interpreter = RowInterpreter::new(&selected);
             for row in from..to {
                 let mut fetch = |input: usize| match t.inputs[input] {
                     Input::Public(slot) => Ok(public_data[slot as usize].clone()),
@@ -258,15 +268,15 @@ impl TableView<'_> {
                         Ok(carriers[carrier][base + read * width + column as usize].clone())
                     }
                 };
-                let values = interpret(&selected, algebra, &mut fetch)?;
-                for &index in &active {
-                    let output = positions
-                        .binary_search(&t.assertions[index].output)
-                        .expect("selected output");
-                    result[row as usize * t.assertions.len() + index] = values[output].clone();
+                let values = interpreter.evaluate(algebra, &mut fetch)?;
+                for &(index, node) in &emissions {
+                    result[row as usize * t.assertions.len() + index] = values[node].clone();
                 }
             }
         }
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests;

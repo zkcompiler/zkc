@@ -417,6 +417,73 @@ fn nominal_signatures_shapes_attributes_and_resource_failures_are_closed() {
         );
     }
 }
+
+#[test]
+fn sparse_output_allowances_and_scalar_precedence_remain_exact_with_zero_numerical_budgets() {
+    for d in 0..3 {
+        let policy = Policy {
+            max_numerical_bytes: 0,
+            max_numerical_work: 0,
+            ..Policy::default()
+        };
+        let m = matrix(d, 2, 3, &[(0, 0, 2), (0, 2, 3), (1, 0, 5)]);
+        let width = if d == 2 { 4 } else { 32 };
+        for (name, input, expected) in [
+            ("matrix.mul_vector", vec![7, 11, 13], vec![53, 35]),
+            ("matrix.transpose_mul_vector", vec![7, 11], vec![69, 0, 21]),
+        ] {
+            let exact = 256 + expected.len() * width;
+            for available in [exact, exact - 1] {
+                let mut controlled = Controlled::new(backend(policy));
+                controlled.output_limit = Some(available);
+                let (result, observed) = one(
+                    controlled,
+                    binding(d, name),
+                    &[],
+                    vec![m.clone(), vector(d, &input)],
+                );
+                if available == exact {
+                    assert_value(&result.unwrap()[0], &vector(d, &expected));
+                } else {
+                    assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
+                    assert!(observed.outputs.is_empty());
+                }
+                assert_eq!(observed.inner.active_frames(), 0);
+            }
+            let mut controlled = Controlled::new(backend(policy));
+            controlled.output_limit = Some(0);
+            assert_eq!(
+                one(
+                    controlled,
+                    binding(d, name),
+                    &[],
+                    vec![m.clone(), vector(d, &[])]
+                )
+                .0
+                .unwrap_err(),
+                "refused:matrix-shape"
+            );
+        }
+        for (available, error) in [
+            (512, "refused:matrix-shape"),
+            (511, "exhausted:output-bytes"),
+        ] {
+            let mut controlled = Controlled::new(backend(policy));
+            controlled.output_limit = Some(available);
+            assert_eq!(
+                one(
+                    controlled,
+                    binding(d, "matrix.bilinear"),
+                    &[],
+                    vec![m.clone(), vector(d, &[]), vector(d, &[])]
+                )
+                .0
+                .unwrap_err(),
+                error
+            );
+        }
+    }
+}
 #[test]
 fn nonzeros_use_separate_cap_and_large_inputs_keep_constant_size_programs() {
     for d in 0..3 {

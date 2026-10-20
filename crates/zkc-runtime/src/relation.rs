@@ -1582,33 +1582,75 @@ pub struct Evaluation {
     pub range_failures: Vec<(usize, usize, u32)>,
 }
 
+/// One selected schedule's reusable node values. Input occurrences refer to
+/// their first node, so the node buffer also caches each fetched input. Neither
+/// the mapping nor value scratch is indexed by the original input number.
+struct RowInterpreter<'a, V> {
+    arena: &'a Expression,
+    input_sources: Vec<usize>,
+    values: Vec<V>,
+}
+impl<'a, V: Clone> RowInterpreter<'a, V> {
+    fn new(arena: &'a Expression) -> Self {
+        let mut first = BTreeMap::new();
+        let input_sources = arena
+            .nodes()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, node)| match node {
+                Node::Input(input) => Some(*first.entry(*input).or_insert(i)),
+                _ => None,
+            })
+            .collect();
+        drop(first);
+        Self {
+            arena,
+            input_sources,
+            values: Vec::with_capacity(arena.nodes().len()),
+        }
+    }
+    /// Refill in node order. Constants and embeddings remain reached, fallible
+    /// operations on every row; preparation performs no Algebra calls.
+    fn evaluate<A: Algebra<Value = V>>(
+        &mut self,
+        algebra: &A,
+        fetch: &mut dyn FnMut(usize) -> Result<V>,
+    ) -> Result<&[V]> {
+        self.values.clear();
+        let mut sources = self.input_sources.iter();
+        for (i, node) in self.arena.nodes().iter().enumerate() {
+            let field = self.arena.facts()[i].field;
+            let v = match node {
+                Node::Constant(f, literal) => algebra.constant(*f, literal)?,
+                Node::Input(j) => {
+                    let source = *sources.next().expect("input occurrence");
+                    if source == i {
+                        fetch(*j)?
+                    } else {
+                        self.values[source].clone()
+                    }
+                }
+                Node::Add(a, b) => algebra.add(field, &self.values[*a], &self.values[*b]),
+                Node::Mul(a, b) => algebra.mul(field, &self.values[*a], &self.values[*b]),
+                Node::Neg(a) => algebra.neg(field, &self.values[*a]),
+                Node::Embed(to, a) => {
+                    algebra.embed(self.arena.facts()[*a].field, *to, &self.values[*a])?
+                }
+            };
+            self.values.push(v);
+        }
+        Ok(&self.values)
+    }
+}
+
 /// Interpret a selected arena for one row: nodes in order, inputs fetched once.
 fn interpret<A: Algebra>(
     arena: &Expression,
     algebra: &A,
     fetch: &mut dyn FnMut(usize) -> Result<A::Value>,
 ) -> Result<Vec<A::Value>> {
-    let mut values: Vec<A::Value> = Vec::with_capacity(arena.nodes().len());
-    let mut inputs: BTreeMap<usize, A::Value> = BTreeMap::new();
-    for (i, node) in arena.nodes().iter().enumerate() {
-        let field = arena.facts()[i].field;
-        let v = match node {
-            Node::Constant(f, literal) => algebra.constant(*f, literal)?,
-            Node::Input(j) => match inputs.get(j) {
-                Some(v) => v.clone(),
-                None => {
-                    let v = fetch(*j)?;
-                    inputs.insert(*j, v.clone());
-                    v
-                }
-            },
-            Node::Add(a, b) => algebra.add(field, &values[*a], &values[*b]),
-            Node::Mul(a, b) => algebra.mul(field, &values[*a], &values[*b]),
-            Node::Neg(a) => algebra.neg(field, &values[*a]),
-            Node::Embed(to, a) => algebra.embed(arena.facts()[*a].field, *to, &values[*a])?,
-        };
-        values.push(v);
-    }
+    let mut interpreter = RowInterpreter::new(arena);
+    let values = interpreter.evaluate(algebra, fetch)?;
     Ok(arena.outputs().iter().map(|o| values[*o].clone()).collect())
 }
 

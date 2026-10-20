@@ -98,6 +98,119 @@ fn finite_scopes_have_hand_calculated_residuals_and_check_windows_before_zero() 
     );
 }
 
+#[test]
+fn actual_row_limits_keep_output_work_and_shape_failure_order_and_spent_work() {
+    let bundle = Bundle::parse(FINITE).unwrap();
+    let view = bundle.table_view(0, Identity::KoalaBear).unwrap();
+    // (height + 1) * (13 nodes + 4 inputs + 5 assertions + 1).
+    assert_eq!(view.work(4), 115);
+    let policy = Policy {
+        max_numerical_bytes: 0,
+        max_numerical_work: 0,
+        ..Policy::default()
+    };
+    let exact_output = 256 + 20 * std::mem::size_of::<KoalaBear>();
+    for (height, witness, limit, available, error, spent) in [
+        (4, vec![0; 8], 115, exact_output, None, 115),
+        (4, vec![], 0, exact_output, Some("exhausted:ring-work"), 0),
+        (4, vec![], 114, exact_output, Some("exhausted:ring-work"), 0),
+        (
+            4,
+            vec![],
+            0,
+            exact_output - 1,
+            Some("exhausted:output-bytes"),
+            0,
+        ),
+        (
+            4,
+            vec![],
+            115,
+            exact_output,
+            Some("refused:relation-table-witness-shape"),
+            115,
+        ),
+        (0, vec![], 0, 0, Some("refused:bundle-height"), 0),
+        (2, vec![], 0, 0, Some("refused:bundle-window"), 0),
+    ] {
+        let mut budget = Budget { limit, spent: 0 };
+        let result = rows(
+            view.clone(),
+            height,
+            &kb(&witness),
+            &[],
+            &kb(&[1]),
+            &policy,
+            &mut budget,
+            available,
+        );
+        if let Some(error) = error {
+            assert_eq!(result.unwrap_err().code, error);
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                kb(&[
+                    0,
+                    2_130_706_432,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2_130_706_432
+                ])
+            );
+        }
+        assert_eq!(budget.spent, spent);
+    }
+    for (policy, error) in [
+        (
+            Policy {
+                max_table_elements: 19,
+                ..policy
+            },
+            "exhausted:element-limit",
+        ),
+        (
+            Policy {
+                max_value_bytes: exact_output - 1,
+                ..policy
+            },
+            "exhausted:output-bytes",
+        ),
+    ] {
+        let mut budget = Budget { limit: 0, spent: 0 };
+        assert_eq!(
+            rows::<KoalaBear>(
+                view.clone(),
+                4,
+                &[],
+                &[],
+                &[],
+                &policy,
+                &mut budget,
+                exact_output
+            )
+            .unwrap_err()
+            .code,
+            error
+        );
+        assert_eq!(budget.spent, 0);
+    }
+}
+
 fn recurrence() -> (Bundle, Json, Json, Json) {
     let bundle = Bundle::parse(include_str!(
         "../../../../compiler/adapters/plonky3/fixtures/recurrence/bundle.json"
