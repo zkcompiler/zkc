@@ -214,6 +214,29 @@ def test_transform_directions_have_complete_independent_expectations(bench, degr
     assert backward.incorrect['P']['expected'] != data['xs']
 
 
+@pytest.mark.parametrize('degree', (1, 4, 8))
+@pytest.mark.parametrize('layout', ('columns', 'rows'))
+def test_batch_coset_forms_match_direct_integer_evaluation_and_layout(bench, degree, layout):
+    a = bench['algebra']
+    shape = {'extension_degree': degree, 'height': 4, 'width': 3,
+             'evaluation_size': 8, 'layout': layout}
+    programs = [bench['operations'].coset_batch(shape | {'form': form})
+                for form in ('columns', 'library')]
+    assert programs[0].inputs == programs[1].inputs
+    data = programs[0].inputs[0]['P']
+    shift = decode(data['shift'])
+    coefficients = [a.dense(4, degree, 302+column) for column in range(3)]
+    root = pow(1791270792, (1 << 24)//8, a.P)
+    columns = [[a.horner(cs, tuple(c*pow(root, i, a.P) % a.P for c in shift))
+                for i in range(8)] for cs in coefficients]
+    expected = ([x for column in columns for x in column] if layout == 'columns' else
+                [columns[column][row] for row in range(8) for column in range(3)])
+    assert list(map(decode, data['expected'])) == expected
+    assert all(p.incorrect['P']['expected'] != data['expected'] for p in programs)
+    assert 'v::concat' in programs[0].source
+    assert 'coset::extend_columns' in programs[1].source
+
+
 @pytest.mark.parametrize('operation', ('vector-scale', 'scale-each', 'msm'))
 def test_separate_curve_operations_check_all_scalar_expectations(bench, operation):
     program = bench['operations'].curve_operation({'elements': 33, 'operation': operation})

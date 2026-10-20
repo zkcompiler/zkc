@@ -89,6 +89,18 @@ The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
+`poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
+quartic/octic extensions. Shape and domain checks precede numerical admission;
+the whole input/output vectors must fit the element policy. Work admission
+counts both transform lengths, base coordinates, complete extension shift
+arithmetic and construction. Adapter-owned transform payloads are reserved
+before allocation without allocating duplicate accounting buffers. The private
+output includes its staging/final overlap. Provider twiddle caches, hidden
+provider scratch and allocator overhead remain outside that reservation.
+Every column must succeed before publication, including when a later column
+fails a shrinking-degree check. The operation has its own resource profile;
+the library's use of it does not promise the exhaustion point of separate calls.
+
 ## Pointwise expressions
 
 The compiler-generated `numerical.map`, `numerical.sum` and

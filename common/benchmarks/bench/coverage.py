@@ -32,7 +32,7 @@ class Case:
             return operations.host_vector(shape)
         if self.name in ('hash_bytes', 'poseidon', 'merkle'):
             return getattr(commitments, self.name)(shape)
-        if self.name in ('transform', 'coset', 'curve_operation'):
+        if self.name in ('transform', 'coset', 'coset_batch', 'curve_operation'):
             return getattr(operations, self.name)(shape)
         return getattr(programs, self.name)(shape)
 
@@ -143,6 +143,16 @@ def cases():
                 {'extension_degree': degree, 'elements': n, 'operation': operation}, 'operation', (operation,),
                 'One direction, unit shift, dense full-degree coefficients; independent Python oracle. Includes polynomial adaptation, equality and Host costs.')
     for degree in (1, 4, 8):
+        # Width, transform length and conversion cost vary separately. Both
+        # forms consume identical inputs and check every output coordinate.
+        for height, width, layout in [(32, w, 'columns') for w in (1, 4, 16, 64)] + [
+                (1024, 1, 'columns'), (256, 4, 'columns'), (32, 4, 'rows')]:
+            for form in ('columns', 'library'):
+                add(f'coset-batch-ext{degree}-h{height}-w{width}-{layout}-{form}', 'coset_batch',
+                    {'extension_degree': degree, 'height': height, 'width': width,
+                     'evaluation_size': height*2, 'layout': layout, 'form': form},
+                    'operation', ('coset extension', 'batch output construction', layout+' layout', 'vector equality'),
+                    'Independent integer transforms and full output comparison. Column loop and library share inputs; row layout includes both transposes. SDK/run includes validation and Host costs.')
         for n in (32, 8192):
             for operation in ('points', 'fold'):
                 add(f'coset-ext{degree}-{operation}-{n}', 'coset',

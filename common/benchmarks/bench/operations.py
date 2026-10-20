@@ -79,6 +79,46 @@ def transform(shape):
                   'expected': list(map(a.encode, expected))})
 
 
+def coset_batch(shape):
+    """Matched authored columns and library batching, with explicit layout costs."""
+    degree, height, width = shape['extension_degree'], shape['height'], shape['width']
+    size, layout, form = shape['evaluation_size'], shape['layout'], shape['form']
+    if layout not in ('columns', 'rows') or form not in ('columns', 'library'):
+        raise ValueError('unknown coset batch layout or form')
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = a.FieldOracle(field)
+    shift, = f.dense(1, 301)
+    coefficients = [f.dense(height, 302+column) for column in range(width)]
+    source = [a.coset(cs, f.one, height) for cs in coefficients]
+    target = [a.coset(cs, shift, size) for cs in coefficients]
+
+    def flatten(columns, rows):
+        return ([value for column in columns for value in column] if layout == 'columns' else
+                [columns[column][row] for row in range(rows) for column in range(width)])
+
+    prefix = 'let columns=xs;' if layout == 'columns' else 'let columns=v::transpose(xs,height,width);'
+    if form == 'library':
+        body = 'let out=coset::extend_columns(columns,width,height,shift,size);'
+    else:
+        body = '''let mut out=v::empty<F>();
+          for column in 0..width {
+            let values=v::slice(columns,column*height,height);
+            let p=coset::interpolate(coset::word(values,1));
+            out=v::concat(out,coset::values(coset::evaluate_coset(p,shift,size)));
+          }'''
+    suffix = 'return v::equal(out,expected);' if layout == 'columns' else \
+             'return v::equal(v::transpose(out,width,size),expected);'
+    program = local(field, 'xs:Vector<F>, width:index, height:index, shift:F, size:index, expected:Vector<F>',
+                    prefix+body+suffix,
+                    {'xs': list(map(f.encode, flatten(source, height))), 'width': str(width),
+                     'height': str(height), 'shift': f.encode(shift), 'size': str(size),
+                     'expected': list(map(f.encode, flatten(target, size)))})
+    program.source = program.source.replace('fn compute(', 'use zkc::coset as coset;\nfn compute(')
+    program.dependencies = ('core.collections', 'core.polynomial')
+    program.oracle = 'Independent integer radix-two evaluation of dense coefficients; every output and extension coordinate checked; no native roundtrip oracle'
+    return program
+
+
 def coset(shape):
     """Separate subgroup traversal and folding with arbitrary coset shifts."""
     degree, n, operation = shape['extension_degree'], shape['elements'], shape['operation']

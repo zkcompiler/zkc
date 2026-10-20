@@ -2,7 +2,7 @@ module zkc::coset;
 use zkc::primitives::coset as raw;
 pub use zkc::primitives::coset::{point,points,root,opening_quotient};
 use zkc::boolean as boolean;
-use zkc::vector::{Vector, length, empty, concat, slice};
+use zkc::vector::{Vector, length, slice};
 use zkc::polynomial::{Polynomial, evaluate};
 use zkc::scalar::{power};
 use zkc::indices::{maximum};
@@ -88,13 +88,15 @@ pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index
 pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
     height: index, shift: F, size: index) -> Vector<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
   require length(columns) == height * count;
-  let mut extended = empty<F>();
-  for column in 0..count {
-    let evaluations = slice(columns, column * height, height);
-    let polynomial = interpolate(word(evaluations, 1));
-    extended = concat(extended, values(evaluate_coset(polynomial, shift, size)));
-  }
-  return extended;
+  return raw::extend(columns, count, height, 1, shift, size);
+}
+
+// Re-evaluate each admitted column without exposing intermediate coefficients.
+pub fn extend_batch<F: Field>(input: ColumnBatch<F>, output: CosetDomain<F>)
+    -> ColumnBatch<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  let data = raw::extend(input.data, input.width, input.geometry.size,
+    input.geometry.shift, output.shift, output.size);
+  return ColumnBatch<F> { geometry: output, width: input.width, data: data };
 }
 
 pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,

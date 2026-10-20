@@ -1,6 +1,7 @@
 //! Checked native installation of coset kernels. Each backend owns its DFT
 //! preparation; no protocol value or transcript state lives in this cache.
 use super::polynomial::{self, Domain, Error, Kernels};
+use crate::numerical::transform::CosetBatch;
 use crate::{
     KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, numerical::Call,
     refused, value::size,
@@ -9,6 +10,11 @@ use p3_field::ExtensionField;
 use zkc_runtime::vm::{Identity, Invocation};
 
 fn failure(error: Error) -> zkc_runtime::vm::BackendError {
+    match error {
+        Error::SizeOverflow => return exhausted("size-overflow"),
+        Error::Allocation => return exhausted("allocation"),
+        _ => {}
+    }
     refused(match error {
         Error::DomainSize => "coset-size",
         Error::ElementLimit => "coset-element-limit",
@@ -19,6 +25,8 @@ fn failure(error: Error) -> zkc_runtime::vm::BackendError {
         Error::FoldSize => "coset-fold-size",
         Error::PointOnDomain => "coset-opening-point",
         Error::OpeningValue => "polynomial-opening-value",
+        Error::BatchShape => "coset-batch-shape",
+        Error::SizeOverflow | Error::Allocation => unreachable!(),
     })
 }
 trait Family: ExtensionField<KoalaBear> {
@@ -95,6 +103,7 @@ pub(crate) fn apply(
     if !matches!(
         name,
         "poly.coset_evaluate"
+            | "poly.coset_extend"
             | "poly.coset_interpolate"
             | "poly.domain_point"
             | "poly.domain_root"
@@ -184,6 +193,45 @@ fn execute<E: Family>(
             allocation(v.len())?;
             E::polynomial_value(kernels.interpolate(v, d).map_err(failure)?)
         }
+        "poly.coset_extend" => {
+            let values = vector(0)?;
+            let shape = CosetBatch::new(values.len(), index(1)?, index(2)?, index(5)?)?;
+            // Empty batches do not inspect unused shifts or domains.
+            let domains = if shape.width == 0 {
+                None
+            } else {
+                let input = domain(shape.height, field(3)?)?;
+                let output = domain(shape.size, field(4)?)?;
+                Some((input, output))
+            };
+            policy.vector_width(shape.input_len, width)?;
+            policy.vector_width(shape.output_len, width)?;
+            let retained = size(shape.output_len, width)?;
+            policy.output(retained, available)?;
+            let call = Call::new(policy, available);
+            call.work(shape.work(E::DIMENSION)?)?;
+            // Admit every adapter-owned Vec before allocating even the result.
+            // P3's internal cached twiddles are outside this payload scope.
+            let workspace = if domains.is_some() {
+                shape.p3_workspace()?
+            } else {
+                0
+            };
+            let _workspace = call.transform_workspace::<E>(workspace)?;
+            let mut output = call.output(shape.output_len, E::ZERO, retained)?;
+            if let Some((input_domain, output_domain)) = domains {
+                kernels
+                    .coset_extend_into(
+                        values,
+                        shape.width,
+                        input_domain,
+                        output_domain,
+                        output.as_mut_slice(),
+                    )
+                    .map_err(failure)?;
+            }
+            output.finish(|values| Ok(E::vector_value(values)))?
+        }
         "poly.even_odd_fold" => {
             let v = vector(0)?;
             let d = domain(v.len(), field(1)?)?;
@@ -234,6 +282,13 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
     use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
+        poly::operation(
+            "poly.coset_extend",
+            &[Vector, Index, Index, Field, Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&["arkworks/poly.coset_extend", "plonky3/poly.coset_extend"]),
         poly::operation(
             "poly.coset_evaluate",
             &[Polynomial, Field, Index],
@@ -289,3 +344,213 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
         ]),
     ]
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use p3_field::PrimeCharacteristicRing;
+
+    fn batch_args<E: Family>(values: Vec<E>, width: u64, height: u64, size: u64) -> Vec<Value> {
+        vec![
+            E::vector_value(values),
+            Value::Index(width),
+            Value::Index(height),
+            E::field_value(E::from_basis_coefficients_fn(|j| {
+                KoalaBear::from_usize(3 + j)
+            })),
+            E::field_value(E::from_basis_coefficients_fn(|j| {
+                KoalaBear::from_usize(7 + 2 * j)
+            })),
+            Value::Index(size),
+        ]
+    }
+
+    fn run<E: Family>(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+        execute::<E>(
+            "poly.coset_extend",
+            args,
+            policy,
+            available,
+            &Kernels::default(),
+        )
+    }
+
+    fn native_batch_checks<E: Family>() {
+        let policy = Policy::default();
+        let kernels = Kernels::default();
+        let args = batch_args::<E>(vec![], 1, 4, 2);
+        let input = Domain::new(4, E::field(&args[3]).unwrap(), 16).unwrap();
+        let output = Domain::new(2, E::field(&args[4]).unwrap(), 16).unwrap();
+        for coefficients in [vec![], vec![E::ONE], vec![E::ONE, E::ONE]] {
+            let values = kernels.evaluate(&coefficients, input).unwrap();
+            let args = batch_args(values.clone(), 1, 4, 2);
+            let alias = args[0].clone();
+            let result = run::<E>(&args, &policy, usize::MAX).unwrap();
+            assert_eq!(
+                E::vector(&result[0]).unwrap(),
+                kernels.evaluate(&coefficients, output).unwrap()
+            );
+            assert_eq!(E::vector(&alias).unwrap(), values);
+            assert_ne!(
+                E::vector(&result[0]).unwrap().as_ptr(),
+                E::vector(&alias).unwrap().as_ptr()
+            );
+        }
+
+        let low = kernels.evaluate(&[E::ONE, E::ONE], input).unwrap();
+        let high = kernels
+            .evaluate(&[E::ZERO, E::ZERO, E::ONE], input)
+            .unwrap();
+        for values in [high.clone(), [low.clone(), high].concat()] {
+            let args = batch_args(values.clone(), (values.len() / 4) as u64, 4, 2);
+            let alias = args[0].clone();
+            assert_eq!(
+                run::<E>(&args, &policy, usize::MAX).unwrap_err().code,
+                "refused:coset-coefficient-count"
+            );
+            assert_eq!(E::vector(&alias).unwrap(), values);
+        }
+
+        // Managed limits include final Arc overlap and provider-consumed Vecs.
+        let args = batch_args(low.clone(), 1, 4, 8);
+        let shape = CosetBatch::new(4, 1, 4, 8).unwrap();
+        let retained = size(8, std::mem::size_of::<E>()).unwrap();
+        let managed = retained + (8 + shape.p3_workspace().unwrap()) * std::mem::size_of::<E>();
+        let work = shape.work(E::DIMENSION).unwrap();
+        for (policy, available, expected) in [
+            (
+                Policy {
+                    max_numerical_work: 0,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_work: work - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: managed - 1,
+                    ..policy
+                },
+                retained,
+                "exhausted:numerical-bytes",
+            ),
+            (
+                Policy {
+                    max_numerical_work: 0,
+                    ..policy
+                },
+                retained - 1,
+                "exhausted:output-bytes",
+            ),
+            (
+                Policy {
+                    max_table_elements: 4,
+                    ..policy
+                },
+                retained,
+                "refused:coset-element-limit",
+            ),
+        ] {
+            let alias = args[0].clone();
+            assert_eq!(
+                run::<E>(&args, &policy, available).unwrap_err().code,
+                expected
+            );
+            assert_eq!(E::vector(&alias).unwrap(), low);
+        }
+        let exact = Policy {
+            max_numerical_bytes: managed,
+            max_numerical_work: work,
+            ..policy
+        };
+        assert!(run::<E>(&args, &exact, retained).is_ok());
+
+        // Individual domains fit, but the whole input/output vector must fit too.
+        for (height, size) in [(4, 2), (2, 4)] {
+            let args = batch_args(vec![E::ZERO; 4 * height], 4, height as u64, size as u64);
+            let small = Policy {
+                max_table_elements: 8,
+                ..policy
+            };
+            assert_eq!(
+                run::<E>(&args, &small, usize::MAX).unwrap_err().code,
+                "exhausted:element-limit"
+            );
+        }
+    }
+
+    #[test]
+    fn native_batch_scopes_preserve_all_installed_coordinates_and_aliases() {
+        native_batch_checks::<KoalaBear>();
+        native_batch_checks::<KoalaBearExt4>();
+        native_batch_checks::<KoalaBearExt8>();
+    }
+
+    #[test]
+    fn native_batch_shape_empty_and_domain_refusal_precedence() {
+        let policy = Policy::default();
+        for (values, width, height, size, expected) in [
+            (vec![KoalaBear::ONE], 0, 0, 0, "refused:coset-batch-shape"),
+            (
+                vec![KoalaBear::ONE; 3],
+                1,
+                4,
+                2,
+                "refused:coset-batch-shape",
+            ),
+            (
+                vec![KoalaBear::ONE; 5],
+                1,
+                4,
+                2,
+                "refused:coset-batch-shape",
+            ),
+            (vec![], u64::MAX, 2, 2, "exhausted:size-overflow"),
+            (vec![], u64::MAX, 0, 2, "exhausted:size-overflow"),
+            (vec![], 1, 0, 0, "refused:coset-size"),
+            (vec![KoalaBear::ONE; 4], 1, 4, 3, "refused:coset-size"),
+        ] {
+            let args = batch_args(values, width, height, size);
+            assert_eq!(
+                run::<KoalaBear>(&args, &policy, usize::MAX)
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+        }
+        let mut empty = batch_args::<KoalaBear>(vec![], 0, u64::MAX, u64::MAX);
+        empty[3] = Value::KoalaBearField(KoalaBear::ZERO);
+        empty[4] = Value::KoalaBearField(KoalaBear::ZERO);
+        assert!(
+            KoalaBear::vector(&run::<KoalaBear>(&empty, &policy, usize::MAX).unwrap()[0])
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut args = batch_args(vec![KoalaBear::ONE; 4], 1, 4, 3);
+        args[3] = Value::KoalaBearField(KoalaBear::ZERO);
+        assert_eq!(
+            run::<KoalaBear>(&args, &policy, usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:coset-zero-shift"
+        );
+        args[3] = Value::KoalaBearField(KoalaBear::ONE);
+        args[5] = Value::Index(4);
+        args[4] = Value::KoalaBearField(KoalaBear::ZERO);
+        assert_eq!(
+            run::<KoalaBear>(&args, &policy, usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:coset-zero-shift"
+        );
+    }
+}

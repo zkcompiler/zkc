@@ -9,6 +9,8 @@ use zkc_runtime::vm::{AttributeRule, BoundSignature, Invocation, OperationBindin
 pub struct NativeCall {
     rule: AttributeRule,
     attributes: Box<[String]>,
+    // A decoded payload only; the reached invocation still checks its binding.
+    unsigned64: Option<u64>,
     expression: Option<Box<ExpressionCall>>,
 }
 struct ExpressionCall {
@@ -51,6 +53,7 @@ impl NativeCall {
         *slot = Some(Self {
             rule,
             attributes: attributes.into(),
+            unsigned64: None,
             expression: Some(Box::new(ExpressionCall {
                 binding: binding.clone(),
                 signature: signature.clone(),
@@ -65,6 +68,10 @@ impl NativeCall {
             .as_ref()
             .map(|expression| &expression.plan)
             .ok_or_else(|| refused("kernel-preparation"))
+    }
+
+    pub(super) fn unsigned64(&self) -> Result<u64> {
+        self.unsigned64.ok_or_else(|| refused("kernel-preparation"))
     }
 
     pub(super) fn prepare(
@@ -82,10 +89,19 @@ impl NativeCall {
         {
             return Ok(());
         }
-        Self::check(rule, attributes)?;
+        let unsigned64 = if rule == AttributeRule::Unsigned64 {
+            Some(
+                crate::kernels::indices::decode_unsigned64(attributes)
+                    .ok_or_else(|| refused("kernel-attributes"))?,
+            )
+        } else {
+            Self::check(rule, attributes)?;
+            None
+        };
         *slot = Some(Self {
             rule,
             attributes: attributes.into(),
+            unsigned64,
             expression: None,
         });
         Ok(())
@@ -93,11 +109,10 @@ impl NativeCall {
     pub(super) fn check(rule: AttributeRule, attributes: &[String]) -> Result<()> {
         match rule {
             AttributeRule::None if attributes.is_empty() => (),
-            AttributeRule::Unsigned64
-                if attributes.len() == 1
-                    && attributes[0]
-                        .parse::<u64>()
-                        .is_ok_and(|n| n.to_string() == attributes[0]) => {}
+            AttributeRule::Unsigned64 => {
+                crate::kernels::indices::decode_unsigned64(attributes)
+                    .ok_or_else(|| refused("kernel-attributes"))?;
+            }
             AttributeRule::NaturalIndex if attributes.len() == 1 => {
                 zkc_runtime::logical::natural_index(&attributes[0])
                     .map_err(|_| refused("kernel-attributes"))?;
@@ -207,20 +222,38 @@ mod tests {
         let attributes = vec!["12".into()];
         NativeCall::prepare(&mut call, AttributeRule::Unsigned64, &attributes).unwrap();
         let storage = call.as_ref().unwrap().attributes.as_ptr();
+        assert_eq!(call.as_ref().unwrap().unsigned64().unwrap(), 12);
         NativeCall::prepare(&mut call, AttributeRule::Unsigned64, &attributes).unwrap();
         assert_eq!(storage, call.as_ref().unwrap().attributes.as_ptr());
 
         // A cache hit never licenses another spelling or another rule.
-        for invalid in [vec!["012".into()], vec!["-1".into()], vec![]] {
+        for invalid in [
+            vec!["012".into()],
+            vec!["-1".into()],
+            vec!["+12".into()],
+            vec!["12 ".into()],
+            vec!["18446744073709551616".into()],
+            vec!["12".into(), "13".into()],
+            vec![],
+        ] {
             let direct = NativeCall::prepare(&mut None, AttributeRule::Unsigned64, &invalid);
             let prepared = NativeCall::prepare(&mut call, AttributeRule::Unsigned64, &invalid);
             assert_eq!(direct, prepared);
             assert!(prepared.is_err());
             assert_eq!(storage, call.as_ref().unwrap().attributes.as_ptr());
+            assert_eq!(call.as_ref().unwrap().unsigned64().unwrap(), 12);
         }
         assert!(NativeCall::prepare(&mut call, AttributeRule::None, &attributes).is_err());
         NativeCall::prepare(&mut call, AttributeRule::NaturalIndices, &attributes).unwrap();
         assert_eq!(call.as_ref().unwrap().rule, AttributeRule::NaturalIndices);
+        assert_eq!(
+            call.as_ref().unwrap().unsigned64(),
+            Err(refused("kernel-preparation"))
+        );
+        for (literal, expected) in [("0", 0), ("19", 19), ("18446744073709551615", u64::MAX)] {
+            NativeCall::prepare(&mut call, AttributeRule::Unsigned64, &[literal.into()]).unwrap();
+            assert_eq!(call.as_ref().unwrap().unsigned64().unwrap(), expected);
+        }
     }
 
     #[test]

@@ -1290,6 +1290,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "poly.coefficient_count",
         "poly.coefficients",
         "poly.coset_evaluate",
+        "poly.coset_extend",
         "poly.coset_interpolate",
         "poly.degree_check",
         "poly.divide_opening",

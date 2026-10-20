@@ -50,6 +50,15 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "plonky3/poly.coset_evaluate",
     ]),
     Contract::selectable(
+        "poly.coset_extend",
+        (
+            &[Vector, Index, Index, Field, Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&["arkworks/poly.coset_extend", "plonky3/poly.coset_extend"]),
+    Contract::selectable(
         "poly.coset_interpolate",
         (&[Vector, Field], &[Polynomial], AttributeRule::None),
     )
@@ -233,6 +242,7 @@ fn resolve(
     if matches!(
         binding.contract.as_str(),
         "poly.coset_evaluate"
+            | "poly.coset_extend"
             | "poly.coset_interpolate"
             | "poly.domain_point"
             | "poly.domain_root"

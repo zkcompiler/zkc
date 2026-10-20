@@ -6,6 +6,7 @@
 
 pub(crate) mod expression;
 mod memory;
+pub(crate) mod transform;
 mod views;
 
 pub(crate) use views::RowMajor;
