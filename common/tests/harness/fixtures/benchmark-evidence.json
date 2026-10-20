@@ -1,0 +1,1145 @@
+{
+  "ingress": {
+    "compiler_options": [],
+    "contracts": {},
+    "format": "zkc.benchmark/0",
+    "host": {},
+    "ingress": "prepared",
+    "matrix": [
+      {
+        "backend": {
+          "ingress": "prepared",
+          "inputs": [
+            {
+              "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-0/proof.bin",
+              "public": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/0-public.json",
+              "witness": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/0-witness.json"
+            },
+            {
+              "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-1/proof.bin",
+              "public": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/1-public.json",
+              "witness": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/1-witness.json"
+            }
+          ],
+          "kind": "host",
+          "package": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/entry.zkpkg",
+          "preparation": true,
+          "preparation_bytes": null,
+          "preparation_entries": null,
+          "sha256": "a402879479867be8fe29015d7877fd34ee216247ce302436afaf73b0cdbf25f3"
+        },
+        "boundary": "admitted_entry_call",
+        "case": "stark-h32-w4-b4",
+        "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
+        "implementation": "zkc",
+        "operation": "prove",
+        "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-0/proof.bin"
+      },
+      {
+        "backend": {
+          "ingress": "prepared",
+          "inputs": [
+            {
+              "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-0/proof.bin",
+              "public": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/0-public.json",
+              "witness": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/0-witness.json"
+            },
+            {
+              "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-1/proof.bin",
+              "public": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/1-public.json",
+              "witness": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/1-witness.json"
+            }
+          ],
+          "kind": "host",
+          "package": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/entry.zkpkg",
+          "preparation": true,
+          "preparation_bytes": null,
+          "preparation_entries": null,
+          "sha256": "a402879479867be8fe29015d7877fd34ee216247ce302436afaf73b0cdbf25f3"
+        },
+        "boundary": "admitted_entry_call",
+        "case": "stark-h32-w4-b4",
+        "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
+        "implementation": "zkc",
+        "operation": "verify",
+        "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-0/proof.bin"
+      },
+      {
+        "backend": {
+          "accept_role": "P",
+          "ingress": "prepared",
+          "kind": "run",
+          "package": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/entry.zkpkg",
+          "roles": {
+            "P": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/0-P.json"
+          },
+          "sha256": "23a56c3ef27366433a4f77bd66c1a25243aa6b0aaf975d474256a692d418197f"
+        },
+        "boundary": "admitted_run_call",
+        "case": "host-vector-kb-length-65536",
+        "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
+        "implementation": "zkc",
+        "operation": "run",
+        "proof": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/unused"
+      }
+    ],
+    "observation": "timing",
+    "plan": {
+      "iterations": 1,
+      "samples": 4,
+      "warmups": 2
+    },
+    "processes": 1,
+    "results": [
+      {
+        "case": "stark-h32-w4-b4",
+        "implementation": "zkc",
+        "operation": "prove",
+        "process_wall_seconds": 0.10500575508922338,
+        "proof": {
+          "bytes": 4508,
+          "mtime_ns": 1792499627297354004,
+          "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.bin",
+          "sha256": "d88f8357483696cc1237e775384f0f2929035452e7de6856ef88b39f3d824ebf"
+        },
+        "repetition": 0,
+        "status": "passed",
+        "validated_proofs": 6,
+        "worker": {
+          "admission_ns": 22824175,
+          "boundary": "admitted_entry_call",
+          "build": {
+            "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+            "debug_assertions": false,
+            "execution_counts": false,
+            "opt_level": "3",
+            "profile": "release",
+            "target": "x86_64-unknown-linux-gnu"
+          },
+          "diagnostics": {
+            "attempt_policy_sha256": null,
+            "attempts": [],
+            "binding_sha256": "dc8d32fb0bb933705598873927f91a573565dc59b82f578595f89f31a467e358",
+            "bytes": 4508,
+            "cancelled": false,
+            "cleanup_errors": [],
+            "external_work": 0,
+            "external_work_limit": 16777216,
+            "instructions": 15178,
+            "iterations": 1384,
+            "logical_bytes": 13776000,
+            "messages": 24,
+            "preparation": {
+              "entries": 2,
+              "hits": 10,
+              "retained_bytes": 4705
+            },
+            "resources": [
+              {
+                "budget": 999944,
+                "generation": 56,
+                "kind": "capability",
+                "stage": "transcript",
+                "transitions": 56
+              }
+            ],
+            "return_at": null,
+            "ring_work": 18470,
+            "ring_work_limit": 268435456,
+            "stop": null,
+            "total_value_bytes": 11159032
+          },
+          "format": "zkc.benchmark-worker/0",
+          "lifecycle": {
+            "admit_ns": 18791455,
+            "calls": [
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 0,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 490
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 2,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 980
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 4,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 1060
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 6,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 910
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 8,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 930
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 10,
+                  "retained_bytes": 4705
+                },
+                "request_ns": 980
+              }
+            ],
+            "capture_ns": 4032720,
+            "diagnostics_ns": 5930,
+            "ingress": "prepared",
+            "input_setup": [
+              {
+                "construction_ns": 141625,
+                "input_index": 0,
+                "retained_payload_bytes": 1620
+              },
+              {
+                "construction_ns": 98243,
+                "input_index": 1,
+                "retained_payload_bytes": 1620
+              }
+            ],
+            "peak_rss_after_diagnostics": 16130048,
+            "peak_rss_before_diagnostics": 16130048,
+            "preparation_limits": {
+              "bytes": 8388608,
+              "default_bytes": 8388608,
+              "default_entries": 128,
+              "entries": 128
+            }
+          },
+          "process": {
+            "affinity": "0-31",
+            "rayon_num_threads": "1",
+            "threads_at_exit": "1"
+          },
+          "process_peak_rss_bytes": 15740928,
+          "proof_bytes": 4508,
+          "proofs": [
+            {
+              "bytes": 4828,
+              "input_index": 0,
+              "mtime_ns": 1792499627233351966,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.0.proof",
+              "sha256": "bcc374c5725db3275c27564be14615dec69b2910c2cb4b3700480ae6b18d23fd"
+            },
+            {
+              "bytes": 4508,
+              "input_index": 1,
+              "mtime_ns": 1792499627246352380,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.1.proof",
+              "sha256": "d88f8357483696cc1237e775384f0f2929035452e7de6856ef88b39f3d824ebf"
+            },
+            {
+              "bytes": 4828,
+              "input_index": 0,
+              "mtime_ns": 1792499627258352762,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.2.proof",
+              "sha256": "bcc374c5725db3275c27564be14615dec69b2910c2cb4b3700480ae6b18d23fd"
+            },
+            {
+              "bytes": 4508,
+              "input_index": 1,
+              "mtime_ns": 1792499627271353176,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.3.proof",
+              "sha256": "d88f8357483696cc1237e775384f0f2929035452e7de6856ef88b39f3d824ebf"
+            },
+            {
+              "bytes": 4828,
+              "input_index": 0,
+              "mtime_ns": 1792499627284353590,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.4.proof",
+              "sha256": "bcc374c5725db3275c27564be14615dec69b2910c2cb4b3700480ae6b18d23fd"
+            },
+            {
+              "bytes": 4508,
+              "input_index": 1,
+              "mtime_ns": 1792499627297354004,
+              "path": "/benchmark-fixtures/runs/ingress-prepared/runs/stark-h32-w4-b4/zkc/prove/0/proof.5.proof",
+              "sha256": "d88f8357483696cc1237e775384f0f2929035452e7de6856ef88b39f3d824ebf"
+            }
+          ],
+          "samples": [
+            {
+              "cpu_ns": 12824634,
+              "elapsed_ns": 12823073,
+              "first_call_ns": 12823073,
+              "index": 0,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 12899164,
+              "elapsed_ns": 12897665,
+              "first_call_ns": 12897665,
+              "index": 1,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 12685493,
+              "elapsed_ns": 12703628,
+              "first_call_ns": 12703628,
+              "index": 2,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 12627764,
+              "elapsed_ns": 12626366,
+              "first_call_ns": 12626366,
+              "index": 3,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 12780454,
+              "elapsed_ns": 12778981,
+              "first_call_ns": 12778981,
+              "index": 4,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 12814614,
+              "elapsed_ns": 12813262,
+              "first_call_ns": 12813262,
+              "index": 5,
+              "iterations": 1,
+              "phase": "sample"
+            }
+          ],
+          "status": "passed",
+          "timer_floor_ns": 20
+        }
+      },
+      {
+        "case": "stark-h32-w4-b4",
+        "implementation": "zkc",
+        "operation": "verify",
+        "process_wall_seconds": 0.06533779995515943,
+        "proof": {
+          "bytes": 4828,
+          "mtime_ns": 1792499623136221409,
+          "path": "/benchmark-fixtures/runs/ingress-prepared/cases/stark-h32-w4-b4/produce-0/proof.bin",
+          "sha256": "bcc374c5725db3275c27564be14615dec69b2910c2cb4b3700480ae6b18d23fd"
+        },
+        "repetition": 0,
+        "status": "passed",
+        "validated_proofs": 0,
+        "worker": {
+          "admission_ns": 15832108,
+          "boundary": "admitted_entry_call",
+          "build": {
+            "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+            "debug_assertions": false,
+            "execution_counts": false,
+            "opt_level": "3",
+            "profile": "release",
+            "target": "x86_64-unknown-linux-gnu"
+          },
+          "diagnostics": {
+            "attempt_policy_sha256": null,
+            "attempts": [],
+            "binding_sha256": "dc8d32fb0bb933705598873927f91a573565dc59b82f578595f89f31a467e358",
+            "bytes": 4508,
+            "cancelled": false,
+            "cleanup_errors": [],
+            "external_work": 0,
+            "external_work_limit": 16777216,
+            "instructions": 13148,
+            "iterations": 1129,
+            "logical_bytes": 11117776,
+            "messages": 24,
+            "preparation": {
+              "entries": 2,
+              "hits": 10,
+              "retained_bytes": 4706
+            },
+            "resources": [
+              {
+                "budget": 999944,
+                "generation": 56,
+                "kind": "capability",
+                "stage": "transcript",
+                "transitions": 56
+              }
+            ],
+            "return_at": null,
+            "ring_work": 5695,
+            "ring_work_limit": 268435456,
+            "stop": null,
+            "total_value_bytes": 9298632
+          },
+          "format": "zkc.benchmark-worker/0",
+          "lifecycle": {
+            "admit_ns": 12849833,
+            "calls": [
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 0,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 290
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 2,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 650
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 4,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 580
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 6,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 650
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 8,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 580
+              },
+              {
+                "decode_ns": null,
+                "input_index": 1,
+                "preparation": {
+                  "entries": 2,
+                  "hits": 10,
+                  "retained_bytes": 4706
+                },
+                "request_ns": 550
+              }
+            ],
+            "capture_ns": 2982275,
+            "diagnostics_ns": 4550,
+            "ingress": "prepared",
+            "input_setup": [
+              {
+                "construction_ns": 86313,
+                "input_index": 0,
+                "retained_payload_bytes": 330
+              },
+              {
+                "construction_ns": 47191,
+                "input_index": 1,
+                "retained_payload_bytes": 330
+              }
+            ],
+            "peak_rss_after_diagnostics": 16072704,
+            "peak_rss_before_diagnostics": 16072704,
+            "preparation_limits": {
+              "bytes": 8388608,
+              "default_bytes": 8388608,
+              "default_entries": 128,
+              "entries": 128
+            }
+          },
+          "process": {
+            "affinity": "0-31",
+            "rayon_num_threads": "1",
+            "threads_at_exit": "1"
+          },
+          "process_peak_rss_bytes": 15773696,
+          "proof_bytes": 4508,
+          "proofs": [],
+          "samples": [
+            {
+              "cpu_ns": 7666312,
+              "elapsed_ns": 7664836,
+              "first_call_ns": 7664836,
+              "index": 0,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 7565143,
+              "elapsed_ns": 7564073,
+              "first_call_ns": 7564073,
+              "index": 1,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 8275002,
+              "elapsed_ns": 8274045,
+              "first_call_ns": 8274045,
+              "index": 2,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 7413102,
+              "elapsed_ns": 7411958,
+              "first_call_ns": 7411958,
+              "index": 3,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 7479072,
+              "elapsed_ns": 7478040,
+              "first_call_ns": 7478040,
+              "index": 4,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 7529373,
+              "elapsed_ns": 7528252,
+              "first_call_ns": 7528252,
+              "index": 5,
+              "iterations": 1,
+              "phase": "sample"
+            }
+          ],
+          "status": "passed",
+          "timer_floor_ns": 20
+        }
+      },
+      {
+        "case": "host-vector-kb-length-65536",
+        "implementation": "zkc",
+        "operation": "run",
+        "process_wall_seconds": 0.013132172171026468,
+        "proof": null,
+        "repetition": 0,
+        "status": "passed",
+        "validated_proofs": 0,
+        "worker": {
+          "admission_ns": 493086,
+          "boundary": "admitted_run_call",
+          "build": {
+            "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+            "debug_assertions": false,
+            "execution_counts": false,
+            "opt_level": "3",
+            "profile": "release",
+            "target": "x86_64-unknown-linux-gnu"
+          },
+          "diagnostics": {
+            "acceptance": null,
+            "assurance": [
+              "authenticated-supplied-schedule",
+              "session-freshness-host-obligation",
+              "local-only-public-inputs",
+              "registry-selected-receive-keys"
+            ],
+            "bundle_sha256": "c06525f71f17c7d0e081361f62af7ce5abd2bc93f33cd95e9b479ed131579cb8",
+            "diagnostics": [],
+            "failure": null,
+            "format": "zkc.bundle-result/0",
+            "layout": [
+              {
+                "inputs": [
+                  [
+                    0,
+                    "vector:koala-bear@plonky3.koala-bear-vector/0",
+                    "wire"
+                  ],
+                  [
+                    1,
+                    "index@native.index/0",
+                    "wire"
+                  ]
+                ],
+                "outputs": [
+                  "bool@native.bool/0"
+                ],
+                "role": "role00000000",
+                "services": []
+              }
+            ],
+            "limits": {
+              "admission": {
+                "bytes": 16777216,
+                "candidate_bytes": 4194304,
+                "depth": 256,
+                "nodes": 250000,
+                "roles": 1024,
+                "steps": 32768,
+                "string_bytes": 4096
+              },
+              "capacity": [
+                "zkc.native-capacity/0",
+                "65536",
+                "4096",
+                "16777216",
+                "67108864",
+                [
+                  "1000000",
+                  "100000",
+                  "4294967296"
+                ],
+                [
+                  "67108864",
+                  "268435456"
+                ]
+              ],
+              "execution": {
+                "external_work_per_role": 16777216,
+                "message_bytes": 4096,
+                "ring_work_per_role": 268435456,
+                "steps": 32768,
+                "total_wire_bytes": 16777216
+              }
+            },
+            "outcome": [
+              "completed"
+            ],
+            "pending": null,
+            "phase": "execution",
+            "reached": [
+              {
+                "anchor": 0,
+                "instruction": 0,
+                "iterations": [],
+                "loop_count": null,
+                "loop_started": false,
+                "progress": "Completed",
+                "receive_completion": null,
+                "role": 0,
+                "sent_bytes": null
+              },
+              {
+                "anchor": null,
+                "instruction": 1,
+                "iterations": [],
+                "loop_count": null,
+                "loop_started": false,
+                "progress": "Completed",
+                "receive_completion": null,
+                "role": 0,
+                "sent_bytes": null
+              }
+            ],
+            "resources": [],
+            "roles": [
+              {
+                "active_frames": 0,
+                "after": [
+                  "returned"
+                ],
+                "before": [
+                  "returned"
+                ],
+                "cancelled": false,
+                "external_work": 0,
+                "live_resource_units": 0,
+                "outputs": null,
+                "retained_output_units": 0,
+                "return_at": null,
+                "ring_work": 0,
+                "role": "role00000000",
+                "usage": {
+                  "instructions": 5,
+                  "iterations": 0,
+                  "live_value_bytes": 512,
+                  "live_values": 1,
+                  "logical_bytes": 2560,
+                  "total_value_bytes": 265472
+                }
+              }
+            ],
+            "session": "benchmark",
+            "status": "executed",
+            "wire": {
+              "receives": 0,
+              "replacement_bytes": 0,
+              "sends": 0,
+              "sent_bytes": 0
+            }
+          },
+          "format": "zkc.benchmark-worker/0",
+          "lifecycle": {
+            "admit_ns": 455075,
+            "calls": [
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 630
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 1290
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 900
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 670
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 590
+              },
+              {
+                "decode_ns": null,
+                "input_index": 0,
+                "request_ns": 560
+              }
+            ],
+            "capture_ns": 38011,
+            "diagnostics_ns": 18191,
+            "ingress": "prepared",
+            "input_setup": [
+              {
+                "construction_ns": 10092574,
+                "input_index": 0,
+                "retained_payload_bytes": 525080
+              }
+            ],
+            "peak_rss_after_diagnostics": 12869632,
+            "peak_rss_before_diagnostics": 12869632,
+            "preparation_limits": null
+          },
+          "process": {
+            "affinity": "0-31",
+            "rayon_num_threads": "1",
+            "threads_at_exit": "1"
+          },
+          "process_peak_rss_bytes": 12869632,
+          "proof_bytes": 0,
+          "proofs": [],
+          "samples": [
+            {
+              "cpu_ns": 66780,
+              "elapsed_ns": 65493,
+              "first_call_ns": 65493,
+              "index": 0,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 43870,
+              "elapsed_ns": 42791,
+              "first_call_ns": 42791,
+              "index": 1,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 25750,
+              "elapsed_ns": 24810,
+              "first_call_ns": 24810,
+              "index": 2,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 22520,
+              "elapsed_ns": 21570,
+              "first_call_ns": 21570,
+              "index": 3,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 21500,
+              "elapsed_ns": 20581,
+              "first_call_ns": 20581,
+              "index": 4,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 21230,
+              "elapsed_ns": 20351,
+              "first_call_ns": 20351,
+              "index": 5,
+              "iterations": 1,
+              "phase": "sample"
+            }
+          ],
+          "status": "passed",
+          "timer_floor_ns": 20
+        }
+      }
+    ],
+    "status": "passed"
+  },
+  "negative_host": {
+    "completed_calls": 1,
+    "error": "Some(\"artifact-stopped:Explicit(\\\"reject\\\")\"); {\"attempt_policy_sha256\":null,\"attempts\":[],\"binding_sha256\":\"3768816351f72f7960c843a6988b8b17c59ff1a68d0a231d2149b5f3f2a6623e\",\"bytes\":440,\"cancelled\":false,\"cleanup_errors\":[],\"external_work\":0,\"external_work_limit\":16777216,\"instructions\":7048,\"iterations\":645,\"logical_bytes\":5624768,\"messages\":4,\"resources\":[{\"budget\":999992,\"generation\":8,\"kind\":\"capability\",\"stage\":\"transcript\",\"transitions\":8}],\"return_at\":null,\"ring_work\":3825,\"ring_work_limit\":268435456,\"stop\":{\"cleanup_errors\":[],\"kind\":\"Explicit(\\\"reject\\\")\",\"local\":{\"function\":\"_calculation_17\",\"instruction\":\"apply_2_s4_s132\",\"site\":\"apply_2_s4_s132\"},\"origin\":[\"zkc.origin/0\",\"native-proof\",\"s7h6578616d706c653h416972\",\"s7h6578616d706c653h416972\",[[\"if\",\"guard_control\",\"else\"]]],\"role\":\"role00000001\",\"site\":\"apply_2_s4_s132\"},\"total_value_bytes\":5029552}",
+    "format": "zkc.benchmark-worker/0",
+    "ingress": "prepared",
+    "preparation": {
+      "after": {
+        "entries": 2,
+        "hits": 2,
+        "retained_bytes": 4706
+      },
+      "before": {
+        "entries": 2,
+        "hits": 0,
+        "retained_bytes": 4706
+      }
+    },
+    "preparation_limits": {
+      "bytes": 8388608,
+      "default_bytes": 8388608,
+      "default_entries": 128,
+      "entries": 128
+    },
+    "refusal": {
+      "class": "verification",
+      "code": "artifact-stopped:Explicit(\"reject\")",
+      "stop": "Explicit(\"reject\")"
+    },
+    "status": "rejected"
+  },
+  "negative_reference": {
+    "completed_calls": null,
+    "error": "Sumcheck verification",
+    "format": "zkc.benchmark-worker/0",
+    "ingress": null,
+    "preparation": null,
+    "preparation_limits": null,
+    "refusal": null,
+    "status": "rejected"
+  },
+  "reference": {
+    "compiler_options": [],
+    "contracts": {},
+    "format": "zkc.benchmark/0",
+    "host": {},
+    "ingress": "json",
+    "matrix": [
+      {
+        "backend": {
+          "kind": "sumcheck",
+          "public": "/benchmark-fixtures/runs/final-current/cases/sumcheck-1024/public.json"
+        },
+        "boundary": "reference_proof_call",
+        "case": "sumcheck-1024",
+        "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
+        "implementation": "reference",
+        "operation": "prove",
+        "proof": "/benchmark-fixtures/runs/final-current/cases/sumcheck-1024/reference.proof"
+      },
+      {
+        "backend": {
+          "kind": "sumcheck",
+          "public": "/benchmark-fixtures/runs/final-current/cases/sumcheck-1024/public.json"
+        },
+        "boundary": "reference_proof_call",
+        "case": "sumcheck-1024",
+        "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
+        "implementation": "reference",
+        "operation": "verify",
+        "proof": "/benchmark-fixtures/runs/final-current/cases/sumcheck-1024/reference.proof"
+      }
+    ],
+    "observation": "timing",
+    "plan": {
+      "iterations": 1,
+      "samples": 5,
+      "warmups": 2
+    },
+    "processes": 1,
+    "results": [
+      {
+        "case": "sumcheck-1024",
+        "implementation": "reference",
+        "operation": "prove",
+        "process_wall_seconds": 0.002756732050329447,
+        "proof": {
+          "bytes": 640,
+          "mtime_ns": 1792500896504561792,
+          "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.bin",
+          "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+        },
+        "repetition": 0,
+        "status": "passed",
+        "validated_proofs": 7,
+        "worker": {
+          "admission_ns": null,
+          "boundary": "reference_proof_call",
+          "build": {
+            "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+            "debug_assertions": false,
+            "execution_counts": false,
+            "opt_level": "3",
+            "profile": "release",
+            "target": "x86_64-unknown-linux-gnu"
+          },
+          "diagnostics": null,
+          "format": "zkc.benchmark-worker/0",
+          "lifecycle": null,
+          "process": {
+            "affinity": "0-31",
+            "rayon_num_threads": "1",
+            "threads_at_exit": "1"
+          },
+          "process_peak_rss_bytes": 3952640,
+          "proof_bytes": 640,
+          "proofs": [
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896503561762,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.0.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896503561762,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.1.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896503561762,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.2.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896504561792,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.3.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896504561792,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.4.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896504561792,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.5.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            },
+            {
+              "bytes": 640,
+              "mtime_ns": 1792500896504561792,
+              "path": "/benchmark-fixtures/runs/final-current/runs/sumcheck-1024/reference/prove/0/proof.6.proof",
+              "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+            }
+          ],
+          "samples": [
+            {
+              "cpu_ns": 194760,
+              "elapsed_ns": 186906,
+              "first_call_ns": 186906,
+              "index": 0,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 132670,
+              "elapsed_ns": 131764,
+              "first_call_ns": 131764,
+              "index": 1,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 126610,
+              "elapsed_ns": 125804,
+              "first_call_ns": 125804,
+              "index": 2,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 128360,
+              "elapsed_ns": 127503,
+              "first_call_ns": 127503,
+              "index": 3,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 122840,
+              "elapsed_ns": 122014,
+              "first_call_ns": 122014,
+              "index": 4,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 121040,
+              "elapsed_ns": 120223,
+              "first_call_ns": 120223,
+              "index": 5,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 136691,
+              "elapsed_ns": 135864,
+              "first_call_ns": 135864,
+              "index": 6,
+              "iterations": 1,
+              "phase": "sample"
+            }
+          ],
+          "status": "passed",
+          "timer_floor_ns": 20
+        }
+      },
+      {
+        "case": "sumcheck-1024",
+        "implementation": "reference",
+        "operation": "verify",
+        "process_wall_seconds": 0.002583816647529602,
+        "proof": {
+          "bytes": 640,
+          "mtime_ns": 1792500827481537539,
+          "path": "/benchmark-fixtures/runs/final-current/cases/sumcheck-1024/reference.proof",
+          "sha256": "73a296b62f0678fab4f75a51087652dd3b0bec29ece9a0d515d4785d77bd9a7d"
+        },
+        "repetition": 0,
+        "status": "passed",
+        "validated_proofs": 0,
+        "worker": {
+          "admission_ns": null,
+          "boundary": "reference_proof_call",
+          "build": {
+            "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+            "debug_assertions": false,
+            "execution_counts": false,
+            "opt_level": "3",
+            "profile": "release",
+            "target": "x86_64-unknown-linux-gnu"
+          },
+          "diagnostics": null,
+          "format": "zkc.benchmark-worker/0",
+          "lifecycle": null,
+          "process": {
+            "affinity": "0-31",
+            "rayon_num_threads": "1",
+            "threads_at_exit": "1"
+          },
+          "process_peak_rss_bytes": 3944448,
+          "proof_bytes": 640,
+          "proofs": [],
+          "samples": [
+            {
+              "cpu_ns": 189320,
+              "elapsed_ns": 180905,
+              "first_call_ns": 180905,
+              "index": 0,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 133350,
+              "elapsed_ns": 132704,
+              "first_call_ns": 132704,
+              "index": 1,
+              "iterations": 1,
+              "phase": "warmup"
+            },
+            {
+              "cpu_ns": 130130,
+              "elapsed_ns": 129484,
+              "first_call_ns": 129484,
+              "index": 2,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 128620,
+              "elapsed_ns": 128014,
+              "first_call_ns": 128014,
+              "index": 3,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 128150,
+              "elapsed_ns": 127554,
+              "first_call_ns": 127554,
+              "index": 4,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 132120,
+              "elapsed_ns": 131483,
+              "first_call_ns": 131483,
+              "index": 5,
+              "iterations": 1,
+              "phase": "sample"
+            },
+            {
+              "cpu_ns": 128320,
+              "elapsed_ns": 127713,
+              "first_call_ns": 127713,
+              "index": 6,
+              "iterations": 1,
+              "phase": "sample"
+            }
+          ],
+          "status": "passed",
+          "timer_floor_ns": 20
+        }
+      }
+    ],
+    "status": "passed"
+  },
+  "source": "Current version-0 native ingress and reference worker reports, reduced to one process. Filesystem roots are normalized under /benchmark-fixtures; file identities and observations are retained as structural fixtures only."
+}

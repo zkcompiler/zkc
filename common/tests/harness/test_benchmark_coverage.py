@@ -19,6 +19,19 @@ def modules(monkeypatch, tmp_path):
     return loaded
 
 
+def host_backend():
+    return {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64,
+            'ingress': 'json', 'inputs': [{'public': 'public.json'}], 'preparation': True}
+
+
+def negative_report(completed=0):
+    return {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected',
+            'error': 'proof rejected', 'completed_calls': completed, 'refusal': None,
+            'preparation': None if completed is None else {
+                phase: {'entries': 0, 'retained_bytes': 0, 'hits': 0} for phase in ('before', 'after')},
+            'preparation_limits': None if completed is None else lifecycle_worker()['lifecycle']['preparation_limits']}
+
+
 @pytest.mark.parametrize('size', [1, 2, 8, 32])
 @pytest.mark.parametrize('degree', [1, 8])
 def test_coset_oracle_matches_horner_at_every_point(modules, size, degree):
@@ -252,7 +265,7 @@ def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, 
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({response!r}))\n')
     executable.chmod(0o755)
-    backend = {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': enabled,
+    backend = {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': enabled,
                'preparation_entries': entries, 'preparation_bytes': capacity}
     job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend,
                                tmp_path/'proof', 'admitted_entry_call')
@@ -266,7 +279,7 @@ def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, 
 
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+           'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
@@ -278,9 +291,9 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
 
 
 @pytest.mark.parametrize('backend', [
-    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True, 'preparation_entries': 512},
-    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True, 'preparation_bytes': 64 << 20},
-    {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': False},
+    {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True, 'preparation_entries': 512},
+    {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True, 'preparation_bytes': 64 << 20},
+    {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': False},
     None, 'absent',
 ])
 def test_saved_manifest_checks_requested_limits(modules, backend):
@@ -310,10 +323,10 @@ def test_workers_receive_only_declared_environment(modules, monkeypatch):
 @pytest.mark.parametrize('completed', [None, 0, 1, 2])
 def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, completed):
     executable = tmp_path/'worker'
-    response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'completed_calls': completed}
+    response = negative_report(completed=completed)
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
-    job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, host_backend(), tmp_path/'proof', 'admitted_entry_call')
     if completed == 1:
         modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
     else:
@@ -325,7 +338,7 @@ def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, co
 def test_refusal_preparation_respects_requested_contract(modules, tmp_path, fault):
     limits = {'entries': 512, 'bytes': 64 << 20, 'default_entries': 128, 'default_bytes': 8 << 20}
     stats = {phase: {'entries': 200, 'retained_bytes': 9 << 20, 'hits': 1} for phase in ('before', 'after')}
-    backend = {'kind': 'host', 'ingress': 'json', 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
+    backend = {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'public.json'}], 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
     if fault == 'before_entries': stats['before']['entries'] = 513
     elif fault == 'after_bytes': stats['after']['retained_bytes'] = (64 << 20) + 1
     elif fault == 'hits': stats['after']['hits'] = 0
@@ -335,7 +348,7 @@ def test_refusal_preparation_respects_requested_contract(modules, tmp_path, faul
         for observation in stats.values(): observation.update(entries=0, retained_bytes=0)
     elif fault == 'request': limits['entries'] = 256
     response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'completed_calls': 1,
-                'preparation': stats, 'preparation_limits': limits}
+                'preparation': stats, 'preparation_limits': limits, 'error': 'proof rejected', 'refusal': None}
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
@@ -380,10 +393,11 @@ def test_stark_claim_mutation_preserves_framing_and_canonical_coordinates(module
 @pytest.mark.parametrize('observed', ['format', 'binding', 'verification', None])
 def test_semantic_control_cannot_pass_at_the_format_layer(modules, tmp_path, observed):
     executable = tmp_path/'worker'
-    response = {'format': 'zkc.benchmark-worker/0', 'ingress': 'json', 'status': 'rejected', 'refusal': {'class': observed}}
+    response = negative_report()
+    response['refusal'] = {'class': observed, 'code': None, 'stop': None} if observed else None
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
-    job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, host_backend(), tmp_path/'proof', 'admitted_entry_call')
     if observed == 'verification':
         modules['runner'].refuse(job, tmp_path/'negative', 5, classes={'verification'})
     else:
@@ -416,7 +430,7 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
 def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     from copy import deepcopy
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+           'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     baseline = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
@@ -471,7 +485,7 @@ def counted_manifest():
     for call in worker['lifecycle']['calls']:
         call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
-           'backend': {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}}
+           'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     return {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},

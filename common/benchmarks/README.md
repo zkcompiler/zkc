@@ -495,6 +495,9 @@ a prepared operation; a preceding successful call alone does not prove a hit.
 Crashes, timeouts, unrelated cancellation and resource-limit failures do not pass.
 Any failed gate, incomplete matrix or changed captured input invalidates the whole
 run's timing summaries and comparisons. Failed evidence is retained.
+Saved reports validate every retained worker, including in failed or interrupted
+runs. Backend requests and proof artifact records use the current exact schema;
+artifact paths, sizes, digests and input schedules remain part of the evidence.
 
 Outputs include `plan.json`, `manifest.json`, `coordination.json`, reports in
 Markdown/JSON/CSV, captured sources/inputs, packages, every produced proof and

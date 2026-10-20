@@ -10,7 +10,7 @@ import shutil
 import sys
 
 from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_preparation_limits, validate_worker, validate_ingress
+from .results import FORMAT, publish, validate_manifest, validate_preparation_limits, validate_worker, validate_ingress, validate_backend, validate_proof_artifacts, validate_negative_report
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
@@ -72,6 +72,7 @@ def host_info():
 
 
 def execute_job(job, directory, plan, timeout):
+    validate_backend(job.backend, boundary=job.boundary)
     directory.mkdir(parents=True)
     proof = directory / 'proof.bin' if job.operation == 'prove' else job.proof
     request = {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': job.operation,
@@ -92,18 +93,13 @@ def execute_job(job, directory, plan, timeout):
     elif job.operation == 'prove' or job.backend.get('kind') != 'host' or len(job.backend['inputs']) == 1:
         require(proof.is_file() and proof.stat().st_size == report['proof_bytes'], 'worker proof size mismatch')
     proofs = report.get('proofs', [])
-    expected = (plan['warmups'] + plan['samples']) * plan['iterations'] if job.operation == 'prove' else 0
-    require(len(proofs) == expected, 'worker did not retain every produced proof')
+    validate_proof_artifacts(report, plan, job.operation, job.backend['kind'] == 'host')
     paths = set()
-    for index, artifact in enumerate(proofs):
-        require(isinstance(artifact, dict) and isinstance(artifact.get('path'), str), 'invalid proof artifact')
-        if job.backend.get('kind') == 'host':
-            require(artifact.get('input_index') == index % len(job.backend['inputs']), 'proof input identity differs')
+    for artifact in proofs:
         path = Path(artifact['path']).resolve()
         require(path.parent == directory.resolve(), 'proof escaped worker directory')
         require(path not in paths, 'worker reused a proof artifact path')
         paths.add(path)
-        require(type(artifact.get('bytes')) is int and artifact['bytes'] >= 0, 'missing proof size')
         require(path.is_file() and path.stat().st_size == artifact['bytes'], 'produced proof size differs')
         actual = identity(path)
         require(artifact.get('sha256') == actual['sha256'], 'produced proof digest differs')
@@ -224,6 +220,7 @@ def run_suite(args, prepare):
     return 0 if manifest['status'] == 'passed' else 1
 
 def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=None):
+    validate_backend(job.backend, boundary=job.boundary)
     directory.mkdir(parents=True)
     path = directory / 'request.json'
     write_json(path, {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': 'verify',
@@ -231,22 +228,4 @@ def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=
     record = Journal(directory / 'commands', timeout).command([job.executable, path], cwd=directory, expected=None)
     require(record['returncode'] > 0, 'negative control was accepted or crashed')
     report = read_report(record)
-    allowed = {'rejected', 'input-bounds'} if truncated else {'rejected'}
-    require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
-            and report.get('status') in allowed, 'negative control failed outside verification')
-
-    if job.backend.get('kind') in ('host', 'run'):
-        require(report.get('ingress') == job.backend['ingress'], 'refusal ingress differs from the request')
-    if completed is not None:
-        require(report.get('completed_calls') == completed, 'negative control failed before the intended invocation')
-    if classes is not None and report['status'] == 'rejected':
-        observed = report.get('refusal')
-        require(isinstance(observed, dict) and observed.get('class') in classes,
-                'negative control refused at the wrong layer')
-    if job.backend.get('kind') == 'host' and completed is not None:
-        limits = report.get('preparation_limits')
-        validate_preparation_limits(limits, job.backend)
-        stats = report.get('preparation')
-        require(isinstance(stats, dict) and set(stats) == {'before', 'after'}, 'missing refusal preparation observations')
-        validate_preparation(stats['before'], limits)
-        validate_preparation(stats['after'], limits, stats['before']['hits'])
+    validate_negative_report(report, job.backend, truncated=truncated, completed=completed, classes=classes)

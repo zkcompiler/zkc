@@ -40,10 +40,10 @@ def saved_host_manifest(policy='json', operation='prove', inputs=2, iterations=1
     life['calls'] = [deepcopy(call) for call in life['calls'] for _ in range(iterations)]
     for index, call in enumerate(life['calls']):
         call['input_index'] = index % inputs
-    worker['proofs'] = [dict(path=f'{index}.proof', bytes=3, sha256='0'*64, input_index=call['input_index'])
+    worker['proofs'] = [dict(path=f'/retained/{index}.proof', bytes=4, sha256='0'*64, mtime_ns=1, input_index=call['input_index'])
                         for index, call in enumerate(life['calls'])] if operation == 'prove' else []
     job = dict(case='case', implementation='zkc', operation=operation, boundary='admitted_entry_call',
-               backend=dict(kind='host', ingress=policy, inputs=[{} for _ in range(inputs)], preparation=True))
+               backend=dict(kind='host', package='entry.zkpkg', sha256='0'*64, ingress=policy, inputs=[{'public': f'{i}-public.json'} for i in range(inputs)], preparation=True))
     return dict(format='zkc.benchmark/0', ingress=policy, status='passed', observation='timing',
                 compiler_options=[], processes=1, plan=plan, matrix=[job], contracts={}, host={},
                 results=[dict(case='case', implementation='zkc', operation=operation, status='passed',
@@ -167,7 +167,7 @@ def test_existing_scheduler_preserves_ingress_and_statement_setup(modules, tmp_p
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({response!r}))\n')
     executable.chmod(0o755)
-    backend = {'kind': 'host', 'ingress': policy, 'inputs': [{'public': 'first'}, {'public': 'second'}],
+    backend = {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'inputs': [{'public': 'first'}, {'public': 'second'}],
                'preparation': True}
     job = modules['runner'].Job('unchanged-case', 'zkc', 'verify', executable, backend,
                                tmp_path/'proof', 'admitted_entry_call')
@@ -222,7 +222,7 @@ def test_worker_cannot_substitute_a_different_ingress_condition(modules, tmp_pat
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({report!r}))\n')
     executable.chmod(0o755)
-    backend = {'kind': 'host', 'ingress': 'json', 'inputs': [{}, {}], 'preparation': True}
+    backend = {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}
     job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend,
                                tmp_path/'proof', 'admitted_entry_call')
     with pytest.raises(modules['io'].MeasurementError, match='ingress differs'):
@@ -230,7 +230,7 @@ def test_worker_cannot_substitute_a_different_ingress_condition(modules, tmp_pat
 
 
 def test_preowned_report_retains_attribution_without_a_decode_label(modules, tmp_path):
-    backend = {'kind': 'host', 'ingress': 'prepared', 'inputs': [{}, {}], 'preparation': True}
+    backend = {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'prepared', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}
     job = dict(case='case', implementation='zkc', operation='verify', boundary='admitted_entry_call', backend=backend)
     manifest = dict(format='zkc.benchmark/0', ingress='prepared', status='passed', observation='timing',
                     compiler_options=[], processes=1, plan=PLAN, matrix=[job], contracts={},
@@ -331,7 +331,7 @@ def test_run_worker_uses_one_statement_and_the_same_report_contract(modules, tmp
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({report!r}))\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('same-run-case', 'zkc', 'run', executable,
-        {'kind': 'run', 'ingress': policy, 'roles': {'P': 'captured'}, 'accept_role': 'P'},
+        {'kind': 'run', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'roles': {'P': 'captured'}, 'accept_role': 'P'},
         tmp_path/'unused', 'admitted_run_call')
     result = modules['runner'].execute_job(job, tmp_path/'run', PLAN, 5)
     assert result['worker']['lifecycle']['ingress'] == policy
@@ -342,14 +342,14 @@ def test_run_worker_uses_one_statement_and_the_same_report_contract(modules, tmp
 def test_negative_control_requires_its_selected_ingress(modules, tmp_path, reported):
     life = lifecycle_worker()['lifecycle']
     response = dict(format='zkc.benchmark-worker/0', status='rejected', ingress=reported,
-                    completed_calls=0, refusal={'class': 'verification'},
+                    completed_calls=0, error='proof rejected', refusal={'class': 'verification', 'code': 'artifact-rejected', 'stop': None},
                     preparation_limits=life['preparation_limits'],
                     preparation={phase: dict(entries=0, retained_bytes=0, hits=0) for phase in ('before', 'after')})
     executable = tmp_path/'worker'
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('case', 'zkc', 'verify', executable,
-        {'kind': 'host', 'ingress': 'prepared', 'preparation': True}, tmp_path/'proof', 'admitted_entry_call')
+        {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'prepared', 'inputs': [{'public': 'public.json'}], 'preparation': True}, tmp_path/'proof', 'admitted_entry_call')
     if reported == 'prepared':
         modules['runner'].refuse(job, tmp_path/'negative', 5, completed=0, classes={'verification'})
     else:
