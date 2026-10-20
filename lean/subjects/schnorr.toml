@@ -25,13 +25,16 @@ facts = "lean/ZkcExamples/Executable/SchnorrProofFacts.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrInteractiveData.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
+artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
 
 [family]
-module = "ZkcSecurity.VCVio.Schnorr"
-instance = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"
+module = "ZkcSecurity.Families.Schnorr"
+construction = "knowledge"
 kind = "sigma"
 
 [claims]
+namespace = "ZkcSecurity.Examples.Subjects.Schnorr"
 endpoint = "executable-bytes"
 properties = ["knowledge-soundness"]
 statement = "fixed"

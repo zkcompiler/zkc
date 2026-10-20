@@ -207,7 +207,10 @@ plain GKR verifier on well-formed statements
 guessing Entry's bound is imported from a worst-case round-by-round proof
 stated in ArkLib's framework (written for the example)
 ([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
-The composed Sumcheck and Sigma proof Entries have no security theorem.
+The composed Sumcheck Entry has no security theorem. The compiled
+Chaum–Pedersen, two-proof AND and Okamoto proof Entries have fixed-statement
+knowledge soundness as applications of the registered knowledge endpoint
+([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)).
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any
@@ -219,8 +222,14 @@ injective. `route_verify` shows that the routed compiled verifier is VCVio's
 Fiat–Shamir verifier for the Schnorr Sigma protocol, and `run_eq` that the whole
 experiment equals VCVio's verification run for the routed prover, because the
 routed cache restricted to histories is the history cache. `knowledge_soundness`
-then applies `FiatShamir.knowledgeExtractor_success`: for every prover whose
-oracle queries number at most `Q`,
+follows from the Sigma bridge of the subject's evidence, the bridge the
+registered knowledge endpoints apply
+([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)):
+this module's routing, routed prover, compiled verifier and experiment are those
+of the Schnorr family package at the subject's checked context (`route_eq_shape`,
+`reduce_eq_shape`, `verify_eq_evidence`, `acceptance_eq_endpoint`), and the
+endpoint's Sigma bridge applies `FiatShamir.knowledgeExtractor_success`: for
+every prover whose oracle queries number at most `Q`,
 
 ```text
 acc * (acc / (Q + 1) - 1 / |F|) <= Pr[extractor finds w with key = w • base]

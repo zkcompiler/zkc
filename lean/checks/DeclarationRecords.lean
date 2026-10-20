@@ -34,10 +34,14 @@ Options:
   of covered endpoint, property, statement form and theorem, record it in the
   header and record every registered endpoint theorem in detail.
 - `--detail NAME`: also record the pretty-printed statement and premises of the
-  declaration `NAME`, its premise telescope whatever its kind, and the
-  registered constants (registry schemas and endpoints) it reaches through
-  repository declarations (repeatable). A name that is not a declaration of the
-  selected modules is noted and skipped; its consumer reports the absence.
+  declaration `NAME`, its premise telescope whatever its kind, the registered
+  constants (registry schemas and endpoints) it reaches through repository
+  declarations, the head constant and arguments of its statement and of its
+  value, every binder with the head constant of its type, the premise telescope
+  of a statement that is an instance of a registered property (the head of a
+  registered endpoint theorem's statement, unfolded once), and the named
+  hypotheses of an evidence value (repeatable). A name that is not a declaration
+  of the selected modules is noted and skipped; its consumer reports the absence.
 
 The output is deterministic for a fixed toolchain and fixed sources. Equal
 statement hashes are regression evidence, not semantic preservation. -/
@@ -122,21 +126,128 @@ def reached (env : Environment) (registered : Std.HashSet Name) (start : Name) :
       pending := next.toList ++ pending
   return found.qsort Name.lt
 
-/-- Pretty-printed statement and premises of one declaration, and the
-registered constants it reaches. -/
-def detail (env : Environment) (registered : Std.HashSet Name) (info : ConstantInfo) : MetaM Json := do
+/-- The head constant of an application, if any. -/
+def headName (expression : Expr) : Option Name :=
+  expression.getAppFn.consumeMData.constName?
+
+def nameJson : Option Name → Json
+  | some name => Json.str name.toString
+  | none => Json.null
+
+/-- The arguments of an application, each with its head constant and its text. -/
+def argumentsJson (expression : Expr) : MetaM Json := do
+  let arguments ← expression.getAppArgs.mapM fun argument => do
+    return Json.mkObj [("head", nameJson (headName argument)), ("text", Json.str (toString (← ppExpr argument)))]
+  return Json.arr arguments
+
+/-- Every leading binder of a type: binder information, whether it is a proof of a
+proposition, and the head constant of its type (`sort` for a universe). -/
+def bindersJson (type : Expr) : MetaM Json :=
+  forallTelescope type fun binders _ => do
+    let found ← binders.mapM fun binder => do
+      let declaration ← binder.fvarId!.getDecl
+      let proof ← isProp declaration.type
+      let head := if declaration.type.isSort then Json.str "sort" else nameJson (headName declaration.type)
+      return Json.mkObj [("binder", Json.str (binderName declaration.binderInfo)), ("premise", Json.bool proof),
+        ("type_head", head)]
+    return Json.arr found
+
+/-- The structures of evidence whose named hypotheses are recorded. -/
+def evidenceStructures : List Name :=
+  [`ZkcSecurity.Endpoint.SoundnessEvidence, `ZkcSecurity.Endpoint.KnowledgeEvidence]
+
+partial def listElements (list : Expr) : MetaM (Array Expr) := do
+  let list ← whnf list
+  if list.isAppOfArity ``List.cons 3 then
+    return #[list.getArg! 1] ++ (← listElements (list.getArg! 2))
+  return #[]
+
+def stringJson (expression : Expr) : MetaM Json := do
+  match (← whnf expression) with
+  | .lit (.strVal value) => return Json.str value
+  | other => return Json.str (toString (← ppExpr other))
+
+/-- The named hypotheses of an evidence value: the cited identifier, the
+category, the claim's head constant (also after reducible unfolding) and
+arguments, and the status: a proof, a proof that is a binder of the evidence's
+declaration (an assumption by premise), or a reported assumption with the
+registry identifier it cites. -/
+def hypothesesJson (binders : Array Expr) (evidence : Expr) (structureName : Name) : MetaM Json := do
+  let list ← mkAppM (structureName ++ `hypotheses) #[evidence]
+  let elements ← listElements list
+  let found ← elements.mapM fun element => do
+    let hypothesis ← whnf element
+    unless hypothesis.isAppOfArity `ZkcSecurity.Endpoint.Hypothesis.mk 4 do
+      return Json.mkObj [("unrecognized", Json.str (toString (← ppExpr hypothesis)))]
+    let claim := hypothesis.getArg! 2
+    let status ← whnf (hypothesis.getArg! 3)
+    let statusJson ← if status.isAppOf `ZkcSecurity.FiatShamir.ObligationStatus.proved then
+        let proof := status.appArg!
+        let premise := binders.any fun binder => proof.containsFVar binder.fvarId!
+        pure (Json.mkObj [("kind", Json.str (if premise then "premise" else "proof"))])
+      else if status.isAppOf `ZkcSecurity.FiatShamir.ObligationStatus.assumed then
+        let entry ← whnf (status.getArg! 2)
+        pure (Json.mkObj [("kind", Json.str "assumed"), ("cites", ← stringJson (entry.getArg! 0))])
+      else pure (Json.mkObj [("kind", Json.str "unrecognized")])
+    return Json.mkObj [("identifier", ← stringJson (hypothesis.getArg! 0)),
+      ("category", Json.str (toString (← ppExpr (hypothesis.getArg! 1)))),
+      ("claim_head", nameJson (headName claim)),
+      ("claim_head_reducible", nameJson (headName (← whnfR claim))),
+      ("claim_arguments", ← argumentsJson claim),
+      ("claim", Json.str (toString (← ppExpr claim))),
+      ("status", statusJson)]
+  return Json.arr found
+
+/-- Pretty-printed statement and premises of one declaration, the registered
+constants it reaches, the head constant and arguments of its statement and of
+its value, every binder, the premise telescope of a statement that is an
+instance of a registered property (unfolded once), and the named hypotheses of
+an evidence value. -/
+def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std.HashSet Name)
+    (info : ConstantInfo) : MetaM Json := do
   let statement ← ppExpr info.type
   let premiseText ← forallTelescope info.type fun binders _ => do
     binders.mapM fun binder => do
       let declaration ← binder.fvarId!.getDecl
       return Json.str (toString (← ppExpr declaration.type))
+  let (typeHead, typeArguments, property, hypotheses) ← forallTelescope info.type fun binders body => do
+    let head := headName body
+    let property ← match head with
+      | some name =>
+          if properties.contains name then
+            match ← unfoldDefinition? body with
+            | some unfolded => pure (Json.mkObj [
+                ("statement", Json.str (toString (← ppExpr unfolded))),
+                ("premise_telescope", Json.arr ((← premises unfolded).map premiseJson))])
+            | none => pure Json.null
+          else pure Json.null
+      | none => pure Json.null
+    let hypotheses ← match head with
+      | some name =>
+          if evidenceStructures.contains name then
+            match info.value? (allowOpaque := true) with
+            | some _ => hypothesesJson binders (mkAppN (mkConst info.name (info.levelParams.map Level.param)) binders) name
+            | none => pure Json.null
+          else pure Json.null
+      | none => pure Json.null
+    return (head, ← argumentsJson body, property, hypotheses)
+  let (valueHead, valueArguments) ← match info.value? (allowOpaque := true) with
+    | some value => lambdaTelescope value fun _ body => do return (headName body, ← argumentsJson body)
+    | none => pure (none, Json.null)
   return Json.mkObj [("statement", Json.str (toString statement)),
     ("premises", Json.arr premiseText),
     ("premise_telescope", Json.arr ((← premises info.type).map premiseJson)),
+    ("binders", ← bindersJson info.type),
+    ("type_head", nameJson typeHead),
+    ("type_arguments", typeArguments),
+    ("value_head", nameJson valueHead),
+    ("value_arguments", valueArguments),
+    ("property", property),
+    ("hypotheses", hypotheses),
     ("registered", Json.arr ((reached env registered info.name).map (Json.str ·.toString)))]
 
-def record (env : Environment) (registered : Std.HashSet Name) (name : Name) (info : ConstantInfo)
-    (module : Name) (detailed : Bool) : MetaM Json := do
+def record (env : Environment) (registered : Std.HashSet Name) (properties : Std.HashSet Name) (name : Name)
+    (info : ConstantInfo) (module : Name) (detailed : Bool) : MetaM Json := do
   let axioms := (← collectAxioms name).qsort Name.lt |>.map (Json.str ·.toString)
   let doc ← findSimpleDocString? env name (includeBuiltin := false)
   let mut fields : List (String × Json) := [
@@ -151,7 +262,7 @@ def record (env : Environment) (registered : Std.HashSet Name) (name : Name) (in
   if info.isTheorem then
     fields := fields ++ [("premises", Json.arr ((← premises info.type).map premiseJson))]
   if detailed then
-    fields := fields ++ [("detail", ← detail env registered info)]
+    fields := fields ++ [("detail", ← detail env registered properties info)]
   return Json.mkObj fields
 
 def runMeta {α : Type} (env : Environment) (action : MetaM α) : IO α := do
@@ -246,6 +357,12 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     for (_, _, _, target) in table do
       registered := registered.insert target
       endpointTheorems := endpointTheorems.push target
+  -- The registered properties: the heads of the endpoint theorems' statements.
+  let mut properties : Std.HashSet Name := {}
+  for target in endpointTheorems do
+    if let some info := env.find? target then
+      if let some head ← runMeta env (forallTelescope info.type fun _ body => pure (headName body)) then
+        properties := properties.insert head
   let mut selected : Array (String × Name × Name × ConstantInfo) := #[]
   for (name, info) in env.constants.map₁.toList do
     let some module := moduleOf name | continue
@@ -267,7 +384,7 @@ unsafe def main (arguments : List String) : IO UInt32 := do
   let mut lines := #[header.compress]
   for (_, module, name, info) in sorted do
     let detailed := options.details.contains name || endpointTheorems.contains name
-    let json ← runMeta env (record env registered name info module detailed)
+    let json ← runMeta env (record env registered properties name info module detailed)
     lines := lines.push json.compress
   IO.FS.writeFile output (String.intercalate "\n" lines.toList ++ "\n")
   IO.println s!"{sorted.size} declarations from {modules.size} modules"

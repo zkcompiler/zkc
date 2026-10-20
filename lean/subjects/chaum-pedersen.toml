@@ -17,6 +17,8 @@ data = "lean/ZkcExamples/Construction/ChaumPedersenProofData.lean"
 bodies = "lean/ZkcExamples/Construction/ChaumPedersenProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/ChaumPedersenProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/ChaumPedersenProof.lean"
+artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/ChaumPedersen/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/ChaumPedersen/Claims.lean"
 interactive_data = "lean/ZkcExamples/Structured/ChaumPedersenData.lean"
 interactive_bodies = "lean/ZkcExamples/Structured/ChaumPedersenBodies.lean"
 interactive_views = "lean/ZkcExamples/Structured/ChaumPedersenViews.lean"
@@ -27,14 +29,16 @@ interactive_source = "lean/bridges/structured/fixtures/chaum-pedersen.mlir"
 request = "lean/bridges/structured/normal-forms/chaum-pedersen.toml"
 
 [family]
-module = "ZkcSecurity.VCVio.Schnorr"
-instance = "ZkcSecurity.Examples.ChaumPedersenSigma"
+module = "ZkcSecurity.Families.SchnorrVariants"
+construction = "knowledge"
 kind = "sigma"
 
 [claims]
+namespace = "ZkcSecurity.Examples.Subjects.ChaumPedersen"
 endpoint = "ideal-meaning"
 properties = ["knowledge-soundness"]
 statement = "fixed"
+regime = "exact-uniform challenges"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -48,6 +52,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 [construction]
 admission = "views"
 inputs = "values"
+model = "Zkc.Protocols.Schnorr.Variants.equality wiring"
+model_imports = ["ZkcExamples.Construction.ChaumPedersenProofModel"]
 
 [bodies]
 entry = "proof"

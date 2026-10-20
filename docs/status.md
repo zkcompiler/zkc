@@ -352,8 +352,10 @@ construction and their [participant projection](../lean/docs/spec/participant-pr
 against the original exports and proves that each compiled verifier's ideal
 meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
 transform of its original verifier; other Entries, suites and programmable
-constructions have no such check. The composed Sumcheck and the Sigma proof
-Entries have this transform equation only; no security theorem covers them. The
+constructions have no such check. The composed Sumcheck Entry has this
+transform equation only; no security theorem covers it. The compiled Sigma proof
+Entries (Chaum–Pedersen, two-proof AND, Okamoto) also have fixed-statement
+knowledge soundness through the registered endpoints. The
 exporter repeats the native proof check before printing the validator; it is
 reviewed native code, not a proved component. For Schnorr it proves
 fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
@@ -508,6 +510,22 @@ compiled Entry, native transcript reading or executable is connected. Statement
 bindings relate policy statements to model statements, with the coverage of the
 application's false statements and the rejection of unmapped statements as
 separate registered obligations.
+[Registered endpoints](../lean/docs/spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
+state ordinary soundness, for fixed and adaptive statements, of a compiled
+verifier's ideal meaning and of host validation of program bytes, and
+fixed-statement knowledge soundness through a generic Sigma bridge, for evidence
+indexed by a compiled Entry's artifacts and by the claim its retained contract
+states. The subject driver generates each claim as the registered endpoint
+applied to a subject's evidence: knowledge soundness of the compiled Schnorr
+(ideal meaning and program bytes), Chaum–Pedersen, two-proof AND and Okamoto
+proof Entries, and ordinary soundness of the guessing Entry (ideal meaning) and
+of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
+statements, every round count up to the static maximum, malformed vectors
+included). A records run given the subject pipeline's evidence establishes the
+assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto, the guessing Entry
+and Sumcheck; the composed Sumcheck and GKR Entries
+retain no target clause to state a claim at, and composed Sumcheck has no
+certificate composition yet.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

@@ -51,6 +51,7 @@ import Zkc.Protocols.AlgebraicRounds.Fresh
 import Zkc.Protocols.AlgebraicRounds.Source
 import Zkc.Protocols.Gkr.Circuit
 import Zkc.Protocols.Schnorr.Common
+import Zkc.Protocols.Schnorr.Variants
 import Zkc.Protocols.Schnorr
 import Zkc.Protocols.Sumcheck.Acceptance
 import Zkc.Protocols.Sumcheck.Committed.Connection
@@ -306,6 +307,7 @@ import Tests.SumcheckSourceControls
 import ZkcExamples.Construction.ChaumPedersenProof
 import ZkcExamples.Construction.ChaumPedersenProofBodies
 import ZkcExamples.Construction.ChaumPedersenProofData
+import ZkcExamples.Construction.ChaumPedersenProofModel
 import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofBodies
@@ -324,10 +326,12 @@ import ZkcExamples.Construction.GuessProofParticipant
 import ZkcExamples.Construction.OkamotoProof
 import ZkcExamples.Construction.OkamotoProofBodies
 import ZkcExamples.Construction.OkamotoProofData
+import ZkcExamples.Construction.OkamotoProofModel
 import ZkcExamples.Construction.OkamotoProofParticipant
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
+import ZkcExamples.Construction.SchnorrAndProofModel
 import ZkcExamples.Construction.SchnorrAndProofParticipant
 import ZkcExamples.Construction.SchnorrProof
 import ZkcExamples.Construction.SchnorrProofBinding

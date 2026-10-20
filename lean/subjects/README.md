@@ -38,10 +38,13 @@ root.
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive Entry |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive Entry |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
+| `generated` | `artifacts`, `claims` | the claim's modules in the security integration: the artifacts with their compiled facts and lowering evidence, and the evidence with its applications |
 | `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check` |
-| `family` | `module`, `instance`, `kind` | family package, its concrete instance, `sigma`, `certificate` or `upstream` |
-| `claims` | `endpoint` | `ideal-meaning`, `executable-bytes`, `transform-equation` or `admission` |
+| `family` | `module`, `kind` | family package; `sigma`, `certificate` or `upstream` |
+| `family` | `construction` | the subject's evidence constructor in its claims namespace |
+| `claims` | `endpoint` | `ideal-meaning` or `executable-bytes` |
 | `claims` | `properties`, `statement`, `regime` | claimed properties, `fixed` or `adaptive`, expected parameter regime |
+| `claims` | `namespace` | namespace of the claim's modules in the security integration; the claim's declarations are its `artifacts`, `Contract.falseStatement` or `Contract.holds`, `evidence`, and the endpoint theorem's name, all in this namespace |
 | `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |
@@ -54,6 +57,19 @@ root.
 Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured
 suite also produces must agree byte for byte.
+
+A subject with a claims namespace `N` has two hand-written modules there:
+`N.Contract`, the application's claim recovered from the admitted original's
+retained contract (`falseStatement` for ordinary soundness, `holds` for
+knowledge soundness), and `N.Evidence`, the family package applied to the
+subject (the model relation or Sigma family, the model equation and the coverage
+of the contract), ending in the constructor `[family] construction` names. The
+driver generates `N.Artifacts` and `N.Claims`: the evidence the constructor
+builds and the registered endpoint applied to it at the subject's artifacts,
+contract and regime, for the manifest's claim and for every other endpoint and
+statement form the subject covers. The kernel checks the claims when the driver
+builds them; the [assurance report](../docs/spec/assurance-report.md) is
+established only through the manifest's application.
 
 ### Optional extensions
 

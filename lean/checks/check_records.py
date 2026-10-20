@@ -11,7 +11,8 @@
 3. Render the "What is proved" table and, from subject manifests, one
    `zkc.assurance-report/0` per subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
-   one.
+   one. A report is established only with the pipeline's evidence, so the
+   subject rows are compared only by a run given `--evidence`.
 4. Run the negative controls of the ledger check and the report generator.
 
 Without `--integration`, only the main package is emitted; a ledger row whose
@@ -83,11 +84,12 @@ def main():
     packages = ["main", *dict.fromkeys(args.integration)]
     subject_manifests = manifests(args.manifests or SUBJECTS)
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = []
+    details = list(controls.EMITTED_APPLICATIONS) if "arklib" in packages else []
     for path in subject_manifests + samples:
-        instance = (reports.load_manifest(path).get("family") or {}).get("instance")
-        if instance:
-            details.append(instance)
+        names = reports.claim_names(reports.load_manifest(path))
+        for name in (names["instance"], names["application"]):
+            if name:
+                details.append(name)
     failures, notes = [], []
 
     paths = {}
@@ -138,15 +140,20 @@ def main():
     report_directory = output / "reports"
     report_directory.mkdir(exist_ok=True)
     for path in subject_manifests + samples:
-        report = reports.build(path, records, claims, args.evidence)
+        report = reports.build(path, records, claims, args.evidence, reused_records=args.records)
         name = ("sample-" if path in samples else "") + report["subject"]
         (report_directory / f"{name}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
         if path in subject_manifests:
             built.append(report)
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
-    if subject_manifests and "arklib" in packages:
+    if subject_manifests and "arklib" in packages and args.evidence is not None:
         compare(SUPPORT, "subject-rows", rows, args.write, failures, notes)
+    elif subject_manifests and "arklib" in packages:
+        # A report is established only with the pipeline's evidence, so the rows a
+        # run without it renders are not the subjects' outcomes; only a run with
+        # evidence is compared.
+        notes.append(f"{SUPPORT.relative_to(ROOT)}#subject-rows: not compared without --evidence")
     elif subject_manifests:
         # Without the security package the registry and endpoints are absent, so the
         # rows are incomplete; only a run that emits them is compared.
@@ -156,6 +163,10 @@ def main():
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
     control_rows = controls.run()
+    if "arklib" in packages:
+        emitted_rows, emitted_failures = controls.run_emitted(records)
+        control_rows += emitted_rows
+        failures += emitted_failures
     summary = {
         "status": "fail" if failures else "pass",
         "packages": {package: records.headers[package].get("declarations") for package in packages},

@@ -394,8 +394,8 @@
     "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledSchnorrFiatShamir",
-      "structural": "6efb4e0045018c88",
-      "explicit": "657fdadc71af68a2"
+      "structural": "b123b60def0c0db8",
+      "explicit": "c199eb19183c575c"
     },
     "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness": {
       "package": "arklib",
@@ -450,6 +450,24 @@
       "module": "ZkcSecurity.Examples.StructuredSchnorrSigma",
       "structural": "c70aa30a6fa1fb94",
       "explicit": "52cd03d62f4fe6ab"
+    },
+    "ZkcSecurity.Examples.Subjects.ChaumPedersen.knowledge_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.Subjects.ChaumPedersen.Claims",
+      "structural": "7b6e8e00e8cf61a8",
+      "explicit": "3b0f618693e216e3"
+    },
+    "ZkcSecurity.Examples.Subjects.Okamoto.knowledge_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.Subjects.Okamoto.Claims",
+      "structural": "ceb690933087408f",
+      "explicit": "9745660a78f63d02"
+    },
+    "ZkcSecurity.Examples.Subjects.SchnorrAnd.knowledge_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims",
+      "structural": "3081e0732ee5bbd4",
+      "explicit": "05cbb5a71b799395"
     },
     "ZkcSecurity.Examples.SumcheckFiatShamir.compiled_adaptive_soundness": {
       "package": "arklib",

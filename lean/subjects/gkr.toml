@@ -21,7 +21,6 @@ request = "lean/bridges/structured/normal-forms/gkr-source.toml"
 
 [family]
 module = "ZkcSecurity.FiatShamir.Composition"
-instance = "ZkcSecurity.Examples.CompiledGkrFiatShamir"
 kind = "certificate"
 
 [claims]

@@ -44,8 +44,8 @@ defines them; the audit, not elaboration, finds a stale name.
 
 Registered endpoints map a covered semantic endpoint, a property and a statement
 form to the theorem that states that property for artifact-indexed evidence. An
-assurance report applies only a registered endpoint; until one is registered for
-a claim, the claim's report is `unresolved`. -/
+assurance report applies only a registered endpoint; a claim with no registered
+endpoint is `unresolved`. -/
 
 set_option autoImplicit false
 
@@ -182,6 +182,12 @@ def entries : List Entry := [
     reduction of squeezed bytes to a field element is treated as exact."⟩,
   ⟨"model.ideal-commitments", .model, some `ZkcSecurity.Commitment.withTables,
     "Committed tables are received in the clear and reads return their entries."⟩,
+  ⟨"model.exact-uniform-regime", .model, some `ZkcSecurity.Endpoint.Regime.exact,
+    "The endpoints' challenge regime in which the oracle answers field elements and a challenge is \
+    the answer itself, exactly uniform."⟩,
+  ⟨"model.history-oracle-replay", .model, some `ZkcSecurity.Endpoint.Sigma.historyOracle,
+    "The transcript challenge on a typed history is a lazily sampled, exactly uniform field \
+    element, shared by the prover and verification, drawn through VCVio's replay oracle."⟩,
   -- Laws of challenge decoders.
   ⟨"law.balanced-decoding", .law, some `ZkcSecurity.FiatShamir.Balanced,
     "Every event of the decoded challenge is at most a stated loss likelier than under the \
@@ -271,6 +277,9 @@ def entries : List Entry := [
     "The adversary makes at most the stated number of oracle queries on every path."⟩,
   ⟨"budget.selected-queries", .budget, some `OracleComp.IsQueryBoundP,
     "The adversary makes at most the stated number of queries selected by a predicate."⟩,
+  ⟨"budget.weighted-cost", .budget, some `WorstCaseCostBound,
+    "The adversary's oracle queries cost at most the stated budget on every path, each query the \
+    weight of its key, repeats and cache hits included."⟩,
   ⟨"budget.participant-queries", .budget, some `ZkcSecurity.FiatShamir.QueryBound,
     "At most a budget of challenge queries on every path of a participant validator."⟩,
   ⟨"budget.typed-queries", .budget, some `ZkcSecurity.FiatShamir.Typed.QueryBound,
@@ -339,8 +348,19 @@ def entries : List Entry := [
   ⟨"family.sumcheck-doomed-any", .familyProperty,
     some `ZkcSecurity.Examples.SumcheckFiatShamir.DoomedAny,
     "The doomed residuals of the Sumcheck certificate for every table and claim."⟩,
+  ⟨"family.sumcheck-rejecting", .familyProperty,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.Rejecting,
+    "The residuals of the Sumcheck rounds followed by a terminal that never accepts, at a point \
+    of the round count's length."⟩,
+  ⟨"family.sumcheck-doomed-all", .familyProperty,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.DoomedAll,
+    "The doomed set of the contract-connected Sumcheck certificate: the residuals of every table \
+    and claim, the refused verifier and the rejecting runs."⟩,
   ⟨"family.sigma-special-hvzk", .familyProperty, some `ZkcSecurity.VCVio.SigmaAnd.SpecialHVZK,
     "Special honest-verifier zero knowledge of a Sigma protocol."⟩,
+  ⟨"family.sigma-correspondence", .familyProperty, some `ZkcSecurity.Endpoint.Sigma.Corresponds,
+    "A verifier asks one challenge, at the initial transcript followed by the commitment's events \
+    and the challenge occurrence, and returns the Sigma protocol's verification of the answer."⟩,
   -- Events: conditions on a claim's statement or outcome.
   ⟨"event.accepted", .event, some `Zkc.Transcript.Accepted,
     "A returned value satisfies the acceptance predicate; stops never accept."⟩,
@@ -351,6 +371,14 @@ def entries : List Entry := [
     checkpoint of one of its transcript queries."⟩,
   ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
     "A policy statement denotes no model statement."⟩,
+  ⟨"event.false-statement", .event, some `ZkcSecurity.Endpoint.ApplicationFalse,
+    "A policy statement the claim's application contract counts as false."⟩,
+  ⟨"event.unmapped-statement", .event, some `ZkcSecurity.Endpoint.ModelRelation.Unmapped,
+    "A policy statement that denotes no model statement under the evidence's statement relation."⟩,
+  ⟨"event.sumcheck-false-statement", .event,
+    some `ZkcSecurity.Examples.Subjects.Sumcheck.Contract.falseStatement,
+    "A Sumcheck policy statement whose claim the retained formula does not confirm as the total of \
+    its vector."⟩,
   ⟨"event.fri-far", .event, some `ZkcSecurity.ArkLib.Fri.Far,
     "A word at relative distance at least the radius from every codeword."⟩,
   ⟨"event.gkr-false-claim", .event, some `ZkcSecurity.ArkLib.Gkr.FalseClaim,
@@ -455,8 +483,15 @@ def audited : List (String × Option Name × Bool) :=
 
 /-- Registered endpoints: covered semantic endpoint (`ideal-meaning` or
 `executable-bytes`), property, statement form (`fixed` or `adaptive`) and the
-endpoint theorem. Empty until an endpoint over artifact-indexed evidence
-exists. -/
-def endpoints : List (String × String × String × Name) := []
+endpoint theorem over artifact-indexed evidence (`ZkcSecurity.Endpoint`).
+Knowledge soundness is registered for fixed statements only. -/
+def endpoints : List (String × String × String × Name) := [
+  ("ideal-meaning", "soundness", "fixed", `ZkcSecurity.Endpoint.fixed_soundness),
+  ("ideal-meaning", "soundness", "adaptive", `ZkcSecurity.Endpoint.adaptive_soundness),
+  ("executable-bytes", "soundness", "fixed", `ZkcSecurity.Endpoint.fixed_soundness_bytes),
+  ("executable-bytes", "soundness", "adaptive", `ZkcSecurity.Endpoint.adaptive_soundness_bytes),
+  ("ideal-meaning", "knowledge-soundness", "fixed", `ZkcSecurity.Endpoint.knowledge_soundness),
+  ("executable-bytes", "knowledge-soundness", "fixed", `ZkcSecurity.Endpoint.knowledge_soundness_bytes)
+]
 
 end ZkcSecurity.Registry

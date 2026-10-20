@@ -65,9 +65,11 @@ verifier with a random oracle on all transcript histories, through the core
 [transcript-construction](../../docs/spec/fiat-shamir.md) and
 [participant projection](../../docs/spec/participant-projection.md) rules.
 Injective routing of histories (`Oracle/Encoding`) makes the experiment exactly
-VCVio's Fiat–Shamir verification run, which gives its knowledge-soundness bound
-under named assumptions, for the relation retained by the Proof Entry's own
-export. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
+VCVio's Fiat–Shamir verification run; its knowledge-soundness bound, under named
+assumptions and for the relation retained by the Proof Entry's own export,
+follows from the Sigma bridge of the subject's evidence
+(`Examples/Subjects/Schnorr`), the bridge the registered knowledge endpoints
+apply. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
 of proof bytes for the validator program the runtime admits, through the core
 [lowering rule](../../docs/spec/executable.md).
 
@@ -241,6 +243,29 @@ commitment's row calls passed through on one byte hash, and bounds the abstract
 committed-opening verifier over the Keccak-256 hash chain with byte tags
 (`ZkcSecurity.HashChain.Joint.keccak_soundness`); no compiled Entry or native
 transcript reading is connected to it.
+
+`Endpoint/*` states the registered
+[endpoints over artifact-indexed evidence](../../docs/spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence).
+`Endpoint/Compiled` collects a compiled Entry's generated facts and states its
+compiled verifier as the transform of the admitted original on every statement
+of the published types. `Endpoint/Evidence` adds the model equation, the
+family's charged certificate, the original validator's charge, binding evidence
+that adaptive claims require (the policy-derived codec of `Endpoint/Binding`
+and coverage of the application's false statements) and lowering evidence that
+claims about program bytes require. `Endpoint/Soundness` proves ordinary
+soundness for fixed and adaptive statements, ideal meaning and program bytes,
+each as one composition of stage relations. `Endpoint/Sigma` is the generic
+Sigma bridge and `Endpoint/Knowledge` gives fixed-statement knowledge soundness
+for both endpoints. `Families/Schnorr` is the Schnorr family package over any
+checked context and `Families/SchnorrVariants` the Chaum–Pedersen, two-proof
+AND and Okamoto family packages; family packages import no compiled Entry.
+`Examples/Subjects/<subject>` holds each subject's claim: a hand `Contract`
+recovered from the admitted original's retained contract, a hand `Evidence`
+applying the family package, and the driver-generated `Artifacts` and `Claims`
+modules, whose applications the assurance reports check.
+`TestsSecurity.Endpoints` relates the subjects' evidence to the earlier compiled
+theorems and holds the Lean controls
+([support](../../docs/support.md#endpoint-applications)).
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

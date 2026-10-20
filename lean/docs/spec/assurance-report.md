@@ -71,10 +71,18 @@ artifact-indexed evidence.
 
 The generator reads, and otherwise ignores, these manifest fields: `name`;
 `entries.proof`; `generated`, the generated Lean modules the subject owns;
-`family.instance`, the evidence instance; `claims.endpoint` (`ideal-meaning` or
-`executable-bytes`), `claims.properties`, `claims.statement` (`fixed` or
-`adaptive`) and `claims.regime`; and `assumptions.requested`, the registry
-identifiers the author expects.
+`claims.endpoint` (`ideal-meaning` or `executable-bytes`), `claims.properties`,
+`claims.statement` (`fixed` or `adaptive`) and `claims.regime`;
+`claims.namespace`, the namespace of the subject's generated claims, from which
+the claim's declarations are named; and `assumptions.requested`, the registry
+identifiers the author expects. In a claims namespace `N`, the artifacts are
+`N.artifacts`, the contract is `N.Contract.falseStatement` for ordinary
+soundness and `N.Contract.holds` for knowledge soundness, the evidence instance
+is `N.evidence` and the application is `N.<endpoint theorem>`. These names
+derive from `N` alone: a manifest field that names one of them otherwise
+(`claims.artifacts`, `claims.contract`, `claims.application`,
+`family.instance`) is a conflicting override, and the pipeline's manifest
+schema rejects those fields.
 
 ## Pipeline evidence
 
@@ -114,12 +122,15 @@ erase its conditions:
 | `property`, `covered_endpoint`, `statement` | The claimed property, the semantic endpoint it covers and the statement form |
 | `validation` | The pipeline's validation outcome as the checks emitted it: `accepted`, `refused`, `unsupported` or `unresolved` |
 | `endpoint` | The registered endpoint theorem: name, module, statement hashes, axiom closure and statement |
+| `application` | The application declaration, with the same facts |
 | `evidence` | The evidence instance, with the same facts |
-| `assumptions[]` | Every remaining assumption: registry identifier, category, schema, statement, the instantiated statement when the assumption is a premise, its discharge (`assumed`, or a proof) and where it comes from |
+| `contract`, `artifacts_declaration` | The contract and artifacts declarations the claim must be stated at |
+| `assumptions[]` | Every remaining assumption: registry identifier, category, schema, statement, the instantiated statement when the assumption is a premise, its discharge (`assumed`, or a proof) and where it comes from; a named hypothesis also lists its recorded arguments |
+| `discharged[]` | The named hypotheses the evidence proves, with their arguments |
 | `requested_assumptions` | The identifiers the manifest requested |
 | `models[]` | The registered model definitions the endpoint and the evidence reach |
 | `regime` | The expected parameter regime and the regime the evidence states |
-| `bound` | The endpoint theorem and its instantiated statement |
+| `bound` | The application declaration, its statement and the property's instantiated statement: the bound the claim states |
 | `outcome`, `reasons` | The claim's outcome and every reason it is not established |
 
 ## Generation
@@ -128,15 +139,47 @@ erase its conditions:
    select a registered endpoint. A covered endpoint outside `ideal-meaning` and
    `executable-bytes`, an unknown statement form, or a combination with no
    registered endpoint is an unsupported endpoint claim.
-2. **Evidence.** The manifest names the evidence instance. A missing instance,
-   or a missing endpoint theorem, leaves the claim unresolved.
-3. **Telescope audit.** Every premise of the endpoint theorem and of the
-   evidence instance, read from their fully elaborated telescopes with implicit
-   and instance binders, is classified by the registry through its head
-   constant. A premise that is not a registered assumption is an omitted
-   premise. Classified premises become assumptions with their instantiated
-   statements.
-4. **Required links.** The trusted links every claim about the covered endpoint
+2. **Application.** The claim is established only through its application
+   declaration, which the subject driver generates: its type must be the
+   registered endpoint's property, its value the registered endpoint applied to
+   the manifest's evidence instance, and its type must name the subject's
+   artifacts, contract and, for ordinary soundness, the manifest's regime. A
+   declaration that applies the endpoint to other evidence, states the claim at
+   other artifacts or at another relation, or applies another theorem leaves
+   the claim unresolved (wrong evidence, mismatched artifact, substituted
+   relation, wrong endpoint). A missing application, instance or endpoint
+   theorem leaves the claim unresolved.
+3. **Evidence.** The evidence instance must be the property's evidence
+   structure indexed by the subject's artifacts and contract.
+4. **Join.** The claim's declarations must belong to this subject's validated
+   artifacts: the manifest's generated `artifacts` and `claims` modules are the
+   `Artifacts` and `Claims` modules of its claims namespace, both among the
+   modules the pipeline regenerated and compared for this subject (see
+   *Connection*); the application and the evidence instance are declared in that
+   `Claims` module; and the pipeline's evidence records an accepted
+   `claim-application` check that built that module with that application. A
+   manifest without a claims namespace, a conflicting override, a claims
+   namespace whose generated modules are not this subject's, a declaration in
+   another module, or evidence without that check leaves the claim unresolved.
+   Without the join, a mutually consistent application, evidence, artifacts and
+   contract of one subject could be reported for another whose own generated
+   modules are connected.
+5. **Telescope audit.** Every premise of the application declaration itself,
+   of its property and of the evidence instance, read from their fully
+   elaborated telescopes with implicit and instance binders, is classified by
+   the registry through its head constant. A generated application has no
+   premise of its own, so one it states is an assumption like any other. A premise that is not a registered assumption is an omitted
+   premise. Every other binder must be a type, an allowed instance or the
+   application context; any other parameter, such as a structure bundling
+   assumptions, is a hidden parameter. Classified premises become assumptions
+   with their instantiated statements.
+6. **Named hypotheses.** Each hypothesis the evidence lists cites a registry
+   identifier; its proposition must be an instance of that entry's schema (a
+   proposition of the same category under another schema is a wrong schema),
+   and its status is a proof, a premise of the evidence, or an assumption
+   citing the same entry. A premise of the evidence that no hypothesis names is
+   an omitted assumption.
+7. **Required links.** The trusted links every claim about the covered endpoint
    rests on are listed as assumptions unless a premise already carries them:
 
    | Covered endpoint | Required trusted links |
@@ -144,22 +187,22 @@ erase its conditions:
    | `ideal-meaning` | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` |
    | `executable-bytes` | `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` |
 
-5. **Models.** The registered model definitions the endpoint and the evidence
-   reach are recorded.
-6. **Artifacts.** A digest attached to generated data is not evidence that the
+8. **Models.** The registered model definitions the endpoint, the application
+   and the evidence reach are recorded.
+9. **Artifacts.** A digest attached to generated data is not evidence that the
    data came from the source, export and program bytes. The connection holds
    when the pipeline evidence is for this subject and this manifest, every
    generated module equals the module the run regenerated, and every digest a
    module records is one the run produced. Anything else is a mismatched
    artifact, or unresolved without evidence.
-7. **Axioms.** An endpoint theorem or evidence instance whose closure leaves
-   the allowed set, for example one that depends on `sorryAx`, leaves the claim
-   unresolved. Dependency and axiom audits are secondary checks; the telescope
-   audit decides premise completeness.
-8. **Outcome.** A refused or unsupported validation is reported as such.
-   Otherwise the claim is `established` only when validation accepted and no
-   reason remains; it is `unresolved` otherwise. A report is `established` when
-   every claim is.
+10. **Axioms.** An endpoint theorem, application or evidence instance whose
+   closure leaves the allowed set, for example one that depends on `sorryAx`,
+   leaves the claim unresolved. Dependency and axiom audits are secondary
+   checks; the telescope audit decides premise completeness.
+11. **Outcome.** A refused or unsupported validation is reported as such.
+    Otherwise the claim is `established` only when validation accepted and no
+    reason remains; it is `unresolved` otherwise. A report is `established`
+    when every claim is.
 
 Two rules decide which equations and bindings a report may count:
 
@@ -175,7 +218,7 @@ Two rules decide which equations and bindings a report may count:
 
 | Outcome | Meaning |
 |---|---|
-| `established` | Validation accepted; a registered endpoint is applied to the subject's evidence; every premise is a registered assumption; the artifacts are connected; closures are clean |
+| `established` | Validation accepted; the application declaration applies the registered endpoint to the subject's evidence at its artifacts, contract and regime; every premise is a registered assumption and every named hypothesis an instance of its schema; the artifacts are connected; closures are clean |
 | `refused` | A check refused, with a named obligation |
 | `unsupported` | A check emitted an outside-fragment refusal |
 | `unresolved` | Checking itself could not conclude: an unsupported endpoint claim, an omitted premise, a mismatched or unconnected artifact, a missing endpoint or instance, a forbidden axiom |
@@ -185,8 +228,18 @@ outcome.
 
 The generator's controls require these reactions: an omitted premise, a
 mismatched artifact, an unsupported endpoint claim, an unregistered endpoint, a
-dependency on `sorryAx` and absent pipeline evidence each make a report
-`unresolved`, and a refused check makes it `refused`.
+dependency on `sorryAx`, absent pipeline evidence, valid evidence of another
+subject, an application at other artifacts or at a substituted relation, an
+application of another theorem, a hypothesis under the wrong schema of its
+category, an assumption bundled into the evidence's parameters and a premise
+no hypothesis names each make a report `unresolved`, and a refused check makes
+it `refused`. An established control report lists its assumptions and models
+and renders the instantiated bound. Records reused from a saved directory (`--records`) carry
+declaration hashes but no identity of the sources they were emitted from, so a
+report built from them is `unresolved`. The application audit also runs on
+declarations Lean emitted (`TestsSecurity.ReportControls`): an application with
+no premise of its own passes, and an explicit `False`, an implicit `False` and a
+`Fact False` instance premise are each reported as omitted.
 
 ## Claims ledger and generated tables
 

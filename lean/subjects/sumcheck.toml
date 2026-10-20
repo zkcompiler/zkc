@@ -19,20 +19,23 @@ participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SumcheckProof.lean"
 program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
+artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Sumcheck/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Sumcheck/Claims.lean"
 
 [normal_forms]
 request = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
 
 [family]
-module = "ZkcSecurity.FiatShamir.Soundness"
-instance = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir"
+module = "ZkcSecurity.Examples.SumcheckFiatShamir"
+construction = "soundness"
 kind = "certificate"
 
 [claims]
+namespace = "ZkcSecurity.Examples.Subjects.Sumcheck"
 endpoint = "executable-bytes"
 properties = ["soundness"]
 statement = "adaptive"
-regime = "decoded challenges with the suite's stated loss"
+regime = "exact-uniform challenges"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
