@@ -309,16 +309,44 @@ supply obligations. Declaration provenance and axiom closure use
 checked stored ConstantInfo bodies, including opaque proofs, rather than
 imported axiom caches. These checks do not add native correspondence premises.
 
-The version-zero knowledge meaning quantifies one `ReplayClass` before its
-statements, histories, adversaries and query counts. The class includes the
-compiled-verifier equation, the retained application relation, special
-soundness and the transcript shape used by the fixed VCVio replay extractor.
-An endpoint method supplies a witness of that class; it does not define the
-requested relation. Different valid witnesses may expose different family or
-witness representations. An arbitrary extraction theorem does not by itself
-establish this particular Sigma replay property. The registered two-run form
-selects the replay guarantee, whose proposition is a probability inequality;
-there is no formal running-time bound in this meaning.
+The version-zero knowledge request fixes the extraction algorithm through the
+admitted subject's typed extractor registry. The standard entry is
+`extractors.response_difference@0`. Its profile fixes the actual retained target,
+private scalar input coordinates, scalar/product response carrier, transcript
+reader and encoder, and an admitted challenge draw. Coordinates are unique,
+cover exactly the relation's scalar witness inputs, and use the challenge's
+nominal field. Repeated uses of one input share its value. The retained-target
+support proof checks private producer roles and excludes public/output witness
+selectors. The registry is part of the semantic environment; its reviewed
+transcript reader is not selected by an evidence value.
+
+A request stores a checked availability proof and obtains that one profile
+directly from the subject's registry. Recovery is componentwise
+`(z₁ - z₂) / (c₁ - c₂)`; unusable forks use the fixed full scalar/product sampler.
+Witness embedding is derived from the coordinate layout. The adversary receives
+all actual subject publications and the initial history. Acceptance uses the
+actual compiled verifier, or actual host validation at the byte stage. Canonical
+replay runs the compiled verifier against the recorded routed oracle cache;
+unrecorded queries reject. The meaning is the forking inequality for that
+concrete experiment. It contains no existential family, recovery callback,
+witness embedding, or evidence-selected adversary key.
+
+`SigmaJustification` is one proof method. It supplies the original-verifier
+equation, retained-relation correspondence, special soundness, and equalities of
+its transcript shape and recovery function with the registered profile. The
+generic `Extraction.replay_eq` proves operational equality with VCVio replay
+without a special-soundness assumption. `SigmaJustification.extract_eq` applies
+that equality; `knowledgeEndpoint` additionally uses actual-proof acceptance
+pruning and byte decoding/pruning. A malformed raw proof can reject while its
+canonical reading accepts; these are deliberately separate obligations.
+
+The earlier existential `ReplayClass` meaning was too weak: a statement-indexed
+Sigma family could recover witnesses by search or choice, despite using a fixed
+outer replay wrapper. Fixing the relation alone did not prevent this. The new
+meaning fixes recovery independently of proof evidence. Any kernel-checked
+proof of that same meaning remains valid; classical reasoning is not prohibited.
+The registered `prover_runs(2)` form still states a probability inequality,
+not a formal running-time bound or a general polynomial-time proof of knowledge.
 
 Public reports retain the selected whole-Entry scope and separately audit other
 compiled Entry trials. Undefined interactive meanings remain visible as

@@ -25,7 +25,7 @@ spec SchnorrClaims for Demo {
       oracle=oracles.random@0(construction.provider),queries=2^64),
     accept=out.accepted,stage=executable_bytes,
     guarantee=guarantees.forking@0(challenges=cardinality(G.Scalar),
-      cost=prover_runs(2)));
+      extractor=extractors.response_difference@0(),cost=prover_runs(2)));
 }
 verify SchnorrClaims.know=fs.forking@0();
 ```
@@ -37,6 +37,15 @@ respectively. `verify Block.label` selects a local block; each claim has at most
 one method plan. The method must be a versioned registry application. Its name
 is data; it is never translated to an unchecked Lean declaration string. A
 missing plan is legal and does not change the request.
+
+For the built-in knowledge model, `extractor=extractors.response_difference@0()`
+selects the registered componentwise response-difference experiment. Version 0
+uses that same entry when this argument is omitted. The admitted author library
+must provide its typed profile; an unknown extractor/version fails resolution,
+and an undefined profile remains incomplete. The profile fixes the transcript
+reading, witness layout, challenge site, and fallback sampling before `verify`
+selects a proof method. `cost=prover_runs(2)` is the replay guarantee form, not a
+checked running-time bound. See the [formal verification contract](../../../lean/docs/spec/verification.md).
 
 An Entry with a configuration block may instead put `spec { ... }` immediately
 after that configuration's closing brace. The block's name for `verify` is the

@@ -1839,6 +1839,15 @@ is a separate property. The family packages of Schnorr and of three variants
 Okamoto's proof of a representation) supply shapes of one or two commitments and
 one or two responses.
 
+These family-specific endpoint theorems justify a named extraction computation;
+they do not, on their own, prevent a statement-indexed family from choosing
+witness search. Source knowledge claims additionally fix the registered
+response-difference profile before selecting evidence. The method proves that
+its family extraction equals that profile's computation, and that canonical
+replay uses the actual verifier. See the [request and receipt contract](verification.md)
+for profile admission, witness coordinates, fallback sampling, and adversary
+inputs. The source-claim meaning contains no existential Sigma-family choice.
+
 A named hypothesis (`Hypothesis`) cites a registry entry by identifier, with
 the proposition it instantiates and its status: a proof, or a reported
 assumption citing a registry entry of its category. The declaration records
