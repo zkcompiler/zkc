@@ -41,7 +41,7 @@ CONTRACT = "Sample.Examples.Contract.falseStatement"
 REGIME = "ZkcSecurity.Endpoint.Regime.exact"
 SCHEMA = "Sample.Links.AcceptanceInclusion"
 TYPES = [{"binder": "implicit", "premise": False, "type_head": "sort"},
-         {"binder": "instance", "premise": False, "type_head": "Field"}]
+         {"binder": "instance", "premise": False, "type_head": "Field", "model_instance": True}]
 
 
 def arguments(*names):
@@ -307,6 +307,19 @@ EMITTED_APPLICATIONS = {
 }
 
 
+# Real evidence records, so binder-dependence classification is tested through
+# the Lean emitter rather than through synthetic JSON alone.
+EMITTED_HYPOTHESES = {
+    "TestsSecurity.ReportControls.proved_binding": "proof",
+    "TestsSecurity.ReportControls.assumed_binding": "premise",
+    "TestsSecurity.ReportControls.unused_assumption_binding": "proof",
+    "TestsSecurity.ReportControls.fact_binding": "premise",
+    "TestsSecurity.ReportControls.inhabited_false_binding": "premise",
+    "TestsSecurity.ReportControls.inhabited_proof_binding": "premise",
+    "TestsSecurity.ReportControls.lifted_proof_binding": "premise",
+}
+
+
 def run_emitted(data):
     """The report's audit of an application's own telescope, on declarations Lean
     emitted: the application without a premise passes, and each added premise is
@@ -330,6 +343,25 @@ def run_emitted(data):
             rows.append(label)
         else:
             failures.append(f"records control {label} failed: {reasons}")
+    for name, expected in EMITTED_HYPOTHESES.items():
+        record = data.get(name)
+        hypotheses = (record or {}).get("detail", {}).get("hypotheses")
+        actual = [item.get("status", {}).get("kind") for item in hypotheses or []]
+        label = "emitted-" + name.rsplit(".", 1)[1].replace("_", "-")
+        if actual == [expected]:
+            rows.append(label)
+        else:
+            failures.append(f"records control {label} failed: expected {[expected]}, got {actual}")
+    # Exercise the downstream report too: a status-string control alone cannot
+    # show that a proof-carrying instance is refused as an unregistered context.
+    for short in ("inhabited_false_binding", "inhabited_proof_binding", "lifted_proof_binding"):
+        name = "TestsSecurity.ReportControls." + short
+        record = data.get(name)
+        reasons = reports.binder_reasons(record or {}, "evidence")
+        if not any(reason.startswith("hidden parameter:") for reason in reasons):
+            failures.append(f"records control hidden-{short} failed: {reasons}")
+        else:
+            rows.append("hidden-" + short)
     return rows, failures
 
 

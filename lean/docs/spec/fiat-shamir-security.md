@@ -1761,11 +1761,12 @@ registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
   fixture, which retains none, uses the language of the imported ArkLib
   soundness statement instead), recovered
   from the export by `bind_contract` and read at the policy's published inputs,
-  whose selectors and publication order the kernel checks. The evidence
-  structures take this predicate as a parameter: they do not themselves derive
-  it from the retained contract, so that the predicate is the retained formula
-  is a property of each subject's `Contract` module, not of the evidence type.
-  No false statement is required to exist;
+  whose selectors and publication order the kernel checks. A retained target
+  reads published inputs from that policy statement; a witness embedding only
+  supplies private coordinates. Evidence requires a proof that its false set
+  or witness relation equals this derived application meaning. An explicit
+  imported-language alternative is available only when the admitted original
+  retains no clauses. No false statement is required to exist;
 - the **regime** (`Regime`): the oracle's answer type and the decoding of a
   challenge from it, exactly uniform field elements at `Regime.exact`.
 

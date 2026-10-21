@@ -1,5 +1,7 @@
 module
 
+public import ZkcSecurity.Examples.Subjects.Guess.Artifacts
+
 public import ZkcSecurity.Examples.CompiledGuessFiatShamir
 
 @[expose] public section
@@ -38,5 +40,20 @@ def falseStatement {F G : Type} (statement : Values (assignment F G) [.field "bl
 theorem falseStatement_all {F G : Type} (statement : Values (assignment F G) [.field "bls12-381.fr"]) :
     falseStatement statement :=
   fun member => member
+
+/-- Explicit imported-language declaration; unavailable to retained-contract
+subjects. Its meaning is the exact language of the imported soundness theorem. -/
+def importedLanguage {F G : Type} : ZkcSecurity.Endpoint.ImportedLanguage compiled F G where
+  identifier := "arklib.guess.empty-language"
+  noClauses := rfl
+  Model := F
+  read := offset
+  language := language F
+
+theorem falseStatement_pinned {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
+    [DecidableEq F] [DecidableEq G] (statement : artifacts.Statement F G) :
+    falseStatement statement ↔
+      (ZkcSecurity.Endpoint.SoundnessTarget.importedLanguage
+        (importedLanguage (F := F) (G := G))).FalseStatement statement := Iff.rfl
 
 end ZkcSecurity.Examples.Subjects.Guess.Contract

@@ -140,6 +140,33 @@ def argumentsJson (expression : Expr) : MetaM Json := do
     return Json.mkObj [("head", nameJson (headName argument)), ("text", Json.str (toString (← ppExpr argument)))]
   return Json.arr arguments
 
+/-- Model instances are admitted only on free non-propositional carrier types.
+Checking just a class name would admit `Inhabited False`, or `Inhabited (PLift P)`,
+as an ordinary model parameter and hide the proof it supplies. The fixed model
+registry can extend this conservative policy when it declares another carrier. -/
+def modelInstance (declaration : LocalDecl) : MetaM Bool := do
+  unless declaration.binderInfo.isInstImplicit do return false
+  let allowed : List Name := [`Field, `CommRing, `Fintype, `DecidableEq, `Inhabited,
+    `SampleableType, `AddCommGroup, `Module]
+  unless (headName declaration.type).any (allowed.contains ·) do return false
+  for argument in declaration.type.getAppArgs do
+    let argumentType ← whnf (← inferType argument)
+    if argumentType.isSort then
+      let .fvar carrier := argument.consumeMData | return false
+      let carrierType ← whnf (← carrier.getDecl).type
+      let .sort level := carrierType | return false
+      if level == .zero then return false
+  return true
+
+/-- Binders whose values are accounted for by the fixed model context. Other
+binders must be treated as potential assumptions, including Type-valued proof
+wrappers. Reporting rejects unregistered wrappers even if a proof does not use
+them; unused explicit propositions are still audited by the premise telescope. -/
+def modelBinder (declaration : LocalDecl) : MetaM Bool := do
+  if declaration.type.isSort then return true
+  if declaration.binderInfo == .default && declaration.type.isConstOf ``String then return true
+  return ← modelInstance declaration
+
 /-- Every leading binder of a type: binder information, whether it is a proof of a
 proposition, and the head constant of its type (`sort` for a universe). -/
 def bindersJson (type : Expr) : MetaM Json :=
@@ -149,7 +176,7 @@ def bindersJson (type : Expr) : MetaM Json :=
       let proof ← isProp declaration.type
       let head := if declaration.type.isSort then Json.str "sort" else nameJson (headName declaration.type)
       return Json.mkObj [("binder", Json.str (binderName declaration.binderInfo)), ("premise", Json.bool proof),
-        ("type_head", head)]
+        ("type_head", head), ("model_instance", Json.bool (← modelInstance declaration))]
     return Json.arr found
 
 /-- The structures of evidence whose named hypotheses are recorded. -/
@@ -173,6 +200,10 @@ arguments, and the status: a proof, a proof that is a binder of the evidence's
 declaration (an assumption by premise), or a reported assumption with the
 registry identifier it cites. -/
 def hypothesesJson (binders : Array Expr) (evidence : Expr) (structureName : Name) : MetaM Json := do
+  let assumptions ← binders.filterM fun binder => do
+    let declaration ← binder.fvarId!.getDecl
+    if ← isProp declaration.type then return true
+    return !(← modelBinder declaration)
   let list ← mkAppM (structureName ++ `hypotheses) #[evidence]
   let elements ← listElements list
   let found ← elements.mapM fun element => do
@@ -183,7 +214,7 @@ def hypothesesJson (binders : Array Expr) (evidence : Expr) (structureName : Nam
     let status ← whnf (hypothesis.getArg! 3)
     let statusJson ← if status.isAppOf `ZkcSecurity.FiatShamir.ObligationStatus.proved then
         let proof := status.appArg!
-        let premise := binders.any fun binder => proof.containsFVar binder.fvarId!
+        let premise := assumptions.any fun binder => proof.containsFVar binder.fvarId!
         pure (Json.mkObj [("kind", Json.str (if premise then "premise" else "proof"))])
       else if status.isAppOf `ZkcSecurity.FiatShamir.ObligationStatus.assumed then
         let entry ← whnf (status.getArg! 2)

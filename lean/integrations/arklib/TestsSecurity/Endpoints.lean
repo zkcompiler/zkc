@@ -175,4 +175,103 @@ theorem mismatched_artifacts : checkCompiled SchnorrProof.imported GuessProof.pa
 
 end Controls
 
+section RetainedContracts
+open ZkcSecurity.Examples.Subjects
+
+/-- Changing the false set to False cannot satisfy the actual pinning field:
+the retained Sumcheck target has a false statement, even though no table has
+this vector's shape at the supplied round count. -/
+theorem false_predicate_rejected {F G : Type} [Field F] [DecidableEq F]
+    [AddCommGroup G] [Module F G] [DecidableEq G] :
+    ¬ (∀ statement, False ↔
+      (SoundnessTarget.retained Sumcheck.Contract.retained).FalseStatement
+        (F := F) (G := G) statement) := by
+  intro pin
+  exact (pin malformed).mpr ((Sumcheck.Contract.falseStatement_pinned _).mp malformed_false)
+
+/-- A valid retained witness also prevents replacing the knowledge relation
+with False. The relation is read at the published zero base and point. -/
+theorem false_knowledge_relation_rejected {F G : Type} [Field F] [DecidableEq F]
+    [AddCommGroup G] [Module F G] [DecidableEq G] :
+    ¬ (∀ statement witness, False ↔ Schnorr.Contract.retained.Holds statement
+      (Schnorr.Contract.embed (F := F) (G := G) witness)) := by
+  intro pin
+  apply (pin (.cons (0 : G) (.cons 0 .nil)) (0 : F)).mpr
+  apply (Schnorr.Contract.holds_pinned _ _).mp
+  rw [Schnorr.Contract.holds_iff, SchnorrProofBinding.relation_iff]
+  simp
+
+/-- The imported-language escape hatch is unavailable to a subject with an
+actual retained clause. Empty owner records in the guessing fixture are fine. -/
+theorem retained_language_alternative_rejected :
+    Schnorr.artifacts.original.contracts.all (fun contract => contract.clauses.isEmpty) = false := by
+  decide +kernel
+
+set_option smartUnfolding true in
+/-- The internal Sumcheck reduction's input clause is not an endpoint target. -/
+theorem wrong_target_kind :
+    ZkcExamples.Structured.SumcheckContractBindings.reductionClause.kind ≠ .target := by
+  decide +kernel
+
+set_option smartUnfolding true in
+/-- The sole retained Schnorr target has no alternative clause index. -/
+theorem wrong_target_index : ¬ 1 < Schnorr.Contract.retained.owner.contract.clauses.length := by
+  decide +kernel
+
+set_option smartUnfolding true in
+/-- A published input cannot become a witness by changing its purpose. -/
+theorem published_witness_rejected :
+    targetSelectorsSupported Schnorr.artifacts.participant.policy ["witness", "statement", "witness"]
+      SchnorrProofBinding.application.selectors = false := by
+  decide +kernel
+
+set_option smartUnfolding true in
+/-- A private producer input cannot become a fixed public parameter. -/
+theorem private_parameter_rejected :
+    targetSelectorsSupported Schnorr.artifacts.participant.policy ["parameter", "statement", "parameter"]
+      SchnorrProofBinding.application.selectors = false := by
+  decide +kernel
+
+set_option smartUnfolding true in
+theorem unknown_purpose_rejected :
+    targetSelectorsSupported Schnorr.artifacts.participant.policy ["parameter", "unknown", "witness"]
+      SchnorrProofBinding.application.selectors = false := by
+  decide +kernel
+
+set_option smartUnfolding true in
+theorem missing_purpose_rejected :
+    targetSelectorsSupported Schnorr.artifacts.participant.policy ["parameter", "statement"]
+      SchnorrProofBinding.application.selectors = false := by
+  decide +kernel
+
+set_option smartUnfolding true in
+/-- A retained output selector has no policy input reading. -/
+theorem output_argument_rejected :
+    targetSelectorsSupported Sumcheck.artifacts.participant.policy ["statement"]
+      (Values.cons ZkcExamples.Structured.SumcheckContractBindings.publicDecision .nil) = false := by
+  decide +kernel
+
+/-- Changing the public binding changes the ordered formula arguments. An
+embedding supplies the witness only, even if it also supplies public coordinates. -/
+theorem changed_public_binding {F G : Type}
+    (base point : G) (different : base ≠ point) (witness : F) :
+    Schnorr.Contract.retained.arguments (.cons base (.cons point .nil)) (Schnorr.Contract.embed witness) ≠
+      some (Schnorr.Contract.arguments (.cons point (.cons base .nil)) witness) := by
+  change some (Schnorr.Contract.arguments (.cons base (.cons point .nil)) witness) ≠ _
+  intro same
+  have values := Option.some.inj same
+  exact different (congrArg (fun values => values.get .here) values)
+
+/-- A witness's proposed replacement for a public parameter is ignored. -/
+theorem witness_cannot_replace_parameter {F G : Type}
+    (base point replacement : G) (witness : F) :
+    Schnorr.Contract.retained.arguments (.cons base (.cons point .nil))
+      (fun type _ => match type with
+        | .group _ => some replacement
+        | .field _ => some witness
+        | _ => none) =
+      some (Schnorr.Contract.arguments (.cons base (.cons point .nil)) witness) := rfl
+
+end RetainedContracts
+
 end TestsSecurity.Endpoints

@@ -84,7 +84,7 @@ def main():
     packages = ["main", *dict.fromkeys(args.integration)]
     subject_manifests = manifests(args.manifests or SUBJECTS)
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = list(controls.EMITTED_APPLICATIONS) if "arklib" in packages else []
+    details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "arklib" in packages else []
     for path in subject_manifests + samples:
         names = reports.claim_names(reports.load_manifest(path))
         for name in (names["instance"], names["application"]):

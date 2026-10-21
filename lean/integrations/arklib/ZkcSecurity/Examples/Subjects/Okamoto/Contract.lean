@@ -1,5 +1,7 @@
 module
 
+public import ZkcSecurity.Examples.Subjects.Okamoto.Artifacts
+
 public import ZkcExamples.Construction.OkamotoProof
 public import Zkc.Source.Structured.ContractExecution
 public import Zkc.Source.Structured.ContractElaboration
@@ -55,6 +57,22 @@ set_option smartUnfolding true in
 theorem published : participant.policy.publicInputs = [0, 1, 2] := by
   decide +kernel
 
+set_option smartUnfolding true in
+/-- The admitted target, including its policy reading, fixed before evidence. -/
+def retained : RetainedTarget compiled.imported artifacts.participant.policy artifacts.publics where
+  owner := owner
+  entry := rfl
+  clauseIndex := clauseIndex
+  target := rfl
+  noResidual := rfl
+  decision := by decide +kernel
+  application := application
+  formula := formulaBinding
+  booleanOutput := rfl
+  publicTypes := by decide +kernel
+  publicArity := by decide +kernel
+  supported := by decide +kernel
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The formula's inputs from a policy statement and a witness pair. -/
@@ -83,5 +101,31 @@ theorem holds_iff (firstBase secondBase point : G) (witnesses : F × F) :
     (.cons (decide (point = witnesses.1 • firstBase + witnesses.2 • secondBase)) .nil :
       Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
+
+/-- Only private producer coordinates are used by the generic reader. -/
+def embed (witnesses : F × F) : retained.Witness F G :=
+  fun type selector => match type with
+    | .field _ => if selector.port.index = 3 then some witnesses.1
+        else if selector.port.index = 4 then some witnesses.2 else none
+    | _ => none
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Exact ordered application read, derived through the compiled policy. -/
+theorem arguments_read (statement : artifacts.Statement F G) (witnesses : F × F) :
+    retained.arguments statement (embed witnesses) = some (arguments statement witnesses) := by
+  match statement with
+  | .cons firstBase (.cons secondBase (.cons point .nil)) => rfl
+
+/-- The existing mathematical predicate is exactly the retained application. -/
+theorem holds_pinned (statement : artifacts.Statement F G) (witnesses : F × F) :
+    holds statement witnesses ↔ retained.Holds statement (embed witnesses) := by
+  unfold RetainedTarget.Holds
+  rw [arguments_read]
+  constructor
+  · intro truth
+    exact ⟨_, rfl, truth⟩
+  · rintro ⟨arguments, read, truth⟩
+    cases read
+    exact truth
 
 end ZkcSecurity.Examples.Subjects.Okamoto.Contract

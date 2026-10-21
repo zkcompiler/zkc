@@ -1,5 +1,7 @@
 module
 
+public import ZkcSecurity.Examples.Subjects.Sumcheck.Artifacts
+
 public import ZkcExamples.Construction.SumcheckProof
 public import ZkcExamples.Structured.SumcheckContractBindings
 
@@ -41,6 +43,22 @@ set_option smartUnfolding true in
 theorem published : ZkcExamples.Construction.SumcheckProof.participant.policy.publicInputs = [0, 1, 2] := by
   decide +kernel
 
+set_option smartUnfolding true in
+/-- The complete public target, with the raw vector fixed by the policy. -/
+def retained : RetainedTarget compiled.imported artifacts.participant.policy artifacts.publics where
+  owner := SumcheckContractBindings.publicOwner
+  entry := rfl
+  clauseIndex := SumcheckContractBindings.publicOwner.namedClause "public_sum"
+  target := rfl
+  noResidual := rfl
+  decision := by decide +kernel
+  application := SumcheckContractBindings.publicApplication
+  formula := SumcheckContractBindings.publicFormula
+  booleanOutput := rfl
+  publicTypes := by decide +kernel
+  publicArity := by decide +kernel
+  supported := by decide +kernel
+
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
 /-- The application's claim: a policy statement is false when the retained
@@ -53,5 +71,39 @@ theorem falseStatement_iff (raw : List F) (claim : F) (rounds : Nat) :
     falseStatement (G := G) (.cons raw (.cons claim (.cons rounds .nil))) ↔
       ¬ SumcheckContractBindings.PublicTruth (G := G) raw claim :=
   Iff.rfl
+
+omit [CommRing F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- This target has no witness arguments: the raw public table is a parameter,
+not an existentially chosen table. -/
+theorem arguments_read (raw : List F) (claim : F) (rounds : Nat)
+    (witness : retained.Witness F G) :
+    retained.arguments (.cons raw (.cons claim (.cons rounds .nil))) witness =
+      some (.cons raw (.cons claim .nil)) := rfl
+
+/-- The old false set is precisely negated existence of a target witness. The
+round count is still unused by the retained formula, including malformed policy
+statements. Stops remain process stops and are never completed false results. -/
+theorem falseStatement_pinned (statement : artifacts.Statement F G) :
+    falseStatement statement ↔ retained.FalseStatement statement := by
+  match statement with
+  | .cons raw (.cons claim (.cons rounds .nil)) =>
+      change (¬ SumcheckContractBindings.PublicTruth (G := G) raw claim) ↔
+        ¬ ∃ witness, retained.Holds (.cons raw (.cons claim (.cons rounds .nil))) witness
+      have same (witness : retained.Witness F G) :
+          retained.Holds (.cons raw (.cons claim (.cons rounds .nil))) witness ↔
+            SumcheckContractBindings.PublicTruth (G := G) raw claim := by
+        unfold RetainedTarget.Holds
+        rw [arguments_read]
+        constructor
+        · rintro ⟨arguments, read, truth⟩
+          cases read
+          exact truth
+        · intro truth
+          exact ⟨_, rfl, truth⟩
+      constructor
+      · intro falseStatement ⟨witness, truth⟩
+        exact falseStatement ((same witness).mp truth)
+      · intro falseStatement truth
+        exact falseStatement ⟨fun _ _ => none, (same _).mpr truth⟩
 
 end ZkcSecurity.Examples.Subjects.Sumcheck.Contract

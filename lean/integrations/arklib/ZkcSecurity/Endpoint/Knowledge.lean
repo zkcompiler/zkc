@@ -87,6 +87,11 @@ endpoint and the application's witness relation `holds`. -/
 structure KnowledgeEvidence (art : Artifacts) (endpoint : Semantics) (Stmt Wit Commit PrvState Resp : Type)
     (holds : art.Statement F G → Wit → Prop) where
   compiled : Compiled art
+  target : RetainedTarget compiled.imported art.participant.policy art.publics
+  /-- Embedding extracted witnesses cannot replace publications or parameters. -/
+  witness : Wit → target.Witness F G
+  relationPinned : ∀ statement extracted,
+    holds statement extracted ↔ target.Holds statement (witness extracted)
   /-- The replaced service handle at which the model equation is read. -/
   handle : Nat
   family : SigmaFamily (F := F) (G := G) compiled.context (art.Statement F G) Stmt Wit Commit PrvState Resp

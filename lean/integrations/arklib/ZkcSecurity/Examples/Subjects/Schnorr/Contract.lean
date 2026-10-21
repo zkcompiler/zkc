@@ -1,5 +1,7 @@
 module
 
+public import ZkcSecurity.Examples.Subjects.Schnorr.Artifacts
+
 public import ZkcExamples.Construction.SchnorrProofBinding
 
 @[expose] public section
@@ -40,6 +42,22 @@ set_option smartUnfolding true in
 theorem published : SchnorrProof.participant.policy.publicInputs = [0, 1] := by
   decide +kernel
 
+set_option smartUnfolding true in
+/-- The admitted target, including its policy reading, fixed before evidence. -/
+def retained : RetainedTarget compiled.imported artifacts.participant.policy artifacts.publics where
+  owner := SchnorrProofBinding.owner
+  entry := rfl
+  clauseIndex := SchnorrProofBinding.clauseIndex
+  target := rfl
+  noResidual := rfl
+  decision := by decide +kernel
+  application := SchnorrProofBinding.application
+  formula := SchnorrProofBinding.formulaBinding
+  booleanOutput := rfl
+  publicTypes := by decide +kernel
+  publicArity := by decide +kernel
+  supported := by decide +kernel
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The formula's inputs from a policy statement and a witness: the published
@@ -57,5 +75,30 @@ def holds (statement : Values (assignment F G) [.group "bls12-381.g1", .group "b
 theorem holds_iff (base point : G) (witness : F) :
     holds (.cons base (.cons point .nil)) witness ↔ SchnorrProofBinding.Relation base point witness :=
   Iff.rfl
+
+/-- Only private producer coordinates are used by the generic reader. -/
+def embed (witness : F) : retained.Witness F G :=
+  fun type _selector => match type with
+    | .field _ => some witness
+    | _ => none
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Exact ordered application read, derived through the compiled policy. -/
+theorem arguments_read (statement : artifacts.Statement F G) (witness : F) :
+    retained.arguments statement (embed witness) = some (arguments statement witness) := by
+  match statement with
+  | .cons base (.cons point .nil) => rfl
+
+/-- The existing mathematical predicate is exactly the retained application. -/
+theorem holds_pinned (statement : artifacts.Statement F G) (witness : F) :
+    holds statement witness ↔ retained.Holds statement (embed witness) := by
+  unfold RetainedTarget.Holds
+  rw [arguments_read]
+  constructor
+  · intro truth
+    exact ⟨_, rfl, truth⟩
+  · rintro ⟨arguments, read, truth⟩
+    cases read
+    exact truth
 
 end ZkcSecurity.Examples.Subjects.Schnorr.Contract

@@ -327,7 +327,8 @@ def binder_reasons(record, origin):
         if binder.get("premise"):
             continue
         head = binder.get("type_head")
-        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES) or \
+        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES
+                                and binder.get("model_instance") is True) or \
                 (binder.get("binder") == "explicit" and head == "String"):
             continue
         reasons.append(f"hidden parameter: binder {position} of {origin} {record['name']} has type {head}, "

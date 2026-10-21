@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Endpoint.Compiled
+public import ZkcSecurity.Endpoint.Contract
 public import ZkcSecurity.Endpoint.Binding
 public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcSecurity.FiatShamir.Binding
@@ -231,6 +232,11 @@ regime. -/
 structure SoundnessEvidence (art : Artifacts) (endpoint : Semantics) (form : Form)
     (claim : art.Statement F G → Prop) (regime : Regime F) where
   compiled : Compiled art
+  /-- The retained target or the explicitly declared imported-language fixture. -/
+  target : SoundnessTarget compiled F G
+  /-- A compatibility name for exactly the derived false set. No independently
+  chosen predicate can discharge this field. -/
+  claimPinned : ∀ statement, claim statement ↔ target.FalseStatement statement
   /-- The replaced service handle at which the model equation is read. -/
   handle : Nat
   relation : ModelRelation F G art.publics
