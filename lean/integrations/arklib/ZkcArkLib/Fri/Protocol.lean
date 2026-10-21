@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import ZkcArkLib.Fri.Domain
 
 @[expose] public section
@@ -225,3 +228,9 @@ theorem prEvent_positions (n s : ℕ) (event : (Fin s → Fin (2 ^ n)) → Prop)
     (by rw [evalDist_drawPositions, SampleableType.evalDist_vector]) _
 
 end ZkcSecurity.ArkLib.Fri
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.ArkLib.Fri.commit
