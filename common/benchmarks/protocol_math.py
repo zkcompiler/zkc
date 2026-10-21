@@ -253,7 +253,7 @@ def observe_storage(case, policy, flags, inputs, directory, tools, journal):
     if case['entry'].endswith('::ProofProduct'):
         source = directory / 'storage.zkc'
         source.write_text((inputs / 'main.zkc').read_text() +
-                          '\nentry fn Storage(inputs: MachineProof<GrandProduct<Extension>>::Inputs) {'
+                          '\nrun Storage(inputs: MachineProof<GrandProduct<Extension>>::Inputs) {'
                           ' return MachineProof<GrandProduct<Extension>>::run(inputs); }\n')
         flags = [f'--module={module}={source}' if x.startswith(f'--module={module}=') else x
                  for x in flags]

@@ -49,7 +49,7 @@ fn work(m:Matrix<F>,v:Vector<F>,selected:index)->F {{
 protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,selected:index@P)->(result:F@P) {{
   return work(m,v,selected);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     row = contract == 'row_dot'
@@ -120,7 +120,7 @@ protocol Run roles(P)(m:Matrix<F>@P,x:Vector<F>@P,y:Vector<F>@P)
   let result @P =work(m,x,y);
   return(result=result);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(82731)

@@ -219,7 +219,7 @@ operation and operand graph.
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol for a native deployment. Proof declarations use the native proof
-policy and deployment schemas. Entry functions retain `func`/`scf` control with
+policy and deployment schemas. Run functions retain `func`/`scf` control with
 explicit `entry` operations and publish `zkc.host/0`; numerical fragments contain
 role-free Local `zkc.program/0` roots, while static child packages contain native
 joint bundles or proof deployments.

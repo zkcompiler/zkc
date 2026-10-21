@@ -57,8 +57,8 @@ protocol PureIndex roles(P, V) (position: index @P) -> (zero: bool @P) {
   return (zero = zero);
 }
 
-entry fn ShapeEntry(inputs: Shape::Inputs) { return Shape::run(inputs); }
-entry fn TableEntry(inputs: MakeTable::Inputs) { return MakeTable::run(inputs); }
-entry fn HalvesEntry(inputs: TableHalves::Inputs) { return TableHalves::run(inputs); }
-entry fn SequenceEntry(inputs: Sequence::Inputs) { return Sequence::run(inputs); }
-entry fn PureIndexEntry(inputs: PureIndex::Inputs) { return PureIndex::run(inputs); }
+run ShapeEntry(inputs: Shape::Inputs) { return Shape::run(inputs); }
+run TableEntry(inputs: MakeTable::Inputs) { return MakeTable::run(inputs); }
+run HalvesEntry(inputs: TableHalves::Inputs) { return TableHalves::run(inputs); }
+run SequenceEntry(inputs: Sequence::Inputs) { return Sequence::run(inputs); }
+run PureIndexEntry(inputs: PureIndex::Inputs) { return PureIndex::run(inputs); }

@@ -35,7 +35,7 @@ fn append<T:Type+Copy+Drop>(xs:Sequence<T>,item:T)->Sequence<T>=primitive("seque
 fn make(a:F,b:F,enabled:bool)->Sequence<Row>{
  return append(append(empty<Row>(),Row{value:a,enabled:enabled}),Row{value:b,enabled:enabled});
 }
-protocol Run roles(P)(a:F@P,b:F@P,enabled:bool@P)->(xs:Sequence<Row>@P){return make(a,b,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:F@P,b:F@P,enabled:bool@P)->(xs:Sequence<Row>@P){return make(a,b,enabled);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     path = directory / 'records'
     path.mkdir()
@@ -50,7 +50,7 @@ fn work(xs:Vector<F>,initial:F,offset:F)->(F,(F,F)){
  let mixed=fold(elements(xs),(initial,offset),fn((a,b), item)=>(b,item));
  return(ordered,mixed);
 }
-protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@P){return work(xs,initial,offset);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@P){return work(xs,initial,offset);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'xs': [], 'initial': '1', 'offset': '4'})['result'] == ['1', ['1', '4']]
@@ -63,7 +63,7 @@ def test_filtered_body_skips_stops_and_still_admits_zip(toolchain, journal, dire
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:F@P){
  return filtered(zip(elements(xs),elements(ys)),0,fn(item)=>enabled,
                  fn(state, item)=>{stop "abort";});
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('skipped', {'xs': ['2'], 'ys': ['3'], 'enabled': False})['result'] == '0'
@@ -80,7 +80,7 @@ fn work(xs:Sequence<Row>)->Sequence<Row>{
  let checked=fold(sequence(xs),(),fn(state, row)=>{require row.enabled;state});
  return collect(sequence(xs),fn(row)=>Row{value:row.value+1,enabled:row.enabled});
 }
-protocol Run roles(P)(xs:Sequence<Row>@P)->(result:Sequence<Row>@P){return work(xs);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Sequence<Row>@P)->(result:Sequence<Row>@P){return work(xs);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'xs': []})['result'] == []
@@ -102,7 +102,7 @@ fn work(xs:Vector<F>,offset:F)->(F,F){
                     rows=elements({shift=shift+1;xs}),initial=0);
  return(triangular,snapshots);
 }
-protocol Run roles(P)(xs:Vector<F>@P,offset:F@P)->(result:(F,F)@P){return work(xs,offset);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<F>@P,offset:F@P)->(result:(F,F)@P){return work(xs,offset);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'xs': [], 'offset': '4'})['result'] == ['0', '0']
@@ -119,7 +119,7 @@ fn work(xs:Sequence<Row>)->(F,F){
  let second=fold(pairs,1,fn(state, (left,right))=>state+left.value+right.value);
  return(first,second);
 }
-protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'xs': []})['result'] == ['0', '1']
@@ -141,7 +141,7 @@ fn sum(rows:domain<F>,flag:bool,body:fn(item:F)->F effects(stop) where item_from
 }
 protocol Run roles(P)(xs:Vector<F>@P,flag:bool@P,shift:F@P)->(result:F@P){
  return sum(elements(xs),flag,fn(item)=>item+shift);
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'xs': [], 'flag': True, 'shift': '4'})['result'] == '0'
@@ -164,7 +164,7 @@ fn work(a:F,b:F)->(F,F,F,F){
  let three:F=fold(array(units),0,fn(state, item)=>state+1);
  return(order,positions,zero,three);
 }
-protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('arrays', {'a': '2', 'b': '7'})['result'] == ['27', '2', '2', '3']
@@ -183,7 +183,7 @@ fn work(a:F,b:F)->F{
    state+row.value*other+xs[0].value
  });
 }
-protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('records', {'a': '2', 'b': '7'})['result'] == '32'
@@ -195,7 +195,7 @@ def test_total_fixed_array_fold_realization(toolchain, journal, directory, flags
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item, rows))->S=finite("math.fold");
 math fn work(a:F,b:F)->F{return total(array([(a,b),(b,a)]),0,fn(state, (x,y))=>state*100+x*10+y);}
-protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('total', {'a': '2', 'b': '7'})['result'] == '2772'
@@ -210,7 +210,7 @@ math fn work(n:index)->(F,bool,index){
  let result:F=total_filtered(range(0,n),0,fn(i)=>intrinsic("index.less",i,threshold<2>()),fn(state, item)=>state+1);
  return(result,intrinsic("index.equal",n,2),18446744073709551615);
 }
-protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('empty', {'n': 0})['result'] == ['0', False, '18446744073709551615']
@@ -238,7 +238,7 @@ math fn work(xs:Vector<F>,rows:Sequence<Row>,matrix:Matrix<F>)->(F,F,F,F){
  let nested:F=total(row_indices(matrix),0,fn(outer, i)=>outer+total(row(matrix,i),0,fn(row_state, item)=>row_state+item));
  return(first,records,entries,nested);
 }
-protocol Run roles(P)(xs:Vector<F>@P,rows:Sequence<Row>@P,matrix:Matrix<F>@P)->(result:(F,F,F,F)@P){return work(xs,rows,matrix);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<F>@P,rows:Sequence<Row>@P,matrix:Matrix<F>@P)->(result:(F,F,F,F)@P){return work(xs,rows,matrix);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     empty_matrix = {'rows': '0', 'columns': '3', 'entries': []}
@@ -258,7 +258,7 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_arra
 domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
 math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->F where item_from(item, rows))->Array<F,N>=finite("math.collect.field_array");
 math fn work(xs:[F;2],ys:[F;2])->Array<F,2>{return collect(zip(array(xs),array(ys)),fn((x,y))=>x+10*y);}
-protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(xs,ys);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(xs,ys);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('total', {'xs': ['2', '3'], 'ys': ['7', '11']})['result'] == ['72', '113']
@@ -279,7 +279,7 @@ fn grid(rows:domain<F>,columns:domain<F>,
 }
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P)->(result:F@P){
  return grid(elements(xs),elements(ys),fn(c,offset,r)=>r*10+c+offset);
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('grid', {'xs': ['2', '3'], 'ys': ['4', '5']})['result'] == '122'

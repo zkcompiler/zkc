@@ -70,7 +70,7 @@ fn work(xs:Vector<F>,seed:F)->F {{ return {body}; }}
 protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P) {{
   return work(xs,seed);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
@@ -99,7 +99,7 @@ fn work(xs:Vector<F>,a:F)->Vector<F> {{ return {body}; }}
 protocol Run roles(P)(xs:Vector<F>@P,a:F@P)->(result:Vector<F>@P) {{
   return work(xs,a);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     entry = Entry(toolchain, journal, directory, source, MODULES)
@@ -137,7 +137,7 @@ fn work(m:Matrix<F>,xs:Vector<F>,seed:F)->Vector<F> {{
 }}
 protocol Run roles(P)(m:Matrix<F>@P,xs:Vector<F>@P,seed:F@P)
   ->(result:Vector<F>@P) {{ return work(m,xs,seed); }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     flags = [] if bulk else ["--no-finite-bulk"]

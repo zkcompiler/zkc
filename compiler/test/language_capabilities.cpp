@@ -48,7 +48,7 @@ int main() {
           where zkc::algebra::TwoAdicField(F) {
         let r @P =root<F>(n);return(r=r);
       }
-      entry fn Demo(inputs: Run<K>::Inputs) { return Run<K>::run(inputs); }
+      run Demo(inputs: Run<K>::Inputs) { return Run<K>::run(inputs); }
     )")
                            .str());
     for (const auto &decl : entry.declarations())
@@ -106,7 +106,7 @@ int main() {
       protocol Run<F:Field> roles(P)(n:index@P)->(r:F@P)
           where zkc::algebra::TwoAdicField(F) {
         let r @P =root<F>(n);return(r=r);
-      } entry fn Demo(inputs: Run<Fr>::Inputs) { return Run<Fr>::run(inputs); }
+      } run Demo(inputs: Run<Fr>::Inputs) { return Run<Fr>::run(inputs); }
     )")
                       .str()),
             "source.capability");
@@ -285,7 +285,7 @@ int main() {
       protocol Run<C:Commitment> roles(P,V)(a:Commit<C>@P,b:Commit<C>@V)->(accepted:bool@V)
           where zkc::pcs::MultilinearOpening(C) setup pcs{a,b}; {
         let sent=send P->V(a);let ok @V =equal<C>(sent,b);return(accepted=ok);
-      } entry fn Demo(inputs: Run<Kzg>::Inputs) { return Run<Kzg>::run(inputs); }
+      } run Demo(inputs: Run<Kzg>::Inputs) { return Run<Kzg>::run(inputs); }
     )");
         take(compileEntry(take(prepareOriginal(entry))));
         for (StringRef head : {"prover_key", "verifier_key", "opening_state",

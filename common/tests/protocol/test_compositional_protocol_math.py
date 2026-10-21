@@ -90,7 +90,7 @@ fn fold_word(word: Vector<F>, shift: F, beta: F) -> Vector<F> {
 }
 protocol Compare roles(P)(word: Vector<F> @P, shift: F @P, beta: F @P)
     -> (folded: Vector<F> @P) { return fold_word(word, shift, beta); }
-entry fn Demo(inputs: Compare::Inputs) { return Compare::run(inputs); }
+run Demo(inputs: Compare::Inputs) { return Compare::run(inputs); }
 '''
 
 
@@ -214,7 +214,7 @@ domain Fr = field("bls12-381.fr");
 protocol Inspect roles(P)(delta: Fr @P) -> (weights: Array<Fr, 4> @P) {
   return compression_weights(delta);
 }
-entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 

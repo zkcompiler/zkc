@@ -253,7 +253,7 @@ int main() {
         operator prefix(80) ⊖ = other;
         return invoke<T=F,A=Identity<F>>(x);
       }
-      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
         const auto &definition = lastBinding(decl(project, "m::invoke"));
         auto closed =

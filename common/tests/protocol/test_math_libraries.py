@@ -73,7 +73,7 @@ protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
     logic=(zkc::boolean::both(true,false),zkc::boolean::either(true,false),
       zkc::boolean::different(true,true),zkc::boolean::negate(false)));
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if notation:
         source = source.replace('module sample;', 'module sample;use zkc::vector;use zkc::matrix;use zkc::symbolic as algebra;')
@@ -115,7 +115,7 @@ fn evaluate(go:bool,ok:bool,eager:bool){{
 protocol Run roles(P)(go:bool@P,ok:bool@P,eager:bool@P)->(result:bool@P){{
   return evaluate(go,ok,eager);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('skipped', {'go': skip, 'ok': False, 'eager': False}) == {'result': skip}
@@ -127,7 +127,7 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 def test_formal_contract_and_execution_modes_refuse(toolchain, journal, directory):
     prefix = '''module sample;
  domain F=field("bls12-381.fr");
- protocol Run roles(P)(a:F@P)->(out:F@P){return a;} entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+ protocol Run roles(P)(a:F@P)->(out:F@P){return a;} run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     for name, definition, code in [
         ('index-bound', 'math fn bad(a:F)->F {return zkc::symbolic::get<F,1,1>(zkc::symbolic::pack([a]));}', 'source.bound'),
@@ -148,7 +148,7 @@ use zkc::indices::{two_adic};
 protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P) {
   return (small=two_adic<4>(height),full=two_adic<63>(height),empty=two_adic<0>(height));
 }
-entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
+run Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
@@ -177,7 +177,7 @@ protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices
  return (word=opening::vector_values(whole),weight=opening::vector_weight(whole),
    value=opening::scalar_value(at),row_weight=opening::scalar_weight(at));
 }
-entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
+run Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     p = 2130706433

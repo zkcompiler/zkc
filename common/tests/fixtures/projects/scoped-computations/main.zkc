@@ -39,4 +39,4 @@ protocol Compute roles(P, V)(
   return result;
 }
 
-entry fn Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
+run Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }

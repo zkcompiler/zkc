@@ -68,8 +68,8 @@ correspondence.
 
 ## Source and application boundary
 
-`entry fn` exposes typed application control; `proof` configures independent
-proving and verification. Entry functions statically call numerical helpers,
+`run` exposes typed application control; `proof` configures independent
+proving and verification. Run functions statically call numerical helpers,
 other Entries, protocol runs and proof operations. Numerical execution retains
 the existing Kernel pipeline and VM.
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
@@ -98,7 +98,7 @@ quotient result with reusable call-local denominator/prefix arrays. AIR witness
 reads select the same core reduction in read order; known reads consume no weights.
 Commands accept unique short or qualified Entry names. Execution filters omitted
 names by function/proof kind; inspection and compilation require a single Entry.
-`new` and `init` create an Entry function with an argument template;
+`new` and `init` create a run function with an argument template;
 `prepare` creates missing maps while preserving existing values. Manifest-relative
 paths supply omitted inputs, proof files and run results. Joint children obtain fresh
 sessions unless explicitly configured in the application context. `inputs check` shares native preparation without

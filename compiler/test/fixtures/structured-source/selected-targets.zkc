@@ -14,4 +14,4 @@ proof Left=Run{
 proof Right=Run{
   prover P;verifier V;public{x};accept ok;target right;construction authored;
 }
-entry fn Session(inputs: Run::Inputs) { return Run::run(inputs); }
+run Session(inputs: Run::Inputs) { return Run::run(inputs); }

@@ -265,7 +265,7 @@ void protocols() {
     math fn count(n:index,x:Fr)->index{return n;}
     protocol Run roles(P)(n:index@P, coins:Random<Fr>@P)->(){
       for _ in 0..count(n,coins.draw()) roles(P) max 4{}return();
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   bool queried = false, repeated = false;
   for (const auto &operation : count.entry().protocol().body->operations) {
@@ -301,7 +301,7 @@ void protocols() {
   native(R"(
     fn aborting(t:Ticket,go:bool)->(){if go{stop "reject";}else{stop "abort";}}
     fn work(go:bool)->(){let t=Ticket{};return aborting(t,go);}
-    protocol Run roles(P)(go:bool@P)->(){let done@P=work(go);return ();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    protocol Run roles(P)(go:bool@P)->(){let done@P=work(go);return ();}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   check("fn f(t:Ticket)->Fr{return {stop \"reject\";};}");
   check("fn f(t:Ticket)->(){{stop \"reject\";}}");
@@ -313,7 +313,7 @@ void protocols() {
           "source.inference");
   native(R"(
     fn work(n:index)->(){let mut ticket=Ticket{};for _ in 0..n{ticket=ticket;}consume ticket;return ();}
-    protocol Run roles(P)(n:index@P)->(){let done@P=work(n);return ();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    protocol Run roles(P)(n:index@P)->(){let done@P=work(n);return ();}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   native(R"(
     fn step(s:State,go:bool)->State{let mut current=s;if go{current=identity(current);}return current;}
@@ -321,7 +321,7 @@ void protocols() {
       let mut state@P=make(x);
       for _ in 0..n roles(P) max 4{state=step(state,go);}
       let result@P=take(state);return result;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   native(R"(
     fn step(a:State,b:State,go:bool)->(State,State){let mut x=a;let mut y=b;if go{x=identity(x);y=identity(y);}return (x,y);}
@@ -330,7 +330,7 @@ void protocols() {
       let mut state@P=make(x);
       for _ in 0..n roles(P) max 4{let other@P=make(x);state=first(state,other,go);}
       let result@P=take(state);return result;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   native(R"(
     protocol Run roles(P)(n:index@P,go:bool@P,x:Fr@P)->(state:State@P)completes{
@@ -344,14 +344,14 @@ void protocols() {
     protocol Pair roles(P,V)(p:Fr@P,v:Fr@V)->(p:Fr@P,v:Fr@V){return(p,v);}
     protocol Observe roles(P,V)()->(){return ();}
     protocol Run roles(P,V)(p:Fr@P,v:Fr@V)->(p:Fr@P,v:Fr@V){let(a,b)=Pair(p,v);Observe();return(v=b,p=a);}
-    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   auto queries = original(R"(
     protocol Run roles(P,V)(n:index@V, coins:Random<Fr>@V)->(r:Fr@V){
       let alias=coins;let mut total:Fr@V=0;
       for _ in 0..n roles(V) max 4{total=total+alias.draw()+coins.draw();}
       return total;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   require(queries.bytes().count("\"protocol.query\"") == 2,
           "two draws must remain two ordered queries");
@@ -359,33 +359,33 @@ void protocols() {
   auto returns = original(R"(
     protocol Run roles(P)(coins:Random<Fr>@P)->(first:Fr@P,second:Fr@P){
       return(second=coins.draw(),first=coins.draw());
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   const auto &body = *returns.entry().protocol().body;
   require(body.results[0].index > body.results[1].index,
           "named return expressions must evaluate in written order");
   native(R"(
     protocol Tuple roles(P)(x:Fr@P)->(pair:(Fr,Fr)@P){return(x,x);}
-    protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let(a,b)=Tuple(x);return a+b;}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let(a,b)=Tuple(x);return a+b;}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   native(R"(
     protocol Run roles(P,V)(n:index@V,x:Fr@(P,V))->(r:Fr@V){
       let mut shared=x;let mut result=x;
       for _ in 0..n roles(V) max 4 {let copied=shared;}
       return result;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   refusesCustody(R"(
     protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let mut state@P=make(x);
       for _ in 0..n roles(P) max 4{state=make(x);}
       let result@P=take(state);return result;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   refusesCustody(R"(
     protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let mut a@P=make(x);let mut b@P=make(x);
       for _ in 0..n roles(P) max 4{let temp=a;a=b;b=temp;}
       let result@P=take(a);let unused@P=take(b);return result;
-    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   for (auto [source, code] :
        {std::pair{"protocol R roles(P,V)(x:Fr@(P,V),n:index@P)->(){let mut "

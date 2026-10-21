@@ -144,7 +144,7 @@ protocol Complete<T:Type> roles(P)(done:bool@P,value:T@P)->(first:bool@P,second:
   let(first,second)=finish_if @P(done)(second=value,first=true);
   return(first=false,second=second);
 }
-entry fn Demo(inputs: Complete<bool>::Inputs) { return Complete<bool>::run(inputs); }
+run Demo(inputs: Complete<bool>::Inputs) { return Complete<bool>::run(inputs); }
 """)
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     inputs = write(directory / 'P.json', {'inputs': {'P': {'done': done, 'value': False}}})
@@ -242,7 +242,7 @@ fn authority(bytes:&[u8],pin:&[u8;32])->std::collections::BTreeMap<String,SetupA
 fn context(host:&FunctionEntry,session:&str)->InvocationContext {
     InvocationContext{deployments:host.deployments().map(|(id,operation)|{
         assert_eq!(operation,"run");
-        (id.into(),InvocationBinding::Run(RunContext{session:session.into(),..Default::default()}))
+        (id.into(),InvocationBinding::Run(RunContext{session:Some(session.into()),..Default::default()}))
     }).collect()}
 }
 use std::convert::{TryFrom,TryInto};
@@ -345,7 +345,7 @@ fn main() {
 
 def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
     source = directory / 'indices.zkc'
-    source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} entry fn Demo(inputs: Index::Inputs) { return Index::run(inputs); }")
+    source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} run Demo(inputs: Index::Inputs) { return Index::run(inputs); }")
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     inputs = write(directory / 'P.json', {'inputs': {'P': {'n': '7'}}})
     command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
@@ -376,7 +376,7 @@ def test_source_entry_refuses_outputs_without_host_export(toolchain, journal, di
     source.write_text('module sample; #[affine] struct Restricted{pub b:bool}'
                       'fn make()->Restricted{return Restricted{b:true};}'
                       'protocol Run roles(P)()->(r:Restricted@P){'
-                      'let r @P =make();return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
+                      'let r @P =make();return(r=r);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
     package = directory / 'restricted.zkpkg'
     refused = journal.json([toolchain.runtime, '--json', 'compile',
                            f'--compiler={toolchain.compiler}', f'--module=sample={source}',
@@ -447,7 +447,7 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
 
 def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory):
     source = directory / 'source.zkc'
-    source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
+    source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} run Demo(inputs: Run::Inputs) { return Run::run(inputs); }')
     args = [toolchain.runtime, '--json', 'compile', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
     env = dict(os.environ, PATH=str(toolchain.compiler.parent))
     result = journal.attempt(args, cwd=directory, env=env)
@@ -517,7 +517,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     source = directory / 'source.zkc'
     def program(count):
         ports = ','.join(f'a{i}:[bool;128]@P' for i in range(count))
-        return f'module sample;protocol Run roles(P)({ports})->(){{return();}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
+        return f'module sample;protocol Run roles(P)({ports})->(){{return();}}run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
     source.write_text(program(7))
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     journal.run([toolchain.runtime, '--json', 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / 'bindings.rs'}'])

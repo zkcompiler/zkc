@@ -315,7 +315,7 @@ protocol Sample roles(V)(values:Vector<Extension>@V, shift:Extension@V)
  let selected@V=choose(values,shift);
  return (selected=selected);
 }
-entry fn Run(inputs: Sample::Inputs) { return Sample::run(inputs); }
+run Run(inputs: Sample::Inputs) { return Sample::run(inputs); }
 '''
 
 
@@ -382,7 +382,7 @@ protocol Inspect roles(P)(trace:Vector<E>@P, configuration:Vector<E>@P,
  return (quotient=result.0,chunks=result.1,opened=result.2,
   quotient_opened=result.3,valid=result.4,reduced=result.5);
 }
-entry fn Run(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+run Run(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 

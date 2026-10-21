@@ -43,7 +43,7 @@ int main() {
         #[site(delivery)] let received=send V->P(c);
       }
       return ();
-    }entry fn Demo(inputs: Round::Inputs) { return Round::run(inputs); })")
+    }run Demo(inputs: Round::Inputs) { return Round::run(inputs); })")
                                    .str();
     auto project = take(checked(source));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Demo"));

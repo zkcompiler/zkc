@@ -424,7 +424,7 @@ protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
   let out @V = evaluate(w, c, p, h);
   return (out = out);
 }}
-entry fn Run(inputs: Check::Inputs) {{ return Check::run(inputs); }}
+run Run(inputs: Check::Inputs) {{ return Check::run(inputs); }}
 ''')
     journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=reference={source}',

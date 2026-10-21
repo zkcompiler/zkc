@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     auto text = (*bytes)->getBuffer().str() + R"(
       protocol Shared roles(P,V)(a:Fr@(P,V),b:Fr@(P,V),x:Fr@(P,V))
         ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@(P,V)){return(r=calculate(a,b,x));}
-      entry fn SharedDemo(inputs: Shared::Inputs) { return Shared::run(inputs); }
+      run SharedDemo(inputs: Shared::Inputs) { return Shared::run(inputs); }
     )";
     auto original =
         take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         let sum=intrinsic<F,0,0>("poly.sum_suffix",fixed);
         return intrinsic<F,0>("poly.evaluate",sum,[]);
       }
-      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     auto original =
         take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
@@ -208,7 +208,7 @@ int main(int argc, char **argv) {
       math fn p(x:F)->Poly<33>{return intrinsic<F,33>("poly.constant",x);}
       math fn value(x:F)->F{let discarded=p(x);return x;}
       protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}
-      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )")));
     auto closed =
         take(zkc::test::closeProtocolDeployment(project, "sample::Demo"));
@@ -277,7 +277,7 @@ int main(int argc, char **argv) {
         return x;
       }
       protocol Run<N:nat> roles(P)(x:F@P)->(r:F@P) where 1<=pow2(N){return(r=p<N>(x));}
-      entry fn Demo(inputs: Run<21>::Inputs) { return Run<21>::run(inputs); }
+      run Demo(inputs: Run<21>::Inputs) { return Run<21>::run(inputs); }
     )")));
     auto closed = zkc::test::closeProtocolDeployment(project, "sample::Demo");
     require(!closed, "oversized closed intrinsic shape admitted");
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
                 r=calculate(a,b,x);
               }
               return(r=r);
-            }entry fn NestedDemo(inputs: Nested::Inputs) { return Nested::run(inputs); }
+            }run NestedDemo(inputs: Nested::Inputs) { return Nested::run(inputs); }
           )";
         auto project = take(check(changed));
         auto result = prepareOriginal(
@@ -329,7 +329,7 @@ int main(int argc, char **argv) {
           return x;
         }
         protocol Run roles(P)(x:F@P)->(r:F@P){return(r=x);}
-        entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+        run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
       )");
           // Close the helper through an ordinary call, then remove that call
           // from the admitted original. The helper remains available only for

@@ -32,7 +32,7 @@ protocol Run roles(P)(roots:Vector<F>@P,data:Vector<F>@P,z:F@P)
   let (points,y,evaluated,q,member,location)=compute(roots,data,z);
   return(points=points,y=y,evaluated=evaluated,q=q,member=member,location=location);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

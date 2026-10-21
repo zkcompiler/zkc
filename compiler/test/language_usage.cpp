@@ -56,7 +56,7 @@ math fn at(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return intrinsic<Vecto
               native(mathematicalForwarding + R"(
 math fn sum(xs:Vector<F>)->F{let view=identity(xs);return total(indices(xs),0,fn(s,i)=>s+at(view,identity(i)));}
 protocol Run roles(P)(xs:Vector<F>@P)->(result:F@P){return sum(xs);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
             });
   cases.run("inferred usage does not identify different mathematical inputs",
@@ -71,7 +71,7 @@ math fn different(xs:Vector<F>,ys:Vector<F>,i:index)->F where in_bounds(i,xs){re
 math fn filtered<I:Type+Copy>(rows:domain<I>,keep:math fn(item:I)->bool where item_from(item,rows),body:math fn(item:I)->F where item_from(item,rows))->Vector<F>=finite("math.collect.vector_where");
 math fn selected(xs:Vector<F>)->Vector<F>{return filtered(indices(xs),fn(i)=>false,fn(i)=>at(identity(xs),identity(i)));}
 protocol Run roles(P)(xs:Vector<F>@P)->(result:Vector<F>@P){return selected(xs);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   });
   cases.run("generic identity is unrestricted", [&] {
@@ -296,7 +296,7 @@ fn thread<T:Type>(x:T,b:bool,n:index)->T {
 protocol Run roles(P)(b:bool@P,n:index@P)->(accepted:bool@P) {
  let claim@P=make();let next@P=thread(claim,b,n);
  let done@P=discharge(next);return true;
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   });
   cases.run("early generic completion infers its normal-exit obligation", [&] {
@@ -402,7 +402,7 @@ protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
 protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
  let claim@P=make();let done@P=discharge(claim);
  let accepted=finish_if @P(go)(accepted=true);return accepted;
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   });
   cases.run("completion cannot interrupt pending operand transfers", [] {
     refuses(check(R"(
@@ -449,7 +449,7 @@ protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
 protocol Run roles(P,Q)(go:bool@P)->(accepted:bool@P) completes {
  let claim@Q=make();let accepted=finish_if @P(go)(accepted=true);
  let done@Q=discharge(claim);return accepted;
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   });
   cases.run("returned resource has a required false-edge successor", [] {
     take(check(R"(
@@ -468,7 +468,7 @@ protocol Run roles(P)(go:bool@P)->(claim:Claim@P) completes {
               native(R"(
 protocol Run<T:Type+Copy+Drop>roles(P)(go:bool@P,x:T@P)->(a:bool@P,b:T@P)completes {
  let(a,b)=finish_if @P(go)(b=x,a=true);return(a,b);
-}entry fn Demo(inputs: Run<bool>::Inputs) { return Run<bool>::run(inputs); })");
+}run Demo(inputs: Run<bool>::Inputs) { return Run<bool>::run(inputs); })");
             });
   cases.run("an abort waives lower-use obligations but not repeated uses", [] {
     take(check("fn stop_with(claim:Claim)->(){stop \"reject\";}"));

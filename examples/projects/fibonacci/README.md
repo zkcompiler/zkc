@@ -55,7 +55,7 @@ inside this project. Existing input maps remain source inputs.
 
 ## Generate a trace in source
 
-`GenerateTrace` is an Entry function backed by an ordinary numerical helper.
+`GenerateTrace` is a run function backed by an ordinary numerical helper.
 `zkc run GenerateTrace` returns the same eight-row trace as the retained adapter
 witness. `ProveClean` calls that Entry, constructs `CleanProof::Witness` and
 invokes the existing proof. It returns only candidate bytes; it does not publish

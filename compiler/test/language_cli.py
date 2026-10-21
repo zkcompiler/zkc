@@ -115,7 +115,7 @@ with case('same-signature protocols execute through distinct Entries'):
       protocol Helpers roles(P,)(x:Fr@P,)->(r:Fr@P,b:bool@P,){
         return(b=is_three(x,),r=entries::plus(x,),);
       }
-      entry fn One(inputs: First::Inputs) { return First::run(inputs); } entry fn Two(inputs: Second::Inputs) { return Second::run(inputs); } entry fn Alias(inputs: First::Inputs) { return First::run(inputs); } entry fn Math(inputs: Helpers::Inputs) { return Helpers::run(inputs); }
+      run One(inputs: First::Inputs) { return First::run(inputs); } run Two(inputs: Second::Inputs) { return Second::run(inputs); } run Alias(inputs: First::Inputs) { return First::run(inputs); } run Math(inputs: Helpers::Inputs) { return Helpers::run(inputs); }
     ''')
     for name, protocol in [('One', 'First'), ('Two', 'Second'), ('Alias', 'First'), ('Math', 'Helpers')]:
         args = ['--source-format=zkc', f'--entry=entries::{name}', f'--module=entries={source}']
@@ -149,7 +149,7 @@ with case('target admission failure names its phase and related source declarati
     helpers += [f'math fn f{i}()->Fr{{return f{i-1}()+f{i-1}();}}' for i in range(1, 18)]
     source.write_text('module expansion; domain Fr=field("bls12-381.fr");\n' + '\n'.join(helpers) +
                       '\nprotocol Small roles(P)()->(r:Fr@P){return(r=1);}' +
-                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry fn Demo(inputs: Unused::Inputs) { return Unused::run(inputs); }')
+                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}run Demo(inputs: Unused::Inputs) { return Unused::run(inputs); }')
     definitions = json.loads(commands.run([compiler, 'language-check', '--source-format=zkc',
                                              f'--module=expansion={source}']))
     assert definitions['scope'] == 'definitions'
@@ -300,7 +300,7 @@ with case('maximum source schema depth binds in the native Host'):
     source.write_text(f"""module deep;
 type Inner = {nested};
 type Deep = (Inner,);
-entry fn Demo(value:Deep)->Deep {{ return value; }}
+run Demo(value:Deep)->Deep {{ return value; }}
 """)
     args = ['--source-format=zkc', '--entry=deep::Demo', f'--module=deep={source}']
     package = commands.run([compiler, 'language-package', *args])

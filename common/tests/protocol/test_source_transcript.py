@@ -229,7 +229,7 @@ protocol Run roles(P)(values:Vector<F>@P,prior:index@P)
   return(scalar_first=scalar_first,bulk_first=bulk_first,
          scalar_next=scalar_next,bulk_next=bulk_next);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source,
                   (*flags, *library_modules('constructions/spongefish')))

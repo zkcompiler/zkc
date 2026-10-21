@@ -1664,23 +1664,19 @@ private:
       if (!expect("}"))
         return {};
     } else {
-      bool entry = take("entry");
-      if (entry && member) {
-        fail("source.mode", "entry functions cannot be interface members");
+      bool run = take("run");
+      if (run && member) {
+        fail("source.mode", "run functions cannot be interface members");
         return {};
       }
-      bool math = !entry && take("math");
-      bool fn = take("fn");
-      if (entry && !fn) {
-        fail("source.syntax", "expected fn after entry");
-        return {};
-      }
+      bool math = !run && take("math");
+      bool fn = !run && take("fn");
       if (math && !fn) {
         fail("source.syntax", "expected fn after math");
         return {};
       }
-      bool protocol = !fn && take("protocol");
-      if (!fn && !protocol) {
+      bool protocol = !run && !fn && take("protocol");
+      if (!run && !fn && !protocol) {
         fail("source.syntax", "expected a source declaration");
         return {};
       }
@@ -1690,7 +1686,7 @@ private:
       }
       d.kind = domainFunction ? Declaration::Kind::DomainFunction
                : protocol     ? Declaration::Kind::Protocol
-               : entry        ? Declaration::Kind::EntryFunction
+               : run          ? Declaration::Kind::EntryFunction
                : math         ? Declaration::Kind::Math
                               : Declaration::Kind::Local;
       if (!name(d.name) || !parameters(d.parameters))
@@ -1758,8 +1754,8 @@ private:
         if (!setupSlot(d))
           return {};
       d.abstract = abstract;
-      if (entry && (!d.scopedInputs.empty() || !d.domainInputs.empty())) {
-        fail("source.stage", "entry parameters must be ordinary data");
+      if (run && (!d.scopedInputs.empty() || !d.domainInputs.empty())) {
+        fail("source.stage", "run parameters must be ordinary data");
         return {};
       }
       if (abstract) {

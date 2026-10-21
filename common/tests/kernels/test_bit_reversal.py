@@ -21,7 +21,7 @@ protocol Run roles(P)(xs:Vector<F>@P, table:Vector<F>@P, width:index@P)
   let rows @P=vector::bit_reverse_rows(table,width);
   return (elements=elements, rows=rows);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 

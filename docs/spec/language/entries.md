@@ -2,15 +2,20 @@
 
 This native contract defines closed Entry jobs and their source-level associations.
 
-## Entry functions
+## Run functions
 
-`entry fn Name(parameters) -> Result { body }` declares an externally callable
+`run Name(parameters) -> Result { body }` declares an externally callable
 Host function. Visibility, named arguments, ordinary generic helpers and Local
 body inference follow the existing callable rules. Result annotations may be
 omitted when uniquely inferable. The body has Host stage, independently of its
 Local computational mode. Ordinary Local and Math helpers cannot invoke Host
 functions or deployments. Calls resolve statically; cycles and ambiguous targets
 refuse. No runtime function-name dispatch is introduced.
+
+`run` introduces the function directly, without `fn`. A run function may perform
+ordinary calculations, execute protocols or call proof operations. Calls between
+run functions use ordinary function-call syntax and share the outer invocation's
+execution context and cumulative resource policy.
 
 Host control uses the existing let/mut, products, variants, if, match, finite for,
 require and final-return conventions. Numerical islands lower through the existing
@@ -300,7 +305,7 @@ proof Proof = Opening<Kzg> {
   accept accepted;
   construction authored;
 }
-entry fn Session(inputs: Opening<Kzg>::Inputs) {
+run Session(inputs: Opening<Kzg>::Inputs) {
   return Opening<Kzg>::run(inputs);
 }
 ```

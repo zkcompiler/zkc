@@ -65,7 +65,7 @@ protocol 実行 roles(検証,role00000000)(入力:bool@role00000000,乱数:Rando
   require @検証 真偽;
   return(結果=記録{値:受信値},真偽=真偽);
 }
-entry fn 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
+run 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
                                 "数学::公開");
         const auto &p = checked.interface().selectedProtocol();
         require(p.roles == std::vector<std::string>({"検証", "role00000000"}) &&
@@ -345,7 +345,7 @@ proof Right=Run{
     const auto text =
         R"(module sample;protocol Verify roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
       proof Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;}
-      entry fn Session(inputs: Verify::Inputs) { return Verify::run(inputs); })";
+      run Session(inputs: Verify::Inputs) { return Verify::run(inputs); })";
     auto proof = take(compileEntry(original(text)));
     require(std::holds_alternative<CompiledNativeProof>(proof.artifact()),
             "authored proof became run");
@@ -440,7 +440,7 @@ proof Right=Run{
             "proof Demo=" +
             name +
             "{prover P;verifier V;public{ok};accept accepted;construction "
-            "authored;}entry fn Session(inputs: " +
+            "authored;}run Session(inputs: " +
             name + "::Inputs) { return " + name + "::run(inputs); }";
         for (StringRef entry : {"sample::Demo", "sample::Session"}) {
           auto checked = original(text, entry);
@@ -462,7 +462,7 @@ proof Right=Run{
     text += "protocol Round roles(P,V)(ok:bool@V)->(accepted:bool@V,x:F@P)"
             "{return(accepted=ok,x=f14());}\n"
             "proof Demo=Round{prover P;verifier V;public{ok};accept accepted;"
-            "construction authored;}entry fn Session(inputs: Round::Inputs) { "
+            "construction authored;}run Session(inputs: Round::Inputs) { "
             "return Round::run(inputs); }";
     for (StringRef entry : {"sample::Demo", "sample::Session"}) {
       auto result = compileEntry(original(text, entry), {false, false});
@@ -493,7 +493,7 @@ proof Right=Run{
           "roles(P,V)(x:bool@V)->(ok:bool@V){let ok @V =" +
           name +
           "(x);return(ok=ok);}proof Demo=Round{prover P;verifier V;"
-          "public{x};accept ok;construction authored;}entry fn Session(inputs: "
+          "public{x};accept ok;construction authored;}run Session(inputs: "
           "Round::Inputs) { return Round::run(inputs); }";
       for (StringRef entry : {"sample::Demo", "sample::Session"})
         take(compileEntry(original(text, entry)));

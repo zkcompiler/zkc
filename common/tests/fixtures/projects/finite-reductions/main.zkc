@@ -22,4 +22,4 @@ protocol Reductions roles(P)
   let product = shifted_product(left, α);
   return (symbolic = symbolic, named = ordinary, dot = dot, product = product);
 }
-entry fn Demo(inputs: Reductions::Inputs) { return Reductions::run(inputs); }
+run Demo(inputs: Reductions::Inputs) { return Reductions::run(inputs); }

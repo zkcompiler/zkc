@@ -205,7 +205,7 @@ protocol Run roles(P,V)(values:vec::Vector<F>@P,claim:F@V,challenges:Random<F>@V
  let (p1,residual1,e1)=Reduce<F,2>(residual0,e0.value,1,challenges);
  return(point=vec::concat(p0,p1),residual=mle::values(residual1),
         remaining=mle::variables(residual1),value=e1.value);
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*library_modules('protocols/polynomial/sumcheck'), *flags))
     result = entry.run_roles('two-prefixes', {

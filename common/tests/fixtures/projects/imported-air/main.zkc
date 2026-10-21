@@ -95,10 +95,10 @@ protocol Points roles(Evaluator)
   let residuals @Evaluator = row_values(assignments, points);
   return (residuals = residuals);
 }
-entry fn RowResiduals(inputs: Rows::Inputs) { return Rows::run(inputs); }
-entry fn TraceResiduals(inputs: Trace::Inputs) { return Trace::run(inputs); }
-entry fn CoefficientResiduals(inputs: Coefficients::Inputs) { return Coefficients::run(inputs); }
-entry fn PointResiduals(inputs: Points::Inputs) { return Points::run(inputs); }
+run RowResiduals(inputs: Rows::Inputs) { return Rows::run(inputs); }
+run TraceResiduals(inputs: Trace::Inputs) { return Trace::run(inputs); }
+run CoefficientResiduals(inputs: Coefficients::Inputs) { return Coefficients::run(inputs); }
+run PointResiduals(inputs: Points::Inputs) { return Points::run(inputs); }
 proof DisclosedTraceProof = RevealTrace {
   prover P;
   verifier V;

@@ -62,21 +62,21 @@ void examples() {
   native("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
          "fn consumeTicket(x:Ticket)->bool{consume x;return true;}"
          "protocol Run roles(P,V)()->(r:bool@V){return consumeTicket(make());}"
-         "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+         "run Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   refuses("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
           "protocol Run roles(P,V)()->(){let _=make();return ();}",
           "source.owner");
   native("interface Select{math fn selected(x:F,y:F)->F;}"
          "module First:Select{math fn selected(x:F,y:F)->F{return x;}}"
          "protocol Run<C:Select> roles(P,V)(s:F@(P,V),p:F@P)->(){"
-         "let r=C::selected(f(s),p);return ();}entry fn Demo(inputs: "
+         "let r=C::selected(f(s),p);return ();}run Demo(inputs: "
          "Run<First>::Inputs) { return Run<First>::run(inputs); }");
   for (StringRef expression : {"f(p)", "f(f(p))", "f(s)+p", "g(f(s),p)",
                                "zero(g(f(s),p))", "zero(f(v))+f(p)"}) {
     auto original = native(
         "protocol Run roles(P,V)(p:F@P,v:F@V,s:F@(P,V))->(r:F@P){return " +
         expression.str() +
-        ";}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+        ";}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
     require(!callOwners(*original.entry().protocol().body).empty(),
             "ordinary call disappeared");
   }
@@ -104,28 +104,28 @@ void examples() {
           "source.roles");
   native(header +
          "let x@P=f(s);let r=ignored(x,p);let _@P=unit(s);return "
-         "();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
-  native(header + "let r@P={let x=f(p);f(s)+x};return ();}entry fn "
+         "();}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+  native(header + "let r@P={let x=f(p);f(s)+x};return ();}run "
                   "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   auto mixed =
-      native(header + "let r@P=zero(f(v))+f(s);return ();}entry fn "
+      native(header + "let r@P=zero(f(v))+f(s);return ();}run "
                       "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   require(callOwners(*mixed.entry().protocol().body) ==
               std::vector<unsigned>({1, 0}),
           "one statement lost its independently owned calls");
   auto nested = native(header + "let r@P=f(s)+{let y@V=f(s);zero(y)};"
-                                "return ();}entry fn Demo(inputs: Run::Inputs) "
+                                "return ();}run Demo(inputs: Run::Inputs) "
                                 "{ return Run::run(inputs); }");
   require(callOwners(*nested.entry().protocol().body) ==
               std::vector<unsigned>({0, 1}),
           "inner statement settlement changed a pending outer call");
   native("protocol Run roles(P,V)(s:F@(P,V))->(r:F@V){let r=send "
-         "P->V(g(f(s),f(s)));return r;}entry fn Demo(inputs: Run::Inputs) { "
+         "P->V(g(f(s),f(s)));return r;}run Demo(inputs: Run::Inputs) { "
          "return Run::run(inputs); }");
   native("protocol Pair roles(P,V)(p:F@P,v:F@V)->(p:F@P,v:F@V){return(p,v);}"
          "protocol Run "
          "roles(P,V)(s:F@(P,V))->(p:F@P,v:F@V){let(a,b)=Pair(f(s),f(s));return("
-         "p=a,v=b);}entry fn Demo(inputs: Run::Inputs) { return "
+         "p=a,v=b);}run Demo(inputs: Run::Inputs) { return "
          "Run::run(inputs); }");
   refuses("protocol Pair roles(P,V)(p:F@P,v:F@V)->(p:F@P,v:F@V){return(p,v);}" +
               header + "let r=Pair(p,v);return ();}",
@@ -133,42 +133,42 @@ void examples() {
   auto outputs = native(
       "protocol Run "
       "roles(P,V)(s:F@(P,V))->(p:F@P,v:F@V){return(v=f(s),p="
-      "f(s));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+      "f(s));}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   require(callOwners(*outputs.entry().protocol().body) ==
               std::vector<unsigned>({1, 0}),
           "return order or independent port demand changed");
   native("protocol Run roles(P,V)(s:F@(P,V),n:index@P)->(r:F@P){let mut x@P=s;"
-         "for _ in 0..n roles(P) max 4{x=f(x);}return x;}entry fn Demo(inputs: "
+         "for _ in 0..n roles(P) max 4{x=f(x);}return x;}run Demo(inputs: "
          "Run::Inputs) { return Run::run(inputs); }");
   refuses("protocol Run roles(P,V)(n:index@P,s:F@V)->(){for _ in 0..n roles(P) "
           "max 4{let x=f(s);}return ();}",
           "source.roles");
   native("protocol Run roles(P)(n:index@P,x:F@P)->(){"
-         "for _ in 0..n roles(P) max 4{unit(x)}return ();}entry fn "
+         "for _ in 0..n roles(P) max 4{unit(x)}return ();}run "
          "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   native("protocol Run roles(P,V)(n:index@(P,V),x:F@P)->(){"
-         "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}entry fn "
+         "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}run "
          "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   refuses("protocol Run roles(P,V)(n:index@(P,V),x:F@(P,V))->(){"
           "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}",
           "source.owner");
   native("protocol Run roles(P)(n:index@P)->(){"
-         "for _ in 0..n roles(P) max 4{}return ();}entry fn Demo(inputs: "
+         "for _ in 0..n roles(P) max 4{}return ();}run Demo(inputs: "
          "Run::Inputs) { return Run::run(inputs); }");
   native("fn count(n:index)->index{return n;}"
          "protocol Run roles(P,V)(n:index@(P,V))->(){"
-         "for _ in 0..count(n) roles(P) max 4{}return ();}entry fn "
+         "for _ in 0..count(n) roles(P) max 4{}return ();}run "
          "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   refuses("fn count(n:index)->index{return n;}"
           "protocol Run roles(P,V)(n:index@(P,V))->(){"
           "for _ in 0..count(n) roles(P,V) max 4{}return ();}",
           "source.roles");
   native("protocol Run roles(P,V)(s:F@(P,V),go:bool@V)->(r:F@V)completes{"
-         "let _=finish_if @V(yes(go))(r=f(s));return f(s);}entry fn "
+         "let _=finish_if @V(yes(go))(r=f(s));return f(s);}run "
          "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   native("fn check(go:bool)->bool{require go;return go;}"
          "protocol Run roles(P,V)(go:bool@V)->(r:bool@V){require "
-         "yes(go);return check(go);}entry fn Demo(inputs: Run::Inputs) { "
+         "yes(go);return check(go);}run Demo(inputs: Run::Inputs) { "
          "return Run::run(inputs); }");
   refuses(
       "protocol Run roles(P,V)(go:bool@(P,V))->(){require yes(go);return ();}",
@@ -178,10 +178,10 @@ void examples() {
   refuses("fn bad(go:bool)->(){require @P go;return ();}", "source.roles");
   refuses("protocol Run roles(P)()->(){require @;return ();}", "source.name");
   // Suffixes cannot alter the committed owner; a direct return demand can.
-  auto a = native(header + "let x=f(p);return ();}entry fn Demo(inputs: "
+  auto a = native(header + "let x=f(p);return ();}run Demo(inputs: "
                            "Run::Inputs) { return Run::run(inputs); }");
   auto b =
-      native(header + "let x=f(p);let actual=send P->V(x);return ();}entry fn "
+      native(header + "let x=f(p);let actual=send P->V(x);return ();}run "
                       "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   require(callOwners(*a.entry().protocol().body) ==
               callOwners(*b.entry().protocol().body),

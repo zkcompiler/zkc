@@ -9,4 +9,4 @@ proof Proof = Open<Rows> {
   accept accepted;
   construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
-entry fn Interactive(inputs: Open<Rows>::Inputs) { return Open<Rows>::run(inputs); }
+run Interactive(inputs: Open<Rows>::Inputs) { return Open<Rows>::run(inputs); }

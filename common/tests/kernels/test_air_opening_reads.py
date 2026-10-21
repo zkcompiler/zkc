@@ -24,7 +24,7 @@ protocol Work roles(P)(kind:Indices@P,column:Indices@P,rotation:Indices@P,
   let result=air::read_quotients(slots,batch,assignments,4,zeta,rho,initial,first);
   return(out=result.0,next=result.1);
 }}
-entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('relations/air'))
     def dense(seed):

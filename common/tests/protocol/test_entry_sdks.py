@@ -12,12 +12,12 @@ def source(directory):
     path = directory / "main.zkc"
     path.write_text('''module application;
 fn increment(value: index) -> index { return value + 1; }
-entry fn Next(value: index) { return increment(value); }
-entry fn Twice(value: index) {
+run Next(value: index) { return increment(value); }
+run Twice(value: index) {
   let next = Next(value);
   return Next(next);
 }
-entry fn Checked(value: index, valid: bool) {
+run Checked(value: index, valid: bool) {
   require valid;
   return increment(value);
 }
@@ -90,14 +90,14 @@ protocol Equality roles(P,V)(expected:bool@(P,V),candidate:bool@P)->(accepted:bo
 proof Core = Equality {
   prover P; verifier V; public{expected}; accept accepted; construction authored;
 }
-entry fn Produce(public:Core::Public,witness:Core::Witness){
+run Produce(public:Core::Public,witness:Core::Witness){
   let result=Core::prove(public,witness);
   return result.proof;
 }
-entry fn Validate(public:Core::Public,candidate:Core::Proof){
+run Validate(public:Core::Public,candidate:Core::Proof){
   return Core::verify(public,candidate);
 }
-entry fn Withhold(public:Core::Public,witness:Core::Witness,complete:bool){
+run Withhold(public:Core::Public,witness:Core::Witness,complete:bool){
   let produced=Core::prove(public,witness);
   require complete;
   return produced.proof;

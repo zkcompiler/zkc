@@ -9,6 +9,6 @@ protocol Response roles(P)(nonce: Fr@P, challenge: Fr@P, secret: Fr@P) -> (respo
   return response(nonce, challenge, secret);
 }
 
-entry fn Run(inputs: Response::Inputs) {
+run Run(inputs: Response::Inputs) {
   return Response::run(inputs);
 }

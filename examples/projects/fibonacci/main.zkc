@@ -56,16 +56,16 @@ fn build_trace(initial_x: Base, initial_y: Base) -> Vector<Base> {
   return trace;
 }
 
-entry fn GenerateTrace(initial_x: Base, initial_y: Base) {
+run GenerateTrace(initial_x: Base, initial_y: Base) {
   return build_trace(initial_x, initial_y);
 }
 
-entry fn ProveClean(public: CleanProof::Public) {
+run ProveClean(public: CleanProof::Public) {
   let trace = GenerateTrace(initial_x = public.initial_x, initial_y = public.initial_y);
   let result = CleanProof::prove(public = public, witness = CleanProof::Witness { trace });
   return result.proof;
 }
 
-entry fn ValidateClean(public: CleanProof::Public, candidate: CleanProof::Proof) {
+run ValidateClean(public: CleanProof::Public, candidate: CleanProof::Proof) {
   return CleanProof::verify(public = public, proof = candidate);
 }

@@ -51,7 +51,7 @@ fn compute({parameters})->bool {{ {body} }}
 protocol Work roles(P)({parameters.replace(', ', ' @P, ')} @P)->(accepted:bool @P) {{
   return compute({', '.join(p.strip().split(':')[0] for p in parameters.split(','))});
 }}
-entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     oracle = a.FieldOracle(field, root=root)
     return Program(source, [{'P': inputs}], support=oracle.support,
@@ -208,7 +208,7 @@ protocol Work roles(P)(matrix:Matrix<F>@P,xs:Vector<F>@P,expected:Vector<F>@P)->
  let actual=mat::multiply(matrix,xs);
  return v::equal(actual,expected);
 }
-entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     inputs = {'matrix': {'rows': str(rows), 'columns': str(columns), 'entries': entries},
               'xs': list(map(str, xs)), 'expected': expected}
@@ -231,7 +231,7 @@ fn work(xs:Vector<F>, weights:Vector<F>, scale:F, expected:F)->bool {
 protocol Work roles(P)(xs:Vector<F>@P,weights:Vector<F>@P,scale:F@P,expected:F@P)->(accepted:bool@P){
  return work(xs,weights,scale,expected);
 }
-entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     scale = a.dense(1, seed=73, modulus=a.FR)[0][0]
     expected = sum(x*y*scale for x, y in zip(xs, weights, strict=True)) % a.FR
@@ -255,7 +255,7 @@ fn work(n:index,r:F,expected:F)->bool {
  return accepted;
 }
 protocol Work roles(P)(n:index@P,r:F@P,expected:F@P)->(accepted:bool@P){return work(n,r,expected);}
-entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
     r = a.dense(1, seed=75, modulus=modulus)[0][0]

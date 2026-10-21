@@ -28,7 +28,7 @@ pub module Box''' + (';' if external else '<N:nat>{' + child + '}'))
 use library::Box as Reader;
 domain F=field("koala-bear");
 protocol Compute roles(P)(xs:[F;2]@P)->(value:F@P){return Reader::first<F,2>(xs);}
-entry fn Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
+run Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
 ''')
         manifest = '''format="zkc.project/0"
 [modules]

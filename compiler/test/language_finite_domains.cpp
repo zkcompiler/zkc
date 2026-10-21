@@ -80,7 +80,7 @@ fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
 indexing xs[i]=at(xs,i);
 struct State{pub xs:Vector<Fr>,pub fixed:[Fr;2]}
 fn work(state:State)->Fr{return sum(indices(state.xs),fn(i)=>state.xs[i]+state.fixed[0]);}
-protocol Demo roles(P)(state:State@P)->(r:Fr@P){return work(state);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(state:State@P)->(r:Fr@P){return work(state);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
         take(zkc::test::closeProtocolDeployment(project, "m::Run"));
         const auto &work = declarationNamed(project, "m::work");
@@ -178,7 +178,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P)
  let two@P=∑ (x ∈ xs) (y ∈ ys) with enabled, x*y;
  let three@P=∑ x in xs, (∑ y in ys, x*y);
  return one+two+three;
-}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     auto report = take(inspectNotations(project, {true, false}));
@@ -286,14 +286,14 @@ fn keep(xs:Vector<Fr>)->Vector<Fr>{return xs;}
 fn work(xs:Vector<Fr>,record:Record,array:[Fr;2])->Fr{
  return fold()" + input + R"(,0,fn(state, item)=>state+item);
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P,record:Record@P,array:[Fr;2]@P)->(r:Fr@P){return work(xs,record,array);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,record:Record@P,array:[Fr;2]@P)->(r:Fr@P){return work(xs,record,array);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
       take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     });
   cases.run("domain factories use the same collection conversion", [&] {
     auto project = take(check(finitePrelude + R"(
 domain fn paired(xs:Vector<Fr>,ys:[Fr;2])->domain<(Fr,Fr)>{return zip(xs,ys);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired(xs,ys),0,fn(state, (a,b))=>state+a*b);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired(xs,ys),0,fn(state, (a,b))=>state+a*b);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     take(zkc::test::closeProtocolDeployment(project, "m::Run"));
   });
@@ -402,7 +402,7 @@ fn sum(rows:domain<Fr>,flag:bool,term:fn(item:Fr)->Fr effects(stop) where item_f
 )" + body + R"(
 }
 fn reordered(unused:domain<Fr>,rows:domain<Fr>,term:fn(item:Fr)->Fr effects(stop) where item_from(item, rows))->Fr effects(stop){return sum(rows,true,term);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fn(x)=>x+shift);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fn(x)=>x+shift);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
       take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     });
@@ -669,7 +669,7 @@ math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys) {
  return total(indices(xs),0,fn(state, i)=>state+at(ys,i));
 }
 math fn same(xs:Vector<Fr>)->Fr{return work(xs,xs);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     unsigned bounds = 0, extents = 0;
@@ -694,16 +694,16 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}entry fn Run(
   for (
       const std::string &source : {
           R"(math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(zip(elements(xs),elements(ys)),0,fn(state, pair)=>state);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
           R"(domain fn choose(xs:Vector<Fr>,ys:Vector<Fr>)->domain<Fr>{let unused=zip(elements(xs),elements(ys));return elements(xs);}
 math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(choose(xs,ys),0,fn(state, item)=>state);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
           R"(domain fn row(xs:Matrix<Fr>,i:index)->domain<Fr>=domain("matrix.row");
 math fn work(xs:Matrix<Fr>,i:index)->Fr{return total(row(xs,i),0,fn(state, item)=>state+item);}
-protocol Demo roles(P)(xs:Matrix<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
+protocol Demo roles(P)(xs:Matrix<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
           R"(domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 math fn work(a:Fr)->Fr{let empty:[Fr;0]=[];return total(zip(array(empty),array([a])),0,fn(state, item)=>state);}
-protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return work(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
+protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return work(a);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })",
       })
     cases.run("total formation is checked before native emission " +
                   source.substr(0, 60),
@@ -718,7 +718,7 @@ type Array<F:Field,N:nat>=builtin("field_array",F,N);
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item, rows))->Array<Fr,N>=finite("math.collect.field_array");
 math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
             "source.data-bound");
   });
@@ -728,7 +728,7 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}entry fn Run(i
 math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
  return total(zip(elements(xs),elements(ys)),0,fn(state, item)=>state);
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs,xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs,xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
               refuses(zkc::test::closeProtocolDeployment(project, "m::Run"),
                       "source.data-bound");
@@ -783,7 +783,7 @@ math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:m
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
 fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr effects(stop){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return work(xs,initial,offset);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return work(xs,initial,offset);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     bool found = false;
@@ -806,7 +806,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
                 auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
-protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
                 auto closed =
                     take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -848,11 +848,11 @@ math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:ma
 math fn sum(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr{return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
 )";
     refuses(check(definitions + R"(
-protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@(P,V)){return sum(xs,initial,offset);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@(P,V)){return sum(xs,initial,offset);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
             "source.roles");
     auto project = take(check(definitions + R"(
-protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@P){return sum(xs,initial,offset);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@P){return sum(xs,initial,offset);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     take(zkc::test::closeProtocolDeployment(project, "m::Run"));
   });
@@ -1342,7 +1342,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
 domain Fr=field("koala-bear");
 fn ignore<T:Type+Copy+Drop>(rows:domain<T>,fallback:T)->T{return fallback;}
 fn forward<T:Type+Copy+Drop>(rows:domain<T>,fallback:T)->T{return ignore(rows,fallback);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(elements(xs),fallback);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(elements(xs),fallback);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     unsigned forwarded = 0;
@@ -1363,7 +1363,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(e
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn observe(rows:domain<index>,xs:Vector<Fr>,body:fn(Vector<Fr>)->Vector<Fr> effects())->Vector<Fr>{return body(xs);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fn(_)=>xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fn(_)=>xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     bool found = false;
@@ -1382,7 +1382,7 @@ domain Fr=field("koala-bear");
 fn ignore<T:Type+Copy+Drop>(rows:domain<T>,fallback:T)->T{return fallback;}
 fn apply(x:Fr,body:fn(Fr)->Fr effects())->Fr{return body(x);}
 fn outer(xs:Vector<Fr>,x:Fr)->Fr{let rows=elements(xs);return apply(x,fn(y)=>ignore(rows,y));}
-protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     bool found = false;
@@ -1403,7 +1403,7 @@ fn outer(xs:Vector<Fr>,x:Fr,n:index,flag:bool)->Fr{
  for i in 0..n { result=if flag {ignore(rows,result)} else {result}; }
  return result;
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P,flag:bool@P)->(r:Fr@P){return outer(xs,x,n,flag);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P,flag:bool@P)->(r:Fr@P){return outer(xs,x,n,flag);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     take(zkc::test::closeProtocolDeployment(project, "m::Run"));
   });
@@ -1412,7 +1412,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P,flag:bool@P)->(r:Fr@P){r
       auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn ignore(rows:domain<index>,fallback:Fr)->Fr{return fallback;}
-protocol Demo roles(P)(a:index@P,b:index@P,x:Fr@P)->(r:Fr@P){return ignore(range(a,b),x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(a:index@P,b:index@P,x:Fr@P)->(r:Fr@P){return ignore(range(a,b),x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
       auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
       for (const auto &decl : closed.declarations())
@@ -1452,7 +1452,7 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@P,x:Fr@P,n:index@(P,V))->(r:Fr@P){
    for _ in 0..n roles(P,V) max 4 {result=ignore(rows,result+x);}
  }
  return result;
-}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
         take(zkc::test::closeProtocolDeployment(project, "m::Run"));
       });
@@ -1465,7 +1465,7 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@V,x:Fr@P,n:index@P)->(r:Fr@P){
  let rows=elements(xs);let mut result@P=x;
  for _ in 0..n roles(P) max 4 {result=ignore(rows,result);}
  return result;
-}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
                       "source.roles");
             });
@@ -1478,7 +1478,7 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@V,x:Fr@P,n:index@(P,V))->(r:Fr@P){
  let rows=elements(xs);let mut result@P=x;
  for _ in 0..n roles(P,V) max 4 {result=ignore(rows,result);}
  return result;
-}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
                       "source.roles");
             });

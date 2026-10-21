@@ -566,7 +566,7 @@ protocol Run roles(P)(draw: Extension @P) -> (challenge: Quartic @P) {
   let challenge @P = Poseidon2::challenge(draw);
   return (challenge = challenge);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

@@ -6,7 +6,7 @@ for the existing participant compiler and runtime. The
 [source profile](../spec/language/README.md) defines syntax,
 permissions, role semantics and bounds. Static protocol composition, managed
 randomness, bounded repetition and conditional participant completion are supported.
-Relations, specification clauses and Entry functions and declarative proofs are supported.
+Relations, specification clauses and Run functions and declarative proofs are supported.
 The common Host supports authenticated packages, named inputs/results and
 independent proof calls through the [CLI and Rust API](../runtime/entries.md).
 
@@ -151,7 +151,7 @@ protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
   let received = send P -> V(pair);
   return received;
 }
-entry fn Demo(inputs: Transfer::Inputs) { return Transfer::run(inputs); }
+run Demo(inputs: Transfer::Inputs) { return Transfer::run(inputs); }
 ```
 
 `math fn` describes total algebra. `fn` describes ordered work, including control

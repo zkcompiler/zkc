@@ -53,7 +53,7 @@ int main() {
     auto project = take(check(R"(module m;
       module Inner { pub math fn yes()->bool{return true;} }
       protocol Demo roles(P)()->(ok:bool@P){return Inner::yes();}
-      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     const auto &root = named(project, "m");
     const auto &inner = named(project, "m::Inner");
@@ -72,7 +72,7 @@ int main() {
       math fn helper()->bool{return true;}
       module Child { pub math fn call()->bool{return helper();} }
       protocol Demo roles(P)()->(ok:bool@P){return Child::call();}
-      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     take(prepareOriginal(
         take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
@@ -101,7 +101,7 @@ int main() {
       )",
                                               "a.zkc"},
                                              {"b", R"(module b;use a::{value};
-        protocol Demo roles(P)()->(ok:bool@P){return value();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+        protocol Demo roles(P)()->(ok:bool@P){return value();}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
       )",
                                               "b.zkc"}}));
     take(prepareOriginal(
@@ -126,7 +126,7 @@ int main() {
       }
       math fn apply<C:I>()->bool{return C::value();}
       protocol Demo roles(P)()->(ok:bool@P){return apply<M>();}
-      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     require(named(project, "m::M::value").isPublic &&
                 !named(project, "m::M::helper").isPublic,
@@ -144,7 +144,7 @@ int main() {
     auto project = take(check(std::vector<SourceBuffer>{
         {"m",
          "module m;math fn helper()->bool{return true;}module Child;protocol "
-         "Demo roles(P)()->(ok:bool@P){return Child::value();}entry fn "
+         "Demo roles(P)()->(ok:bool@P){return Child::value();}run "
          "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
          "main.zkc"},
         {"m::Child",
@@ -169,7 +169,7 @@ int main() {
       }
       use m::Generic as Alias;
       protocol Demo roles(P)(x:[bool;2]@P)->(out:[bool;2]@P){return Alias::Inner::copy<2>(x);}
-      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     take(prepareOriginal(
         take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
@@ -243,7 +243,7 @@ int main() {
     auto project = take(check(std::vector<SourceBuffer>{
         {"m",
          "module m;type Secret:Copy+Drop=bool;module Child;protocol Demo "
-         "roles(P)()->(ok:bool@P){return Child::roundtrip();}entry fn "
+         "roles(P)()->(ok:bool@P){return Child::roundtrip();}run "
          "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
          "root"},
         {"m::Child",
@@ -269,7 +269,7 @@ int main() {
         const std::string client =
             "module client;use library::Box::{apply};protocol Demo "
             "roles(P)(x:[bool;2]@P)->(out:[bool;2]@P){return "
-            "apply<2>(x);}entry fn Run(inputs: Demo::Inputs) { return "
+            "apply<2>(x);}run Run(inputs: Demo::Inputs) { return "
             "Demo::run(inputs); }";
         for (bool external : {false, true}) {
           std::vector<SourceBuffer> files = {
@@ -298,7 +298,7 @@ int main() {
          "impl"},
         {"client",
          "module client;protocol Demo roles(P)()->(out:index@P){return "
-         "impl::count<2>();}entry fn Run(inputs: Demo::Inputs) { return "
+         "impl::count<2>();}run Run(inputs: Demo::Inputs) { return "
          "Demo::run(inputs); }",
          "client"}}));
     take(prepareOriginal(
@@ -307,7 +307,7 @@ int main() {
   cases.run("generic modules do not expose uninstantiated Entries", [] {
     auto project =
         take(check("module m<N:nat>;protocol Demo "
-                   "roles(P)()->(ok:bool@P){return true;}entry fn Run(inputs: "
+                   "roles(P)()->(ok:bool@P){return true;}run Run(inputs: "
                    "Demo::Inputs) { return Demo::run(inputs); }"));
     refuses(closeEntry(project, "m::Run"), "source.generic");
   });
@@ -328,7 +328,7 @@ int main() {
       operator infixl(60) ⊕ = add;
       operator ⊕ = add;
       module Child {pub math fn value()->bool{return true⊕false;}}
-      protocol Demo roles(P)()->(out:bool@P){return value();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      protocol Demo roles(P)()->(out:bool@P){return value();}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
         take(prepareOriginal(
             take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
@@ -360,8 +360,8 @@ int main() {
       auto project = take(check(
           "module m;module Library{pub math fn value()->bool{return true;}}" +
           (reverse ? b + a : a + b) +
-          "protocol Demo roles(P)()->(ok:bool@P){return Again::value();}entry "
-          "fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
+          "protocol Demo roles(P)()->(ok:bool@P){return Again::value();}run "
+          "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
       take(prepareOriginal(
           take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
     }
@@ -465,7 +465,7 @@ int main() {
         pub math fn make(x:[bool;N])->Row{return S<T=bool>{x:x};}
       }
       protocol Demo roles(P)(x:[bool;2]@P)->(out:M::Row<2>@P){return M::make<2>(x);}
-      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+      run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     take(prepareOriginal(
         take(zkc::test::closeProtocolDeployment(project, "m::Run"))));

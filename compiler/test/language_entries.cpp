@@ -36,8 +36,7 @@ std::string setupSource(StringRef choices = setupChoices,
       clauses = "";
     text.insert(at + StringRef("->(ok:bool@V)").size(),
                 " " + clauses.str() + " ");
-    return text +
-           "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }";
+    return text + "run Demo(inputs: Run::Inputs) { return Run::run(inputs); }";
   }
   return (setupBase + kind + " Demo=Run" + choices).str();
 }
@@ -93,27 +92,26 @@ int main() {
             "construction without format changed the default");
   });
   cases.run("execution kind is explicit and contextual", [] {
-    take(close(
-        (base +
-         "entry fn Demo(inputs: Round::Inputs) { return Round::run(inputs); }")
-            .str()));
+    take(
+        close((base +
+               "run Demo(inputs: Round::Inputs) { return Round::run(inputs); }")
+                  .str()));
     refuses(close((base + "proof Demo=Round;").str()), "source.entry");
     refuses(close((base + "proof Demo=Round{}").str()), "source.entry");
-    refuses(
-        close((base + "entry fn Demo(inputs: Round::Inputs)" + choices).str()),
-        "source.syntax");
+    refuses(close((base + "run Demo(inputs: Round::Inputs)" + choices).str()),
+            "source.syntax");
     refuses(close((base + "entry Demo=Round;").str()), "source.syntax");
     refuses(close((base + "proof Original=Round" + choices +
-                   "entry fn Demo(inputs: Original::Inputs) { return "
+                   "run Demo(inputs: Original::Inputs) { return "
                    "Original::run(inputs); }")
                       .str()),
             "source.name");
-    refuses(close((base + "entry fn Original(inputs: Round::Inputs) { return "
+    refuses(close((base + "run Original(inputs: Round::Inputs) { return "
                           "Round::run(inputs); }proof Demo=Original;")
                       .str()),
             "source.entry");
-    refuses(close((base + "entry fn Original(inputs: Round::Inputs) { return "
-                          "Round::run(inputs); }entry fn Demo(inputs: "
+    refuses(close((base + "run Original(inputs: Round::Inputs) { return "
+                          "Round::run(inputs); }run Demo(inputs: "
                           "Round::Inputs) { return Original::run(inputs); }")
                       .str()),
             "source.name");
@@ -121,7 +119,7 @@ int main() {
       struct Data{pub proof:bool,pub run:bool}
       math fn proof(run:bool)->bool{return run;}
       protocol Run roles(P)(data:Data@P)->(run:bool@P){return sample::proof(data.proof);}
-      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })"));
+      run Demo(inputs: Run::Inputs) { return Run::run(inputs); })"));
     take(close(R"(module sample;
       struct Data{proof:bool,run:bool}
       enum Choice{proof(),run(bool)}
@@ -132,10 +130,10 @@ int main() {
         let proof=data.proof;let run=proof;return Helper::proof(run);
       }
       protocol Work roles(P)(value:bool@P)->(out:bool@P){return identity(value);}
-      entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); })"));
+      run Demo(inputs: Work::Inputs) { return Work::run(inputs); })"));
     take(close(R"(module sample;
       protocol run roles(P)(x:bool@P)->(out:bool@P){return x;}
-      entry fn Demo(inputs: run::Inputs) { return run::run(inputs); })"));
+      run Demo(inputs: run::Inputs) { return run::run(inputs); })"));
     auto imported = take(
         capture({{"lib",
                   "module lib;pub math fn proof(run:bool)->bool{return run;}",
@@ -143,7 +141,7 @@ int main() {
                  {"sample",
                   R"(module sample;use lib::{proof};
           protocol T roles(P)(x:bool@P)->(out:bool@P){return proof(x);}
-          entry fn Demo(inputs: T::Inputs) { return T::run(inputs); })",
+          run Demo(inputs: T::Inputs) { return T::run(inputs); })",
                   {}}}));
     take(closeEntry(take(analyze(imported).checkedProject()), "Demo"));
   });
@@ -152,7 +150,7 @@ int main() {
       auto captured = take(capture({{"a",
                                      R"(module a;
         protocol Task roles(P)(x:bool@P)->(x:bool@P){return x;}
-        entry fn Job(inputs: Task::Inputs) { return Task::run(inputs); })" +
+        run Job(inputs: Task::Inputs) { return Task::run(inputs); })" +
                                          extra,
                                      {}},
                                     {"b", "module b;", {}}}));
@@ -170,7 +168,7 @@ int main() {
     refuses(selectEntry(sole, "a::Task"), "source.entry");
     refuses(selectEntry(sole, "b::Job"), "source.entry");
     auto aliases =
-        check("entry fn Alias(inputs: Task::Inputs) { return Job(inputs); }");
+        check("run Alias(inputs: Task::Inputs) { return Job(inputs); }");
     require(aliases.entries().size() == 2,
             "complete aliases are named candidates");
     refuses(selectEntry(aliases, ""), "source.entry");
@@ -179,11 +177,11 @@ int main() {
             "an alias changed short-name selection");
     auto captured =
         take(capture({{"a",
-                       "module a;protocol T roles(P)()->(){return();}entry fn "
+                       "module a;protocol T roles(P)()->(){return();}run "
                        "Job(inputs: T::Inputs) { return T::run(inputs); }",
                        {}},
                       {"b",
-                       "module b;protocol T roles(P)()->(){return();}entry fn "
+                       "module b;protocol T roles(P)()->(){return();}run "
                        "Job(inputs: T::Inputs) { return T::run(inputs); }",
                        {}}}));
     auto ambiguous = take(analyze(captured).checkedProject());
@@ -198,7 +196,7 @@ int main() {
   cases.run("execution kind filters only omitted selectors", [] {
     auto captured = take(capture({{"a",
                                    R"(module a;
-          protocol T roles(P)()->(){return();}entry fn Job(inputs: T::Inputs) { return T::run(inputs); })",
+          protocol T roles(P)()->(){return();}run Job(inputs: T::Inputs) { return T::run(inputs); })",
                                    {}},
                                   {"b",
                                    R"(module b;
@@ -222,12 +220,12 @@ int main() {
   cases.run("ambiguity diagnostics retain late matching Entries", [] {
     std::string early = "module a;protocol T roles(P)()->(){return();}";
     for (unsigned i = 0; i < 20; ++i)
-      early += "entry fn Candidate" + std::to_string(i) +
+      early += "run Candidate" + std::to_string(i) +
                "(inputs: T::Inputs) { return T::run(inputs); }";
     auto captured =
         take(capture({{"a", early, {}},
                       {"y",
-                       "module y;protocol T roles(P)()->(){return();}entry fn "
+                       "module y;protocol T roles(P)()->(){return();}run "
                        "Job(inputs: T::Inputs) { return T::run(inputs); }",
                        {}},
                       {"z",
@@ -257,26 +255,24 @@ int main() {
     )";
         Limits limits;
         limits.callDepth = 3;
-        take(close(declarations +
-                       "entry fn Demo(inputs: Run<Wrap<Base>>::Inputs) { "
-                       "return Run<Wrap<Base>>::run(inputs); }",
+        take(close(declarations + "run Demo(inputs: Run<Wrap<Base>>::Inputs) { "
+                                  "return Run<Wrap<Base>>::run(inputs); }",
                    limits));
-        refuses(
-            close(declarations +
-                      "entry fn Demo(inputs: Run<Wrap<Wrap<Base>>>::Inputs) { "
-                      "return Run<Wrap<Wrap<Base>>>::run(inputs); }",
-                  limits),
-            "source.limit");
+        refuses(close(declarations +
+                          "run Demo(inputs: Run<Wrap<Wrap<Base>>>::Inputs) { "
+                          "return Run<Wrap<Wrap<Base>>>::run(inputs); }",
+                      limits),
+                "source.limit");
         auto cached = replaceText(declarations, "return(r=first)",
                                   "return(r=extra<C>(first))");
         // First use caches Wrap<Base>; the second reaches that same
         // instance one level deeper and must include its complete height.
-        refuses(close(cached + "entry fn Demo(inputs: Run<Wrap<Base>>::Inputs) "
+        refuses(close(cached + "run Demo(inputs: Run<Wrap<Base>>::Inputs) "
                                "{ return Run<Wrap<Base>>::run(inputs); }",
                       limits),
                 "source.limit");
         limits.callDepth = 4;
-        take(close(cached + "entry fn Demo(inputs: Run<Wrap<Base>>::Inputs) { "
+        take(close(cached + "run Demo(inputs: Run<Wrap<Base>>::Inputs) { "
                             "return Run<Wrap<Base>>::run(inputs); }",
                    limits));
       });
@@ -298,9 +294,8 @@ int main() {
                 alias.protocol().symbol == selected.protocol().symbol,
             "complete alias omitted policy choices");
     auto run = take(close(
-        (base +
-         "entry fn Demo(inputs: Round::Inputs) { return Alias(inputs); }entry "
-         "fn Alias(inputs: Round::Inputs) { return Round::run(inputs); }")
+        (base + "run Demo(inputs: Round::Inputs) { return Alias(inputs); }run "
+                "Alias(inputs: Round::Inputs) { return Round::run(inputs); }")
             .str()));
     require(!run.entry().proof(), "run alias became a proof job");
   });

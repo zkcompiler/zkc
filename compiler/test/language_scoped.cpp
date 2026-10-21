@@ -45,7 +45,7 @@ int main() {
     succeeds(R"(
 fn precise(x:Fr)->Fr effects(){return forward(x,fn(y)=>y+1);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return precise(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     refuses(check(R"(
 fn bad(x:Fr)->Fr effects(){return forward(x,fn(y)=>{require y==1;y});}
 )"),
@@ -58,7 +58,7 @@ fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}
 fn adapter(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return invoke(x,fn(y)=>invoke(y,fn(z)=>f(z)));}
 fn precise(x:Fr)->Fr effects(){return adapter(x,fn(y)=>y+1);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return precise(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
             });
   cases.run("output contracts are universally checked by callback identity", [] {
     for (
@@ -138,7 +138,7 @@ interface I{fn run(x:Fr,body:fn(Fr)->Fr)->Fr effects(body);}
 module C:I{fn run(x:Fr,renamed:fn(Fr)->Fr)->Fr{return renamed(x);}}
 fn through<T:I>(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return T::run(x,f);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x,fn(y)=>y);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     refuses(check(R"(
 interface I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a);}
 module C:I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return b(x);}}
@@ -151,7 +151,7 @@ interface I{fn run(x:Fr)->Fr effects();}
 module C:I{fn run(x:Fr)->Fr effects(stop){return x;}}
 fn through<T:I>(x:Fr)->Fr effects(){return T::run(x);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     refuses(check(R"(
 interface I{fn run(x:Fr)->Fr effects();}
 module C:I{fn run(x:Fr)->Fr effects(stop){require x==1;return x;}}
@@ -162,7 +162,7 @@ module C:I{fn run(x:Fr)->Fr effects(stop){require x==1;return x;}}
   cases.run("generic Local apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward(x,fn(y)=>y+a));}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run("existing reduction inside scoped callback", [] {
     succeeds(R"(
@@ -173,7 +173,7 @@ fn example(xs:Vector<Fr>,a:Fr)->Fr {
  return apply(a,fn(y)=>∑ x in xs, (x+a+y));
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P)->(r:Fr@P){return example(xs,a);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run(
       "scoped specialization retains joint authored and captured aliases", [] {
@@ -183,7 +183,7 @@ fn dispatcher(x:Fr,y:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){
  return twice(x,x,body)+twice(x,y,body);
 }
 protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return dispatcher(x,y,fn(v)=>v+y);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
         auto closed =
             take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -230,7 +230,7 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
               "let a" + std::to_string(i) + "=a" + std::to_string(i - 1) + ";";
         program += "return apply(a150,fn(y)=>y+a150);}";
         program += "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return "
-                   "chain(x);}entry fn Run(inputs: Demo::Inputs) { return "
+                   "chain(x);}run Run(inputs: Demo::Inputs) { return "
                    "Demo::run(inputs); }";
         auto closed = take(
             zkc::test::closeProtocolDeployment(take(check(program)), "m::Run"));
@@ -244,7 +244,7 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
       program += "let a" + std::to_string(i) + "=apply(x,body);";
     program +=
         "return x;}protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return "
-        "wide(x,fn(y)=>y+a);}entry fn Run(inputs: Demo::Inputs) { return "
+        "wide(x,fn(y)=>y+a);}run Run(inputs: Demo::Inputs) { return "
         "Demo::run(inputs); }";
     auto closed = take(
         zkc::test::closeProtocolDeployment(take(check(program)), "m::Run"));
@@ -254,7 +254,7 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
   cases.run("protocol edge rejects coordinated forged input aliases", [] {
     auto closed = take(zkc::test::closeProtocolDeployment(take(check(R"(
 protocol Inner roles(P)(a:Fr@P,b:Fr@P)->(r:Fr@P){return a-b;}
-protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
                                                           "m::Run"));
     bool changed = false;
@@ -282,7 +282,7 @@ protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}entry
   cases.run("truncated hidden input body is rejected before reading ports", [] {
     auto closed = take(zkc::test::closeProtocolDeployment(take(check(R"(
 fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){return body(x)+y;}
-protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
                                                           "m::Run"));
     bool changed = false;
@@ -308,7 +308,7 @@ fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S e
 fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(item:I)->Fr effects(stop) where item_from(item, rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 fn g(xs:Vector<Fr>,a:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){let r=∑ x in xs,(x+a);return body(r);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn(y)=>y+b);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn(y)=>y+b);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
               auto closed =
                   take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -329,7 +329,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn
 fn iterate(x:Fr,n:index,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){
  let mut state=x;for _ in 0..n {state=body(state);}return state;
 }
-protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
         auto closed =
             take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -383,7 +383,7 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x
                 expression +
                 "}protocol Demo roles(P)(x:Fr@P,y:Fr@P,flag:" + flagType +
                 "@P)"
-                "->(r:Fr@P){return choose(x,flag,fn(v)=>v+y);}entry fn "
+                "->(r:Fr@P){return choose(x,flag,fn(v)=>v+y);}run "
                 "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
             auto closed =
                 take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -422,13 +422,13 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x
                 "(x:Fr)->Fr{let mut s=x;for _ in 0..1 {s=f" +
                 std::to_string(i + 1) + "(s);}return s;}";
     succeeds(source + "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P)"
-                      "{return f0(x);}entry fn Run(inputs: Demo::Inputs) { "
+                      "{return f0(x);}run Run(inputs: Demo::Inputs) { "
                       "return Demo::run(inputs); }");
   });
   cases.run("generic Math apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fn(y)=>y+a));}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run("module nested scoped capture and record projections", [] {
     succeeds(R"(
@@ -443,20 +443,20 @@ protocol Demo roles(P,V)(x:Fr@(P,V),parameters:Parameters<Fr>@P,position:index@P
  let result=through<Fr,Increment<Fr>>(x,fn(y)=>forward(y,fn(z)=>get(parameters.table,position)+z+parameters.shift));
  return(r=result);
 }
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run("Local callback has short circuit inside protocol", [] {
     succeeds(R"(
 fn fail(x:bool)->bool effects(stop){require x;return x;}
 protocol Demo roles(P)(x:bool@P)->(r:bool@P){return(r=apply(x,fn(y)=>false && fail(y)));}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run("multiple inputs and tuple destructuring", [] {
     succeeds(R"(
 fn two(x:Fr,y:Fr,body:fn(Fr,Fr)->Fr effects())->Fr effects(){return body(x,y);}
 fn pair(x:(Fr,Fr),body:fn((Fr,Fr))->Fr effects())->Fr effects(){return body(x);}
 fn example(x:Fr,y:Fr)->Fr{return two(x,y,fn(a, b)=>a+b)+pair((x,y),fn((a,b))=>a-b);}
-protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return(r=example(x,y));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return(r=example(x,y));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
   });
   cases.run("empty input list, Unit pattern and trailing comma", [] {
     succeeds(R"(
@@ -464,13 +464,13 @@ fn zero(body:fn()->Fr effects())->Fr effects(){return body();}
 fn unit(body:fn(())->Fr effects())->Fr effects(){return body(());}
 fn one(x:Fr,body:fn(Fr)->Fr effects())->Fr effects(){return body(x);}
 fn work(x:Fr)->Fr{return zero(fn()=>x)+unit(fn(())=>x)+one(x,fn(y,)=>y);}
-protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("fun is an ordinary identifier", [] {
     succeeds(R"(
 fn fun(x:Fr)->Fr{return x;}
-protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>fun(y));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>fun(y));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("scoped is an ordinary type name", [] {
@@ -478,21 +478,21 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>fun(y));}entry fn
 type scoped=Fr;
 fn identity(x:scoped)->scoped{return x;}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return identity(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("scoped is an ordinary local and lambda binding name", [] {
     succeeds(R"(
 fn bind(x:Fr)->Fr{let scoped=x;return apply(scoped,fn(y)=>y);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(bind(x),fn(scoped)=>scoped);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("scoped is an ordinary function name", [] {
     succeeds(R"(
 fn scoped(x:Fr)->Fr{return x;}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return scoped(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   for (const auto &source :
@@ -531,19 +531,19 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 #[affine] struct Token {}
 fn carry(x:Token,n:index)->Token{return forward(x,fn(y)=>{let mut state=y;for _ in 0..n {let old=state;consume old;state=Token{};}state});}
 fn work(n:index)->bool{let value=carry(Token{},n);consume value;return true;}
-protocol Demo roles(P)(n:index@P)->(r:bool@P){return work(n);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(n:index@P)->(r:bool@P){return work(n);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("Math Boolean callback inside protocol formula", [] {
     succeeds(R"(
-protocol Demo roles(P,V)(x:bool@(P,V))->(r:bool@(P,V)){return true && apply_math(x,fn(y)=>y || false);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P,V)(x:bool@(P,V))->(r:bool@(P,V)){return true && apply_math(x,fn(y)=>y || false);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
   cases.run("unused contextual callback and all-stopping callback", [] {
     succeeds(R"(
 fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:fn(A)->B effects(stop),fallback:B)->B effects(){return fallback;}
 fn work(x:Fr)->Fr{return ignore(x,fn(_)=>{stop "reject";},x);}
-protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
   });
 
@@ -559,14 +559,13 @@ math fn h(x:Fr,y:Fr)->Fr{return g<Fr,Impl<Fr>>(x,y);}
                     "protocol Demo "
                     "roles(P,V)(x:Fr@(P,V),y:Fr@P)->(r:Fr@(P,V)){return(r=" +
                     call +
-                    ");}entry fn Run(inputs: Demo::Inputs) { return "
+                    ");}run Run(inputs: Demo::Inputs) { return "
                     "Demo::run(inputs); }"),
               "source.roles");
-    succeeds(
-        helpers +
-        "protocol Demo "
-        "roles(P,V)(x:Fr@(P,V),y:Fr@P)->(r:Fr@P){return(r=h(x,y)"
-        ");}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }");
+    succeeds(helpers +
+             "protocol Demo "
+             "roles(P,V)(x:Fr@(P,V),y:Fr@P)->(r:Fr@P){return(r=h(x,y)"
+             ");}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }");
   });
   cases.run("callback after whole reassignment does not capture moved input",
             [] {
@@ -579,7 +578,7 @@ fn f(x:Fr,c:bool,h:Holder)->Fr{
  else {s=Holder{v:x,t:Token{}};x};
 }
 fn run(x:Fr,c:bool)->Fr{return f(x,c,Holder{v:x,t:Token{}});}
-protocol Demo roles(P)(x:Fr@P,c:bool@P)->(r:Fr@P){return run(x,c);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,c:bool@P)->(r:Fr@P){return run(x,c);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )");
             });
   cases.run("always-stopping argument excludes unreachable callback capture",
@@ -587,7 +586,7 @@ protocol Demo roles(P)(x:Fr@P,c:bool@P)->(r:Fr@P){return run(x,c);}entry fn Run(
               refuses(check(R"(
 fn g(a:Fr,b:Fr)->Fr{return a;}
 fn f(x:Fr,a:Fr)->Fr{return apply(x,fn(y)=>g({stop "reject";},a));}
-protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
                       "source.unreachable");
             });
@@ -650,20 +649,20 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}entry fn Run(inpu
        "source.scoped"},
       {"protocol Demo "
        "roles(P,V)(x:Fr@(P,V),a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply(x,fn(y)=>"
-       "y+a+b));}entry fn Run(inputs: Demo::Inputs) { return "
+       "y+a+b));}run Run(inputs: Demo::Inputs) { return "
        "Demo::run(inputs); }",
        "source.roles"},
       {"protocol Demo "
        "roles(P,V)(x:Fr@(P,V))->(r:Fr@(P,V)){return(r=apply(x,fn(y)=>y));}"
-       "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
+       "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
        "source.roles"},
       {"fn identity(x:Fr)->Fr{return x;} protocol Demo "
        "roles(P,V)(x:Fr@(P,V))->(r:Fr@P){return(r=apply_math(identity(x),fn(_)="
-       ">0));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
+       ">0));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
        "source.owner"},
       {"protocol Demo "
        "roles(P,V)(x:Fr@P,a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply_math(x,fn(_)="
-       ">{let dead=a+b;0}));}entry fn Run(inputs: Demo::Inputs) { return "
+       ">{let dead=a+b;0}));}run Run(inputs: Demo::Inputs) { return "
        "Demo::run(inputs); }",
        "source.roles"},
       {"fn f(x:Fr)->Fr{return apply(x,fn((a,b))=>a+b);}", "source.type"},
@@ -679,7 +678,7 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}entry fn Run(inpu
        "apply(t,fn(y)=>(y,y));}",
        "source.move"},
       {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "
-       "apply(x,fn(y)=>y+coins.draw());}entry fn Run(inputs: Demo::Inputs) { "
+       "apply(x,fn(y)=>y+coins.draw());}run Run(inputs: Demo::Inputs) { "
        "return Demo::run(inputs); }",
        "source.scoped-capture"},
       {"interface I{fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr effects();}module "
@@ -695,7 +694,7 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}entry fn Run(inpu
               [&] { refuses(check(refusals[i].first), refusals[i].second); });
   cases.run("scoped expansion respects closed instance and depth bounds", [] {
     auto project = take(check(R"(
-protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)=>z+x));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)=>z+x));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     Limits limits;
     limits.instances = 2;
@@ -726,7 +725,7 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)
   cases.run("forwarded scoped selection mutation is rejected", [] {
     auto project = take(check(R"(
 fn chain(x:Fr,first:fn(Fr)->Fr effects(stop),second:fn(Fr)->Fr effects(stop))->Fr effects(stop){return second(first(x));}
-protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fn(y)=>y+a,fn(y)=>y*b);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fn(y)=>y+a,fn(y)=>y*b);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     bool changed = false;
@@ -745,7 +744,7 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fn(y)=>y+a
   });
   const std::string captured = R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return(r=forward(x,fn(y)=>{let dead=a+b;y+a-b}));}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })";
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })";
   for (bool specialized : {false, true})
     for (unsigned mutation = 0; mutation < 4; ++mutation)
       cases.run(
@@ -754,7 +753,7 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })";
           [&] {
             auto project = take(check(R"(
 fn chain(x:Fr,first:fn(Fr)->Fr effects(stop),second:fn(Fr)->Fr effects(stop))->Fr effects(stop){return second(first(x));}
-protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fn(y)=>y*b,x=x,first=fn(y)=>y+a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fn(y)=>y*b,x=x,first=fn(y)=>y+a);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
             auto closed =
                 take(zkc::test::closeProtocolDeployment(project, "m::Run"));
@@ -848,7 +847,7 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fn(y)
             std::to_string(mutation),
         [&, mutation] {
           auto project = take(check(R"(
-protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>{let t=a;y+t-b});}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>{let t=a;y+t-b});}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
           bool changed = false;
           for (const auto &decl : project.declarations())
@@ -983,7 +982,7 @@ fn adapter(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(b){
 }
 fn clean(x:Fr)->Fr effects(){return adapter(x,fn(y)=>{require y==1;y},fn(y)=>y);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return clean(x);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
               refuses(check(R"(
 fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}
 fn adapter(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a){return invoke(x,fn(y)=>b(y));}
@@ -1007,7 +1006,7 @@ fn adapter(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a){return invoke(x,fn(y)=
         [&] {
           auto project = take(check(R"(
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>kernel<Fr>("field.constant";"1"));}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })"));
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })"));
           auto closed =
               take(zkc::test::closeProtocolDeployment(project, "m::Run"));
           bool changed = false;
@@ -1139,7 +1138,7 @@ fn compose(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return a(b(x));}
   cases.run("independent closed effect mutation is rejected", [] {
     auto project = take(check(R"(
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>y);}
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })"));
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     bool changed = false;
     for (const auto &decl : closed.declarations())

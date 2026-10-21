@@ -46,7 +46,7 @@ fn check(n:index, malformed:bool)->bool {
   return linear::equal(linear::zero<G>(),linear::scale(expression,0));
 }
 protocol Run roles(P)(n:index@P,malformed:bool@P)->(ok:bool@P){return check(n,malformed);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('GROUP', group)
     entry = Entry(toolchain, journal, directory, source, (*library_modules(*core_packages()), *flags))
     for n in (0, 1, 2, 9):
@@ -80,7 +80,7 @@ fn check(error:F)->(bool,bool,bool) {
   return(first,second,first && second);
 }
 protocol Run roles(P)(error:F@P)->(checks:(bool,bool,bool)@P){return check(error);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if not return_rows:
         source = source.replace('(bool,bool,bool)', 'bool')
@@ -110,7 +110,7 @@ fn check(a:G::Scalar,reverse:bool,valid_left:bool)->G {
   return linear::evaluate(linear::add(left,right));
 }
 protocol Run roles(P)(a:G::Scalar@P,reverse:bool@P,valid_left:bool@P)->(out:G@P){return check(a,reverse,valid_left);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 """
     entry = Entry(toolchain, journal, directory, source, library_modules(*core_packages()))
     for reverse in (False, True):

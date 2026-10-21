@@ -35,7 +35,7 @@ protocol Work roles(P)(xs:Vector<F>@P,columns:index@P,height:index@P,shift:F@P,s
     ->(result:(Vector<F>,Vector<F>)@P) {{
   return evaluate(xs,columns,height,shift,size);
 }}
-entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 
@@ -102,7 +102,7 @@ protocol Work roles(P)(values:Vector<F>@P,coefficients:Vector<F>@P,shift:F@P,
   let direct=coset::evaluate_batch(coefficients,count,width,shift,size);
   return(split=split,direct=direct,original=coefficients);
 }}
-entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
                   [*library_modules('relations/air'), *flags])

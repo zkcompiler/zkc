@@ -39,7 +39,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,input_shift:F
     output_shift:F@P,size:index@P)->(result:(Vector<F>,Vector<F>)@P) {{
   return extend(xs,width,height,input_shift,output_shift,size);
 }}
-entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     input_shift, output_shift = scalar(3), scalar(7)
@@ -98,7 +98,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P)->(data:Vector<F>@P,width:in
   return(data=c::batch_values(output),width=c::batch_width(output),
     shift=c::domain_shift(geometry),size=c::domain_size(geometry));
 }
-entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('core/polynomial'))
     root = pow(1791270792, (1 << 24)//4, P)

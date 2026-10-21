@@ -48,7 +48,7 @@ protocol View roles(Evaluator)
   let q @Evaluator = batch<Extension,Recurrence>(assignment);
   return (base_widths = b, extension_widths = e, active = a, point = p, batch = q);
 }
-entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
+run Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 
@@ -123,7 +123,7 @@ protocol View roles(Evaluator)(unused: index @Evaluator)
   let w @Evaluator = widths<Recurrence>();
   return (widths = w);
 }
-entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
+run Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
     Client(toolchain, journal, directory, width_only, document, refuses='source.asset-carrier')
     Client(toolchain, journal, directory, width_only.replace('kernel<Base,0>', 'kernel<Base,1>'),

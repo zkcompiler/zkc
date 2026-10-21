@@ -61,7 +61,7 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     ''')
     (project / 'main.zkc').write_text('''module example;
     use example_protocol::{Test};
-    entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
+    run Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     with (project / 'zkc.toml').open('a') as manifest:
@@ -87,7 +87,7 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
 
     # Explicit short names must remain ambiguous across different execution kinds.
     (project / 'other.zkc').write_text('''module other;
-    use example_protocol::{Test};entry fn Proof(inputs: Test::Inputs) { return Test::run(inputs); }''')
+    use example_protocol::{Test};run Proof(inputs: Test::Inputs) { return Test::run(inputs); }''')
     with (project / 'zkc.toml').open('a') as f:
         f.write('\nother = "other.zkc"\n')
     for command, invocation_flags in [('run', [invocation, f'--input={p}']),
@@ -102,7 +102,7 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     journal.run([toolchain.runtime, '--json', 'verify', *options, '--allow-authored', f'--proof={proof}', '--witness=missing'], refuses='cli-option')
     # Additional run Entries require selection; proof selection remains unique.
     with (project / 'main.zkc').open('a') as f:
-        f.write('\nentry fn Other(inputs: Test::Inputs) { return Test::run(inputs); }\n')
+        f.write('\nrun Other(inputs: Test::Inputs) { return Test::run(inputs); }\n')
     journal.run([toolchain.runtime, '--json', 'run', *options, invocation, f'--input={p}'], refuses='source-compilation')
     assert journal.json([toolchain.runtime, '--json', 'prove', *options, *producing])['entry'] == 'example::Proof'
 
@@ -201,7 +201,7 @@ def test_modes_and_templates_never_guess_or_replace_inputs(toolchain, journal, d
     assert generated['files'] == [str(directory / 'templates/arguments.json')]
     journal.run([toolchain.runtime, '--json', 'run', *pinned, '--input=missing.json'], refuses='entry-input-document')
     source = directory / 'unit.zkc'
-    source.write_text('module u;entry fn Main(u:())->(){return u;}')
+    source.write_text('module u;run Main(u:())->(){return u;}')
     explicit = [f'--compiler={toolchain.compiler}', f'--module=u={source}']
     generated = journal.json([toolchain.runtime, '--json', 'inputs', 'init', *explicit, f'--output={directory / "unit"}'])
     path = Path(generated['files'][0])

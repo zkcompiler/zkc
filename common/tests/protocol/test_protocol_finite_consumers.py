@@ -28,7 +28,7 @@ protocol Inspect roles(P)(claims: Vector<F> @P, height: index @P, x: F @P)
     -> (value: F @P) {
   return recombine(claims, height, x);
 }
-entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -56,7 +56,7 @@ protocol Inspect roles(P)(coefficients: Vector<F> @P, shift: F @P,
     size: index @P, position: index @P) -> (value: F @P) {
   return terminal(coefficients, shift, size, position);
 }
-entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -109,7 +109,7 @@ protocol Inspect<R: Reduction<F>> roles(P)(values: Vector<F> @P, rows: index @P,
   let built @P = build<R>(values, rows, gamma, delta, active);
   return (columns = built.0, claims = built.1);
 }
-entry fn Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }
+run Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }
 '''
 
 
@@ -117,8 +117,8 @@ entry fn Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run
 @pytest.mark.parametrize('reduction', ['LogUp', 'GrandProduct'])
 def test_interaction_product_admission_and_inactive_rows(
         toolchain, journal, directory, flags, reduction):
-    source = REDUCTION.replace('entry fn Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }',
-                               f'entry fn Demo(inputs: Inspect<{reduction}<F>>::Inputs) {{ return Inspect<{reduction}<F>>::run(inputs); }}')
+    source = REDUCTION.replace('run Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }',
+                               f'run Demo(inputs: Inspect<{reduction}<F>>::Inputs) {{ return Inspect<{reduction}<F>>::run(inputs); }}')
     entry, sites = compile_counted_entry(toolchain, journal, directory, source,
                                         flags, modules=AIR)
     # Observe the production library's nonzero fold, including generic usage

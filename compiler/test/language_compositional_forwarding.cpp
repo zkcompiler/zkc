@@ -55,14 +55,14 @@ int main() {
           "math fn run(xs:Vector<Fr>)->Fr{return total(indices(xs),0,"
           "fn(s,i)=>s+subject(xs,i));}\n"
           "protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return run(xs);}"
-          "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
+          "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
       emit(project, context);
     });
   cases.run("forwarded literal index emits", [&] {
     emit(take(check(R"(
 math fn subject(xs:Array<Fr,4>)->Fr{return intrinsic<Array<Fr,4>>("container.at",xs,index_id(index_id(3)));}
 fn fixed_read(xs:Vector<Fr>)->Fr{let packed=kernel<Fr,4>("field_array.from_vector",xs);return subject(packed);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return fixed_read(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return fixed_read(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });
@@ -73,14 +73,14 @@ struct Outer{pub inner:Inner}
 math fn inner(x:Outer)->Inner{return x.inner;}
 math fn values(x:Inner)->Vector<Fr>{return x.values;}
 math fn subject(x:Outer)->Fr{return total(indices(values(inner(x))),0,fn(s,i)=>s+at(x.inner.values,i));}
-protocol Demo roles(P)(x:Outer@P)->(r:Fr@P){return subject(x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(x:Outer@P)->(r:Fr@P){return subject(x);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });
   cases.run("forwarded domain container and callback captures emit", [&] {
     emit(take(check(R"(
 math fn subject(xs:Vector<Fr>)->Fr{let ys=nested(xs);return total(indices(ys),0,fn(s,i)=>s+at(xs,index_id(i)));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });
@@ -104,7 +104,7 @@ math fn apply_pair(rows:domain<(index,index)>,body:math fn(item:(index,index))->
 math fn pair(x:index)->(index,index){return (x,x);}
 math fn apply(rows:domain<index>,body:math fn(item:index)->Fr where item_from(item,rows))->Fr{return total(rows,0,fn(s,item)=>{let paired=pair(item);s+body(paired.0)});}
 math fn subject(xs:Vector<Fr>)->Fr{return apply(indices(xs),fn(i)=>at(xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });
@@ -122,7 +122,7 @@ domain fn product(a:domain<index>,b:domain<index>)->domain<(index,index)>=domain
 math fn pair_id(x:(index,index))->(index,index){return x;}
 math fn apply_pair(rows:domain<(index,index)>,body:math fn(item:(index,index))->Fr where item_from(item,rows))->Fr{return total(rows,0,fn(s,item)=>s+body(pair_id(item)));}
 math fn subject()->Fr{return apply_pair(product(range(0,2),range(1,3)),fn(pair)=>1);}
-protocol Demo roles(P)()->(r:Fr@P){return subject();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)()->(r:Fr@P){return subject();}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });
@@ -131,7 +131,7 @@ protocol Demo roles(P)()->(r:Fr@P){return subject();}entry fn Run(inputs: Demo::
 math fn generic<F:Field>(xs:Vector<F>)->Vector<F>{return xs;}
 math fn second(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{return generic<Fr>(ys);}
 math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(indices(ys),0,fn(s,i)=>s+at(second(xs,ys),i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return subject(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return subject(xs,ys);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
          context);
   });

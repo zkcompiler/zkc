@@ -35,5 +35,5 @@ protocol Inspect<R: Reduction<E>> roles(P)(channels: index @P, kind: Indices @P,
     height, challenges);
   return (columns = result.0, claims = result.1, residuals = result.2, ranges = result.3);
 }
-entry fn LogUpRun(inputs: Inspect<LogUp<E>>::Inputs) { return Inspect<LogUp<E>>::run(inputs); }
-entry fn ProductRun(inputs: Inspect<GrandProduct<E>>::Inputs) { return Inspect<GrandProduct<E>>::run(inputs); }
+run LogUpRun(inputs: Inspect<LogUp<E>>::Inputs) { return Inspect<LogUp<E>>::run(inputs); }
+run ProductRun(inputs: Inspect<GrandProduct<E>>::Inputs) { return Inspect<GrandProduct<E>>::run(inputs); }

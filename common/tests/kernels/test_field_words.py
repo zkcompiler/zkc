@@ -51,7 +51,7 @@ protocol Run roles(P)(x:F@P, xs:Vector<F>@P, raw:Indices@P)
   let decoded @P=decode(raw);
   return (encoded=encoded, decoded=decoded);
 }}
-entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 

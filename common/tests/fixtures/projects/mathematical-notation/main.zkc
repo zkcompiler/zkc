@@ -18,4 +18,4 @@ protocol Compare roles(P)(a: Vector<F> @P, b: Vector<F> @P,
           named_result = named(a, b, weights, α),
           pointwise = a ⊙ b);
 }
-entry fn Run(inputs: Compare::Inputs) { return Compare::run(inputs); }
+run Run(inputs: Compare::Inputs) { return Compare::run(inputs); }

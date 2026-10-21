@@ -48,5 +48,5 @@ protocol Combination roles(P, V)
   let accepted @V = same(received, expected);
   return (accepted = accepted);
 }
-entry fn Check(inputs: Gates::Inputs) { return Gates::run(inputs); }
-entry fn Interactive(inputs: Combination::Inputs) { return Combination::run(inputs); }
+run Check(inputs: Gates::Inputs) { return Gates::run(inputs); }
+run Interactive(inputs: Combination::Inputs) { return Combination::run(inputs); }

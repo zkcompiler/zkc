@@ -443,7 +443,7 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
     return selected(matches.front());
   if (candidates.empty())
     return detail::failure("source.entry",
-                           "project has no Entries; declare entry fn or proof");
+                           "project has no Entries; declare run or proof");
   std::string message;
   if (matches.empty() && name.empty())
     message = "no Entry of the required execution kind; available Entries:";
@@ -710,7 +710,7 @@ const Declaration *ClosedEntry::protocolOrNull() const {
                            : nullptr;
 }
 const Declaration &ClosedEntry::protocol() const {
-  assert(protocolOrNull() && "entry function has no protocol root");
+  assert(protocolOrNull() && "run function has no protocol root");
   return *protocolOrNull();
 }
 std::optional<HostInvocation::Kind> ClosedEntry::invocationKind() const {

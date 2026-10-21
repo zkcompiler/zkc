@@ -20,6 +20,9 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
     assert created['publication']['published'] == created['files']
     assert created['publication']['requested'] == created['files']
     assert len(created['files']) == 3
+    assert (project / 'main.zkc').read_text() == (
+        'module example;\n\nrun Main(value: index) -> index {\n  return value;\n}\n'
+    )
     value = project / 'inputs/example.Main/arguments.json'
     assert json.loads(value.read_text()) == {'value': None}
     journal.json(command(toolchain, 'run'), cwd=project, refuses='entry-input-unfilled')
@@ -109,7 +112,7 @@ def test_non_utf8_working_directory_refuses_without_a_scaffold(toolchain, journa
 def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    source.write_text('module example;\n      protocol Test roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}\n      entry fn Case(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    source.write_text('module example;\n      protocol Test roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}\n      run Case(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     path = directory / 'inputs/example.Case/arguments.json'
     assert prepared['files'] == [str(path)]
@@ -127,7 +130,7 @@ def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolc
     assert failed['input_path'] == 'arguments.inputs.p'
     assert 'execution' not in failed
     # A device-like role name remains a field, never a file path.
-    source.write_text('module example;\n      protocol Test roles(CON)(left:index@CON)->(result:index@CON){return left;}\n      entry fn Reserved(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    source.write_text('module example;\n      protocol Test roles(CON)(left:index@CON)->(result:index@CON){return left;}\n      run Reserved(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     path = directory / 'inputs/example.Reserved/arguments.json'
     assert prepared['files'] == [str(path)]
@@ -139,7 +142,7 @@ def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolc
 def test_prepare_all_entries_preserves_data_and_checks_current_shapes(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    source.write_text(source.read_text() + '\nentry fn Other(value:index)->index{return value;}\n')
+    source.write_text(source.read_text() + '\nrun Other(value:index)->index{return value;}\n')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     assert [entry['name'] for entry in prepared['entries']] == ['example::Main', 'example::Other']
     other = directory / 'inputs/example.Other/arguments.json'
@@ -172,7 +175,7 @@ def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, dire
     (directory / 'main.zkc').write_text('''module 数学;
       fn 増加(α:index)->index{return α+1;}
       protocol 計算 roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
-      entry fn 実行₂(inputs: 計算::Inputs) { return 計算::run(inputs); }
+      run 実行₂(inputs: 計算::Inputs) { return 計算::run(inputs); }
     ''')
     assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
@@ -236,7 +239,7 @@ def test_human_stops_use_source_participant_names(toolchain, journal, directory)
       protocol Test roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
         let received=send 証明者->検証者(ok);require received;return received;
       }
-      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
+      run Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
       proof Proof=Test{prover 証明者;verifier 検証者;public{};accept accepted;construction authored;}
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory)
@@ -261,7 +264,7 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
         let received=send P->V(accept);return received && expected;
       }
       proof Proof=Test{prover P;verifier V;public{expected};accept accepted;construction authored;}
-      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
+      run Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
     ''')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     selected = next(e for e in prepared['entries'] if e['name'] == 'example::Proof')
@@ -318,8 +321,8 @@ def test_implicit_inputs_are_protected_and_invalid_plans_publish_nothing(toolcha
         journal.json(command(toolchain, 'run', f'--results={alias}'), cwd=directory,
                      refuses='entry-output-path')
     (directory / 'main.zkc').write_text('''module example;
-      entry fn New(value:index)->index{return value;}
-      entry fn Broken(inputs: Missing::Inputs) { return Missing::run(inputs); }
+      run New(value:index)->index{return value;}
+      run Broken(inputs: Missing::Inputs) { return Missing::run(inputs); }
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-compilation')
     assert not (directory / 'inputs/example.New').exists()
@@ -343,14 +346,14 @@ def test_prepare_refuses_symlinks_and_case_collisions_before_publication(toolcha
     source.write_text('''module example;
       protocol A roles(P)(x:index@P)->(y:index@P){return x;}
       protocol B roles(Q)(x:index@Q)->(y:index@Q){return x;}
-      entry fn Clash(inputs: A::Inputs) { return A::run(inputs); }
-      entry fn clash(inputs: B::Inputs) { return B::run(inputs); }
+      run Clash(inputs: A::Inputs) { return A::run(inputs); }
+      run clash(inputs: B::Inputs) { return B::run(inputs); }
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-output-collision')
     assert not (directory / 'inputs/example.Clash').exists()
     assert not (directory / 'inputs/example.clash').exists()
     # A fully explicit invocation does not consult the default input namespace.
-    source.write_text('module example; entry fn Main(value:index)->index{return value;}')
+    source.write_text('module example; run Main(value:index)->index{return value;}')
     value.write_text('{"value":"7"}')
     conflict = directory / 'inputs/example.main'
     conflict.mkdir()
@@ -372,7 +375,7 @@ def test_run_result_policy_and_unserializable_outputs(toolchain, journal, direct
       protocol Compute roles(P,V)()->(p:Poly@P,accepted:bool@V){
         let p@P=polynomial();let accepted@V=true;return(p=p,accepted=accepted);
       }
-      entry fn Main(inputs: Compute::Inputs) { return Compute::run(inputs); }
+      run Main(inputs: Compute::Inputs) { return Compute::run(inputs); }
       proof Proof=Compute{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     (directory / 'inputs/example.Main/arguments.json').write_text(
@@ -415,7 +418,7 @@ def test_generated_commands_use_defaults_and_empty_roles_need_no_file(toolchain,
       protocol Exchange roles(P,V)(accept:bool@P)->(accepted:bool@V){
         let actual=send P->V(accept);return actual;
       }
-      entry fn Interactive(inputs: Exchange::Inputs) { return Exchange::run(inputs); }
+      run Interactive(inputs: Exchange::Inputs) { return Exchange::run(inputs); }
       proof Proof=Exchange{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     for name in ('Interactive', 'Proof'):

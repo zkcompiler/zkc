@@ -30,7 +30,7 @@ fn work(initial:index)->(index,index,index,index){
 protocol Run roles(P)(initial:index@P)->(result:(index,index,index,index)@P){
   return work(initial);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     operands = ','.join('{state=state+1;state}' for _ in range(3))
     source = source.replace('CALL', f'⟪{operands}⟫' if symbolic else f'reversed({operands})')
@@ -52,7 +52,7 @@ fn 計算(α:index,β₂:index)->状態{return 状態::完了(α+β₂);}
 protocol 実行 roles(参加者)(α:index@参加者,β₂:index@参加者)->(結果:状態@参加者){
   return 計算(α,β₂);
 }
-entry fn Demo(inputs: 実行::Inputs) { return 実行::run(inputs); }
+run Demo(inputs: 実行::Inputs) { return 実行::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('unicode', {'参加者': {'α': '4', 'β₂': '7'}}) == {
@@ -71,7 +71,7 @@ fn work(go:bool,eager:bool)->bool{
   return if eager { ⟪false,⊢go⟫ } else { false && ⊢go };
 }
 protocol Run roles(P)(go:bool@P,eager:bool@P)->(result:bool@P){return work(go,eager);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('skipped', {'go': False, 'eager': False}) == {'result': False}

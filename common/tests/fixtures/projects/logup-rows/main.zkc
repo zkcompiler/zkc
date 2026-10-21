@@ -78,7 +78,7 @@ pub protocol Inspect roles(P)(tuple_values: Vector<F> @P, arity: index @P,
   return (fingerprints = fingerprints, denominators = denominators,
     reciprocal_residuals = reciprocal_residuals, boolean_residuals = boolean_residuals);
 }
-entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 
 math fn forwarded_index(value: index) -> index { return value; }
 
@@ -93,4 +93,4 @@ pub protocol Weights roles(P)(delta: Fr @P) -> (weights: Array<Fr, 4> @P) {
   let weights @P = compression_weights(delta);
   return (weights = weights);
 }
-entry fn CompressionWeights(inputs: Weights::Inputs) { return Weights::run(inputs); }
+run CompressionWeights(inputs: Weights::Inputs) { return Weights::run(inputs); }

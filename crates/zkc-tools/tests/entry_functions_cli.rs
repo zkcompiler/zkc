@@ -778,7 +778,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     let source = root.join("main.zkc");
     std::fs::write(
         &source,
-        "module sample; entry fn Main(flag: bool) -> bool { return flag; }\n",
+        "module sample; run Main(flag: bool) -> bool { return flag; }\n",
     )
     .unwrap();
     let manifest = root.join("zkc.toml");

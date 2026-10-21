@@ -35,7 +35,7 @@ protocol Run roles(P)(states:Vector<F>@P, count:index@P) -> (result:(Vector<F>,b
   let result @P=check(states,count);
   return (result=result);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

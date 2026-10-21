@@ -88,7 +88,7 @@ protocol Outer<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let result=Forward(x
     }
     compile(relay + R"(
 protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let result=Relay(x);return result;}
-entry fn Demo(inputs: Forward<bool>::Inputs) { return Forward<bool>::run(inputs); }
+run Demo(inputs: Forward<bool>::Inputs) { return Forward<bool>::run(inputs); }
 )");
   });
   cases.run("shared components derive admission independently of Copy", [] {
@@ -103,7 +103,7 @@ protocol Shared<T:Type> roles(P,V)(x:T@(P,V))->(r:T@(P,V)) where () {return x;}
               "unexpected sharing condition");
     compile(R"(
 protocol Shared<T:Type> roles(P,V)(x:T@(P,V))->(r:T@(P,V)) where () {return x;}
-entry fn Demo(inputs: Shared<bool>::Inputs) { return Shared<bool>::run(inputs); }
+run Demo(inputs: Shared<bool>::Inputs) { return Shared<bool>::run(inputs); }
 )");
     refuses(check(R"(
 #[linear] struct Token {}
@@ -122,11 +122,11 @@ protocol Bad roles(P,V)(x:Key@(P,V))->(r:Key@(P,V)){return x;}
          {"bool", "[bool;2]", "(bool,bool)", "Record", "Choice"})
       compile(relay +
               "struct Record{pub value:bool}enum Choice{Some(bool),None()}"
-              "entry fn Demo(inputs: Relay<" +
+              "run Demo(inputs: Relay<" +
               type.str() + ">::Inputs) { return Relay<" + type.str() +
               ">::run(inputs); }");
-    compile(relay + "type Sequence<T:Type+Copy>=builtin(\"sequence\",T);entry "
-                    "fn Demo(inputs: Relay<Sequence<bool>>::Inputs) { return "
+    compile(relay + "type Sequence<T:Type+Copy>=builtin(\"sequence\",T);run "
+                    "Demo(inputs: Relay<Sequence<bool>>::Inputs) { return "
                     "Relay<Sequence<bool>>::run(inputs); }");
   });
   cases.run("privacy and explicit resources survive generic substitution", [] {
@@ -146,7 +146,7 @@ protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let res
     require(decl.admissions.size() == 2, "symbolic aggregate obligations lost");
     compile(R"(
 protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let result=send P->V(x);return result;}
-entry fn Demo(inputs: Relay<bool,2>::Inputs) { return Relay<bool,2>::run(inputs); }
+run Demo(inputs: Relay<bool,2>::Inputs) { return Relay<bool,2>::run(inputs); }
 )");
   });
   cases.run("opaque associated constructors cannot be invented by transport",
@@ -176,7 +176,7 @@ protocol Bad roles(P,V)(x:Polynomial@P)->(r:Polynomial@V){let result=send P->V(x
 fn make()->Checked{return Checked{value:true};}
 fn duplicate(x:Checked)->(Checked,Checked){return(x,x);}
 protocol Run roles(P,V)()->(p:Checked@P,v:Checked@V){let p@P=make();let v@V=make();return(p,v);}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
             });
   cases.run(
@@ -222,9 +222,9 @@ protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let r=Relay(x);ret
     const auto project = take(check(source));
     require(declaration(project, "Forward").admissions.size() == 2,
             "later explicit-contract callee lost its boundaries");
-    compile(source + "entry fn Demo(inputs: Forward<bool>::Inputs) { return "
+    compile(source + "run Demo(inputs: Forward<bool>::Inputs) { return "
                      "Forward<bool>::run(inputs); }");
-    refuses(admitRun(source + "struct Secret{value:bool}entry fn Demo(inputs: "
+    refuses(admitRun(source + "struct Secret{value:bool}run Demo(inputs: "
                               "Forward<Secret>::Inputs) { return "
                               "Forward<Secret>::run(inputs); }"),
             "source.ingress");
@@ -264,12 +264,11 @@ protocol Shared<C:Family> roles(P,V)(x:C::Item@(P,V))->(r:C::Item@(P,V)) where (
 protocol Forward roles(P,V)(x:Box::Item@(P,V))->(r:Box::Item@(P,V)){let r=Shared<Box>(x);return r;}
 )";
         take(check(source));
-        refuses(
-            zkc::test::closeProtocolDeployment(
-                take(check(source + "entry fn Demo(inputs: Forward::Inputs) { "
-                                    "return Forward::run(inputs); }")),
-                "m::Demo"),
-            "source.ingress");
+        refuses(zkc::test::closeProtocolDeployment(
+                    take(check(source + "run Demo(inputs: Forward::Inputs) { "
+                                        "return Forward::run(inputs); }")),
+                    "m::Demo"),
+                "source.ingress");
       });
   return cases.result();
 }

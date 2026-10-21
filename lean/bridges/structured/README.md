@@ -477,7 +477,7 @@ the pinned development environment, with the compiler built (`just build`) and
 Lean set up ([development guide](../../../docs/development/README.md)):
 
 1. Write the protocol and an Entry that runs it, for example
-   `entry fn EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) { return ChaumPedersen<G>::run(inputs); }` in a project module.
+   `run EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) { return ChaumPedersen<G>::run(inputs); }` in a project module.
 2. Write the manifest: its sources (a project or a module map), the Entry under
    `[entries] interactive`, the structured profile, and under `[generated]` the
    retained export (`interactive_export`, `interactive_source`), the data module

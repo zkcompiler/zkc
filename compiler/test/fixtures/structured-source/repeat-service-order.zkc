@@ -26,5 +26,5 @@ protocol Outer roles(X,Y,Z)(n: index @(Z,X), first: Random<Fr> @X,
   let (p,v) = Run roles(Z,X)(n,first,second);
   return (x = v, y = outside, z = p);
 }
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
-entry fn Nested(inputs: Outer::Inputs) { return Outer::run(inputs); }
+run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+run Nested(inputs: Outer::Inputs) { return Outer::run(inputs); }

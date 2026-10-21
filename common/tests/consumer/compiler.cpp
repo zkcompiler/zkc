@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     protocol Step roles(P)(x:bool@P)->(r:bool@P)
       spec {output contract=Same(in.x,out.r);}{return(r=x);}
     protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=Step(x);return(r=r);}
-    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
+    run Demo(inputs:Run::Inputs){return Run::run(inputs);}
     protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
       let received=send P->V(x);return(accepted=received);
     }

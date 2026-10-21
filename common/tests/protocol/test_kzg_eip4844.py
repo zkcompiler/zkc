@@ -301,7 +301,7 @@ protocol Check roles(P)(setup: Groups<eip4844::G1> @P) -> (key: Bytes @P, count:
   let admitted = eip4844::admit_setup(setup);
   return (key = encoding::group_compressed(eip4844::verifier_key()), count = curve::length(admitted));
 }
-entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
+run Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('commitments/kzg', 'constructions/ethereum/eip4844'))
     pinned = lagrange()

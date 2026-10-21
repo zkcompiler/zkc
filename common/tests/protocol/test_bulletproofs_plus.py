@@ -264,7 +264,7 @@ protocol Check roles(P)(challenges:vec::Vector<F>@P,y:F@P,n:index@P)
  ->(result:(bool,vec::Vector<F>,vec::Vector<F>)@P) {
   return compare(challenges,y,n);
 }
-entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
+run Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''.replace('GROUP', group).replace('FIELD', field)
     entry = Entry(toolchain, journal, directory, source,
                   library_modules('arguments/bulletproofs/weighted_inner_product', 'constructions/monero/bulletproofs_plus'))

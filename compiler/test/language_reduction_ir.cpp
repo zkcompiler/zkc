@@ -25,7 +25,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P,
                       ext:Vector<Ext>@P,c:Ext@P,d:Ext@P)->(r:Fr@P,s:Ext@P){
   return(r=f(xs,ys,a,b),s=f(ext,ext,c,d));
 }
-entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
 ClosedEntry close(StringRef text = source) {
   auto input = take(capture({{"m", text.str(), "reduction-ir.zkc"}}));
@@ -110,7 +110,7 @@ int main() {
       fn custom(xs:Vector<Fr>)->Fr{stop "reject";}
       fn collect<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->Vector<F> effects(stop)=finite("local.collect.vector");
       fn f(xs:Vector<Fr>)->Fr{let terms=collect(xs,fn(x)=>x);return custom(terms);}
-      protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+      protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     auto original = take(prepareOriginal(entry));
     require(original.bytes().contains("local.stop") &&
                 original.bytes().contains("local.finite_collect"),
@@ -129,7 +129,7 @@ fn sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop)
         for _ in 0..n {acc=acc+(∑ x in xs,x*a);}
         return if b {∑ x in xs,(x+a)} else {acc};
       }
-      protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:bool@P,n:index@P)->(r:Fr@P){return(r=f(xs,a,b,n));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
+      protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:bool@P,n:index@P)->(r:Fr@P){return(r=f(xs,a,b,n));}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     take(compileEntry(take(prepareOriginal(entry))));
   });
   return cases.result();
