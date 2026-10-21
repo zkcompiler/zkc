@@ -7,6 +7,7 @@
 #include <string>
 
 namespace zkc {
+class CompilationObservation;
 struct RunOptions {
   std::string entry = "main";
   bool simplify = true;
@@ -22,6 +23,7 @@ struct RunOptions {
   std::optional<std::string> publicCoinRequirement;
   /// Mathematical algorithm families, independent of simplify/storage release.
   MathematicalSelectionPolicy mathematicalSelection = {};
+  CompilationObservation *observations = nullptr;
 };
 /// Owns the final physical module, including retained statement/interface
 /// metadata, and a complete zkc.run/0 bundle for the selected entry.

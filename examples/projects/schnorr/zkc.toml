@@ -8,3 +8,9 @@
 
 [workspace]
 path = "../../../zkc.workspace.toml"
+
+[test.interface]
+entry = "Proof"
+
+[test.interactive-interface]
+entry = "Interactive"

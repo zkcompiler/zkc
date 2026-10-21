@@ -372,6 +372,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     for (auto index : proof.publicInputs)
       append_range(selection.publicInputs, protocol.inputs[index].native);
     NativeProofOptions native;
+    native.observations = options.observations;
     native.policy = NativeProofSelection{selection};
     native.simplify = options.simplify;
     native.releaseStorage = options.releaseStorage;
@@ -403,6 +404,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                          options);
   }
   RunOptions run;
+  run.observations = options.observations;
   run.entry = protocol.symbol;
   run.simplify = options.simplify;
   run.releaseStorage = options.releaseStorage;

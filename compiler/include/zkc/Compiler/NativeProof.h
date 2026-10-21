@@ -7,6 +7,7 @@
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
+class CompilationObservation;
 /// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
@@ -71,6 +72,7 @@ struct NativeProofOptions {
   std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
+  CompilationObservation *observations = nullptr;
 };
 struct CompiledNativeProof {
   Compilation compilation;

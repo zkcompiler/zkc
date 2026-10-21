@@ -83,7 +83,7 @@ def execute(name, optimized, values, capacity=None):
     ], []]], []]
     path = args.output / f'case-{len(checks) + 1}-inputs.json'
     path.write_text(json.dumps(data))
-    command = [args.runtime, '--json', 'run-bundle', bundle,
+    command = [args.runtime, '--json', 'bundle', 'run', bundle,
                hashlib.sha256(bundle.read_bytes()).hexdigest(), path]
     if capacity:
         command.append('--capacity=' + str(capacity))

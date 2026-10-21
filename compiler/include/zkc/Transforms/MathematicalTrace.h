@@ -52,6 +52,14 @@ enum class PublicationBoundary {
   PublishedToCaller
 };
 enum class CompletionKind { Completed, Unchanged, Refused };
+/// Diagnostic spellings shared by journal renderers; never admission evidence.
+const char *decisionName(OptimizationStatus);
+const char *decisionName(OptimizationReason);
+const char *decisionName(WorkOwner);
+const char *decisionName(DecisionFamily);
+const char *decisionName(RealizationChoice);
+const char *decisionName(PublicationBoundary);
+const char *decisionName(CompletionKind);
 enum class VerificationObservation {
   Verified,
   Mismatch,
@@ -129,6 +137,8 @@ struct RealizationTrace {
   std::vector<RealizationEvent> events;
   RealizationWork initialWork, remainingWork;
   bool remarks = false;
+  size_t eventLimit = 65536;
+  uint64_t droppedEvents = 0;
   /// Caller-owned diagnostic stream, live throughout the synchronous call.
   llvm::raw_ostream *ir = nullptr;
 

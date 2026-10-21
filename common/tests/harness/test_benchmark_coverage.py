@@ -76,7 +76,9 @@ def test_generated_compilation_forwards_explicit_policy(modules, tmp_path):
 import json,sys
 from pathlib import Path
 Path({str(arguments)!r}).write_text(json.dumps(sys.argv[1:]))
-print('{{}}')
+for a in sys.argv[1:]:
+    if a.startswith('--observations='): Path(a.split('=',1)[1]).write_text(json.dumps({{'completed':True}}))
+print('{{"options":{{}}}}')
 ''')
     compiler.chmod(0o755)
     args = SimpleNamespace(source=root, compiler=compiler, timeout=5,
@@ -115,7 +117,13 @@ def test_generated_families_capture_workspace_dependency_closures(modules, tmp_p
     execution = importlib.import_module('bench.execution')
     root = Path(__file__).resolve().parents[3]
     compiler = tmp_path/'compiler'
-    compiler.write_text(f'#!{sys.executable}\nprint("{{}}")\n')
+    compiler.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+for a in sys.argv[1:]:
+    if a.startswith('--observations='): Path(a.split('=',1)[1]).write_text(json.dumps({{'completed':True}}))
+print('{{"options":{{}}}}')
+''')
     compiler.chmod(0o755)
     args = SimpleNamespace(source=root, compiler=compiler, timeout=10, compiler_option=[])
     families = {}

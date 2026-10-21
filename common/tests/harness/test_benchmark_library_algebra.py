@@ -371,7 +371,13 @@ def test_selected_source_library_closure_is_captured_without_running_a_real_comp
         path = selected/owner
         path.write_text(path.read_text()+'\n// Selected-source capture sentinel.\n')
     compiler = tmp_path/'compiler-stub'
-    compiler.write_text(f'#!{sys.executable}\nprint("{{}}")\n')
+    compiler.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+for a in sys.argv[1:]:
+    if a.startswith('--observations='): Path(a.split('=',1)[1]).write_text(json.dumps({{'completed':True}}))
+print('{{"options":{{}}}}')
+''')
     compiler.chmod(0o755)
     args = SimpleNamespace(source=selected, compiler=compiler, timeout=10, compiler_option=[])
     capture = bench['runner'].Capture(tmp_path/'capture')

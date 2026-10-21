@@ -63,6 +63,7 @@ struct EntryOptions {
   bool simplify = true;
   bool releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
+  CompilationObservation *observations = nullptr;
 };
 using EntryArtifact = std::variant<CompiledRun, CompiledNativeProof>;
 class CompiledEntry {
@@ -78,7 +79,9 @@ private:
   CompiledEntry(CheckedOriginal source, EntryArtifact compiled,
                 EntryOptions options)
       : source(std::move(source)), compiled(std::move(compiled)),
-        configuration(options) {}
+        configuration(options) {
+    configuration.observations = nullptr;
+  }
   CheckedOriginal source;
   EntryArtifact compiled;
   EntryOptions configuration;

@@ -365,7 +365,7 @@ the loaded data and remain valid after the input request is dropped or changed.
 The installed command is:
 
 ```text
-zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS
+zkc bundle run BUNDLE EXPECTED_SHA256 INPUTS
     [--setups=AUTHORITY] [--capacity=CAPACITY] [--limits=LIMITS]
 ```
 

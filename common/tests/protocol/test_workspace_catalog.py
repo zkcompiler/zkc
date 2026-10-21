@@ -34,10 +34,9 @@ def test_catalog_path_and_explicit_inputs_share_identity_after_relocation(toolch
     original.mkdir()
     project, _ = fixture(original)
     explicit = project_arguments(project)
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}']
-    checked = journal.json([*command, f'--project={project}', '--api'])
+    command = [toolchain.runtime, '--json', 'inspect', '--view=api', f'--compiler={toolchain.compiler}']
+    checked = journal.json([*command, f'--project={project}'])
     graph = checked.pop('project_graph')
-    checked.pop('api')
     checked.pop('project')
     assert checked == journal.json([*command, *explicit])
     root = next(p for p in graph['packages'] if p['manifest'] == str(project))

@@ -25,6 +25,12 @@ struct Manifest {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
     workspace: Option<Workspace>,
+    #[serde(default)]
+    build: super::BuildSettings,
+    #[serde(default)]
+    profile: BTreeMap<String, super::BuildSettings>,
+    #[serde(default)]
+    test: BTreeMap<String, super::TestRecipe>,
 }
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -84,6 +90,9 @@ pub struct Project {
     pub(crate) paths: Vec<String>,
     pub(crate) manifest: Option<PathBuf>,
     graph: Option<ProjectGraph>,
+    build: super::BuildSettings,
+    profiles: BTreeMap<String, super::BuildSettings>,
+    tests: BTreeMap<String, super::TestRecipe>,
 }
 impl Project {
     pub fn discover() -> Result<Self> {
@@ -112,6 +121,27 @@ impl Project {
     pub fn graph(&self) -> Option<&ProjectGraph> {
         self.graph.as_ref()
     }
+    pub fn tests(&self) -> &BTreeMap<String, super::TestRecipe> {
+        &self.tests
+    }
+    /// Only the root manifest controls compilation. Dependency settings never leak.
+    pub fn settings(
+        &self,
+        profile: Option<&str>,
+        overrides: &super::BuildSettings,
+    ) -> Result<super::ResolvedSettings> {
+        let mut result = super::ResolvedSettings::default();
+        result.apply(&self.build, "build");
+        if let Some(name) = profile {
+            if name != "default" {
+                let settings = self.profiles.get(name).ok_or("source-profile-missing")?;
+                result.apply(settings, &format!("profile.{name}"));
+            }
+            result.profile = name.into();
+        }
+        result.apply(overrides, "request");
+        Ok(result)
+    }
     fn from_parts(
         manifest: Option<PathBuf>,
         mut modules: BTreeMap<String, String>,
@@ -124,10 +154,16 @@ impl Project {
             paths: vec![],
             manifest: manifest.clone(),
             graph: None,
+            build: Default::default(),
+            profiles: BTreeMap::new(),
+            tests: BTreeMap::new(),
         };
         if let Some(path) = manifest {
             let mut capture = Capture::default();
             let root = capture.load(&path)?;
+            result.tests = capture.tests;
+            result.build = capture.build;
+            result.profiles = capture.profiles;
             result.graph = Some(ProjectGraph {
                 format: "zkc.project-graph/0",
                 root,
@@ -173,6 +209,9 @@ struct Capture {
     visited: BTreeSet<PathBuf>,
     packages: BTreeMap<PathBuf, ProjectPackage>,
     catalogs: BTreeMap<PathBuf, Catalog>,
+    build: super::BuildSettings,
+    profiles: BTreeMap<String, super::BuildSettings>,
+    tests: BTreeMap<String, super::TestRecipe>,
 }
 impl Capture {
     fn load(&mut self, path: &Path) -> Result<PathBuf> {
@@ -209,6 +248,29 @@ impl Capture {
             || project.dependencies.len() > MANIFESTS
         {
             return Err("source-project-limit".into());
+        }
+        if project.profile.len() > 256
+            || project.profile.contains_key("default")
+            || project
+                .profile
+                .keys()
+                .any(|s| s.is_empty() || s.len() > 128)
+        {
+            return Err("source-profile-format".into());
+        }
+        if project.test.len() > 256 {
+            return Err("source-test-limit".into());
+        }
+        if project.test.keys().any(|s| s.is_empty() || s.len() > 128) {
+            return Err("source-test-format".into());
+        }
+        for recipe in project.test.values() {
+            recipe.validate()?;
+        }
+        if self.active.is_empty() {
+            self.tests = project.test;
+            self.build = project.build;
+            self.profiles = project.profile;
         }
         self.active.insert(context.clone());
         self.manifests
@@ -384,6 +446,61 @@ fn discover() -> Result<PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn settings_and_tests_belong_to_root_and_reject_unknown_profiles() {
+        let root = tempfile::tempdir().unwrap();
+        let dependency = manifest(
+            root.path(),
+            "dep",
+            r#"[modules]
+dep="main.zkc"
+[build]
+finite-bulk=false
+[profile.other]
+simplify=false
+[test.dependency]
+entry="dep::Main"
+"#,
+        );
+        let path = manifest(
+            root.path(),
+            "root",
+            r#"[modules]
+main="main.zkc"
+[dependencies]
+dep="../dep"
+[build]
+release-storage=true
+[profile.vector]
+release-storage=false
+finite-bulk=false
+[test.consumer]
+entry="main::Main"
+"#,
+        );
+        std::fs::write(dependency.parent().unwrap().join("main.zkc"), "").unwrap();
+        std::fs::write(path.parent().unwrap().join("main.zkc"), "").unwrap();
+        let project = Project::load(&path).unwrap();
+        let defaults = project
+            .settings(None, &Default::default())
+            .unwrap()
+            .options();
+        assert!(defaults.finite_bulk && defaults.release_storage);
+        let vector = project
+            .settings(Some("vector"), &Default::default())
+            .unwrap()
+            .options();
+        assert!(!vector.release_storage && !vector.finite_bulk);
+        assert!(
+            project
+                .settings(Some("other"), &Default::default())
+                .is_err()
+        );
+        assert_eq!(project.tests().len(), 1);
+        let contents = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, contents.replace("[test.consumer]", "[test.\"\"]")).unwrap();
+        assert!(Project::load(&path).is_err());
+    }
     #[test]
     fn explicit_paths_keep_their_loading_directory() {
         let base = std::env::current_dir().unwrap();

@@ -40,7 +40,62 @@ pub fn human(report: &Value) -> String {
             }
         }
     }
-    if !super::succeeded(report) {
+    if let Some(view) = report["view"].as_str() {
+        let field = match view {
+            "toolchain" => "toolchain",
+            "project" => "project_graph",
+            "api" | "placement" | "notations" => "checked",
+            _ => "interface",
+        };
+        if let Some(value) = report.get(field) {
+            writeln!(text, "{}", serde_json::to_string_pretty(value).unwrap()).unwrap();
+        }
+        if view == "project"
+            && let Some(settings) = report.get("settings")
+        {
+            writeln!(
+                text,
+                "Settings: {}",
+                serde_json::to_string_pretty(settings).unwrap()
+            )
+            .unwrap();
+        }
+    }
+    if let Some(directory) = report["report"]["directory"].as_str() {
+        writeln!(text, "Report: {directory}").unwrap();
+    }
+    if let Some(code) = report["report_error"].as_str() {
+        writeln!(
+            text,
+            "Report error [{code}]; operation status: {}",
+            report["status"]
+        )
+        .unwrap();
+    }
+    if let Some(tests) = report["tests"].as_array() {
+        for test in tests {
+            writeln!(
+                text,
+                "{}: {}",
+                test["name"].as_str().unwrap_or("test"),
+                if test["passed"] == true {
+                    "passed"
+                } else {
+                    "failed"
+                }
+            )
+            .unwrap();
+        }
+    }
+    if let Some(counts) = report.get("execution_counts") {
+        writeln!(
+            text,
+            "Execution counts: {}",
+            serde_json::to_string_pretty(counts).unwrap()
+        )
+        .unwrap();
+    }
+    if !super::succeeded(report) && report.get("code").is_some() {
         writeln!(
             text,
             "Error [{}]: {}",

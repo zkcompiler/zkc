@@ -126,6 +126,8 @@ def run_suite(args, prepare):
                 'compiler_options': args.compiler_option, 'ingress': args.ingress,
                 'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
+    if getattr(args, 'configuration', None) is not None:
+        manifest['configuration'] = args.configuration
     try:
         if args.cpu is not None:
             require(hasattr(os, 'sched_setaffinity'), 'CPU affinity is unavailable')

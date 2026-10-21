@@ -385,7 +385,7 @@ add no cryptographic construction or security claim.
 The deployment and complete proof are each at most 16 MiB; the participant
 candidate is at most 4 MiB, under the [program carrier ceiling](program.md#carrier-size).
 
-The `zkc prove-bundle` and `verify-bundle` file adapters require bounded regular
+The `zkc bundle prove` and `bundle verify` file adapters require bounded regular
 inputs, including deployment, invocation, authority, capacity, attempt-policy and
 verification proof files. An authored deployment without a derived transcript
 requires `--allow-authored` on either command, matching named Entry calls.

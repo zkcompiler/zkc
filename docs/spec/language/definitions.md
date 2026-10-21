@@ -88,6 +88,29 @@ All participating manifests and mapped files are protected compilation inputs.
 No registry lookup, implicit module discovery or version selection occurs. Each supplied path
 is nonempty, contains no NUL, and is at most 4096 bytes.
 
+Optional root `[build]` and `[profile.NAME]` tables contain partial Boolean
+implementation settings: `simplify`, `finite-bulk`, `release-storage`,
+`fuse-vector-reductions`, `fuse-collect-fold` and `calculation-batching`.
+Resolution is shipped defaults, root build, selected profile, then explicit
+request overrides. Omission preserves the preceding value; explicit `false`
+overrides it. At most 256 named profiles are admitted, with nonempty names of at
+most 128 bytes. `default` is reserved for the root build without a named profile.
+Unknown profiles and fields refuse. Dependency settings are validated but never
+applied to a consumer. Settings select checked implementations and never disable
+required source, mathematical or physical verification. Effective values and
+origins are diagnostic metadata; the package retains its published policy.
+
+Optional root `[test.NAME]` tables describe consumer invocations, with required
+`entry`, optional `operation` (`check`, `run`, `prove` or `verify`; default
+`check`), string-array `args`, and `expect` (`success` or an exact refusal code;
+default `success`). At most 256 tests are admitted, with nonempty names of at most
+128 bytes. An Entry name is at most 4096 bytes; there are at most 64 arguments of
+4096 bytes each and an expectation is nonempty and at most 128 bytes. Recipes
+cannot replace source roots, the compiler, pinned packages, profiles, reports or
+compilation caches. File arguments resolve beside the root manifest. Dependency
+recipes are validated but never run implicitly. Tests use ordinary checking and
+Host execution. See [tooling](../../compiler/tooling.md) for defaults and usage.
+
 A manifest may declare `[workspace]` with exactly one string `path`. A dependency
 may then be a table with exactly one nonempty string `workspace`, naming a
 package in that explicitly selected catalog. String dependencies retain their
@@ -122,9 +145,10 @@ including symlinked manifests. Explicit command-line paths use the invocation
 directory. Absolute paths, `..` and ordinary symlink resolution are supported;
 imports do not scan directories. SDK captures never discover a manifest.
 
-The manifest carries locations and formats, not execution choices or secrets.
-Its path, formatting and discovery location are report metadata and do not enter
-capture identity. Identical named source/asset bytes have the same capture.
+Manifest paths, formatting, profiles and test recipes do not enter source
+capture identity. Identical named source/asset bytes have the same capture;
+effective build settings separately determine the published implementation policy.
+Execution inputs and secrets remain outside source capture.
 The CLI protects the manifest, mapped inputs and selected compiler from output
 publication, including file aliases. See [Entry selection](entries.md#selection)
 for canonical names and check scopes, and the [project guide](../../language/README.md#project-inputs)
@@ -219,8 +243,8 @@ the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
-`zkc check --declarations` adds a diagnostic array of public modules, interfaces,
-completed callable contracts and constructions from captured modules, sorted by qualified name, under `declarations`.
+`zkc inspect --view=placement` reports a diagnostic array of public modules, interfaces,
+completed callable contracts and constructions from captured modules, sorted by qualified name, under `checked.declarations`.
 Module/interface records report directly declared public member names and any
 implemented contract. The inventory uses canonical declaration paths with public
 owners; it does not enumerate import alias or reexport routes.
@@ -243,7 +267,7 @@ not a serialization accepted by the checker. The view never supplies linking
 or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
 an exceeded bound refuses without publishing a partial result.
 
-`zkc check --api` adds a diagnostic `api` object with format `zkc.source-api/0`.
+`zkc inspect --view=api` reports a diagnostic `checked.api` object with format `zkc.source-api/0`.
 Its `roots` are the captured root modules. Its `exports` form a compact graph:
 each edge records the canonical `owner`, exported `name`, canonical `target`,
 whether it is `imported`, and its source location. Following an alias does not
