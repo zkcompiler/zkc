@@ -22,7 +22,7 @@ run here:
 
 ```sh
 python3 prepare.py
-zkc run BlobToCommitment --input=P=build/inputs/example.BlobToCommitment/P.json
+zkc run BlobToCommitment --input=build/inputs/example.BlobToCommitment/arguments.json
 zkc prove BlobProof --public=build/inputs/example.BlobProof/public.json \
   --witness=build/inputs/example.BlobProof/witness.json --output=build/blob.proof --allow-authored
 zkc verify BlobProof --public=build/inputs/example.BlobProof/public.json \
@@ -53,7 +53,7 @@ this block in a separate consumer tree using only declared package dependencies.
 ```sh zkc-example
 python3 prepare.py --output=build/inputs
 zkc check
-zkc run ComputeChallenge --input=P=build/inputs/example.ComputeChallenge/P.json
+zkc run ComputeChallenge --input=build/inputs/example.ComputeChallenge/arguments.json
 zkc prove BlobProof --public=build/inputs/example.BlobProof/public.json --witness=build/inputs/example.BlobProof/witness.json --output=build/blob.proof --allow-authored
 zkc verify BlobProof --public=build/inputs/example.BlobProof/public.json --proof=build/blob.proof --allow-authored
 ```

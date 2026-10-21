@@ -9,7 +9,11 @@ proof Proof = TwoSums<F,4> {
   accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run Interactive = TwoSums<F,4>;
+entry fn Interactive(inputs: TwoSums<F,4>::Inputs) {
+  return TwoSums<F,4>::run(inputs);
+}
 
 // Inspect the reusable round result without claiming proof acceptance.
-run Reduction = sums::Reduction<F,4>;
+entry fn Reduction(inputs: sums::Reduction<F,4>::Inputs) {
+  return sums::Reduction<F,4>::run(inputs);
+}

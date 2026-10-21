@@ -28,7 +28,7 @@ protocol Work roles(P)(payload:Bytes @P, expected:Bytes @P)->(accepted:bool @P) 
   let accepted @P=bytes::equal(bytes::sha256(payload),expected);
   return (accepted=accepted);
 }
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     return Program(source, [{'P': inputs}], dependencies=('core.encoding',),
                    incorrect={'P': incorrect},

@@ -48,11 +48,16 @@ pub(crate) struct RoleMap {
 /// This API executes the pinned algorithm, including authored constructions;
 /// it does not impose an application binding policy. Use [`crate::entry::ProofEntry`]
 /// with [`crate::entry::ProofOptions`] to require managed transcript binding.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct NativeDeployment {
     ring_assets: zkc_backends::ring::Registry,
     relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
+    sequence_work_limit: u64,
+    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    retained_inputs: bool,
+    operation: Option<bool>,
+    proof_bytes_limit: usize,
     publication: String,
     choices: [bool; 6],
     external_work_limit: u64,
@@ -62,6 +67,7 @@ pub struct NativeDeployment {
     preparation: PreparedComputations<NativeBackend>,
     source: String,
     descriptor: Json,
+    binding_metadata_bytes: usize,
     format: ProofFormat,
     public: Vec<Port>,
     maps: BTreeMap<String, RoleMap>,
@@ -77,6 +83,9 @@ pub(crate) struct SourceInterface<'a> {
     pub services: Vec<usize>,
     pub public: &'a [Port],
     pub roles: &'a BTreeMap<String, RoleMap>,
+    pub operation: Option<bool>,
+    pub producer: &'a str,
+    pub validator: &'a str,
 }
 enum Mode<'a> {
     Prove,
@@ -98,6 +107,12 @@ impl<'a> Invocation<'a> {
         !matches!(self, Self::Verify(_))
     }
     fn plan(self, host: &NativeDeployment) -> Result<Mode<'a>> {
+        if host
+            .operation
+            .is_some_and(|producer| producer != self.is_producer())
+        {
+            return Err("native-proof-operation".into());
+        }
         Ok(match self {
             Self::Prove => Mode::Prove,
             Self::Verify(proof) => Mode::Verify(proof),
@@ -222,13 +237,39 @@ impl NativeDeployment {
         if &identity != expected_sha256 {
             return Err("native-proof-deployment-binding".into());
         }
-        Self::admit_payload(bytes, &hex(expected_sha256), authority)
+        Self::admit_payload(bytes, &hex(expected_sha256), authority, None, false)
     }
     pub(crate) fn admit_artifact(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
     ) -> Result<Self> {
-        Self::admit_payload(artifact.bytes(), &hex(artifact.identity()), authority)
+        Self::admit_artifact_operation(artifact, authority, None)
+    }
+    pub(crate) fn admit_artifact_operation(
+        artifact: &crate::entry::AuthenticatedArtifact<'_>,
+        authority: SetupAuthority,
+        operation: Option<bool>,
+    ) -> Result<Self> {
+        Self::admit_payload(
+            artifact.bytes(),
+            &hex(artifact.identity()),
+            authority,
+            operation,
+            false,
+        )
+    }
+    pub(crate) fn admit_host_operation(
+        artifact: &crate::entry::AuthenticatedArtifact<'_>,
+        authority: SetupAuthority,
+        producer: bool,
+    ) -> Result<Self> {
+        Self::admit_payload(
+            artifact.bytes(),
+            &hex(artifact.identity()),
+            authority,
+            Some(producer),
+            true,
+        )
     }
     // The public loader checks the caller's deployment pin; the private view
     // borrows exact artifact bytes from a Package captured against its caller's
@@ -238,6 +279,8 @@ impl NativeDeployment {
         bytes: &[u8],
         expected_sha256: &str,
         authority: SetupAuthority,
+        operation: Option<bool>,
+        retained_inputs: bool,
     ) -> Result<Self> {
         let value = parse(bytes, INPUT_LIMIT)?;
         let envelope = array(&value, 9)?;
@@ -290,9 +333,15 @@ impl NativeDeployment {
             .map_err(|e| e.to_string())?;
             let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
                 .map_err(|e| e.to_string())?;
-            program
-                .check_installation(&dummy)
-                .map_err(|e| e.to_string())?;
+            match operation {
+                Some(producing) => program.check_role_installation(
+                    entry,
+                    if producing { producer } else { validator },
+                    &dummy,
+                ),
+                None => program.check_installation(&dummy),
+            }
+            .map_err(|e| e.to_string())?;
             program
         };
         let messages = messages::MessageLayout::read(descriptor, &policy)?;
@@ -307,6 +356,8 @@ impl NativeDeployment {
             &envelope[6],
             &descriptor[4],
             construction.as_ref(),
+            operation,
+            retained_inputs,
         )?;
         let keys = public
             .iter()
@@ -336,24 +387,53 @@ impl NativeDeployment {
             .iter()
             .map(|(role, map)| (role.clone(), map.data.iter().map(|p| p.original).collect()))
             .collect();
-        let proof_entry = NativeProofEntry::new(
-            admitted,
-            entry,
-            producer,
-            validator,
-            acceptance.ok_or("native-proof-acceptance-map")?,
-            zkc_runtime::vm::ProofConstruction {
-                suite,
-                events: &messages.events,
-                plan: construction.as_ref(),
-                source_inputs: &source_inputs,
-            },
-        )
+        let construction = zkc_runtime::vm::ProofConstruction {
+            suite,
+            events: &messages.events,
+            plan: construction.as_ref(),
+            source_inputs: &source_inputs,
+        };
+        let acceptance = if operation == Some(true) {
+            acceptance.unwrap_or(policy.original_acceptance)
+        } else {
+            acceptance.ok_or("native-proof-acceptance-map")?
+        };
+        let proof_entry = if maps.len() == 1 {
+            let operation = match operation {
+                Some(true) => zkc_runtime::vm::NativeProofOperation::Prove,
+                Some(false) => zkc_runtime::vm::NativeProofOperation::Verify,
+                None => return Err("native-proof-role-map".into()),
+            };
+            NativeProofEntry::new_for_operation(
+                admitted,
+                entry,
+                producer,
+                validator,
+                acceptance,
+                construction,
+                operation,
+                &public.iter().map(|p| p.original).collect::<Vec<_>>(),
+            )
+        } else {
+            NativeProofEntry::new(
+                admitted,
+                entry,
+                producer,
+                validator,
+                acceptance,
+                construction,
+            )
+        }
         .map_err(|e| e.to_string())?;
         Ok(Self {
             ring_assets: Default::default(),
             relation_assets: Default::default(),
             ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
+            sequence_work_limit: 16_777_216,
+            shared_ledger: None,
+            retained_inputs,
+            operation,
+            proof_bytes_limit: MAX_PROOF_BYTES,
             publication: expected_sha256.to_owned(),
             choices: [
                 choices[0] == "true",
@@ -373,6 +453,10 @@ impl NativeDeployment {
             entry: proof_entry,
             source,
             descriptor: envelope[2].clone(),
+            binding_metadata_bytes: logical::tree_size(&envelope[2])
+                .map_err(|e| e.to_string())?
+                .saturating_mul(8)
+                .saturating_add(4096),
             format: policy.format,
             public,
             maps,
@@ -396,6 +480,9 @@ impl NativeDeployment {
         // Source-port correspondence and canonical public agreement were
         // checked at admission/input loading. Neither role nor value equality
         // grants publicity to proof bytes, resources or private inputs.
+        if self.shared_ledger.is_some() {
+            return call(runner);
+        }
         let public = self.maps[&role.role]
             .data
             .iter()
@@ -458,6 +545,9 @@ impl NativeDeployment {
                 .collect(),
             public: &self.public,
             roles: &self.maps,
+            operation: self.operation,
+            producer: policy[2].as_str().expect("admitted producer"),
+            validator: policy[3].as_str().expect("admitted validator"),
         }
     }
 
@@ -475,6 +565,26 @@ impl NativeDeployment {
         Ok(self)
     }
 
+    /// Share invocation-wide charging with every reached runner and attempt.
+    pub fn with_shared_ledger(mut self, ledger: zkc_runtime::vm::ExecutionLedger) -> Self {
+        self.shared_ledger = Some(ledger);
+        self
+    }
+    pub(crate) fn with_invocation_limits(
+        mut self,
+        capacity: Capacity,
+        external: u64,
+        ring: u64,
+        sequence: u64,
+        proof_bytes: usize,
+    ) -> Self {
+        self.capacity = capacity;
+        self.external_work_limit = external;
+        self.ring_work_limit = ring;
+        self.sequence_work_limit = sequence;
+        self.proof_bytes_limit = proof_bytes.min(MAX_PROOF_BYTES);
+        self
+    }
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
     /// Authored execution follows the pinned program's own binding algorithm.
@@ -520,17 +630,22 @@ impl NativeDeployment {
         self.prepare_inputs(input, invocation.is_producer(), &mut imports)
             .map(|_| ())
     }
+    fn selected_role(&self, producing: bool) -> Result<&EntryRole> {
+        (if producing {
+            self.entry.producer()
+        } else {
+            self.entry.validator()
+        })
+        .ok_or_else(|| "native-proof-operation".into())
+    }
     fn prepare_inputs(
         &self,
         input: &ProofInputs,
         producer: bool,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<inputs::Prepared> {
-        let role = if producer {
-            self.entry.producer()
-        } else {
-            self.entry.validator()
-        };
+        imports.set_ledger(self.shared_ledger.clone());
+        let role = self.selected_role(producer)?;
         inputs::prepare(self, input, role, producer, imports)
     }
     fn execute_with_imports(
@@ -545,14 +660,10 @@ impl NativeDeployment {
             Mode::Verify(proof) => (Some(proof), None),
             Mode::Attempts(plan) => (None, Some(plan)),
         };
-        if proof.is_some_and(|p| p.len() > MAX_PROOF_BYTES) {
+        if proof.is_some_and(|p| p.len() > self.proof_bytes_limit) {
             return Err("native-proof-proof-limit".into());
         }
-        let role = if proof.is_none() {
-            self.entry.producer()
-        } else {
-            self.entry.validator()
-        };
+        let role = self.selected_role(proof.is_none())?;
         let mapping = &self.maps[&role.role];
         let inputs::Prepared {
             mut backend,
@@ -560,6 +671,8 @@ impl NativeDeployment {
             planned,
             root,
             binding,
+            loading,
+            encoding,
         } = self.prepare_inputs(input, proof.is_none(), imports)?;
         let policy = self.capacity.backend();
         let transcript_budget = input.transcript_budget;
@@ -573,6 +686,7 @@ impl NativeDeployment {
         let registry = ServiceRegistry::new(policy);
         let mut resources: Vec<Capability> = Vec::new();
         let mut services: Vec<ServiceReference> = Vec::new();
+        let mut retained = encoding;
         let setup = (|| -> Result<Vec<Value>> {
             let mut values = Vec::new();
             for (item, port) in planned.into_iter().zip(&mapping.data) {
@@ -614,6 +728,10 @@ impl NativeDeployment {
                 && let Some(proof) = proof
             {
                 let ty = &role.inputs.last().expect("admitted codec input").1;
+                retained.extend(crate::host::shared::allocation(
+                    self.shared_ledger.as_ref(),
+                    proof.len().saturating_add(512),
+                )?);
                 values.push(
                     backend
                         .decode_raw_bytes(ty, proof)
@@ -640,6 +758,9 @@ impl NativeDeployment {
             Ok(values)
         })();
         let mut report = NativeProofReport {
+            verification: None,
+            retained,
+            retained_outputs: Vec::new(),
             execution_counts: Default::default(),
             outputs: None,
             outcome: Ok(Vec::new()),
@@ -656,6 +777,7 @@ impl NativeDeployment {
             usage: Default::default(),
             external_work: 0,
             ring_work: 0,
+            sequence_work: 0,
             ring_work_limit: self.ring_work_limit,
             external_work_limit: self.external_work_limit,
             cleanup_errors: Vec::new(),
@@ -678,15 +800,23 @@ impl NativeDeployment {
                     &mut report,
                 );
             }
-            Ok(values) => match Runner::new_with_budgets(
+            Ok(values) => match Runner::new_for_role_with_ledger(
                 self.entry.admitted(),
                 self.entry.entry(),
                 &role.role,
                 "native-proof",
                 backend,
                 values,
-                self.capacity.values,
+                zkc_runtime::vm::ValueBudget {
+                    live_bytes: self
+                        .capacity
+                        .values
+                        .live_bytes
+                        .saturating_sub(loading.as_ref().map_or(0, |v| v.bytes())),
+                    ..self.capacity.values
+                },
                 self.capacity.work,
+                self.shared_ledger.clone(),
             ) {
                 Err(failed) => {
                     report.outcome = Err(failed.error.to_string());
@@ -697,17 +827,19 @@ impl NativeDeployment {
                     match proof {
                         None => {
                             let produced = self.prepared_call(&mut runner, role, |runner| {
-                                driver::produce_native(
+                                driver::produce_native_shared(
                                     runner,
                                     &binding,
                                     self.transport(),
-                                    MAX_PROOF_BYTES,
+                                    self.proof_bytes_limit,
+                                    self.shared_ledger.clone(),
                                 )
                             });
                             retain_driver_stop(&mut report, &produced);
                             report.outcome = produced
                                 .outcome
                                 .map(|p| {
+                                    report.retained.extend(p.retained);
                                     report.outputs = Some(self.original_outputs(role, p.outputs));
                                     p.proof
                                 })
@@ -718,15 +850,23 @@ impl NativeDeployment {
                         }
                         Some(proof) => {
                             let validated = self.prepared_call(&mut runner, role, |runner| {
-                                driver::validate_native(
+                                driver::validate_native_shared(
                                     runner,
                                     proof,
                                     &binding,
                                     self.transport(),
                                     self.entry.acceptance(),
+                                    self.shared_ledger.clone(),
                                 )
                             });
                             retain_driver_stop(&mut report, &validated);
+                            report.verification = match &validated.outcome {
+                                Ok(_) => Some(VerificationDecision::Accepted),
+                                Err(driver::ArtifactFailure::Rejected) => {
+                                    Some(VerificationDecision::Rejected)
+                                }
+                                Err(_) => None,
+                            };
                             report.outcome = validated
                                 .outcome
                                 .map(|values| {
@@ -742,13 +882,16 @@ impl NativeDeployment {
                     report.usage = runner.usage();
                     report.execution_counts = runner.execution_counts();
                     report.return_at = runner.early_return().map(|(o, s)| (o.clone(), s.into()));
-                    backend = runner.into_backend();
+                    let (returned_backend, outputs) = runner.into_retained_outputs();
+                    report.retained_outputs.extend(outputs);
+                    backend = returned_backend;
                 }
             },
         }
         report.instructions = report.usage.instructions;
         report.external_work = backend.external_work_spent();
         report.ring_work = backend.ring_work_spent();
+        report.sequence_work = backend.sequence_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
         Ok(report)
     }
@@ -823,7 +966,18 @@ fn budget(value: &Json) -> Result<u64> {
     inputs::check_budget(n)?;
     Ok(n)
 }
+/// The verifier's semantic decision after consuming the complete proof.
+/// Operational and cleanup failures remain separate in the execution report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VerificationDecision {
+    Accepted,
+    Rejected,
+}
+
 pub struct NativeProofReport {
+    /// Present only when the verifier returned a Boolean decision after proof
+    /// framing completed. A later cleanup failure does not erase that decision.
+    pub verification: Option<VerificationDecision>,
     pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     pub outcome: Result<Vec<u8>>,
     /// Successful copyable results indexed by their original protocol output
@@ -845,10 +999,13 @@ pub struct NativeProofReport {
     pub usage: zkc_runtime::vm::Usage,
     pub external_work: u64,
     pub ring_work: u64,
+    pub sequence_work: u64,
     pub ring_work_limit: u64,
     pub external_work_limit: u64,
     /// Cleanup failures remain separate from the primary body failure.
     pub cleanup_errors: Vec<String>,
+    retained_outputs: Vec<zkc_runtime::vm::RetainedOutputs<Value>>,
+    retained: Vec<zkc_runtime::vm::LiveReservation>,
 }
 fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     json!({"origin":s.origin.json(),"role":s.role,"site":s.site,
@@ -857,9 +1014,34 @@ fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
         "cleanup_errors":s.cleanup_errors.iter().map(ToString::to_string).collect::<Vec<_>>()})
 }
 impl NativeProofReport {
+    /// A completed verification may reject normally. Never infer that case from
+    /// diagnostic strings, and never turn an operational failure into rejection.
+    pub fn verification_result(&self) -> Option<bool> {
+        if self.cancelled || self.stop.is_some() || !self.cleanup_errors.is_empty() {
+            return None;
+        }
+        self.verification
+            .map(|decision| decision == VerificationDecision::Accepted)
+    }
+
+    /// Bounded child receipt; no proof bytes, outputs or complete attempt trees.
+    pub fn diagnostics_summary(&self) -> Json {
+        use crate::host::diagnostics::{message, stop, values};
+        json!({"verification_decision":self.verification.map(|d|match d {VerificationDecision::Accepted=>"accepted",VerificationDecision::Rejected=>"rejected"}),
+            "usage":{"instructions":self.usage.instructions,"iterations":self.usage.iterations,"total_value_bytes":self.usage.total_value_bytes,"logical_bytes":self.usage.logical_bytes},
+            "binding_sha256":self.binding,"messages":self.messages,"bytes":self.bytes,"cancelled":self.cancelled,
+            "stop":self.stop.as_ref().map(stop),"cleanup_errors":self.cleanup_errors.iter().take(16).map(|e|message(e)).collect::<Vec<_>>(),
+            "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),"resources":values(self.resources.iter()),
+            "resource_count":self.resources.len(),"attempt_count":self.attempts.len(),
+            "attempts":self.attempts.iter().take(16).map(|a|json!({"attempt":a.attempt,"decision":a.decision.as_ref().map_err(|e|message(e)),"stop":a.stop.as_ref().map(stop)})).collect::<Vec<_>>()})
+    }
     /// Payload-free execution diagnostics, including failed attempts and cleanup.
     pub fn diagnostics(&self) -> Json {
         let mut report = json!({});
+        report["verification_decision"] = json!(self.verification.map(|decision| match decision {
+            VerificationDecision::Accepted => "accepted",
+            VerificationDecision::Rejected => "rejected",
+        }));
         report["binding_sha256"] = json!(self.binding);
         report["messages"] = json!(self.messages);
         report["bytes"] = json!(self.bytes);
@@ -876,6 +1058,7 @@ impl NativeProofReport {
         report["cleanup_errors"] = json!(self.cleanup_errors);
         report["external_work"] = json!(self.external_work);
         report["ring_work"] = json!(self.ring_work);
+        report["sequence_work"] = json!(self.sequence_work);
         report["ring_work_limit"] = json!(self.ring_work_limit);
         report["external_work_limit"] = json!(self.external_work_limit);
         report["iterations"] = json!(self.usage.iterations);
@@ -900,3 +1083,22 @@ pub(crate) mod cli;
 
 #[cfg(test)]
 mod tests;
+
+impl std::fmt::Debug for NativeDeployment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeDeployment")
+            .field("publication", &self.publication)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for NativeProofReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeProofReport")
+            .field("verification", &self.verification)
+            .field("bytes", &self.bytes)
+            .field("stop", &self.stop)
+            .field("cleanup_errors", &self.cleanup_errors)
+            .finish_non_exhaustive()
+    }
+}

@@ -1,12 +1,10 @@
 //! Resolve the complete invocation before opening inputs or publishing outputs.
 use super::{inputs::Operation, *};
-use crate::project::{Artifact, Layout, input_path};
-use rand::{TryRng, rngs::SysRng};
+use crate::project::{Artifact, CheckedInterface, Layout, input_path};
 use std::{collections::BTreeMap, path::PathBuf};
 
 pub(super) struct Invocation {
     pub inputs: BTreeMap<String, PathBuf>,
-    pub session: Option<String>,
     pub proof: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub results: Option<PathBuf>,
@@ -14,7 +12,7 @@ pub(super) struct Invocation {
 }
 impl Invocation {
     pub fn resolve(
-        interface: &Interface,
+        interface: &CheckedInterface,
         layout: Option<&Layout>,
         args: &Arguments<'_>,
         operation: Operation,
@@ -23,15 +21,8 @@ impl Invocation {
     ) -> Result<Self> {
         let mut inputs = BTreeMap::new();
         if operation == Operation::Run {
-            for (_, value) in args.options.iter().filter(|(key, _)| *key == "--input") {
-                let (role, path) = inputs::assignment(value.unwrap())?;
-                if !interface.roles().iter().any(|r| r.name == role)
-                    || inputs
-                        .insert(role.to_owned(), PathBuf::from(path))
-                        .is_some()
-                {
-                    return Err("entry-input-roles".into());
-                }
+            if let Some(path) = args.value("--input") {
+                inputs.insert("arguments".into(), PathBuf::from(path));
             }
         } else {
             for name in if operation == Operation::Prove {
@@ -61,24 +52,11 @@ impl Invocation {
         }
         let mut invocation = Self {
             inputs,
-            session: None,
             proof: None,
             output: None,
             results: None,
             default_outputs: Vec::new(),
         };
-        if operation == Operation::Run {
-            invocation.session = Some(match args.value("--session") {
-                Some(session) => session.to_owned(),
-                None => {
-                    let mut bytes = [0; 16];
-                    SysRng
-                        .try_fill_bytes(&mut bytes)
-                        .map_err(|_| "entry-session-random")?;
-                    hex(&bytes)
-                }
-            });
-        }
         if !checking {
             let mut output =
                 |flag: &str, kind: Artifact, required: bool| -> Result<Option<PathBuf>> {
@@ -124,9 +102,6 @@ impl Invocation {
                 report[name] = json!(path);
             }
         }
-        if let Some(session) = &invocation.session {
-            report["session"] = json!(session);
-        }
         Ok(invocation)
     }
 
@@ -168,7 +143,9 @@ impl Invocation {
 pub(super) fn protect_options(args: &Arguments<'_>, outputs: &mut Outputs) -> Result<()> {
     for &(key, value) in &args.options {
         match key {
-            "--setups" | "--capacity" | "--limits" => outputs.protect([value.unwrap()])?,
+            "--setups" | "--capacity" | "--limits" | "--invocations" => {
+                outputs.protect([value.unwrap()])?
+            }
             "--key" => outputs.protect([inputs::assignment(value.unwrap())?.1])?,
             _ => (),
         }

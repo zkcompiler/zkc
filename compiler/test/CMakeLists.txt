@@ -467,3 +467,8 @@ add_zkc_test(kernel_schedule Transforms kernel-schedule)
 target_compile_definitions(zkc-kernel_schedule-test PRIVATE
   ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-kernel_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
+
+add_zkc_test(host_entry Compiler host-entry)
+mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
+
+add_zkc_test(language_entry_functions Language language-entry-functions)

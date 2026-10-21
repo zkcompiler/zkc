@@ -22,6 +22,62 @@ pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
     }
     Ok(())
 }
+pub(super) fn check_host_ports(
+    interface: &Interface,
+    operation: Option<super::ProofOperation>,
+) -> Result<(), String> {
+    let roles = interface.roles().iter().filter(|role| {
+        operation.is_none_or(|operation| {
+            let proof = interface.proof().expect("proof operation");
+            role.native_name
+                == interface.roles()[if operation == super::ProofOperation::Prove {
+                    proof.prover
+                } else {
+                    proof.verifier
+                }]
+                .native_name
+        })
+    });
+    for role in roles {
+        for port in interface.input_ports(role) {
+            if port.key.is_none() {
+                value::check_export(&port.schema)?;
+            }
+        }
+        for port in interface.output_ports(role) {
+            value::check_export(&port.schema)?;
+        }
+    }
+    // Public binding must still have the native owner's canonical codec.
+    if operation.is_some() {
+        for port in interface.public_ports() {
+            if port.key.is_none() {
+                check_input(interface, &port.schema)?;
+            }
+        }
+    }
+    Ok(())
+}
+pub(super) fn check_proof_ports(
+    interface: &Interface,
+    operation: super::ProofOperation,
+) -> Result<(), String> {
+    let proof = interface.proof().ok_or("entry-job-kind")?;
+    let role = &interface.roles()[if operation == super::ProofOperation::Prove {
+        proof.prover
+    } else {
+        proof.verifier
+    }];
+    for port in interface.public_ports().chain(interface.input_ports(role)) {
+        if port.key.is_none() {
+            check_input(interface, &port.schema)?;
+        }
+    }
+    for port in interface.output_ports(role) {
+        value::check_export(&port.schema)?;
+    }
+    Ok(())
+}
 pub(super) fn check_input(interface: &Interface, schema: &Schema) -> Result<(), String> {
     value::check_import(schema)?;
     if !schema.leaves.iter().all(|leaf| {

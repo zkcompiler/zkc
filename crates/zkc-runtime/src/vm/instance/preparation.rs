@@ -37,11 +37,14 @@ fn shared_bytes<V: Value>(values: &[V], retained: crate::vm::Retained<'_>) -> Op
 }
 impl<B: Backend> Instance<B> {
     pub(crate) fn owns_preparation(&self, cache: &PreparedComputations<B>) -> bool {
-        Arc::ptr_eq(&cache.executable, &self.admitted.executable)
+        self.shared.is_none() && Arc::ptr_eq(&cache.executable, &self.admitted.executable)
     }
     pub(crate) fn deterministic(&self, code: &LocalCode) -> bool {
         code.instructions.iter().all(|op| match op {
-            Operation::Op { call, .. } => self.operations[call.binding.index].deterministic(),
+            Operation::Op { call, .. } => self.operations[call.binding.index]
+                .as_ref()
+                .expect("installed root binding")
+                .deterministic(),
             Operation::Conditional {
                 then_body,
                 else_body,
@@ -78,6 +81,9 @@ impl<B: Backend> Instance<B> {
         key: &Key,
     ) -> Option<Transfer<B::Value>> {
         debug_assert!(self.owns_preparation(cache));
+        if self.shared.is_some() {
+            return None;
+        }
         let evaluation = cache.get(key)?;
         if !self.available().dominates(evaluation.available) {
             return None;

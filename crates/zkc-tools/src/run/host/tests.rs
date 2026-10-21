@@ -699,3 +699,62 @@ fn ring_work_limit_cannot_raise_the_host_ceiling() {
         "bundle-ring-work-limit"
     );
 }
+
+#[test]
+fn independent_concurrent_hosts_charge_the_same_ledger_before_execution() {
+    use std::sync::Barrier;
+    use zkc_runtime::vm::{ExecutionLedger, ValueBudget, WorkBudget};
+    let ledger = ExecutionLedger::new(
+        ValueBudget {
+            live_bytes: 64 * 1024,
+            total_bytes: 1024 * 1024,
+        },
+        WorkBudget {
+            instructions: 1,
+            ..Default::default()
+        },
+    );
+    let barrier = Arc::new(Barrier::new(2));
+    let threads = (0..2)
+        .map(|_| {
+            let ledger = ledger.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let (raw, _) = fixture("bool");
+                let mut artifact: Json = serde_json::from_slice(&raw).unwrap();
+                let mut program: Json =
+                    serde_json::from_str(artifact["candidate"].as_str().unwrap()).unwrap();
+                program[3].as_array_mut().unwrap().truncate(1);
+                program[4][0][2].as_array_mut().unwrap().truncate(1);
+                artifact["candidate"] = json!(program.to_string());
+                artifact["roles"] = json!(["Alice"]);
+                artifact["steps"].as_array_mut().unwrap().truncate(1);
+                let mut limits = HostLimits::default();
+                limits.capacity.values.live_bytes = 8192;
+                let raw = artifact.to_string();
+                let host = host(raw.as_bytes(), limits).with_shared_ledger(ledger);
+                let request = RunInputs {
+                    session: "concurrent".into(),
+                    roles: vec![RoleInputs {
+                        role: "Alice".into(),
+                        inputs: vec![Value::Bool(true).into()],
+                        services: vec![],
+                    }],
+                    setups: Default::default(),
+                };
+                let prepared = host.prepare_typed(&request).unwrap();
+                barrier.wait();
+                let report = prepared.execute();
+                report.execution.as_ref().unwrap().outcome == Outcome::Completed
+            })
+        })
+        .collect::<Vec<_>>();
+    let success = threads
+        .into_iter()
+        .map(|t| t.join().unwrap())
+        .filter(|success| *success)
+        .count();
+    assert_eq!(success, 1);
+    assert_eq!(ledger.snapshot().instructions, 1);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, records
 
 commands = Commands(records())
@@ -78,8 +79,9 @@ def run(text, refusal=None):
 with case('source-component-contracts-use-the-existing-product-layout'):
     fixture = Path(__file__).parent / 'fixtures/structured-source/declaration-contracts.zkc'
     flags = ['--source-format=zkc', '--entry=sample::Demo', f'--module=sample={fixture}']
-    emitted = commands.run([compiler, 'language-emit', *flags])
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags]))
+    package = compile_run_package(commands, *flags)
+    emitted = package['original']
+    interface = json.loads(package['interface'])
     snapshot = export(emitted, symbol=interface['protocol'])
     owners = dict(snapshot[8])
     assert owners[interface['protocol']] == []

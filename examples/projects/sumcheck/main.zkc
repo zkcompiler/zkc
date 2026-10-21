@@ -9,4 +9,6 @@ proof Proof = Sumcheck<Fr, 2> {
   accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run Interactive = Sumcheck<Fr, 2>;
+entry fn Interactive(inputs: Sumcheck<Fr, 2>::Inputs) {
+  return Sumcheck<Fr, 2>::run(inputs);
+}

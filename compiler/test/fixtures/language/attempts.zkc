@@ -30,4 +30,4 @@ proof Plain=Authored{
   construction authored;
 }
 proof Once=Authored{prover P;verifier V;public{};accept accepted;construction authored;}
-run Run=Round;
+entry fn Run(inputs: Round::Inputs) { return Round::run(inputs); }

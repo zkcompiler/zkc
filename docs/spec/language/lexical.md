@@ -39,7 +39,7 @@ Default-ignorable and bidi-control characters outside comments are illegal code
 tokens and never whitespace. This is not a whole-buffer comment-content ban or
 a guarantee against visually confusable identifiers.
 
-Keywords remain reserved except in explicitly contextual positions. `run`,
+Keywords remain reserved except in explicitly contextual positions. `entry`,
 `proof`, `operator`, `as`, `primitive`, `notation`, `infixl`, `infixr`, `infix`,
 `prefix` and `postfix` have special meanings in their declaration or import
 grammar; elsewhere they remain available as ordinary names. `effects` introduces

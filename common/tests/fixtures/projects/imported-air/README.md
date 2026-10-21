@@ -70,9 +70,14 @@ From the repository root:
 zkc compile --project=common/tests/fixtures/projects/imported-air/zkc.toml \
   imported_air::TraceResiduals \
   --output=trace.zkpkg
-zkc run --package=trace.zkpkg --sha256=EXPECTED_SHA256 --session=recurrence \
-  --input=Evaluator=compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json \
-  --results=results.json
+python3 - <<'PYTHON'
+import json
+from pathlib import Path
+values = json.loads(Path("compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json").read_text())
+Path("arguments.json").write_text(json.dumps({"inputs": {"Evaluator": values}}))
+PYTHON
+zkc run --package=trace.zkpkg --sha256=EXPECTED_SHA256 \
+  --input=arguments.json --results=results.json
 ```
 
 Use the package digest returned by `compile`. `results.json` has format

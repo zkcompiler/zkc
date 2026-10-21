@@ -23,7 +23,7 @@ protocol Run roles(P)(xs:Vector<F>@P,needle:F@P)
   let again=v::find_last(xs,needle);
   return(position=position,again=again,unchanged=xs);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
                   [*library_modules(*core_packages()), *flags])

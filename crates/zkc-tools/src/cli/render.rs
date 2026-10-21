@@ -71,18 +71,23 @@ pub fn human(report: &Value) -> String {
                 }
             }
         }
-        if let Some(roles) = execution["roles"].as_array() {
-            for role in roles {
-                let stopped = [&role["before"], &role["after"]]
-                    .into_iter()
-                    .find(|state| state[0] == "stopped");
-                if let (Some(state), Some(name)) = (stopped, role["role"].as_str()) {
-                    stop(&mut text, report, name, &state[1]);
+        stops(&mut text, execution, &report["role_names"]);
+        if let Some(calls) = execution["calls"].as_array() {
+            for call in calls {
+                let Some(id) = call["target"].as_str() else {
+                    continue;
+                };
+                let mut details = String::new();
+                stops(
+                    &mut details,
+                    &call["native"],
+                    &report["invocation_role_names"][id],
+                );
+                if !details.is_empty() {
+                    writeln!(text, "Invocation {id}:").unwrap();
+                    text.push_str(&details);
                 }
             }
-        }
-        if let Some(role) = execution["stop"]["role"].as_str() {
-            stop(&mut text, report, role, &execution["stop"]["kind"]);
         }
         if report["code"] == "entry-input-document" || report["code"] == "entry-input-missing" {
             text.push_str("Check the selected input paths; use zkc prepare to create missing project templates.\n");
@@ -95,6 +100,9 @@ pub fn human(report: &Value) -> String {
         }
         if report["code"] == "entry-output-codec" {
             text.push_str("An output has no file codec. For run, use --no-results to execute without result publication.\n");
+        }
+        if report["code"] == "entry-setup-authority" && report["invocations"].is_array() {
+            text.push_str("Provide independent child setup authority with --invocations=FILE. Inspect the compiled package for exact deployment IDs and setup slots.\n");
         }
         if let Some(published) = report["publication"]["published"]
             .as_array()
@@ -115,7 +123,7 @@ pub fn human(report: &Value) -> String {
     }
     let status = match report["status"].as_str().unwrap_or("") {
         "checked" => "Source checks passed.",
-        "inputs-checked" => "Inputs checked; no protocol was executed.",
+        "inputs-checked" => "Inputs checked; no entry was executed.",
         "compiled" => "Entry compiled.",
         "initialized" => "Initialized. Fill the input values before execution.",
         "prepared" => "Prepared. Existing input values were preserved.",
@@ -143,7 +151,7 @@ pub fn human(report: &Value) -> String {
     {
         text.push_str("Use zkc prepare when input templates are needed.\n");
     }
-    for key in ["interface", "declarations", "notations"] {
+    for key in ["interface", "invocations", "declarations", "notations"] {
         if !report[key].is_null() {
             writeln!(
                 text,
@@ -165,13 +173,29 @@ pub fn human(report: &Value) -> String {
     }
     text
 }
-fn stop(text: &mut String, report: &Value, native_role: &str, reason: &Value) {
-    let name = report["role_names"][native_role]
-        .as_str()
-        .unwrap_or(native_role);
+fn stops(text: &mut String, execution: &Value, names: &Value) {
+    if let Some(roles) = execution["roles"].as_array() {
+        for role in roles {
+            let stopped = [&role["before"], &role["after"]]
+                .into_iter()
+                .find(|state| state[0] == "stopped");
+            if let (Some(state), Some(name)) = (stopped, role["role"].as_str()) {
+                stop(text, names, name, &state[1]);
+            }
+        }
+    }
+    if let Some(role) = execution["stop"]["role"].as_str() {
+        stop(text, names, role, &execution["stop"]["kind"]);
+    }
+}
+fn stop(text: &mut String, names: &Value, native_role: &str, reason: &Value) {
+    let name = names[native_role].as_str().unwrap_or(native_role);
     writeln!(text, "Stopped {name}: {reason}").unwrap();
 }
 fn requirements(requirements: &Value, text: &mut String) {
+    if requirements["invocations"] == "--invocations=FILE" {
+        text.push_str("Override static child invocation policy with --invocations=FILE.\n");
+    }
     if requirements["allow_authored"] == true {
         text.push_str("Authored proof: explicit --allow-authored is required.\n");
     }

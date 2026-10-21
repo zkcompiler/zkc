@@ -567,7 +567,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
         }
         insert(&mut entries, name(&a[1])?, roles, ErrorCode::Symbol)?;
     }
-    if entries.is_empty() {
+    if entries.is_empty() && (functions.is_empty() || !participants.is_empty()) {
         return Err(err(ErrorCode::Symbol, "module has no entry"));
     }
     for name in decoder.bindings.keys() {

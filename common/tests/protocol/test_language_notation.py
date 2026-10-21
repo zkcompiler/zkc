@@ -30,7 +30,7 @@ fn work(initial:index)->(index,index,index,index){
 protocol Run roles(P)(initial:index@P)->(result:(index,index,index,index)@P){
   return work(initial);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     operands = ','.join('{state=state+1;state}' for _ in range(3))
     source = source.replace('CALL', f'⟪{operands}⟫' if symbolic else f'reversed({operands})')
@@ -52,10 +52,10 @@ fn 計算(α:index,β₂:index)->状態{return 状態::完了(α+β₂);}
 protocol 実行 roles(参加者)(α:index@参加者,β₂:index@参加者)->(結果:状態@参加者){
   return 計算(α,β₂);
 }
-run Demo=実行;
+entry fn Demo(inputs: 実行::Inputs) { return 実行::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    assert entry.run_roles('unicode', {'参加者': {'inputs': {'α': '4', 'β₂': '7'}}}) == {
+    assert entry.run_roles('unicode', {'参加者': {'α': '4', 'β₂': '7'}}) == {
         '参加者': {'結果': {'case': '完了', 'fields': {'0': '11'}}},
     }
 
@@ -71,12 +71,12 @@ fn work(go:bool,eager:bool)->bool{
   return if eager { ⟪false,⊢go⟫ } else { false && ⊢go };
 }
 protocol Run roles(P)(go:bool@P,eager:bool@P)->(result:bool@P){return work(go,eager);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('skipped', {'go': False, 'eager': False}) == {'result': False}
     assert entry.run('accepted', {'go': True, 'eager': True}) == {'result': False}
-    entry.run('refused', {'go': False, 'eager': True}, refuses='entry-run-incomplete')
+    entry.run('refused', {'go': False, 'eager': True}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -98,17 +98,15 @@ def test_published_vector_notation_project(toolchain, journal, directory, flags)
     def vector(values):
         return [str(n) for n in values]
 
-    inputs = input_files(journal, 'notation', session='mathematical_notation', roles={
-        'P': {'inputs': {
+    inputs = input_files(journal, 'notation', session='mathematical_notation', package=package, arguments={'inputs': {'P': {
             'a': vector([2, 3]), 'b': vector([5, 7]),
             'weights': vector([11, 13]), 'α': scalar(2),
-        }},
-    })
+        }}})
     output = directory / 'output.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f"--sha256={built['package_sha256']}", *inputs, f'--results={output}'])
     assert report['status'] == 'executed'
-    assert json.loads(output.read_text())['roles']['P'] == {
+    assert json.loads(output.read_text())['value']['P'] == {
         'symbolic': scalar(231), 'named_result': scalar(231),
         'pointwise': vector([10, 21]),
     }
@@ -153,6 +151,6 @@ def test_notation_example_runs_with_its_supplied_inputs(toolchain, journal, dire
     journal.json([*runtime, 'inputs', 'check', '--operation=run', compiler], cwd=project)
     journal.json([*runtime, 'run', compiler], cwd=project)
     results = json.loads((project / 'build/zkc/example.Run.results.json').read_text())
-    assert results['roles']['P'] == {
+    assert results['value']['P'] == {
         'symbolic': '231', 'named_result': '231', 'pointwise': ['10', '21'],
     }

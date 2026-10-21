@@ -124,18 +124,24 @@ class RunCorrespondence {
           return false;
         Cursor enter{*group->getArray("loop")};
         SmallVector<unsigned> owners;
-        for (auto owner : repeat.getRoles()) {
-          auto role = index(cast<StringAttr>(owner).getValue());
-          if (!role || !prefix(enter, *role, source))
+        // Loop boundaries use the enclosing participant roster, as do the
+        // projected targets. Application substitution can permute the loop's
+        // owner set without changing that execution coordinate order.
+        for (unsigned role = 0; role < roles.size(); ++role) {
+          if (!llvm::is_contained(
+                  repeat.getRoles(),
+                  StringAttr::get(op.getContext(), roles[role].program->role)))
+            continue;
+          if (!prefix(enter, role, source))
             return false;
-          auto *instruction = next(*role);
+          auto *instruction = next(role);
           auto *loop =
               instruction ? instruction->get<program::Loop>() : nullptr;
           if (!loop || instruction->site != repeat.getSite() ||
               loop->count.maximum != repeat.getMaximum() ||
-              !step(enter, *role, source))
+              !step(enter, role, source))
             return false;
-          owners.push_back(*role);
+          owners.push_back(role);
         }
         Cursor inner{*group->getArray("body")};
         if (!enter.done() ||

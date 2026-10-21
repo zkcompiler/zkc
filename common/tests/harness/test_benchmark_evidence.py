@@ -82,9 +82,9 @@ def test_backend_variant_mutations(evidence, kind, fault):
         elif fault == 'nested_missing': del backend['inputs'][0]['public']
         else: backend['inputs'][0]['witness'] = []
     elif kind == 'run':
-        if fault == 'nested_unknown': backend['roles']['P'] = {'path': 'input.json'}
+        if fault == 'nested_unknown': backend['arguments'] = {'path': 'input.json'}
         elif fault == 'nested_missing': del backend['accept_role']
-        else: backend['roles'] = ['P']
+        else: backend['arguments'] = ['input.json']
     elif kind in ('schnorr', 'monero'): backend['witness'] = {}
     else: backend['witness'] = None  # Sumcheck has no witness field.
     with pytest.raises(io.MeasurementError): results.validate_backend(backend)
@@ -199,7 +199,7 @@ def test_monero_negative_shape_and_optional_backend_fields(evidence):
 
 @pytest.mark.parametrize('kind,field', [
     ('host', field) for field in ('kind', 'ingress', 'package', 'sha256', 'inputs', 'preparation')
-] + [('run', field) for field in ('kind', 'ingress', 'package', 'sha256', 'roles', 'accept_role')]
+] + [('run', field) for field in ('kind', 'ingress', 'package', 'sha256', 'arguments', 'accept_role')]
   + [('sumcheck', 'public'), ('schnorr', 'public'), ('monero', 'public')])
 def test_every_required_backend_field_is_required(evidence, kind, field):
     results, io, fixtures = evidence
@@ -223,10 +223,10 @@ def test_host_backend_value_types(evidence, field, value):
 
 
 @pytest.mark.parametrize('field,value', [
-    ('roles', {}), ('roles', {'P': None}), ('roles', {'': 'input.json'}),
-    ('accept_role', []), ('accept_role', 'absent'), ('accept_role', ''),
+    ('arguments', {}), ('arguments', None), ('arguments', ''),
+    ('accept_role', []), ('accept_role', ''),
 ])
-def test_run_backend_role_selection(evidence, field, value):
+def test_function_backend_argument_and_result_selection(evidence, field, value):
     results, io, fixtures = evidence
     document = fixtures['ingress']
     document['matrix'][-1]['backend'][field] = value

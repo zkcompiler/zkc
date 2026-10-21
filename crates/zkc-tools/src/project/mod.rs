@@ -10,4 +10,6 @@ mod layout;
 pub use layout::{Artifact, Layout, input_path};
 mod preparation;
 pub use preparation::{Preparation, Template};
+mod inspection;
 mod selection;
+pub use inspection::CheckedInterface;

@@ -38,7 +38,11 @@ struct CheckedStorage {
 struct ClosedStorage {
   std::vector<Asset> assets;
   std::vector<Declaration> declarations;
-  DeclarationId protocol;
+  DeclarationId root;
+  std::optional<DeclarationId> protocol;
+  std::vector<ClosedInvocation> invocations;
+  std::optional<HostInvocation::Kind> invocationKind;
+  uint64_t work = 0;
 };
 struct AnalysisStorage {
   std::shared_ptr<const std::vector<SourceBuffer>> sources;

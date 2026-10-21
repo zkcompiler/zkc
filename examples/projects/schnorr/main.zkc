@@ -10,4 +10,6 @@ proof Proof = Schnorr<G> {
   target knowledge;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run Interactive = Schnorr<G>;
+entry fn Interactive(inputs: Schnorr<G>::Inputs) {
+  return Schnorr<G>::run(inputs);
+}

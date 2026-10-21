@@ -30,6 +30,12 @@ protocol Residual roles(P,V)
   let boundary = current - initial;
   return (value = transition * inverse_z + alpha * boundary);
 }
-run Helpers = WithHelper;
-run Expanded = Inline;
-run AirResidual = Residual;
+entry fn Helpers(inputs: WithHelper::Inputs) {
+  return WithHelper::run(inputs);
+}
+entry fn Expanded(inputs: Inline::Inputs) {
+  return Inline::run(inputs);
+}
+entry fn AirResidual(inputs: Residual::Inputs) {
+  return Residual::run(inputs);
+}

@@ -1,7 +1,7 @@
 //! Per-bind admission and authenticated immutable import reuse. No global cache.
 mod native;
 use super::inputs::{Result, read_regular};
-pub(crate) use native::check_native_data;
+pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 use zkc_arkworks::{ProverKey, VerifierKey};
@@ -83,6 +83,11 @@ pub(crate) enum Input<'a> {
         verifier: Arc<VerifierKey>,
     },
     Ready(Value),
+    Retained {
+        ty: PhysicalType,
+        value: &'a Value,
+        selected: Option<Arc<VerifierKey>>,
+    },
 }
 impl<'a> Input<'a> {
     /// Borrow immutable application data until loading has reserved its full
@@ -116,6 +121,7 @@ impl<'a> Input<'a> {
             }
             Self::Key { .. } => Type::ProverKey,
             Self::Ready(value) => value.ty(),
+            Self::Retained { ty, .. } => ty.kind(),
         }
     }
     fn estimate(&self) -> Result<usize> {
@@ -124,6 +130,7 @@ impl<'a> Input<'a> {
                 Value::key_retained_bytes(Type::ProverKey, verifier).map_err(|e| e.to_string())
             }
             Self::Ready(value) => Ok(value.retained_bytes()),
+            Self::Retained { value, .. } => Ok(value.retained_bytes()),
             Self::Native { estimate, .. }
             | Self::NativeWire { estimate, .. }
             | Self::Variant { estimate, .. } => Ok(*estimate),
@@ -161,6 +168,9 @@ pub(crate) struct Admission<'a> {
     entry_bytes: usize,
     operands: usize,
     work: usize,
+    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    wire_retained: Vec<zkc_runtime::vm::LiveReservation>,
+    retained_inputs: bool,
 }
 impl<'a> Admission<'a> {
     pub fn new(limits: LoadLimits) -> Result<Self> {
@@ -176,15 +186,41 @@ impl<'a> Admission<'a> {
             entry_bytes: 0,
             operands: 0,
             work: 0,
+            ledger: None,
+            wire_retained: Vec::new(),
+            retained_inputs: false,
         })
     }
+    pub fn with_retained_inputs(mut self, enabled: bool) -> Self {
+        self.retained_inputs = enabled;
+        self
+    }
+    pub fn with_shared_ledger(mut self, ledger: Option<zkc_runtime::vm::ExecutionLedger>) -> Self {
+        self.ledger = ledger;
+        self
+    }
     pub fn work(&mut self, amount: usize) -> Result<()> {
+        let mut work = self.work;
         add(
-            &mut self.work,
+            &mut work,
             amount,
             self.limits.work,
             "artifact-input-work-limit",
-        )
+        )?;
+        if let Some(ledger) = &self.ledger {
+            ledger
+                .charge(
+                    zkc_runtime::vm::WorkBudget {
+                        instructions: 0,
+                        iterations: 0,
+                        logical_bytes: amount as u64,
+                    },
+                    0,
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        self.work = work;
+        Ok(())
     }
     /// Charge the scan before traversing framing, then reserve its retention.
     pub fn native_wire(
@@ -205,11 +241,25 @@ impl<'a> Admission<'a> {
         limit: usize,
     ) -> Result<Vec<u8>> {
         let remaining = self.limits.work - self.work;
-        let bytes = file.read(limit.min(remaining)).map_err(|e| match e {
-            super::io::ReadError::Limit if remaining < limit => "artifact-input-work-limit",
-            super::io::ReadError::Limit => "entry-input-reference-byte-limit",
-            _ => "entry-input-reference",
-        })?;
+        let bytes = if let Some(ledger) = &self.ledger {
+            let buffer = file
+                .read_shared(limit.min(remaining), ledger)
+                .map_err(|e| {
+                    if e == "entry-input-reference-byte-limit" && remaining < limit {
+                        "artifact-input-work-limit".into()
+                    } else {
+                        e
+                    }
+                })?;
+            self.wire_retained.extend(buffer.retained);
+            buffer.bytes
+        } else {
+            file.read(limit.min(remaining)).map_err(|e| match e {
+                super::io::ReadError::Limit if remaining < limit => "artifact-input-work-limit",
+                super::io::ReadError::Limit => "entry-input-reference-byte-limit",
+                _ => "entry-input-reference",
+            })?
+        };
         if <[u8; 32]>::from(Sha256::digest(&bytes)) != *sha256 {
             return Err("entry-input-reference-digest".into());
         }
@@ -284,6 +334,40 @@ impl<'a> Admission<'a> {
         self.private_operand(Value::capability_retained_bytes())?;
         Ok(Operand::Resource(input))
     }
+    /// Reserve the decoded pool before any decoder allocates. Loading also
+    /// charges conservative byte work separately from numerical execution.
+    pub fn load_shared(
+        self,
+        backend: &NativeBackend,
+        policy: &Policy,
+        ledger: &zkc_runtime::vm::ExecutionLedger,
+        metadata: usize,
+    ) -> Result<(Vec<Value>, zkc_runtime::vm::LiveReservation)> {
+        let bytes = self
+            .pool_bytes
+            .checked_add(metadata)
+            .ok_or("entry-host-loading-limit")?;
+        let work = if self.ledger.is_some() {
+            metadata
+        } else {
+            self.work
+                .checked_add(bytes)
+                .ok_or("entry-host-loading-limit")?
+        };
+        ledger
+            .charge(
+                zkc_runtime::vm::WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: work as u64,
+                },
+                bytes,
+            )
+            .map_err(|e| e.to_string())?;
+        let live = ledger.reserve_live(bytes).map_err(|e| e.to_string())?;
+        let values = self.load(backend, policy)?;
+        Ok((values, live))
+    }
     pub fn load(mut self, backend: &NativeBackend, policy: &Policy) -> Result<Vec<Value>> {
         // Work is a cumulative conservative proxy: bytes read/scanned plus
         // retained charges for every value, including cache hits. Reserve all
@@ -300,6 +384,7 @@ impl<'a> Admission<'a> {
         for (input, estimate) in std::mem::take(&mut self.inputs) {
             let value = match input {
                 Input::Ready(value) => value,
+                Input::Retained { value, .. } => value.clone(),
                 input @ (Input::Native { .. }
                 | Input::NativeWire { .. }
                 | Input::Variant { .. }) => native::load(backend, input)?,
@@ -313,22 +398,53 @@ impl<'a> Admission<'a> {
                     // Freeze precisely this named file into bounded owned bytes.
                     // Never reopen between SHA and import. Even a cache hit must
                     // satisfy this path's current captured bytes and declared pin.
-                    let bytes = match source {
-                        KeySource::Path(path) => read_regular(path, limit),
-                        KeySource::File(file) => file.read(limit).map_err(|e| match e {
-                            super::io::ReadError::Limit => "artifact-byte-limit".into(),
-                            _ => "entry-input-reference".into(),
-                        }),
-                    }
-                    .map_err(|e| {
-                        if e == "artifact-byte-limit" && remaining < policy.max_wire_bytes {
-                            "artifact-input-work-limit".into()
-                        } else {
-                            e
+                    let buffer = if let Some(ledger) = &self.ledger {
+                        Some(
+                            (match &source {
+                                KeySource::Path(path) => {
+                                    let mut file =
+                                        super::io::open_regular(path).map_err(|_| "artifact-io")?;
+                                    super::io::read_shared(&mut file, limit, Some(ledger))
+                                }
+                                KeySource::File(file) => file.read_shared(limit, ledger),
+                            })
+                            .map_err(|e| {
+                                if e == "entry-input-reference-byte-limit" {
+                                    if remaining < policy.max_wire_bytes {
+                                        "artifact-input-work-limit".into()
+                                    } else {
+                                        "artifact-byte-limit".into()
+                                    }
+                                } else {
+                                    e
+                                }
+                            })?,
+                        )
+                    } else {
+                        None
+                    };
+                    let unshared;
+                    let bytes = if let Some(buffer) = &buffer {
+                        &buffer.bytes
+                    } else {
+                        unshared = match source {
+                            KeySource::Path(path) => read_regular(path, limit),
+                            KeySource::File(file) => file.read(limit).map_err(|e| match e {
+                                super::io::ReadError::Limit => "artifact-byte-limit".into(),
+                                _ => "entry-input-reference".into(),
+                            }),
                         }
-                    })?;
+                        .map_err(|e| {
+                            if e == "artifact-byte-limit" && remaining < policy.max_wire_bytes {
+                                "artifact-input-work-limit".into()
+                            } else {
+                                e
+                            }
+                        })?;
+                        &unshared
+                    };
                     self.work(bytes.len())?;
-                    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+                    let digest: [u8; 32] = Sha256::digest(bytes).into();
                     // The material pin is NOT the wire SHA. Include both, and
                     // full VK bytes, so only a previously authenticated import
                     // can hit. A different file with a claimed pin must import.
@@ -346,7 +462,7 @@ impl<'a> Admission<'a> {
                         IMPORT_COUNT.with(|n| n.set(n.get() + 1));
                         let key = Arc::new(
                             ProverKey::from_bytes(
-                                &bytes,
+                                bytes,
                                 fingerprint,
                                 &verifier,
                                 &policy.ark_bounds(),

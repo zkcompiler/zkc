@@ -1,7 +1,7 @@
 //! Borrowed input groups and schema-directed readable values. Schema authority
 //! remains in Interface; decoders neither run protocols nor discover files.
 use super::{
-    Interface, NamedValues, Value,
+    FunctionInterface, Interface, NamedValues, Value,
     interface::{
         InputPort,
         raw::{Field, Kind, Schema},
@@ -15,10 +15,34 @@ use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{PhysicalType, Type};
 
-pub struct InputGroup<'a> {
-    pub(super) interface: &'a Interface,
+#[derive(Clone, Copy)]
+enum InputInterface<'a> {
+    Deployment(&'a Interface),
+    Function(&'a FunctionInterface),
+}
+impl<'a> InputInterface<'a> {
+    fn check_input(self, schema: &Schema) -> Result<(), String> {
+        match self {
+            Self::Deployment(v) => super::arguments::check_input(v, schema),
+            Self::Function(v) => v.check_input(schema).map_err(|e| e.to_string()),
+        }
+    }
+    fn logical_type(self, name: &str) -> Option<&'a zkc_runtime::vm::LogicalType> {
+        match self {
+            Self::Deployment(v) => v.logical_type(name),
+            Self::Function(v) => v.logical_type(name),
+        }
+    }
+}
+struct InputSchemaPort<'a> {
     name: &'a str,
-    pub(super) ports: Vec<InputPort<'a>>,
+    schema: &'a Schema,
+    key: Option<Type>,
+}
+pub struct InputGroup<'a> {
+    interface: InputInterface<'a>,
+    name: &'a str,
+    ports: Vec<InputSchemaPort<'a>>,
 }
 impl InputGroup<'_> {
     pub fn name(&self) -> &str {
@@ -34,11 +58,11 @@ impl InputGroup<'_> {
                 .iter()
                 .map(|p| {
                     (
-                        p.name.clone(),
+                        p.name.to_owned(),
                         if p.key == Some(Type::ProverKey) {
                             json!({"file":null,"fingerprint":null})
                         } else {
-                            template(&p.schema)
+                            template(p.schema)
                         },
                     )
                 })
@@ -52,10 +76,10 @@ impl InputGroup<'_> {
             .map(|port| {
                 json!({
                     "name": port.name,
-                    "schema": describe(&port.schema),
+                    "schema": describe(port.schema),
                     "initializer": (port.key == Some(Type::ProverKey)).then_some("prover_key"),
                     "constructible": port.key == Some(Type::ProverKey) ||
-                        super::arguments::check_input(self.interface, &port.schema).is_ok(),
+                        self.interface.check_input(port.schema).is_ok(),
                 })
             })
             .collect::<Vec<_>>();
@@ -63,15 +87,51 @@ impl InputGroup<'_> {
     }
 }
 impl Interface {
+    /// Context ports are selected by the same checked native owner that binds
+    /// generated calls; ordinary source operands are excluded from these maps.
+    pub(crate) fn context_input_groups(&self, operation: &str) -> Vec<InputGroup<'_>> {
+        self.roles()
+            .iter()
+            .filter(|role| {
+                operation == "run"
+                    || self.proof().is_some_and(|proof| {
+                        role.native_name
+                            == self.roles()[if operation == "prove" {
+                                proof.prover
+                            } else {
+                                proof.verifier
+                            }]
+                            .native_name
+                    })
+            })
+            .map(|role| InputGroup {
+                interface: InputInterface::Deployment(self),
+                name: &role.name,
+                ports: self
+                    .context_ports(role)
+                    .map(|p| InputSchemaPort {
+                        name: &p.definition.name,
+                        schema: &p.definition.schema,
+                        key: p.key,
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
     /// Proofs expose public data once and the prover's remaining witness inputs.
     /// Run groups are role-local even when the source port names several roles.
     pub fn input_groups<'a>(&'a self) -> Vec<InputGroup<'a>> {
         let group = |name: &'a str, ports: Vec<InputPort<'a>>| InputGroup {
-            interface: self,
+            interface: InputInterface::Deployment(self),
             name,
             ports: ports
                 .into_iter()
                 .filter(|p| p.key != Some(Type::VerifierKey))
+                .map(|p| InputSchemaPort {
+                    name: &p.definition.name,
+                    schema: &p.definition.schema,
+                    key: p.key,
+                })
                 .collect(),
         };
         if let Some(proof) = self.proof() {
@@ -87,6 +147,25 @@ impl Interface {
                 .iter()
                 .map(|role| group(role.name.as_str(), self.named_inputs(role).collect()))
                 .collect()
+        }
+    }
+}
+impl FunctionInterface {
+    /// Parameters form one exact named map, independent of child roles.
+    pub fn input_group(&self) -> InputGroup<'_> {
+        InputGroup {
+            interface: InputInterface::Function(self),
+            name: "arguments",
+            ports: self
+                .signature()
+                .parameters
+                .iter()
+                .map(|p| InputSchemaPort {
+                    name: &p.name,
+                    schema: &p.schema,
+                    key: None,
+                })
+                .collect(),
         }
     }
 }
@@ -213,7 +292,7 @@ impl Decoder {
         for port in &group.ports {
             let path = format!("{}.{}", group.name, port.name);
             let value = values
-                .remove(&port.name)
+                .remove(port.name)
                 .ok_or_else(|| InputError::at("entry-input-names", &path))?;
             let decoded = if port.key == Some(Type::ProverKey) {
                 let (file, pin) =
@@ -227,11 +306,13 @@ impl Decoder {
                 }
                 .into()
             } else {
-                super::arguments::check_input(group.interface, &port.schema)
+                group
+                    .interface
+                    .check_input(port.schema)
                     .map_err(|e| InputError::at(e, &path))?;
-                self.value(group.interface, &port.schema, value, &path, &mut resolver)?
+                self.value(group.interface, port.schema, value, &path, &mut resolver)?
             };
-            result.insert(port.name.clone(), decoded);
+            result.insert(port.name.to_owned(), decoded);
         }
         if let Some(name) = values.keys().next() {
             return Err(InputError::at(
@@ -257,7 +338,7 @@ impl Decoder {
     }
     fn value(
         &mut self,
-        interface: &Interface,
+        interface: InputInterface<'_>,
         schema: &Schema,
         value: Json,
         path: &str,
@@ -344,7 +425,7 @@ impl Decoder {
     }
     fn fields(
         &mut self,
-        interface: &Interface,
+        interface: InputInterface<'_>,
         fields: &[Field],
         mut values: serde_json::Map<String, Json>,
         path: &str,

@@ -73,7 +73,7 @@ enum Backend {
         ingress: ingress::Ingress,
         package: PathBuf,
         sha256: String,
-        roles: std::collections::BTreeMap<String, PathBuf>,
+        arguments: PathBuf,
         accept_role: String,
     },
     Schnorr {
@@ -208,9 +208,9 @@ fn run() -> Result<Report> {
             ingress: _,
             package,
             sha256,
-            roles,
+            arguments,
             accept_role,
-        } => run_entry::run(&request, package, sha256, roles, accept_role),
+        } => run_entry::run(&request, package, sha256, arguments, accept_role),
         Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
             schnorr::run(&request, public, witness.as_deref())
         }
@@ -310,7 +310,7 @@ mod request_tests {
                 json!({"kind":kind,"package":"package","sha256":"pin","inputs":[],
                     "preparation":true,"preparation_entries":null,"preparation_bytes":null})
             } else {
-                json!({"kind":kind,"package":"package","sha256":"pin","roles":{},"accept_role":"P"})
+                json!({"kind":kind,"package":"package","sha256":"pin","arguments":"arguments.json","accept_role":"P"})
             };
             assert!(serde_json::from_value::<Backend>(backend.clone()).is_err());
             for ingress in ["json", "wire", "native", "prepared"] {

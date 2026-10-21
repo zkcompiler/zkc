@@ -41,12 +41,32 @@ impl RunEntry {
         limits: HostLimits,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
+        Self::admit_inner(package, limits, setups, false)
+    }
+    pub(crate) fn admit_host(
+        package: Package,
+        limits: HostLimits,
+        setups: SetupAuthority,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, limits, setups, true)
+    }
+    fn admit_inner(
+        package: Package,
+        limits: HostLimits,
+        setups: SetupAuthority,
+        retained_inputs: bool,
+    ) -> EntryResult<Self> {
         let interface =
             crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
         if interface.is_proof() {
             return Err(E::new(P::Admission, "entry-job-kind"));
         }
-        arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
+        (if retained_inputs {
+            arguments::check_host_ports(&interface, None)
+        } else {
+            arguments::check_ports(&interface)
+        })
+        .map_err(|e| E::new(P::Interface, e))?;
         let native = RunHost::admit_artifact(
             &package.authenticated_artifact(),
             limits,
@@ -63,6 +83,11 @@ impl RunEntry {
             native.bundle().entry(),
         )
         .map_err(|e| E::new(P::Assets, e))?;
+        let native = if retained_inputs {
+            native.with_retained_inputs()
+        } else {
+            native
+        };
         let native = native
             .with_ring_assets(assets.registry().clone())
             .with_relation_assets(assets.relation_registry().clone());
@@ -85,12 +110,28 @@ impl RunEntry {
     pub fn limits(&self) -> HostLimits {
         self.native.limits()
     }
-    pub(crate) fn output_types(&self) -> impl Iterator<Item = &zkc_runtime::vm::PhysicalType> {
-        self.native
-            .bundle()
-            .roles()
-            .iter()
-            .flat_map(|role| &role.entry.outputs)
+    pub(crate) fn execute_shared(
+        &self,
+        request: RunRequest,
+        limits: HostLimits,
+        ring: u64,
+        sequence: u64,
+        ledger: zkc_runtime::vm::ExecutionLedger,
+    ) -> EntryResult<RunReport> {
+        let native = self
+            .native
+            .clone()
+            .with_invocation_limits(limits, ring, sequence)
+            .with_shared_ledger(ledger);
+        let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
+        let prepared = native
+            .prepare_typed(&inputs)
+            .map_err(|e| E::new(P::Preparation, e))?;
+        Ok(PreparedRun {
+            interface: &self.interface,
+            native: prepared,
+        }
+        .execute())
     }
 
     /// Names cover every role and input exactly. Missing service allowances use

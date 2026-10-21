@@ -483,6 +483,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             if constexpr (std::is_same_v<T, MathValue> ||
                           std::is_same_v<T, BulkApplication> ||
                           std::is_same_v<T, ProtocolApplication> ||
+                          std::is_same_v<T, HostInvocation> ||
                           std::is_same_v<T, Construct> ||
                           std::is_same_v<T, LocalPrimitive> ||
                           std::is_same_v<T, LocalControl>)

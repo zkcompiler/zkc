@@ -3,6 +3,7 @@
 set(zkc_builtin_dialects
   "protocol|Protocol|types"
   "local|Local|types"
+  "entry|Entry|types"
   "kernel|Kernel|none"
   "data|Data|types"
   "crypto|Crypto|types"

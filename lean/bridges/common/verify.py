@@ -18,6 +18,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from native_entry import native_run
 from registry import CONTRACTS
 from request_support import Obligation, require
 from snapshot import render, string, natural
@@ -475,8 +476,7 @@ def export_native(modules, entry, compiler, output):
     flags = ['--source-format=zkc', *['--module=' + item for item in modules], '--entry=' + entry]
     def execute(command):
         return subprocess.check_output(list(map(str, command)), text=True, stderr=subprocess.PIPE, timeout=30)
-    text = execute([compiler, 'language-emit', *flags])
-    interface = json.loads(execute([compiler, 'language-interface', *flags]))
+    text, interface = native_run(execute, compiler, flags)
     (output / 'interface.json').write_text(json.dumps(interface, indent=2) + '\n')
     digest = hashlib.sha256(text.encode()).hexdigest()
     require(interface['original'] == digest, 'native-identity', 'Native interface and retained source disagree')

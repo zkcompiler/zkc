@@ -10,7 +10,9 @@ pub use report::{
     Failure, FailureKind, Observation, Outcome, PendingMessage, Phase, Progress, Reached, Report,
     RoleReport, State, StopCause, StopSummary, Text, WireUsage,
 };
-pub use session::{Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, WireBackend, run};
+pub use session::{
+    Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, WireBackend, run, run_with_ledger,
+};
 
 mod host;
 pub use host::{

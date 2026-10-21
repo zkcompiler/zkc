@@ -144,9 +144,47 @@ impl Program {
         for symbol in roles.values() {
             called_functions(&self.program.participants[symbol].body, &mut functions);
         }
+        self.function_asset_references(functions.iter().map(String::as_str))
+    }
+    /// Asset references of one participant, including every local branch and
+    /// loop body it may reach. Other participants' functions are excluded.
+    pub fn role_asset_references(
+        &self,
+        entry: &str,
+        role: &str,
+    ) -> Result<Vec<AssetReference>, AdmissionError> {
+        let participant = self
+            .program
+            .entries
+            .get(entry)
+            .and_then(|roles| roles.get(role))
+            .and_then(|symbol| self.program.participants.get(symbol))
+            .ok_or_else(|| AdmissionError::new(ErrorCode::Record, "asset-references-role"))?;
+        let mut functions = BTreeSet::new();
+        called_functions(&participant.body, &mut functions);
+        self.function_asset_references(functions.iter().map(String::as_str))
+    }
+    /// Asset references of a role-free numerical function, including dormant
+    /// local regions. The function must already belong to this admitted Program.
+    pub fn local_asset_references(
+        &self,
+        function: &str,
+    ) -> Result<Vec<AssetReference>, AdmissionError> {
+        self.function_asset_references(std::iter::once(function))
+    }
+    fn function_asset_references<'a>(
+        &self,
+        functions: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Vec<AssetReference>, AdmissionError> {
+        let refuse = |detail| AdmissionError::new(ErrorCode::Record, detail);
         let mut references = Vec::new();
         for name in functions {
-            for instruction in LocalInstruction::walk(&self.program.functions[&name].body) {
+            let function = self
+                .program
+                .functions
+                .get(name)
+                .ok_or_else(|| refuse("asset-references-function"))?;
+            for instruction in LocalInstruction::walk(&function.body) {
                 let LocalInstruction::Op {
                     site,
                     binding,
@@ -166,7 +204,7 @@ impl Program {
                     .try_reserve(1)
                     .map_err(|_| refuse("asset-references-allocation"))?;
                 references.push(AssetReference {
-                    function: name.clone(),
+                    function: name.to_owned(),
                     site: site.clone(),
                     binding: binding.clone(),
                     identity: identity.clone(),

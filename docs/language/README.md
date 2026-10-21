@@ -77,7 +77,7 @@ zkc compile example::Proof --output=proof.zkpkg
 ```
 
 `check` checks every definition, including generic library bodies. Its `entries`
-array lists canonical names and `run`/`proof` kinds. Selecting an Entry also
+array lists canonical names and `function`/`proof` kinds. Selecting an Entry also
 checks its closure, Protocol IR and source correspondence. A definitions check
 alone does not establish that every specialization can compile. Neither form
 executes a protocol. `scope` distinguishes `definitions` from `entry`.

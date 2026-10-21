@@ -130,6 +130,8 @@ public:
              function_ref<Error(const ApplicationOccurrence &)> visitor)
       : view(view), limits(limits), visitor(visitor), remaining(limits.work) {}
   Error run(mlir::ModuleOp module) {
+    if (view.host)
+      return Error::success();
     for (const auto &protocol : view.protocols) {
       if (!charge(protocol.symbol.size() + 1))
         return limit();

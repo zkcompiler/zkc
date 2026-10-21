@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, records
 from project import project_inputs
 
@@ -340,8 +341,11 @@ def frontend(label):
     commands.write(label + '-inputs.json', before)
     flags = ['--source-format=zkc', '--entry=primitive_examples::' + label + 'Entry',
              *[f'--module={name}={path}' for name, path in sorted(modules.items())]]
-    source = commands.run([compiler, 'language-emit', *flags], keep=label + '.mlir')
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags], keep=label + '-interface.json'))
+    child = compile_run_package(commands, *flags)
+    source = child['original']
+    interface = json.loads(child['interface'])
+    (commands.directory / (label + '.mlir')).write_text(source)
+    (commands.directory / (label + '-interface.json')).write_text(child['interface'])
     assert before == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
     assert interface['original'] == hashlib.sha256(source.encode()).hexdigest()
     snapshot = export(source, interface['protocol'], keep=label + '-structured.json')

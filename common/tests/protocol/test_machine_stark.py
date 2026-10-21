@@ -6,6 +6,8 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
+from entry import joint_execution, joint_artifact
+
 from input_files import input_files
 import importlib.util
 import json
@@ -132,24 +134,24 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
     # fits the Program carrier's shared 4 MiB limit. The outer Run bundle
     # has its own separate limit.
     package, pin = compile_entry(toolchain, journal, directory, 'Run')
-    bundle = json.loads(json.loads(package.read_text())['artifact'])
+    bundle = joint_artifact(json.loads(package.read_text()))
     assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['role00000000', 'role00000001']
     assert 1024 * 1024 < len(bundle['candidate'].encode()) <= 4 * 1024 * 1024
     pair = requests('store-load')
     public, private = pair[0], pair[1]
 
     def run(name, secret):
-        inputs = input_files(journal, name + '-run.json', session='machine_' + name, roles={'P': {'inputs': public | private | secret}, 'V': {'inputs': public}})
+        inputs = input_files(journal, name + '-run.json', session='machine_' + name, package=package, arguments={'inputs': {'P': public | private | secret, 'V': public}})
         outputs = directory / (name + '-outputs.json')
         return [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'], outputs
 
     command, outputs = run('honest', {})
     assert journal.json(command)['status'] == 'executed'
-    assert json.loads(outputs.read_text())['roles']['V'] == {'accepted': True}
+    assert json.loads(outputs.read_text())['value']['V'] == {'accepted': True}
     # The verifier's own checks stop the run on a false witness.
     command, outputs = run('false-witness', {'cpu': alter_vector(private['cpu'], 0)})
-    report = journal.json(command, refuses='entry-run-incomplete')
-    after = {role['role']: role['after'] for role in report['execution']['roles']}
+    report = journal.json(command, refuses='entry-host-run-failed')
+    after = {role['role']: role['after'] for role in joint_execution(report)['roles']}
     assert after['role00000001'][0] == 'stopped' and after['role00000001'][1]['cause'][0] == 'explicit'
     assert not outputs.exists()
 

@@ -167,6 +167,7 @@ add_zkc_component(IR
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
   lib/Dialect/Local/IR/LocalDialect.cpp
+  lib/Dialect/Entry/IR/EntryDialect.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Kernel/IR/KernelDialect.cpp
@@ -225,6 +226,7 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Resources.cpp
 )
 add_zkc_component(Translation
+  lib/Translation/Entry.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp
   lib/Translation/Language/FiniteEmission.cpp
@@ -294,6 +296,7 @@ add_zkc_component(Transforms
   lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
+  lib/Compiler/Host.cpp
   lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
@@ -354,7 +357,7 @@ target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
-  MLIRFuncDialect MLIRArithDialect)
+  MLIRFuncDialect MLIRArithDialect MLIRSCFDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)

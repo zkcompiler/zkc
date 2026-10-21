@@ -48,7 +48,7 @@ protocol View roles(Evaluator)
   let q @Evaluator = batch<Extension,Recurrence>(assignment);
   return (base_widths = b, extension_widths = e, active = a, point = p, batch = q);
 }
-run Polynomial = View;
+entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 
@@ -91,11 +91,11 @@ def test_metadata_and_substitution_admit_untaken_polynomial_references(
     assert unframe(result['point'], extension=True) == reference(assignment)
     assert result['point'] == result['batch']
     failed = client.run('reached-height', request | {'present': True},
-                        refuses='entry-run-incomplete')
+                        refuses='entry-host-run-failed')
     assert stopped(failed) == f'refused:{code}'
     if policy[0] == 'fixed':
         failed = client.run('substituted-height', request | {'present': True, 'height': 8},
-                            refuses='entry-run-incomplete')
+                            refuses='entry-host-run-failed')
         assert stopped(failed) == 'refused:bundle-height'
 
 
@@ -123,7 +123,7 @@ protocol View roles(Evaluator)(unused: index @Evaluator)
   let w @Evaluator = widths<Recurrence>();
   return (widths = w);
 }
-run Polynomial = View;
+entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
     Client(toolchain, journal, directory, width_only, document, refuses='source.asset-carrier')
     Client(toolchain, journal, directory, width_only.replace('kernel<Base,0>', 'kernel<Base,1>'),

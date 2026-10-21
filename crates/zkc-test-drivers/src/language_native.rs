@@ -651,19 +651,9 @@ fn main() {
             &load(&format!("completion_nested-{optimized}.bundle")),
             true,
         );
+        // Affine completion is exercised by the native-attempt driver.
+        // Source Entry results require Copy/Drop and cannot export it.
         for n in [0, 1, 3] {
-            for go in [false, true] {
-                let mut participant = runner(
-                    &load(&format!("completion_affine-{optimized}.bundle")),
-                    "role00000000",
-                    vec![Value::Index(n), Value::Bool(go), field(7)],
-                );
-                let values = returned(&mut participant);
-                assert_eq!(values.len(), 2);
-                assert_eq!(participant.backend().live_resource_units(), 1);
-                expect_field(&values[1], 7);
-                assert_eq!(participant.early_return().is_some(), go && n > 0);
-            }
             let values = returned(&mut runner(
                 &load(&format!("repeat_affine-{optimized}.bundle")),
                 "role00000000",

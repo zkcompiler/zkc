@@ -12,7 +12,7 @@ interactive run from the repository root, with built tools on `PATH`:
 zkc run --project=examples/projects/schnorr/zkc.toml
 ```
 
-The command selects the unique run Entry, reads its participant maps and writes
+The command selects the unique Entry function, reads its named arguments and writes
 `build/zkc/example.Interactive.results.json` beside the manifest. The returned
 `V.accepted` is the verifier's decision; a completed run can return false.
 The inputs use the public demonstration witness 3. Scalars are decimal strings; group values contain canonical element bytes.
@@ -39,7 +39,7 @@ zkc prove Proof
 zkc verify Proof
 ```
 
-Inputs: inputs/example.Proof/{public,witness}.json and participant maps for Interactive.
+Inputs: inputs/example.Proof/{public,witness}.json and inputs/example.Interactive/arguments.json.
 
 Profile: BLS12-381 G1; the demonstration witness is public knowledge.
 

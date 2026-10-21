@@ -161,7 +161,11 @@ fn nominal_enum_identity_hashes_decoded_original_utf8_and_rejects_tampering() {
     wrong_digest["protocols"][0]["inputs"][0]["schema"]["identity"] = json!(digest(&encoded));
     assert_eq!(read(&wrong_digest).unwrap_err(), InterfaceError::Schema);
 }
-fn run_fixture(ty: &Value, names: &[&str], native_names: &[&str]) -> (Value, String) {
+pub(in crate::entry) fn run_fixture(
+    ty: &Value,
+    names: &[&str],
+    native_names: &[&str],
+) -> (Value, String) {
     let logical = ty["leaves"][0].as_str().unwrap();
     let physical = physical(logical);
     let mut participants = Vec::new();
@@ -534,7 +538,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     );
 }
 
-fn proof_fixture() -> (Value, String) {
+pub(in crate::entry) fn proof_fixture() -> (Value, String) {
     let boolean = physical("bool");
     let candidate = json!([
         "zkc.program/0",

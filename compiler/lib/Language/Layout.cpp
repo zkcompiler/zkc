@@ -23,6 +23,8 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
   hash.frame("zkc.language.schema/0");
   hash.frame(typeKindName(layout.type.kind));
   hash.frame(toHex(SHA256::hash(arrayRefFromStringRef(key)), true));
+  if (!layout.generatedIdentity.empty())
+    hash.frame(layout.generatedIdentity);
   hash.frame(layout.custody ? "1" : "0");
   hash.frame(layout.constructible ? "1" : "0");
   for (bool allowed : {layout.permissions.copy, layout.permissions.drop})
@@ -270,6 +272,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   result->permissions = {true, true};
   result->constructible = true;
   auto *decl = state->types->typeDeclaration(type);
+  if (decl && decl->generated)
+    result->generatedIdentity = decl->generated->identity;
   if ((type.kind == K::Record &&
        (!decl || decl->kind != Declaration::Kind::Record)) ||
       (type.kind == K::Variant &&
@@ -451,7 +455,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   if (!construction)
     return state->types->takeError();
   result->constructible =
-      *construction == detail::Semantics::Admission::Accepted;
+      *construction == detail::Semantics::Admission::Accepted &&
+      (!decl || !decl->generated || decl->generated->constructible);
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;

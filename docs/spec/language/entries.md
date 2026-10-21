@@ -2,21 +2,51 @@
 
 This native contract defines closed Entry jobs and their source-level associations.
 
-## Entry jobs
+## Entry functions
 
-`run` selects joint execution; `proof` selects proving and verification. They
-are contextual at declaration positions, so ordinary variables and fields may be
-named `run` or `proof`. Both produce the same checked Entry abstraction, with an
-explicit execution kind.
+`entry fn Name(parameters) -> Result { body }` declares an externally callable
+Host function. Visibility, named arguments, ordinary generic helpers and Local
+body inference follow the existing callable rules. Result annotations may be
+omitted when uniquely inferable. The body has Host stage, independently of its
+Local computational mode. Ordinary Local and Math helpers cannot invoke Host
+functions or deployments. Calls resolve statically; cycles and ambiguous targets
+refuse. No runtime function-name dispatch is introduced.
+
+Host control uses the existing let/mut, products, variants, if, match, finite for,
+require and final-return conventions. Numerical islands lower through the existing
+Kernel and physical program pipeline. Only reached calls execute, in operand and
+control order. No retry, memoization, parallel execution or effect reordering is
+implicit. Invalid dormant branches and callable contracts are checked eagerly.
+
+A closed protocol specialization `P<A>` generates nominal `Inputs`, `RunResult`
+and `run(inputs)`. Ordinary Inputs/RunResult fields are indexed by participant;
+shared ports retain distinct role components. A proof `D` generates `Public`,
+`Witness`, candidate `Proof { bytes }`, projection-only `ProveResult`, and
+`VerifyResult` with `Accepted { outputs }` and `Rejected` alternatives. The
+operation signatures are `D::prove(public, witness)` and
+`D::verify(public, proof)`. Exact specialization identity is part of each generated
+type; structurally equal products do not make deployments interchangeable.
+Service, setup and resource authority are not freely constructible data fields.
+Only ordinary importable/exportable data crosses the Host numerical boundary;
+affine managed custody remains with its native owner.
+
+Only successful explicit source return roots are published. Normal joint-run
+false is ordinary data. Semantic verifier rejection produces Rejected without
+success outputs; malformed framing, native stops and cleanup failures do not
+produce a successful source return. Returning a candidate does not generate an
+implicit verifier for the wrapping Entry. Its declarative proof remains callable
+with an independently supplied public statement.
+
+## Proof declarations
+
+`proof` is contextual at declaration positions. A declaration closes a protocol's
+static parameters and chooses proving/verification policy:
 
 ```text
-entry-decl := ("run" | "proof") name "=" path static-args?
-              (";" | "{" clause* "}")
+proof-decl := "proof" name "=" path static-args? (";" | "{" clause* "}")
 ```
 
-`run Session = Protocol<Args>;` selects a joint run. Its optional block accepts
-only setup associations; an empty block is equivalent to the short form.
-A `proof` targeting a protocol requires a complete proof block:
+A protocol target requires a complete proof configuration block:
 
 ```text
 proof Proof = Schnorr<G> {
@@ -45,7 +75,7 @@ Optional `complete port.field;` selects a producer Boolean output or product
 field, for example `complete result.ready;`. True permits completion; false
 withholds that attempt's proof. This does not change the protocol body or add a
 guard. Ordinary `prove` uses one attempt and refuses an incomplete result; the
-application must call `prove_attempts` with a larger count to authorize retries. Run Entries cannot carry a completion selection.
+application must call `prove_attempts` with a larger count to authorize retries. Completion belongs to proof production, not ordinary joint execution.
 
 `construction authored;` selects the existing no-derived-transcript profile.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
@@ -94,7 +124,7 @@ native statement ABI.
 
 An Entry may name another complete Entry, including one declared later. An alias
 uses the short form without a block, even an empty one. Aliases
-must have the same run/proof kind and inherit the protocol, closed arguments,
+must be proof aliases and inherit the protocol, closed arguments,
 setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
@@ -252,14 +282,14 @@ cannot silently change a previously successful selection to another Entry.
 
 Definition checking without selection does not close every Entry. The compiler's
 `zkc.source-check/0` diagnostic report includes an `entries` array of objects with
-`name` (canonical qualified name) and `kind` (`run` or `proof`). A selected check
+`name` (canonical qualified name) and `kind` (`function` or `proof`). A selected check
 reports its canonical `entry` and `original` identity, with `scope: "entry"`;
 an unselected check has `scope: "definitions"` and no selected Entry. Detailed
 public callable inspection remains the optional `declarations` array.
 
 ### Setup associations
 
-Run and proof Entries may associate inputs with named setup slots:
+Proof declarations and protocol metadata may associate inputs with named setup slots:
 
 ```text
 proof Proof = Opening<Kzg> {
@@ -270,7 +300,9 @@ proof Proof = Opening<Kzg> {
   accept accepted;
   construction authored;
 }
-run Session = Opening<Kzg> { setup pcs { vk, pk, statement.commitment }; }
+entry fn Session(inputs: Opening<Kzg>::Inputs) {
+  return Opening<Kzg>::run(inputs);
+}
 ```
 
 A selector names an input or a visible product subtree. It retains logical port
@@ -293,7 +325,7 @@ verifier-key ports are admitted in a proof Entry, independently of the slot coun
 Prover-key inputs must remain at the prover. The Host pins
 all keys in one slot to the same application-selected identity. Multiple slots
 may select different identities. A run slot does not require a verifier-key input.
-A run block accepts setup associations without proof choices. A proof block
+A protocol association supplies the joint invocation contract. A proof block
 always requires its complete configuration, even if it also has setup slots.
 
 Explicit setup association admits whole builtin `prover_key` and `verifier_key`

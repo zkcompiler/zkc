@@ -216,7 +216,7 @@ class SpecializationCheck {
       for (unsigned i = original.inputs; i < actual.inputs; ++i)
         results.push_back({i});
     }
-    if (actual.mode != original.mode ||
+    if (actual.mode != original.mode || actual.stage != original.stage ||
         actual.inputs != original.inputs + hidden ||
         actual.values.size() != original.values.size() + hidden ||
         actual.operations.size() != original.operations.size() ||
@@ -560,6 +560,13 @@ class SpecializationCheck {
                      instance(value.callee, source[target.index], nullptr,
                               *statics, selected, depth + 1,
                               std::is_same_v<T, HelperCall>);
+            } else if constexpr (std::is_same_v<T, HostInvocation>) {
+              auto statics = arguments(action.arguments, subst, op.span);
+              return original.stage == Body::Stage::Host && statics &&
+                     action.kind == value.kind &&
+                     action.target.index == value.target.index &&
+                     *statics == value.arguments &&
+                     same(value.operands, mapped(action.operands));
             } else if constexpr (std::is_same_v<T, MathValue>) {
               auto statics = arguments(action.staticArguments, subst, op.span);
               return statics && *statics == value.staticArguments &&
@@ -1117,21 +1124,29 @@ public:
         typeDeclarations(source.begin(), source.end()), work(work),
         types(typeDeclarations, entry.project().assets(), work) {}
   Error run() {
-    const auto &authored = source[entry.entry().id.index];
-    if (!authored.target)
+    // Internal joint deployment owners are explicit Run entries, not source
+    // declarations. Their root still has an ordinary checked source witness.
+    const auto &authored = entry.entry().id.index < source.size()
+                               ? source[entry.entry().id.index]
+                               : entry.entry();
+    auto sourceRoot = authored.kind == Declaration::Kind::EntryFunction
+                          ? std::optional(authored.id)
+                          : authored.target;
+    if (sourceRoot && sourceRoot->index >= source.size())
+      sourceRoot = entry.root().origin;
+    if (!sourceRoot)
       return failure("source.scoped-specialization",
                      "entry has no source target", authored.span);
-    const auto &rootLayout = entry.protocol().closureLayout;
+    const auto &rootLayout = entry.root().closureLayout;
     if (!rootLayout.captures.empty() ||
-        rootLayout.inputs.size() !=
-            source[authored.target->index].inputs.size())
+        rootLayout.inputs.size() != source[sourceRoot->index].inputs.size())
       return failure("source.scoped-specialization",
                      "entry input layout differs", authored.span);
     for (unsigned i = 0; i < rootLayout.inputs.size(); ++i)
       if (rootLayout.inputs[i] != i)
         return failure("source.scoped-specialization",
                        "entry asserts an input alias", authored.span);
-    if (!instance(entry.protocol().id, source[authored.target->index], nullptr,
+    if (!instance(entry.root().id, source[sourceRoot->index], nullptr,
                   authored.staticArguments, {}, 1))
       return types.takeError();
     const auto *proof = authored.proof();

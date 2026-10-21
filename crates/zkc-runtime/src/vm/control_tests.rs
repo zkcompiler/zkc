@@ -239,7 +239,7 @@ fn participant_frames_use_admitted_loop_ports_and_reject_mistyped_captures() {
     assert!(matches!(
         loaded
             .instance
-            .enter_participant(&frame, &wrong, Retention::Transfer),
+            .enter_root(&frame, &wrong, Retention::Transfer),
         Err(RuntimeError::Payload)
     ));
     assert_eq!(loaded.instance.usage(), usage);

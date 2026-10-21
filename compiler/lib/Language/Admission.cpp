@@ -18,6 +18,9 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   if (isStaticOnly(type) || type.kind == K::Formal)
     return A::Rejected;
   const auto *decl = typeDeclaration(type);
+  if (boundary == Boundary::Construction && decl && decl->generated &&
+      !decl->generated->constructible)
+    return A::Rejected;
   if (decl && decl->resource)
     return A::Rejected;
   // An opaque associated representation remains opaque after specialization.
@@ -126,6 +129,70 @@ bool Semantics::admit(const Type &type, Boundary boundary, Span span,
     related.insert(related.begin(), span);
   }
   return fail(code, message, at, related);
+}
+std::optional<bool> Semantics::setupAuthority(const Type &type, Span span,
+                                              unsigned depth) {
+  if (depth > work.limits.typeDepth || !charge(1, span)) {
+    if (!diagnostic)
+      fail("source.limit", "Host data traversal depth exceeded", span);
+    return {};
+  }
+  using K = Type::Kind;
+  std::vector<Type> children;
+  if (type.kind == K::Record || type.kind == K::Associated) {
+    const auto *decl = typeDeclaration(type);
+    if (decl && decl->abstract)
+      return false;
+    auto product = fields(type, span, depth + 1);
+    if (!product)
+      return {};
+    for (const auto &field : *product)
+      children.push_back(field.type);
+  } else if (type.kind == K::Variant) {
+    auto variants = alternatives(type, span, depth + 1);
+    if (!variants)
+      return {};
+    for (const auto &variant : *variants)
+      for (const auto &field : variant.fields)
+        children.push_back(field.type);
+  } else {
+    if (type.kind == K::Builtin &&
+        (type.domain == "prover_key" || type.domain == "verifier_key" ||
+         type.domain == "srs"))
+      return true;
+    if (type.kind == K::Builtin && !symbolic(type)) {
+      auto native = nativeLayout(type);
+      if (!native) {
+        accept(native.takeError(), span);
+        return {};
+      }
+      if (protocol::nativeSetupType(*native))
+        return true;
+    }
+    for (const auto &argument : type.arguments)
+      if (!isStaticOnly(argument))
+        children.push_back(argument);
+  }
+  for (const auto &child : children) {
+    auto authority = setupAuthority(child, span, depth + 1);
+    if (!authority || *authority)
+      return authority;
+  }
+  return false;
+}
+bool Semantics::hostData(const Type &type, Span span,
+                         const Declaration *scope) {
+  auto authority = setupAuthority(type, span);
+  if (!authority)
+    return false;
+  if (*authority)
+    return fail("source.host-data", "setup authority is not ordinary Host data",
+                span);
+  for (auto usage : {Usage::Copy, Usage::Drop})
+    if (!requireUsage(type, usage, span, scope, "source.host-data",
+                      "Host boundaries require ordinary Copy and Drop data"))
+      return false;
+  return true;
 }
 bool Semantics::ingress(const Type &type, Span span) {
   return executableType(type, span) &&

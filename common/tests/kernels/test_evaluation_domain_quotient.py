@@ -3,7 +3,7 @@
 import pytest
 
 from binomial_reference import FIELDS, P
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import library_modules
 
 
@@ -32,7 +32,7 @@ protocol Run roles(P)(roots:Vector<F>@P,data:Vector<F>@P,z:F@P)
   let (points,y,evaluated,q,member,location)=compute(roots,data,z);
   return(points=points,y=y,evaluated=evaluated,q=q,member=member,location=location);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -223,6 +223,6 @@ def test_invalid_checked_roots_and_evaluation_extents_reject_before_outputs(
             ('non-root-singleton', {'roots': [two], 'data': [one]}),
             ('short-values', {'data': [one]}),
             ('long-values', {'data': [one, two, zero]})]:
-        report = entry.run(name, valid | change, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, valid | change, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'explicit', {'omitted_bytes': 0, 'text': 'reject'}]

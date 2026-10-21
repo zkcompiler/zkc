@@ -76,7 +76,7 @@ def compile_consumer(toolchain, journal, directory, flags, field, consumer):
     source = f'''module sample;
 use {module}::{{{protocol}}};
 domain F = field("{field}");
-run Demo = {protocol}<F>;
+entry fn Demo(inputs: {protocol}<F>::Inputs) {{ return {protocol}<F>::run(inputs); }}
 '''
     return compile_entry(toolchain, journal, directory, source, flags,
                          modules=project_modules(project))
@@ -221,7 +221,7 @@ protocol Invalid roles(P)(left: vec::Vector<F> @P, right: vec::Vector<F> @P)
   require vec::length(left) == vec::length(right);
   return claim(left, right);
 }
-run Demo = Invalid;
+entry fn Demo(inputs: Invalid::Inputs) { return Invalid::run(inputs); }
 ''',
 ]
 

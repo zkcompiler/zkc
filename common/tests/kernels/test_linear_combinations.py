@@ -1,7 +1,7 @@
 """Ordered linear expressions agree with dense arithmetic and preserve separate equations."""
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import core_packages, library_modules
 
 
@@ -46,12 +46,12 @@ fn check(n:index, malformed:bool)->bool {
   return linear::equal(linear::zero<G>(),linear::scale(expression,0));
 }
 protocol Run roles(P)(n:index@P,malformed:bool@P)->(ok:bool@P){return check(n,malformed);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('GROUP', group)
     entry = Entry(toolchain, journal, directory, source, (*library_modules(*core_packages()), *flags))
     for n in (0, 1, 2, 9):
         assert entry.run(f'length-{n}', {'n': str(n), 'malformed': False})['ok'] is True
-    entry.run('shape', {'n': '2', 'malformed': True}, refuses='entry-run-incomplete')
+    entry.run('shape', {'n': '2', 'malformed': True}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('return_rows', [False, True])
@@ -80,7 +80,7 @@ fn check(error:F)->(bool,bool,bool) {
   return(first,second,first && second);
 }
 protocol Run roles(P)(error:F@P)->(checks:(bool,bool,bool)@P){return check(error);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if not return_rows:
         source = source.replace('(bool,bool,bool)', 'bool')
@@ -110,14 +110,14 @@ fn check(a:G::Scalar,reverse:bool,valid_left:bool)->G {
   return linear::evaluate(linear::add(left,right));
 }
 protocol Run roles(P)(a:G::Scalar@P,reverse:bool@P,valid_left:bool@P)->(out:G@P){return check(a,reverse,valid_left);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 """
     entry = Entry(toolchain, journal, directory, source, library_modules(*core_packages()))
     for reverse in (False, True):
         for valid_left in (False, True):
             report = entry.run(f'invalid-parts-{reverse}-{valid_left}',
                                {'a': '7', 'reverse': reverse, 'valid_left': valid_left},
-                               refuses='entry-run-incomplete')
-            after = report['execution']['roles'][0]['after']
+                               refuses='entry-host-run-failed')
+            after = joint_execution(report)['roles'][0]['after']
             assert after[0] == 'stopped'
             assert after[1]['cause'] == ['explicit', {'text': 'reject', 'omitted_bytes': 0}]

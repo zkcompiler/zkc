@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, records
 from project import project_inputs
 
@@ -434,14 +435,15 @@ def frontend(label):
     commands.write(label + '-inputs.json', before)
     flags = ['--source-format=zkc', '--entry=map_examples::' + label + 'Entry',
              *[f'--module={name}={path}' for name, path in sorted(modules.items())]]
-    emitted = commands.attempt([compiler, 'language-emit', *flags], text=False,
-                               keep=label + '.mlir')
-    assert emitted.returncode == 0, emitted.stderr.decode()
-    assert (commands.directory / (label + '.mlir')).read_bytes() == emitted.stdout
-    source = emitted.stdout.decode()
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags], keep=label + '-interface.json'))
+    child = compile_run_package(commands, *flags)
+    emitted = child['original'].encode()
+    (commands.directory / (label + '.mlir')).write_bytes(emitted)
+    assert (commands.directory / (label + '.mlir')).read_bytes() == emitted
+    source = emitted.decode()
+    interface = json.loads(child['interface'])
+    (commands.directory / (label + '-interface.json')).write_text(child['interface'])
     assert before == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
-    assert interface['original'] == hashlib.sha256(emitted.stdout).hexdigest()
+    assert interface['original'] == hashlib.sha256(emitted).hexdigest()
     snapshot = export(source, interface['protocol'], keep=label + '-structured.json')
     assert snapshot[2] == 'sha256:' + interface['original']
     assert not any(op in source for op in ['"protocol.apply"', '"protocol.repeat"'])

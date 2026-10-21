@@ -54,4 +54,4 @@ proof Proof = SpotCheck<pow2(3), 4> {
   accept accepted;
   construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
-run Interactive = SpotCheck<pow2(3), 4>;
+entry fn Interactive(inputs: SpotCheck<pow2(3), 4>::Inputs) { return SpotCheck<pow2(3), 4>::run(inputs); }

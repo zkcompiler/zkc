@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Project.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
@@ -252,10 +253,11 @@ int main() {
         operator prefix(80) ⊖ = other;
         return invoke<T=F,A=Identity<F>>(x);
       }
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
         const auto &definition = lastBinding(decl(project, "m::invoke"));
-        auto closed = take(closeEntry(project, "m::Demo"));
+        auto closed =
+            take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
         unsigned retained = 0;
         for (const auto &value : closed.declarations())
           if (value.body)

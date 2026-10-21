@@ -8,6 +8,7 @@ CMakeUserPresets.json
 .venv*/
 __pycache__/
 *.py[co]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 

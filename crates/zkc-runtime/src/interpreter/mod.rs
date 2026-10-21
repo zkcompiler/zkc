@@ -1,6 +1,8 @@
 use crate::vm::code::{LocalCode, Operation};
 use crate::vm::instance::{Instance, Scope, Transfer};
 mod local;
+mod local_runner;
+pub use local_runner::LocalRunner;
 mod preparation;
 mod values;
 use crate::vm::retention::Retention;
@@ -118,6 +120,40 @@ impl<B: Backend> Runner<B> {
             value_budget,
             work_budget,
         )?;
+        Self::from_loaded(loaded)
+    }
+
+    /// Root-specific linking with an optional invocation-wide ledger. Existing
+    /// constructors retain their full-program installation behavior.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_role_with_ledger(
+        admitted: &Program,
+        entry: &str,
+        role: &str,
+        session: &str,
+        backend: B,
+        inputs: Vec<B::Value>,
+        value_budget: ValueBudget,
+        work_budget: WorkBudget,
+        ledger: Option<ExecutionLedger>,
+    ) -> std::result::Result<Self, LoadError<B>> {
+        Self::from_loaded(Instance::load_role(
+            admitted,
+            entry,
+            role,
+            session,
+            backend,
+            inputs,
+            value_budget,
+            work_budget,
+            true,
+            ledger,
+        )?)
+    }
+
+    fn from_loaded(
+        loaded: crate::vm::instance::loading::Loaded<B>,
+    ) -> std::result::Result<Self, LoadError<B>> {
         let root = loaded.frame.origin().clone();
         let env = loaded
             .frame
@@ -255,7 +291,42 @@ impl<B: Backend> Runner<B> {
         if !self.is_terminal() {
             self.halt(StopKind::Cancelled, None, None);
         }
+        self.discard_returned();
         self.instance.take_backend()
+    }
+    fn discard_returned(&mut self) {
+        if let Some(Action::Returned(values)) = self.pending.as_mut() {
+            let values = std::mem::take(values);
+            self.instance.release_returned(&values);
+            // Drop payloads before take_backend or Instance::drop releases the
+            // shared live reservation. Keep the stable terminal marker.
+            drop(values);
+        }
+    }
+    /// Consume a terminal runner and move its live reservation with returned
+    /// values. An unfinished runner is cancelled and returns no output guard.
+    pub fn into_retained_outputs(mut self) -> (B, Option<RetainedOutputs<B::Value>>) {
+        if !self.is_terminal() {
+            self.cancel();
+        }
+        let outputs = match self.pending.take() {
+            Some(Action::Returned(values)) => {
+                self.instance.release_returned(&values);
+                Some(RetainedOutputs {
+                    values,
+                    reservation: self.instance.take_live_reservation(),
+                })
+            }
+            terminal => {
+                self.pending = terminal;
+                None
+            }
+        };
+        // Preserve terminal status for Drop after moving its tuple.
+        if outputs.is_some() {
+            self.pending = Some(Action::Returned(vec![]));
+        }
+        (self.instance.take_backend(), outputs)
     }
     pub fn cancel(&mut self) {
         if !self.is_terminal() {
@@ -286,9 +357,7 @@ impl<B: Backend> Runner<B> {
         destination: Destination,
         retention: Retention,
     ) -> Result<()> {
-        let scope = self
-            .instance
-            .enter_participant(&frame, &values, retention)?;
+        let scope = self.instance.enter_root(&frame, &values, retention)?;
         let env = frame
             .inputs()
             .iter()
@@ -361,6 +430,7 @@ impl<B: Backend> Runner<B> {
                 instance.close_scope(execution.scope, execution.env.values());
             }
         });
+        self.instance.release_live_reservation();
         self.pending = Some(Action::Stopped(Stop {
             origin,
             role: self.role().to_owned(),
@@ -1091,10 +1161,13 @@ impl<B: Backend> Runner<B> {
 
 impl<B: Backend> Drop for Runner<B> {
     fn drop(&mut self) {
-        if self.instance.has_backend() && !self.is_terminal() {
-            // The explicit cancellation API preserves diagnostics for the host.
-            // Drop still closes every admitted view and never rolls back state.
-            self.halt(StopKind::Cancelled, None, None);
+        if self.instance.has_backend() {
+            if !self.is_terminal() {
+                // The explicit cancellation API preserves diagnostics for the host.
+                // Drop still closes every admitted view and never rolls back state.
+                self.halt(StopKind::Cancelled, None, None);
+            }
+            self.discard_returned();
         }
     }
 }

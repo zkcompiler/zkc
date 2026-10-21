@@ -540,22 +540,30 @@ private:
     advance();
     return true;
   }
-  bool path(std::string &output, bool allowSort = false,
-            bool allowAbsolute = false) {
-    bool absolute = allowAbsolute && take("::");
-    if (!name(output))
-      return false;
+  bool pathSuffix(std::string &output, bool allowSort = false) {
     while (take("::")) {
       std::string part;
-      // Field and Group are also qualified catalog capability exports.
-      // They remain reserved as declaration and unqualified names.
-      if (allowSort && (at("Field") || at("Group"))) {
+      // Field/Group are catalog exports; operation names are generated members.
+      if ((allowSort && (at("Field") || at("Group"))) || at("run") ||
+          at("prove") || at("verify")) {
         part = text().str();
         advance();
       } else if (!name(part))
         return false;
+      if (!accept(work.charge(part.size() + 2, current().span)))
+        return false;
       output += "::" + part;
+      if (output.size() >
+          work.limits.moduleBytes + work.limits.identifierBytes + 4)
+        return fail("source.limit", "qualified name byte limit exceeded");
     }
+    return true;
+  }
+  bool path(std::string &output, bool allowSort = false,
+            bool allowAbsolute = false) {
+    bool absolute = allowAbsolute && take("::");
+    if (!name(output) || !pathSuffix(output, allowSort))
+      return false;
     if (absolute)
       output.insert(0, "::");
     return output.size() <= work.limits.moduleBytes +
@@ -670,6 +678,8 @@ private:
       } else if (!path(out.name, true, true))
         return false;
       if (!staticArguments(out.arguments, out.labels, depth))
+        return false;
+      if (!pathSuffix(out.name, true))
         return false;
     }
     out.span.end = previousEnd;
@@ -884,6 +894,26 @@ private:
     value.span.end = previousEnd;
     return true;
   }
+  bool setupSlot(SyntaxDeclaration &decl) {
+    SyntaxSetupSlot slot;
+    slot.span = current().span;
+    if (!named(slot.name) || !expect("{"))
+      return false;
+    if (!at("}"))
+      do {
+        SyntaxSelector input;
+        input.span = current().span;
+        if (!name(input.port) || !selectorPath(input))
+          return false;
+        input.span.end = previousEnd;
+        slot.inputs.push_back(std::move(input));
+      } while (take(",") && !at("}"));
+    if (!expect("}") || !expect(";"))
+      return false;
+    slot.span.end = previousEnd;
+    decl.setups.push_back(std::move(slot));
+    return true;
+  }
   bool entryChoices(SyntaxDeclaration &decl) {
     SyntaxProofEntry value;
     value.span = current().span;
@@ -893,28 +923,10 @@ private:
     std::set<std::string> choices;
     while (!at("}") && !atEnd()) {
       if (take("setup")) {
-        SyntaxSetupSlot slot;
-        slot.span = current().span;
-        if (!named(slot.name) || !expect("{"))
+        if (!setupSlot(decl))
           return false;
-        if (!at("}"))
-          do {
-            SyntaxSelector input;
-            input.span = current().span;
-            if (!name(input.port) || !selectorPath(input))
-              return false;
-            input.span.end = previousEnd;
-            slot.inputs.push_back(std::move(input));
-          } while (take(",") && !at("}"));
-        if (!expect("}") || !expect(";"))
-          return false;
-        slot.span.end = previousEnd;
-        decl.setups.push_back(std::move(slot));
         continue;
       }
-      if (decl.entryKind == EntryKind::Run)
-        return fail("source.entry",
-                    "run blocks accept only setup associations");
       auto key = text().str();
       if (!choices.insert(key).second)
         return fail("source.entry", "duplicate Entry choice");
@@ -1517,9 +1529,8 @@ private:
       }
       if (!expect("}"))
         return {};
-    } else if (at("run") || at("proof")) {
-      d.entryKind = at("proof") ? EntryKind::Proof : EntryKind::Run;
-      advance();
+    } else if (take("proof")) {
+      d.entryKind = EntryKind::Proof;
       d.kind = Declaration::Kind::Entry;
       if (member) {
         fail("source.syntax", "declaration is not an interface member");
@@ -1653,8 +1664,17 @@ private:
       if (!expect("}"))
         return {};
     } else {
-      bool math = take("math");
+      bool entry = take("entry");
+      if (entry && member) {
+        fail("source.mode", "entry functions cannot be interface members");
+        return {};
+      }
+      bool math = !entry && take("math");
       bool fn = take("fn");
+      if (entry && !fn) {
+        fail("source.syntax", "expected fn after entry");
+        return {};
+      }
       if (math && !fn) {
         fail("source.syntax", "expected fn after math");
         return {};
@@ -1670,6 +1690,7 @@ private:
       }
       d.kind = domainFunction ? Declaration::Kind::DomainFunction
                : protocol     ? Declaration::Kind::Protocol
+               : entry        ? Declaration::Kind::EntryFunction
                : math         ? Declaration::Kind::Math
                               : Declaration::Kind::Local;
       if (!name(d.name) || !parameters(d.parameters))
@@ -1733,7 +1754,14 @@ private:
       }
       if (protocol && !specifications(d))
         return {};
+      while (protocol && take("setup"))
+        if (!setupSlot(d))
+          return {};
       d.abstract = abstract;
+      if (entry && (!d.scopedInputs.empty() || !d.domainInputs.empty())) {
+        fail("source.stage", "entry parameters must be ordinary data");
+        return {};
+      }
       if (abstract) {
         if (!expect(";"))
           return {};
@@ -2041,6 +2069,8 @@ private:
         return {};
       if (!staticArguments(value.arguments, value.staticLabels, depth))
         return {};
+      if (!pathSuffix(value.text))
+        return {};
       if (!expect("("))
         return {};
       if (!at(")"))
@@ -2221,6 +2251,8 @@ private:
       } else if (!path(value.text, false, true))
         return {};
       if (!staticArguments(value.arguments, value.staticLabels, depth))
+        return {};
+      if (!pathSuffix(value.text))
         return {};
       if (records && take("roles")) {
         value.roles.emplace();

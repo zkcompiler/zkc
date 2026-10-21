@@ -24,7 +24,7 @@ def test_multilinear_factor_layout(toolchain, journal, directory, flags):
       ->(result:vec::Vector<F>@P,remaining:index@P,columns:index@P){
       let result=evaluate(data,dimensions,width,point);
       return(result=result.0,remaining=result.1,columns=result.2);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     '''
     entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
     # Rows 00,01,10,11; two independent factors at each row. Not column-major.
@@ -62,7 +62,7 @@ def test_table_shape_predicate_returns_false(toolchain, journal, directory, flag
       domain F=field("koala-bear");
       protocol Run roles(P)(values:Vector<F>@P,dimensions:index@P,columns:index@P)
           ->(valid:bool@P){return mle::has_shape(values,dimensions,columns);}
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     '''
     entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
     for name, values, dimensions, columns, valid in [
@@ -98,7 +98,7 @@ def test_coset_word_domain_and_fold(toolchain, journal, directory, flags):
       ->(value:F@P,folded:vec::Vector<F>@P,shift:F@P,wrong:F@P,reordered:F@P){
       let result=check(coefficients,shift,size,beta);
       return(value=result.0,folded=result.1,shift=result.2,wrong=result.3,reordered=result.4);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     '''
     entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
     args = {'coefficients': ['1', '2', '3'], 'shift': '3', 'size': '4', 'beta': '5'}
@@ -126,12 +126,12 @@ def test_view_constructor_authority(toolchain, journal, directory, view, constru
     if boundary == 'construct':
         body = f'fn bypass(values:Vector<F>)->{view}{{return {construction};}}'
     elif boundary == 'entry':
-        body = f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}} run Demo=Run;'
+        body = f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
     else:
         make = 'mle::table(values,0,1)' if view.startswith('mle') else 'coset::word(values,1)'
         body = f'''protocol Run roles(P,V)(values:Vector<F>@P)->(result:{view}@V){{
           let value={make};let received=send P -> V(value);return received;
-        }} run Demo=Run;'''
+        }} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'''
     path = directory / 'private.zkc'
     path.write_text(declarations + body)
     report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
@@ -156,8 +156,8 @@ def test_coset_constructors_own_admission(toolchain, journal, directory, operati
       use zkc::polynomial as poly; domain F=field("koala-bear");
       protocol Run roles(P)(data:Vector<F>@P,shift:F@P,size:index@P)->(value:Vector<F>@P){{
         return {operation};
-      }} run Demo=Run;
+      }} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     for i, values in enumerate(inputs):
-        entry.run(f'invalid-{i}', values, refuses='entry-run-incomplete')
+        entry.run(f'invalid-{i}', values, refuses='entry-host-run-failed')

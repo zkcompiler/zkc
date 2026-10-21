@@ -111,7 +111,7 @@ pub(in crate::entry) struct Service {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(rename_all = "lowercase")]
-pub(in crate::entry) enum Kind {
+pub enum Kind {
     Boolean,
     Index,
     Field,
@@ -126,14 +126,14 @@ pub(in crate::entry) enum Kind {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(remote = "Self")]
-pub(in crate::entry) enum Permission {
+pub enum Permission {
     Copy,
     Drop,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(deny_unknown_fields)]
-pub(in crate::entry) struct Schema {
+pub struct Schema {
     pub kind: Kind,
     pub identity: String,
     #[serde(rename = "type")]
@@ -145,18 +145,18 @@ pub(in crate::entry) struct Schema {
     pub alternatives: Vec<Alternative>,
     pub leaves: Vec<String>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(deny_unknown_fields)]
-pub(in crate::entry) struct Field {
+pub struct Field {
     pub name: String,
     pub offset: u32,
     pub schema: Schema,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(deny_unknown_fields)]
-pub(in crate::entry) struct Alternative {
+pub struct Alternative {
     pub name: String,
     pub fields: Vec<Field>,
 }

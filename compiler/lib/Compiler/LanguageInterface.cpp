@@ -87,6 +87,36 @@ Error preflight(StringRef bytes) {
   return Error::success();
 }
 } // namespace
+json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
+  auto fields = [](ArrayRef<InterfaceField> fields) {
+    json::Array result;
+    for (const auto &f : fields)
+      result.push_back(
+          json::Object{{"name", f.name},
+                       {"offset", f.offset},
+                       {"schema", encodeInterfaceSchema(*f.schema)}});
+    return result;
+  };
+  json::Array alternatives, permissions, leaves;
+  for (const auto &a : s.alternatives)
+    alternatives.push_back(
+        json::Object{{"name", a.name}, {"fields", fields(a.fields)}});
+  if (s.permissions.copy)
+    permissions.push_back("Copy");
+  if (s.permissions.drop)
+    permissions.push_back("Drop");
+  for (const auto &l : s.leaves)
+    leaves.push_back(l);
+  return json::Object{{"kind", typeKindName(s.kind)},
+                      {"identity", s.identity},
+                      {"type", s.type},
+                      {"custody", s.custody},
+                      {"constructible", s.constructible},
+                      {"permissions", std::move(permissions)},
+                      {"fields", fields(s.fields)},
+                      {"alternatives", std::move(alternatives)},
+                      {"leaves", std::move(leaves)}};
+}
 Expected<json::Value> detail::parseInterface(StringRef bytes,
                                              const Limits &limits) {
   if (auto error = checkLimits(limits))
@@ -129,10 +159,21 @@ Error detail::withInterface(
     return error("target.admission",
                  "original failed mathematical IR admission");
   uint64_t remaining = limits.work;
-  if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
-    return error;
-  if (auto error = mathematical::checkMapFormulas(*module, remaining))
-    return error;
+  auto checkMathematics = [&](mlir::ModuleOp subject) -> Error {
+    if (auto e = mathematical::checkFormulaDefinitions(subject, remaining))
+      return e;
+    return mathematical::checkMapFormulas(subject, remaining);
+  };
+  if (parsed->getAsObject() && parsed->getAsObject()->get("selection")) {
+    for (auto numeric : module->getOps<mlir::ModuleOp>()) {
+      auto copy = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::cast<mlir::ModuleOp>(numeric->clone()));
+      copy->getOperation()->removeAttr("entry.calculation");
+      if (auto e = checkMathematics(*copy))
+        return e;
+    }
+  } else if (auto e = checkMathematics(*module))
+    return e;
   auto identity = toHex(SHA256::hash(arrayRefFromStringRef(original)), true);
   auto decoded =
       detail::decodeInterface(*module, identity, *parsed, limits, assets);

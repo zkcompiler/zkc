@@ -52,7 +52,7 @@ this block in a separate consumer tree using only declared package dependencies.
 ```sh zkc-example
 python3 prepare.py --output=build/inputs
 zkc check
-zkc run Run --input=P=build/inputs/P.json --input=V=build/inputs/V.json
+zkc run Run --input=build/inputs/arguments.json
 zkc prove Proof --public=build/inputs/public.json --witness=build/inputs/witness.json --output=build/fri.proof
 zkc verify Proof --public=build/inputs/public.json --proof=build/fri.proof
 ```

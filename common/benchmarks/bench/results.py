@@ -60,7 +60,7 @@ def validate_backend(backend, ingress=None, boundary=None):
     required, optional = {'kind'}, set()
     if kind in ('host', 'run'):
         required |= {'ingress', 'package', 'sha256'}
-        require(boundary is None or boundary == ('admitted_entry_call' if kind == 'host' else 'admitted_run_call'),
+        require(boundary is None or boundary == ('admitted_entry_call' if kind == 'host' else 'admitted_function_call'),
                 'invalid ingress boundary')
         require(backend.get('ingress') in INGRESS, 'invalid backend ingress')
         require(valid_path(backend.get('package')) and valid_digest(backend.get('sha256')),
@@ -68,7 +68,7 @@ def validate_backend(backend, ingress=None, boundary=None):
         if ingress is not None:
             require(backend['ingress'] == ingress, 'manifest ingress differs from the job')
     else:
-        require(boundary not in ('admitted_entry_call', 'admitted_run_call'), 'invalid ingress backend')
+        require(boundary not in ('admitted_entry_call', 'admitted_function_call'), 'invalid ingress backend')
         required.add('public')
         require(valid_path(backend.get('public')), 'invalid backend public path')
         if kind in ('schnorr', 'monero'):
@@ -90,12 +90,10 @@ def validate_backend(backend, ingress=None, boundary=None):
             require(valid_path(record['public']) and all(record.get(name) is None or valid_path(record[name])
                     for name in ('witness', 'proof')), 'invalid Host input path')
     elif kind == 'run':
-        required |= {'roles', 'accept_role'}
-        roles = backend.get('roles')
-        require(isinstance(roles, dict) and roles and all(isinstance(role, str) and role
-                and valid_path(path) for role, path in roles.items()), 'invalid Run roles')
-        require(isinstance(backend.get('accept_role'), str) and backend['accept_role'] in roles,
-                'invalid Run acceptance role')
+        required |= {'arguments', 'accept_role'}
+        require(valid_path(backend.get('arguments')), 'invalid Function arguments path')
+        require(isinstance(backend.get('accept_role'), str) and backend['accept_role'],
+                'invalid Function acceptance role')
     validate_fields(backend, required, optional, 'backend')
 
 
@@ -154,12 +152,12 @@ def validate_worker(report, plan, boundary):
     require(build.get('debug_assertions') is False, 'benchmark worker must disable debug assertions')
     counted = build.get('execution_counts', False)
     require(type(counted) is bool, 'invalid execution counts capability')
-    if boundary in ('admitted_entry_call', 'admitted_run_call'):
+    if boundary in ('admitted_entry_call', 'admitted_function_call'):
         require('execution_counts' in build, 'missing runtime observation capability')
-    require(not counted or boundary in ('admitted_entry_call', 'admitted_run_call'),
+    require(not counted or boundary in ('admitted_entry_call', 'admitted_function_call'),
             'execution counts require a source workload')
     lifecycle = report['lifecycle']
-    if boundary in ('admitted_entry_call', 'admitted_run_call'):
+    if boundary in ('admitted_entry_call', 'admitted_function_call'):
         require(isinstance(lifecycle, dict), 'missing Host lifecycle measurements')
     if lifecycle is not None:
         require(isinstance(lifecycle, dict) and set(lifecycle) == {'capture_ns', 'admit_ns', 'calls',
@@ -273,7 +271,7 @@ def validate_manifest(manifest):
         worker = validate_worker(result['worker'], plan, job['boundary'])
         if job['boundary'] == 'admitted_entry_call':
             validate_preparation_limits(worker['lifecycle']['preparation_limits'], job['backend'])
-        if job['boundary'] in ('admitted_entry_call', 'admitted_run_call'):
+        if job['boundary'] in ('admitted_entry_call', 'admitted_function_call'):
             validate_ingress(worker['lifecycle'], job['backend'])
         validate_proofs(result, plan, job['operation'], job['backend']['kind'] == 'host')
         require(worker['build'].get('execution_counts', False) is (manifest['observation'] == 'execution_counts'),

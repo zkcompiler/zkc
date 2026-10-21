@@ -1,5 +1,5 @@
-use super::{Project, selection};
-use crate::entry::{CompileOptions, Interface, Package};
+use super::{CheckedInterface, Project, selection};
+use crate::entry::{CompileOptions, Package};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -11,13 +11,13 @@ use std::{
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum EntryKind {
-    Run,
+    Function,
     Proof,
 }
 impl EntryKind {
     fn name(self) -> &'static str {
         match self {
-            Self::Run => "run",
+            Self::Function => "function",
             Self::Proof => "proof",
         }
     }
@@ -28,11 +28,8 @@ pub struct Selection<'a> {
     pub kind: Option<EntryKind>,
 }
 impl Selection<'_> {
-    fn matches(self, view: &Interface) -> bool {
-        selection::matches(self.name, view.entry())
-            && self
-                .kind
-                .is_none_or(|k| (k == EntryKind::Proof) == view.is_proof())
+    pub(crate) fn matches(self, view: &CheckedInterface) -> bool {
+        selection::matches(self.name, view.entry()) && self.kind.is_none_or(|k| k == view.kind())
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -256,9 +253,9 @@ impl Compiler {
         serde_json::from_value(report).map_err(|_| "source-check-format".into())
     }
     /// A checked logical view, obtained before executable lowering. It cannot bind a Host.
-    pub fn inspect(&self, project: &Project, selection: Selection<'_>) -> Result<Interface> {
+    pub fn inspect(&self, project: &Project, selection: Selection<'_>) -> Result<CheckedInterface> {
         let bytes = self.invoke(project, "language-interface", selection, &[])?;
-        let view = Interface::from_compiler(&bytes).map_err(|e| e.to_string())?;
+        let view = CheckedInterface::from_compiler(&bytes)?;
         if !selection.matches(&view) {
             return Err("source-entry-selection".into());
         }
@@ -294,7 +291,7 @@ impl Compiler {
         let pin = Sha256::digest(&bytes).into();
         let package =
             Package::capture(&bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
-        let view = crate::entry::BoundInterface::read(&package).map_err(|e| e.to_string())?;
+        let view = CheckedInterface::read(&package)?;
         if !selection.matches(&view) || package.options() != options {
             return Err("source-entry-selection".into());
         }

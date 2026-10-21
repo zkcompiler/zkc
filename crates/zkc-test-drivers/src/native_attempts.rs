@@ -250,7 +250,13 @@ fn run(directory: &Path, case: &Json) {
             .as_array()
             .unwrap()
             .iter()
-            .zip(&deployment.entry().producer().inputs)
+            .zip(
+                &deployment
+                    .entry()
+                    .producer()
+                    .expect("combined proof producer")
+                    .inputs,
+            )
             .map(|(row, (_, ty))| {
                 if row[1][0] == "rng" {
                     InputValue::Resource {

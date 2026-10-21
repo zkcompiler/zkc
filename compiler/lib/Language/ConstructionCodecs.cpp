@@ -20,8 +20,11 @@ Checker::constructionMember(const Type &provider, StringRef name, Span span) {
   if (!types.charge(contract->members.size(), span))
     return {};
   for (auto id : contract->members)
-    if (output.declarations[id.index].name == name)
+    if (output.declarations[id.index].name == name) {
+      if (!signature(id))
+        return {};
       return id;
+    }
   types.fail("source.construction", "provider interface requires " + name,
              span);
   return {};

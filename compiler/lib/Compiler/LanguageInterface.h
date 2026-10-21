@@ -26,6 +26,9 @@ llvm::Error withInterface(
 llvm::Error withInterface(
     const CheckedOriginal &, const Limits &,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, const LanguageInterface &)>);
+llvm::json::Value encodeInterfaceSchema(const InterfaceSchema &);
+llvm::Expected<std::shared_ptr<const InterfaceSchema>>
+decodeHostSchema(const llvm::json::Value &, const Limits &);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,
                                                  const Limits &);
 } // namespace zkc::language::detail

@@ -74,6 +74,10 @@ def violations(project_graph, api, library_root, *, contracts=True):
             # bodies freeze them; native bindings retain catalog authority.
             if not any(layer(owner, library_root) is not None for owner in owners[source['module']]):
                 continue
+            # Generated Host operations carry compiler-owned contracts; they
+            # are not authored Local library bodies with inferred effects.
+            if declaration.get('stage') == 'host' and declaration.get('generated'):
+                continue
             if declaration.get('definition') != 'body':
                 continue
             kind = declaration['kind']

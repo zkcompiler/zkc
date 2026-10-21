@@ -1,7 +1,8 @@
 # Running source Entries
 
-A Protocol defines computation and interaction. A `run` or `proof` Entry selects
-one closed invocation. The common Host executes its compiled participant programs.
+A protocol defines participant computation and interaction. An `entry fn` exposes
+application control; a `proof` declaration configures proving and verification.
+Both execute through the common Host and native VM.
 
 ## Project workflow
 
@@ -18,10 +19,10 @@ zkc prepare
 ```
 
 `new` creates a directory; `init` initializes an existing directory (the current
-directory by default). Both create an index echo protocol, its Entry and an input
+directory by default). Both create a minimal Entry function and its argument
 template. They refuse an existing project or conflicting source files and preserve
 existing regular input files.
-Fill `inputs/example.Main/P.json`
+Fill `inputs/example.Main/arguments.json`
 with `{"value":"7"}`, then run:
 
 ```sh
@@ -66,7 +67,7 @@ zkc prove example::Proof
 zkc verify example::Proof
 ```
 
-Omitted names require one eligible Entry: `run` considers run Entries;
+Omitted names require one eligible Entry: `run` considers Entry functions;
 `prove` and `verify` consider proof Entries. `inspect`, `compile`, `bindings`
 and `inputs init` consider both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
@@ -77,7 +78,7 @@ requires qualification. A unique Entry of the wrong kind is an error.
 |---|---|---|
 | Proof public inputs | `inputs/<qualified.name>/public.json` | `--public=FILE` |
 | Prover witness inputs | `inputs/<qualified.name>/witness.json` | `--witness=FILE` |
-| Run participant inputs | `inputs/<qualified.name>/<Role>.json` | `--input=ROLE=FILE` |
+| Entry function arguments | `inputs/<qualified.name>/arguments.json` | `--input=FILE` |
 | Compiled package | `build/zkc/<qualified.name>.zkpkg` | `--output=FILE` |
 | Produced or verified proof | `build/zkc/<qualified.name>.zkproof` | `--output=FILE` / `--proof=FILE` |
 | Run output values | `build/zkc/<qualified.name>.results.json` | `--results=FILE` |
@@ -92,9 +93,9 @@ For a run that needs no result file, use `--no-results`; it conflicts with
 `--results`. This also allows execution when a returned value has no file codec.
 
 Package and explicit-module modes require explicit input paths and proof paths;
-they do not borrow defaults from a nearby project. A run without `--session`
-receives a fresh random session identifier, shown in its report. An explicit
-session is used exactly as supplied; callers are responsible for its freshness.
+they do not borrow defaults from a nearby project. Joint child invocations receive
+fresh sessions by default. Explicit child sessions and policies belong in
+`--invocations=FILE`; callers are responsible for explicitly selected freshness.
 
 ### Input templates
 
@@ -128,9 +129,11 @@ Applications cannot supply an alternative renaming table.
 
 Input files are plain maps with exact source port names. Proofs have one public
 map and a separate prover witness map. Verification accepts no witness file.
-Runs use `--input=ROLE=FILE` for each role with inputs; omitted empty groups are
-filled automatically. A shared source port remains a separate role-local input
-in a run. Project paths follow the table above; verification never opens a witness map.
+Entry functions use one `--input=FILE` map keyed by parameter names. Generated
+protocol Inputs records contain a nested record per role, for example
+`{"inputs":{"P":{"value":"7"},"V":{"value":"7"}}}`. A shared port remains
+a separate role-local input. Empty parameter lists need no input file. Project
+paths follow the table above; verification never opens a witness map.
 
 | Source value | JSON |
 |---|---|
@@ -170,9 +173,9 @@ Pinned package mode cannot be mixed with source options or an Entry name.
 Rehashing an unknown package does not authorize it. Authored proof jobs require
 `--allow-authored`; derived jobs choose their transcript suite in source.
 
-Use `--service=ROLE.NAME=COUNT`, `--transcript-budget=COUNT` and `--context=HEX`
-for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
-sets [native limits](../spec/runtime/capacity.md); run Entries also accept
+Direct proof commands use `--service=ROLE.NAME=COUNT`,
+`--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
+sets [native limits](../spec/runtime/capacity.md); Entry functions also accept
 `--limits=FILE` for [work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
 selected verifier. Other roles refuse.
@@ -213,8 +216,8 @@ The public `project::{Project, Compiler, Selection}` API resolves source project
 and returns checked interfaces or packages. `Project::layout()` supplies standard
 paths. `Compiler::prepare()` returns a `Preparation` of checked interfaces and
 `Template` files; the CLI publishes it through the common Host.
-`entry::Interface` describes logical
-inputs; `BoundInterface` ties that view to a package. `entry::inputs::Decoder`
+`entry::FunctionInterface` describes Entry function signatures; `Interface` and
+`BoundInterface` describe native proof/deployment interfaces. `entry::inputs::Decoder`
 accepts readable maps, with an optional explicit file resolver. Typed applications
 can construct `RoleInputs`, `RunRequest` and `ProofRequest` directly and invoke
 `RunEntry` or `ProofEntry`. Their preparation, native execution and authority
@@ -245,7 +248,7 @@ logical result maps retain source names.
 zkc bindings --package=proof.zkpkg --sha256=EXPECTED_SHA256 --output=bindings.rs
 ```
 
-The module pins that package and provides named input/output structures, setup
+For a proof, the module pins that package and provides named input/output structures, setup
 and service constants, `into_inputs`, `into_role` and `take`. Mathematical leaves
 use `entry::Value`; native admission still checks domain, permissions and setup.
 Generated Rust identifiers use `__zkc_` plus full UTF-8 byte hex for Unicode,
@@ -254,3 +257,45 @@ also resolves generated-name collisions. Serialized keys and role constants keep
 original source names. The bindings contain no protocol arithmetic or custom interpreter. Regenerate
 them when the authorized package changes. The [tools crate](../../crates/zkc-tools/README.md)
 owns the API inventory.
+
+## Entry Host and SDKs
+
+Entry control and numerical computation have separate owners. The compiled Host
+program selects control branches and static calls; numerical functions use the
+existing Kernel pipeline and VM. Protocol and proof calls use their native
+admission, setup, transcript and cleanup owners. The outer invocation shares
+cumulative work and value limits across reached calls. A fresh child does not
+reset these allowances. The live allowance includes retained parent data and
+native transport; children receive a conservative share of its remainder. A
+nested computation can therefore reach the limit before the same standalone
+runner. See the [execution contract](../spec/runtime/entries.md#function-execution)
+for the partition policy. Calls are ordered, and no retry or result caching is
+implicit. Only the successfully returned source root is published.
+
+`--invocations=FILE` can set policies for exact static child deployment IDs shown
+by inspection. Ordinary data stays in arguments.json. Child configuration carries
+sessions, semantic contexts, service budgets and independently authorized setup
+material. Its `inputs` maps supply only the named setup/key ports excluded from
+generated ordinary records; inspection exposes their schemas. Context cannot
+replace source call operands. Defaults cover children without
+setup slots. Required setup authority must be supplied explicitly.
+
+Function packages generate an `Arguments` structure, an admission function pinned
+to the package, and a typed `call` wrapper with the source result type:
+
+```rust,ignore
+let host = bindings::admit(package_bytes, options, authority)?;
+let result = bindings::call(&host, arguments, context)?;
+// result.report retains usage, reached calls and failures.
+// result.value is present only after successful execution and conversion.
+```
+
+Applications may also use `FunctionEntry::prepare(FunctionRequest)` directly.
+Authority and context are separate from ordinary arguments. Generated wrappers
+check exact package identity before preparation; schema equality alone cannot
+select a different deployment.
+
+The [Python SDK](../../python/README.md) calls the installed CLI, which uses this
+same Host. It accepts checked JSON-shaped arguments and returns the source value
+with its native report. It passes proof bytes unchanged. Each call starts a fresh
+process; retaining an admitted Host for repeated calls is available in Rust.

@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from entry import joint_execution
+
 from input_files import input_files
 from test_source_projects import build, read
 
@@ -28,12 +30,11 @@ def test_each_obligation_uses_its_own_verifier_table(toolchain, journal, directo
     prover = {name: public[name] for name in ('left', 'right', 'rounds')}
     verifier = dict(public)
     verifier[changed] = ['0'] * 4
-    inputs = input_files(journal, 'interactive', roles={
-        'P': {'inputs': prover}, 'V': {'inputs': verifier}})
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': prover, 'V': verifier}})
     outputs = directory / 'outputs.json'
     journal.run([toolchain.runtime, '--json', 'run', f'--package={package}',
                  f'--sha256={pin}', *inputs, f'--results={outputs}'])
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is False
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] is False
 
 
 @pytest.mark.parametrize('rounds,table,claim,accepted', [
@@ -45,19 +46,17 @@ def test_each_obligation_uses_its_own_verifier_table(toolchain, journal, directo
 def test_public_sumcheck_terminal_dimension(toolchain, journal, directory, rounds, table, claim, accepted):
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Interactive', [])
     public = {'values': table, 'claim': claim, 'rounds': str(rounds)}
-    inputs = input_files(journal, 'interactive', roles={
-        'P': {'inputs': {'values': table, 'rounds': str(rounds)}},
-        'V': {'inputs': public}})
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': table, 'rounds': str(rounds)}, 'V': public}})
     outputs = directory / 'outputs.json'
     malformed = len(table) != 2 ** rounds
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={pin}', *inputs, f'--results={outputs}'],
-                          refuses='entry-run-incomplete' if malformed else None)
+                          refuses='entry-host-run-failed' if malformed else None)
     if malformed:
-        assert report['execution']['wire']['sends'] == 0
+        assert joint_execution(report)['wire']['sends'] == 0
         assert not outputs.exists()
     else:
-        assert json.loads(outputs.read_text())['roles']['V']['accepted'] is accepted
+        assert json.loads(outputs.read_text())['value']['V']['accepted'] is accepted
 
 
 
@@ -67,27 +66,23 @@ def test_sumcheck_rejects_only_the_verifier_table(toolchain, journal, directory,
     # The padded table leaves [P(r1,r2), 0] after the two MSB-first folds.
     # Its residual sum agrees, so only complete dimension discharge rejects it.
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Interactive', flags)
-    inputs = input_files(journal, 'interactive', roles={
-        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'rounds': '2'}},
-        'V': {'inputs': {'values': table, 'claim': '10', 'rounds': '2'}}})
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': ['1', '2', '3', '4'], 'rounds': '2'}, 'V': {'values': table, 'claim': '10', 'rounds': '2'}}})
     outputs = directory / 'outputs.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={pin}', *inputs, f'--results={outputs}'])
     # Each round sends two boundary sums and one delivered challenge.
-    assert report['execution']['wire']['sends'] == 6
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is False
+    assert joint_execution(report)['wire']['sends'] == 6
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] is False
 
 
 @pytest.mark.parametrize('rounds', [0, 1, 2])
 def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, directory, rounds):
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
-    inputs = input_files(journal, 'interactive', roles={
-        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': str(rounds)}},
-        'V': {'inputs': {'claim': '10', 'rounds': str(rounds)}}})
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': str(rounds)}, 'V': {'claim': '10', 'rounds': str(rounds)}}})
     outputs = directory / 'outputs.json'
     journal.run([toolchain.runtime, '--json', 'run', f'--package={package}',
                  f'--sha256={pin}', *inputs, f'--results={outputs}'])
-    result = json.loads(outputs.read_text())['roles']
+    result = json.loads(outputs.read_text())['value']
     assert result['P']['point'] == result['V']['evaluation']['point']
     assert len(result['P']['point']) == rounds
     # Independent MSB-first interpolation of each remaining Boolean row.
@@ -103,12 +98,10 @@ def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, 
 
 def test_reduction_rejects_excess_rounds_before_sending(toolchain, journal, directory):
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
-    inputs = input_files(journal, 'interactive', roles={
-        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '3'}},
-        'V': {'inputs': {'claim': '10', 'rounds': '3'}}})
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '3'}, 'V': {'claim': '10', 'rounds': '3'}}})
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
-                           f'--sha256={pin}', *inputs], refuses='entry-run-incomplete')
-    assert report['execution']['wire']['sends'] == 0
+                           f'--sha256={pin}', *inputs], refuses='entry-host-run-failed')
+    assert joint_execution(report)['wire']['sends'] == 0
 
 
 def test_proof_binds_public_tables_even_with_unchanged_sum(toolchain, journal, directory):
@@ -184,13 +177,13 @@ def test_each_opening_participant_checks_its_own_domain(toolchain, journal, dire
     package, pin = build(toolchain, journal, directory, 'common/tests/fixtures/projects/polynomial-opening', 'Interactive', [])
     public = read('common/tests/fixtures/projects/polynomial-opening', 'public')
     witness = read('common/tests/fixtures/projects/polynomial-opening', 'witness')
-    roles = {'P': {'inputs': public | witness}, 'V': {'inputs': dict(public)}}
-    roles[role]['inputs']['point'] = public['shift']
-    request = input_files(journal, 'pole', roles=roles)
+    roles = {'P': public | witness, 'V': dict(public)}
+    roles[role]['point'] = public['shift']
+    request = input_files(journal, 'pole', package=package, arguments={'inputs': roles})
     refused = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                             f'--sha256={pin}', *request, f'--results={directory / "outputs.json"}'],
-                           refuses='entry-run-incomplete')
-    stopped = refused['execution']['roles'][0 if role == 'P' else 1]['after']
+                           refuses='entry-host-run-failed')
+    stopped = joint_execution(refused)['roles'][0 if role == 'P' else 1]['after']
     assert stopped[0] == 'stopped'
     assert stopped[1]['cause'] == ['explicit', {'text': 'reject', 'omitted_bytes': 0}]
 
@@ -212,12 +205,12 @@ protocol Run roles(P,V)(values:vec::Vector<F>@P,claim:F@V,challenges:Random<F>@V
  let (p1,residual1,e1)=Reduce<F,2>(residual0,e0.value,1,challenges);
  return(point=vec::concat(p0,p1),residual=mle::values(residual1),
         remaining=mle::variables(residual1),value=e1.value);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*library_modules('protocols/polynomial/sumcheck'), *flags))
     result = entry.run_roles('two-prefixes', {
-        'P': {'inputs': {'values': ['1', '2', '3', '4']}},
-        'V': {'inputs': {'claim': '10'}}})
+        'P': {'values': ['1', '2', '3', '4']},
+        'V': {'claim': '10'}})
     r0, r1 = map(int, result['P']['point'])
     modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
     expected = ((1-r0)*(1-r1) + 2*(1-r0)*r1 + 3*r0*(1-r1) + 4*r0*r1) % modulus

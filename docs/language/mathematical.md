@@ -6,7 +6,7 @@ for the existing participant compiler and runtime. The
 [source profile](../spec/language/README.md) defines syntax,
 permissions, role semantics and bounds. Static protocol composition, managed
 randomness, bounded repetition and conditional participant completion are supported.
-Relations, specification clauses and explicit run/proof Entries are supported.
+Relations, specification clauses and Entry functions and declarative proofs are supported.
 The common Host supports authenticated packages, named inputs/results and
 independent proof calls through the [CLI and Rust API](../runtime/entries.md).
 
@@ -25,13 +25,13 @@ zkc-compile language-check --source-format=zkc --entry=transfer::Demo \
 
 Use the same options with `language-emit` to print checked original MLIR,
 `language-interface` for the selected Entry's named port layout, or
-`language-bundle` for the selected run bundle or proof deployment, or
+`language-bundle` for the selected Host control artifact or native proof deployment, or
 `language-package` for the immutable package containing original, interface,
 artifact and compilation options. These Entry commands check source and original
 IR correspondence; bundle/package commands also lower and admit the executable
 target. `language-check` also accepts no `--entry`
 to check definitions alone; the report identifies that narrower scope.
-Output commands accept `--entry-kind=run|proof` to restrict the eligible kind.
+Output commands accept `--entry-kind=function|proof` to restrict the eligible kind.
 An explicit name is resolved before kind checking; filtering cannot hide an
 ambiguous short name. With no name, exactly one eligible Entry is required.
 The application CLI offers `zkc check` with the same behavior and optional
@@ -122,7 +122,7 @@ The compiler finds the actual draws of `challenges` through composition and
 repetition. It checks each delivery before constructing participant transcripts.
 Use `construction authored;` for an authored noninteractive job. `target` is
 optional and adds no execution guard. An Entry alias such as `proof Release = Proof;`
-inherits the whole configuration. The [Entry contract](../spec/language/entries.md#entry-jobs)
+inherits the whole configuration. The [Entry contract](../spec/language/entries.md#proof-declarations)
 defines exact selection and refusal rules.
 
 A proof Entry can select `complete result.ready;` for bounded attempts. Setup
@@ -151,7 +151,7 @@ protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
   let received = send P -> V(pair);
   return received;
 }
-run Demo = Transfer;
+entry fn Demo(inputs: Transfer::Inputs) { return Transfer::run(inputs); }
 ```
 
 `math fn` describes total algebra. `fn` describes ordered work, including control

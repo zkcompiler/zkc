@@ -67,6 +67,8 @@ def prepare_case(args, output, capture, manifest, case):
     files = []
     identities = []
     for index, entry in enumerate(inputs):
+        if not program.proof:
+            entry = {"arguments": {"inputs": entry}}
         row, hashes = {}, {}
         for name, values in entry.items():
             path = directory/f'{index}-{name}.json'
@@ -89,23 +91,20 @@ def prepare_case(args, output, capture, manifest, case):
                   'Generated-project compilation is a single compiler-process observation, excluding source generation.'],
         'boundaries': {},
     }
-    boundary = 'admitted_entry_call' if program.proof else 'admitted_run_call'
+    boundary = 'admitted_entry_call' if program.proof else 'admitted_function_call'
     base = {'package': str(package), 'sha256': digest(package), 'ingress': args.ingress}
     if not program.proof:
-        backend = base | {'kind': 'run', 'roles': files[0], 'accept_role': 'P'}
+        backend = base | {'kind': 'run', 'arguments': files[0]['arguments'], 'accept_role': 'P'}
         job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary, execution_counts=args.execution_counts)
         execute_job(job, directory/'control', CONTROL, args.timeout)
         # The generator supplies a typed incorrect expectation for its own domain.
         require(program.incorrect is not None, 'run workload needs an incorrect-result control')
-        bad_roles = {}
-        for role, values in program.incorrect.items():
-            path = directory/f'incorrect-{role}.json'
-            write_json(path, values)
-            capture.add(path)
-            bad_roles[role] = str(path)
+        path = directory/'incorrect-arguments.json'
+        write_json(path, {'inputs': program.incorrect})
+        capture.add(path)
         request = directory/'incorrect-request.json'
         write_json(request, {'format': 'zkc.benchmark-job/0', 'operation': 'run', 'plan': CONTROL,
-            'backend': backend | {'roles': bad_roles}, 'proof': str(directory/'unused')})
+            'backend': backend | {'arguments': str(path)}, 'proof': str(directory/'unused')})
         record = Journal(directory/'incorrect', args.timeout).command([args.worker, request], cwd=directory, expected=None)
         report = json.loads(Path(record['stdout']).read_text())
         require(report.get('ingress') == args.ingress, 'incorrect-result ingress differs from the request')

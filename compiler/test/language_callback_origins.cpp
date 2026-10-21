@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Project.h"
 #include "llvm/Support/JSON.h"
@@ -54,9 +55,9 @@ fn permute(rows:domain<Fr>,columns:domain<Fr>,
 )->Fr effects(stop){return grid(rows,columns,fn(r,c)=>body(c,0,r));}
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){
  return permute(elements(xs),elements(ys),fn(a,unused,b)=>a+b+unused);
-}run Run=Demo;
+}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    auto closed = take(closeEntry(project, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
     require(named(project, "permute").scopedInputs[0].itemOrigins ==
@@ -73,9 +74,9 @@ fn generic_grid<A:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<A>,columns:domain
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){
  return generic_grid(elements(xs),indices(xs),fn(value,i)=>value);
-}run Run=Demo;
+}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-        take(closeEntry(project, "m::Run"));
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"));
       });
   cases.run("equal-typed state is not an item in the first slot", [] {
     refuses(check(R"(
@@ -159,12 +160,13 @@ fn forward(go:bool,rows:domain<Fr>,columns:domain<Fr>,
                               expression.str() + R"(;}
 protocol Demo roles(P)(go:bool@P,xs:Vector<Fr>@P)->(r:Fr@P){
  return forward(go,elements(xs),elements(xs),fn(state,item)=>state+item);
-}run Run=Demo;
+}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
                 auto project = take(check(source));
                 if (auto error = checkScopedElaboration(project))
                   throw std::runtime_error(toString(std::move(error)));
-                auto closed = take(closeEntry(project, "m::Run"));
+                auto closed =
+                    take(zkc::test::closeProtocolDeployment(project, "m::Run"));
                 if (auto error = checkScopedSpecialization(closed))
                   throw std::runtime_error(toString(std::move(error)));
                 source.replace(source.find("fold(rows,0,step)"),
@@ -237,7 +239,7 @@ module Impl:Grid{
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){
  return Impl::run(elements(xs),elements(xs),fn(a,b)=>a+b);
-}run Run=Demo;
+}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
   });
   for (const auto &clause :
@@ -363,9 +365,9 @@ math fn indexed(rows:domain<index>,columns:domain<index>,
 math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
  return indexed(indices(xs),indices(ys),fn(r,c)=>at(xs,r)+at(ys,c));
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    take(closeEntry(project, "m::Run"));
+    take(zkc::test::closeProtocolDeployment(project, "m::Run"));
   });
   for (unsigned mutation = 0; mutation < 3; ++mutation)
     cases.run("independent formal contract mutation " + Twine(mutation), [&] {

@@ -1,7 +1,8 @@
 # Tests
 
-The execution toolkit has one path: `.zkc` source lowers through Protocol IR
-(PIR), built on MLIR, to `zkc.program/0`, which the common Runner and Host execute. Shared Python
+The execution toolkit checks `.zkc` applications through Entry control and
+Protocol IR (PIR), built on MLIR. Their numerical work lowers to `zkc.program/0`;
+the common Entry, proof and joint Hosts share the native VM. Shared Python
 tests exercise that path and its installed tools. The optional Lean package
 maintains independent research models and checks.
 

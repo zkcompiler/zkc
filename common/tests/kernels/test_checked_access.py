@@ -29,7 +29,7 @@ fn access(m:Matrix<F>,row:index,column:index)->F {{
 protocol Run roles(P)(m:Matrix<F>@P,row:index@P,column:index@P)->(result:F@P) {{
   return access(m,row,column);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     degree = DEGREE.get(field, 1)
@@ -43,12 +43,12 @@ run Demo=Run;
                               ('wide-row', str(2**32), '1'),
                               ('huge-column', '0', str(2**64 - 1))]:
         report = entry.run(name, inputs | {'row': row, 'column': column},
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'matrix-index' in str(report)
     for rows, columns in [(0, 0), (0, 3), (2, 0)]:
         report = entry.run(f'empty-{rows}-{columns}', {
             'm': {'rows': str(rows), 'columns': str(columns), 'entries': []},
-            'row': '0', 'column': '0'}, refuses='entry-run-incomplete')
+            'row': '0', 'column': '0'}, refuses='entry-host-run-failed')
         assert 'matrix-index' in str(report)
 
 
@@ -65,7 +65,7 @@ fn access(values:Vector<F>,position:index)->F {{
 protocol Run roles(P)(values:Vector<F>@P,position:index@P)->(result:F@P) {{
   return access(values,position);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     values = [str(3 * i + 7) for i in range(length)]
@@ -73,10 +73,10 @@ run Demo=Run;
         assert entry.run(f'valid-{index}', {'values': values, 'position': str(index)})['result'] == expected
     for index in (length, 2**32, 2**64 - 1):
         report = entry.run(f'outside-{index}', {'values': values, 'position': str(index)},
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'field-array-index' in str(report)
     report = entry.run('wrong-length', {'values': values + ['99'], 'position': '0'},
-                       refuses='entry-run-incomplete')
+                       refuses='entry-host-run-failed')
     assert 'field-array-length' in str(report)
 
 
@@ -90,9 +90,9 @@ fn access(a:F,b:F,position:index)->(F,F) {
 protocol Run roles(P)(a:F@P,b:F@P,position:index@P)->(result:(F,F)@P) {
   return access(a,b,position);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     assert entry.run('valid', {'a': '7', 'b': '11', 'position': '0'})['result'] == ['7', '11']
-    report = entry.run('outside', {'a': '7', 'b': '11', 'position': '2'}, refuses='entry-run-incomplete')
+    report = entry.run('outside', {'a': '7', 'b': '11', 'position': '2'}, refuses='entry-host-run-failed')
     assert 'field-array-index' in str(report)

@@ -306,6 +306,7 @@ struct Import {
   bool isPublic = false, indexing = false;
 };
 struct SyntaxDeclaration {
+  std::optional<std::string> generated;
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
   /// installed identity or, for an asset domain, the captured asset name.

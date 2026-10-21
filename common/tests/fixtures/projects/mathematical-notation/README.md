@@ -24,7 +24,7 @@ zkc inputs check --operation=run
 zkc run
 ```
 
-The supplied [input map](inputs/example.Run/P.json) contains these values.
+The supplied [input map](inputs/example.Run/arguments.json) contains these values.
 `run` writes named outputs to `build/zkc/example.Run.results.json`.
 
 `α` is a source identifier with exact NFC spelling. Input and output JSON keep

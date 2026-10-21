@@ -3,7 +3,7 @@
 import pytest
 
 from coset_reference import CosetReference
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import library_modules
 
 
@@ -36,7 +36,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,poi
     ->(result:(Vector<F>,Vector<F>,F,F)@P) {{
   return evaluate(xs,width,height,shift,point);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 
@@ -79,8 +79,8 @@ run Demo=Work;
         data = check(f'arbitrary-word-{i}', columns, height, shift, point, expected)
 
     def refuse(name, changes, cause):
-        report = entry.run(name, data | changes, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, data | changes, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'backend', {'omitted_bytes': 0, 'text': cause}]
 
     for name, changes, cause in [
@@ -130,7 +130,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,
   return(single=single,columns=columns,selected=selected,data=data,word_values=word_values,
     width=batch_width,height=batch_height,shift=batch_shift);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
                   [*library_modules('core/polynomial'), *flags])
@@ -151,14 +151,14 @@ run Demo=Work;
     for column in (width, width + 1):
         entry.run(f'column-out-of-bounds-{column}',
                   data | {'point': f.encode(f.zero), 'column': column},
-                  refuses='entry-run-incomplete')
+                  refuses='entry-host-run-failed')
     entry.run('checked-shape', data | {'point': f.encode(f.zero), 'column': 0,
-                                      'xs': data['xs'][:-1]}, refuses='entry-run-incomplete')
+                                      'xs': data['xs'][:-1]}, refuses='entry-host-run-failed')
     entry.run('checked-domain', data | {'point': f.encode(f.zero), 'column': 0,
-                                       'shift': f.encode(f.zero)}, refuses='entry-run-incomplete')
+                                       'shift': f.encode(f.zero)}, refuses='entry-host-run-failed')
     entry.run('checked-height', data | {'point': f.encode(f.zero), 'column': 0,
                                        'height': 3, 'xs': data['xs'][:9]},
-              refuses='entry-run-incomplete')
+              refuses='entry-host-run-failed')
     constants = [f.encode(scalar(f, seed)) for seed in (43, 47, 59)]
     for i, point in enumerate([f.zero, shift, scalar(f, 7)]):
         assert entry.run(f'singleton-domain-{i}', data | {

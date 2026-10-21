@@ -17,7 +17,7 @@ ALLOWED = {
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
-    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
+    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRSCFDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
 }
 HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
@@ -27,7 +27,7 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
+        "Compilation", "Diagnostics", "Host", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
         "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],

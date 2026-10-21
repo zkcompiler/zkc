@@ -36,7 +36,7 @@ pub fn authority(bytes: &[u8]) -> Result<SetupAuthority> {
     })
 }
 mod output;
-pub use output::{output_setups, proof_outputs, run_outputs};
+pub use output::{function_output, output_setups, proof_outputs, run_outputs};
 
 pub(crate) use output::output_setups_with;
 

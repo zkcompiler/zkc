@@ -33,7 +33,7 @@ fn through<C:Transform>(x:F,first:fn(F)->F,second:fn(F)->F)->F effects(first,sec
  return C::run(x,first,second);
 }
 fn work(x:F)->F effects(){return through<Pipeline>(x,fn(y)=>y+1,fn(y)=>y*2);}
-protocol Run roles(P)(x:F@P)->(result:F@P){return work(x);}run Demo=Run;
+protocol Run roles(P)(x:F@P)->(result:F@P){return work(x);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('composed', {'x': '3'})['result'] == '8'
@@ -52,7 +52,7 @@ fn grid(rows:domain<F>,columns:domain<F>,
 }
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P)->(result:F@P){
  return grid(elements(xs),elements(ys),fn(x,y)=>apply(x,fn(z)=>z*y));
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('grid', {'xs': ['2', '3'], 'ys': ['5', '7']})['result'] == '60'
@@ -68,7 +68,7 @@ fn fold_item_first(rows:domain<F>,initial:F,
 )->F {return fold(rows,initial,fn(state,item)=>step(item,state));}
 protocol Run roles(P)(xs:Vector<F>@P)->(result:F@P){
  return fold_item_first(elements(xs),0,fn(item,state)=>state*10+item);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('ordered', {'xs': ['2', '3', '5']})['result'] == '235'
@@ -97,7 +97,7 @@ math fn work(xs:Vector<F>,ys:Vector<F>)->F{
 }
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P)->(result:F@P){
  return work(xs,ys);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('bounds', {'xs': ['2', '3'], 'ys': ['5', '7']})['result'] == '60'

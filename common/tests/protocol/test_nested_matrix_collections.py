@@ -56,7 +56,7 @@ def test_nested_matrix_values_and_empty_admission(toolchain, journal, directory,
             [seed + product for product in products])
     for label, changed in [('used', {'xs': decimal_values([])}),
                            ('ignored', {'ignored': decimal_values([])})]:
-        refused = entry.run(label, inputs | changed, refuses='entry-run-incomplete')
+        refused = entry.run(label, inputs | changed, refuses='entry-host-run-failed')
         assert 'rejected:require' in json.dumps(refused)
 
     # Empty outer traversal skips *all* inner admission, even conflicting zip
@@ -76,7 +76,7 @@ def test_nested_matrix_values_and_empty_admission(toolchain, journal, directory,
     assert entry.run('empty-inner-nonzero-seed', zero_inputs)['result'] == decimal_values([19, 19])
     refused = entry.run('empty-inner-ignored-mismatch',
                         zero_inputs | {'ignored': decimal_values([1])},
-                        refuses='entry-run-incomplete')
+                        refuses='entry-host-run-failed')
     assert 'rejected:require' in json.dumps(refused)
     both_empty = zero_inputs | {'m': matrix(0, 0, [], tag, width),
                                 'xs': decimal_values([1]), 'ignored': decimal_values([2, 3])}

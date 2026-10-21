@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Contracts/Domains.h"
@@ -109,7 +110,16 @@ void mutate(function_ref<void(json::Value &)> change) {
 CheckedOriginal compile(StringRef code) {
   auto project = take(
       analyze(take(capture({{"sample", code.str(), {}}}))).checkedProject());
-  return take(prepareOriginal(take(closeEntry(project, "sample::Demo"))));
+  return take(prepareOriginal(
+      take(zkc::test::closeProtocolDeployment(project, "sample::Demo"))));
+}
+// These native controls intentionally expose affine result custody. Their
+// protocol deployment is independent of an ordinary source Entry function.
+CheckedOriginal compileNative(StringRef code) {
+  auto project = take(
+      analyze(take(capture({{"sample", code.str(), {}}}))).checkedProject());
+  return take(
+      prepareOriginal(take(zkc::test::closeNativeRun(project, "sample::Run"))));
 }
 // This fixture is independent of source layout/emission and the Names helpers.
 std::pair<std::string, json::Value>
@@ -324,7 +334,8 @@ int main() {
         text += ',';
       text += name;
     }
-    text += ")@P)->(){return ();}run Demo=Run;";
+    text += ")@P)->(){return ();}entry fn Demo(inputs: Run::Inputs) { return "
+            "Run::run(inputs); }";
     auto project = analyze(take(capture({{module, text, "long-type.zkc"}})))
                        .checkedProject();
     // The source work bound currently refuses this before interface writing.
@@ -334,7 +345,8 @@ int main() {
     if (!project)
       failure = project.takeError();
     else {
-      auto selected = closeEntry(*project, module + "::Demo");
+      auto selected =
+          zkc::test::closeProtocolDeployment(*project, module + "::Demo");
       if (!selected)
         failure = selected.takeError();
       else {
@@ -497,7 +509,7 @@ protocol Run roles(P)(a:Box<bool>@P,b:Box<index>@P,c:[bool;0]@P,d:[index;0]@P)
   ->(x:Box<bool>@P,y:Box<index>@P,u:[bool;0]@P,v:[index;0]@P){
   return(x=a,y=b,u=c,v=d);
 }
-run Demo=Run;)zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
     const auto &v = source.interface().selectedProtocol();
     require(v.inputs[0].schema->identity != v.inputs[1].schema->identity &&
                 v.inputs[2].schema->identity != v.inputs[3].schema->identity &&
@@ -535,10 +547,10 @@ run Demo=Run;)zkc");
     for (
         StringRef code : {
             R"zkc(module sample; #[affine] struct Token{} fn mint()->Token{return Token{};}
-      protocol Run roles(P)()->(x:Token@P){let t @P =mint();return(x=t);}run Demo=Run;)zkc",
+      protocol Run roles(P)()->(x:Token@P){let t @P =mint();return(x=t);})zkc",
             R"zkc(module sample; enum Choice{A(bool),B()}
-      protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);}run Demo=Run;)zkc"}) {
-      auto source = compile(code);
+      protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);})zkc"}) {
+      auto source = compileNative(code);
       auto v = take(json::parse(source.interfaceJson()));
       auto &out = *protocol(v).getArray("outputs")->front().getAsObject();
       (*out.getObject("schema"))["identity"] = std::string(64, '0');
@@ -688,17 +700,19 @@ run Demo=Run;)zkc");
         source += ",";
       source += "a" + std::to_string(i) + ":[();1024]@P";
     }
-    source += ")->(){return();}run Demo=Run;";
+    source += ")->(){return();}entry fn Demo(inputs: Run::Inputs) { return "
+              "Run::run(inputs); }";
     auto captured = take(capture({{"sample", source, {}}}));
     auto project = take(analyze(captured).checkedProject());
-    refuses(prepareOriginal(take(closeEntry(project, "sample::Demo"))),
+    refuses(prepareOriginal(take(
+                zkc::test::closeProtocolDeployment(project, "sample::Demo"))),
             "source.limit");
   });
   cases.run("source agreement remains stronger than a structural interface",
             [] {
               auto source = compile(R"zkc(module sample;
 protocol Run roles(P)(a:bool@P)->(b:bool@P) {return(b=a);}
-run Demo=Run;)zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
               auto value = take(json::parse(source.interfaceJson()));
               input(value)["name"] = "renamed";
               take(readInterface(source.bytes(), zkc::printJson(value)));
@@ -710,7 +724,7 @@ run Demo=Run;)zkc");
             });
   cases.run(
       "variants empty products and custody survive independent reading", [] {
-        auto source = compile(R"zkc(module sample;
+        auto source = compileNative(R"zkc(module sample;
 domain Fr=field("bls12-381.fr");
 #[affine] struct State {pub value:Fr}
 enum Choice {Some(Fr), None()}
@@ -720,7 +734,7 @@ protocol Run roles(P)(choice:Choice@P, empty:[Fr;0]@P, x:Fr@P)
  let state @P =make(x);
  return(same=choice,unit=(),state=state);
 }
-run Demo=Run;)zkc");
+)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         require(
             view.selectedProtocol().inputs[0].schema->alternatives.size() ==
@@ -763,12 +777,12 @@ run Demo=Run;)zkc");
   cases.run(
       "restricted children restrict their aggregate at single-role outputs",
       [] {
-        auto source = compile(R"zkc(module sample;
+        auto source = compileNative(R"zkc(module sample;
 #[linear] struct Ticket {}
 struct Wrapper {ticket:Ticket}
 fn make()->Wrapper {return Wrapper{ticket:Ticket{}};}
 protocol Run roles(P)()->(result:Wrapper@P) {let value @P =make(); return(result=value);}
-run Demo=Run;)zkc");
+)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         require(
             !view.selectedProtocol().outputs[0].schema->constructible &&
@@ -795,7 +809,7 @@ run Demo=Run;)zkc");
   cases.run("zero-leaf shared ports still require source permissions", [] {
     auto source = compile(R"zkc(module sample;
 protocol Run roles(P,V)()->(empty:()@(V,P)) {return(empty=());}
-run Demo=Run;)zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
     auto view = take(readInterface(source.bytes(), source.interfaceJson()));
     require(view.selectedProtocol().outputs[0].native.empty() &&
                 view.selectedProtocol().outputs[0].roles.size() == 2,
@@ -811,11 +825,11 @@ run Demo=Run;)zkc");
             "source.interface");
   });
   cases.run("native admission checks custody placement before metadata", [] {
-    auto source = compile(R"zkc(module sample;
+    auto source = compileNative(R"zkc(module sample;
 #[affine] struct Token {}
 fn mint()->Token {return Token{};}
 protocol Run roles(P,V)()->(t:Token@P) {let t @P =mint();return(t=t);}
-run Demo=Run;)zkc");
+)zkc");
     auto v = take(json::parse(source.interfaceJson()));
     auto &port = *protocol(v).getArray("outputs")->front().getAsObject();
     port.getObject("schema")->operator[]("custody") = false;
@@ -835,14 +849,14 @@ run Demo=Run;)zkc");
     refuses(readInterface(bytes, zkc::printJson(v)), "target.admission");
   });
   cases.run("native nominal anchors cannot acquire two source labels", [] {
-    auto source = compile(R"zkc(module sample;
+    auto source = compileNative(R"zkc(module sample;
 #[affine] struct Token {}
 enum Choice {Some(bool),None()}
 fn mint()->Token {return Token{};}
 protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
  let a @P =mint(); let b @P =mint();return(a=a,b=b,x=v,y=v);
 }
-run Demo=Run;)zkc");
+)zkc");
     for (unsigned index : {1u, 3u}) {
       auto v = take(json::parse(source.interfaceJson()));
       auto &port = *(*protocol(v).getArray("outputs"))[index].getAsObject();
@@ -863,7 +877,8 @@ run Demo=Run;)zkc");
                   domain.identity +
                   "\");"
                   "protocol Run roles(P,V)(x:D@(V,P))->(result:D@(V,P)) "
-                  "{return(result=x);}run Demo=Run;");
+                  "{return(result=x);}entry fn Demo(inputs: Run::Inputs) { "
+                  "return Run::run(inputs); }");
       auto view = take(readInterface(source.bytes(), source.interfaceJson()));
       require(view.selectedProtocol().inputs[0].schema->constructible &&
                   view.selectedProtocol().inputs[0].roles ==
@@ -994,7 +1009,8 @@ run Demo=Run;)zkc");
         "!local.capability<\"transcript:merlin3.bls12-381.fr64be/0\">";
     auto source =
         compile("module sample;protocol Pass "
-                "roles(P)(x:bool@P)->(r:bool@P){return x;}run Demo=Pass;");
+                "roles(P)(x:bool@P)->(r:bool@P){return x;}entry fn "
+                "Demo(inputs: Pass::Inputs) { return Pass::run(inputs); }");
     auto native = source.bytes().str();
     for (size_t at = 0; (at = native.find("i1", at)) != std::string::npos;
          at += type.size())

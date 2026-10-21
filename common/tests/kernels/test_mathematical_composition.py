@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from input_files import input_files
 from source_modules import core_packages, library_modules
 
@@ -28,7 +28,7 @@ math fn collect<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->F where i
 math fn copy(xs:vec::Vector<F>)->vec::Vector<F>{return collect(vec::elements(xs),fn(x)=>x);}
 math fn term(xs:vec::Vector<F>,i:index)->F where in_bounds(i,xs){return vec::at(copy(xs),i);}
 math fn work(xs:vec::Vector<F>)->F{return total::sum(vec::indices(xs),fn(i)=>term(xs,i));}
-protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){return work(xs);}run Demo=Run;
+protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){return work(xs);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*MODULES, *flags))
     assert entry.run('nonempty', {'xs': ['2', '3', '5']})['value'] == '10'
@@ -41,12 +41,12 @@ def test_checked_static_conversion_precedes_total_consumer(toolchain, journal, d
 math fn last(values:arrays::Array<F,3>)->F{return symbolic::get<F,3,2>(values);}
 protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){
  let fixed=arrays::from_vector<F,3>(xs);return last(fixed);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*MODULES, *flags))
     assert entry.run('valid', {'xs': ['2', '3', '5']})['value'] == '5'
     for count in (0, 2, 4):
-        entry.run(f'wrong-{count}', {'xs': ['7'] * count}, refuses='entry-run-incomplete')
+        entry.run(f'wrong-{count}', {'xs': ['7'] * count}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('nested', [False, True])
@@ -58,7 +58,7 @@ def test_pack_callbacks_preserve_values_guards_and_bounded_work(toolchain, journ
     source = PRELUDE + f'math fn product(pair:(F,F))->F{{{body}}}' + '''
 protocol Run roles(P)(xs:vec::Vector<F>@P,ys:vec::Vector<F>@P)->(value:F@P){
  return finite::sum(domains::zip(xs,ys),fn(pair)=>product(pair));
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     counters = []
     for name, flags in [('default', ()), ('ordered', ('--no-finite-bulk',)),
@@ -68,15 +68,14 @@ protocol Run roles(P)(xs:vec::Vector<F>@P,ys:vec::Vector<F>@P)->(value:F@P){
         entry = Entry(toolchain, journal, folder, source, (*MODULES, *flags))
         assert entry.run('small', {'xs': ['2', '3'], 'ys': ['5', '7']})['value'] == str(62 if nested else 31)
         assert entry.run('empty', {'xs': [], 'ys': []})['value'] == '0'
-        entry.run('strict-empty', {'xs': [], 'ys': ['1']}, refuses='entry-run-incomplete')
-        entry.run('strict-nonempty', {'xs': ['1', '2'], 'ys': ['1']}, refuses='entry-run-incomplete')
-        request = input_files(journal, f'{name}-large', roles={
-            'P': {'inputs': {'xs': ['2'] * 64, 'ys': ['3'] * 64}}})
+        entry.run('strict-empty', {'xs': [], 'ys': ['1']}, refuses='entry-host-run-failed')
+        entry.run('strict-nonempty', {'xs': ['1', '2'], 'ys': ['1']}, refuses='entry-host-run-failed')
+        request = input_files(journal, f'{name}-large', package=entry.package, arguments={'inputs': {'P': {'xs': ['2'] * 64, 'ys': ['3'] * 64}}})
         output = folder / 'large.json'
         report = journal.json([toolchain.runtime, '--json', 'run', f'--package={entry.package}',
                                f'--sha256={entry.pin}', *request, f'--results={output}'])
-        assert json.loads(output.read_text())['roles']['P']['value'] == str(768 if nested else 384)
-        counters.append(report['execution']['roles'][0]['usage'])
+        assert json.loads(output.read_text())['value']['P']['value'] == str(768 if nested else 384)
+        counters.append(joint_execution(report)['roles'][0]['usage'])
     if not nested:
         for optimized in (counters[0], counters[2]):
             assert optimized['logical_bytes'] < counters[1]['logical_bytes']

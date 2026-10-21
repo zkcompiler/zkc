@@ -1,6 +1,5 @@
 //! Checked plans for source projects and input templates, without file publication.
-use super::{Compiler, Error, Project, Selection, input_path};
-use crate::entry::Interface;
+use super::{CheckedInterface, Compiler, Error, Project, Selection, input_path};
 use std::path::{Path, PathBuf};
 
 /// A file to create, never an instruction to replace user data.
@@ -9,12 +8,12 @@ pub struct Template {
     pub contents: String,
 }
 impl Template {
-    pub fn inputs(directory: &Path, interface: &Interface) -> Result<Vec<Self>, String> {
+    pub fn inputs(directory: &Path, interface: &CheckedInterface) -> Result<Vec<Self>, String> {
         let mut paths = std::collections::BTreeSet::new();
         interface
             .input_groups()
             .iter()
-            .filter(|group| !group.is_empty())
+            .filter(|group| !group.is_empty() || interface.kind() == super::EntryKind::Function)
             .map(|group| {
                 let path = input_path(directory, group.name())?;
                 if !paths.insert(path.to_string_lossy().to_ascii_lowercase()) {
@@ -31,17 +30,28 @@ impl Template {
     }
     pub(crate) fn scaffold(directory: &Path) -> Vec<Self> {
         [
-            ("zkc.toml", "format = \"zkc.project/0\"\n\n[modules]\nexample = \"main.zkc\"\nexample_protocol = \"protocol.zkc\"\n"),
-            ("protocol.zkc", "module example_protocol;\n\npub protocol Echo roles(P)(value: index @P) -> (result: index @P) {\n  return value;\n}\n"),
-            ("main.zkc", "module example;\nuse example_protocol::{Echo};\n\nrun Main = Echo;\n"),
-        ].into_iter().map(|(name, contents)| Self { path: directory.join(name), contents: contents.into() }).collect()
+            (
+                "zkc.toml",
+                "format = \"zkc.project/0\"\n\n[modules]\nexample = \"main.zkc\"\n",
+            ),
+            (
+                "main.zkc",
+                "module example;\n\nentry fn Main(value: index) -> index {\n  return value;\n}\n",
+            ),
+        ]
+        .into_iter()
+        .map(|(name, contents)| Self {
+            path: directory.join(name),
+            contents: contents.into(),
+        })
+        .collect()
     }
 }
 
 /// Every selected interface is checked before any template is published.
 /// Existing input contents are deliberately outside this plan's authority.
 pub struct Preparation {
-    pub entries: Vec<Interface>,
+    pub entries: Vec<CheckedInterface>,
     pub templates: Vec<Template>,
 }
 impl Compiler {
@@ -69,10 +79,11 @@ impl Compiler {
                     kind: None,
                 },
             )?;
-            if interface
-                .input_groups()
-                .iter()
-                .any(|group| !group.is_empty())
+            if interface.kind() == super::EntryKind::Function
+                || interface
+                    .input_groups()
+                    .iter()
+                    .any(|group| !group.is_empty())
             {
                 let directory = layout.inputs(interface.entry())?;
                 if !directories.insert(directory.to_string_lossy().to_ascii_lowercase()) {

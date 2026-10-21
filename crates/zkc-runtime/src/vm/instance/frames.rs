@@ -32,13 +32,29 @@ impl<B: Backend> Instance<B> {
         }
         Ok(())
     }
+    /// A generic execution root with exact function ports and no participant
+    /// services. Native backends retain their existing Entry custody contract.
+    pub(crate) fn function_entry_frame(&mut self, origin: Origin, inputs: FrameInputs) -> Frame {
+        let data = self.frame_data(origin, Arc::new(FrameKind::Entry), inputs);
+        self.propose_frame(data)
+    }
     pub(crate) fn entry_frame(&mut self, origin: Origin) -> Frame {
         let mut data = self.frame_data(
             origin,
             Arc::new(FrameKind::Entry),
-            self.participant.inputs.clone().into(),
+            self.participant
+                .as_ref()
+                .expect("participant root")
+                .inputs
+                .clone()
+                .into(),
         );
-        data.services = self.participant.services.clone();
+        data.services = self
+            .participant
+            .as_ref()
+            .expect("participant root")
+            .services
+            .clone();
         self.propose_frame(data)
     }
     pub(crate) fn local_frame(
@@ -54,7 +70,10 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn loop_frame(&mut self, origin: Origin, site: &str, iteration: u64) -> Frame {
         let inputs = self
             .admitted
-            .loop_inputs(&self.participant.symbol, site)
+            .loop_inputs(
+                &self.participant.as_ref().expect("participant root").symbol,
+                site,
+            )
             .clone();
         let mut data = self.frame_data(
             origin,

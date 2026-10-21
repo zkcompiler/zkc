@@ -24,4 +24,4 @@ protocol Run roles(P,V)(pair:(bool,bool)@P,value:bool@V)
   return(pair=nextPair,value=nextValue,ok=accepted);
 }
 
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

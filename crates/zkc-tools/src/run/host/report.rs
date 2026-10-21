@@ -88,6 +88,30 @@ impl HostReport {
             }
         }
     }
+    /// Bounded, payload-free child receipt without materializing the whole trace.
+    pub fn diagnostics_summary(&self) -> Json {
+        use crate::host::diagnostics::{text, values};
+        let execution = self.execution.as_ref();
+        json!({"phase":self.phase,"session":self.session,"failure":self.failure.as_deref().map(text),
+            "cleanup_errors":values(self.cleanup_errors.iter()),
+            "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),
+            "resources":values(self.resources.iter()),
+            "resource_count":self.resources.len(),
+            "reached_count":execution.map_or(0,|e|e.reached.len()),
+            "reached":execution.map(|e|e.reached.iter().take(16).map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,"progress":format!("{:?}",r.progress)})).collect::<Vec<_>>()),
+            "wire":execution.map(|e|json!({"sends":e.wire.sends,"receives":e.wire.receives,"sent_bytes":e.wire.sent_bytes,"replacement_bytes":e.wire.replacement_bytes})),
+            "outcome":execution.map(|e|outcome_summary(&e.outcome)),
+            "role_count":execution.map_or(0,|e|e.roles.len()),
+            "roles":execution.map(|e|e.roles.iter().take(16).map(|r| {
+                let backend=&e.backends.iter().find(|(name,_)|name==&r.role).expect("role custody").1;
+                json!({"role":text(&r.role),"before":state_summary(&r.before),"after":state_summary(&r.after),"cancelled":r.cancelled,
+                    "usage":r.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
+                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,"logical_bytes":u.logical_bytes})),
+                    "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),
+                    "sequence_work":backend.sequence_work_spent(),"active_frames":backend.active_frames(),
+                    "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&r.outputs)})
+            }).collect::<Vec<_>>())})
+    }
     pub fn json(&self) -> Json {
         self.json_with_outputs(true)
     }
@@ -102,19 +126,7 @@ impl HostReport {
             "failure":self.failure,"resources":self.resources,"roles":[],"outcome":null,
             "assurance":["authenticated-supplied-schedule","session-freshness-host-obligation","local-only-public-inputs","registry-selected-receive-keys"]});
         if let Some(execution) = &self.execution {
-            result["outcome"] = match &execution.outcome {
-                Outcome::Completed => json!(["completed"]),
-                Outcome::ParticipantStopped { role } => json!(["participant-stopped", role]),
-                Outcome::ReturnedEarly { role, blocked } => {
-                    json!(["returned-early", role, blocked])
-                }
-                Outcome::DriverFailed(failure) => json!([
-                    "driver-failed",
-                    format!("{:?}", failure.kind),
-                    bounded(&failure.detail)
-                ]),
-                Outcome::HostCancelled(reason) => json!(["host-cancelled", bounded(reason)]),
-            };
+            result["outcome"] = outcome(&execution.outcome);
             result["wire"] = json!({"sends":execution.wire.sends,"receives":execution.wire.receives,
                 "sent_bytes":execution.wire.sent_bytes,"replacement_bytes":execution.wire.replacement_bytes});
             result["reached"] = json!(execution.reached.iter().map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,
@@ -156,6 +168,57 @@ impl HostReport {
         }
         result["diagnostics"] = json!(diagnostics);
         result
+    }
+}
+fn state_summary(value: &State) -> Json {
+    use crate::host::diagnostics::{message, origin, text};
+    match value {
+        State::Stopped(stop) => {
+            json!(["stopped",{"origin":origin(&stop.origin),"origin_path_omitted":stop.origin.path.len().saturating_sub(4),
+            "site":stop.site.as_deref().map(text),"cause":match &stop.cause {
+                StopCause::Decode(reason)=>json!(["decode",reason.as_str()]),
+                StopCause::Explicit(reason)=>json!(["explicit",message(&reason.text)]),
+                StopCause::Backend(reason)=>json!(["backend",message(&reason.text)]),
+                StopCause::Limit=>json!(["limit"]),StopCause::Cancelled=>json!(["cancelled"]),
+            },"local":stop.local.as_ref().map(|l|json!({"site":text(&l.site),"function":text(&l.function),"instruction":l.instruction.as_deref().map(text)})),
+            "cleanup_errors":stop.cleanup_errors.iter().take(4).map(|e|message(&e.text)).collect::<Vec<_>>(),
+            "omitted_errors":stop.omitted_errors+stop.cleanup_errors.len().saturating_sub(4)}])
+        }
+        State::ReturnIf { site } => json!(["return-if", text(site)]),
+        State::Pending { kind, site } => json!(["pending", format!("{kind:?}"), text(site)]),
+        State::Unpolled { kind, site } => json!([
+            "unpolled",
+            kind.map(|k| format!("{k:?}")),
+            site.as_deref().map(text)
+        ]),
+        _ => state(value),
+    }
+}
+fn outcome_summary(value: &Outcome) -> Json {
+    use crate::host::diagnostics::message;
+    match value {
+        Outcome::ParticipantStopped { role } => json!(["participant-stopped", role]),
+        Outcome::ReturnedEarly { role, blocked } => json!(["returned-early", role, blocked]),
+        Outcome::DriverFailed(failure) => json!([
+            "driver-failed",
+            format!("{:?}", failure.kind),
+            message(&failure.detail.text)
+        ]),
+        Outcome::HostCancelled(reason) => json!(["host-cancelled", message(&reason.text)]),
+        _ => outcome(value),
+    }
+}
+fn outcome(outcome: &Outcome) -> Json {
+    match outcome {
+        Outcome::Completed => json!(["completed"]),
+        Outcome::ParticipantStopped { role } => json!(["participant-stopped", role]),
+        Outcome::ReturnedEarly { role, blocked } => json!(["returned-early", role, blocked]),
+        Outcome::DriverFailed(failure) => json!([
+            "driver-failed",
+            format!("{:?}", failure.kind),
+            bounded(&failure.detail)
+        ]),
+        Outcome::HostCancelled(reason) => json!(["host-cancelled", bounded(reason)]),
     }
 }
 fn bounded(text: &Text) -> Json {

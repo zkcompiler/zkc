@@ -1,5 +1,6 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -42,10 +43,10 @@ int main() {
         #[site(delivery)] let received=send V->P(c);
       }
       return ();
-    }run Demo=Round;)")
+    }entry fn Demo(inputs: Round::Inputs) { return Round::run(inputs); })")
                                    .str();
     auto project = take(checked(source));
-    auto closed = take(closeEntry(project, "m::Demo"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
     auto original = take(prepareOriginal(closed));
     for (bool simplify : {false, true})
       take(compileEntry(original, {simplify, false}));
@@ -67,8 +68,8 @@ int main() {
     auto changed = source;
     auto position = changed.find("#[site(commitment)]");
     changed.insert(position, "let unrelated@P=x+x;");
-    auto updated = take(
-        prepareOriginal(take(closeEntry(take(checked(changed)), "m::Demo"))));
+    auto updated = take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+        take(checked(changed)), "m::Demo"))));
     require(updated.bytes().contains(nativeSiteName("commitment", 987) + "_0"),
             "unrelated source operation must not rename a labelled site");
   });
@@ -84,7 +85,8 @@ int main() {
       proof Demo=Proof {prover P;verifier V;public{};accept ok;
         construction fiat_shamir("merlin3.bls12-381.fr64be/0",coins);}
     )"));
-    auto original = take(prepareOriginal(take(closeEntry(project, "m::Demo"))));
+    auto original = take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Demo"))));
     for (bool simplify : {false, true})
       take(compileEntry(original, {simplify, false}));
   });

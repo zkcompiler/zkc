@@ -6,7 +6,16 @@ use std::collections::{BTreeMap, BTreeSet};
 mod codec;
 mod construction;
 mod dependencies;
+#[cfg(test)]
+mod tests;
 pub use construction::ConstructionPlan;
+
+/// The executable endpoint required by an independent proof invocation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeProofOperation {
+    Prove,
+    Verify,
+}
 
 /// Construction facts authenticated by the caller's selected deployment.
 /// Source-input indices are checked by the Host against participant ports.
@@ -44,8 +53,10 @@ fn refuse(reason: &'static str) -> NativeProofError {
 pub struct NativeProofEntry {
     admitted: Program,
     entry: String,
-    producer: EntryRole,
-    validator: EntryRole,
+    producer_role: String,
+    validator_role: String,
+    producer: Option<EntryRole>,
+    validator: Option<EntryRole>,
     acceptance: usize,
     transcript: Option<PhysicalType>,
     native_binding: bool,
@@ -861,13 +872,62 @@ impl NativeProofEntry {
         acceptance: usize,
         construction: ProofConstruction<'_>,
     ) -> Result<Self> {
+        Self::admit(
+            admitted,
+            entry,
+            producer,
+            validator,
+            acceptance,
+            construction,
+            None,
+        )
+    }
+
+    /// Admit exactly one executable endpoint. Public source indices come from
+    /// the authenticated descriptor, independently of the absent endpoint.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_operation(
+        admitted: Program,
+        entry: &str,
+        producer: &str,
+        validator: &str,
+        acceptance: usize,
+        construction: ProofConstruction<'_>,
+        operation: NativeProofOperation,
+        public_inputs: &[usize],
+    ) -> Result<Self> {
+        Self::admit(
+            admitted,
+            entry,
+            producer,
+            validator,
+            acceptance,
+            construction,
+            Some((operation, public_inputs)),
+        )
+    }
+
+    fn admit(
+        admitted: Program,
+        entry: &str,
+        producer_role: &str,
+        validator_role: &str,
+        acceptance: usize,
+        construction: ProofConstruction<'_>,
+        selection: Option<(NativeProofOperation, &[usize])>,
+    ) -> Result<Self> {
+        let (producer, validator) = (producer_role, validator_role);
+        let operation = selection.map(|(operation, _)| operation);
         let ProofConstruction {
             suite,
             events,
             plan,
             source_inputs,
         } = construction;
-        if producer == validator {
+        if producer == validator
+            || !super::decode::valid_name(producer)
+            || !super::decode::valid_name(validator)
+        {
             return Err(refuse("native-proof-profile"));
         }
         let transcript = suite
@@ -953,16 +1013,19 @@ impl NativeProofEntry {
         let codec = plan
             .and_then(|p| p.codec.as_ref())
             .map(|codec| {
-                codec::CheckedCodec::new(&admitted, codec, &state, &helpers, producer, validator)
+                codec::CheckedCodec::new(
+                    &admitted, codec, &state, &helpers, producer, validator, operation,
+                )
             })
             .transpose()?;
         let has_codec = codec.is_some();
         let roles = admitted
             .entry(entry)
             .ok_or_else(|| refuse("native-proof-entry"))?;
-        if roles.len() != 2
+        let endpoint_count = if operation.is_some() { 1 } else { 2 };
+        if roles.len() != endpoint_count
             || admitted.program.entries.len() != 1
-            || admitted.program.participants.len() != 2
+            || admitted.program.participants.len() != endpoint_count
         {
             return Err(refuse("native-proof-entry"));
         }
@@ -973,13 +1036,18 @@ impl NativeProofEntry {
                 .cloned()
                 .ok_or_else(|| refuse("native-proof-role"))
         };
-        let producer = find(producer)?;
-        let validator = find(validator)?;
-        if validator
-            .outputs
-            .get(acceptance)
-            .is_none_or(|t| t.kind() != Type::Bool)
-        {
+        let producer = (operation != Some(NativeProofOperation::Verify))
+            .then(|| find(producer))
+            .transpose()?;
+        let validator = (operation != Some(NativeProofOperation::Prove))
+            .then(|| find(validator))
+            .transpose()?;
+        if validator.as_ref().is_some_and(|endpoint| {
+            endpoint
+                .outputs
+                .get(acceptance)
+                .is_none_or(|t| t.kind() != Type::Bool)
+        }) {
             return Err(refuse("native-proof-validator"));
         }
         let layout = admitted
@@ -1010,17 +1078,53 @@ impl NativeProofEntry {
             }
             Ok(messages)
         };
-        let producer_messages = messages(&producer.role)?;
-        if producer_messages != messages(&validator.role)?
-            || has_codec && !producer_messages.is_empty()
+        let producer_messages = producer.as_ref().map(|r| messages(&r.role)).transpose()?;
+        let validator_messages = validator.as_ref().map(|r| messages(&r.role)).transpose()?;
+        if producer_messages
+            .as_ref()
+            .zip(validator_messages.as_ref())
+            .is_some_and(|(producer, validator)| producer != validator)
+            || has_codec
+                && producer_messages
+                    .iter()
+                    .chain(&validator_messages)
+                    .any(|m| !m.is_empty())
         {
             return Err(refuse("native-proof-wire-layout"));
         }
+        if let Some((_, public)) = selection
+            && (source_inputs.len() != endpoint_count
+                || public.len() > 1024
+                || !public.windows(2).all(|pair| pair[0] < pair[1])
+                || public.iter().any(|i| *i >= 1024))
+        {
+            return Err(refuse("native-proof-source-map"));
+        }
+        if producer.is_some()
+            && let Some(plan) = plan
+        {
+            let shared = match selection {
+                Some((_, public)) => public,
+                None => source_inputs
+                    .get(validator_role)
+                    .ok_or_else(|| refuse("native-proof-construction-start"))?,
+            };
+            // Combined admission also has a real verifier that must supply
+            // these root inputs. Preserve that obligation when it is absent.
+            if plan
+                .inputs
+                .iter()
+                .chain(plan.codec.iter().flat_map(|codec| &codec.inputs))
+                .any(|input| !shared.contains(input))
+            {
+                return Err(refuse("native-proof-private-dependency"));
+            }
+        }
         let mut used_helpers = BTreeSet::new();
         let mut previous_loops = None;
-        for endpoint in [&producer, &validator] {
+        for endpoint in producer.iter().chain(&validator) {
             let participant = &admitted.program.participants[&endpoint.participant];
-            let validating = endpoint.role == validator.role;
+            let validating = endpoint.role == validator_role;
             let state_inputs = if transcript.is_some() { state.len() } else { 0 };
             let state_outputs = state.len();
             let hidden_input = usize::from(has_codec && validating);
@@ -1082,9 +1186,9 @@ impl NativeProofEntry {
                     {
                         return Err(refuse("native-proof-construction-root"));
                     }
-                    if validating {
-                        construction_function(&admitted.program.functions[function], &plan.state)?;
-                    }
+                    // These are shared construction roots even in a producer-only
+                    // deployment; the absent verifier cannot supply this check.
+                    construction_function(&admitted.program.functions[function], &plan.state)?;
                     root_definitions.extend(outputs.iter().cloned());
                     body = &body[1..];
                     Ok(outputs.clone())
@@ -1126,13 +1230,25 @@ impl NativeProofEntry {
                     body,
                     inputs,
                     validating,
-                    &producer.role,
-                    &validator.role,
+                    producer_role,
+                    validator_role,
                 )?;
                 body = &normalized;
             }
             let ordinary_inputs = inputs_end - state_inputs;
             let ordinary_outputs = outputs_end - state_outputs;
+            if let Some((_, public)) = selection {
+                let actual = source_inputs
+                    .get(&endpoint.role)
+                    .ok_or_else(|| refuse("native-proof-source-map"))?;
+                if actual.len() != ordinary_inputs
+                    || !actual.windows(2).all(|pair| pair[0] < pair[1])
+                    || actual.iter().any(|i| *i >= 1024)
+                    || validating && actual.as_slice() != public
+                {
+                    return Err(refuse("native-proof-source-map"));
+                }
+            }
             if transcript.is_some()
                 || plan.is_some()
                 || (validating && !participant.services.is_empty())
@@ -1142,9 +1258,12 @@ impl NativeProofEntry {
                     let actual = source_inputs
                         .get(&endpoint.role)
                         .ok_or_else(|| refuse("native-proof-construction-start"))?;
-                    let public = source_inputs
-                        .get(&validator.role)
-                        .ok_or_else(|| refuse("native-proof-construction-start"))?;
+                    let public = match selection {
+                        Some((_, public)) => public,
+                        None => source_inputs
+                            .get(validator_role)
+                            .ok_or_else(|| refuse("native-proof-construction-start"))?,
+                    };
                     if actual.len() != ordinary_inputs {
                         return Err(refuse("native-proof-construction-start"));
                     }
@@ -1192,8 +1311,8 @@ impl NativeProofEntry {
             let mut walk = ProofWalk {
                 admitted: &admitted,
                 helpers: &helpers,
-                producer: &producer.role,
-                validator: &validator.role,
+                producer: producer_role,
+                validator: validator_role,
                 validating,
                 transcript: transcript.is_some() || plan.is_some(),
                 affine_state: transcript.is_some(),
@@ -1222,6 +1341,8 @@ impl NativeProofEntry {
         Ok(Self {
             admitted,
             entry: entry.into(),
+            producer_role: producer_role.into(),
+            validator_role: validator_role.into(),
             producer,
             validator,
             acceptance,
@@ -1236,11 +1357,21 @@ impl NativeProofEntry {
     pub fn entry(&self) -> &str {
         &self.entry
     }
-    pub fn producer(&self) -> &EntryRole {
-        &self.producer
+    /// The admitted producer endpoint, if this deployment includes it.
+    pub fn producer(&self) -> Option<&EntryRole> {
+        self.producer.as_ref()
     }
-    pub fn validator(&self) -> &EntryRole {
-        &self.validator
+    /// The admitted validator endpoint, if this deployment includes it.
+    pub fn validator(&self) -> Option<&EntryRole> {
+        self.validator.as_ref()
+    }
+    /// Descriptor identity, including when no producer endpoint is admitted.
+    pub fn producer_role(&self) -> &str {
+        &self.producer_role
+    }
+    /// Descriptor identity, including when no validator endpoint is admitted.
+    pub fn validator_role(&self) -> &str {
+        &self.validator_role
     }
     pub fn acceptance(&self) -> usize {
         self.acceptance

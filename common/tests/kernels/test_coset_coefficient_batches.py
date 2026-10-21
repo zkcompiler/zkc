@@ -3,7 +3,7 @@
 import pytest
 
 from coset_reference import CosetReference
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import library_modules
 
 
@@ -35,7 +35,7 @@ protocol Work roles(P)(xs:Vector<F>@P,columns:index@P,height:index@P,shift:F@P,s
     ->(result:(Vector<F>,Vector<F>)@P) {{
   return evaluate(xs,columns,height,shift,size);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 
@@ -56,8 +56,8 @@ run Demo=Work;
         assert entry.run(f'batch-{height}-{size}-{columns}', data)['result'] == [expected, data['xs']]
 
     def refuse(name, data, cause):
-        report = entry.run(name, data, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, data, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'backend', {'omitted_bytes': 0, 'text': cause}]
 
     blocks = [[], [scalar(13), scalar(17)]]
@@ -102,7 +102,7 @@ protocol Work roles(P)(values:Vector<F>@P,coefficients:Vector<F>@P,shift:F@P,
   let direct=coset::evaluate_batch(coefficients,count,width,shift,size);
   return(split=split,direct=direct,original=coefficients);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
                   [*library_modules('relations/air'), *flags])
@@ -121,8 +121,8 @@ run Demo=Work;
     # Interpolation normalization, capacity refusal and representation padding
     # remain source operations before the new batch call.
     refused = entry.run('insufficient-capacity', data | {'width': 2, 'count': 2},
-                        refuses='entry-run-incomplete')
-    cause = refused['execution']['roles'][0]['after'][1]['cause']
+                        refuses='entry-host-run-failed')
+    cause = joint_execution(refused)['roles'][0]['after'][1]['cause']
     assert cause[0] == 'explicit' and cause[1]['text'] == 'reject'
     zeros = [encode(reference.zero)] * 8
     data = {'values': zeros, 'coefficients': [], 'shift': encode(shift),

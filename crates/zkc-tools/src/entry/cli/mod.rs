@@ -1,12 +1,13 @@
 //! Thin command orchestration over project compilation and the shared Entry Host.
+mod context;
+mod function;
 mod initialize;
 mod inputs;
 mod invocation;
 mod target;
 use super::{
-    AttemptOptions, BindingPolicy, BindingScope, BoundInterface, Interface, Package, ProofEntry,
-    ProofOperation, ProofOptions, ProofRequest, RoleInputs, RunEntry, RunRequest, SetupAuthority,
-    files,
+    AttemptOptions, BindingPolicy, BindingScope, Interface, Package, ProofEntry, ProofOperation,
+    ProofOptions, ProofRequest, RoleInputs, SetupAuthority, files,
 };
 use crate::{
     cli::Arguments,
@@ -16,7 +17,7 @@ use crate::{
     },
     run::HostLimits,
 };
-use inputs::{Operation, Options, Request};
+use inputs::{Operation, Options};
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use target::Target;
@@ -86,14 +87,8 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         return Ok(());
     }
     let operation = operation.expect("execution command");
-    let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
+    let view = crate::project::CheckedInterface::read(&package)?;
     report["entry"] = json!(view.entry());
-    report["role_names"] = json!(
-        view.roles()
-            .iter()
-            .map(|role| (&role.native_name, &role.name))
-            .collect::<std::collections::BTreeMap<_, _>>()
-    );
     report["phase"] = json!("invocation");
     let layout = match &target {
         Target::Project(source) => source.project.layout(),
@@ -102,6 +97,17 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     let invocation =
         invocation::Invocation::resolve(&view, layout.as_ref(), args, operation, checking, report)?;
     let mut destinations = invocation.destinations(&target, args)?;
+    if operation == Operation::Run {
+        return function::execute(
+            package,
+            &view,
+            args,
+            invocation,
+            destinations,
+            checking,
+            report,
+        );
+    }
     let mut options = Options::parse(args)?;
     report["setups"] = json!(
         options
@@ -113,62 +119,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     );
     report["phase"] = json!("admission");
     let mut documents = files::Documents::new(options.proof.capacity)?;
-    if operation == Operation::Run {
-        let host = RunEntry::admit(package, options.run, options.setups.clone())?;
-        invocation.check_results(host.output_types())?;
-        report["entry"] = json!(host.interface().entry());
-        report["capacity"] = host.limits().capacity.record();
-        report["phase"] = json!("inputs");
-        let Request::Run(request) = options.request(
-            host.interface(),
-            &invocation,
-            operation,
-            &mut documents,
-            report,
-        )?
-        else {
-            unreachable!()
-        };
-        documents.protect(&mut destinations)?;
-        if checking {
-            host.check_inputs(request)?;
-            report["status"] = json!("inputs-checked");
-        } else {
-            let mut imports = crate::host::setups::VerifierKeys::new(
-                host.limits().capacity.backend().ark_bounds(),
-            );
-            let output_setups = if invocation.results.is_some() {
-                files::output_setups_with(
-                    &request.setups,
-                    &options.setups,
-                    host.limits().capacity,
-                    &mut imports,
-                )?
-            } else {
-                Default::default()
-            };
-            let prepared = host.prepare_with(request, &mut imports)?;
-            let result = prepared.execute();
-            report["phase"] = json!("execution");
-            report["execution"] = result.native.diagnostics();
-            if let Some(error) = result.output_error {
-                return Err(error);
-            }
-            let outputs = result.outputs.ok_or_else(|| {
-                result
-                    .native
-                    .failure
-                    .unwrap_or_else(|| "entry-run-incomplete".into())
-            })?;
-            if invocation.results.is_some() {
-                report["phase"] = json!("results");
-                let encoded = files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
-                report["phase"] = json!("publication");
-                destinations.publish(&[("results", &encoded)], report)?;
-            }
-            report["status"] = json!("executed");
-        }
-    } else {
+    {
         let host = ProofEntry::admit(package, options.proof, options.setups.clone())?;
         invocation.check_results(
             host.output_types(if operation == Operation::Prove {
@@ -186,16 +137,20 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         });
         report["capacity"] = options.proof.capacity.record();
         report["phase"] = json!("inputs");
-        let Request::Proof(request) = options.request(
+        report["role_names"] = json!(
+            host.interface()
+                .roles()
+                .iter()
+                .map(|role| (&role.native_name, &role.name))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        );
+        let request = options.request(
             host.interface(),
             &invocation,
             operation,
             &mut documents,
             report,
-        )?
-        else {
-            unreachable!()
-        };
+        )?;
         documents.protect(&mut destinations)?;
         if checking {
             host.check_inputs(

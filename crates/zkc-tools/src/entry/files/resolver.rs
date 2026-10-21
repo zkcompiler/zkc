@@ -58,12 +58,34 @@ impl Documents {
                 path: group.name().into(),
             }
         })?;
+        self.decode_in(group, &bytes, directory)
+    }
+    /// Decode one named map from a checked invocation document. File references
+    /// retain the same directory confinement and aggregate limits as input files.
+    pub(crate) fn decode_at(
+        &mut self,
+        group: &InputGroup<'_>,
+        bytes: &[u8],
+        path: &Path,
+    ) -> Result<NamedValues, InputError> {
+        let directory = Directory::new(path).map_err(|e| InputError {
+            code: file_error(e, "entry-input-document"),
+            path: group.name().into(),
+        })?;
+        self.decode_in(group, bytes, directory)
+    }
+    fn decode_in(
+        &mut self,
+        group: &InputGroup<'_>,
+        bytes: &[u8],
+        directory: Directory,
+    ) -> Result<NamedValues, InputError> {
         let mut resolver = References {
             directory,
             files: &mut self.files,
             cache: BTreeMap::new(),
         };
-        self.decoder.decode(group, &bytes, Some(&mut resolver))
+        self.decoder.decode(group, bytes, Some(&mut resolver))
     }
     pub(crate) fn protect(
         &self,

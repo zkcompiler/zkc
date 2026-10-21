@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from project import project_arguments
 from tools import compiler, records
 
@@ -69,9 +70,11 @@ def frontend(path, entry='Demo', flags=None, label=None):
     label = label or path.stem + '-' + entry
     flags = ['--source-format=zkc', '--entry=' + ('example::' if path.name == 'main.zkc' else 'sample::') + entry, *flags]
     before = path.read_bytes()
-    source = commands.run([compiler, 'language-emit', *flags], keep=label + '.mlir')
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags],
-                                        keep=label + '.interface.json'))
+    child = compile_run_package(commands, *flags)
+    source = child['original']
+    interface = json.loads(child['interface'])
+    (commands.directory / (label + '.mlir')).write_text(source)
+    (commands.directory / (label + '-interface.json')).write_text(child['interface'])
     assert path.read_bytes() == before
     snapshot = export(source, interface['protocol'], keep=label + '.snapshot.json')
     assert 'sha256:' + interface['original'] == snapshot[2]

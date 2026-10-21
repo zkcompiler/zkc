@@ -47,5 +47,5 @@ pub protocol Products<E: Field> roles(P)(fingerprints: vec::Vector<E> @P,
   return (product = denominator_product(fingerprints, gamma, gate, initial),
           other_product = denominator_product(fingerprints, other_gamma, gate, initial));
 }
-run Demo = Products<Base>;
-run ExtensionDemo = Products<Extension>;
+entry fn Demo(inputs: Products<Base>::Inputs) { return Products<Base>::run(inputs); }
+entry fn ExtensionDemo(inputs: Products<Extension>::Inputs) { return Products<Extension>::run(inputs); }

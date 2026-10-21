@@ -99,6 +99,8 @@ impl RoleInterface {
         role_map: &Json,
         public_map: &Json,
         construction: Option<&ConstructionPlan>,
+        operation: Option<bool>,
+        retained_inputs: bool,
     ) -> Result<Self> {
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
@@ -135,6 +137,13 @@ impl RoleInterface {
                 .collect::<Vec<_>>();
             let data = ports(&row[2], &input_types)?;
             for ty in &input_types {
+                if retained_inputs
+                    && ty.is_duplicable()
+                    && !zkc_backends::has_native_wire(ty)
+                    && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
+                {
+                    continue;
+                }
                 input_kind(ty)?;
             }
             let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - outputs])?;
@@ -188,7 +197,17 @@ impl RoleInterface {
                 return Err("native-proof-role-map".into());
             }
         }
-        if maps.len() != 2 || !maps.contains_key(producer) || !maps.contains_key(validator) {
+        let selected = operation.map(|p| if p { producer } else { validator });
+        if selected.is_none()
+            && (maps.len() != 2 || !maps.contains_key(producer) || !maps.contains_key(validator))
+            || selected.is_some_and(|s| {
+                !maps.contains_key(s)
+                    || !(maps.len() == 1
+                        || maps.len() == 2
+                            && maps.contains_key(producer)
+                            && maps.contains_key(validator))
+            })
+        {
             return Err("native-proof-role-map".into());
         }
         let mut authorities: std::collections::BTreeSet<_> =
@@ -205,10 +224,11 @@ impl RoleInterface {
         {
             return Err("native-proof-service-map".into());
         }
-        for port in &maps[producer].data {
-            if maps[validator]
-                .data
-                .iter()
+        for port in maps.get(producer).into_iter().flat_map(|m| &m.data) {
+            if maps
+                .get(validator)
+                .into_iter()
+                .flat_map(|m| &m.data)
                 .any(|other| other.original == port.original && other.logical != port.logical)
             {
                 return Err("native-proof-shared-port-type".into());
@@ -227,19 +247,29 @@ impl RoleInterface {
             }
             public.push(Port { original, logical });
         }
-        let required = &maps[validator].data;
+        let required = maps.get(validator).map(|m| &m.data);
         let selected = list(policy.public_selection)?
             .iter()
             .map(index)
             .collect::<Result<Vec<_>>>()?;
-        if public.len() != required.len()
-            || selected != public.iter().map(|p| p.original).collect::<Vec<_>>()
-            || public
-                .iter()
-                .zip(required)
-                .any(|(p, a)| p.original != a.original || p.logical != a.logical)
+        if selected != public.iter().map(|p| p.original).collect::<Vec<_>>()
+            || required.is_some_and(|required| {
+                public.len() != required.len()
+                    || public
+                        .iter()
+                        .zip(required)
+                        .any(|(p, a)| p.original != a.original || p.logical != a.logical)
+            })
         {
             return Err("native-proof-public-map".into());
+        }
+        for port in maps.get(producer).into_iter().flat_map(|m| &m.data) {
+            if public
+                .iter()
+                .any(|p| p.original == port.original && p.logical != port.logical)
+            {
+                return Err("native-proof-shared-port-type".into());
+            }
         }
         Ok(Self {
             maps,

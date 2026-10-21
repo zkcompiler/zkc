@@ -10,7 +10,9 @@ math fn accumulate(xs: Vector<Fr>, seed: Fr) -> Fr {
 protocol Accumulate roles(P)(xs: Vector<Fr>@P, seed: Fr@P) -> (result: Fr@P) {
   return accumulate(xs, seed);
 }
-run Run = Accumulate;
+entry fn Run(inputs: Accumulate::Inputs) {
+  return Accumulate::run(inputs);
+}
 domain fn indices<F: Field>(xs: Vector<F>) -> domain<index> = domain("indices");
 math fn at(xs: Vector<Fr>, i: index) -> Fr where in_bounds(i, xs) {
   return intrinsic<Vector<Fr>>("container.at", xs, i);
@@ -21,4 +23,6 @@ math fn indexed(xs: Vector<Fr>, seed: Fr) -> Fr {
 protocol Indexed roles(P)(xs: Vector<Fr>@P, seed: Fr@P) -> (result: Fr@P) {
   return indexed(xs, seed);
 }
-run IndexedRun = Indexed;
+entry fn IndexedRun(inputs: Indexed::Inputs) {
+  return Indexed::run(inputs);
+}

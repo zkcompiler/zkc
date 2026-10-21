@@ -1,6 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
@@ -14,22 +15,27 @@
 using namespace llvm;
 using namespace zkc::language;
 namespace {
+StringRef stage;
 void require(bool condition, StringRef message) {
   if (!condition) {
-    errs() << message << '\n';
+    errs() << stage << ": " << message << '\n';
     std::exit(1);
   }
 }
 template <class T> T must(Expected<T> value) {
   if (!value) {
-    errs() << toString(value.takeError()) << '\n';
+    errs() << stage << ": " << toString(value.takeError()) << '\n';
     std::exit(1);
   }
   return std::move(*value);
 }
 CheckedProject check(StringRef source, const Limits &limits = {}) {
-  return must(analyze(must(capture({{"m", source.str(), "types.zkc"}})), limits)
-                  .checkedProject());
+  auto project =
+      analyze(must(capture({{"m", source.str(), "types.zkc"}})), limits)
+          .checkedProject();
+  if (!project)
+    errs() << "source:\n" << source << '\n';
+  return must(std::move(project));
 }
 void refuses(StringRef source, StringRef code, const Limits &limits = {}) {
   auto value =
@@ -49,13 +55,26 @@ void refuses(StringRef source, StringRef code, const Limits &limits = {}) {
 void closureRefuses(StringRef source, StringRef code,
                     const Limits &limits = {}) {
   auto project = check(source, limits);
-  auto selected = closeEntry(project, "m::Demo", limits);
+  auto selected =
+      zkc::test::closeProtocolDeployment(project, "m::Demo", limits);
   require(!selected, "Entry closure unexpectedly accepted");
   auto message = toString(selected.takeError());
   require(StringRef(message).contains(code), message);
 }
+void nativeClosureRefuses(StringRef source, StringRef code,
+                          StringRef protocol = "m::Run") {
+  auto selected = zkc::test::closeNativeRun(check(source), protocol);
+  require(!selected, "native Run closure unexpectedly accepted");
+  auto message = toString(selected.takeError());
+  require(StringRef(message).contains(code), message);
+}
 CheckedOriginal original(StringRef source) {
-  return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
+  return must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(check(source), "m::Demo"))));
+}
+CheckedOriginal nativeOriginal(StringRef source) {
+  return must(prepareOriginal(
+      must(zkc::test::closeNativeRun(check(source), "m::Run"))));
 }
 mlir::Operation *first(mlir::ModuleOp module, StringRef name) {
   mlir::Operation *found = nullptr;
@@ -84,7 +103,9 @@ void mutation(const CheckedOriginal &source,
           "wrong mutation refusal phase");
 }
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
-const std::string unit = "protocol Run roles(P)()->(){return();}run Demo=Run;";
+const std::string unit =
+    "protocol Run roles(P)()->(){return();}entry fn Demo(inputs: Run::Inputs) "
+    "{ return Run::run(inputs); }";
 void byteDataAndHistory() {
   auto bytes = original(R"(
 module m;
@@ -108,7 +129,7 @@ protocol Relay roles(P,V)()->(accepted:bool@V) {
   let accepted @V = valid(c);
   return(accepted=accepted);
 }
-run Demo=Relay;
+entry fn Demo(inputs: Relay::Inputs) { return Relay::run(inputs); }
 )");
   must(compileEntry(bytes));
   auto history = original(R"(
@@ -120,7 +141,7 @@ fn sample()->index {
   return result;
 }
 protocol Run roles(P)()->(r:index@P){let r @P=sample();return(r=r);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   require(StringRef(history.bytes()).contains("crypto.exec.openvm_sample"),
           "source history lost its ordered operation");
@@ -137,7 +158,7 @@ fn digest(input:Bytes)->Bytes {
   return bytes;
 }
 protocol Run roles(P)(input:Bytes@P)->(r:Bytes@P){let r @P=digest(input);return(r=r);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   require(StringRef(shake.bytes()).count("crypto.exec.shake128_squeeze") == 2,
           "unused history transition disappeared from source IR");
@@ -158,11 +179,11 @@ fn roundtrip(point:G,value:F)->bool {
 protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
   let r @P=roundtrip(point,value);return(r=r);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(encoding));
   closureRefuses(R"(module m;type State=builtin("shake128_state");
-protocol Run roles(P)(s:State@P)->(){return();}run Demo=Run;)",
+protocol Run roles(P)(s:State@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
                  "source.ingress");
   refuses(R"(module m;type State=builtin("shake128_state");
 protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
@@ -185,26 +206,29 @@ protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){
     auto checked = original(prefix + R"(
 struct Pair<T:Type>{pub first:T,pub second:T}
 enum Choice{Some(Fr),None()}
-)" + relay + "run Demo=Relay<" +
-                            type + ">;");
+)" + relay + "entry fn Demo(inputs: Relay<" +
+                            std::string(type) + ">::Inputs) { return Relay<" +
+                            type + ">::run(inputs); }");
     must(compileEntry(checked));
   }
   for (const auto &definition :
        {"struct Secret {value:Fr}", "#[sealed] struct Secret {pub value:Fr}",
         "#[sealed] enum Secret {Some(Fr)}",
         "struct Hidden{value:Fr}struct Secret{pub value:Hidden}"})
-    refuses(prefix + definition + relay + "run Demo=Relay<Secret>;",
-            "source.ingress");
-  closureRefuses(
-      prefix + "struct Secret{value:Fr}protocol Run "
-               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}run Demo=Run;",
-      "source.ingress");
+    closureRefuses(prefix + definition + relay +
+                       "entry fn Demo(inputs: Relay<Secret>::Inputs) { return "
+                       "Relay<Secret>::run(inputs); }",
+                   "source.ingress");
+  closureRefuses(prefix +
+                     "struct Secret{value:Fr}protocol Run "
+                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+                 "source.ingress");
   refuses(prefix + "interface I{type State:Invent;}", "source.type");
-  auto emitted = original(prefix + R"(
+  auto emitted = nativeOriginal(prefix + R"(
 struct Secret{value:Fr}
 fn make()->Secret{return Secret{value:1};}
 protocol Run roles(P)()->(r:Secret@P){let x @P =make();return(r=x);}
-run Demo=Run;
 )");
   auto schema = must(json::parse(emitted.interfaceJson()));
   auto *permissions = schema.getAsObject()
@@ -230,7 +254,9 @@ void typing() {
           {"enum Empty {}", "source.type"},
           {"interface Bad {domain F=field(\"bls12-381.fr\");}",
            "source.syntax"},
-          {"interface Bad {run Demo=Run;}", "source.syntax"},
+          {"interface Bad {entry fn Demo(inputs: Run::Inputs) { return "
+           "Run::run(inputs); }}",
+           "source.mode"},
           {"fn bad(a:[Fr;2])->Fr{return a[2];}", "source.index"},
           {"fn bad(a:[Fr;2],i:index)->Fr{return a[i];}", "source.index"},
           {"math fn bad<F:Field>(x:F)->F{return x+2;}", "source.literal"},
@@ -371,7 +397,7 @@ domain Curve=group("bls12-381.g1");
 struct Box<G:Group>{pub item:G::Scalar}
 protocol Run<G:Group> roles(P,V)(b:Box<G>@P)->(r:Box<G>@V)
 {let r=send P->V(b);return(r=r);}
-run Demo=Run<Curve>;
+entry fn Demo(inputs: Run<Curve>::Inputs) { return Run<Curve>::run(inputs); }
 )");
   must(compileEntry(boxedScalar));
   check(prefix + R"(
@@ -428,7 +454,7 @@ math fn sq<C:Algebra>(x:C::Scalar)->C::Scalar{return x*x;}
 domain Curve=group("bls12-381.g1");
 protocol Run<G:Group> roles(P,V)(x:G::Scalar@P)->(r:G::Scalar@V)
 {let r=send P->V(x);return(r=r);}
-run Demo=Run<Curve>;
+entry fn Demo(inputs: Run<Curve>::Inputs) { return Run<Curve>::run(inputs); }
 )");
   must(compileEntry(scalarMessage));
   check(prefix + R"(
@@ -450,19 +476,25 @@ interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque) ;}
 module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
 )");
   check(prefix + "protocol Run roles(P)()->(r:bool@P){let r @P "
-                 "=true;return(r=r);}run Demo=Run;");
+                 "=true;return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
+                 "return Run::run(inputs); }");
   must(compileEntry(original(
       prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
-               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}run Demo=Run;")));
-  closureRefuses(
-      prefix + "#[sealed] struct Secret {pub x:bool}protocol "
-               "Run<T:Type+Copy+Drop> "
-               "roles(P)(x:T@P)->(r:T@P){return(r=x);}run Demo=Run<Secret>;",
-      "source.ingress");
-  closureRefuses(
+               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }")));
+  nativeClosureRefuses(prefix +
+                           "#[sealed] struct Secret {pub x:bool}protocol "
+                           "Run<T:Type+Copy+Drop> "
+                           "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
+                           "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
+                           "{let result=Run<Secret>(x);return(r=result);}",
+                       "source.ingress", "m::Inspect");
+  nativeClosureRefuses(
       prefix + "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop> "
-               "roles(P)(x:T@P)->(r:T@P){return(r=x);}run Demo=Run<Secret>;",
-      "source.ingress");
+               "roles(P)(x:T@P)->(r:T@P){return(r=x);}"
+               "protocol Inspect roles(P)(x:Secret@P)->(r:Secret@P)"
+               "{let result=Run<Secret>(x);return(r=result);}",
+      "source.ingress", "m::Inspect");
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State effects(stop, opaque);fn open(x:State)->F effects(stop, opaque);}
         pub module Box<F:Field>:Boxed<F>{type State: Type =F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
@@ -471,12 +503,12 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
                                       {"m", prefix + R"(
         use lib::{Boxed,Box};
         fn work<C:Boxed<Fr>>(x:Fr)->Fr{let state=C::make(x);return C::open(state);}
-        protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P =work<Box<Fr>>(x);return(r=r);}run Demo=Run;
+        protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P =work<Box<Fr>>(x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
       )",
                                        "m.zkc"}}));
   auto libraryProject = must(analyze(libraryCapture).checkedProject());
-  auto libraryOriginal =
-      must(prepareOriginal(must(closeEntry(libraryProject, "m::Demo"))));
+  auto libraryOriginal = must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(libraryProject, "m::Demo"))));
   must(compileEntry(libraryOriginal));
   auto variantPrivacy = must(capture(
       {{"lib", "module lib;#[affine] pub enum Ticket{Valid(bool)}", "lib.zkc"},
@@ -530,18 +562,21 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar {return x;}}
   auto indexed = original(
       prefix + "fn count<N:nat>()->index{return index<N+1>();}protocol Run "
                "roles(P)()->(r:index@P){let r @P "
-               "=count<2>();return(r=r);}run Demo=Run;");
+               "=count<2>();return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
+               "return Run::run(inputs); }");
   must(compileEntry(indexed));
   auto nestedConstructor = original(
       prefix + "enum Choice{A(Fr)}fn get(v:Choice)->Fr{return match v {A(x)=>{ "
                "x}};}fn nested(x:Fr)->Fr{return get(Choice::A(x));}protocol "
                "Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P "
-               "=nested(x);return(r=r);}run Demo=Run;");
+               "=nested(x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { "
+               "return Run::run(inputs); }");
   must(compileEntry(nestedConstructor));
-  closureRefuses(
-      prefix + "#[sealed] enum Secret {A(bool)}protocol Run "
-               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}run Demo=Run;",
-      "source.ingress");
+  closureRefuses(prefix +
+                     "#[sealed] enum Secret {A(bool)}protocol Run "
+                     "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry fn "
+                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+                 "source.ingress");
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(prefix +
               "#[sealed] enum Secret {A(bool)}fn "
@@ -557,7 +592,7 @@ interface I{type Out;fn make()->Out effects(stop, opaque);fn finish(x:Out)->() e
 module C:I{type Out: Type =();fn make()->Out{return Out(());}fn finish(x:Out)->(){consume x;return ();}}
 struct Holder<A:I>{pub item:A::Out}
 fn forward<A:I>()->(){let h=Holder<A>{item:A::make()};return A::finish(h.item);}
-protocol Run roles(P)()->(){let done @P =forward<C>();return();}run Demo=Run;
+protocol Run roles(P)()->(){let done @P =forward<C>();return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(nestedAssociated));
   check(prefix + R"(
@@ -565,10 +600,10 @@ struct Wrapped<G:Group> {pub x:G::Scalar}
 fn need<T:Type>(x:T)->T{return x;}
 fn read<G:Group>(x:Wrapped<G>)->G::Scalar {return need(x.x);}
 )");
-  auto emptyArray =
-      original(prefix + "#[linear] struct Token {}fn empty()->[Token;0]{return "
-                        "[];}protocol Run roles(P)()->(r:[Token;0]@P){let r @P "
-                        "=empty();return(r=r);}run Demo=Run;");
+  auto emptyArray = nativeOriginal(
+      prefix + "#[linear] struct Token {}fn empty()->[Token;0]{return "
+               "[];}protocol Run roles(P)()->(r:[Token;0]@P){let r @P "
+               "=empty();return(r=r);}");
   auto emptySchema = must(json::parse(emptyArray.interfaceJson()));
   auto *emptyPort = emptySchema.getAsObject()
                         ->getArray("protocols")
@@ -583,8 +618,9 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar {return need(x.x);}
               json::Array{},
           "empty array lost element permissions");
   auto emptySource = check("module m;protocol Run roles(P,V)()->(x:()@V){let "
-                           "x=send P->V(());return(x=x);}run Demo=Run;");
-  auto emptyClosed = closeEntry(emptySource, "m::Demo");
+                           "x=send P->V(());return(x=x);}entry fn Demo(inputs: "
+                           "Run::Inputs) { return Run::run(inputs); }");
+  auto emptyClosed = zkc::test::closeProtocolDeployment(emptySource, "m::Demo");
   require(!emptyClosed, "empty source message passed closure");
   bool located = false;
   handleAllErrors(emptyClosed.takeError(), [&](const DiagnosticError &error) {
@@ -625,7 +661,7 @@ void layoutsAndCorrespondence() {
   auto aggregate = original(prefix + R"(
 struct Pair<T:Type+Copy+Drop>{pub left:T,pub right:T}
 protocol Run roles(P)(p:Pair<Fr>@P,u:()@P)->(q:Pair<Fr>@P,u:()@P){return(q=Pair<Fr>{right:p.left,left:p.right},u=u);}
-run Demo=Run;)");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   auto schema = must(json::parse(aggregate.interfaceJson()));
   auto &ports = *schema.getAsObject()
                      ->getArray("protocols")
@@ -661,7 +697,7 @@ run Demo=Run;)");
 math fn twice<F:Field>(x:F)->F{return x+x;}
 math fn outer(x:Fr)->Fr{return twice(x);}
 fn choose(x:Fr,go:bool)->Fr {let y=outer(x);return if go { y}else{ x};}
-protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);return(r=r);}run Demo=Run;)");
+protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(local));
   auto sharedMath = original(prefix + R"(
     enum Choice { Some(Fr), None() }
@@ -679,7 +715,7 @@ protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);
       let c @P =choose(x,b);
       return(a=a.1,c=c);
     }
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(sharedMath));
   mutation(sharedMath, [](mlir::ModuleOp module) {
@@ -734,7 +770,7 @@ protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);
 enum Choice{A(Fr),B(Fr)}
 fn make(x:Fr)->Choice{return Choice::A(x);}
 fn get(v:Choice)->Fr{return match v {A(x)=>{ x},B(x)=>{ x}};}
-protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);return(r=y);}run Demo=Run;)");
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);return(r=y);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(variant, [](auto module) {
     first(module, "local.variant_inject")
         ->setAttr("alternative",
@@ -767,11 +803,11 @@ interface Algebra {type Scalar:Field;}
 module BLS:Algebra {type Scalar:Field=Fr;}
 struct Box<C:Algebra> {pub value:C::Scalar}
 fn get<C:Algebra>(box:Box<C>)->C::Scalar {return box.value;}
-protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){let r @P =get<BLS>(box);return(r=r);}run Demo=Run;)");
+protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){let r @P =get<BLS>(box);return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(associatedLayout));
   auto loop = original(prefix + R"(
 fn count(n:index,x:Fr)->Fr{let mut s:Fr=0;for _ in 0..n{s=s+x;}return s;}
-protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let r @P =count(n,x);return(r=r);}run Demo=Run;)");
+protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let r @P =count(n,x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(loop, [](auto module) {
     auto *op = first(module, "local.for");
     auto low = op->getOperand(0), high = op->getOperand(1);
@@ -780,7 +816,7 @@ protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let r @P =count(n,x);return(r=
   });
   auto guard = original(prefix + R"(
 fn guarded(go:bool)->(){require go;return ();}
-protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}run Demo=Run;)");
+protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(guard,
            [](auto module) { first(module, "protocol.local_call")->erase(); });
   mutation(guard, [](auto module) {
@@ -799,7 +835,7 @@ protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}run D
   auto inferred = original(prefix + R"(
 fn identity(x:Fr)->Fr{return x;}
 protocol Run roles(P,V)(x:Fr@(P,V))->(){let unused@P=identity(x);return ();}
-run Demo=Run;)");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(inferred, [](auto module) {
     first(module, "protocol.local_call")
         ->setAttr("role",
@@ -808,7 +844,7 @@ run Demo=Run;)");
   auto custodyVariant = original(prefix + R"(
 #[affine] enum Choice {unpack(), Other(Fr)}
 fn get()->Fr{let v=Choice::unpack();return match v {Other(x)=>{ x},unpack()=>{let zero:Fr=0; zero}};}
-protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}run Demo=Run;)");
+protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(custodyVariant));
   mutation(custodyVariant, [](auto module) {
     first(module, "local.exec.resource_unit_consume")->erase();
@@ -818,13 +854,13 @@ protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}run Demo=Run;)");
 struct Holder<N:nat>{pub token:Tok<N+1>}
 fn wrap()->Holder<1>{return Holder<1>{token:Tok<2>{}};}
 fn finish(h:Holder<1>)->(){let t=h.token;consume t;return ();}
-protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}run Demo=Run;)");
+protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(nominal));
   auto resource = original(prefix + R"(
 interface I{type State;fn make()->State effects(stop, opaque);fn done(x:State)->() effects(stop, opaque);}
 module C:I{#[linear] type State=();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
 fn forward<T:I>()->(){let x=T::make();return T::done(x);}
-protocol Run roles(P)()->(){let r @P =forward<C>();return();}run Demo=Run;)");
+protocol Run roles(P)()->(){let r @P =forward<C>();return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   require(resource.bytes().contains("resource_unit"),
           "empty associated resource lost custody");
   must(compileEntry(resource));
@@ -833,9 +869,9 @@ protocol Run roles(P)()->(){let r @P =forward<C>();return();}run Demo=Run;)");
   });
 }
 void sourceNotation() {
-  original(
-      "module m;math fn pick(x:[bool;2])->bool{return x[1];}protocol Run "
-      "roles(P)(x:[bool;2]@P)->(r:bool@P){return(r=pick(x));}run Demo=Run;");
+  original("module m;math fn pick(x:[bool;2])->bool{return x[1];}protocol Run "
+           "roles(P)(x:[bool;2]@P)->(r:bool@P){return(r=pick(x));}entry fn "
+           "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
   for (StringRef bad : {"x[01]", "x.1"})
     refuses(
         ("module m;math fn pick(x:[bool;2])->bool{return " + bad + ";}").str(),
@@ -854,7 +890,8 @@ void sourceNotation() {
        {"reject", "abort", "exhausted", "incomplete", "refused"})
     must(compileEntry(original(("module m;fn halt()->bool{stop \"" + reason +
                                 "\";}protocol Run roles(P)()->(r:bool@P){let x "
-                                "@P =halt();return(r=x);}run Demo=Run;")
+                                "@P =halt();return(r=x);}entry fn Demo(inputs: "
+                                "Run::Inputs) { return Run::run(inputs); }")
                                    .str())));
 }
 void bounds() {
@@ -894,19 +931,22 @@ void bounds() {
     expanded += "type A" + std::to_string(i) + "=(A" + std::to_string(i - 1) +
                 ",A" + std::to_string(i - 1) + ");";
   refuses(expanded, "source.limit");
-  auto fanout = check("module m;protocol Run "
-                      "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
-                      ");}run Demo=Run;");
-  auto exploded = prepareOriginal(must(closeEntry(fanout, "m::Demo")));
+  auto fanout = check(
+      "module m;protocol Run "
+      "roles(P)(z:[[[[();1024];1024];1024];1024]@P)->(){return("
+      ");}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+  auto exploded = prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(fanout, "m::Demo")));
   require(!exploded, "zero-leaf schema fanout escaped the work bound");
   require(StringRef(toString(exploded.takeError())).contains("source.limit"),
           "wrong schema fanout failure");
   Limits limits;
   limits.instances = 1;
-  closureRefuses(
-      prefix + "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
-               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}run Demo=Run;",
-      "source.limit", limits);
+  closureRefuses(prefix +
+                     "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
+                     "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}entry fn "
+                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+                 "source.limit", limits);
   limits = {};
   limits.naturalTerms = 1;
   refuses(prefix + "type A<N:nat,M:nat>=[Fr;N+M];", "source.limit", limits);
@@ -918,9 +958,10 @@ void bounds() {
   refuses(prefix + "type A=[Fr;2];", "source.limit", limits);
   auto project =
       check(prefix + "struct Pair{pub a:Fr,pub b:Fr}" +
-            "protocol Run roles(P)(x:Pair@P)->(y:Pair@P){return(y=x);}run "
-            "Demo=Run;");
-  auto result = prepareOriginal(must(closeEntry(project, "m::Demo")), limits);
+            "protocol Run roles(P)(x:Pair@P)->(y:Pair@P){return(y=x);}entry fn "
+            "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+  auto result = prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(project, "m::Demo")), limits);
   require(!result, "aggregate leaf bound escaped emission");
   consumeError(result.takeError());
 }
@@ -952,7 +993,7 @@ void staticDomains() {
       let a=send P->V(doubleValue<Kzg>(x.value));
       let b @P =total<Kzg>(v);let d @P =configured(c);
       return(a=a,b=b,d=d);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(selected));
   check(domains + R"(
@@ -1032,7 +1073,7 @@ void staticDomains() {
       {
       let a @P =extract(x);let b @P =invoke<C,Selected<C>>(a);
       let d @P =configured(c);return(r=b+d);
-    }run Demo=Run<Kzg>;
+    }entry fn Demo(inputs: Run<Kzg>::Inputs) { return Run<Kzg>::run(inputs); }
   )")));
   std::string longPath = "Bn";
   for (unsigned i = 0; i < 100; ++i)
@@ -1083,7 +1124,7 @@ void nativeData() {
       let r @V =sum(v);
       return(r=r);
     }
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(selected));
   require(selected.bytes().contains("!algebra.field_vector<"),
@@ -1117,7 +1158,7 @@ void nativeData() {
     protocol Run roles(P)(a:Vector<Fr>@P,m:Matrix<Fr>@P)->(r:Fr@P,n:index@P){
       let p @P =parts(a);let s @P =sum(p.0);
       let dims @P =length(m);return(r=s,n=dims);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )")));
   must(compileEntry(original(prefix + R"(
     type Values=builtin("sequence", Fr);
@@ -1129,7 +1170,7 @@ void nativeData() {
     protocol Run roles(P,V)(x:Fr@P)->(r:Fr@V){
       let xs @P =singleton(x);let ys=send P->V(xs);
       let r @V =first(ys);return(r=r);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )")));
   for (const auto &body : {"math fn bad<F:Field>(v:Vector<F>)->F{return "
                            "kernel<F>(\"vector.sum\",v);}",
@@ -1162,7 +1203,7 @@ void nativeData() {
     domain K=field("koala-bear");
     fn root(n:index)->K{return kernel<K>("poly.domain_root",n);}
     protocol Run roles(P)(n:index@P)->(r:K@P){let r @P =root(n);return(r=r);}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )")));
   refuses(prefix + "type Bad=builtin(\"vector\",index);" + unit,
           "source.builtin");
@@ -1195,25 +1236,25 @@ void nativeData() {
     math fn identity<F:Field>(v:Vector<F>)->Vector<F>{return v;}
     protocol Run roles(P)(v:Vector<Fr>@P)->(r:Vector<Fr>@P){
       let r=identity(v);return(r=r);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )")));
-  closureRefuses(prefix + R"(
+  nativeClosureRefuses(prefix + R"(
     type Data=builtin("polynomial",Fr);
     math fn identity<T:Type+Copy+Drop>(v:T)->T{return v;}
     protocol Run roles(P)(v:Data@P)->(r:Data@P){
       let r=identity(v);return(r=r);
-    }run Demo=Run;
+    }
   )",
-                 "source.mode");
-  closureRefuses(prefix + R"(
+                       "source.mode");
+  nativeClosureRefuses(prefix + R"(
     type Data=builtin("polynomial",Fr);
     math fn identity<T:Type+Copy+Drop>(v:T)->T{return v;}
     fn work(v:Data)->Data{return identity(v);}
     protocol Run roles(P)(v:Data@P)->(r:Data@P){
       let r @P =work(v);return(r=r);
-    }run Demo=Run;
+    }
   )",
-                 "source.mode");
+                       "source.mode");
   refuses(prefix + R"(
     struct Secret{pub value:Fr}
     fn bad(x:Secret)->index{return kernel<Secret>("sequence.length",x);}
@@ -1232,20 +1273,28 @@ void nativeData() {
   auto constant = original(prefix + R"(
     fn literal()->Fr{return kernel<Fr>("field.constant";"7");}
     protocol Run roles(P)()->(r:Fr@P){let r @P =literal();return(r=r);}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(constant));
 }
 
 } // namespace
 int main() {
+  stage = "byteDataAndHistory";
   byteDataAndHistory();
+  stage = "staticDomains";
   staticDomains();
+  stage = "nativeData";
   nativeData();
+  stage = "boundaryAuthority";
   boundaryAuthority();
+  stage = "typing";
   typing();
+  stage = "layoutsAndCorrespondence";
   layoutsAndCorrespondence();
+  stage = "sourceNotation";
   sourceNotation();
+  stage = "bounds";
   bounds();
   outs() << "types, permissions, static dispatch, local regions and "
             "correspondence checked\n";

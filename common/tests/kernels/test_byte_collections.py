@@ -26,7 +26,7 @@ fn encode(values:Vector<F>,byte:index,count:index)->bytes::Bytes {{
 }}
 protocol Run roles(P)(values:Vector<F>@P,byte:index@P,count:index@P)
   ->(result:bytes::Bytes@P) {{ return encode(values,byte,count); }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     modules = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, (*flags, *modules))
@@ -58,7 +58,7 @@ fn check()->bool {{
   return true;
 }}
 protocol Run roles(P)()->(ok:bool@P) {{ let ok @P=check();return ok; }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     modules = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, modules)
@@ -75,7 +75,7 @@ use zkc::bytes::{Bytes};
 protocol Run roles(P)(value:index@P)->(bytes:Bytes@P) {
   return encoding::index_uleb128(value);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*library_modules(*core_packages()), *flags))
     values = [0, 1, 300, 624485, 2**64-1]

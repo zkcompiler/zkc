@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -26,7 +26,7 @@ fn work(xs:Vector<F>,seed:F)->(F,F,F,F){{
  return(a,b,c,d);
 }}
 protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:(F,F,F,F)@P){{return work(xs,seed);}}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     for n in (0, 3):
@@ -55,7 +55,7 @@ fn work(xs:Vector<F>,unused:Vector<F>,seed:F,scale:F)->(F,F,F,F){
  return(polynomial,uniform,indexed,captured);
 }
 protocol Run roles(P)(xs:Vector<F>@P,unused:Vector<F>@P,seed:F@P,scale:F@P)
- ->(result:(F,F,F,F)@P){return work(xs,unused,seed,scale);}run Demo=Run;
+ ->(result:(F,F,F,F)@P){return work(xs,unused,seed,scale);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     modulus = 2**31 - 2**24 + 1
@@ -68,10 +68,10 @@ protocol Run roles(P)(xs:Vector<F>@P,unused:Vector<F>@P,seed:F@P,scale:F@P)
         inputs = {'xs': list(map(str, xs)), 'unused': ['9']*n,
                   'seed': str(seed), 'scale': str(scale)}
         assert entry.run(f'rows-{n}', inputs)['result'] == [str(x % modulus) for x in expected]
-        iterations = json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations']
+        iterations = joint_execution(json.loads(journal.last.stdout))['roles'][0]['usage']['iterations']
         assert iterations == (4*n if '--no-finite-bulk' in flags else 0)
         refused = entry.run(f'mismatched-{n}', inputs | {'unused': ['9']*(n+1)},
-                            refuses='entry-run-incomplete')
+                            refuses='entry-host-run-failed')
         assert 'rejected:require' in json.dumps(refused)
 
 
@@ -94,19 +94,19 @@ fn work(xs:Vector<F>,seed:F,enabled:bool)->(F,F){
  return(recurrent,partial);
 }
 protocol Run roles(P)(xs:Vector<F>@P,seed:F@P,enabled:bool@P)
- ->(result:(F,F)@P){return work(xs,seed,enabled);}run Demo=Run;
+ ->(result:(F,F)@P){return work(xs,seed,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('empty', {'xs': [], 'seed': '7', 'enabled': False})['result'] == ['7', '7']
     assert entry.run('values', {'xs': ['2', '3'], 'seed': '7', 'enabled': True})['result'] == ['95', '25']
     report = json.loads(journal.last.stdout)
-    assert report['execution']['roles'][0]['usage']['iterations'] == 4
+    assert joint_execution(report)['roles'][0]['usage']['iterations'] == 4
     inverse = entry.run('unused-partial', {'xs': ['0'], 'seed': '7', 'enabled': False},
-                        refuses='entry-run-incomplete')
+                        refuses='entry-host-run-failed')
     assert 'refused:zero-inverse' in json.dumps(inverse)
     stopped = entry.run('explicit-stop', {'xs': ['1'], 'seed': '7', 'enabled': False},
-                        refuses='entry-run-incomplete')
-    assert stopped['execution']['roles'][0]['after'][1]['cause'][0] == 'explicit'
+                        refuses='entry-host-run-failed')
+    assert joint_execution(stopped)['roles'][0]['after'][1]['cause'][0] == 'explicit'
 
 
 @pytest.mark.parametrize('mode,module', [('fn', 'finite'), ('math fn', 'finite_math')])
@@ -123,11 +123,11 @@ MODE work(xs:Vector<F>,seed:F)->F{
    state+(x*x+x)
  });
 }
-protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,seed);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,seed);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE_MODULE', module).replace('MODE', mode)
     entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify'])
     assert entry.run('values', {'xs': ['2', '3'], 'seed': '7'})['result'] == '25'
-    iterations = json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations']
+    iterations = joint_execution(json.loads(journal.last.stdout))['roles'][0]['usage']['iterations']
     assert iterations == (0 if mode == 'math fn' else 2)
 
 
@@ -142,12 +142,12 @@ domain F=field("bls12-381.fr");
 math fn work(xs:Vector<K>,seed:F,value:F)->F{
  return finite::fold(zkc::vector::indices(xs),seed,fn(state,_)=>state+value*value);
 }
-protocol Run roles(P)(xs:Vector<K>@P,seed:F@P,value:F@P)->(result:F@P){return work(xs,seed,value);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<K>@P,seed:F@P,value:F@P)->(result:F@P){return work(xs,seed,value);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify'])
     for n in (0, 3):
         assert entry.run(f'rows-{n}', {'xs': ['2']*n, 'seed': '7', 'value': '3'})['result'] == str(7+9*n)
-        assert json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations'] == 0
+        assert joint_execution(json.loads(journal.last.stdout))['roles'][0]['usage']['iterations'] == 0
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -174,7 +174,7 @@ fn work(xs:Vector<F>,ys:Vector<F>,enabled:bool)->(F,F,F,F,F,index){
  let pairs=finite::collect(domains::product(zkc::vector::elements(xs),zkc::vector::elements(ys)),fn(pair)=>pair);
  return(dot,ordered,product,selected,materialized,zkc::sequence::length(pairs));
 }
-protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,index)@P){return work(xs,ys,enabled);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,index)@P){return work(xs,ys,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if implicit:
         source = source.replace('zkc::vector::elements(xs)', 'xs').replace('zkc::vector::elements(ys)', 'ys')
@@ -182,7 +182,7 @@ protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:(F,
     assert entry.run('values', {'xs': ['2', '3'], 'ys': ['7', '11'], 'enabled': True})['result'] == ['47', '23', '12', '5', '13', '4']
     assert entry.run('filter-skips-body', {'xs': ['2', '3'], 'ys': ['7', '11'], 'enabled': False})['result'] == ['47', '23', '12', '0', '13', '4']
     assert entry.run('empty', {'xs': [], 'ys': [], 'enabled': False})['result'] == ['0', '0', '1', '0', '0', '0']
-    entry.run('strict-zip', {'xs': [], 'ys': ['1'], 'enabled': False}, refuses='entry-run-incomplete')
+    entry.run('strict-zip', {'xs': [], 'ys': ['1'], 'enabled': False}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -199,7 +199,7 @@ math fn analytic(xs:Vector<F>,matrix:Matrix<F>)->(F,F,F){
  let nested=total::sum(zkc::matrix::row_indices(matrix),fn(i)=>total::sum(zkc::matrix::row_values(matrix,i),fn(x)=>x));
  return(energy,coordinates,nested);
 }
-protocol Run roles(P)(xs:Vector<F>@P,matrix:Matrix<F>@P)->(result:(F,F,F)@P){return analytic(xs,matrix);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,matrix:Matrix<F>@P)->(result:(F,F,F)@P){return analytic(xs,matrix);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if indexed:
         source = source.replace('::{Vector}', '::{Vector,indexing []}').replace('::{Matrix}', '::{Matrix,indexing []}')
@@ -231,7 +231,7 @@ fn work(xs:Vector<G::Scalar>,n:index)->(bool,G::Scalar,G::Scalar,index){
  let triangular:index=finite::fold(domains::range(0,n),0,fn(state, i)=>state+finite::fold(domains::range(0,i),0,fn(count, j)=>count+1));
  return(commitment==expected,selected,ratio,triangular);
 }
-protocol Run roles(P)(xs:Vector<G::Scalar>@P,n:index@P)->(result:(bool,G::Scalar,G::Scalar,index)@P){return work(xs,n);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<G::Scalar>@P,n:index@P)->(result:(bool,G::Scalar,G::Scalar,index)@P){return work(xs,n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['0', '2', '3'], 'n': 4})['result'] == [True, '2', '1', '6']
@@ -251,15 +251,15 @@ fn work(xs:Vector<F>,enabled:bool)->F{
    zkc::vector::get(values,0)+zkc::vector::get(values,1)
  });
 }
-protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:F@P){return work(xs,enabled);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:F@P){return work(xs,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['1', '1'], 'enabled': True})['result'] == '2'
-    entry.run('empty-still-calls-reducer', {'xs': [], 'enabled': True}, refuses='entry-run-incomplete')
-    failure = entry.run('body-before-reducer', {'xs': ['0'], 'enabled': False}, refuses='entry-run-incomplete')
+    entry.run('empty-still-calls-reducer', {'xs': [], 'enabled': True}, refuses='entry-host-run-failed')
+    failure = entry.run('body-before-reducer', {'xs': ['0'], 'enabled': False}, refuses='entry-host-run-failed')
     assert 'refused:zero-inverse' in str(failure)
-    failure = entry.run('reducer-failure', {'xs': ['1', '1'], 'enabled': False}, refuses='entry-run-incomplete')
-    assert failure['execution']['roles'][0]['after'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
+    failure = entry.run('reducer-failure', {'xs': ['1', '1'], 'enabled': False}, refuses='entry-host-run-failed')
+    assert joint_execution(failure)['roles'][0]['after'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
 
 
 def test_finite_library_project(toolchain, journal, directory):
@@ -288,7 +288,7 @@ fn work(count:index,a:F,b:F,scale:F,shift:F)->(F,F,F){
  let affine=zkc::vector::sum(mapped);
  return(dot,square,affine);
 }
-protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F,F,F)@P){return work(count,a,b,scale,shift);}run Demo=Run;
+protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F,F,F)@P){return work(count,a,b,scale,shift);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if symbolic:
         source = source.replace('finite::sum(domains::zip(xs,ys),fn((x,y))=>x*y)',
@@ -302,7 +302,7 @@ protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F
     count = 1024 if fallback else 2**16
     assert entry.run('large', {'count': str(count), 'a': '3', 'b': '7', 'scale': '2', 'shift': '5'})['result'] == [str(21*count), str(9*count), str(11*count)]
     report = json.loads(journal.last.stdout)
-    iterations = report['execution']['roles'][0]['usage']['iterations']
+    iterations = joint_execution(report)['roles'][0]['usage']['iterations']
     assert iterations > 0 if fallback else iterations == 0
 
 
@@ -320,12 +320,12 @@ fn work(value:G::Scalar)->bool{
  let commitment=finite::group_sum(domains::zip(points,scalars),fn((point,scalar))=>point*scalar);
  return commitment==base*(value*4096);
 }
-protocol Run roles(P)(value:G::Scalar@P)->(result:bool@P){return work(value);}run Demo=Run;
+protocol Run roles(P)(value:G::Scalar@P)->(result:bool@P){return work(value);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     assert entry.run('large', {'value': '3'})['result'] is True
     report = json.loads(journal.last.stdout)
-    assert report['execution']['roles'][0]['usage']['iterations'] == 12
+    assert joint_execution(report)['roles'][0]['usage']['iterations'] == 12
 
 
 def test_named_matrix_views_keep_contractions(toolchain, journal, directory):
@@ -341,14 +341,14 @@ fn work(matrix:Matrix<F>,value:F,selected:index)->(F,F){
  let column=finite::sum(domains::zip(zkc::matrix::column_values(matrix,0),ys),fn((x,y))=>x*y);
  return(row,column);
 }
-protocol Run roles(P)(matrix:Matrix<F>@P,value:F@P,selected:index@P)->(result:(F,F)@P){return work(matrix,value,selected);}run Demo=Run;
+protocol Run roles(P)(matrix:Matrix<F>@P,value:F@P,selected:index@P)->(result:(F,F)@P){return work(matrix,value,selected);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     matrix = {'rows': '2', 'columns': str(2**16), 'entries': [['0', '0', '2'], ['1', str(2**16-1), '7']]}
     assert entry.run('large', {'matrix': matrix, 'value': '3', 'selected': '1'})['result'] == ['21', '6']
     report = json.loads(journal.last.stdout)
-    assert report['execution']['roles'][0]['usage']['iterations'] == 0
-    entry.run('out-of-bounds-view', {'matrix': matrix, 'value': '3', 'selected': '2'}, refuses='entry-run-incomplete')
+    assert joint_execution(report)['roles'][0]['usage']['iterations'] == 0
+    entry.run('out-of-bounds-view', {'matrix': matrix, 'value': '3', 'selected': '2'}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -381,7 +381,7 @@ MODE compute(xs:Vector<F>,enabled:bool)->(F,F,F,F,F,F,F,F,F,F,F){
  let implicit_array_sum:F=finite::sum([1,2],fn(x)=>x);
  return(folded,filtered,accumulated,selected,values_sum,kept_sum,product,product_kept,sum_kept,array_sum,implicit_array_sum);
 }
-protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,F,F,F,F,F,F)@P){return compute(xs,enabled);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,F,F,F,F,F,F)@P){return compute(xs,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE_MODULE', module).replace('MODE', mode).replace('let array=[1,2];', 'let array:[F;2]=[1,2];')
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['2', '3'], 'enabled': True})['result'] == ['723', '723', '23', '23', '7', '7', '6', '6', '5', '3', '3']
@@ -408,7 +408,7 @@ fn work(xs:Vector<G::Scalar>,enabled:bool)->(bool,bool){
  let selected=if enabled {expected} else {generator*0};
  return(all==expected,kept==selected);
 }
-protocol Run roles(P)(xs:Vector<G::Scalar>@P,enabled:bool@P)->(result:(bool,bool)@P){return work(xs,enabled);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<G::Scalar>@P,enabled:bool@P)->(result:(bool,bool)@P){return work(xs,enabled);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE_MODULE', module).replace('MODE', mode)
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     for label, values, enabled in [('values', ['2', '3'], True), ('none-kept', ['2', '3'], False), ('empty', [], True)]:
@@ -433,13 +433,13 @@ protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P,n:index@P)->(
  let triangular:F@P=∑ i ∈ range(0,n), (∑ j ∈ range(0,i), 1);
  let precedence@P=∑ x ∈ xs, x + 1;
  return(dot,square,shifted,filtered,product,nested,triangular,precedence);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['1', '1'], 'ys': ['7', '11'], 'enabled': True, 'n': 4})['result'] == ['18', '2', '4', '2', '36', '36', '6', '3']
     assert entry.run('skip-failing-body', {'xs': ['0', '1'], 'ys': ['7', '11'], 'enabled': False, 'n': 0})['result'] == ['11', '1', '2', '0', '18', '18', '0', '2']
     assert entry.run('empty', {'xs': [], 'ys': [], 'enabled': True, 'n': 0})['result'] == ['0', '0', '1', '0', '0', '0', '0', '1']
-    entry.run('strict-zip', {'xs': [], 'ys': ['1'], 'enabled': False, 'n': 0}, refuses='entry-run-incomplete')
+    entry.run('strict-zip', {'xs': [], 'ys': ['1'], 'enabled': False, 'n': 0}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('explicit', [False, True])
@@ -473,11 +473,11 @@ protocol Run roles(P)(xs:Vector<F>@P,i:index@P)->(result:(F,F)@P){
  let total@P=finite::sum(zkc::vector::indices(xs),fn(j)=>xs[j]);
  let picked@P=selected(xs,i);
  return(total,picked);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['2', '3'], 'i': '1'})['result'] == ['5', '3']
-    entry.run('bounds', {'xs': [], 'i': '0'}, refuses='entry-run-incomplete')
+    entry.run('bounds', {'xs': [], 'i': '0'}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -506,7 +506,7 @@ fn work(xs:Array<G::Scalar,2>)->(G::Scalar,G::Scalar,bool,bool){
  let results=combined(xs,rows,points,values);
  return(results.0,results.1,results.2==generator+generator,results.3);
 }
-protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,bool,bool)@P){return work(xs);}run Demo=Run;
+protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,bool,bool)@P){return work(xs);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['2', '3']})['result'] == ['5', '5', True, True]
@@ -515,11 +515,10 @@ protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,boo
 def test_matrix_demand_example(toolchain, journal, directory):
     source = (ROOT / 'common/tests/fixtures/projects/finite-computations/main.zkc').read_text()
     source = source.replace('module example;', 'module sample;')
-    source = source.replace('run Demo = Compute;', '').replace('run MatrixDemo = MatrixProducts;', 'run Demo = MatrixProducts;')
-    entry = Entry(toolchain, journal, directory, source, MODULES)
+    entry = Entry(toolchain, journal, directory, source, MODULES, entry='MatrixDemo')
     matrix = {'rows': '2', 'columns': '3', 'entries': [['0', '0', '2'], ['1', '2', '7']]}
     assert entry.run('matrix-demands', {'matrix': matrix, 'xs': ['3', '5', '11'],
                                         'row': 1, 'seed': '13'}) == {
         'selected': '77', 'rows': ['19', '90']}
     entry.run('selected-row-bounds', {'matrix': matrix, 'xs': ['3', '5', '11'],
-                                     'row': 2, 'seed': '13'}, refuses='entry-run-incomplete')
+                                     'row': 2, 'seed': '13'}, refuses='entry-host-run-failed')

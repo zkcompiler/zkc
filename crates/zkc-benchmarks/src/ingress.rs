@@ -5,7 +5,7 @@ use serde_json::Value as Json;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 use zkc_tools::{
-    entry::{Interface, NamedValues, Value, inputs::InputGroup},
+    entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
     execution::{Capacity, InputValue, PreparedData},
 };
 
@@ -18,6 +18,20 @@ pub enum Ingress {
     Prepared,
 }
 
+#[derive(Clone, Copy)]
+enum Types<'a> {
+    Native(&'a Interface),
+    Function(&'a FunctionInterface),
+}
+impl<'a> Types<'a> {
+    fn logical_type(self, name: &str) -> Option<&'a zkc_runtime::vm::LogicalType> {
+        match self {
+            Self::Native(interface) => interface.logical_type(name),
+            Self::Function(interface) => interface.logical_type(name),
+        }
+    }
+}
+
 pub struct Owner {
     values: NamedValues,
     pub retained_payload_bytes: usize,
@@ -27,6 +41,26 @@ impl Owner {
         values: NamedValues,
         group: &InputGroup<'_>,
         interface: &Interface,
+        ingress: Ingress,
+        capacity: Capacity,
+    ) -> Result<Self> {
+        Self::with_types(values, group, Types::Native(interface), ingress, capacity)
+    }
+
+    pub fn function(
+        values: NamedValues,
+        group: &InputGroup<'_>,
+        interface: &FunctionInterface,
+        ingress: Ingress,
+        capacity: Capacity,
+    ) -> Result<Self> {
+        Self::with_types(values, group, Types::Function(interface), ingress, capacity)
+    }
+
+    fn with_types(
+        values: NamedValues,
+        group: &InputGroup<'_>,
+        interface: Types<'_>,
         ingress: Ingress,
         capacity: Capacity,
     ) -> Result<Self> {
@@ -87,7 +121,7 @@ fn field<'a>(fields: &'a [Json], name: &str) -> Result<&'a Json> {
 fn convert(
     value: Value,
     schema: &Json,
-    interface: &Interface,
+    interface: Types<'_>,
     ingress: Ingress,
     capacity: Capacity,
     retained: &mut usize,
@@ -183,7 +217,7 @@ fn convert(
 fn convert_fields(
     values: NamedValues,
     fields: &[Json],
-    interface: &Interface,
+    interface: Types<'_>,
     ingress: Ingress,
     capacity: Capacity,
     retained: &mut usize,

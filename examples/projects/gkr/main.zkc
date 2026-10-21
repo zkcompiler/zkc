@@ -9,4 +9,6 @@ proof Proof = Gkr<Fr, 4, 4> {
   accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run Interactive = Gkr<Fr, 4, 4>;
+entry fn Interactive(inputs: Gkr<Fr, 4, 4>::Inputs) {
+  return Gkr<Fr, 4, 4>::run(inputs);
+}

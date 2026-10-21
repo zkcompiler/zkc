@@ -16,6 +16,7 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import ROOT, digest  # noqa: E402
+from bridges.common.native_entry import native_run  # noqa: E402
 
 
 def options(subject, entry, extra=()):
@@ -86,10 +87,10 @@ def interactive_entry(runner, subject, compiler, directory):
     entry = subject.get("entries", "interactive")
     common = options(subject, entry)
     prefix = f"{subject.name}:interactive"
-    source = runner.run([compiler, "language-emit", *common], name=f"{prefix}:emit").stdout
+    source, interface = native_run(
+        lambda command: runner.run(command, name=f"{prefix}:package").stdout, compiler, common)
     (directory / "source.mlir").write_text(source, encoding="utf-8")
-    interface = json.loads(runner.run([compiler, "language-interface", *common],
-                                      name=f"{prefix}:interface").stdout)
+    (directory / "interface.json").write_text(json.dumps(interface) + "\n", encoding="utf-8")
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source.encode()))
     exported = runner.run([compiler, "protocol-structured", directory / "source.mlir",
                            f"--symbol={interface['protocol']}"], name=f"{prefix}:export").stdout

@@ -1,5 +1,6 @@
 """A generic Sumcheck library uses closed ring assets through ordinary Entries."""
 
+from entry import joint_execution
 from input_files import input_files
 from source_modules import library_modules
 import json
@@ -60,13 +61,11 @@ def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, e
     entry = 'ExtensionRun' if extension else 'BaseRun'
     package, pin = build(toolchain, journal, directory, entry)
     inputs = values(extension)
-    request = input_files(journal, 'run.json', session='expression_sumcheck_test', roles={
-            'P': {'inputs': {k: v for k, v in inputs.items() if k != 'claim'}},
-            'V': {'inputs': inputs}})
+    request = input_files(journal, 'run.json', session='expression_sumcheck_test', package=package, arguments={'inputs': {'P': {k: v for k, v in inputs.items() if k != 'claim'}, 'V': inputs}})
     output = directory / 'output.json'
     result = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}']))
     assert result['status'] == 'executed'
-    assert json.loads(output.read_text())['roles']['V']['accepted'] is True
+    assert json.loads(output.read_text())['value']['V']['accepted'] is True
 
 
 @pytest.mark.parametrize('extension', [False, True])
@@ -97,14 +96,12 @@ def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal,
 @pytest.mark.parametrize('table', [[], ['1'] * 4, ['1'] * 16])
 def test_expression_stops_on_only_the_verifier_table(toolchain, journal, directory, flags, table):
     package, pin = build(toolchain, journal, directory, 'ExtensionRun', flags)
-    request = input_files(journal, 'interactive', roles={
-        'P': {'inputs': {'values': values()['values'], 'rounds': '2'}},
-        'V': {'inputs': values() | {'values': table}}})
+    request = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': values()['values'], 'rounds': '2'}, 'V': values() | {'values': table}}})
     output = directory / 'output.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={pin}', *request, f'--results={output}'],
-                          refuses='entry-run-incomplete')
-    assert report['execution']['wire']['sends'] == 4
+                          refuses='entry-host-run-failed')
+    assert joint_execution(report)['wire']['sends'] == 4
     assert not output.exists()
 
 

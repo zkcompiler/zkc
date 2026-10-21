@@ -10,14 +10,14 @@ struct Leaf {
     needs_setup: bool,
     source_identity: Option<String>,
 }
-pub(super) struct Schemas<'a> {
+pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
     retained: usize,
     leaves: BTreeMap<&'a str, Leaf>,
     schemas: BTreeMap<&'a str, &'a Schema>,
 }
 impl<'a> Schemas<'a> {
-    pub(super) fn new() -> Self {
+    pub(in crate::entry) fn new() -> Self {
         Self {
             remaining: 1_000_000,
             retained: 0,
@@ -35,7 +35,7 @@ impl<'a> Schemas<'a> {
             .map(|leaf| (leaf.ty.kind(), leaf.needs_setup))
             .ok_or(E::Schema)
     }
-    pub(super) fn finish(self) -> BTreeMap<String, LogicalType> {
+    pub(in crate::entry) fn finish(self) -> BTreeMap<String, LogicalType> {
         self.leaves
             .into_iter()
             .map(|(s, l)| (s.to_owned(), l.ty))
@@ -78,7 +78,7 @@ impl<'a> Schemas<'a> {
         }
         Ok(&self.leaves[spelling])
     }
-    pub(super) fn check(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
+    pub(in crate::entry) fn check(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
         use Permission::*;
         require(depth <= 32, E::Limit)?;
         self.charge(1 + schema.display_type.len() + schema.identity.len())?;

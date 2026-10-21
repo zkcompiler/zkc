@@ -234,13 +234,14 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         )
         .unwrap();
         assert!(report.cleanup_errors.is_empty());
+        assert_eq!(report.verification_result(), None);
         let proof = report.outcome.unwrap();
         assert_eq!(proof.len(), 40);
         let request = ProofInputs::decode(&deployment, &inputs, Invocation::Verify(&[])).unwrap();
         let prepared = inputs::prepare(
             &deployment,
             &request,
-            deployment.entry.validator(),
+            deployment.entry.validator().unwrap(),
             false,
             &mut crate::host::setups::VerifierKeys::new(deployment.capacity.backend().ark_bounds()),
         )
@@ -296,17 +297,36 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             .unwrap_err(),
             "proof-header"
         );
-        assert!(
-            crate::proof::tests::execute(
-                &deployment,
-                &inputs,
-                crate::proof::Invocation::one_shot(Some(&proof))
-            )
-            .unwrap()
-            .outcome
-            .is_ok()
-        );
+        let verified = crate::proof::tests::execute(
+            &deployment,
+            &inputs,
+            crate::proof::Invocation::one_shot(Some(&proof)),
+        )
+        .unwrap();
+        assert!(verified.outcome.is_ok());
+        assert_eq!(verified.verification_result(), Some(true));
         if handling == "consume" {
+            // A normal negative decision is retained structurally before its
+            // diagnostic is rendered. Malformed framing remains a failure.
+            let mut rejected_program: Json = serde_json::from_str(&candidate).unwrap();
+            rejected_program[2][1][4][0][3] = json!(false);
+            let rejected_candidate = rejected_program.to_string();
+            let mut rejected: Json = serde_json::from_str(&deployment_bytes).unwrap();
+            rejected[4] = json!(rejected_candidate);
+            rejected[5] = json!(hash(rejected_candidate.as_bytes()));
+            let bytes = serde_json::to_vec(&rejected).unwrap();
+            let rejected =
+                NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                    .unwrap();
+            let produced = execute(&rejected, &inputs, Invocation::Prove).unwrap();
+            let rejected_proof = produced.outcome.unwrap();
+            let declined =
+                execute(&rejected, &inputs, Invocation::Verify(&rejected_proof)).unwrap();
+            assert_eq!(declined.verification_result(), Some(false));
+            assert!(declined.outputs.is_none());
+            let malformed = execute(&rejected, &inputs, Invocation::Verify(&[])).unwrap();
+            assert_eq!(malformed.verification_result(), None);
+
             // Three completed false trials exercise aggregation independently
             // of successful one-shot proving and verification above.
             let mut program: Json = serde_json::from_str(&candidate).unwrap();
@@ -353,6 +373,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
 }
 fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
     NativeProofReport {
+        retained: Vec::new(),
+        retained_outputs: Vec::new(),
+        verification: None,
         execution_counts: Default::default(),
         outputs: outcome
             .as_ref()
@@ -372,6 +395,7 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         usage: Default::default(),
         external_work: 0,
         ring_work: 0,
+        sequence_work: 0,
         ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
         external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
@@ -401,6 +425,7 @@ fn failed_retirement_discards_completed_bytes_and_preserves_a_primary_failure() 
         };
         backend.retire(&root).unwrap(); // Simulate an adapter custody error at final cleanup.
         let mut report = cleanup_report(primary);
+        report.verification = Some(VerificationDecision::Accepted);
         retire_resources(
             &mut backend,
             &ServiceRegistry::new(Policy::default()),
@@ -409,7 +434,7 @@ fn failed_retirement_discards_completed_bytes_and_preserves_a_primary_failure() 
             &mut report,
         );
         assert_eq!(
-            report.outcome.err().unwrap(),
+            report.outcome.as_ref().err().unwrap(),
             if failed_before_cleanup {
                 "original-body-failure"
             } else {
@@ -418,6 +443,7 @@ fn failed_retirement_discards_completed_bytes_and_preserves_a_primary_failure() 
         );
         assert!(report.outputs.is_none());
         assert_eq!(report.cleanup_errors.len(), 1);
+        assert_eq!(report.verification_result(), None);
         assert_eq!(report.resources.len(), 1);
         assert!(
             backend.observe(&other).is_err(),

@@ -2,7 +2,9 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/Entry.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <map>
@@ -15,6 +17,27 @@ std::string digest(StringRef bytes) {
 Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
+  if (entry.entry().kind == Declaration::Kind::EntryFunction) {
+    auto plan = planHost(entry, limits);
+    if (!plan)
+      return plan.takeError();
+    auto value = json::Object{
+        {"format", "zkc.language-interface/0"},
+        {"capture", entry.project().capture().identity().str()},
+        {"original", original.str()},
+        {"toolchain", toolchain.str()},
+        {"entry", entry.entry().qualifiedName},
+        {"selection",
+         json::Object{{"kind", "function"}, {"function", entry.root().symbol}}},
+        {"functions", std::move(plan->signatures)},
+        {"protocols", json::Array{}},
+        {"relations", json::Array{}},
+        {"setups", json::Array{}}};
+    stream << printJson(std::move(value));
+    if (stream.overflow())
+      return error("source.limit", "Host interface byte limit");
+    return Error::success();
+  }
   Layouts layouts(entry, limits);
   struct Ports {
     std::vector<std::shared_ptr<const Layout>> inputs, outputs;

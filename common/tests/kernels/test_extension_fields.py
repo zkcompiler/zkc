@@ -31,7 +31,7 @@ protocol Run roles(P)(a:E@P, b:E@P, xs:Vector<E>@P, m:Matrix<E>@P)
   let result @P = work(a,b,xs,m);
   return (result=result);
 }}
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 
@@ -75,7 +75,7 @@ def test_extension_kernel_results_and_zero_inverse(toolchain, journal, directory
                     ('field', add(mul(xs[0], mv[0]), mul(xs[1], mv[1])))]
         assert actual == [wire(kind, result) for kind, result in expected]
     inputs['a'] = wire('field', ZERO)
-    report = entry.run('zero-inverse', inputs, refuses='entry-run-incomplete')
+    report = entry.run('zero-inverse', inputs, refuses='entry-host-run-failed')
     assert 'zero-inverse' in str(report)
     # Malformed noncanonical coordinates are refused before values reach a kernel.
     inputs['a'] = wire('field', [P] + [0] * (d - 1))

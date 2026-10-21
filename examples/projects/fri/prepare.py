@@ -15,7 +15,7 @@ def inputs():
         value = sum((degree+1) * pow(x, degree, P) for degree in range(8)) % P
         word.append([str(value), *(['0']*7)])
     public = {'shift': ['3', *(['0']*7)], 'round_count': '3', 'query_count': '8'}
-    return {'public': public, 'witness': {'word': word}, 'P': public | {'word': word}, 'V': public}
+    return {'public': public, 'witness': {'word': word}, 'arguments': {'inputs': {'P': public | {'word': word}, 'V': public}}}
 
 
 def main():

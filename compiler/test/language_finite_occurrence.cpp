@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
 using namespace llvm;
@@ -39,7 +40,7 @@ Expected<ClosedEntry> close(StringRef source) {
   auto project = check(source);
   if (!project)
     return project.takeError();
-  return closeEntry(*project, "m::Run");
+  return zkc::test::closeProtocolDeployment(*project, "m::Run");
 }
 void verify(const ClosedEntry &closed, mlir::MLIRContext &context) {
   if (auto error = checkScopedSpecialization(closed))
@@ -67,7 +68,9 @@ std::string fixedSubject(StringRef domain, unsigned size) {
          ">{return fixed(" + domain.str() +
          ",fn(item)=>a);}\n"
          "protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr," +
-         std::to_string(size) + ">@P){return subject(a);}run Run=Demo;";
+         std::to_string(size) +
+         ">@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return "
+         "Demo::run(inputs); }";
 }
 } // namespace
 int main() {
@@ -105,7 +108,7 @@ int main() {
             [] {
               refuses(check(R"(
 math fn unused(xs:Array<Fr,5>)->Array<Fr,4>{return fixed(fixed_elements(xs),fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return a;}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return a;}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
                       "source.data-bound");
             });
@@ -120,10 +123,11 @@ math fn subject(xs:Vector<Fr>)->Fr{let ys:Array<Fr,4>=fixed(elements(xs),fn(x)=>
             [] {
               const auto source = R"(
 math fn subject(xs:Vector<Fr>)->Array<Fr,4>{return fixed(elements(xs),fn(x)=>x);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Array<Fr,4>@P){return subject(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Array<Fr,4>@P){return subject(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
               auto project = take(check(source));
-              refuses(closeEntry(project, "m::Run"), "source.data-bound");
+              refuses(zkc::test::closeProtocolDeployment(project, "m::Run"),
+                      "source.data-bound");
             });
   cases.run("symbolic fixed result supplies no numeric count before formation",
             [] {
@@ -133,27 +137,31 @@ math fn subject<N:nat>(xs:Array<Fr,5>)->Fr{let ys:Array<Fr,N>=fixed(fixed_elemen
                       "source.data-bound");
             });
   for (unsigned size : {4u, 5u})
-    cases.run("symbolic fixed formation closes at " + std::to_string(size),
-              [&] {
-                auto project = take(check(
-                    R"(
+    cases.run(
+        "symbolic fixed formation closes at " + std::to_string(size), [&] {
+          auto project = take(check(
+              R"(
 math fn subject<N:nat>(xs:Array<Fr,5>)->Array<Fr,N>{return fixed(fixed_elements(xs),fn(x)=>x);}
 math fn work<N:nat>(a:Fr)->Array<Fr,N>{let xs:Array<Fr,5>=fixed(range(0,5),fn(i)=>a);return subject<N>(xs);}
 protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,)" +
-                    std::to_string(size) + ">@P){return work<" +
-                    std::to_string(size) + ">(a);}run Run=Demo;"));
-                if (size == 5)
-                  verify(take(closeEntry(project, "m::Run")), context);
-                else
-                  refuses(closeEntry(project, "m::Run"), "source.data-bound");
-              });
+              std::to_string(size) + ">@P){return work<" +
+              std::to_string(size) +
+              ">(a);}entry fn Run(inputs: Demo::Inputs) { return "
+              "Demo::run(inputs); }"));
+          if (size == 5)
+            verify(take(zkc::test::closeProtocolDeployment(project, "m::Run")),
+                   context);
+          else
+            refuses(zkc::test::closeProtocolDeployment(project, "m::Run"),
+                    "source.data-bound");
+        });
   cases.run("generic finite signatures preserve input and result substitution",
             [&] {
               verify(take(close(R"(
 math fn seeded<F:Field,I:Type+Copy+Drop>(rows:domain<I>,initial:F,step:math fn(F,item:I)->F where item_from(item,rows))->F=finite("math.fold");
 math fn subject<N:nat>(xs:Array<Fr,N>,seed:Fr)->Fr{return seeded(fixed_elements(xs),seed,fn(s,x)=>s+x);}
 math fn work(a:Fr,seed:Fr)->Fr{let xs:Array<Fr,4>=fixed(range(0,4),fn(i)=>a);return subject(xs,seed);}
-protocol Demo roles(P)(a:Fr@P,seed:Fr@P)->(r:Fr@P){return work(a,seed);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P,seed:Fr@P)->(r:Fr@P){return work(a,seed);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
                      context);
             });
@@ -165,7 +173,7 @@ protocol Demo roles(P)(a:Fr@P,seed:Fr@P)->(r:Fr@P){return work(a,seed);}run Run=
 math fn bounded<N:nat>(rows:domain<Fr>,initial:Fr,step:math fn(Fr,item:Fr)->Fr where item_from(item,rows))->Fr where 1<=N=finite("math.fold");
 math fn subject(xs:Vector<Fr>)->Fr{return bounded<)" +
                     std::to_string(size) + R"(>(elements(xs),0,fn(s,x)=>s+x);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
                 if (size)
                   verify(take(close(source)), context);
@@ -177,7 +185,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}run Run=De
 interface Folder<F:Field>{math fn fold(rows:domain<F>,initial:F,step:math fn(F,item:F)->F where item_from(item,rows))->F;}
 module Ordered<F:Field>:Folder<F>{math fn fold(rows:domain<F>,initial:F,step:math fn(F,item:F)->F where item_from(item,rows))->F=finite("math.fold");}
 math fn selected<F:Field,C:Folder<F>>(xs:Vector<F>,seed:F)->F{return C::fold(elements(xs),seed,fn(s,x)=>s+x);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return selected<Fr,Ordered<Fr>>(xs,seed);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return selected<Fr,Ordered<Fr>>(xs,seed);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
            context);
   });
@@ -185,7 +193,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return selected<Fr,O
     auto closed = take(close(R"(
 math fn subject(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let ys=mapped(elements(vector_id(xs)),fn(x)=>x);return at(ys,i);}
 math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(s,i)=>s+subject(xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     verify(closed, context);
   });
@@ -195,7 +203,7 @@ struct Columns{pub counts:Vector<Fr>,pub reciprocals:Vector<Fr>}
 math fn weighted(counts:Vector<Fr>,reciprocals:Vector<Fr>)->Fr where equal_extent(counts,reciprocals){let collected=mapped(elements(reciprocals),fn(x)=>x);return total(zip(elements(counts),elements(collected)),0,fn(s,p)=>s+p.0*p.1);}
 math fn columns(t:Columns)->Fr where equal_extent(t.counts,t.reciprocals){return weighted(t.counts,t.reciprocals);}
 math fn subject(t:Columns)->Fr{let collected=mapped(elements(t.reciprocals),fn(x)=>x);return weighted(t.reciprocals,collected);}
-protocol Demo roles(P)(t:Columns@P)->(r:Fr@P){return subject(t);}run Run=Demo;
+protocol Demo roles(P)(t:Columns@P)->(r:Fr@P){return subject(t);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
            context);
   });
@@ -204,14 +212,14 @@ protocol Demo roles(P)(t:Columns@P)->(r:Fr@P){return subject(t);}run Run=Demo;
               refuses(close(R"(
 struct Columns{pub counts:Vector<Fr>,pub reciprocals:Vector<Fr>}
 math fn subject(t:Columns)->Fr{let collected=mapped(elements(t.reciprocals),fn(x)=>x);return total(zip(elements(t.counts),elements(collected)),0,fn(s,p)=>s+p.0*p.1);}
-protocol Demo roles(P)(t:Columns@P)->(r:Fr@P){return subject(t);}run Run=Demo;
+protocol Demo roles(P)(t:Columns@P)->(r:Fr@P){return subject(t);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
                       "source.data-bound");
             });
   cases.run("source and closed collections publish fresh numeric extents", [&] {
     verify(take(close(R"(
 math fn subject(a:Fr)->Array<Fr,4>{let xs=mapped(range(index_id(0),index_id(4)),fn(i)=>a);let ys=mapped(xs,fn(x)=>x);return fixed(ys,fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
            context);
   });
@@ -219,7 +227,7 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Dem
             [&] {
               verify(take(close(R"(
 math fn subject(a:Fr)->Array<Fr,0>{let xs=filtered(range(4,1),fn(i)=>true,fn(i)=>a);return fixed(xs,fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,0>@P){return subject(a);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,0>@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
                      context);
             });
@@ -232,7 +240,7 @@ math fn subject(a:Fr)->Fr{let xs=filtered(range(0,4),fn(i)=>true,fn(i)=>a);retur
   cases.run("filtered upper count does not justify fixed positive collect", [] {
     refuses(close(R"(
 math fn subject(a:Fr)->Array<Fr,4>{let xs=filtered(range(0,4),fn(i)=>true,fn(i)=>a);return fixed(xs,fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
             "source.data-bound");
   });
@@ -302,7 +310,7 @@ math fn subject(a:Fr)->Array<Fr,4>{return fixed(range(0,4),fn(i)=>a);}
 domain fn relay(rows:domain<index>)->domain<index>{return rows;}
 domain fn interval(lo:index,hi:index)->domain<index>{return relay(range(lo,hi));}
 math fn subject(a:Fr)->Array<Fr,4>{return fixed(body=fn(i)=>a,rows=interval(index_id(0),index_id(4)));}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )")),
            context);
   });
@@ -310,7 +318,7 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Dem
     refuses(close(R"(
 domain fn selected(xs:Vector<Fr>,ys:Vector<Fr>,lo:index,hi:index)->domain<index>{let unused=zip(elements(xs),elements(ys));return range(lo,hi);}
 math fn subject(xs:Vector<Fr>,ys:Vector<Fr>,a:Fr)->Array<Fr,0>{return fixed(selected(xs,ys,0,0),fn(i)=>a);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P)->(r:Array<Fr,0>@P){return subject(xs,ys,a);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P)->(r:Array<Fr,0>@P){return subject(xs,ys,a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
             "source.data-bound");
   });
@@ -331,7 +339,7 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){l
     refuses(close(R"(
 math fn wrapper(rows:domain<index>,body:math fn(item:index)->Fr where item_from(item,rows))->Array<Fr,4>{return fixed(rows,body);}
 math fn subject(a:Fr)->Array<Fr,4>{return wrapper(range(0,4),fn(i)=>a);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Demo;
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"),
             "source.data-bound");
   });
@@ -352,22 +360,23 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P){return subject(a);}run Run=Dem
                         callee +
                         "(range(0,4),fn(i)=>a);}\n"
                         "protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,4>@P) "
-                        "effects(stop){return subject(a);}run Run=Demo;"),
+                        "effects(stop){return subject(a);}entry fn Run(inputs: "
+                        "Demo::Inputs) { return Demo::run(inputs); }"),
                   "source.data-bound");
         });
   for (StringRef choice : {"domain", "callback", "predicate", "seed"})
     cases.run("witness rejects a different valid " + choice + " choice", [&] {
       auto source = choice == "predicate" ? R"(
 math fn subject()->(Vector<Fr>,Vector<Fr>){let a=filtered(range(0,4),fn(i)=>true,fn(i)=>1);let b=filtered(range(0,4),fn(i)=>false,fn(i)=>1);return (a,b);}
-protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}run Run=Demo;
+protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"
                     : choice == "seed"    ? R"(
 math fn subject()->(Fr,Fr){let first:Fr=1;let second:Fr=2;let a=total(range(0,4),first,fn(s,i)=>s+1);let b=total(range(0,4),second,fn(s,i)=>s+1);return (a,b);}
-protocol Demo roles(P)()->(r:(Fr,Fr)@P){return subject();}run Run=Demo;
+protocol Demo roles(P)()->(r:(Fr,Fr)@P){return subject();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"
                                           : R"(
 math fn subject()->(Vector<Fr>,Vector<Fr>){let lo:index=0;let next:index=1;let hi:index=4;let end:index=5;let a=mapped(range(lo,hi),fn(i)=>1);let b=mapped(range(next,end),fn(i)=>2);return (a,b);}
-protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}run Run=Demo;
+protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
       auto closed = take(close(source));
       verify(closed, context);
@@ -404,7 +413,7 @@ protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}run Ru
     auto closed = take(close(R"(
 math fn wrapper(rows:domain<Fr>,body:math fn(item:Fr)->Fr where item_from(item,rows))->Vector<Fr>{return mapped(rows,body);}
 fn both(rows:domain<Fr>,body:math fn(item:Fr)->Fr where item_from(item,rows))->(Vector<Fr>,Vector<Fr>){return (wrapper(rows,body),mapped(rows,body));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:(Vector<Fr>,Vector<Fr>)@P){return both(elements(xs),fn(x)=>x);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:(Vector<Fr>,Vector<Fr>)@P){return both(elements(xs),fn(x)=>x);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     verify(closed, context);
     const Declaration *generic = nullptr;

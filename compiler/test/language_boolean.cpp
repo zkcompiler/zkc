@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
 using namespace llvm;
@@ -30,10 +31,10 @@ int main() {
     }
     protocol Run roles(P,V)(a:bool@(P,V),b:bool@(P,V))->(r:bool@(P,V)){
       return(r=formula(a,b));
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )";
-  auto original = take(
-      prepareOriginal(take(closeEntry(take(check(program)), "sample::Demo"))));
+  auto original = take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+      take(check(program)), "sample::Demo"))));
   cases.run("shared mathematical Boolean formulas", [&] {
     for (bool simplify : {false, true})
       take(compileEntry(original, {simplify, false}));
@@ -97,10 +98,11 @@ int main() {
         auto protocol = [&](StringRef roles) {
           return helper + "protocol Run roles(P,V)(a:bool@P,b:bool@" +
                  roles.str() + ")->(r:bool@P){return(r=" + callee +
-                 "(a,b));}run Demo=Run;";
+                 "(a,b));}entry fn Demo(inputs: Run::Inputs) { return "
+                 "Run::run(inputs); }";
         };
-        take(prepareOriginal(
-            take(closeEntry(take(check(protocol("(P,V)"))), "sample::Demo"))));
+        take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+            take(check(protocol("(P,V)"))), "sample::Demo"))));
         auto refused = check(protocol("V"));
         require(!refused, "unavailable helper intermediate admitted");
         require(

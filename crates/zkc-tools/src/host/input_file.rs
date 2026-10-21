@@ -21,6 +21,16 @@ impl InputFile {
         }
         Ok(Self(Arc::new(Mutex::new(file))))
     }
+    pub(crate) fn read_shared(
+        &self,
+        limit: usize,
+        ledger: &zkc_runtime::vm::ExecutionLedger,
+    ) -> Result<super::io::SharedBytes, String> {
+        let mut file = self.0.lock().map_err(|_| "entry-input-reference")?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(|_| "entry-input-reference")?;
+        super::io::read_shared(&mut file, limit, Some(ledger))
+    }
     pub(crate) fn read(&self, limit: usize) -> Result<Vec<u8>, super::io::ReadError> {
         let mut file = self
             .0

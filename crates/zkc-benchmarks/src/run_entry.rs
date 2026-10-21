@@ -1,4 +1,4 @@
-//! Ordinary source programs use the same admitted Host as application callers.
+//! Ordinary source programs use the same admitted Function Host as applications.
 use crate::{
     Failure, Operation, Report, Request, Result,
     host::capture,
@@ -6,13 +6,12 @@ use crate::{
     measure::measure,
     observation::{Call, InputSetup, Lifecycle},
 };
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    time::Instant,
-};
+use std::{collections::BTreeMap, path::Path, time::Instant};
 use zkc_tools::{
-    entry::{NamedValues, RoleInputs, RunEntry, RunRequest, Value, inputs::Decoder},
+    entry::{
+        FunctionEntry, FunctionInterface, FunctionOptions, FunctionRequest, InvocationBinding,
+        InvocationContext, NamedValues, RunContext, Value, inputs::Decoder,
+    },
     execution::InputValue,
 };
 
@@ -20,117 +19,105 @@ fn accepted(value: Option<&Value>) -> bool {
     matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_backends::Value::Bool(true)))
 }
 
-fn make_request(values: BTreeMap<String, NamedValues>) -> RunRequest {
-    RunRequest {
-        session: "benchmark".into(),
-        roles: values
-            .into_iter()
-            .map(|(role, inputs)| {
+fn context(entry: &FunctionEntry) -> InvocationContext {
+    InvocationContext {
+        deployments: entry
+            .deployments()
+            .map(|(id, _)| {
                 (
-                    role,
-                    RoleInputs {
-                        inputs,
+                    id.into(),
+                    InvocationBinding::Run(RunContext {
+                        session: Some("benchmark".into()),
                         ..Default::default()
-                    },
+                    }),
                 )
             })
             .collect(),
-        setups: BTreeMap::new(),
     }
 }
-fn share(owners: &BTreeMap<String, Owner>) -> Result<BTreeMap<String, NamedValues>> {
-    owners
-        .iter()
-        .map(|(role, owner)| Ok((role.clone(), owner.share()?)))
-        .collect()
+
+fn make_request(entry: &FunctionEntry, arguments: NamedValues) -> FunctionRequest {
+    FunctionRequest {
+        arguments,
+        context: context(entry),
+    }
 }
 
 pub fn run(
     job: &Request,
     path: &Path,
     sha256: &str,
-    roles: &BTreeMap<String, PathBuf>,
+    arguments: &Path,
     accept_role: &str,
 ) -> Result<Report> {
     let ingress = job.ingress()?;
     if job.operation != Operation::Run {
-        return Err("run worker requires a run operation".into());
+        return Err("function worker requires a run operation".into());
+    }
+    if zkc_runtime::vm::ExecutionCounts::ENABLED {
+        return Err(
+            "benchmark-counts: Function Host execution observations are unavailable".into(),
+        );
     }
     let (package, capture_ns) = capture(path, sha256)?;
     let start = Instant::now();
-    let entry = RunEntry::admit(package, Default::default(), Default::default())
-        .map_err(|e| e.to_string())?;
+    // This inventory is checked by the common Host owner, before executable
+    // admission. Setup authority is never inferred from a child package.
+    let requirements =
+        FunctionInterface::deployment_requirements(&package).map_err(|e| e.to_string())?;
+    let children = requirements
+        .as_array()
+        .ok_or("invalid Function deployment inventory")?;
+    let mut authority = BTreeMap::new();
+    for child in children {
+        if child["operation"] != "run" || child["setups"].as_array().is_none_or(|v| !v.is_empty()) {
+            return Err("benchmark Function requires setup-free run children".into());
+        }
+        let id = child["id"]
+            .as_str()
+            .ok_or("missing checked deployment id")?;
+        authority.insert(id.into(), Default::default());
+    }
+    let options = FunctionOptions::default();
+    let entry = FunctionEntry::admit(package, options, authority).map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
-    let data = roles
-        .iter()
-        .map(|(role, path)| {
-            Ok((
-                role.clone(),
-                std::fs::read(path).map_err(|e| e.to_string())?,
-            ))
-        })
-        .collect::<Result<BTreeMap<_, _>>>()?;
-    let groups = entry.interface().input_groups();
-    let decode = || {
-        let mut decoder = Decoder::new(entry.limits().capacity)?;
-        data.iter()
-            .map(|(role, bytes)| {
-                let group = groups
-                    .iter()
-                    .find(|g| g.name() == role)
-                    .ok_or("unknown input role")?;
-                let inputs = decoder
-                    .decode(group, bytes, None)
-                    .map_err(|e| e.to_string())?;
-                Ok((role.clone(), inputs))
-            })
-            .collect::<Result<BTreeMap<_, _>>>()
+    let data = std::fs::read(arguments).map_err(|e| e.to_string())?;
+    let group = entry.interface().input_group();
+    let decode = || -> Result<NamedValues> {
+        Decoder::new(options.limits.capacity)?
+            .decode(&group, &data, None)
+            .map_err(|e| e.to_string().into())
     };
     let mut input_setup = Vec::new();
-    let owners = if ingress == Ingress::Json {
+    let owner = if ingress == Ingress::Json {
         None
     } else {
         let start = Instant::now();
-        let owners = decode()?
-            .into_iter()
-            .map(|(role, values)| {
-                let group = groups
-                    .iter()
-                    .find(|g| g.name() == role)
-                    .ok_or("unknown input role")?;
-                Ok((
-                    role,
-                    Owner::new(
-                        values,
-                        group,
-                        entry.interface(),
-                        ingress,
-                        entry.limits().capacity,
-                    )?,
-                ))
-            })
-            .collect::<Result<BTreeMap<_, _>>>()?;
-        // Public Host admission confirms the exact physical ABI and complete
-        // loading limits. This issues no resources; every timed call checks again.
+        let owner = Owner::function(
+            decode()?,
+            &group,
+            entry.interface(),
+            ingress,
+            options.limits.capacity,
+        )?;
         entry
-            .check_inputs(make_request(share(&owners)?))
+            .check_inputs(make_request(&entry, owner.share()?))
             .map_err(|e| format!("benchmark-ingress: input admission: {e}"))?;
         input_setup.push(InputSetup {
             input_index: 0,
             construction_ns: start.elapsed().as_nanos(),
-            retained_payload_bytes: owners.values().map(|o| o.retained_payload_bytes).sum(),
+            retained_payload_bytes: owner.retained_payload_bytes,
         });
-        Some(owners)
+        Some(owner)
     };
-    let calls = std::cell::RefCell::new(Vec::with_capacity(
-        (job.plan.warmups + job.plan.samples) * job.plan.iterations,
-    ));
+    let total = (job.plan.warmups + job.plan.samples) * job.plan.iterations;
+    let calls = std::cell::RefCell::new(Vec::with_capacity(total));
     let mut last = None;
     let mut observed = 0;
     let samples = measure(
         job.plan,
         || {
-            let (decoded, decode_ns) = if owners.is_none() {
+            let (decoded, decode_ns) = if owner.is_none() {
                 let start = Instant::now();
                 let values = decode()?;
                 (Some(values), Some(start.elapsed().as_nanos()))
@@ -138,56 +125,50 @@ pub fn run(
                 (None, None)
             };
             let start = Instant::now();
-            let values = if let Some(owners) = &owners {
-                share(owners)?
+            let values = if let Some(owner) = &owner {
+                owner.share()?
             } else {
                 decoded.unwrap()
             };
-            let input = make_request(values);
+            let input = make_request(&entry, values);
             let request_ns = start.elapsed().as_nanos();
             calls
                 .borrow_mut()
                 .push(Call::constructed(0, decode_ns, request_ns));
             Ok(input)
         },
+        // Time the complete Function call, including native child invocation,
+        // input adaptation, cleanup and construction of its typed source return.
         |input| Ok(entry.prepare(input).map_err(|e| e.to_string())?.execute()),
         |report| {
             if !report.is_success() {
-                return Err(format!("run failed: {}", report.native.diagnostics()).into());
+                return Err(format!("function failed: {}", report.diagnostics()).into());
             }
-            if !accepted(
-                report
-                    .outputs
-                    .as_ref()
-                    .and_then(|r| r.get(accept_role))
-                    .and_then(|r| r.get("accepted")),
-            ) {
+            let value = report.value.as_ref().unwrap().clone().into_value();
+            let value = match &value {
+                Value::Record(roles) => roles.get(accept_role),
+                _ => None,
+            };
+            let acceptance = match value {
+                Some(Value::Record(outputs)) => outputs.get("accepted"),
+                _ => None,
+            };
+            if !accepted(acceptance) {
                 return Err(Failure::IncorrectResult);
             }
-            let mut counts = zkc_runtime::vm::ExecutionCounts::default();
-            for role in &report
-                .native
-                .execution
-                .as_ref()
-                .expect("successful execution")
-                .roles
-            {
-                counts.merge(&role.execution_counts);
-            }
-            calls.borrow_mut().last_mut().unwrap().execution_counts = counts.json();
             observed += 1;
-            if observed == (job.plan.warmups + job.plan.samples) * job.plan.iterations {
+            if observed == total {
                 last = Some(report);
             }
             Ok(())
         },
     )?;
-    let mut report = Report::new("admitted_run_call", samples, 0);
+    let mut report = Report::new("admitted_function_call", samples, 0);
     report.admission_ns = Some(capture_ns + admit_ns);
     let last = last.unwrap();
     let before = crate::peak_rss();
     let start = Instant::now();
-    report.diagnostics = last.native.diagnostics();
+    report.diagnostics = last.diagnostics();
     let diagnostics_ns = start.elapsed().as_nanos();
     report.lifecycle = Some(Lifecycle {
         ingress,
@@ -216,5 +197,105 @@ mod tests {
         )))));
         assert!(!accepted(Some(&Value::Unit)));
         assert!(!accepted(None));
+    }
+
+    // Independently authored Function carrier: acceptance is ordinary source
+    // data and the worker acceptance gate checks publication. No native protocol exists.
+    #[test]
+    fn function_worker_calls_the_host_with_every_ingress_and_checks_every_result() {
+        use serde_json::json;
+        use sha2::{Digest, Sha256};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        fn hash(bytes: &[u8]) -> String {
+            Sha256::digest(bytes)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect()
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "zkc-benchmark-function-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(directory.clone());
+        let boolean = json!({"kind":"boolean","type":"bool","identity":hash(b"bool"),
+            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+            "fields":[],"alternatives":[],"leaves":["bool"]});
+        let product = |name: &str, member: &str, child: &serde_json::Value| {
+            json!({
+            "kind":"record","type":name,"identity":hash(name.as_bytes()),
+            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+            "fields":[{"name":member,"offset":0,"schema":child}],"alternatives":[],"leaves":["bool"]})
+        };
+        let outputs = product("example::Outputs", "accepted", &boolean);
+        let result = product("example::Result", "P", &outputs);
+        let definition = |id, schema: &serde_json::Value| json!({"id":id,"schema":schema});
+        let signature = json!({"symbol":"example::Main",
+            "parameters":[{"name":"accepted","schema":boolean}],"result":result});
+        let artifact = json!({"format":"zkc.host/0","original":hash(b"original"),"entry":"example::Main",
+            "functions":[{"signature":signature,"body":{
+                "arguments":[definition(0,&boolean)],"operations":[
+                    {"op":"construct","alternative":"","operands":[0],"results":[definition(1,&outputs)]},
+                    {"op":"construct","alternative":"","operands":[1],"results":[definition(2,&result)]}],"returns":[2]}}],
+            "calculations":[],"deployments":[]});
+        let interface = json!({"format":"zkc.language-interface/0","capture":hash(b"capture"),
+            "original":hash(b"original"),"toolchain":"test","entry":"example::Main",
+            "selection":{"kind":"function","function":"example::Main"},
+            "functions":[signature],"protocols":[],"relations":[],"setups":[]});
+        let package = json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact.to_string(),"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        let path = directory.join("function.zkpkg");
+        std::fs::write(&path, &package).unwrap();
+        let arguments = directory.join("arguments.json");
+        for ingress in ["json", "wire", "native", "prepared"] {
+            let job: Request = serde_json::from_value(json!({"format":"zkc.benchmark-job/0",
+                "backend":{"kind":"run","ingress":ingress,"package":path,"sha256":hash(package.as_bytes()),
+                    "arguments":arguments,"accept_role":"P"},"operation":"run",
+                "plan":{"warmups":1,"samples":2,"iterations":2},"proof":directory.join("unused")})).unwrap();
+            std::fs::write(&arguments, r#"{"accepted":true}"#).unwrap();
+            let report = run(&job, &path, &hash(package.as_bytes()), &arguments, "P");
+            if zkc_runtime::vm::ExecutionCounts::ENABLED {
+                assert!(report.is_err());
+                continue;
+            }
+            let report = report.unwrap();
+            assert_eq!(report.boundary, "admitted_function_call");
+            assert_eq!(report.diagnostics["completed"], true);
+            assert!(
+                report.diagnostics["usage"]["instructions"]
+                    .as_u64()
+                    .unwrap()
+                    > 0
+            );
+            let life = report.lifecycle.unwrap();
+            assert_eq!(life.calls.len(), 6);
+            assert_eq!(life.input_setup.len(), usize::from(ingress != "json"));
+            assert!(
+                life.calls
+                    .iter()
+                    .all(|c| c.decode_ns.is_some() == (ingress == "json"))
+            );
+            assert!(matches!(
+                run(&job, &path, &hash(package.as_bytes()), &arguments, "absent"),
+                Err(Failure::IncorrectResult)
+            ));
+            std::fs::write(&arguments, r#"{"accepted":false}"#).unwrap();
+            assert!(matches!(
+                run(&job, &path, &hash(package.as_bytes()), &arguments, "P"),
+                Err(Failure::IncorrectResult)
+            ));
+            std::fs::write(&arguments, r#"{"accepted":true,"extra":false}"#).unwrap();
+            assert!(run(&job, &path, &hash(package.as_bytes()), &arguments, "P").is_err());
+        }
     }
 }

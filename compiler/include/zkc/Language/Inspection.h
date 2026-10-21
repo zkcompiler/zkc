@@ -3,7 +3,8 @@
 #include "zkc/Language/Project.h"
 
 namespace zkc::language {
-/// JSON inventory of canonical Entry names and run/proof kinds, sorted by name.
+/// JSON inventory of canonical Entry names and function/proof/deployment kinds,
+/// sorted by name.
 llvm::Expected<std::string> inspectEntries(const CheckedProject &,
                                            const Limits & = {});
 /// JSON array of public modules, interfaces, callables and constructions,

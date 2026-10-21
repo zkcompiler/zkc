@@ -12,6 +12,8 @@ import sys
 
 import pytest
 
+from entry import joint_execution
+
 from test_source_projects import ROOT, build
 
 PROJECT = 'examples/projects/eip4844'
@@ -106,16 +108,16 @@ class Entries:
     def run(self, entry, inputs):
         """Returned role outputs, or None after a participant stop."""
         package, pin = self.package(entry)
-        document = inputs.document('P', inputs.values)
+        document = inputs.document('arguments', {'inputs': {'P': inputs.values}})
         output = inputs.directory / 'outputs.json'
         result = self.journal.attempt([self.toolchain.runtime, '--json', 'run', f'--package={package}',
-                                       f'--sha256={pin}', '--session=vectors', f'--input=P={document}',
+                                       f'--sha256={pin}', f'--input={document}',
                                        f'--results={output}'])
         report = self.journal.parse(result)
         if report.get('status') == 'executed':
-            return json.loads(output.read_text())['roles']['P']
-        assert report.get('code') == 'entry-run-incomplete', report
-        assert report['execution']['outcome'][0] == 'participant-stopped', report
+            return json.loads(output.read_text())['value']['P']
+        assert report.get('code') == 'entry-host-run-failed', report
+        assert joint_execution(report)['outcome'][0] == 'participant-stopped', report
         return None
 
     def verify(self, entry, inputs, public, proof):
@@ -299,7 +301,7 @@ protocol Check roles(P)(setup: Groups<eip4844::G1> @P) -> (key: Bytes @P, count:
   let admitted = eip4844::admit_setup(setup);
   return (key = encoding::group_compressed(eip4844::verifier_key()), count = curve::length(admitted));
 }
-run Demo = Check;
+entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('commitments/kzg', 'constructions/ethereum/eip4844'))
     pinned = lagrange()
@@ -307,7 +309,7 @@ run Demo = Check;
     def run(name, setup):
         (directory / f'{name}.zkcv').write_bytes(setup)
         reference = {'file': f'{name}.zkcv', 'sha256': hashlib.sha256(setup).hexdigest()}
-        return entry.run(name, {'setup': reference}, refuses='entry-run-incomplete' if setup != pinned else None)
+        return entry.run(name, {'setup': reference}, refuses='entry-host-run-failed' if setup != pinned else None)
 
     # The embedded verifier key is the second G2 monomial point of the asset.
     assert run('pinned', pinned) == {'key': list(g2_monomial(1)), 'count': '4096'}
@@ -399,7 +401,7 @@ def test_example_inputs_prove_and_verify(toolchain, journal, directory):
     common = [toolchain.runtime, '--json']
     for entry in ['BlobToCommitment', 'ComputeKzgProof', 'ComputeChallenge', 'PointEvaluationPrecompile']:
         report = journal.json([*common, 'run', f'example::{entry}', f'--compiler={toolchain.compiler}', project,
-                               '--session=example', f'--input=P={output / f"example.{entry}/P.json"}',
+                               f'--input={output / f"example.{entry}/arguments.json"}',
                                f'--results={directory / f"{entry}.json"}'])
         assert report['status'] == 'executed', entry
     for entry in ['KzgProof', 'BlobProof', 'BlobBatchProof']:

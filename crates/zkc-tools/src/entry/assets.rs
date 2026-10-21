@@ -34,6 +34,37 @@ impl EntryAssets {
         admitted: &Program,
         entry: &str,
     ) -> Result<Self> {
+        let references = admitted
+            .asset_references(entry)
+            .map_err(|_| "entry-asset-references")?;
+        Self::admit_references(package, references)?.check_interface(interface)
+    }
+    pub(super) fn admit_role(
+        package: &Package,
+        interface: &Interface,
+        admitted: &Program,
+        entry: &str,
+        role: &str,
+    ) -> Result<Self> {
+        let references = admitted
+            .role_asset_references(entry, role)
+            .map_err(|_| "entry-asset-references")?;
+        Self::admit_references(package, references)?.check_interface(interface)
+    }
+    fn check_interface(self, interface: &Interface) -> Result<Self> {
+        // Declaration-only relation Bundles still determine the formal ABI.
+        for relation in &interface.document.relations {
+            if let Definition::Bundle { asset } = &relation.definition {
+                let definition = self.relations.bundle(asset).ok_or("entry-asset-missing")?;
+                bundle::check(&definition, relation)?;
+            }
+        }
+        Ok(self)
+    }
+    pub(in crate::entry) fn admit_references(
+        package: &Package,
+        references: Vec<AssetReference>,
+    ) -> Result<Self> {
         let mut registry = Registry::default();
         let mut relations = RelationRegistry::default();
         let mut identities = Vec::new();
@@ -80,17 +111,6 @@ impl EntryAssets {
             }
             identities.push(asset.expected_sha256().to_owned());
         }
-        // A declaration-only Bundle remains meaningful even when no runtime
-        // operation evaluates it. Its contents determine the formal ABI.
-        for relation in &interface.document.relations {
-            if let Definition::Bundle { asset } = &relation.definition {
-                let definition = relations.bundle(asset).ok_or("entry-asset-missing")?;
-                bundle::check(&definition, relation)?;
-            }
-        }
-        let references = admitted
-            .asset_references(entry)
-            .map_err(|_| "entry-asset-references")?;
         let mut checked = std::collections::BTreeSet::new();
         for reference in &references {
             let binding = reference.binding.declaration();

@@ -188,7 +188,8 @@ spelling and diagnostic locations. It retains those exact bytes and returns
 `CheckedOriginal`. `prepareOriginal` emits and runs the same independent checks;
 its emitted bytes need no second canonicality comparison.
 `CheckedOriginal::interface()` exposes the checked view; `selectedProtocol()`
-selects its Entry's protocol record. Host authentication must bind the retained
+selects a protocol or proof deployment's protocol record. Application Entry
+functions expose their Host plan instead. Host authentication must bind the retained
 interface bytes, not arbitrary caller JSON that happens to compare semantically.
 The byte overload of `inspectApplications` admits the entire original and interface before calling a
 read-only visitor for each static `protocol.apply`. Each occurrence exposes its
@@ -250,8 +251,8 @@ existing ASCII grammars.
 
 `packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/0`
 with exactly `format`, `original`, `interface`, `artifact`, `options` and
-`assets`. Original MLIR, interface JSON and native run bundle or proof
-deployment are exact strings. Options contain exactly the required JSON Booleans
+`assets`. Original MLIR, interface JSON and Host control artifact or native proof deployment are exact
+strings. Child deployments inside a Host artifact retain their own exact packages. Options contain exactly the required JSON Booleans
 `simplify`, `release_storage`, `fuse_vector_reductions`, `finite_bulk` and
 `fuse_collect_fold` and `calculation_batching`. Finite bulk selection and calculation batching default
 to true and both fusion choices to false; all four fields are required and independent of
@@ -296,3 +297,55 @@ identity used by native proof binding. A consumer must obtain its expected
 package identity independently; internal hashes do not authenticate a supplied
 package. Retaining MLIR does not require the Host to recompile it or establish
 a security theorem.
+
+## Host control artifact
+
+An Entry function publishes `zkc.host/0` in the existing package artifact member.
+It has exactly `format`, `original`, `entry`, `functions`, `calculations` and
+`deployments`. `original` hashes the exact retained original; `entry` selects a
+function symbol. The interface uses `selection: {kind: "function", function}` and
+a `functions` signature inventory. Its `protocols`, `relations` and `setups`
+arrays are empty: child native packages own those contracts.
+
+Each signature has `symbol`, ordered named `parameters` with a logical `schema`,
+and one `result` schema. Schemas retain the same nominal, constructor, permission
+and native leaf contracts as protocol interfaces. Each function has `signature`
+and `body`. Blocks have ordered `arguments`, `operations` and `returns`; SSA
+definitions have `id` and `schema`. IDs are unique within a function, and uses
+must dominate their operations. Nested regions receive explicit arguments.
+
+Host operations cover product/variant construction and projection, unpacking,
+static Entry calls, numerical calculations, native invocations, if/match/for,
+require, drop and explicit stop. Every potential region and static reference is
+admitted before execution. Retained helpers form an acyclic static graph.
+The retained original uses standard `func` and `scf` control. Its `entry.stop`
+operation never returns; typed SSA results close only the immediate unreachable
+return/yield required by the enclosing region. The correspondence reader checks
+that exact continuation. These results do not construct data or execution authority;
+the executable Host stop has no results and bypasses the continuation.
+Operation argument/result signatures, complete variant coverage, region captures
+and loop-carried values must agree; a reference cannot select a structurally
+similar deployment with a different generated identity.
+
+A calculation has `id`, ordered `parameters` and `results` schemas, a `function`
+root and an exact `program` string. The existing physical `zkc.program/0` grammar
+permits a nonempty Local function table with empty participant and entry tables.
+Its full definitions and potential branches remain subject to native admission.
+Only the selected Local root's dependencies are installed for execution.
+Numerical fragments use the maintained mathematical realization, scheduling,
+physical lowering and VM mechanisms. They do not introduce another arithmetic
+interpreter or a synthetic participant.
+
+A deployment has `id`, `operation` (`run`, `prove` or `verify`), ordered
+`parameters` and `results` schemas, and an exact child `package` string. Child
+source interfaces independently determine role-local ports, proof choices and
+setup contracts. The parent package pin covers child bytes; native admission and
+application authority are still required. Verification installs the verifier
+closure without producer data, entropy or producer-only primitive support.
+
+Compiler publication compares the complete Host original and executable against
+the checked source, including numerical definitions and child closure. The Rust
+Host independently checks structure, signatures, schemas, references and native
+children after package authentication. Neither check turns a package digest into
+a protocol security theorem. All schemas remain version zero; there is one
+current grammar and no legacy source-run reader.

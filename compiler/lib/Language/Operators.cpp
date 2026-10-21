@@ -229,6 +229,8 @@ bool Checker::prepareOperators() {
     const auto &context = output.declarations[id.index];
     const auto &module = *sources[id.index];
     for (unsigned i = 0; i < module.operators.size(); ++i) {
+      if (moduleOperators.count(OperatorSite{id.index, i}))
+        continue;
       auto binding = operatorBinding(context, module.operators[i]);
       if (!binding)
         return false;
@@ -289,8 +291,21 @@ Checker::operatorCandidates(const Declaration &decl,
                       expr.span))
       return {};
     for (auto site : visibleOperators[decl.module.index]) {
-      const auto &binding = moduleOperators.at(site);
-      if (!include(binding))
+      auto found = moduleOperators.find(site);
+      if (found == moduleOperators.end()) {
+        // Generated proof signatures may complete a protocol body while the
+        // outer signature pass is still running. Resolve its visible operator
+        // family lazily; the ordinary preparation pass validates the rest.
+        const auto &written = sources[site.first]->operators[site.second];
+        if (!written.notation || written.notation->key() != descriptorKey)
+          continue;
+        auto binding =
+            operatorBinding(output.declarations[site.first], written);
+        if (!binding)
+          return {};
+        found = moduleOperators.emplace(site, std::move(*binding)).first;
+      }
+      if (!include(found->second))
         return {};
     }
   }

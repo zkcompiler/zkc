@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import shutil
 
+from native_entry import native_run
 from snapshot import render
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
@@ -331,8 +332,7 @@ def main():
         suite=Suite(args,temporary)
         flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
                '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--entry=example::Interactive']
-        text=execute([args.compiler,'language-emit',*flags])
-        interface=json.loads(execute([args.compiler,'language-interface',*flags]))
+        text, interface = native_run(execute, args.compiler, flags)
         assert interface['original']==hashlib.sha256(text.encode()).hexdigest()
         symbol=interface['protocol']
         data=suite.exercise(text,symbol)
@@ -345,8 +345,7 @@ def main():
         sumcheck_flags=['--source-format=zkc',
                         '--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
                         '--entry=scalar_sumcheck::Interactive']
-        sumcheck_text=execute([args.compiler,'language-emit',*sumcheck_flags])
-        sumcheck_interface=json.loads(execute([args.compiler,'language-interface',*sumcheck_flags]))
+        sumcheck_text, sumcheck_interface = native_run(execute, args.compiler, sumcheck_flags)
         assert sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()
         sumcheck_symbol=sumcheck_interface['protocol']
         sumcheck_data=suite.exercise(sumcheck_text,sumcheck_symbol)
@@ -362,8 +361,8 @@ def main():
             flags=['--source-format=zkc',
                    '--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
                    '--entry=scalar_algebra::'+entry]
-            algebra_text=execute([args.compiler,'language-emit',*flags])
-            algebra_symbol=json.loads(execute([args.compiler,'language-interface',*flags]))['protocol']
+            algebra_text, algebra_interface = native_run(execute, args.compiler, flags)
+            algebra_symbol = algebra_interface['protocol']
             suite.exercise(algebra_text,algebra_symbol)
             algebra_sources.append((algebra_text,algebra_symbol))
         variation_checks=0

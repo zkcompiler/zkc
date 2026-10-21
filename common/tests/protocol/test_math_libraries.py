@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -73,7 +73,7 @@ protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
     logic=(zkc::boolean::both(true,false),zkc::boolean::either(true,false),
       zkc::boolean::different(true,true),zkc::boolean::negate(false)));
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     if notation:
         source = source.replace('module sample;', 'module sample;use zkc::vector;use zkc::matrix;use zkc::symbolic as algebra;')
@@ -93,12 +93,12 @@ run Demo=Run;
         vector([8, 9]), vector([2, 13]), scalar(43), '2', '2', scalar(14), scalar(7), vector([6, 9])]
     assert result['logic'] == [False, True, False, True]
     report = entry.run('odd-table', inputs | {'v': vector([2, 3, 4])},
-                       refuses='entry-run-incomplete')
-    after = report['execution']['roles'][0]['after']
+                       refuses='entry-host-run-failed')
+    after = joint_execution(report)['roles'][0]['after']
     assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
     report = entry.run('empty-table', inputs | {'v': vector([])},
-                       refuses='entry-run-incomplete')
-    after = report['execution']['roles'][0]['after']
+                       refuses='entry-host-run-failed')
+    after = joint_execution(report)['roles'][0]['after']
     assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
 
 
@@ -115,19 +115,19 @@ fn evaluate(go:bool,ok:bool,eager:bool){{
 protocol Run roles(P)(go:bool@P,ok:bool@P,eager:bool@P)->(result:bool@P){{
   return evaluate(go,ok,eager);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('skipped', {'go': skip, 'ok': False, 'eager': False}) == {'result': skip}
     entry.run('evaluated', {'go': skip, 'ok': False, 'eager': True},
-              refuses='entry-run-incomplete')
+              refuses='entry-host-run-failed')
     assert entry.run('accepted', {'go': skip, 'ok': True, 'eager': True}) == {'result': skip}
 
 
 def test_formal_contract_and_execution_modes_refuse(toolchain, journal, directory):
     prefix = '''module sample;
  domain F=field("bls12-381.fr");
- protocol Run roles(P)(a:F@P)->(out:F@P){return a;} run Demo=Run;
+ protocol Run roles(P)(a:F@P)->(out:F@P){return a;} entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     for name, definition, code in [
         ('index-bound', 'math fn bad(a:F)->F {return zkc::symbolic::get<F,1,1>(zkc::symbolic::pack([a]));}', 'source.bound'),
@@ -148,7 +148,7 @@ use zkc::indices::{two_adic};
 protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P) {
   return (small=two_adic<4>(height),full=two_adic<63>(height),empty=two_adic<0>(height));
 }
-run Demo=Check;
+entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
@@ -177,7 +177,7 @@ protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices
  return (word=opening::vector_values(whole),weight=opening::vector_weight(whole),
    value=opening::scalar_value(at),row_weight=opening::scalar_weight(at));
 }
-run Demo=Check;
+entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     p = 2130706433
@@ -213,5 +213,5 @@ run Demo=Check;
                           ('column-index', {'selected': [2, 0, 1]}),
                           ('row-width', {'row': [0]}),
                           ('accumulator', {'initial': initial[:-1]})]:
-        entry.run(name, inputs | changed, refuses='entry-run-incomplete')
-    entry.run('empty-accumulator', empty | {'initial': []}, refuses='entry-run-incomplete')
+        entry.run(name, inputs | changed, refuses='entry-host-run-failed')
+    entry.run('empty-accumulator', empty | {'initial': []}, refuses='entry-host-run-failed')

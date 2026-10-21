@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_artifact
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = library_modules(*core_packages())
@@ -22,7 +22,7 @@ domain F=field("koala-bear");
 
 def work_instructions(entry):
     package = json.loads(entry.package.read_text())
-    bundle = json.loads(package["artifact"])
+    bundle = joint_artifact(package)
     program = json.loads(bundle["candidate"])
     bindings = {binding[0]: binding for binding in program[1]}
     work = next(
@@ -70,7 +70,7 @@ fn work(xs:Vector<F>,seed:F)->F {{ return {body}; }}
 protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P) {{
   return work(xs,seed);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
@@ -99,7 +99,7 @@ fn work(xs:Vector<F>,a:F)->Vector<F> {{ return {body}; }}
 protocol Run roles(P)(xs:Vector<F>@P,a:F@P)->(result:Vector<F>@P) {{
   return work(xs,a);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     entry = Entry(toolchain, journal, directory, source, MODULES)
@@ -137,7 +137,7 @@ fn work(m:Matrix<F>,xs:Vector<F>,seed:F)->Vector<F> {{
 }}
 protocol Run roles(P)(m:Matrix<F>@P,xs:Vector<F>@P,seed:F@P)
   ->(result:Vector<F>@P) {{ return work(m,xs,seed); }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 """
     )
     flags = [] if bulk else ["--no-finite-bulk"]
@@ -183,6 +183,6 @@ run Demo=Run;
     refused = entry.run(
         "mismatch",
         {"m": matrix(2, 2), "xs": ["7"], "seed": "13"},
-        refuses="entry-run-incomplete",
+        refuses="entry-host-run-failed",
     )
     assert "rejected:require" in json.dumps(refused)

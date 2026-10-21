@@ -150,6 +150,10 @@ private:
   std::set<unsigned> formingParameters;
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   bool entries();
+  bool entry(DeclarationId, unsigned = 1);
+  bool generatedSignature(Declaration &, unsigned);
+  std::vector<unsigned> entryStates;
+  bool constructionsReady = false;
   bool constructions();
   std::optional<DeclarationId> constructionMember(const Type &, llvm::StringRef,
                                                   Span);

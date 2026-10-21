@@ -2539,6 +2539,21 @@ fn asset_references_cover_called_functions_and_every_local_region() {
         ],
         "both branches and loop-only functions are reported; uncalled functions are not"
     );
+    assert_eq!(
+        admitted.role_asset_references("main", "P").unwrap().len(),
+        3
+    );
+    assert_eq!(
+        admitted.local_asset_references("evaluate").unwrap().len(),
+        2
+    );
+    assert_eq!(admitted.local_asset_references("inner").unwrap().len(), 1);
+    assert_eq!(
+        admitted.local_asset_references("unused").unwrap()[0].identity,
+        digest(4)
+    );
+    assert!(admitted.local_asset_references("missing").is_err());
+    assert!(admitted.role_asset_references("main", "missing").is_err());
     for reference in &references {
         assert_eq!(reference.binding.declaration().contract, "ring.point");
         assert_eq!(

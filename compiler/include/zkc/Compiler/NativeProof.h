@@ -5,6 +5,7 @@
 #include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
+#include <optional>
 #include <variant>
 namespace zkc {
 /// Current deployment policy. The source remains independently owned.
@@ -67,10 +68,13 @@ llvm::Expected<llvm::json::Value> exportConstructedParticipant(
 struct NativeProofSelection {
   NativeProofPolicy policy;
 };
+enum class NativeProofOperation { Prove, Verify };
 struct NativeProofOptions {
   std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
+  /// Absent preserves the existing complete declarative deployment API.
+  std::optional<NativeProofOperation> operation = std::nullopt;
 };
 struct CompiledNativeProof {
   Compilation compilation;

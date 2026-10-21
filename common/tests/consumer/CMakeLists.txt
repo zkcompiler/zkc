@@ -88,7 +88,7 @@ foreach(mode required optional optional-native repeated default compiler tools
   add_test(NAME package-${mode} COMMAND ${CMAKE_COMMAND}
     "-DPACKAGE_DIR=${ZkcCompiler_DIR}" "-DMLIR_DIR=${MLIR_DIR}" "-DLLVM_DIR=${LLVM_DIR}"
     "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/component-validation/${mode}"
-    "-DMODE=${mode}" "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+    "-DMODE=${mode}" "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}" "-Dutf8proc_DIR=${utf8proc_DIR}"
     "-DC_COMPILER=${CMAKE_C_COMPILER}" "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/package-components.cmake")
 endforeach()

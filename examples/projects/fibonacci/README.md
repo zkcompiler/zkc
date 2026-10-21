@@ -52,3 +52,13 @@ Expected negative control: Changing a public boundary or a trace opening refuses
 
 Generated packages, proofs and result documents are written under `build/`
 inside this project. Existing input maps remain source inputs.
+
+## Generate a trace in source
+
+`GenerateTrace` is an Entry function backed by an ordinary numerical helper.
+`zkc run GenerateTrace` returns the same eight-row trace as the retained adapter
+witness. `ProveClean` calls that Entry, constructs `CleanProof::Witness` and
+invokes the existing proof. It returns only candidate bytes; it does not publish
+the intermediate trace or change the independently callable `CleanProof`.
+`ValidateClean` exposes the generated verifier operation with an independent
+public statement and candidate.

@@ -54,7 +54,7 @@ protocol MachineProof<R: Reduction<Extension>> roles(P,V)
   return (accepted = accepted);
 }
 
-run Run = MachineProof<LogUp<Extension>>;
+entry fn Run(inputs: MachineProof<LogUp<Extension>>::Inputs) { return MachineProof<LogUp<Extension>>::run(inputs); }
 proof ProofLogUp = MachineProof<LogUp<Extension>> {
   prover P;
   verifier V;

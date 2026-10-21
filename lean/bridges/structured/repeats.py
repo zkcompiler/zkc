@@ -68,8 +68,8 @@ class RepeatSuite(OpenSuite):
             paths.update(owned_sources(ROOT / tree, {".py"}))
         bridge = ROOT / "lean/bridges/structured"
         paths.update(owned_sources(bridge, {".py", ".md", ".json", ".mlir", ".zkc", ".toml"}))
-        # The shared renderer library the structured renderer imports.
-        paths.add(ROOT / "lean/bridges/common/lean_render.py")
+        # Shared renderers and native Entry adapters are source dependencies.
+        paths.update(owned_sources(ROOT / "lean/bridges/common", {".py"}))
         for tree in ("include", "lib", "tools", "test", "cmake"):
             paths.update(owned_sources(ROOT / "compiler" / tree,
                 {".cpp", ".h", ".td", ".def", ".inc", ".cmake", ".in", ".txt",

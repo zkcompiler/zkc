@@ -32,8 +32,12 @@ protocol ExtensionSumcheck roles(P,V)
     (values, values, claim, rounds, challenges);
   return (accepted = accepted);
 }
-run BaseRun = BaseSumcheck;
-run ExtensionRun = ExtensionSumcheck;
+entry fn BaseRun(inputs: BaseSumcheck::Inputs) {
+  return BaseSumcheck::run(inputs);
+}
+entry fn ExtensionRun(inputs: ExtensionSumcheck::Inputs) {
+  return ExtensionSumcheck::run(inputs);
+}
 proof BaseProof = BaseSumcheck {
   prover P;
   verifier V;

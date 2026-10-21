@@ -24,6 +24,7 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
           using T = std::decay_t<decltype(action)>;
           if constexpr (std::is_same_v<T, MathValue> ||
                         std::is_same_v<T, HelperCall> ||
+                        std::is_same_v<T, HostInvocation> ||
                         std::is_same_v<T, BulkApplication> ||
                         std::is_same_v<T, ProtocolApplication> ||
                         std::is_same_v<T, Construct> ||

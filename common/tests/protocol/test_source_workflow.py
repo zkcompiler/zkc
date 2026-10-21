@@ -41,7 +41,7 @@ pub fn fold<T:Field>(a:Vector<T>,b:Vector<T>,r:T) {
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,r:F@P)->(out:Vector<F>@P){
   return fold(a,b,r);
 }
-run Job=Run;
+entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'modules': {
         'main': source.name, 'formula': library.name,
@@ -66,12 +66,17 @@ pub math fn affine<F:Field>(low:F,high:F,r:E)->F{return low;}
 pub math fn affine<F:Field>(low:F,high:F,r:F)->F{let unused=low==high;return low;}
 ''')
     assert journal.json(command)['scope'] == 'definitions'
-    diagnostic = journal.json([*command, 'main::Job'],
+    package = directory / 'unsupported-map.zkpkg'
+    diagnostic = journal.json([toolchain.runtime, '--json', 'compile',
+                              f'--compiler={toolchain.compiler}',
+                              f'--project={project}', 'main::Job',
+                              f'--output={package}'],
                               refuses='source-compilation')['diagnostics']
     assert 'algebra-map-formula' in diagnostic and str(library) in diagnostic
     assert str(source) in diagnostic
     assert '\\0A' not in diagnostic
     assert '\nrelated source declaration: formula::affine\n' in diagnostic
+    assert not package.exists()
 
 
 def write(directory, name, value):
@@ -85,7 +90,7 @@ def source_project(directory):
     source.write_text('''module main;
 math fn identity<T:Type+Copy+Drop>(value:T){return value;}
 protocol Run roles(P)(x:bool@P)->(out:bool@P){return identity(x);}
-run Job=Run;
+entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0',
                      'modules': {'main': 'main.zkc'}, 'assets': {}})
@@ -124,7 +129,7 @@ def test_check_requires_a_successful_compiler_report(toolchain, journal, directo
 
 def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal, directory):
     source, project = source_project(directory)
-    source.write_text(source.read_text().replace('run Job=', 'pub run Job='))
+    source.write_text(source.read_text().replace('entry fn Job(', 'pub entry fn Job('))
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                f'--project={project}', 'main::Job']
     baseline = journal.json(command)
@@ -168,7 +173,7 @@ def test_check_validates_requested_api_report(toolchain, journal, directory, req
 def test_check_validates_the_compilers_selection_report(toolchain, journal, directory):
     _, project = source_project(directory)
     compiler = directory / 'compiler'
-    job = {'name': 'main::Job', 'kind': 'run'}
+    job = {'name': 'main::Job', 'kind': 'function'}
     alias = {'name': 'main::Alias', 'kind': 'proof'}
     baseline = {'format': 'zkc.source-check/0', 'status': 'checked', 'scope': 'definitions'}
     controls = [
@@ -180,7 +185,7 @@ def test_check_validates_the_compilers_selection_report(toolchain, journal, dire
         ({'entries': [job | {'name': 'Job'}]}, None),
         ({'entries': [job], 'entry': 'main::Job'}, None),
         ({'entries': [alias, job], 'entry': 'main::Alias', 'scope': 'entry'}, 'Job'),
-        ({'entries': [job, {'name': 'other::Job', 'kind': 'run'}],
+        ({'entries': [job, {'name': 'other::Job', 'kind': 'function'}],
           'entry': 'main::Job', 'scope': 'entry'}, 'Job'),
     ]
     for fields, selector in controls:
@@ -200,7 +205,7 @@ proof Proof=Verify{prover P;verifier V;public{ok};accept ok;construction authore
 ''')
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}']
     report = journal.json(command, cwd=directory)
-    assert report['entries'] == [{'name': 'main::Job', 'kind': 'run'},
+    assert report['entries'] == [{'name': 'main::Job', 'kind': 'function'},
                                  {'name': 'main::Proof', 'kind': 'proof'}]
     assert journal.json([*command, 'Proof'], cwd=directory)['entry'] == 'main::Proof'
 
@@ -353,9 +358,15 @@ pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
     source.write_text(source.read_text().replace('unresolved =', 'unresolved @P ='))
     checked = journal.json([*command, '--declarations'])
     declarations = checked['declarations']
-    assert [d['name'] for d in declarations] == ['library', 'library::identity', 'library::zero', 'main', 'main::Run']
+    assert [d['name'] for d in declarations] == [
+        'library', 'library::identity', 'library::zero', 'main',
+        'main::Run', 'main::Run::run']
     declarations = [d for d in declarations if d['kind'] != 'module']
-    assert declarations[-1]['roles'] == ['P', 'V']
+    protocol = next(d for d in declarations if d['kind'] == 'protocol')
+    assert protocol['roles'] == ['P', 'V']
+    assert declarations[-1]['stage'] == 'host'
+    assert declarations[-1]['generated']['target'] == 'main::Run'
+    assert declarations[-1]['generated']['member'] == 'run'
     assert declarations[1]['outputs'][0]['type'] == 'F'
     assert declarations[1]['parameters'][0]['sort'] == 'Field'
     assert declarations[0]['effects'] == {'opaque': False, 'stop': False, 'dependencies': []}
@@ -375,7 +386,7 @@ def test_discovery_selection_and_default_output(toolchain, journal, directory):
     definitions = journal.json(command, cwd=child)
     assert definitions['project'] == str(project)
     assert definitions['scope'] == 'definitions'
-    assert definitions['entries'] == [{'name': 'main::Job', 'kind': 'run'}]
+    assert definitions['entries'] == [{'name': 'main::Job', 'kind': 'function'}]
     selected = journal.json([*command, 'Job'], cwd=child)
     assert selected['entry'] == 'main::Job' and selected['scope'] == 'entry'
     compile = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}']
@@ -393,15 +404,15 @@ def test_discovery_selection_and_default_output(toolchain, journal, directory):
     config['modules']['library'] = library.name
     project.write_text(project_text(config))
     assert journal.json(compile, cwd=child)['entry'] == 'main::Job'
-    source.write_text(source.read_text() + '\nrun Alias=Job;')
+    source.write_text(source.read_text() + '\nentry fn Alias(inputs: Run::Inputs) { return Job(inputs); }')
     refused = journal.json(compile, cwd=child, refuses='source-compilation')
     assert 'source.entry' in refused['diagnostics']
-    assert 'main::Alias (run)' in refused['diagnostics'] and 'main::Job (run)' in refused['diagnostics']
+    assert 'main::Alias (function)' in refused['diagnostics'] and 'main::Job (function)' in refused['diagnostics']
     assert journal.json([*compile, 'Job'], cwd=child)['entry'] == 'main::Job'
     # Another module's same short name is ambiguous, never preferred by location.
-    library.write_text('module library; protocol Run roles(P)()->(){return();}run Job=Run;')
+    library.write_text('module library; protocol Run roles(P)()->(){return();}entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }')
     refused = journal.json([*command, 'Job'], cwd=child, refuses='source-compilation')
-    assert 'library::Job (run)' in refused['diagnostics']
+    assert 'library::Job (function)' in refused['diagnostics']
     assert journal.json([*command, 'main::Job'], cwd=child)['entry'] == 'main::Job'
     journal.run([*command, 'main::Run'], cwd=child, refuses='source-compilation')
     # Explicit input mode never discovers the surrounding manifest.
@@ -442,7 +453,7 @@ def test_default_output_protection_and_name_collision(toolchain, journal, direct
         assert target.read_bytes() == before
         output.unlink()
     # Case-folded collisions refuse even on a case-sensitive filesystem.
-    source.write_text(source.read_text() + '\nrun job=Job;')
+    source.write_text(source.read_text() + '\nentry fn job(inputs: Run::Inputs) { return Job(inputs); }')
     journal.run([*command, 'Job'], cwd=directory)
     original = output.read_bytes()
     journal.run([*command, 'job'], cwd=directory, refuses='source-output-collision')
@@ -470,7 +481,7 @@ def test_toml_comments_order_and_omitted_assets_preserve_capture(toolchain, jour
 def test_default_output_requires_a_portable_filename(toolchain, journal, directory, module, entry):
     source, project = source_project(directory)
     source.write_text(source.read_text().replace('module main;', f'module {module};')
-                      .replace('run Job=', f'run {entry}='))
+                      .replace('entry fn Job(', f'entry fn {entry}('))
     project.write_text(project_text({'format': 'zkc.project/0', 'modules': {module: source.name}}))
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}']
     journal.run(command, cwd=directory, refuses='source-output-name')

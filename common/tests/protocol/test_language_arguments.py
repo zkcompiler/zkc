@@ -4,7 +4,7 @@ import itertools
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -26,7 +26,7 @@ fn work(go:bool){
 protocol Run roles(P)(go:bool@P)->(result:(bool,index,index,bool,index,bool,index)@P){
   return work(go=go);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
@@ -50,14 +50,14 @@ fn add(a:index,b:index){{return a+b;}}
 protocol Run roles(P)(first:bool@P,second:bool@P)->(r:index@P){{
   let r=Pair(right=abort(first),left=reject(second));return r;
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('success', {'first': False, 'second': False}) == {'r': '3'}
     for first, reason in [(True, 'abort'), (False, 'reject')]:
         report = entry.run(reason, {'first': first, 'second': True},
-                           refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['before'][1]['cause'] == [
+                           refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['before'][1]['cause'] == [
             'explicit', {'omitted_bytes': 0, 'text': reason},
         ]
 
@@ -74,14 +74,14 @@ protocol Draw roles(P)(first:Random<F>@P,go:bool@P,second:Random<F>@P)->(r:bool@
 protocol Run roles(P)(go:bool@P,a:Random<F>@P,b:Random<F>@P)->(r:bool@P){
   let r=Draw(second=a,go=go,first=b);return r;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     # The first draw must use b's budget, then reject before reading exhausted a.
     report = entry.run_roles('reject', {
-        'P': {'inputs': {'go': False}, 'services': {'a': 0, 'b': 1}},
-    }, refuses='entry-run-incomplete')
-    assert report['execution']['roles'][0]['before'][1]['cause'] == [
+        'P': {'go': False},
+    }, role_services={'P': {'a': 0, 'b': 1}}, refuses='entry-host-run-failed')
+    assert joint_execution(report)['roles'][0]['before'][1]['cause'] == [
         'explicit', {'omitted_bytes': 0, 'text': 'reject'},
     ]
 
@@ -102,7 +102,7 @@ protocol Run roles(P)(a:bool@P,b:bool@P,c:bool@P)
   return(formula_result=formula(c=c,a=a,b=b),local=local(c=c,b=b,a=a),
          common=!a || b && c==false,state=observe(b=b,a=a));
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for a, b, c in itertools.product((False, True), repeat=3):
@@ -129,13 +129,13 @@ protocol Run roles(P)(go:bool@P,ok:bool@P,use_eager:bool@P)->(r:bool@P){{
 fn choose(go:bool,ok:bool,use_eager:bool){{
   return if use_eager{{eager(go,ok)}}else{{conditional(go,ok)}};
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('skipped', {'go': skip, 'ok': False, 'use_eager': False}) == {'r': skip}
     for name, go, eager in [('reached', not skip, False), ('eager', skip, True)]:
         report = entry.run(name, {'go': go, 'ok': False, 'use_eager': eager},
-                           refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['before'][1]['cause'] == [
+                           refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['before'][1]['cause'] == [
             'explicit', {'omitted_bytes': 0, 'text': 'reject'},
         ]

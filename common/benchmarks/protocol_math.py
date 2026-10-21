@@ -253,7 +253,8 @@ def observe_storage(case, policy, flags, inputs, directory, tools, journal):
     if case['entry'].endswith('::ProofProduct'):
         source = directory / 'storage.zkc'
         source.write_text((inputs / 'main.zkc').read_text() +
-                          '\nrun Storage = MachineProof<GrandProduct<Extension>>;\n')
+                          '\nentry fn Storage(inputs: MachineProof<GrandProduct<Extension>>::Inputs) {'
+                          ' return MachineProof<GrandProduct<Extension>>::run(inputs); }\n')
         flags = [f'--module={module}={source}' if x.startswith(f'--module={module}=') else x
                  for x in flags]
         entry = f'{module}::Storage'
@@ -262,19 +263,28 @@ def observe_storage(case, policy, flags, inputs, directory, tools, journal):
                      *flags, *POLICIES[policy]], cwd=directory, stdout=package)
     public = json.loads((inputs / 'public.json').read_text())
     witness = json.loads((inputs / 'witness.json').read_text())
-    prover, verifier = directory / 'P.json', directory / 'V.json'
-    write_json(prover, public | witness)
-    write_json(verifier, public)
+    arguments = directory / 'storage-arguments.json'
+    write_json(arguments, {'inputs': {'P': public | witness, 'V': public}})
     outputs = directory / 'storage-outputs.json'
     report, command = journal.report([runtime, '--json', 'run', f'--package={package}',
-        f'--sha256={digest(package)}', '--session=protocol-measurement-storage',
-        f'--input=P={prover}', f'--input=V={verifier}', f'--results={outputs}'],
+        f'--sha256={digest(package)}', f'--input={arguments}', f'--results={outputs}'],
         cwd=directory, status='executed')
-    require(json.loads(outputs.read_text())['roles']['V']['accepted'] is True,
+    values = json.loads(outputs.read_text())
+    require(set(values) == {'format', 'value'} and values['format'] == 'zkc.entry-outputs/0',
+            'interactive storage observation has an invalid result envelope')
+    require(values['value']['V']['accepted'] is True,
             'interactive storage observation did not accept')
-    execution = report['execution']
+    function = report['execution']
+    require(function['format'] == 'zkc.entry-function-result/0' and function['completed'],
+            'interactive storage function did not complete')
+    calls = [call for call in function['calls'] if call['operation'] == 'run']
+    require(len(calls) == 1 and calls[0]['completed'],
+            'interactive storage observation needs exactly one completed joint call')
+    execution = calls[0]['native']
     roles = execution['roles']
-    require(all('usage' in role and 'live_resource_units' in role and
+    require(roles and len(roles) == execution['role_count'],
+            'interactive storage observation needs a complete native role snapshot')
+    require(all(isinstance(role.get('usage'), dict) and 'live_resource_units' in role and
                 'retained_output_units' in role for role in roles),
             'interactive report missing exit storage counters')
     return {'scope': 'separate interactive Entry; per-role exit snapshot, not proof work or peak memory',

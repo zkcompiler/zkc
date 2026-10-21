@@ -8,12 +8,6 @@ namespace zkc::kernel {
 // Charge operations and SSA slots before copying a transient closure/body.
 bool chargeCopy(mlir::Operation *, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity = nullptr);
-// Producer shared by preparation and participant demand formation. Source is
-// an admitted immutable closure; the wrapper is a private proposal containing
-// total mathematics and at most one trailing partial guard.
-mlir::LogicalResult formCalculation(local::FuncOp wrapper,
-                                    mlir::Operation *sourceOwner,
-                                    MathematicalSelectionPolicy policy);
 // Independent exact comparison of original dependency bodies and domains.
 mlir::LogicalResult verifyDependencies(mlir::Operation *sourceOwner,
                                        ModuleOp candidate);

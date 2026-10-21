@@ -21,6 +21,22 @@ environments. An installed operation receives only its admitted binding,
 explicit operands and current call context. Installed operations include effects;
 installation alone does not establish numerical purity.
 
+`NativeProofEntry::new` admits a combined producer/validator deployment.
+`new_for_operation` admits exactly one endpoint selected by
+`NativeProofOperation::{Prove, Verify}` using the same transcript, construction,
+dependency and wire rules. Its public source-input indices come from the
+authenticated descriptor; an absent endpoint needs no source map or executable
+substitute. `producer()` and `validator()` return optional admitted endpoints;
+`producer_role()` and `validator_role()` retain descriptor identities for context
+binding. Those identities do not authorize execution. The caller authenticates
+the descriptor and its correspondence to each present role's wire layout.
+
+Operation-specific codec admission requires only the selected direction's
+helpers and validates every retained codec declaration. Proof execution uses
+`Program::check_role_installation` and `Runner::new_for_role_with_ledger` to link
+all potential calls and regions of the selected endpoint. The combined
+constructor and full-program installation remain available for low-level callers.
+
 `Backend::Operation: InstalledOperation` names the installed handle contract.
 `prepare_binding` resolves one exact `OperationBinding`; `OperationSignature`
 describes ports and attributes, with `BoundSignature` using physical port types.

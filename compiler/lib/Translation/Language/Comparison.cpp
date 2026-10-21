@@ -16,6 +16,7 @@
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
@@ -51,6 +52,7 @@ bool roleSet(mlir::Attribute value, ArrayRef<unsigned> indices) {
 }
 class Comparator {
   const ClosedEntry &project;
+  ArrayRef<Declaration> declared;
   mlir::ModuleOp module;
   const Limits &limits;
   Layouts layouts;
@@ -402,7 +404,7 @@ class Comparator {
     if (argument != block.getNumArguments())
       return fail("block has extra arguments");
     const auto &proof = project.entry().proof();
-    if (!region && decl.id.index == project.protocol().id.index && proof &&
+    if (!region && proof && decl.id.index == project.protocol().id.index &&
         proof->target) {
       const auto &clause = decl.specifications[*proof->target];
       const auto &relation =
@@ -1161,9 +1163,11 @@ class Comparator {
 
 public:
   Comparator(const ClosedEntry &project, mlir::ModuleOp module,
-             const Limits &limits)
-      : project(project), module(module), limits(limits),
-        layouts(project, limits), remaining(limits.work) {
+             const Limits &limits, ArrayRef<Declaration> selected = {})
+      : project(project),
+        declared(selected.empty() ? project.declarations() : selected),
+        module(module), limits(limits), layouts(project, limits),
+        remaining(limits.work) {
     (void)!!failure;
   }
   Expected<Correspondence> run() {
@@ -1257,7 +1261,7 @@ public:
     mlir::SymbolTableCollection symbols;
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);
-    for (auto &decl : project.declarations()) {
+    for (auto &decl : declared) {
       if (!decl.body || !decl.parameters.empty())
         continue;
       if (++report.declarations > limits.declarations)
@@ -1370,7 +1374,7 @@ public:
                 protocol ? &availability : nullptr))
         return takeFailure();
     }
-    for (const auto &decl : project.declarations()) {
+    for (const auto &decl : declared) {
       if (!decl.relation || !decl.origin)
         continue;
       if (++report.declarations > limits.declarations)
@@ -1491,6 +1495,19 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
   if (!module || mlir::failed(mlir::verify(module)))
     return error("target.admission",
                  "original failed mathematical IR admission");
+  if (project.entry().kind == Declaration::Kind::EntryFunction)
+    return compareHostOriginal(project, module, limits);
   return Comparator(project, module, limits).run();
+}
+Expected<Correspondence> compareNumericalOriginal(const ClosedEntry &project,
+                                                  const Declaration &fragment,
+                                                  mlir::ModuleOp module,
+                                                  const Limits &limits) {
+  auto definitions = numericalDefinitions(project, fragment);
+  if (!definitions)
+    return definitions.takeError();
+  if (!module || mlir::failed(mlir::verify(module)))
+    return error("target.admission", "numerical original failed admission");
+  return Comparator(project, module, limits, *definitions).run();
 }
 } // namespace zkc::language

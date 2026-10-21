@@ -1,7 +1,7 @@
 use super::*;
 use std::path::PathBuf;
 
-use crate::project::{Compiler, Project, Template, input_path};
+use crate::project::{CheckedInterface, Compiler, EntryKind, Project, Template, input_path};
 
 pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     let directory = std::path::absolute(args.positional.first().copied().unwrap_or("."))
@@ -65,22 +65,26 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     Ok(())
 }
 
-fn describe_plan(interfaces: &[Interface], report: &mut Json) {
+fn describe_plan(interfaces: &[CheckedInterface], report: &mut Json) {
     report["entries"] = json!(interfaces.iter().map(|interface| json!({
         "name": interface.entry(),
+        "kind": interface.kind(),
         "input_groups": interface.input_groups().iter().map(|g| g.describe()).collect::<Vec<_>>(),
         "requirements": requirements(interface),
     })).collect::<Vec<_>>());
 }
-fn requirements(interface: &Interface) -> Json {
-    json!({
-        "allow_authored": interface.proof().is_some_and(|p| p.suite.is_none()),
-        "setups": interface.setup_names().collect::<Vec<_>>(),
-    })
+fn requirements(interface: &CheckedInterface) -> Json {
+    match interface {
+        CheckedInterface::Proof(v) => json!({
+            "allow_authored": v.proof().is_some_and(|p| p.suite.is_none()),
+            "setups": v.setup_names().collect::<Vec<_>>(),
+        }),
+        CheckedInterface::Function(_) => json!({"invocations":"--invocations=FILE"}),
+    }
 }
 pub(super) fn inputs(
     target: &Target,
-    interface: &Interface,
+    interface: &CheckedInterface,
     args: &Arguments<'_>,
     report: &mut Json,
 ) -> Result<()> {
@@ -130,14 +134,14 @@ pub(super) fn inputs(
         ))
     };
     let mut commands = Vec::new();
-    for command in if interface.is_proof() {
+    for command in if interface.kind() == EntryKind::Proof {
         vec!["prove", "verify"]
     } else {
         vec!["run"]
     } {
         let mut args = vec!["zkc".to_owned(), command.into()];
         args.extend(selection.clone());
-        if interface.is_proof() {
+        if interface.kind() == EntryKind::Proof {
             if !groups[0].is_empty() {
                 args.push(file("public")?);
             }
@@ -155,15 +159,10 @@ pub(super) fn inputs(
                 );
             }
         } else {
-            for group in &groups {
-                if !group.is_empty() {
-                    args.push(format!(
-                        "--input={}={}",
-                        group.name(),
-                        input_path(&directory, group.name())?.display()
-                    ));
-                }
-            }
+            args.push(format!(
+                "--input={}",
+                input_path(&directory, "arguments")?.display()
+            ));
         }
         commands.push(args);
     }

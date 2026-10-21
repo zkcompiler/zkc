@@ -4,7 +4,7 @@ import pytest
 
 from binomial_reference import P
 from coset_reference import CosetReference
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import library_modules
 
 
@@ -39,14 +39,14 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,input_shift:F
     output_shift:F@P,size:index@P)->(result:(Vector<F>,Vector<F>)@P) {{
   return extend(xs,width,height,input_shift,output_shift,size);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     input_shift, output_shift = scalar(3), scalar(7)
 
     def refuse(name, data, cause):
-        report = entry.run(name, data, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, data, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'backend', {'omitted_bytes': 0, 'text': cause}]
 
     def inputs(columns, height, size):
@@ -98,7 +98,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P)->(data:Vector<F>@P,width:in
   return(data=c::batch_values(output),width=c::batch_width(output),
     shift=c::domain_shift(geometry),size=c::domain_size(geometry));
 }
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('core/polynomial'))
     root = pow(1791270792, (1 << 24)//4, P)
@@ -109,4 +109,4 @@ run Demo=Work;
         'data': data, 'width': '2', 'shift': '3', 'size': '4'}
     assert entry.run('zero-columns', {'xs': [], 'width': 0}) == {
         'data': [], 'width': '0', 'shift': '3', 'size': '4'}
-    entry.run('wrong-width', {'xs': ['7', str(P-3)], 'width': 2}, refuses='entry-run-incomplete')
+    entry.run('wrong-width', {'xs': ['7', str(P-3)], 'width': 2}, refuses='entry-host-run-failed')

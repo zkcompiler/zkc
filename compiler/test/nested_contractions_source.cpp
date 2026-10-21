@@ -5,6 +5,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
@@ -54,7 +55,7 @@ Prepared prepare(MLIRContext &context) {
   auto captured = take(
       language::capture({{"sample", fixture(), "nested-read-through.zkc"}}));
   auto checked = take(language::analyze(captured).checkedProject());
-  auto entry = take(language::closeEntry(checked, "sample::Demo"));
+  auto entry = take(closeProtocolDeployment(checked, "sample::Demo"));
   auto original = take(language::prepareOriginal(entry));
   Prepared result;
   result.module = parseSourceString<ModuleOp>(original.bytes(), &context);
@@ -282,7 +283,8 @@ int main() {
               auto captured = take(
                   language::capture({{"sample", text, "nested-matrix.zkc"}}));
               auto checked = take(language::analyze(captured).checkedProject());
-              auto entry = take(language::closeEntry(checked, "sample::Demo"));
+              auto entry =
+                  take(closeProtocolDeployment(checked, "sample::Demo"));
               auto original = take(language::prepareOriginal(entry));
               auto prepared =
                   parseSourceString<ModuleOp>(original.bytes(), &context);
@@ -460,7 +462,7 @@ int main() {
     auto captured =
         take(language::capture({{"sample", text, "nested-effect.zkc"}}));
     auto checked = take(language::analyze(captured).checkedProject());
-    auto entry = take(language::closeEntry(checked, "sample::Demo"));
+    auto entry = take(closeProtocolDeployment(checked, "sample::Demo"));
     auto original = take(language::prepareOriginal(entry));
     auto prepared = parseSourceString<ModuleOp>(original.bytes(), &context);
     require(bool(prepared), "effectful source refused");

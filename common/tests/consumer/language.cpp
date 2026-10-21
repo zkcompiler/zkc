@@ -45,7 +45,7 @@ int main() {
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       let r @P =swap(x);return(r=r);
     }
-    run Demo=Run;)",
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);})",
         "consumer.zkc"}},
       {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
         "unused.json"}},
@@ -104,7 +104,7 @@ int main() {
   }
   if (checked->entries().size() != 1 ||
       checked->declarations()[selected->index].entryKind() !=
-          zkc::language::EntryKind::Run ||
+          zkc::language::EntryKind::Function ||
       inventory->find("m::Demo") == std::string::npos)
     return 14;
   auto entry = zkc::language::closeEntry(*checked, "");
@@ -113,13 +113,17 @@ int main() {
     return 3;
   }
   zkc::language::Layouts layouts(*checked);
-  auto layout = layouts.get(entry->protocol().inputs.front().type);
+  if (entry->invocations().size() != 1 ||
+      !entry->invocations().front().deployment)
+    return 20;
+  const auto &protocol = entry->invocations().front().deployment->protocol();
+  auto layout = layouts.get(protocol.inputs.front().type);
   if (!layout) {
     llvm::errs() << llvm::toString(layout.takeError());
     return 4;
   }
   return (*layout)->fields.size() == 2 && (*layout)->leaves.size() == 2 &&
-                 entry->protocol().symbol == "s1h6d3h52756e"
+                 protocol.symbol == "s1h6d3h52756e"
              ? 0
              : 5;
 }

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from input_files import decimal_values
 from octic_reference import P, ZERO, ONE, add, mul, power
 from source_modules import core_packages, library_modules
@@ -28,7 +28,7 @@ protocol Inspect roles(P)(claims: Vector<F> @P, height: index @P, x: F @P)
     -> (value: F @P) {
   return recombine(claims, height, x);
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -56,7 +56,7 @@ protocol Inspect roles(P)(coefficients: Vector<F> @P, shift: F @P,
     size: index @P, position: index @P) -> (value: F @P) {
   return terminal(coefficients, shift, size, position);
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -82,7 +82,7 @@ def test_fri_terminal_coefficients_and_domain_admission(toolchain, journal, dire
     # Empty coefficients must still admit the domain and position.
     for label, changed in [('size', {'size': 3}), ('position', {'position': 8})]:
         entry.run(label, inputs | {'coefficients': []} | changed,
-                  refuses='entry-run-incomplete')
+                  refuses='entry-host-run-failed')
 
 
 REDUCTION = '''module sample;
@@ -109,7 +109,7 @@ protocol Inspect<R: Reduction<F>> roles(P)(values: Vector<F> @P, rows: index @P,
   let built @P = build<R>(values, rows, gamma, delta, active);
   return (columns = built.0, claims = built.1);
 }
-run Demo = Inspect<LogUp<F>>;
+entry fn Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }
 '''
 
 
@@ -117,8 +117,8 @@ run Demo = Inspect<LogUp<F>>;
 @pytest.mark.parametrize('reduction', ['LogUp', 'GrandProduct'])
 def test_interaction_product_admission_and_inactive_rows(
         toolchain, journal, directory, flags, reduction):
-    source = REDUCTION.replace('run Demo = Inspect<LogUp<F>>;',
-                               f'run Demo = Inspect<{reduction}<F>>;')
+    source = REDUCTION.replace('entry fn Demo(inputs: Inspect<LogUp<F>>::Inputs) { return Inspect<LogUp<F>>::run(inputs); }',
+                               f'entry fn Demo(inputs: Inspect<{reduction}<F>>::Inputs) {{ return Inspect<{reduction}<F>>::run(inputs); }}')
     entry, sites = compile_counted_entry(toolchain, journal, directory, source,
                                         flags, modules=AIR)
     # Observe the production library's nonzero fold, including generic usage
@@ -139,8 +139,8 @@ def test_interaction_product_admission_and_inactive_rows(
         ('active-zero', {'values': [1, 5, 3, 3, 1, 1]}),
         ('shape-before-zero', {'values': [1, 5, 3, 3, 1]}),
     ]:
-        refused = entry.run(label, inputs | changed, refuses='entry-run-incomplete')
-        cause = refused['execution']['roles'][0]['after'][1]['cause']
+        refused = entry.run(label, inputs | changed, refuses='entry-host-run-failed')
+        cause = joint_execution(refused)['roles'][0]['after'][1]['cause']
         assert cause[0] == 'explicit'
         assert cause[1]['text'] == ('abort' if label == 'active-zero' else 'reject')
 

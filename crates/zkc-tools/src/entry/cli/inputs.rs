@@ -17,7 +17,7 @@ impl Operation {
     }
     pub fn kind(self) -> crate::project::EntryKind {
         if self == Self::Run {
-            crate::project::EntryKind::Run
+            crate::project::EntryKind::Function
         } else {
             crate::project::EntryKind::Proof
         }
@@ -27,19 +27,23 @@ impl Operation {
             Self::Run => &[
                 "--public",
                 "--witness",
+                "--session",
+                "--service",
+                "--key",
+                "--setups",
                 "--context",
                 "--transcript-budget",
                 "--external-work",
-                "--allow-authored",
                 "--attempts",
             ],
-            Self::Prove => &["--session", "--input", "--limits"],
+            Self::Prove => &["--session", "--input", "--limits", "--invocations"],
             Self::Verify => &[
                 "--session",
                 "--input",
                 "--limits",
                 "--witness",
                 "--attempts",
+                "--invocations",
             ],
         };
         if forbidden.iter().any(|f| args.has(f)) {
@@ -170,7 +174,7 @@ impl Options {
         operation: Operation,
         documents: &mut files::Documents,
         report: &mut Json,
-    ) -> Result<Request> {
+    ) -> Result<ProofRequest> {
         let mut load = |group: &super::super::inputs::InputGroup<'_>,
                         path: Option<&std::path::PathBuf>| {
             documents
@@ -183,61 +187,35 @@ impl Options {
                     e.code
                 })
         };
-        if operation == Operation::Run {
-            let mut roles = BTreeMap::new();
-            for group in interface.input_groups() {
-                let input = load(&group, invocation.inputs.get(group.name()))?;
-                roles.insert(
-                    group.name().into(),
-                    RoleInputs {
-                        inputs: input,
-                        services: self.services.remove(group.name()).unwrap_or_default(),
-                    },
-                );
-            }
-            if !self.services.is_empty() {
-                return Err("entry-service-names".into());
-            }
-            Ok(Request::Run(RunRequest {
-                session: invocation.session.clone().expect("resolved run session"),
-                roles,
-                setups: std::mem::take(&mut self.material),
-            }))
+        let groups = interface.input_groups();
+        let public = load(&groups[0], invocation.inputs.get("public"))?;
+        let private = if operation == Operation::Prove {
+            load(&groups[1], invocation.inputs.get("witness"))?
         } else {
-            let groups = interface.input_groups();
-            let public = load(&groups[0], invocation.inputs.get("public"))?;
-            let private = if operation == Operation::Prove {
-                load(&groups[1], invocation.inputs.get("witness"))?
-            } else {
-                Default::default()
-            };
-            let proof = interface.proof().ok_or("entry-job-kind")?;
-            let role = &interface.roles()[if operation == Operation::Prove {
-                proof.prover
-            } else {
-                proof.verifier
-            }]
-            .name;
-            let services = self.services.remove(role).unwrap_or_default();
-            if !self.services.is_empty() {
-                return Err("entry-service-names".into());
-            }
-            Ok(Request::Proof(ProofRequest {
-                public,
-                private: RoleInputs {
-                    inputs: private,
-                    services,
-                },
-                context: std::mem::take(&mut self.context),
-                transcript_budget: self.transcript_budget,
-                setups: std::mem::take(&mut self.material),
-            }))
+            Default::default()
+        };
+        let proof = interface.proof().ok_or("entry-job-kind")?;
+        let role = &interface.roles()[if operation == Operation::Prove {
+            proof.prover
+        } else {
+            proof.verifier
+        }]
+        .name;
+        let services = self.services.remove(role).unwrap_or_default();
+        if !self.services.is_empty() {
+            return Err("entry-service-names".into());
         }
+        Ok(ProofRequest {
+            public,
+            private: RoleInputs {
+                inputs: private,
+                services,
+            },
+            context: std::mem::take(&mut self.context),
+            transcript_budget: self.transcript_budget,
+            setups: std::mem::take(&mut self.material),
+        })
     }
-}
-pub(super) enum Request {
-    Run(RunRequest),
-    Proof(ProofRequest),
 }
 pub(super) fn assignment(value: &str) -> Result<(&str, &str)> {
     let (name, path) = value.split_once('=').ok_or("cli-usage")?;

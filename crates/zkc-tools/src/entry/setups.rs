@@ -133,3 +133,30 @@ pub(super) fn run_material(
         })
         .collect()
 }
+
+/// Validate every static context's material against application-owned identities,
+/// independently of whether execution eventually reaches that deployment.
+pub(super) fn check_pinned_material(
+    interface: &Interface,
+    authority: &SetupAuthority,
+    material: &BTreeMap<String, Vec<u8>>,
+    capacity: crate::execution::Capacity,
+    imports: &mut crate::host::setups::VerifierKeys,
+) -> Result<BTreeMap<String, std::sync::Arc<zkc_arkworks::VerifierKey>>> {
+    check(interface, authority)?;
+    check_material(interface, material, capacity)?;
+    interface
+        .setups
+        .iter()
+        .map(|slot| {
+            Ok((
+                slot.name.clone(),
+                imports.import(
+                    &material[&slot.name],
+                    authority.keys[&slot.name],
+                    "entry-setup-canonical",
+                )?,
+            ))
+        })
+        .collect()
+}

@@ -16,6 +16,10 @@ def documents():
         result[f'example.{entry}/public.json'] = dict(zip(
             ('initial_x', 'initial_y', 'final_x', 'final_y'), public, strict=True))
         result[f'example.{entry}/witness.json'] = {'trace': trace}
+    public = result['example.CleanProof/public.json']
+    result['example.GenerateTrace/arguments.json'] = {
+        key: public[key] for key in ('initial_x', 'initial_y')}
+    result['example.ProveClean/arguments.json'] = {'public': public}
     return result
 
 

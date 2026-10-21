@@ -54,29 +54,71 @@ impl<V> Drop for Transfer<V> {
 }
 
 impl<B: Backend> Instance<B> {
+    fn reserve_constructor(
+        &self,
+        bound: usize,
+    ) -> Result<Option<crate::vm::execution_ledger::AllocationReservation>> {
+        let Some(shared) = &self.shared else {
+            return Ok(None);
+        };
+        // Value adapters advertise a stable upper bound before construction.
+        // Refuse insufficient capacity before invoking a constructor, even if
+        // this particular scalar or variant would have been smaller.
+        if bound > Limits::VALUE_BYTES {
+            return Err(RuntimeError::Limit);
+        }
+        self.can_retain_size(1, bound, bound, 0)?;
+        let reservation = shared.reserve_output(bound, false);
+        if reservation.bytes() < bound {
+            reservation.settle(0, 0)?;
+            return Err(RuntimeError::Limit);
+        }
+        Ok(Some(reservation))
+    }
     pub(crate) fn boolean(&mut self, scope: &mut Scope, value: bool) -> Result<B::Value> {
+        let reservation = self.reserve_constructor(B::Value::control_allocation_bound())?;
         let value = self.accept(B::Value::from_control_bool(value)?, &BOOL_TYPE)?;
-        self.retain_in(scope, std::slice::from_ref(&value), Retention::Input)?;
+        self.retain_reserved(
+            scope,
+            std::slice::from_ref(&value),
+            Retention::Input,
+            reservation,
+        )?;
         Ok(value)
     }
 
-    pub(crate) fn variant(
+    pub(crate) fn variant<'a>(
         &mut self,
         scope: &mut Scope,
         ty: &PhysicalType,
         alternative: usize,
-        payload: Vec<B::Value>,
-    ) -> Result<B::Value> {
+        payload: impl ExactSizeIterator<Item = &'a B::Value> + Clone,
+    ) -> Result<B::Value>
+    where
+        B::Value: 'a,
+    {
         let descriptor = ty
             .logical()
             .variant_descriptor()
             .expect("admitted variant")
             .clone();
+        let reservation = self.reserve_constructor(B::Value::variant_allocation_bound(
+            &descriptor,
+            payload.clone(),
+        ))?;
+        // The bound includes the owned payload slots, not just the adapter's
+        // final value. Keep their collection and operand clones after admission.
+        let payload = payload.cloned().collect();
         let value = self.accept(
             B::Value::pack_variant(descriptor, alternative, payload)?,
             ty,
         )?;
-        self.retain_in(scope, std::slice::from_ref(&value), Retention::Input)?;
+        self.retain_reserved(
+            scope,
+            std::slice::from_ref(&value),
+            Retention::Input,
+            reservation,
+        )?;
         Ok(value)
     }
 
@@ -222,8 +264,30 @@ impl<B: Backend> Instance<B> {
         }
         Ok(())
     }
-    fn retain(&mut self, values: &[B::Value], retention: Retention) -> Result<()> {
+    fn retain(
+        &mut self,
+        values: &[B::Value],
+        retention: Retention,
+        reservation: Option<crate::vm::execution_ledger::AllocationReservation>,
+    ) -> Result<()> {
         let charge = self.can_retain(values, retention)?;
+        let work = if retention == Retention::Result {
+            charge.fresh as u64
+        } else {
+            0
+        };
+        if let Some(reservation) = reservation {
+            reservation.settle(charge.fresh, work)?;
+        } else if let Some(shared) = &self.shared {
+            shared.charge(
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: work,
+                },
+                charge.fresh,
+            )?;
+        }
         self.counts.add(Event::Retain, values.len() as u64);
         self.ledger.retain(values);
         self.usage.live_values += values.len();
@@ -233,6 +297,16 @@ impl<B: Backend> Instance<B> {
             self.usage.logical_bytes += charge.fresh as u64;
         }
         Ok(())
+    }
+    pub(crate) fn open_reserved_scope(
+        &mut self,
+        values: &[B::Value],
+        retention: Retention,
+        reservation: Option<crate::vm::execution_ledger::AllocationReservation>,
+    ) -> Result<Scope> {
+        let mut scope = Scope::new();
+        self.retain_reserved(&mut scope, values, retention, reservation)?;
+        Ok(scope)
     }
     pub(crate) fn open_scope(
         &mut self,
@@ -249,22 +323,34 @@ impl<B: Backend> Instance<B> {
         values: &[B::Value],
         retention: Retention,
     ) -> Result<()> {
-        self.retain(values, retention)?;
+        self.retain(values, retention, None)?;
         scope.bindings += values.len();
         Ok(())
     }
-    pub(super) fn retain_returned(&mut self, values: &[B::Value]) -> Result<()> {
+    pub(super) fn retain_reserved(
+        &mut self,
+        scope: &mut Scope,
+        values: &[B::Value],
+        retention: Retention,
+        reservation: Option<crate::vm::execution_ledger::AllocationReservation>,
+    ) -> Result<()> {
+        self.retain(values, retention, reservation)?;
+        scope.bindings += values.len();
+        Ok(())
+    }
+    pub(crate) fn retain_returned(&mut self, values: &[B::Value]) -> Result<()> {
         debug_assert_eq!(self.returned.bindings, 0, "one terminal reservation");
         self.returned = self.open_scope(values, Retention::Transfer)?;
         Ok(())
     }
-    pub(super) fn release_returned(&mut self, values: &[B::Value]) {
+    pub(crate) fn release_returned(&mut self, values: &[B::Value]) {
         let scope = std::mem::replace(&mut self.returned, Scope::new());
         self.close_scope(scope, values.iter());
     }
     fn unpin_return(&mut self, values: &[B::Value]) {
         self.counts.add(Event::Unpin, values.len() as u64);
         self.usage.live_value_bytes -= self.ledger.unpin(values);
+        self.release_closed_reservation();
     }
 
     pub(crate) fn release_return(&mut self, mut values: Transfer<B::Value>) -> Vec<B::Value> {
@@ -300,8 +386,12 @@ impl<B: Backend> Instance<B> {
     }
 
     pub(crate) fn index_value(&self, index: u64) -> Result<B::Value> {
+        let reservation = self.reserve_constructor(B::Value::control_allocation_bound())?;
         let value = B::Value::from_control_index(index)?;
         self.validate(&value, &INDEX_TYPE, false)?;
+        if let Some(reservation) = reservation {
+            reservation.settle(value.retained_bytes(), 0)?;
+        }
         Ok(value)
     }
     pub(crate) fn validate_backend(&self, value: &B::Value) -> Result<()> {
@@ -357,5 +447,6 @@ impl<B: Backend> Instance<B> {
         debug_assert_eq!(closed_values, scope.bindings);
         self.usage.live_values -= scope.bindings;
         self.usage.live_value_bytes -= released + scope.released_storage;
+        self.release_closed_reservation();
     }
 }

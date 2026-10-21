@@ -95,12 +95,12 @@ def verify(toolchain, journal, package, pin, public, proof, name='verifier', ref
 
 
 def run(toolchain, journal, directory, package, pin, prover, verifier, name):
-    inputs = input_files(journal, name, roles={'P': {'inputs': prover}, 'V': {'inputs': verifier}})
+    inputs = input_files(journal, name, package=package, arguments={'inputs': {'P': prover, 'V': verifier}})
     outputs = directory / f'{name}.outputs.json'
     report = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
                                      *inputs, f'--results={outputs}']))
     assert report['status'] == 'executed'
-    return json.loads(outputs.read_text())['roles']['V']['accepted']
+    return json.loads(outputs.read_text())['value']['V']['accepted']
 
 
 def prover_inputs(public):
@@ -121,7 +121,7 @@ def test_example_inputs_are_reference_statements():
                 for name, value in TWO_LAYERS.items()}
     assert public == expected
     for role in ['P', 'V']:
-        values = json.loads((PROJECT / f'inputs/example.Interactive/{role}.json').read_text())
+        values = json.loads((PROJECT / 'inputs/example.Interactive/arguments.json').read_text())['inputs'][role]
         assert values == (expected if role == 'V' else prover_inputs(expected))
 
 

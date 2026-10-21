@@ -35,7 +35,7 @@ pub(super) fn valid_check(report: &Json, request: Option<&str>) -> bool {
         };
         if !canonical_name(name)
             || name <= previous
-            || !matches!(candidate["kind"].as_str(), Some("run" | "proof"))
+            || !matches!(candidate["kind"].as_str(), Some("function" | "proof"))
             || candidate.as_object().is_none_or(|obj| obj.len() != 2)
         {
             return false;
@@ -62,6 +62,19 @@ pub(super) fn valid_check(report: &Json, request: Option<&str>) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn discovery_selects_functions_without_a_source_run_alias() {
+        let function =
+            json!({"entries":[{"name":"sample::Main","kind":"function"}],"entry":"sample::Main"});
+        assert!(valid_check(&function, Some("Main")));
+        let old = json!({"entries":[{"name":"sample::Main","kind":"run"}],"entry":"sample::Main"});
+        assert!(!valid_check(&old, Some("Main")));
+        assert!(serde_json::from_str::<crate::project::EntryKind>("\"run\"").is_err());
+        assert_eq!(
+            serde_json::to_value(crate::project::EntryKind::Function).unwrap(),
+            "function"
+        );
+    }
     #[test]
     fn canonical_unicode_selection_keeps_exact_names_and_byte_limits() {
         let name = "数学::𐐀::証明₂";

@@ -6,6 +6,7 @@ checks each positive certificate and proves the negative certificates impossible
 import hashlib
 import json
 
+from native_entry import native_run
 from snapshot import render
 
 
@@ -26,8 +27,7 @@ def check_contract_forms(suite, root, execute, originals):
             flags = ['--source-format=zkc',
                      f'--module={module}=lean/bridges/common/fixtures/{family.lower()}-forms.zkc',
                      f'--entry={module}::{form}']
-            text = execute([suite.args.compiler, 'language-emit', *flags])
-            interface = json.loads(execute([suite.args.compiler, 'language-interface', *flags]))
+            text, interface = native_run(execute, suite.args.compiler, flags)
             assert interface['original'] == hashlib.sha256(text.encode()).hexdigest()
             symbol = interface['protocol']
             data = suite.exercise(text, symbol)

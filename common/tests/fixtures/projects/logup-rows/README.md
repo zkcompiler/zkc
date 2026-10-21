@@ -24,7 +24,7 @@ zkc run --project=common/tests/fixtures/projects/logup-rows/zkc.toml logup_rows:
 zkc run --project=common/tests/fixtures/projects/logup-rows/zkc.toml logup_rows::CompressionWeights
 ```
 
-The supplied [row inputs](inputs/logup_rows.Demo/P.json) use tuples `[1,3]`,
+The supplied [row inputs](inputs/logup_rows.Demo/arguments.json) use tuples `[1,3]`,
 `[4,2]`, `[5,3]`, counts `[1,1,0]`, `gamma = 11`, and `delta = 2`.
 Outputs are fingerprints `[7,8,11]`, denominators `[4,3,1]`, and two residual
 vectors `[0,0,0]`. Increasing the first reciprocal by one changes its residual
@@ -37,7 +37,7 @@ The separate `CompressionWeights` Entry uses BLS12-381.Fr for native fixed-array
 support. `compression_weights(delta)` collects four powers with
 `field_array::collect(range(0, forwarded_index(4)), ...)`: the endpoint is an
 actual literal forwarded through an identity helper. Its
-[sample input](inputs/logup_rows.CompressionWeights/P.json) gives `[1,2,4,8]`;
+[sample input](inputs/logup_rows.CompressionWeights/arguments.json) gives `[1,2,4,8]`;
 `delta = 0` gives `[1,0,0,0]`.
 
 This is a mathematical slice with supplied reciprocals and challenges. It does

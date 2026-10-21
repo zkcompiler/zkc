@@ -4,6 +4,8 @@ import os
 from hashlib import sha256
 from pathlib import Path
 
+from entry import project_invocation
+
 
 def command(toolchain, *arguments):
     return [toolchain.runtime, '--json', *arguments, f'--compiler={toolchain.compiler}']
@@ -17,8 +19,8 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
                             'files', 'preserved', 'publication', 'entries'}
     assert created['publication']['published'] == created['files']
     assert created['publication']['requested'] == created['files']
-    assert len(created['files']) == 4
-    value = project / 'inputs/example.Main/P.json'
+    assert len(created['files']) == 3
+    value = project / 'inputs/example.Main/arguments.json'
     assert json.loads(value.read_text()) == {'value': None}
     journal.json(command(toolchain, 'run'), cwd=project, refuses='entry-input-unfilled')
     value.write_text('{"value":"7"}\n')
@@ -32,24 +34,25 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
     first = journal.json(command(toolchain, 'run'), cwd=child)
     second = journal.json(command(toolchain, 'run'), cwd=child)
     assert first['status'] == second['status'] == 'executed'
-    assert len(first['session']) == 32 and first['session'] != second['session']
-    assert first['inputs'] == {'P': str(value)}
+    assert first['execution']['completed'] and second['execution']['completed']
+    assert 'session' not in first and 'session' not in second
+    assert first['inputs'] == {'arguments': str(value)}
     result = project / 'build/zkc/example.Main.results.json'
     assert first['results'] == str(result)
-    assert json.loads(result.read_text())['roles'] == {'P': {'result': '7'}}
+    assert json.loads(result.read_text())['value'] == '7'
     custom = child / 'custom.json'
     custom.write_text('{"value":"11"}')
-    overridden = journal.json(command(toolchain, 'run', '--input=P=custom.json',
-                                      '--results=custom-result.json', '--session=chosen'), cwd=child)
-    assert overridden['session'] == 'chosen'
-    assert json.loads((child / 'custom-result.json').read_text())['roles']['P']['result'] == '11'
-    assert json.loads(result.read_text())['roles']['P']['result'] == '7'
+    overridden = journal.json(command(toolchain, 'run', '--input=custom.json',
+                                      '--results=custom-result.json'), cwd=child)
+    assert overridden['inputs'] == {'arguments': 'custom.json'}
+    assert json.loads((child / 'custom-result.json').read_text())['value'] == '11'
+    assert json.loads(result.read_text())['value'] == '7'
     for name in ('check', 'prepare', 'run'):
         output = journal.attempt([toolchain.runtime, name, f'--compiler={toolchain.compiler}'], cwd=child)
         assert output.returncode == 0 and not output.stderr
         assert not output.stdout.startswith('{')
     assert 'Results:' in output.stdout and str(result) in output.stdout
-    failed = journal.attempt([toolchain.runtime, 'run', '--input=P=absent.json',
+    failed = journal.attempt([toolchain.runtime, 'run', '--input=absent.json',
                               f'--compiler={toolchain.compiler}'], cwd=child)
     assert failed.returncode == 1 and not failed.stdout
     assert 'entry-input-document' in failed.stderr and 'absent.json' in failed.stderr
@@ -103,46 +106,49 @@ def test_non_utf8_working_directory_refuses_without_a_scaffold(toolchain, journa
     assert list(invalid.iterdir()) == []
 
 
-def test_role_input_filenames_are_portable_and_explicit_paths_override(toolchain, journal, directory):
+def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    source.write_text('''module example;
-      protocol Test roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}
-      run Case=Test;
-    ''')
-    journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-output-collision')
-    journal.json(command(toolchain, 'run'), cwd=directory, refuses='source-output-collision')
-    assert not (directory / 'inputs/example.Case').exists()
-    value = directory / 'left.json'
-    value.write_text('{"left":"7"}')
-    right = directory / 'right.json'
-    right.write_text('{"right":"3"}')
-    assert journal.json(command(toolchain, 'run', f'--input=P={value}', f'--input=p={right}'),
+    source.write_text('module example;\n      protocol Test roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}\n      entry fn Case(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
+    path = directory / 'inputs/example.Case/arguments.json'
+    assert prepared['files'] == [str(path)]
+    assert json.loads(path.read_text()) == {'inputs': {'P': {'left': None}, 'p': {'right': None}}}
+    path.write_text('{"inputs":{"P":{"left":"7"},"p":{"right":"3"}}}')
+    invocation = project_invocation(toolchain, journal, directory)
+    assert journal.json(command(toolchain, 'run', invocation), cwd=directory)['status'] == 'executed'
+    explicit = directory / 'explicit.json'
+    explicit.write_text(path.read_text())
+    assert journal.json(command(toolchain, 'run', invocation, f'--input={explicit}'),
                         cwd=directory)['status'] == 'executed'
-    source.write_text('''module example;
-      protocol Test roles(CON)(left:index@CON)->(result:index@CON){return left;}
-      run Reserved=Test;
-    ''')
-    journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-output-name')
-    journal.json(command(toolchain, 'run'), cwd=directory, refuses='source-output-name')
-    assert journal.json(command(toolchain, 'run', f'--input=CON={value}'),
-                        cwd=directory)['status'] == 'executed'
+    explicit.write_text('{"inputs":{"P":{"left":"7"},"Q":{"right":"3"}}}')
+    failed = journal.json(command(toolchain, 'run', invocation, f'--input={explicit}'),
+                          cwd=directory, refuses='entry-input-fields')
+    assert failed['input_path'] == 'arguments.inputs.p'
+    assert 'execution' not in failed
+    # A device-like role name remains a field, never a file path.
+    source.write_text('module example;\n      protocol Test roles(CON)(left:index@CON)->(result:index@CON){return left;}\n      entry fn Reserved(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
+    path = directory / 'inputs/example.Reserved/arguments.json'
+    assert prepared['files'] == [str(path)]
+    path.write_text('{"inputs":{"CON":{"left":"7"}}}')
+    invocation = project_invocation(toolchain, journal, directory)
+    assert journal.json(command(toolchain, 'run', invocation), cwd=directory)['status'] == 'executed'
 
 
 def test_prepare_all_entries_preserves_data_and_checks_current_shapes(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    source.write_text(source.read_text() + '\nrun Other = Echo;\n')
+    source.write_text(source.read_text() + '\nentry fn Other(value:index)->index{return value;}\n')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     assert [entry['name'] for entry in prepared['entries']] == ['example::Main', 'example::Other']
-    other = directory / 'inputs/example.Other/P.json'
+    other = directory / 'inputs/example.Other/arguments.json'
     assert prepared['files'] == [str(other)]
     assert journal.json(command(toolchain, 'prepare', 'Other'), cwd=directory)['files'] == []
     journal.json(command(toolchain, 'run'), cwd=directory, refuses='source-compilation')
     other.write_text('{"value":"9"}')
     assert journal.json(command(toolchain, 'run', 'Other'), cwd=directory)['entry'] == 'example::Other'
-    protocol = directory / 'protocol.zkc'
-    protocol.write_text(protocol.read_text().replace('value', 'renamed'))
+    source.write_text(source.read_text().replace('value', 'renamed'))
     assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
     journal.json(command(toolchain, 'prepare'), cwd=directory)
     assert other.read_text() == '{"value":"9"}'
@@ -166,32 +172,35 @@ def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, dire
     (directory / 'main.zkc').write_text('''module 数学;
       fn 増加(α:index)->index{return α+1;}
       protocol 計算 roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
-      run 実行₂=計算;
+      entry fn 実行₂(inputs: 計算::Inputs) { return 計算::run(inputs); }
     ''')
     assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
-    value = directory / 'inputs/数学.実行₂/参加者.json'
+    value = directory / 'inputs/数学.実行₂/arguments.json'
     assert prepared['files'] == [str(value)]
-    assert json.loads(value.read_text()) == {'α': None}
+    assert json.loads(value.read_text()) == {'inputs': {'参加者': {'α': None}}}
     # Escaped keys and raw source names address the same port without normalization.
-    value.write_text('{"\\u03b1":"7"}')
+    value.write_text('{"inputs":{"参加者":{"\\u03b1":"7"}}}')
     assert journal.json(command(toolchain, 'prepare'), cwd=directory)['preserved'] == [str(value)]
     for name in ([], ['実行₂'], ['数学::実行₂']):
         report = journal.json(command(toolchain, 'run', *name), cwd=directory)
         result = directory / 'build/zkc/数学.実行₂.results.json'
-        assert report['inputs'] == {'参加者': str(value)}
+        assert report['inputs'] == {'arguments': str(value)}
         assert report['results'] == str(result)
-        assert json.loads(result.read_text())['roles'] == {'参加者': {'結果': '8'}}
+        assert json.loads(result.read_text())['value'] == {'参加者': {'結果': '8'}}
     package = journal.json(command(toolchain, 'compile'), cwd=directory)
     assert package['output'] == str(directory / 'build/zkc/数学.実行₂.zkpkg')
     alternate = directory / 'alternate.json'
-    alternate.write_text('{"α":"10"}')
-    report = journal.json(command(toolchain, 'run', '--input=参加者=alternate.json'), cwd=directory)
-    assert json.loads(Path(report['results']).read_text())['roles']['参加者']['結果'] == '11'
-    journal.json(command(toolchain, 'run', '--input=role00000000=alternate.json'),
-                 cwd=directory, refuses='entry-input-roles')
-    journal.json(command(toolchain, 'run', '--input=参加者=alternate.json',
-                         '--input=参加者=alternate.json'), cwd=directory, refuses='entry-input-roles')
+    alternate.write_text('{"inputs":{"参加者":{"α":"10"}}}')
+    report = journal.json(command(toolchain, 'run', '--input=alternate.json'), cwd=directory)
+    assert json.loads(Path(report['results']).read_text())['value']['参加者']['結果'] == '11'
+    alternate.write_text('{"inputs":{"role00000000":{"α":"10"}}}')
+    failed = journal.json(command(toolchain, 'run', '--input=alternate.json'),
+                          cwd=directory, refuses='entry-input-fields')
+    assert failed['input_path'] == 'arguments.inputs.参加者'
+    assert 'execution' not in failed
+    journal.json(command(toolchain, 'run', '--input=alternate.json',
+                         '--input=alternate.json'), cwd=directory, refuses='cli-option')
 
 
 def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
@@ -227,13 +236,14 @@ def test_human_stops_use_source_participant_names(toolchain, journal, directory)
       protocol Test roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
         let received=send 証明者->検証者(ok);require received;return received;
       }
-      run Interactive=Test;
+      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
       proof Proof=Test{prover 証明者;verifier 検証者;public{};accept accepted;construction authored;}
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory)
-    (directory / 'inputs/example.Interactive/証明者.json').write_text('{"ok":false}')
+    (directory / 'inputs/example.Interactive/arguments.json').write_text(
+        '{"inputs":{"証明者":{"ok":false},"検証者":{}}}')
     (directory / 'inputs/example.Proof/witness.json').write_text('{"ok":false}')
-    failed = journal.json(command(toolchain, 'run'), cwd=directory, refuses='entry-run-incomplete')
+    failed = journal.json(command(toolchain, 'run'), cwd=directory, refuses='entry-host-run-failed')
     assert failed['role_names'] == {'role00000000': '証明者', 'role00000001': '検証者'}
     journal.json(command(toolchain, 'prove', '--allow-authored'), cwd=directory)
     for operation, options in [('run', []), ('verify', ['--allow-authored'])]:
@@ -251,7 +261,7 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
         let received=send P->V(accept);return received && expected;
       }
       proof Proof=Test{prover P;verifier V;public{expected};accept accepted;construction authored;}
-      run Interactive=Test;
+      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
     ''')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     selected = next(e for e in prepared['entries'] if e['name'] == 'example::Proof')
@@ -270,8 +280,8 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
     checked = journal.json(command(toolchain, 'inputs', 'check', '--operation=prove', *options), cwd=directory)
     assert checked['entry'] == 'example::Proof' and 'execution' not in checked
     run_inputs = directory / 'inputs/example.Interactive'
-    (run_inputs / 'P.json').write_text('{"accept":true,"expected":true}')
-    (run_inputs / 'V.json').write_text('{"expected":true}')
+    (run_inputs / 'arguments.json').write_text(
+        '{"inputs":{"P":{"accept":true,"expected":true},"V":{"expected":true}}}')
     assert journal.json(command(toolchain, 'run'), cwd=directory)['entry'] == 'example::Interactive'
     # Verification must not open an available witness, including a FIFO.
     witness.unlink()
@@ -295,7 +305,7 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
 
 def test_implicit_inputs_are_protected_and_invalid_plans_publish_nothing(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
-    value = directory / 'inputs/example.Main/P.json'
+    value = directory / 'inputs/example.Main/arguments.json'
     value.write_text('{"value":"7"}')
     original = value.read_bytes()
     journal.json(command(toolchain, 'run', f'--results={value}'), cwd=directory,
@@ -308,9 +318,8 @@ def test_implicit_inputs_are_protected_and_invalid_plans_publish_nothing(toolcha
         journal.json(command(toolchain, 'run', f'--results={alias}'), cwd=directory,
                      refuses='entry-output-path')
     (directory / 'main.zkc').write_text('''module example;
-      use example_protocol::{Echo};
-      run New = Echo;
-      run Broken = Missing;
+      entry fn New(value:index)->index{return value;}
+      entry fn Broken(inputs: Missing::Inputs) { return Missing::run(inputs); }
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-compilation')
     assert not (directory / 'inputs/example.New').exists()
@@ -320,7 +329,7 @@ def test_implicit_inputs_are_protected_and_invalid_plans_publish_nothing(toolcha
 def test_prepare_refuses_symlinks_and_case_collisions_before_publication(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    value = directory / 'inputs/example.Main/P.json'
+    value = directory / 'inputs/example.Main/arguments.json'
     original = value.read_bytes()
     if os.name == 'posix':
         saved = directory / 'saved.json'
@@ -334,19 +343,19 @@ def test_prepare_refuses_symlinks_and_case_collisions_before_publication(toolcha
     source.write_text('''module example;
       protocol A roles(P)(x:index@P)->(y:index@P){return x;}
       protocol B roles(Q)(x:index@Q)->(y:index@Q){return x;}
-      run Clash=A;
-      run clash=B;
+      entry fn Clash(inputs: A::Inputs) { return A::run(inputs); }
+      entry fn clash(inputs: B::Inputs) { return B::run(inputs); }
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory, refuses='source-output-collision')
     assert not (directory / 'inputs/example.Clash').exists()
     assert not (directory / 'inputs/example.clash').exists()
     # A fully explicit invocation does not consult the default input namespace.
-    source.write_text('module example; use example_protocol::{Echo}; run Main=Echo;')
+    source.write_text('module example; entry fn Main(value:index)->index{return value;}')
     value.write_text('{"value":"7"}')
     conflict = directory / 'inputs/example.main'
     conflict.mkdir()
     journal.json(command(toolchain, 'run'), cwd=directory, refuses='source-output-collision')
-    explicit = journal.json(command(toolchain, 'run', f'--input=P={value}'), cwd=directory)
+    explicit = journal.json(command(toolchain, 'run', f'--input={value}'), cwd=directory)
     assert explicit['status'] == 'executed'
 
 
@@ -363,9 +372,11 @@ def test_run_result_policy_and_unserializable_outputs(toolchain, journal, direct
       protocol Compute roles(P,V)()->(p:Poly@P,accepted:bool@V){
         let p@P=polynomial();let accepted@V=true;return(p=p,accepted=accepted);
       }
-      run Main=Compute;
+      entry fn Main(inputs: Compute::Inputs) { return Compute::run(inputs); }
       proof Proof=Compute{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
+    (directory / 'inputs/example.Main/arguments.json').write_text(
+        '{"inputs":{"P":{},"V":{}}}')
     refused = journal.json(command(toolchain, 'run'), cwd=directory, refuses='entry-output-codec')
     assert 'execution' not in refused
     executed = journal.json(command(toolchain, 'run', '--no-results'), cwd=directory)
@@ -404,13 +415,14 @@ def test_generated_commands_use_defaults_and_empty_roles_need_no_file(toolchain,
       protocol Exchange roles(P,V)(accept:bool@P)->(accepted:bool@V){
         let actual=send P->V(accept);return actual;
       }
-      run Interactive=Exchange;
+      entry fn Interactive(inputs: Exchange::Inputs) { return Exchange::run(inputs); }
       proof Proof=Exchange{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     for name in ('Interactive', 'Proof'):
         templates = journal.json(command(toolchain, 'inputs', 'init', name), cwd=directory)
-        group = 'P' if name == 'Interactive' else 'witness'
-        (directory / f'inputs/example.{name}/{group}.json').write_text('{"accept":true}')
+        group = 'arguments' if name == 'Interactive' else 'witness'
+        values = {'inputs': {'P': {'accept': True}, 'V': {}}} if name == 'Interactive' else {'accept': True}
+        (directory / f'inputs/example.{name}/{group}.json').write_text(json.dumps(values))
         for argv in templates['commands']:
             assert not any(arg.startswith('--session=') for arg in argv)
             assert not any(arg.startswith(('--proof=', '--output=')) for arg in argv)
@@ -419,4 +431,4 @@ def test_generated_commands_use_defaults_and_empty_roles_need_no_file(toolchain,
             assert result['status'] in ('executed', 'produced', 'accepted')
         if name == 'Interactive':
             assert not (directory / 'inputs/example.Interactive/V.json').exists()
-            assert list(result['inputs']) == ['P']
+            assert list(result['inputs']) == ['arguments']

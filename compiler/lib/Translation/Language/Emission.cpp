@@ -18,6 +18,7 @@
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
 #include "zkc/Translation/Packing.h"
 #include "llvm/ADT/StringExtras.h"
@@ -29,6 +30,7 @@ namespace {
 using Values = SmallVector<mlir::Value>;
 class Emitter {
   const ClosedEntry &project;
+  ArrayRef<Declaration> declared;
   const Limits &limits;
   mlir::MLIRContext &context;
   mlir::OpBuilder builder;
@@ -370,7 +372,7 @@ class Emitter {
       services.push_back(block.addArgument(type, location));
     }
     const auto &proof = project.entry().proof();
-    if (!region && decl.id.index == project.protocol().id.index && proof &&
+    if (!region && proof && decl.id.index == project.protocol().id.index &&
         proof->target) {
       const auto &clause = decl.specifications[*proof->target];
       const auto &relation =
@@ -1138,11 +1140,13 @@ class Emitter {
 
 public:
   Emitter(const ClosedEntry &project, mlir::MLIRContext &context,
-          const Limits &limits)
-      : project(project), limits(limits), context(context), builder(&context),
+          const Limits &limits, ArrayRef<Declaration> selected = {})
+      : project(project),
+        declared(selected.empty() ? project.declarations() : selected),
+        limits(limits), context(context), builder(&context),
         location(builder.getUnknownLoc()), layouts(project, limits),
         module(mlir::ModuleOp::create(location)), remaining(limits.work) {
-    for (const auto &decl : project.declarations())
+    for (const auto &decl : declared)
       if ((decl.body || (decl.relation && decl.origin)) &&
           decl.parameters.empty()) {
         symbols.insert(decl.symbol);
@@ -1151,7 +1155,7 @@ public:
       }
     (void)!!failure;
   }
-  Expected<std::string> run() {
+  Expected<mlir::OwningOpRef<mlir::ModuleOp>> build() {
     builder.setInsertionPointToEnd(module->getBody());
     auto *unit =
         make("protocol.module", {}, {},
@@ -1161,7 +1165,7 @@ public:
     if (!unit)
       return std::move(failure);
     definitions = &unit->getRegion(0).front();
-    for (auto &decl : project.declarations()) {
+    for (auto &decl : declared) {
       if (!decl.body || !decl.parameters.empty())
         continue;
       declaration = decl.qualifiedName;
@@ -1237,7 +1241,7 @@ public:
     mlir::SymbolTable table(unit);
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);
-    for (const auto &decl : project.declarations()) {
+    for (const auto &decl : declared) {
       if (!decl.relation || !decl.origin)
         continue;
       const auto &definition = *decl.relation;
@@ -1299,10 +1303,16 @@ public:
       if (!make("relation.declare", {}, {}, attributes))
         return std::move(failure);
     }
+    return std::move(module);
+  }
+  Expected<std::string> run() {
+    auto built = build();
+    if (!built)
+      return built.takeError();
     std::string result;
-    mlir::AsmState state(*module, canonicalPrintingFlags());
+    mlir::AsmState state(**built, canonicalPrintingFlags());
     BoundedStream stream(result, limits.irBytes);
-    module->print(stream, state);
+    (*built)->print(stream, state);
     stream << '\n';
     if (stream.overflow())
       return error("source.limit", "emitted MLIR byte limit exceeded");
@@ -1420,6 +1430,16 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
   if (!hasProtocolDialects(context))
     return error("source.dialects",
                  "native dialects must be loaded before source emission");
+  if (project.entry().kind == Declaration::Kind::EntryFunction)
+    return emitHostOriginal(project, context, limits);
   return Emitter(project, context, limits).run();
+}
+Expected<mlir::OwningOpRef<mlir::ModuleOp>>
+buildNumericalOriginal(const ClosedEntry &project, const Declaration &fragment,
+                       mlir::MLIRContext &context, const Limits &limits) {
+  auto definitions = numericalDefinitions(project, fragment);
+  if (!definitions)
+    return definitions.takeError();
+  return Emitter(project, context, limits, *definitions).build();
 }
 } // namespace zkc::language

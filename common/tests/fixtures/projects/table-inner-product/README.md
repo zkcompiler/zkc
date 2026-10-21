@@ -25,9 +25,9 @@ zkc run --project=common/tests/fixtures/projects/table-inner-product/zkc.toml ta
 ```
 
 `Demo` uses KoalaBear; `ExtensionDemo` uses KoalaBear Ext8. The supplied
-[base-field inputs](inputs/table_claims.Demo/P.json) construct weights `[5,7,11]`
+[base-field inputs](inputs/table_claims.Demo/arguments.json) construct weights `[5,7,11]`
 and return `square_claim = 45`, `weighted_claim = 93`. The
-[extension inputs](inputs/table_claims.ExtensionDemo/P.json) have nonzero
+[extension inputs](inputs/table_claims.ExtensionDemo/arguments.json) have nonzero
 extension coordinates. An empty table returns `initial` for both claims.
 
 The [integration tests](../../../protocol/test_indexed_callback_selection.py)

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_artifact
 from input_files import decimal_values
 from octic_reference import ONE, P, ZERO, add, mul
 from source_modules import core_packages, library_modules
@@ -29,19 +29,14 @@ FOLD = '''
 protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P)->(value:F@P) {
   return total::fold(vec::elements(values), initial, fn(p,x)=>CALLBACK);
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
 def compile_entry(toolchain, journal, directory, source, flags, modules=()):
     options = list(dict.fromkeys([*library_modules(*core_packages()), *modules, *flags]))
     entry = Entry(toolchain, journal, directory, source, options)
-    bundle = journal.json([
-        toolchain.compiler, 'language-bundle', '--source-format=zkc',
-        '--entry=sample::Demo', f'--module=sample={directory}/kernels.zkc',
-        *options,
-    ])
-    return entry, operation_sites(json.loads(bundle['candidate']))
+    return entry, operation_sites(json.loads(joint_artifact(json.loads(entry.package.read_text()))['candidate']))
 
 
 def operation_sites(program):
@@ -110,7 +105,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, factor:F@P, offset:F@P)
     ->(value:vec::Vector<F>@P) {
   return collect(vec::elements(values), fn(x)=>affine(x,factor,offset));
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     if repeated_capture:
         source = source.replace('affine(x,factor,offset)', 'affine(x,factor,factor)')
@@ -139,7 +134,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P, enabled:bool@P)
     fn(x)=>enabled, fn(p,x)=>wrapped(p,x));
   return (square, filtered);
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)
@@ -167,7 +162,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P, limit:index@P)
     ->(value:F@P) {
   return total::fold(vec::elements(values), initial, fn(p,x)=>nested(p,x,limit));
 }
-run Demo = Inspect;
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)
@@ -178,4 +173,4 @@ run Demo = Inspect;
         'value': '7'}
     inputs = {'values': [], 'initial': 7, 'limit': str(2**64-1)}
     assert entry.run('outer-empty', inputs) == {'value': '7'}
-    entry.run('inner-bound', inputs | {'values': [2]}, refuses='entry-run-incomplete')
+    entry.run('inner-bound', inputs | {'values': [2]}, refuses='entry-host-run-failed')

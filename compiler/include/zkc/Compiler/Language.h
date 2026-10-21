@@ -64,7 +64,11 @@ struct EntryOptions {
   bool releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
 };
-using EntryArtifact = std::variant<CompiledRun, CompiledNativeProof>;
+struct CompiledHost {
+  std::string artifact;
+};
+using EntryArtifact =
+    std::variant<CompiledRun, CompiledNativeProof, CompiledHost>;
 class CompiledEntry {
 public:
   const CheckedOriginal &original() const { return source; }

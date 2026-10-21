@@ -19,6 +19,7 @@
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SourceMgr.h"
@@ -56,7 +57,8 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            bool releaseStorage,
                            MathematicalSelectionPolicy mathematicalSelection,
                            LinearContractionStats &statistics,
-                           json::Array *stages = nullptr) {
+                           json::Array *stages = nullptr,
+                           StringRef selectedRole = {}) {
   PassManager pipeline(module.getContext());
   auto add = [&](std::unique_ptr<Pass> pass) {
     if (stages)
@@ -68,9 +70,58 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   if (fixPolynomials)
     add(protocol::createFixPolynomialFactorsPass());
   add(protocol::createLowerMathPass(mathematicalSelection));
-  add(protocol::createSelectPhysicalPass({}, false, releaseStorage,
-                                         &statistics));
-  return pipeline.run(module);
+  if (failed(pipeline.run(module)))
+    return failure();
+  if (!selectedRole.empty()) {
+    auto owner = *module.getOps<protocol_ir::ProtocolModuleOp>().begin();
+    SymbolTable table(owner);
+    llvm::StringSet<> reached;
+    SmallVector<Operation *> pending;
+    for (auto endpoint :
+         owner.getBody().front().getOps<protocol_ir::ParticipantOp>())
+      if (endpoint.getRole() == selectedRole)
+        pending.push_back(endpoint);
+    if (pending.size() != 1)
+      return failure();
+    for (auto entry :
+         owner.getBody().front().getOps<protocol_ir::ProtocolEntryOp>()) {
+      SmallVector<Attribute> targets;
+      for (auto value : entry.getTargets()) {
+        auto pair = cast<ArrayAttr>(value);
+        if (cast<StringAttr>(pair[0]).getValue() == selectedRole)
+          targets.push_back(pair);
+      }
+      if (!targets.empty()) {
+        entry.setTargetsAttr(ArrayAttr::get(module.getContext(), targets));
+        pending.push_back(entry);
+      }
+    }
+    while (!pending.empty()) {
+      auto *definition = pending.pop_back_val();
+      auto name = SymbolTable::getSymbolName(definition);
+      if (!name || !reached.insert(name.getValue()).second)
+        continue;
+      auto uses = SymbolTable::getSymbolUses(definition);
+      if (!uses)
+        return failure();
+      for (const auto &use : *uses)
+        if (auto *target =
+                table.lookup(use.getSymbolRef().getRootReference().getValue()))
+          pending.push_back(target);
+    }
+    for (auto &definition : make_early_inc_range(owner.getBody().front())) {
+      auto name = SymbolTable::getSymbolName(&definition);
+      if (!name || !reached.contains(name.getValue()))
+        definition.erase();
+    }
+  }
+  PassManager physical(module.getContext());
+  auto selection = protocol::createSelectPhysicalPass({}, false, releaseStorage,
+                                                      &statistics);
+  if (stages)
+    stages->push_back(selection->getArgument().str());
+  physical.addPass(std::move(selection));
+  return physical.run(module);
 }
 } // namespace
 Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
@@ -256,9 +307,21 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
   result->module = std::move(constructed->module);
+  auto constructedRoot =
+      *result->module->getOps<protocol_ir::ProtocolModuleOp>().begin();
+  auto retainedProjection = *constructedRoot.getBody()
+                                 .front()
+                                 .getOps<protocol_ir::ProjectionOp>()
+                                 .begin();
+  auto interface = cast<DictionaryAttr>(retainedProjection.getInterfaces()[0]);
+  StringRef selectedRole;
+  if (options.operation)
+    selectedRole = *options.operation == NativeProofOperation::Verify
+                       ? policy->validator
+                       : policy->producer;
   if (failed(lowerProgram(*result->module, options.simplify, false,
                           options.releaseStorage, options.mathematicalSelection,
-                          result->statistics)) ||
+                          result->statistics, nullptr, selectedRole)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);
@@ -268,9 +331,7 @@ compileNativeProof(StringRef text, StringRef filename,
   if (candidate.size() > program::artifactByteLimit)
     return diagnostics.failure(error("native-proof-candidate-limit"));
   auto root = *result->module->getOps<protocol_ir::ProtocolModuleOp>().begin();
-  auto projection =
-      *root.getBody().front().getOps<protocol_ir::ProjectionOp>().begin();
-  auto interface = cast<DictionaryAttr>(projection.getInterfaces()[0]);
+
   auto type =
       cast<FunctionType>(interface.getAs<TypeAttr>("original_type").getValue());
   json::Array maps;
@@ -293,6 +354,8 @@ compileNativeProof(StringRef text, StringRef filename,
     if (auto e = data(port.getAs<ArrayAttr>("outputs"), false, outputs))
       return diagnostics.failure(std::move(e));
     auto role = port.getAs<StringAttr>("role").str();
+    if (!selectedRole.empty() && role != selectedRole)
+      continue;
     auto participant =
         cast<protocol_ir::ParticipantOp>(SymbolTable::lookupSymbolIn(
             root, port.getAs<FlatSymbolRefAttr>("participant")));

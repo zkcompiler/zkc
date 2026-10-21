@@ -105,13 +105,12 @@ def test_altered_rows_proofs_and_statements_are_refused(toolchain, journal, dire
 def test_managed_service_positions_run(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory, 'Interactive')
     def run(rows, name, refuses=None):
-        request = input_files(journal, (directory / f'{name}.json').name, session='index_sampling', roles={'P': {'inputs': {'values': vector(rows), 'rounds': 3}},
-                      'V': {'inputs': {'expected': vector(ROWS), 'rounds': 3}}})
+        request = input_files(journal, (directory / f'{name}.json').name, session='index_sampling', package=package, arguments={'inputs': {'P': {'values': vector(rows), 'rounds': 3}, 'V': {'expected': vector(ROWS), 'rounds': 3}}})
         outputs = directory / f'{name}.outputs.json'
         report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={outputs}'], refuses=refuses)
         return report, outputs
     report, outputs = run(ROWS, 'honest')
     assert report['status'] == 'executed'
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
-    report, outputs = run(SHIFTED, 'shifted', refuses='entry-run-incomplete')
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] is True
+    report, outputs = run(SHIFTED, 'shifted', refuses='entry-host-run-failed')
     assert report['status'] == 'refused' and not outputs.exists()

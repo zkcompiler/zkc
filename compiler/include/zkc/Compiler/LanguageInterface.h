@@ -87,11 +87,25 @@ struct InterfaceProofEntry {
   std::string suite, selectedConstruction;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
 };
+struct InterfaceFunctionParameter {
+  std::string name;
+  std::shared_ptr<const InterfaceSchema> schema;
+};
+struct InterfaceFunction {
+  std::string symbol;
+  std::vector<InterfaceFunctionParameter> parameters;
+  std::shared_ptr<const InterfaceSchema> result;
+};
+struct InterfaceHostEntry {
+  std::string function;
+  std::vector<InterfaceFunction> functions;
+};
 struct LanguageInterface {
   std::string capture, original, toolchain, entry;
   std::vector<InterfaceProtocol> protocols;
   std::vector<InterfaceRelation> relations;
   unsigned selected = 0;
+  std::optional<InterfaceHostEntry> host;
   std::optional<InterfaceProofEntry> proof;
   std::vector<InterfaceSetup> setups;
   const InterfaceProtocol &selectedProtocol() const {

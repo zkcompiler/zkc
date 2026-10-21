@@ -98,6 +98,19 @@ pub struct ProofReport {
     pub binding_scope: BindingScope,
 }
 impl ProofReport {
+    /// Distinguish normal semantic rejection from execution, cleanup, or output
+    /// reconstruction failure. A successful producer has no verifier decision.
+    pub fn verification_result(&self) -> Option<bool> {
+        if self.output_error.is_some() {
+            return None;
+        }
+        match self.native.verification_result()? {
+            true if self.outputs.is_some() => Some(true),
+            false => Some(false),
+            _ => None,
+        }
+    }
+
     /// For verification, true means the selected acceptance result was true and
     /// complete cleanup/result reconstruction succeeded. Production succeeds
     /// when the complete unpublished proof and its outputs are available.
@@ -137,6 +150,32 @@ impl ProofEntry {
         options: ProofOptions,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
+        Self::admit_inner(package, options, setups, None, false)
+    }
+    /// Admit only the selected operation's executable installation and input plan.
+    pub fn admit_operation(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+        operation: ProofOperation,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, options, setups, Some(operation), false)
+    }
+    pub(crate) fn admit_host_operation(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+        operation: ProofOperation,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, options, setups, Some(operation), true)
+    }
+    fn admit_inner(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+        operation: Option<ProofOperation>,
+        retained_inputs: bool,
+    ) -> EntryResult<Self> {
         let interface =
             crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
         let proof = interface
@@ -155,23 +194,68 @@ impl ProofEntry {
         {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
-        arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
-        let native = NativeDeployment::admit_artifact(
-            &package.authenticated_artifact(),
-            setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
-        )
+        if retained_inputs {
+            arguments::check_host_ports(&interface, operation)
+                .map_err(|e| E::new(P::Interface, e))?;
+        } else if let Some(operation) = operation {
+            arguments::check_proof_ports(&interface, operation)
+                .map_err(|e| E::new(P::Interface, e))?;
+        } else {
+            arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
+        }
+        let mut authority =
+            setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?;
+        if let Some(operation) = operation {
+            let role = &interface.roles()[if operation == ProofOperation::Prove {
+                roles.0
+            } else {
+                roles.1
+            }];
+            let selected = interface
+                .input_ports(role)
+                .flat_map(|p| p.definition.native.iter().map(|i| *i as usize))
+                .collect::<std::collections::BTreeSet<_>>();
+            authority.inputs.retain(|i, _| selected.contains(i));
+        }
+        let native = match operation {
+            Some(op) if retained_inputs => NativeDeployment::admit_host_operation(
+                &package.authenticated_artifact(),
+                authority,
+                op == ProofOperation::Prove,
+            ),
+            Some(op) => NativeDeployment::admit_artifact_operation(
+                &package.authenticated_artifact(),
+                authority,
+                Some(op == ProofOperation::Prove),
+            ),
+            None => NativeDeployment::admit_artifact(&package.authenticated_artifact(), authority),
+        }
         .and_then(|n| n.with_capacity(options.capacity))
         .and_then(|n| n.with_external_work_limit(options.external_work))
         .map_err(|e| E::new(P::Admission, e))?;
         interface
             .check_proof(&native)
             .map_err(|e| E::new(P::Binding, e))?;
-        let assets = EntryAssets::admit(
-            &package,
-            &interface,
-            native.entry().admitted(),
-            native.entry().entry(),
-        )
+        let assets = if let Some(operation) = operation {
+            EntryAssets::admit_role(
+                &package,
+                &interface,
+                native.entry().admitted(),
+                native.entry().entry(),
+                if operation == ProofOperation::Prove {
+                    native.entry().producer_role()
+                } else {
+                    native.entry().validator_role()
+                },
+            )
+        } else {
+            EntryAssets::admit(
+                &package,
+                &interface,
+                native.entry().admitted(),
+                native.entry().entry(),
+            )
+        }
         .map_err(|e| E::new(P::Assets, e))?;
         let native = native
             .with_ring_assets(assets.registry().clone())
@@ -206,6 +290,7 @@ impl ProofEntry {
             ProofOperation::Prove => self.native.entry().producer(),
             ProofOperation::Verify => self.native.entry().validator(),
         };
+        let Some(role) = role else { return &[] };
         // The admitted map covers original outputs, excluding any transcript
         // state added by derivation. Only original outputs reach file encoding.
         let count = self.native.source_interface().roles[&role.role]
@@ -259,6 +344,41 @@ impl ProofEntry {
                         crate::proof::Invocation::Attempts,
                     ),
                     imports,
+                )
+                .map_err(|e| E::new(P::Preparation, e))?,
+            producer,
+        ))
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn execute_shared(
+        &self,
+        request: ProofRequest,
+        proof: Option<&[u8]>,
+        capacity: Capacity,
+        external: u64,
+        ring: u64,
+        sequence: u64,
+        proof_bytes: usize,
+        ledger: zkc_runtime::vm::ExecutionLedger,
+    ) -> EntryResult<ProofReport> {
+        let producer = proof.is_none();
+        let attempts = self.attempt_policy(producer, None)?;
+        let inputs = self
+            .inputs(request, producer)
+            .map_err(|e| E::new(P::Request, e))?;
+        let native = self
+            .native
+            .clone()
+            .with_invocation_limits(capacity, external, ring, sequence, proof_bytes)
+            .with_shared_ledger(ledger);
+        Ok(self.report(
+            native
+                .execute(
+                    &inputs,
+                    attempts.as_ref().map_or_else(
+                        || crate::proof::Invocation::one_shot(proof),
+                        crate::proof::Invocation::Attempts,
+                    ),
                 )
                 .map_err(|e| E::new(P::Preparation, e))?,
             producer,

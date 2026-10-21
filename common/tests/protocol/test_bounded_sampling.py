@@ -1,4 +1,6 @@
 """Library rejection sampling, explicit exhaustion and unchanged snapshots."""
+
+from entry import joint_execution
 import json
 from pathlib import Path
 
@@ -25,7 +27,7 @@ protocol Sample roles(P)(first:index@P,bound:index@P)->(value:index@P,count:inde
   let(value,count)=sample(first,bound);
   return(value=value,count=count);
 }
-run Demo=Sample;
+entry fn Demo(inputs: Sample::Inputs) { return Sample::run(inputs); }
 '''
 
 
@@ -82,17 +84,17 @@ def test_bounded_word_sampling(toolchain, journal, directory, attempts, flags):
                              if bound and value >= threshold), None)
             name = f'{bound}-{first}'
             inputs = input_files(journal, name + '.json', session='sampling',
-                                 roles={'P': {'inputs': {'first': str(first), 'bound': str(bound)}}})
+                                 package=package, arguments={'inputs': {'P': {'first': str(first), 'bound': str(bound)}}})
             output = directory / (name + '.results.json')
             report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                                    f'--sha256={built["package_sha256"]}', *inputs, f'--results={output}'],
-                                  refuses=None if accepted else 'entry-run-incomplete')
+                                  refuses=None if accepted else 'entry-host-run-failed')
             if accepted:
                 count, value = accepted
-                assert json.loads(output.read_text())['roles']['P'] == {
+                assert json.loads(output.read_text())['value']['P'] == {
                     'value': str(value), 'count': str(count)}
             else:
-                after = report['execution']['roles'][0]['after']
+                after = joint_execution(report)['roles'][0]['after']
                 assert after[0] == 'stopped'
                 assert after[1]['cause'][0] == 'explicit'
                 assert after[1]['cause'][1]['text'] == ('exhausted' if bound else 'reject')

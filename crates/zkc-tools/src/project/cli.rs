@@ -2,7 +2,7 @@
 use super::{Asset, CheckOptions, Compiler, NotationOptions, Project, Selection};
 use crate::{
     cli::Arguments,
-    entry::{BoundInterface, CompileOptions},
+    entry::CompileOptions,
     host::{inputs::hex, publication::Outputs},
 };
 use serde_json::{Value as Json, json};
@@ -186,7 +186,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                     source.options,
                 )
                 .map_err(|e| compiler_error(&mut report, e))?;
-            let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
+            let view = super::CheckedInterface::read(&package)?;
             report["entry"] = json!(view.entry());
             report["toolchain"] = json!(view.toolchain());
             report["package_sha256"] = json!(hex(package.identity()));

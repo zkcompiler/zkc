@@ -6,7 +6,7 @@ results therefore exercise a separate boundary from their structural agreement.
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -28,7 +28,7 @@ protocol Run roles(P)(x:index@P,b:bool@P)
   let (sum,double,selected,last,state)=work(x,b);
   return(sum,double,selected,last,state);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for x in (0, 7):
@@ -50,11 +50,11 @@ protocol Run roles(P,V)(shared:index@(P,V),p:index@P)->(r:index@P,s:index@V){
   let r=add(echo(shared),p);
   return(r,s=echo(shared));
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('different-components', {
-        'P': {'inputs': {'shared': 2, 'p': 3}}, 'V': {'inputs': {'shared': 9}},
+        'P': {'shared': 2, 'p': 3}, 'V': {'shared': 9},
     }) == {'P': {'r': '5'}, 'V': {'s': '9'}}
 
 
@@ -66,16 +66,16 @@ protocol Run roles(P,V)(n:index@(P,V),go:bool@P)->(result:bool@V){
   for _ in 0..n roles(P,V) max 4{note(go)}
   return true;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for name, n, go in [('empty', 0, False), ('pass', 2, True)]:
         assert entry.run_roles(name, {
-            'P': {'inputs': {'n': n, 'go': go}}, 'V': {'inputs': {'n': n}},
+            'P': {'n': n, 'go': go}, 'V': {'n': n},
         }) == {'P': {}, 'V': {'result': True}}
     report = entry.run_roles('reject', {
-        'P': {'inputs': {'n': 1, 'go': False}}, 'V': {'inputs': {'n': 1}},
-    }, refuses='entry-run-incomplete')
+        'P': {'n': 1, 'go': False}, 'V': {'n': 1},
+    }, refuses='entry-host-run-failed')
     assert 'reject' in str(report)
 
 
@@ -110,7 +110,7 @@ protocol Run roles(P)(n:index@P,m:index@P,go:bool@P)
   }
   return(bound,total,local_bound,local_total);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for n in (0, 1, 4, 8):
@@ -121,7 +121,7 @@ run Demo=Run;
                     'local_total': str(expected), 'local_bound': '0',
                     'total': str(expected + n), 'bound': '0',
                 }
-    entry.run('over-bound', {'n': 9, 'm': 0, 'go': False}, refuses='entry-run-incomplete')
+    entry.run('over-bound', {'n': 9, 'm': 0, 'go': False}, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -136,11 +136,11 @@ protocol Run roles(P)(go:bool@P)->(result:index@P) {
   let result@P=work(go);
   return result;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
-        report = entry.run(str(go), {'go': go}, refuses='entry-run-incomplete')
+        report = entry.run(str(go), {'go': go}, refuses='entry-host-run-failed')
         assert ('reject' if go else 'abort') in str(report)
 
 
@@ -159,12 +159,12 @@ fn work(n:index,go:bool)->index {
 protocol Run roles(P)(n:index@P,go:bool@P)->(result:index@P) {
   let result@P=work(n,go);return result;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source)
     for go in (False, True):
         assert entry.run(f'empty-{go}', {'n': 0, 'go': go}) == {'result': '0'}
-        report = entry.run(f'stop-{go}', {'n': 2, 'go': go}, refuses='entry-run-incomplete')
+        report = entry.run(f'stop-{go}', {'n': 2, 'go': go}, refuses='entry-host-run-failed')
         assert ('reject' if go else 'abort') in str(report)
 
 
@@ -191,14 +191,14 @@ fn work(x:index,go:bool,halt:bool)->index {
 protocol Run roles(P)(x:index@P,go:bool@P,halt:bool@P)->(result:index@P){
   let result@P=work(x,go,halt);return result;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
         for halt in (False, True):
             inputs = {'x': 7, 'go': go, 'halt': halt}
             if halt:
-                report = entry.run(f'{go}-{halt}', inputs, refuses='entry-run-incomplete')
+                report = entry.run(f'{go}-{halt}', inputs, refuses='entry-host-run-failed')
                 assert ('reject' if go else 'abort') in str(report)
             else:
                 assert entry.run(f'{go}-{halt}', inputs) == {'result': '14'}
@@ -213,20 +213,20 @@ fn plus(a:index,b:index)->index {return kernel("index.add",a,b);}
 protocol Run roles(P)(x:index@P,first:bool@P,second:bool@P)->(r:index@P){
   return plus(checked(x,first),raw(x,second));
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('pass', {'x': 7, 'first': True, 'second': True}) == {'r': '14'}
     stopped = entry.run('source-stop', {'x': 7, 'first': False, 'second': False},
-                        refuses='entry-run-incomplete')
-    assert stopped['execution']['roles'][0]['before'][1]['cause'] == [
+                        refuses='entry-host-run-failed')
+    assert joint_execution(stopped)['roles'][0]['before'][1]['cause'] == [
         'explicit', {'omitted_bytes': 0, 'text': 'reject'},
     ]
     assert 'rejected:require' not in str(stopped)
     failed = entry.run('raw-failure', {'x': 7, 'first': True, 'second': False},
-                       refuses='entry-run-incomplete')
+                       refuses='entry-host-run-failed')
     assert 'rejected:require' in str(failed)
-    assert failed['execution']['roles'][0]['before'][1]['cause'][0] == 'backend'
+    assert joint_execution(failed)['roles'][0]['before'][1]['cause'][0] == 'backend'
 
 
 @pytest.mark.parametrize('owner', ['P', 'V'])
@@ -242,18 +242,18 @@ protocol Run roles(P,V)(n:index@(P,V),go:bool@{owner})->(r:bool@V){{
   }}
   return true;
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source)
     def roles(n, go):
-        result = {role: {'inputs': {'n': n}} for role in ('P', 'V')}
-        result[owner]['inputs']['go'] = go
+        result = {role: {'n': n} for role in ('P', 'V')}
+        result[owner]['go'] = go
         return result
     assert entry.run_roles('zero', roles(0, False))['V'] == {'r': True}
     assert entry.run_roles('pass', roles(1, True))['V'] == {'r': True}
-    report = entry.run_roles('stop', roles(1, False), refuses='entry-run-incomplete')
+    report = entry.run_roles('stop', roles(1, False), refuses='entry-host-run-failed')
     native_owner = f'role{("P", "V").index(owner):08x}'
-    stopped = next(role for role in report['execution']['roles'] if role['role'] == native_owner)
+    stopped = next(role for role in joint_execution(report)['roles'] if role['role'] == native_owner)
     assert stopped['before'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
     assert 'loop-count-disagreement' not in str(report)
     assert 'provenance' not in str(report)
@@ -268,19 +268,19 @@ fn add(a:F,b:F)->F{return a+b;}
 protocol Run roles(P)(go:bool@P, coins:Random<F>@P)->(r:F@P){
   return add(checked(coins.draw(),go),coins.draw());
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    report = entry.run_roles('stop-after-first-draw', {'P': {'inputs': {'go': False}, 'services': {'coins': 1}}},
-                             refuses='entry-run-incomplete')
-    assert report['execution']['roles'][0]['before'][1]['cause'] == [
+    report = entry.run_roles('stop-after-first-draw', {'P': {'go': False}}, role_services={'P': {'coins': 1}},
+                             refuses='entry-host-run-failed')
+    assert joint_execution(report)['roles'][0]['before'][1]['cause'] == [
         'explicit', {'omitted_bytes': 0, 'text': 'reject'},
     ]
     # The first draw consumed the available budget. Reaching the second draw
     # would report exhaustion, so the source stop must precede it.
     assert 'exhausted' not in str(report)
-    report = entry.run_roles('second-draw-exhausts', {'P': {'inputs': {'go': True}, 'services': {'coins': 1}}},
-                             refuses='entry-run-incomplete')
+    report = entry.run_roles('second-draw-exhausts', {'P': {'go': True}}, role_services={'P': {'coins': 1}},
+                             refuses='entry-host-run-failed')
     assert 'exhausted' in str(report)
 
 
@@ -294,12 +294,12 @@ protocol Run roles(P,V)(x:index@(P,V),y:index@P)
   let sum@P=x+y;let difference@P=x-y;let product@P=x*y;
   let same@V=x==x;return(sum,difference,product,same);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('separate-owners', {
-        'P': {'inputs': {'x': 7, 'y': 2}}, 'V': {'inputs': {'x': 11}},
+        'P': {'x': 7, 'y': 2}, 'V': {'x': 11},
     }) == {'P': {'sum': '9', 'difference': '5', 'product': '14'}, 'V': {'same': True}}
     entry.run_roles('underflow', {
-        'P': {'inputs': {'x': 1, 'y': 2}}, 'V': {'inputs': {'x': 11}},
-    }, refuses='entry-run-incomplete')
+        'P': {'x': 1, 'y': 2}, 'V': {'x': 11},
+    }, refuses='entry-host-run-failed')

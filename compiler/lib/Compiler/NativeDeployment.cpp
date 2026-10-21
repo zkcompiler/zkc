@@ -22,14 +22,15 @@ bool owns(Attribute owners, StringAttr role) {
 }
 Expected<json::Array> ports(pir::MathematicalOp source,
                             const program::Participants &program,
-                            const NativeProofPolicy &policy) {
+                            const NativeProofPolicy &policy,
+                            StringRef selectedRole = {}) {
   const program::ParticipantEntry *entry = nullptr;
   for (const auto &candidate : program.entries)
     if (candidate.name == policy.entry)
       entry = &candidate;
-  if (!entry || entry->participants.size() != source.getRoles().size() ||
-      program.entries.size() != 1 ||
-      program.participants.size() != source.getRoles().size())
+  auto count = selectedRole.empty() ? source.getRoles().size() : 1;
+  if (!entry || entry->participants.size() != count ||
+      program.entries.size() != 1 || program.participants.size() != count)
     return error("native-deployment-correspondence");
   json::Array maps;
   unsigned stateInputs = !policy.suite.empty(), stateOutputs = stateInputs;
@@ -51,6 +52,8 @@ Expected<json::Array> ports(pir::MathematicalOp source,
   auto type = source.getFunctionType();
   for (auto item : source.getRoles()) {
     auto role = cast<StringAttr>(item);
+    if (!selectedRole.empty() && role.getValue() != selectedRole)
+      continue;
     const program::Participant *participant = nullptr;
     for (const auto &mapping : entry->participants)
       if (mapping.first == role.getValue())
@@ -168,7 +171,12 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   });
   if (!entry)
     return error("native-deployment-subject");
-  auto maps = ports(entry, *program, policy);
+  StringRef selectedRole;
+  if (options.operation)
+    selectedRole = *options.operation == NativeProofOperation::Verify
+                       ? policy.validator
+                       : policy.producer;
+  auto maps = ports(entry, *program, policy, selectedRole);
   if (!maps)
     return maps.takeError();
   if (!out[6].getAsArray() || *out[6].getAsArray() != *maps)

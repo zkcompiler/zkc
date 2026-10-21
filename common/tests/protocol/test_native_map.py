@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution, joint_package
 from test_total_callback_selection import operation_sites
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -48,7 +48,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P,
   let constant = broadcast(a, s);
   return (folded = folded, combined = combined, constant = constant);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # The mapped result is never used; its shape checks still execute.
@@ -67,7 +67,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P)
   let kept = dead(a, b, s);
   return (kept = kept);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # A map inside a loop executes, and checks shapes, once per iteration.
@@ -89,7 +89,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P, n: index @P)
   let repeated = repeat(a, b, s, n);
   return (repeated = repeated);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # One helper realized for a scalar call and for two different row masks.
@@ -114,7 +114,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, x: Fr @P, y: Fr @P,
   let scalar = single(x, y, s);
   return (rows = rows, toward = toward, scalar = scalar);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -150,7 +150,7 @@ def subdirectory(directory, name):
 
 
 def report(entry, name, values):
-    request = input_files(entry.journal, name, roles={'P': {'inputs': values}})
+    request = input_files(entry.journal, name, package=entry.package, arguments={'inputs': {'P': values}})
     output = entry.directory / f'{name}.outputs.json'
     return entry.journal.json([entry.tools.runtime, '--json', 'run', f'--package={entry.package}', f'--sha256={entry.pin}', *request, f'--results={output}'])
 
@@ -176,7 +176,7 @@ def test_map_refuses_any_rowwise_length_mismatch(toolchain, journal, directory):
     for name, values in [('used', inputs(good, [4, 5], good, 2)),
                          ('unused', inputs(good, good, [7, 8], 2)),
                          ('empty-against-rows', inputs([], good, good, 2))]:
-        refused = entry.run(name, values, refuses='entry-run-incomplete')
+        refused = entry.run(name, values, refuses='entry-host-run-failed')
         assert 'rejected:require' in json.dumps(refused), name
 
 
@@ -186,7 +186,7 @@ def test_unused_map_result_still_checks_shapes(toolchain, journal, directory, fl
     values = {'a': vector([1, 2]), 'b': vector([3, 4]), 's': scalar(5)}
     assert entry.run('equal', values)['kept'] == vector([1, 2])
     values['b'] = vector([3])
-    refused = entry.run('mismatch', values, refuses='entry-run-incomplete')
+    refused = entry.run('mismatch', values, refuses='entry-host-run-failed')
     assert 'rejected:require' in json.dumps(refused)
 
 
@@ -208,7 +208,7 @@ def test_map_in_a_loop(toolchain, journal, directory, flags):
     values = {'a': vector([1, 2]), 'b': vector([3]), 's': scalar(5), 'n': 0}
     assert entry.run('mismatch-unread', values) == {'repeated': vector([1, 2])}
     values['n'] = 2
-    refused = entry.run('mismatch', values, refuses='entry-run-incomplete')
+    refused = entry.run('mismatch', values, refuses='entry-host-run-failed')
     assert 'rejected:require' in json.dumps(refused)
 
 
@@ -234,7 +234,7 @@ def test_artifact_and_work_are_independent_of_height(toolchain, journal, directo
         rows = list(range(height))
         result = report(first, f'height{height}', inputs(rows, rows, rows, 3))
         assert result['status'] == 'executed'
-        instructions.add(result['execution']['roles'][0]['usage']['instructions'])
+        instructions.add(joint_execution(result)['roles'][0]['usage']['instructions'])
     # One executed instruction sequence for every height: no per-row expansion.
     assert len(instructions) == 1
 
@@ -248,10 +248,10 @@ def build(toolchain, journal, directory, entry):
 
 
 def run(toolchain, journal, directory, package, pin, name, roles, refuses=None):
-    request = input_files(journal, f'{name}.json', session='native_map_example', roles=roles)
+    request = input_files(journal, f'{name}.json', session='native_map_example', package=package, arguments={'inputs': {role: data['inputs'] for role, data in (roles).items()}}, role_services={role: data.get('services', {}) for role, data in (roles).items()})
     output = directory / f'{name}.outputs.json'
     result = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'], refuses=refuses)
-    return result if refuses else json.loads(output.read_text())['roles']
+    return result if refuses else json.loads(output.read_text())['value']
 
 
 def test_native_map_example_gates(toolchain, journal, directory):
@@ -266,7 +266,7 @@ def test_native_map_example_gates(toolchain, journal, directory):
     changed = output[:2] + [(output[2] + 1) % MODULUS] + output[3:]
     assert run(toolchain, journal, directory, package, pin, 'changed', columns(changed))['V']['accepted'] is False
     run(toolchain, journal, directory, package, pin, 'short', columns(output[:3]),
-        refuses='entry-run-incomplete')
+        refuses='entry-host-run-failed')
 
 
 def test_native_map_example_combination(toolchain, journal, directory):
@@ -278,7 +278,7 @@ def test_native_map_example_combination(toolchain, journal, directory):
     result = run(toolchain, journal, directory, package, pin, 'valid', roles([1, 2, 3], [4, 5, 6]))
     assert result['V']['accepted'] is True
     run(toolchain, journal, directory, package, pin, 'short', roles([1, 2, 3], [4, 5]),
-        refuses='entry-run-incomplete')
+        refuses='entry-host-run-failed')
 
 
 # The map realizer applies three simplifications of its own: it inlines the
@@ -332,7 +332,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P, s: F
   let combined = combine(a, b, c, s);
   return (combined = combined);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -344,8 +344,9 @@ def realized_operation_counts(toolchain, journal, directory, name, source):
     """
     path = directory / f'{name}.zkc'
     path.write_text(source)
-    emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
-                           '--entry=sample::Demo', f'--module=sample={path}'])
+    package = journal.json([toolchain.compiler, 'language-package', '--source-format=zkc',
+                            '--entry=sample::Demo', f'--module=sample={path}'])
+    emitted = joint_package(package)['original']
     original = directory / f'{name}.mlir'
     original.write_text(emitted)
     prepared = journal.run([toolchain.optimizer, '--zkc-prepare-protocol', original])
@@ -372,12 +373,12 @@ def test_realizer_simplifications_change_work_not_values_or_checks(toolchain, jo
                       PRELUDE + combine + PROTOCOL, flags)
         result = report(entry, 'rows', inputs(a, b, c, s))
         assert result['status'] == 'executed'
-        usage[name] = result['execution']['roles'][0]['usage']
+        usage[name] = joint_execution(result)['roles'][0]['usage']
         values[name] = entry.run('values', inputs(a, b, c, s))['combined']
         # Every variant still compares the unread column before any arithmetic,
         # with or without its own simplification.
         refused = entry.run('unread-mismatch', inputs(a, b, c[:-1], s),
-                            refuses='entry-run-incomplete')
+                            refuses='entry-host-run-failed')
         assert 'rejected:require' in json.dumps(refused), name
     assert all(value == vector(expected_rows) for value in values.values())
     fused, split, rows, dead = (usage[name] for name in ('fused', 'split', 'rows', 'dead'))

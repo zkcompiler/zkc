@@ -187,10 +187,11 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      : decl.finiteDefinition ? "finite"
                      : decl.abstract         ? "abstract"
                                              : "body"},
-      {"kind", domain                                  ? "domain"
-               : !ordered                              ? "math"
-               : decl.kind == Declaration::Kind::Local ? "local"
-                                                       : "protocol"},
+      {"kind", domain                                          ? "domain"
+               : !ordered                                      ? "math"
+               : decl.kind == Declaration::Kind::EntryFunction ? "entry"
+               : decl.kind == Declaration::Kind::Local         ? "local"
+                                                               : "protocol"},
       {"parameters", std::move(parameters)},
       {"roles", std::move(roster)},
       {"input_order", std::move(order)},
@@ -210,6 +211,17 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                           : "captured"},
            {"begin", decl.span.begin},
            {"end", decl.span.end}}}};
+  if (decl.kind == Declaration::Kind::EntryFunction ||
+      (decl.generated && decl.generated->operation))
+    result["stage"] = "host";
+  if (decl.generated) {
+    result["generated"] = json::Object{
+        {"target",
+         project.declarations()[decl.generated->target.index].qualifiedName},
+        {"member", decl.generated->member},
+        {"identity", decl.generated->identity},
+        {"constructible", decl.generated->constructible}};
+  }
   if (decl.construction) {
     for (StringRef key : {"abstract", "definition", "roles", "input_order",
                           "inputs", "outputs", "services", "effects"})
@@ -348,7 +360,9 @@ Expected<std::string> inspectEntries(const CheckedProject &project,
       const auto &decl = project.declarations()[id.index];
       json.value(json::Object{
           {"name", decl.qualifiedName},
-          {"kind", decl.entryKind() == EntryKind::Proof ? "proof" : "run"}});
+          {"kind", decl.entryKind() == EntryKind::Proof      ? "proof"
+                   : decl.entryKind() == EntryKind::Function ? "function"
+                                                             : "run"}});
       if (out.overflow())
         break;
     }
@@ -370,6 +384,7 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
       continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
+        decl.kind != Declaration::Kind::EntryFunction &&
         decl.kind != Declaration::Kind::DomainFunction &&
         decl.kind != Declaration::Kind::Protocol &&
         decl.kind != Declaration::Kind::Construction &&
@@ -588,7 +603,9 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
                              {"fields", fields(alternative.fields)}});
           }
           value["constructor"] =
-              decl.sealed || privateFields ? "owner" : "public";
+              decl.generated && !decl.generated->constructible ? "native"
+              : decl.sealed || privateFields                   ? "owner"
+                                                               : "public";
           value["private_fields"] = privateFields;
           value["fields"] = fields(decl.fields);
           if (decl.kind == Declaration::Kind::Variant)
@@ -615,10 +632,15 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           value["purposes"] = std::move(purposes);
           break;
         }
+        case Declaration::Kind::EntryFunction:
+          value["entry_kind"] = "function";
+          break;
         case Declaration::Kind::Entry:
           dataKind("entry");
-          value["entry_kind"] =
-              decl.entryKind() == EntryKind::Proof ? "proof" : "run";
+          value["entry_kind"] = decl.entryKind() == EntryKind::Proof ? "proof"
+                                : decl.entryKind() == EntryKind::Function
+                                    ? "function"
+                                    : "run";
           break;
         default:
           break;

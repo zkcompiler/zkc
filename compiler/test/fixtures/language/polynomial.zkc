@@ -43,5 +43,5 @@ protocol Local roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
   let r @P =local_calculate(a,b,x);
   return(r=r);
 }
-run Demo=Run;
-run LocalDemo=Local;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn LocalDemo(inputs: Local::Inputs) { return Local::run(inputs); }

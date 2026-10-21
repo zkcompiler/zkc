@@ -349,7 +349,7 @@ bool Semantics::withinModule(DeclarationId context, DeclarationId owner) const {
 bool Semantics::constructorAllowed(const Declaration &context,
                                    const Type &type) const {
   auto *decl = typeDeclaration(type);
-  return decl &&
+  return decl && (!decl->generated || decl->generated->constructible) &&
          (type.kind == Type::Kind::Record || type.kind == Type::Kind::Variant ||
           type.kind == Type::Kind::Associated) &&
          withinModule(context.module, decl->module);

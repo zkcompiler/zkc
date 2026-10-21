@@ -167,6 +167,7 @@ def reject_deployment(toolchain, journal, directory, deployment, name, reason):
                            hashlib.sha256(encoded).hexdigest(), inputs,
                            directory / (name + '.bin'), '--allow-authored'], refuses=reason)
     assert result['phase'] == 'admission'
+    assert not (directory / (name + '.bin')).exists()
 
 
 def check_construction_mutations(toolchain, journal, directory, package):
@@ -175,6 +176,7 @@ def check_construction_mutations(toolchain, journal, directory, package):
     plan = deployed[2][6]
     for name, reason in [('state', 'native-proof-state-chain'),
                          ('payload', 'native-proof-observation-payload'),
+                         ('private-start', 'native-proof-private-dependency'),
                          ('start', 'native-proof-construction-root'),
                          ('coverage', 'native-proof-construction-coverage'),
                          ('selector', 'native-proof-construction')]:
@@ -189,8 +191,11 @@ def check_construction_mutations(toolchain, journal, directory, package):
             else:
                 observed[3][2] = producer[4][0][0]  # Public data instead of the actual send.
             changed[4] = json.dumps(program)
-        elif name == 'start':
+        elif name == 'private-start':
             changed[2][6][5][1] = ['2']  # A prover-private input cannot initialize both roles.
+        elif name == 'start':
+            # A shared input still must match the actual compiled start call.
+            changed[2][6][5][1] = ['1']
         elif name == 'coverage':
             changed[2][6][6][0][2].reverse()
         else:

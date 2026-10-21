@@ -13,13 +13,13 @@ impl<B: Backend> Runner<B> {
         depth: usize,
         key: Option<crate::vm::preparation::Key>,
     ) -> Result<Transfer<B::Value>> {
-        self.instance.enter_local(frame, &args)?;
+        let reservation = self.instance.enter_local(frame, &args)?;
         let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
         let (result, record) = if let Some(values) = reused {
             (Ok(values), None)
         } else {
             let checkpoint = key.and_then(|key| self.begin_computation(key));
-            let result = self.run_local_body(frame, logical_origin, body, args, depth);
+            let result = self.run_local_body(frame, logical_origin, body, args, depth, reservation);
             let record = match (checkpoint, &result) {
                 (Some(recording), Ok(values)) => {
                     self.instance.record_computation(recording, values)
@@ -57,8 +57,11 @@ impl<B: Backend> Runner<B> {
         body: &LocalCode,
         args: Vec<B::Value>,
         depth: usize,
+        reservation: Option<crate::vm::execution_ledger::AllocationReservation>,
     ) -> Result<Transfer<B::Value>> {
-        let mut scope = self.instance.open_scope(&args, Retention::Transfer)?;
+        let mut scope =
+            self.instance
+                .open_reserved_scope(&args, Retention::Transfer, reservation)?;
         let mut env = Values::new(args);
         let mut current_site = None;
         let mut current_has_own_site = false;
@@ -112,10 +115,12 @@ impl<B: Backend> Runner<B> {
                         output,
                         ..
                     } => {
-                        let payload = payload.iter().map(|n| env[n].clone()).collect();
-                        let value = self
-                            .instance
-                            .variant(&mut scope, ty, *alternative, payload)?;
+                        let value = self.instance.variant(
+                            &mut scope,
+                            ty,
+                            *alternative,
+                            payload.iter().map(|n| &env[n]),
+                        )?;
                         env.insert(*output, value);
                     }
                     Operation::Match {

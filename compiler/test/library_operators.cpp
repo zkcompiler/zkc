@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/Support/JSON.h"
@@ -110,7 +111,7 @@ int main() {
       protocol Run roles(P)(a:index@P,b:index@P)->(sum:index@P,same:bool@P){
         let sum@P=a+b;let same@P=a==b;return(sum,same);
       }
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
     const auto &body = *decl(project, "m::Run").body;
     require(body.effects.fixed.mayStop,
@@ -121,7 +122,8 @@ int main() {
                                  op.action);
                            }) == 1,
             "protocol index arithmetic lost its helper boundary");
-    take(prepareOriginal(take(closeEntry(project, "m::Demo"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Demo"))));
   });
   cases.run("primitive helper boundaries count toward source call depth", [&] {
     Limits limits;
@@ -150,24 +152,26 @@ int main() {
     for (const auto &[source, depth] :
          std::vector<std::pair<std::string, unsigned>>{
              {"protocol Run roles(P)(a:index@P,b:index@P)->(r:index@P){return "
-              "a+b;}run Demo=Run;",
+              "a+b;}entry fn Demo(inputs: Run::Inputs) { return "
+              "Run::run(inputs); }",
               2},
              {"math fn both(a:bool,b:bool)->bool=primitive(\"bool.and\");fn "
               "f(a:bool,b:bool)->bool{return both(a,b);}protocol Run "
-              "roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return f(a,b);}run "
-              "Demo=Run;",
+              "roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return f(a,b);}entry fn "
+              "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
               3},
              {field +
                   "type V=builtin(\"vector\",F);fn f(a:V,b:V)->V{return map "
                   "zkc::prelude::field_add(each a,each b);}protocol Run "
-                  "roles(P)(a:V@P,b:V@P)->(r:V@P){return f(a,b);}run Demo=Run;",
+                  "roles(P)(a:V@P,b:V@P)->(r:V@P){return f(a,b);}entry fn "
+                  "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
               3}}) {
       Limits limits;
       limits.callDepth = depth - 1;
       refuses(check(source, limits), "source.limit");
       limits.callDepth = depth;
       auto project = take(check(source, limits));
-      take(closeEntry(project, "m::Demo", limits));
+      take(zkc::test::closeProtocolDeployment(project, "m::Demo", limits));
     }
   });
   for (StringRef import :
@@ -418,9 +422,10 @@ int main() {
         operator + = other;
         return sum<T=F,A=Ordinary<F>>(x,x);
       }
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
-    take(prepareOriginal(take(closeEntry(project, "m::Demo"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Demo"))));
   });
   cases.run("contextual notation words remain ordinary identifiers", [&] {
     take(check(

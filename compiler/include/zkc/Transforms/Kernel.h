@@ -3,12 +3,18 @@
 
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 
 namespace zkc::mathematical {
 struct RealizationTrace;
 }
 namespace zkc::kernel {
+/// Form a checked numerical calculation from an admitted immutable closure.
+/// The private wrapper may contain total mathematics and a trailing guard.
+mlir::LogicalResult formCalculation(local::FuncOp wrapper,
+                                    mlir::Operation *sourceOwner,
+                                    MathematicalSelectionPolicy policy);
 /// Materialize logical invocations into the existing Local execution
 /// vocabulary, retaining each call's policy. Numerical alternatives belong to
 /// individual source occurrences; the reader checks their actual payloads.

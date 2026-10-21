@@ -13,4 +13,6 @@ protocol Claim roles(P)(a0: Fr@P, a1: Fr@P, r: Fr@P) -> (claim: Fr@P) {
   return claim(a0, a1, r);
 }
 
-run Run = Claim;
+entry fn Run(inputs: Claim::Inputs) {
+  return Claim::run(inputs);
+}
