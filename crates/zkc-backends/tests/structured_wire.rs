@@ -365,6 +365,33 @@ fn collection_limits_accumulate_across_record_children() {
     }
 }
 #[test]
+fn immutable_variant_bounds_count_shared_payload_occurrences() {
+    let mut ty = String::from("bool");
+    let mut value = Value::Bool(true);
+    for _ in 0..3 {
+        ty = logical("Layer", json!([["record", [ty]]]));
+        value = variant(&ty, 0, vec![value]);
+    }
+    let pair_type = LogicalType::parse(&logical(
+        "SharedLayers",
+        json!([["pair", [ty.clone(), ty]]]),
+    ))
+    .unwrap();
+    let descriptor = pair_type.variant_descriptor().unwrap().clone();
+    // Expanded charges count both occurrences, even though cloned immutable
+    // variants share their backing. Decoding retains that same profile.
+    let expected = descriptor.retained_bytes() + 256 + 2 * 512 + 2 * value.retained_bytes();
+    let pair = Value::Variant(Variant::new(descriptor, 0, vec![value.clone(), value]).unwrap());
+    assert_eq!(pair.retained_bytes(), expected);
+    let backend = common::ark_backend(None);
+    let bytes = backend.encode_native_value(&pair).unwrap();
+    let decoded = backend
+        .decode_native_value(&pair.physical_type(), &bytes)
+        .unwrap();
+    assert_eq!(decoded.retained_bytes(), expected);
+    assert_eq!(pair.clone().retained_bytes(), expected);
+}
+#[test]
 fn formed_type_depth_and_leaf_preflight_define_the_boundary() {
     let mut ty = String::from("bool");
     let mut value = Value::Bool(true);

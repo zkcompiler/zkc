@@ -1941,6 +1941,61 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
 }
 
 #[test]
+fn nested_variant_measurement_refuses_with_exhausted_shared_work() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
+    let capacity = Capacity::default();
+    let entry = admit_with_capacity(&pair_variant_document(index(), true), capacity);
+    let scalar = zkc_backends::Value::Index(7);
+    let work = scalar.retained_bytes() as u64;
+    let ledger = ExecutionLedger::new(
+        capacity.values,
+        WorkBudget {
+            logical_bytes: work,
+            ..capacity.work
+        },
+    );
+    let value = data::from_output(
+        entry.host(),
+        &entry.signature().parameters[0].schema,
+        scalar.into(),
+        &ledger,
+    )
+    .unwrap();
+    let result = &entry.signature().result;
+    let inner = data::pack(
+        entry.host(),
+        &result.alternatives[1].fields[0].schema,
+        "One",
+        vec![value],
+        &ledger,
+    )
+    .unwrap();
+    let held = ledger.snapshot().live_reserved_bytes;
+    // The inner native variant is immutable. Its expanded retained bound must
+    // be available without traversing its active payload before admission.
+    assert_eq!(ledger.snapshot().logical_bytes, work);
+    assert_eq!(
+        data::pack(
+            entry.host(),
+            result,
+            "Pair",
+            vec![inner.clone(), inner.clone()],
+            &ledger,
+        )
+        .unwrap_err(),
+        "Limit"
+    );
+    let usage = ledger.snapshot();
+    assert_eq!(usage.logical_bytes, work);
+    assert_eq!(usage.live_reserved_bytes, held);
+    assert_eq!(usage.pending_logical_bytes, 0);
+    assert_eq!(usage.pending_value_bytes, 0);
+    drop(inner);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
 fn repeated_native_measurements_share_logical_work_before_walking() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};

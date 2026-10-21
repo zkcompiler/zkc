@@ -40,7 +40,9 @@ of their backing tables; singular key/state handles add no backing-element
 collection count. Retained-byte and owner validation limits still apply.
 Before each native payload measurement, the Host charges its conservative
 retained-byte bound to the invocation-wide logical work allowance, including
-repeated uses of shared data. Standalone output leaves need no such scan.
+repeated uses of shared data. Immutable sequences and variants retain this
+bound, so computing their charge does not traverse their payloads. Standalone
+output leaves need no such scan.
 
 The selected policy reaches native data loading, backend kernels, setup import,
 service registry and runner budgets. Attempts cannot exceed these invocation
