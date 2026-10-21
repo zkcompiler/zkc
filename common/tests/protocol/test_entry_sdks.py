@@ -27,6 +27,21 @@ entry fn Checked(value: index, valid: bool) {
     return path, manifest
 
 
+def test_python_runs_a_protocol_without_an_authored_entry(toolchain, directory):
+    (directory / 'main.zkc').write_text('''module application;
+protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
+  let received=send P->V(value);return received;
+}
+''')
+    manifest = directory / 'zkc.toml'
+    manifest.write_text('format="zkc.project/0"\n[modules]\napplication="main.zkc"\n')
+    client = Client(manifest, executable=toolchain.runtime, compiler=toolchain.compiler)
+    for value in (False, True):
+        outcome = client.run({'inputs': {'P': {'value': value}, 'V': {}}},
+                             entry='Echo').require_success()
+        assert outcome.value == {'P': {}, 'V': {'received': value}}
+
+
 def test_python_and_cli_return_the_same_source_value(toolchain, journal, directory):
     _, manifest = source(directory)
     client = Client(manifest, executable=toolchain.runtime, compiler=toolchain.compiler)

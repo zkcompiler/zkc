@@ -4,6 +4,19 @@ This native contract defines closed Entry jobs and their source-level associatio
 
 ## Entry functions
 
+A protocol without static parameters provides a default run Entry selected by
+its qualified protocol name, or an unambiguous short name. It reuses the generated
+`Protocol::run` signature and has the Host body `return Protocol::run(inputs)`.
+Its Entry kind is `function`; compilation, preparation, bindings, execution and
+source correspondence follow the ordinary Entry function contracts. The internal
+generated function name is not a second selectable Entry name.
+
+The inventory includes these default Entries alongside authored Entry functions
+and proofs, including imported concrete protocols. Omitted selectors require one
+eligible candidate; defaults never shadow authored Entries. Static parameters are
+not inferred for external selection: a generic protocol requires a closed Entry
+function wrapper. No proof configuration or Host authority is inferred.
+
 `entry fn Name(parameters) -> Result { body }` declares an externally callable
 Host function. Visibility, named arguments, ordinary generic helpers and Local
 body inference follow the existing callable rules. Result annotations may be

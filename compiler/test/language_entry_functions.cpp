@@ -47,6 +47,48 @@ pub proof Family=Work{prover P;verifier V;public{x};accept ok;construction autho
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("concrete protocols expose their generated run as an Entry", [] {
+    auto project = take(check(R"(module sample;
+      protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
+        let received=send P->V(value);return received;
+      }
+    )"));
+    require(project.entries().size() == 1,
+            "default run entry is absent or duplicated");
+    for (StringRef name : {"", "Echo", "sample::Echo"}) {
+      auto entry = take(closeEntry(project, name, {}, EntryKind::Function));
+      require(entry.entry().entryName() == "sample::Echo" &&
+                  entry.root().qualifiedName == "sample::Echo::run" &&
+                  entry.root().body->stage == Body::Stage::Host &&
+                  entry.invocations().size() == 1 &&
+                  entry.invocations().front().kind == HostInvocation::Kind::Run,
+              "default run bypassed the entry-function closure");
+    }
+    refuses(closeEntry(project, "Echo", {}, EntryKind::Proof),
+            "source.entry-kind");
+    refuses(selectEntry(project, "sample::Echo::run"), "source.entry");
+  });
+  cases.run("generic protocols require an explicit closed Entry", [] {
+    auto project = take(check(protocol));
+    require(project.entries().empty(),
+            "generic protocol acquired an implicit specialization");
+    refuses(selectEntry(project, "Work"), "source.entry");
+    take(close((protocol + R"(
+      entry fn Demo(inputs:Work<F>::Inputs){return Work<F>::run(inputs);}
+    )")
+                   .str()));
+  });
+  cases.run("an unused protocol does not enter a calculation closure", [] {
+    auto entry = take(close(R"(module sample;
+      protocol Unused roles(P)(value:bool@P)->(out:bool@P){return value;}
+      entry fn Demo(value:index){return value+1;}
+    )"));
+    require(entry.invocations().empty() && !entry.protocolOrNull(),
+            "default run body introduced an unreachable deployment");
+    require(entry.entry().entryName() == "sample::Demo" &&
+                entry.root().qualifiedName == "sample::Demo",
+            "default run body replaced the authored root");
+  });
   cases.run("standalone calculation closes without a protocol", [] {
     auto entry =
         take(close("module sample; entry fn Demo(x:index){return x+1;}"));

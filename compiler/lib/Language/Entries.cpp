@@ -408,6 +408,29 @@ bool Checker::generatedSignature(Declaration &decl, unsigned depth) {
       return false;
     decl.outputs.push_back({"result", nominal(*result), {}, decl.span});
     decl.effectAllowance = EffectSummary{Effects{true, false}};
+    if (member == "run") {
+      if (!types.charge(4 + decl.parameters.size(), decl.span))
+        return false;
+      Body body;
+      body.mode = Body::Mode::Local;
+      body.stage = Body::Stage::Host;
+      body.inputs = 1;
+      body.values = {{decl.inputs.front().type, {}, decl.span},
+                     {decl.outputs.front().type, {}, decl.span}};
+      std::vector<Type> arguments;
+      for (const auto &parameter : decl.parameters)
+        arguments.push_back(parameterType(parameter));
+      body.operations.push_back({HostInvocation{HostInvocation::Kind::Run,
+                                                target,
+                                                std::move(arguments),
+                                                {ValueId{0}}},
+                                 {ValueId{1}},
+                                 decl.span,
+                                 0});
+      body.results = {ValueId{1}};
+      body.effects.fixed.mayStop = true;
+      decl.body = std::make_shared<Body>(std::move(body));
+    }
   } else if (member == "Inputs" || member == "RunResult") {
     for (auto child : decl.members) {
       if (!signature(child, depth + 1))

@@ -184,7 +184,7 @@ def test_published_finite_reductions_project(toolchain, journal, directory, flag
     assert json.loads(package.read_text())['options']['fuse_vector_reductions'] == \
         ('--fuse-vector-reductions' in flags)
     assert built['options'] == json.loads(package.read_text())['options']
-    source = [f'--compiler={toolchain.compiler}',
+    source = ['example::Demo', f'--compiler={toolchain.compiler}',
               f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml', *flags]
     checked = journal.json([toolchain.runtime, '--json', 'run', '--dry-run', *source, *request])
     assert checked['status'] == 'inputs-checked'

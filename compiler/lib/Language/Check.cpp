@@ -214,7 +214,8 @@ bool Checker::collect() {
           child.span = source.span;
           child.isPublic = true;
           child.generated = name.str();
-          if (kind == Declaration::Kind::Local)
+          if (kind == Declaration::Kind::Local ||
+              kind == Declaration::Kind::EntryFunction)
             child.effects = Effects{true, false};
           source.members.push_back(std::move(child));
           return source.members.back();
@@ -232,7 +233,7 @@ bool Checker::collect() {
               product.members.push_back(std::move(child));
             }
           }
-          add("run", K::Local);
+          add("run", K::EntryFunction);
         } else if (source.kind == K::Entry &&
                    source.entryKind == EntryKind::Proof) {
           for (auto member : {"Public", "Witness", "Proof", "ProverOutputs",

@@ -3,6 +3,10 @@
 A protocol defines participant computation and interaction. An `entry fn` exposes
 application control; a `proof` declaration configures proving and verification.
 Both execute through the common Host and native VM.
+A concrete protocol is also directly runnable: `zkc run ProtocolName` uses its
+generated Entry with one `inputs` argument, keyed by participant. Inspect or
+prepare that name to obtain its schema and input template; an `entry fn` wrapper
+is needed only for specialization or application logic.
 
 ## Project workflow
 

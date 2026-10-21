@@ -11,6 +11,41 @@ def command(toolchain, *arguments):
     return [toolchain.runtime, '--json', *arguments, f'--compiler={toolchain.compiler}']
 
 
+def test_protocol_default_entry_discovery_prepare_and_execution(toolchain, journal, directory):
+    (directory / 'main.zkc').write_text('''module example;
+protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
+  let received=send P->V(value);return received;
+}
+''')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    checked = journal.json(command(toolchain, 'check'), cwd=directory)
+    assert checked['entries'] == [{'name': 'example::Echo', 'kind': 'function'}]
+    inspected = journal.json(command(toolchain, 'inspect', 'Echo'), cwd=directory)
+    assert inspected['interface']['entry'] == 'example::Echo'
+    assert inspected['interface']['kind'] == 'function'
+    prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
+    arguments = directory / 'inputs/example.Echo/arguments.json'
+    assert prepared['files'] == [str(arguments)]
+    assert json.loads(arguments.read_text()) == {'inputs': {'P': {'value': None}, 'V': {}}}
+    arguments.write_text('{"inputs":{"P":{"value":false},"V":{}}}')
+    for selector in ([], ['Echo'], ['example::Echo']):
+        run = journal.json(command(toolchain, 'run', *selector), cwd=directory)
+        assert run['entry'] == 'example::Echo'
+        assert json.loads(Path(run['results']).read_text())['value'] == {'P': {}, 'V': {'received': False}}
+    compiled = journal.json(command(toolchain, 'compile'), cwd=directory)
+    assert compiled['entry'] == 'example::Echo'
+    bindings = directory / 'bindings.rs'
+    journal.json(command(toolchain, 'bindings', 'Echo', f'--output={bindings}'), cwd=directory)
+    assert 'pub fn call' in bindings.read_text()
+    journal.json(command(toolchain, 'prove', 'Echo'), cwd=directory, refuses='source-compilation')
+    journal.json(command(toolchain, 'verify', 'Echo'), cwd=directory, refuses='source-compilation')
+    # An application Entry is another candidate, never a silent replacement.
+    with (directory / 'main.zkc').open('a') as source:
+        source.write('entry fn Application(inputs:Echo::Inputs){return Echo::run(inputs);}\n')
+    journal.json(command(toolchain, 'run'), cwd=directory, refuses='source-compilation')
+    assert journal.json(command(toolchain, 'run', 'Echo'), cwd=directory)['status'] == 'executed'
+
+
 def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, directory):
     project = directory / 'demo'
     created = journal.json(command(toolchain, 'new', project))
@@ -115,7 +150,7 @@ def test_non_utf8_working_directory_refuses_without_a_scaffold(toolchain, journa
 def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     source = directory / 'main.zkc'
-    source.write_text('module example;\n      protocol Test roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}\n      entry fn Case(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    source.write_text('module example;\n      protocol Case roles(P,p)(left:index@P,right:index@p)->(result:index@P){return left;}\n    ')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     path = directory / 'inputs/example.Case/arguments.json'
     assert prepared['files'] == [str(path)]
@@ -133,7 +168,7 @@ def test_role_names_are_record_fields_and_arguments_have_one_portable_file(toolc
     assert failed['input_path'] == 'arguments.inputs.p'
     assert 'execution' not in failed
     # A device-like role name remains a field, never a file path.
-    source.write_text('module example;\n      protocol Test roles(CON)(left:index@CON)->(result:index@CON){return left;}\n      entry fn Reserved(inputs: Test::Inputs) { return Test::run(inputs); }\n    ')
+    source.write_text('module example;\n      protocol Reserved roles(CON)(left:index@CON)->(result:index@CON){return left;}\n    ')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     path = directory / 'inputs/example.Reserved/arguments.json'
     assert prepared['files'] == [str(path)]
@@ -177,8 +212,7 @@ def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, dire
     (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\n"数学"="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module 数学;
       fn 増加(α:index)->index{return α+1;}
-      protocol 計算 roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
-      entry fn 実行₂(inputs: 計算::Inputs) { return 計算::run(inputs); }
+      protocol 実行₂ roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
     ''')
     assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
@@ -239,11 +273,10 @@ def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
 def test_human_stops_use_source_participant_names(toolchain, journal, directory):
     (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
     (directory / 'main.zkc').write_text('''module example;
-      protocol Test roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
+      protocol Interactive roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
         let received=send 証明者->検証者(ok);require received;return received;
       }
-      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
-      proof Proof=Test{prover 証明者;verifier 検証者;public{};accept accepted;construction authored;}
+      proof Proof=Interactive{prover 証明者;verifier 検証者;public{};accept accepted;construction authored;}
     ''')
     journal.json(command(toolchain, 'prepare'), cwd=directory)
     (directory / 'inputs/example.Interactive/arguments.json').write_text(
@@ -263,11 +296,10 @@ def test_human_stops_use_source_participant_names(toolchain, journal, directory)
 def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, directory):
     journal.json(command(toolchain, 'init'), cwd=directory)
     (directory / 'main.zkc').write_text('''module example;
-    protocol Test roles(P,V)(accept:bool@P, expected:bool@(P,V))->(accepted:bool@V){
+    protocol Interactive roles(P,V)(accept:bool@P, expected:bool@(P,V))->(accepted:bool@V){
         let received=send P->V(accept);return received && expected;
       }
-      proof Proof=Test{prover P;verifier V;public{expected};accept accepted;construction authored;}
-      entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
+      proof Proof=Interactive{prover P;verifier V;public{expected};accept accepted;construction authored;}
     ''')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     selected = next(e for e in prepared['entries'] if e['name'] == 'example::Proof')
@@ -375,11 +407,10 @@ def test_run_result_policy_and_unserializable_outputs(toolchain, journal, direct
         let one:F=1;let count:index=1;
         return kernel<F>("poly.from_coefficients",kernel<F>("vector.fill",one,count));
       }
-      protocol Compute roles(P,V)()->(p:Poly@P,accepted:bool@V){
+      protocol Main roles(P,V)()->(p:Poly@P,accepted:bool@V){
         let p@P=polynomial();let accepted@V=true;return(p=p,accepted=accepted);
       }
-      entry fn Main(inputs: Compute::Inputs) { return Compute::run(inputs); }
-      proof Proof=Compute{prover P;verifier V;public{};accept accepted;construction authored;}
+      proof Proof=Main{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     (directory / 'inputs/example.Main/arguments.json').write_text(
         '{"inputs":{"P":{},"V":{}}}')

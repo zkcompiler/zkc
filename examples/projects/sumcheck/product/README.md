@@ -10,8 +10,9 @@ contents in the Entry package. A different arena, such as a three-factor
 product, changes the compiled rounds without editing the client or the library.
 The kernels are the same native evaluator available to AIR consumers.
 
-`BaseRun` and `BaseProof` accept KoalaBear values and explicitly embed them in
-Ext8 before the first round. `ExtensionRun` and `Proof` accept Ext8 values.
+`BaseSumcheck` and `BaseProof` accept KoalaBear values and explicitly embed them in
+Ext8 before the first round. `ExtensionSumcheck` and `Proof` accept Ext8 values.
+The two concrete protocols provide their run Entries without wrappers.
 All four use Ext8 challenges. Each row contains the two factors consecutively;
 folds eliminate the most significant Boolean variable first. A four-row table
 `[1,2, 3,4, 5,6, 7,8]` has claim `100` and two rounds.

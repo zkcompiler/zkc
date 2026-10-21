@@ -47,6 +47,26 @@ entry fn Main(x:F,count:index,enabled:bool)->F{
 '''
 
 
+@pytest.mark.parametrize('value', [False, True])
+def test_protocol_default_run_uses_the_entry_host(toolchain, journal, directory, value):
+    source = '''module example;
+protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
+  let received=send P->V(value);return received;
+}
+'''
+    package, pin = compile_function(toolchain, journal, directory, source, 'Echo')
+    report, result = execute(toolchain, journal, directory, package, pin, 'echo',
+                             {'inputs': {'P': {'value': value}, 'V': {}}})
+    assert result == {'P': {}, 'V': {'received': value}}
+    assert [call['operation'] for call in report['execution']['calls']] == ['run']
+    assert report['entry'] == 'example::Echo'
+    proof = directory / 'echo.proof'
+    for operation, path in [('prove', f'--output={proof}'), ('verify', f'--proof={proof}')]:
+        journal.json([toolchain.runtime, '--json', operation, f'--package={package}',
+                       f'--sha256={pin}', path], refuses='source-entry-selection')
+    assert not proof.exists()
+
+
 @pytest.mark.parametrize('flags', [(), ('--no-simplify',), ('--release-storage',)])
 def test_standalone_calculation_static_calls_and_reached_control(toolchain, journal, directory, flags):
     package, pin = compile_function(toolchain, journal, directory, CALCULATION, flags=flags)

@@ -160,7 +160,7 @@ for args, refusal in [
     ([*options, '--source-format=zkc'], 'source.options'),
     ([*options, '--guess'], 'source.options'),
     (['--source-format=json', *options[1:]], 'source.format'),
-    (['--source-format=zkc', '--entry=transfer::Transfer', *modules], 'source.entry'),
+    (['--source-format=zkc', '--entry=transfer::Transfer::run', *modules], 'source.entry'),
     (['--source-format=zkc', '--entry=missing::Demo', *modules], 'source.entry'),
     (['--source-format=zkc', '--entry=transfer::Demo', modules[0]], 'source.import'),
     ([*options, modules[0]], 'source.module'),

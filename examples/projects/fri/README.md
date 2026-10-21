@@ -20,7 +20,8 @@ zkc compile \
   example::Proof --output=fri.zkpkg
 ```
 
-`Run` exposes interactive execution. `Proof` derives verifier randomness through
+`Fri` provides its default interactive run entry without an `entry fn` wrapper.
+`Proof` explicitly derives verifier randomness through
 the installed Merlin3 transcript construction. Public inputs are the coset
 `shift`, `round_count = 3` and `query_count = 8`; the verifier checks those counts
 against the static profile. The prover supplies the `word` vector. Extension
@@ -52,7 +53,7 @@ this block in a separate consumer tree using only declared package dependencies.
 ```sh zkc-example
 python3 prepare.py --output=build/inputs
 zkc check
-zkc run Run --input=build/inputs/arguments.json
+zkc run Fri --input=build/inputs/arguments.json
 zkc prove Proof --public=build/inputs/public.json --witness=build/inputs/witness.json --output=build/fri.proof
 zkc verify Proof --public=build/inputs/public.json --proof=build/fri.proof
 ```

@@ -394,8 +394,8 @@ std::vector<DeclarationId> CheckedProject::entries() const {
          decl.parameters.empty()))
       result.push_back(decl.id);
   llvm::sort(result, [&](DeclarationId a, DeclarationId b) {
-    return declarations()[a.index].qualifiedName <
-           declarations()[b.index].qualifiedName;
+    return declarations()[a.index].entryName() <
+           declarations()[b.index].entryName();
   });
   return result;
 }
@@ -422,28 +422,21 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
                              project.declarations()[id.index].span);
     return id;
   };
-  if (name.contains("::")) {
-    for (const auto &decl : project.declarations())
-      if (decl.qualifiedName == name) {
-        if (decl.kind != Declaration::Kind::Entry &&
-            decl.kind != Declaration::Kind::EntryFunction)
-          return detail::failure("source.entry",
-                                 "selection must name an Entry declaration",
-                                 decl.span);
-        return selected(decl.id);
-      }
-  }
   auto candidates = project.entries();
   std::vector<DeclarationId> matches;
-  for (auto id : candidates)
-    if (name.empty() ? eligible(id)
-                     : project.declarations()[id.index].name == name)
+  for (auto id : candidates) {
+    auto entryName = project.declarations()[id.index].entryName();
+    if (name.empty()          ? eligible(id)
+        : name.contains("::") ? entryName == name
+                              : entryName.rsplit("::").second == name)
       matches.push_back(id);
+  }
   if (matches.size() == 1)
     return selected(matches.front());
   if (candidates.empty())
-    return detail::failure("source.entry",
-                           "project has no Entries; declare entry fn or proof");
+    return detail::failure(
+        "source.entry", "project has no Entries; declare a concrete protocol, "
+                        "entry fn or proof");
   std::string message;
   if (matches.empty() && name.empty())
     message = "no Entry of the required execution kind; available Entries:";
@@ -462,7 +455,7 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
       break;
     }
     const auto &decl = project.declarations()[id.index];
-    message += " " + decl.qualifiedName + " (" +
+    message += " " + decl.entryName().str() + " (" +
                (decl.entryKind() == EntryKind::Proof      ? "proof"
                 : decl.entryKind() == EntryKind::Function ? "function"
                                                           : "run") +

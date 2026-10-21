@@ -454,7 +454,7 @@ public:
     if (!inventory())
       return std::move(failure);
     if (view.capture != entry.project().capture().identity() ||
-        view.entry != entry.entry().qualifiedName ||
+        view.entry != entry.entry().entryName() ||
         view.selected >= view.protocols.size() ||
         view.protocols[view.selected].symbol != entry.protocol().symbol)
       return error("source.correspondence",
@@ -509,7 +509,7 @@ Error compareInterface(const ClosedEntry &entry, const LanguageInterface &view,
     return error;
   if (entry.entry().kind == Declaration::Kind::EntryFunction) {
     if (!view.host || view.capture != entry.project().capture().identity() ||
-        view.entry != entry.entry().qualifiedName ||
+        view.entry != entry.entry().entryName() ||
         view.host->function != entry.root().symbol || !view.protocols.empty() ||
         !view.relations.empty() || view.proof || !view.setups.empty())
       return error("source.correspondence",

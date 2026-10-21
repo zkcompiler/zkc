@@ -148,8 +148,8 @@ def test_notation_example_runs_with_its_supplied_inputs(toolchain, journal, dire
     compiler = f'--compiler={toolchain.compiler}'
     checked = journal.json([*runtime, 'inspect', '--view=notations', compiler], cwd=project)
     assert checked['checked']['notations']['format'] == 'zkc.notations/0'
-    journal.json([*runtime, 'run', '--dry-run', compiler], cwd=project)
-    journal.json([*runtime, 'run', compiler], cwd=project)
+    journal.json([*runtime, 'run', 'Run', '--dry-run', compiler], cwd=project)
+    journal.json([*runtime, 'run', 'Run', compiler], cwd=project)
     results = json.loads((project / 'build/zkc/example.Run.results.json').read_text())
     assert results['value']['P'] == {
         'symbolic': '231', 'named_result': '231', 'pointwise': ['10', '21'],

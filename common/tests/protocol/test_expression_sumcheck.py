@@ -58,7 +58,7 @@ def test_expression_sumcheck_independent_proof(toolchain, journal, directory, fl
 
 @pytest.mark.parametrize('extension', [False, True])
 def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, extension):
-    entry = 'ExtensionRun' if extension else 'BaseRun'
+    entry = 'ExtensionSumcheck' if extension else 'BaseSumcheck'
     package, pin = build(toolchain, journal, directory, entry)
     inputs = values(extension)
     request = input_files(journal, 'run.json', session='expression_sumcheck_test', package=package, arguments={'inputs': {'P': {k: v for k, v in inputs.items() if k != 'claim'}, 'V': inputs}})
@@ -95,7 +95,7 @@ def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal,
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 @pytest.mark.parametrize('table', [[], ['1'] * 4, ['1'] * 16])
 def test_expression_stops_on_only_the_verifier_table(toolchain, journal, directory, flags, table):
-    package, pin = build(toolchain, journal, directory, 'ExtensionRun', flags)
+    package, pin = build(toolchain, journal, directory, 'ExtensionSumcheck', flags)
     request = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': values()['values'], 'rounds': '2'}, 'V': values() | {'values': table}}})
     output = directory / 'output.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',

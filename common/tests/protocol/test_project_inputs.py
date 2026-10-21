@@ -78,7 +78,7 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
             {'b': True} if entry == 'Proof' else {'inputs': {'P': {'b': True}, 'V': {}}}))
     p = project / 'inputs/example.Interactive/arguments.json'
     invocation = project_invocation(toolchain, journal, directory, project=project / 'zkc.toml', entry='Interactive')
-    run = journal.json([toolchain.runtime, '--json', 'run', *options, invocation, f'--input={p}'])
+    run = journal.json([toolchain.runtime, '--json', 'run', 'Interactive', *options, invocation, f'--input={p}'])
     assert run['entry'] == 'example::Interactive'
     witness = project / 'inputs/example.Proof/witness.json'
     proof = directory / 'proof.bin'
@@ -215,7 +215,6 @@ def test_dry_run_ignores_proof_and_result_paths_without_publication(toolchain, j
     protocol Test roles(P,V)(go:bool@P)->(accepted:bool@V){
       require go;let r=send P->V(go);return r;
     }
-    entry fn Interactive(inputs:Test::Inputs){return Test::run(inputs);}
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     target = [f'--compiler={toolchain.compiler}', f'--module=test={source}']

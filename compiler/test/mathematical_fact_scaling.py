@@ -44,7 +44,7 @@ math fn work(xs:Vector<Fr>)->Fr {{
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){{return work(xs);}}
 entry fn Run(inputs: Demo::Inputs) {{ return Demo::run(inputs); }}
 ''')
-    options = ['--source-format=zkc', f'--module=m={path}']
+    options = ['--source-format=zkc', '--entry=m::Run', f'--module=m={path}']
     commands.run([compiler, 'language-check', *options])
     emitted = compile_run_package(commands, *options)['original']
     original = output / 'preconditions.mlir'

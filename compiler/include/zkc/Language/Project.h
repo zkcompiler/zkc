@@ -734,6 +734,13 @@ struct Declaration {
   std::optional<protocol::ProofFormat> proofFormat;
   std::optional<ConstructionDefinition> construction;
   std::variant<RunEntry, ProofEntry> configuration;
+  /// A protocol's generated run function is selected by the protocol name.
+  llvm::StringRef entryName() const {
+    llvm::StringRef name = qualifiedName;
+    return generated && generated->operation == HostInvocation::Kind::Run
+               ? name.drop_back(5)
+               : name;
+  }
   EntryKind entryKind() const {
     if (kind == Kind::EntryFunction)
       return EntryKind::Function;

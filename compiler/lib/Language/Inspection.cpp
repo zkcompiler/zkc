@@ -359,7 +359,7 @@ Expected<std::string> inspectEntries(const CheckedProject &project,
     for (auto id : project.entries()) {
       const auto &decl = project.declarations()[id.index];
       json.value(json::Object{
-          {"name", decl.qualifiedName},
+          {"name", decl.entryName()},
           {"kind", decl.entryKind() == EntryKind::Proof      ? "proof"
                    : decl.entryKind() == EntryKind::Function ? "function"
                                                              : "run"}});

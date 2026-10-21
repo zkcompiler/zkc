@@ -20,8 +20,8 @@ outputs are `231`, and the pointwise output is `[10, 21]` in BLS12-381 Fr.
 ```sh
 cd common/tests/fixtures/projects/mathematical-notation
 zkc inspect --view=notations
-zkc run --dry-run
-zkc run
+zkc run Run --dry-run
+zkc run Run
 ```
 
 The supplied [input map](inputs/example.Run/arguments.json) contains these values.

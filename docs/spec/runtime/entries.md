@@ -336,6 +336,9 @@ Entry functions; prove/verify commands filter to proof Entries. Other commands
 consider both kinds. Explicit short names must be unique across kinds before
 checking eligibility. Qualified names resolve exactly. `--dry-run` retains the
 selected operation's eligibility and input rules.
+Concrete protocol defaults have kind `function` and are selected by the protocol
+name, through the same rules. They include imported concrete protocols; an
+authored Entry does not silently hide a default.
 
 `Interface` is the checked logical source view. `BoundInterface` additionally
 binds it to the package's artifact identity and compile options. `inspect` and `prepare`

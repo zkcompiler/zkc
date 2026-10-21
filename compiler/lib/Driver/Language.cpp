@@ -357,7 +357,7 @@ int runLanguageCompiler(int argc, char **argv) {
   identities["source_locations_truncated"] =
       original->locations().size() > 4096;
   if (command == "language-check") {
-    checked["entry"] = selected->entry().qualifiedName;
+    checked["entry"] = selected->entry().entryName();
     checked["original"] = original->identity();
     return publishCheck();
   }

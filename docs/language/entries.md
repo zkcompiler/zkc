@@ -5,6 +5,29 @@ declaration chooses a closed proof construction. An `entry fn` is an application
 entry point: it prepares data, calls protocols or proofs, and returns a value.
 The [declaration contract](../spec/language/entries.md) defines the exact checks.
 
+## Default protocol runs
+
+A protocol without static parameters is directly runnable under its own name:
+
+```zkc
+protocol Echo roles(P, V)(value: bool @P) -> (received: bool @V) {
+  let received = send P -> V(value);
+  return received;
+}
+```
+
+`zkc inspect Echo` shows its generated argument and result schemas;
+`zkc prepare Echo` creates an argument template; `zkc run Echo` executes it.
+The argument file contains `{"inputs":{"P":{"value":true},"V":{}}}`.
+The returned value is `{"P":{},"V":{"received":true}}`.
+
+The compiler uses the existing Entry function path to call `Echo::run(inputs)`.
+No wrapper is needed for a basic run. An omitted selector requires exactly one
+eligible Entry; multiple protocols or Entry functions require a name, qualified
+by module when necessary. Imported concrete protocols are also selectable.
+Protocols with static parameters require an explicit Entry function that chooses
+their specialization. Proofs always require an explicit `proof` declaration.
+
 ## Application control
 
 Entry functions use ordinary typed arguments and Local expressions. They may

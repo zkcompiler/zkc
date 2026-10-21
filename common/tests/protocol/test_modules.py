@@ -46,7 +46,7 @@ library="library.zkc"
         assert modules['library::Box']['owner']['name'] == 'library'
         assert [p['inherited'] for p in modules['library::Box']['parameters']] == [True, False]
         package = project / 'module.zkpkg'
-        built = journal.json([toolchain.runtime, '--json', 'compile',
+        built = journal.json([toolchain.runtime, '--json', 'compile', 'Demo',
                               f'--compiler={toolchain.compiler}', f'--output={package}',
                               *flags], cwd=project)
         inputs = input_files(journal, f'{external}.inputs.json', session='module_test',

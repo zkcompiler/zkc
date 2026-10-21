@@ -72,6 +72,9 @@ correspondence.
 proving and verification. Entry functions statically call numerical helpers,
 other Entries, protocol runs and proof operations. Numerical execution retains
 the existing Kernel pipeline and VM.
+Concrete protocols also expose a default run Entry under their protocol name,
+using the same generated Host operation and Entry function path. Generic
+specializations require an explicit wrapper; proof declarations remain explicit.
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
 Explicit local workspace catalogs select leaf packages alongside path
 dependencies, preserve capture identity, and report selected-edge provenance in

@@ -359,7 +359,7 @@ def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     # V folds and evaluates with its own shift. A prover on another coset
     # commits layers that authenticate but do not chain, so V stops at the
     # first fold check.
-    run_package, run_pin = compile_entry(toolchain, journal, directory, entry='Run')
+    run_package, run_pin = compile_entry(toolchain, journal, directory, entry='Fri')
     run_sites = guard_sites(toolchain, journal, directory, package=run_package)
     counts = {'round_count': 3, 'query_count': 8}
     inputs = input_files(journal, 'mismatched-shift.json', session='fri_shift_mismatch', package=run_package, arguments={'inputs': {'P': counts | {'shift': wire([SHIFT], scalar=True), 'word': wire(values)}, 'V': counts | {'shift': wire([[5, 2, 0, 0, 0, 0, 0, 0]], scalar=True)}}})
@@ -395,7 +395,7 @@ use fri::{LowDegree};
         return selected
 
     # Interactive execution draws positions from the host's entropy.
-    package, pin = compile_entry(toolchain, journal, directory, entry='Run', text=text)
+    package, pin = compile_entry(toolchain, journal, directory, entry='Fri', text=text)
     inputs = input_files(journal, 'run.json', session='fri_query_binding', package=package, arguments={'inputs': {'P': shared | {'word': wire(cubic)}, 'V': shared}})
     outputs = directory / 'outputs.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'])

@@ -309,7 +309,8 @@ int main() {
         take(check("module m<N:nat>;protocol Demo "
                    "roles(P)()->(ok:bool@P){return true;}entry fn Run(inputs: "
                    "Demo::Inputs) { return Demo::run(inputs); }"));
-    refuses(closeEntry(project, "m::Run"), "source.generic");
+    require(project.entries().empty(), "generic module acquired an Entry");
+    refuses(closeEntry(project, "m::Run"), "source.entry");
   });
   cases.run("captured declaration cannot hijack an authored protocol path", [] {
     refuses(check(std::vector<SourceBuffer>{

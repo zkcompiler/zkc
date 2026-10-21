@@ -159,19 +159,21 @@ int main() {
       return take(analyze(captured).checkedProject());
     };
     auto sole = check("");
-    require(sole.entries().size() == 1, "Entry inventory omitted candidate");
-    for (StringRef name : {"", "Job", "a::Job"}) {
+    require(sole.entries().size() == 2, "Entry inventory omitted candidate");
+    refuses(selectEntry(sole, ""), "source.entry");
+    for (StringRef name : {"Job", "a::Job"}) {
       auto selected = take(selectEntry(sole, name));
       require(sole.declarations()[selected.index].qualifiedName == "a::Job",
               "selection changed the canonical Entry");
       require(take(closeEntry(sole, name)).entry().qualifiedName == "a::Job",
               "closure disagrees with selection");
     }
-    refuses(selectEntry(sole, "a::Task"), "source.entry");
+    require(take(closeEntry(sole, "a::Task")).entry().entryName() == "a::Task",
+            "protocol name did not select its default run Entry");
     refuses(selectEntry(sole, "b::Job"), "source.entry");
     auto aliases =
         check("entry fn Alias(inputs: Task::Inputs) { return Job(inputs); }");
-    require(aliases.entries().size() == 2,
+    require(aliases.entries().size() == 3,
             "complete aliases are named candidates");
     refuses(selectEntry(aliases, ""), "source.entry");
     auto selected = take(selectEntry(aliases, "Job"));
@@ -188,7 +190,10 @@ int main() {
                        {}}}));
     auto ambiguous = take(analyze(captured).checkedProject());
     refuses(selectEntry(ambiguous, "Job"), "source.entry");
+    refuses(selectEntry(ambiguous, "T"), "source.entry");
     take(selectEntry(ambiguous, "b::Job"));
+    require(take(closeEntry(ambiguous, "b::T")).entry().entryName() == "b::T",
+            "qualified protocol selection was ambiguous");
     auto empty =
         take(analyze(take(capture({{"a", "module a;", {}}}))).checkedProject());
     require(empty.entries().empty(), "library unexpectedly has an Entry");
@@ -207,11 +212,13 @@ int main() {
                                    {}}}));
     auto project = take(analyze(captured).checkedProject());
     for (auto kind : {EntryKind::Function, EntryKind::Proof}) {
-      auto selected = take(selectEntry(project, "", {}, kind));
-      require(project.declarations()[selected.index].entryKind() == kind,
-              "omitted selector ignored execution kind");
       refuses(selectEntry(project, "Job", {}, kind), "source.entry");
     }
+    auto selected = take(selectEntry(project, "", {}, EntryKind::Proof));
+    require(project.declarations()[selected.index].entryKind() ==
+                EntryKind::Proof,
+            "omitted selector ignored execution kind");
+    refuses(selectEntry(project, "", {}, EntryKind::Function), "source.entry");
     take(closeEntry(project, "b::Job", {}, EntryKind::Proof));
     refuses(selectEntry(project, "a::Job", {}, EntryKind::Proof),
             "source.entry-kind");
