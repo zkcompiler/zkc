@@ -84,6 +84,7 @@ def main(argv=None):
             require(all(name and len(name) <= 128 and all(c.isalnum() or c in '-_' for c in name) for name in args.profile), 'unsafe candidate name')
             args.output.mkdir(parents=True, exist_ok=False)
             requests = []
+            candidates = []
             for name in args.profile:
                 directory = args.output/'requests'/name
                 journal = Journal(directory, args.timeout)
@@ -91,14 +92,18 @@ def main(argv=None):
                     f'--project={args.profile_project.resolve()}', f'--compiler={args.compiler}', f'--profile={name}'],
                     cwd=args.source.resolve(), status='inspected')
                 candidate = copy.copy(args)
-                candidate.output = args.output/name
+                candidate.output = args.output/'candidates'/name
                 candidate.label = name
                 candidate.configuration = report['settings']
                 candidate.compiler_option = flags(report['settings']['values'])
                 requests.append({'profile':name,'settings':report['settings'],
                     'request_report':str(directory),'result':str(candidate.output/'manifest.json')})
-                (args.output/'candidates.json').write_text(json.dumps({'format':'zkc.benchmark-candidates/0',
-                    'candidates':requests}, indent=2)+'\n')
+                candidates.append(candidate)
+            # Resolve the entire bounded panel before launching measurements.
+            # Request journals and candidate outputs have disjoint namespaces.
+            (args.output/'candidates.json').write_text(json.dumps({'format':'zkc.benchmark-candidates/0',
+                'candidates':requests}, indent=2)+'\n')
+            for candidate in candidates:
                 status = run(candidate, prepare)
                 if status: return status
             return 0

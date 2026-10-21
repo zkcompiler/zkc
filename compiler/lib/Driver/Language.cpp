@@ -3,6 +3,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -53,13 +54,18 @@ int runLanguageCompiler(int argc, char **argv) {
     if (captured) {
       object["capture"] = captured->identity();
       json::Array sources;
-      for (const auto &source : captured->sources())
-        sources.push_back(json::Object{{"module", source.module},
-                                       {"path", source.diagnosticPath}});
+      for (const auto &source : diagnosticSources)
+        sources.push_back(
+            json::Object{{"module", source.module},
+                         {"path", source.diagnosticPath},
+                         {"origin", source.origin == SourceOrigin::Captured
+                                        ? "captured"
+                                        : "installation"}});
       object["sources"] = std::move(sources);
     }
     std::error_code ec;
-    raw_fd_ostream out(observationPath, ec, sys::fs::OF_Text);
+    raw_fd_ostream out(observationPath, ec, sys::fs::CD_CreateNew,
+                       sys::fs::FA_Write, sys::fs::OF_Text);
     if (ec) {
       errs() << "source.observation-io: " << ec.message() << '\n';
       return false;
@@ -97,6 +103,8 @@ int runLanguageCompiler(int argc, char **argv) {
                                      {"begin", span.begin},
                                      {"end", span.end}});
     record["related"] = std::move(related);
+    if (message.related.size() > 64)
+      record["related_truncated"] = true;
     return json::Value(std::move(record));
   };
   auto refuse = [&](Error failure) {
@@ -150,7 +158,7 @@ int runLanguageCompiler(int argc, char **argv) {
         arg.starts_with("--diagnostics=")) {
       collectObservations = arg.starts_with("--observations=");
       arg = arg.split('=').second;
-      if (!observationPath.empty() || arg.empty())
+      if (!observationPath.empty() || arg.empty() || arg == "-")
         return refuse(error("source.options", "expected one observation file"));
       observationPath = arg.str();
     } else if (arg.consume_front("--dump=")) {

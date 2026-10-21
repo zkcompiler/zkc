@@ -304,6 +304,7 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
         Ok(args) => args,
         Err(error) => {
             let format = match name {
+                "test" => "zkc.project-tests/0",
                 "compile" => "zkc.entry-build/0",
                 "check" => "zkc.source-check/0",
                 "inspect" => "zkc.entry-inspection/0",
@@ -434,6 +435,10 @@ mod tests {
 
     #[test]
     fn argument_errors_are_consistent_and_precede_io() {
+        assert_eq!(
+            run("test", &args(&["--unknown"]))["format"],
+            "zkc.project-tests/0"
+        );
         for spec in COMMANDS {
             let invalid = args(&["one", "two", "three", "four", "five"]);
             let report = run(spec.name, &invalid);

@@ -2,12 +2,12 @@
 #define ZKC_COMPILER_RUN_H
 
 #include "zkc/Compiler/Compilation.h"
-#include "zkc/Compiler/Observation.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include <optional>
 #include <string>
 
 namespace zkc {
+class CompilationObservation;
 struct RunOptions {
   std::string entry = "main";
   bool simplify = true;

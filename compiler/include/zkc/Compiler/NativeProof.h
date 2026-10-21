@@ -2,12 +2,12 @@
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
-#include "zkc/Compiler/Observation.h"
 #include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
+class CompilationObservation;
 /// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;

@@ -214,6 +214,8 @@ void CompilationObservation::phase(StringRef name, ModuleOp module) {
                         {"mapping", isa<UnknownLoc>(op->getLoc())
                                         ? "unknown"
                                         : "containing-location"}};
+    if (out.overflow())
+      mapped["location_truncated"] = true;
     for (StringRef name : {"sym_name", "site", "binding", "implementation",
                            "contract", "arguments", "logical_origin"}) {
       if (auto attr = op->getAttr(name)) {

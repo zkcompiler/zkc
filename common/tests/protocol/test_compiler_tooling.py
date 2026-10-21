@@ -1,5 +1,6 @@
 """Settings, observational equivalence, local reuse, and consumer workflows."""
 import concurrent.futures
+import hashlib
 import json
 import shutil
 import subprocess
@@ -103,13 +104,17 @@ def test_cache_invalidations_corruption_quota_and_concurrency(toolchain, journal
     hit, same = build('hit')
     assert first['cache']['status'] == 'miss' and first['cache']['retained']
     assert hit['cache']['status'] == 'hit' and same == package
-    changed, _ = build('setting', '--no-finite-bulk')
+    changed, other_policy = build('setting', '--no-finite-bulk')
     assert changed['cache']['status'] == 'miss' and changed['cache']['key'] != hit['cache']['key']
     bypassed, same = build('observed', f'--report={directory/"fresh-observation"}')
     assert bypassed['cache']['status'] == 'recomputed' and package == same
     entry = cache/f'{hit["cache"]["key"]}.zkcache'
     entry.write_bytes(b'corrupt')
     repaired, same = build('repaired')
+    assert repaired['cache']['status'] == 'miss' and same == package
+    # A self-consistent digest cannot substitute a different executable policy.
+    entry.write_bytes(hashlib.sha256(other_policy).hexdigest().encode()+b'\n'+other_policy)
+    repaired, same = build('policy-repaired')
     assert repaired['cache']['status'] == 'miss' and same == package
     source = root/'protocol.zkc'
     source.write_text(source.read_text()+'\n// New captured source identity.\n')
@@ -157,7 +162,7 @@ def test_test_recipes_diagnostics_and_toolchain_outside_project(toolchain, journ
         *(f'--module={name}={root/path}' for name,path in modules.items())]
     failed_publication = subprocess.run([*low_level, f'--observations={root}'],
         capture_output=True, text=True, timeout=30)
-    assert failed_publication.returncode != 0 and not failed_publication.stdout
+    assert failed_publication.returncode > 0 and not failed_publication.stdout
     assert 'source.observation-io' in failed_publication.stderr
     api = journal.json(command(toolchain, 'inspect', '--view=api'), cwd=root)
     assert api['checked']['api']['format'] == 'zkc.source-api/0'
@@ -185,3 +190,13 @@ expect="source-compilation"
     assert len(result['compiler_diagnostics']['toolchain']['binary_sha256']) == 64
     assert result['compiler_diagnostics']['diagnostics']
     assert (directory/'failure/command.json').is_file()
+    cached_failure = journal.json(command(toolchain, 'compile', f'--cache={directory/"failure-cache"}'),
+        cwd=root, refuses='source-compilation')
+    assert str(source) in cached_failure['diagnostics']
+    catalog = cached_failure['compiler_diagnostics']['sources']
+    assert any(item['path'] == str(source) and item['origin'] == 'captured' for item in catalog)
+    assert catalog[-1]['origin'] == 'installation'
+    for diagnostic in cached_failure['compiler_diagnostics']['diagnostics']:
+        for span in [diagnostic, *diagnostic['related']]:
+            if 'source' in span:
+                assert 0 <= span['source'] < len(catalog)

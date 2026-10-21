@@ -7,6 +7,13 @@ use std::{
     process::Command,
     time::Duration,
 };
+const DIAGNOSTIC_BYTES: usize = 65536;
+pub(super) fn trim_diagnostics(text: &mut String) -> bool {
+    let end = text.floor_char_boundary(DIAGNOSTIC_BYTES);
+    let truncated = end < text.len();
+    text.truncate(end);
+    truncated
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -215,13 +222,16 @@ impl Compiler {
             .unwrap()
             .reopen()
             .map_err(|_| "source-compiler-io")?
-            .take(65537)
+            .take((DIAGNOSTIC_BYTES + 1) as u64)
             .read_to_end(&mut diagnostics)
             .map_err(|_| "source-compiler-io")?;
-        let truncated = diagnostics.len() > 65536;
-        diagnostics.truncate(65536);
-        let diagnostics =
+        let mut truncated = diagnostics.len() > DIAGNOSTIC_BYTES;
+        diagnostics.truncate(DIAGNOSTIC_BYTES);
+        let mut diagnostics =
             (!diagnostics.is_empty()).then(|| String::from_utf8_lossy(&diagnostics).into_owned());
+        if let Some(text) = &mut diagnostics {
+            truncated |= trim_diagnostics(text);
+        }
         let mut observation: Option<serde_json::Value> =
             crate::host::inputs::read_regular(&observation_path, 32 * 1024 * 1024)
                 .ok()

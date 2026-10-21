@@ -3,6 +3,7 @@
 #include "zkc/Driver/Compiler.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/raw_ostream.h"
@@ -37,7 +38,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < argc; ++i) {
     llvm::StringRef arg(argv[i]);
     if (arg.consume_front("--time-trace=")) {
-      if (!timeTrace.empty() || arg.empty()) {
+      if (!timeTrace.empty() || arg.empty() || arg == "-") {
         llvm::errs() << "source.time-trace-options\n";
         return 2;
       }
@@ -45,13 +46,27 @@ int main(int argc, char **argv) {
     } else
       arguments.push_back(argv[i]);
   }
-  if (!timeTrace.empty())
+  std::unique_ptr<llvm::raw_fd_ostream> trace;
+  if (!timeTrace.empty()) {
+    std::error_code ec;
+    trace = std::make_unique<llvm::raw_fd_ostream>(
+        timeTrace, ec, llvm::sys::fs::CD_CreateNew, llvm::sys::fs::FA_Write,
+        llvm::sys::fs::OF_Text);
+    if (ec) {
+      llvm::errs() << "source.time-trace-io: " << ec.message() << '\n';
+      return 1;
+    }
     llvm::timeTraceProfilerInitialize(100, "zkc-compile");
+  }
   mlir::DialectRegistry registry;
   int result = zkc::runCompiler(arguments.size(), arguments.data(), registry);
-  if (!timeTrace.empty()) {
-    if (auto error = llvm::timeTraceProfilerWrite(timeTrace, "")) {
-      llvm::errs() << llvm::toString(std::move(error)) << '\n';
+  if (trace) {
+    llvm::timeTraceProfilerWrite(*trace);
+    trace->flush();
+    if (trace->has_error()) {
+      llvm::errs() << "source.time-trace-io: " << trace->error().message()
+                   << '\n';
+      trace->clear_error();
       result = 1;
     }
     llvm::timeTraceProfilerCleanup();

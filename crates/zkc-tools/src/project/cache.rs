@@ -79,6 +79,9 @@ impl CompilationCache {
         let lock = self.lock("store.lock")?;
         lock.lock().map_err(|_| "source-cache-io")?;
         let mut entries = self.entries()?;
+        // Replacement consumes only the new record's size. Counting both copies
+        // needlessly evicts other keys, including when repairing a corrupt entry.
+        entries.retain(|entry| entry.0 != path);
         let mut used = entries.iter().map(|e| e.1).sum::<u64>();
         entries.sort_by_key(|e| e.2);
         for (old, size, _) in entries {
@@ -93,6 +96,28 @@ impl CompilationCache {
         output.write_all(bytes).map_err(|_| "source-cache-io")?;
         output.persist(path).map_err(|_| "source-cache-io")?;
         Ok(true)
+    }
+    fn read(&self, path: &Path) -> Result<Option<Vec<u8>>, Error> {
+        let lock = self.lock("store.lock")?;
+        lock.lock().map_err(|_| "source-cache-io")?;
+        let Ok(bytes) = io::read_regular(path, Package::MAX_BYTES + 65) else {
+            return Ok(None);
+        };
+        let authenticated = bytes.split_at_checked(65).is_some_and(|(pin, package)| {
+            let digest: [u8; 32] = Sha256::digest(package).into();
+            pin[64] == b'\n'
+                && std::str::from_utf8(&pin[..64])
+                    .ok()
+                    .and_then(|text| crate::host::inputs::digest(text).ok())
+                    == Some(digest)
+        });
+        if !authenticated {
+            fs::remove_file(path).map_err(|_| "source-cache-io")?;
+            return Ok(None);
+        }
+        // The immutable owned bytes outlive this accounting lock. Package
+        // validation and interface capture can run concurrently for other keys.
+        Ok(Some(bytes))
     }
     pub(super) fn build(
         &self,
@@ -112,7 +137,7 @@ impl CompilationCache {
         // for a key. Names/formats and length-delimited bodies define its closure.
         let snapshot = Snapshot::capture(request.project)?;
         let identity = compiler.capabilities()?;
-        let mut key = snapshot.identity;
+        let mut key = snapshot.identity.clone();
         frame(
             &mut key,
             &serde_json::to_vec(&identity).map_err(|_| "source-cache-format")?,
@@ -128,31 +153,12 @@ impl CompilationCache {
         // a concurrent compiler can recompute without waiting on another build.
         let writer = self.lock(&format!("writer-{}.lock", &key[..2]))?;
         let writing = writer.try_lock().is_ok();
+        if let Some(bytes) = self.read(&path)?
+            && let Ok(mut result) =
+                Compiler::captured(&bytes[65..], request.selection, request.options)
         {
-            let lock = self.lock("store.lock")?;
-            lock.lock().map_err(|_| "source-cache-io")?;
-            if let Ok(bytes) = io::read_regular(&path, Package::MAX_BYTES + 65) {
-                let cached = (|| {
-                    let (pin, package) = bytes.split_at_checked(65).ok_or("source-cache-format")?;
-                    if pin[64] != b'\n' {
-                        return Err("source-cache-format".into());
-                    }
-                    let text =
-                        std::str::from_utf8(&pin[..64]).map_err(|_| "source-cache-format")?;
-                    let pin = crate::host::inputs::digest(text)?;
-                    let actual: [u8; 32] = Sha256::digest(package).into();
-                    if actual != pin {
-                        return Err("source-cache-format".into());
-                    }
-                    Compiler::captured(package, request.selection, request.options)
-                        .map_err(|e| e.code)
-                })();
-                if let Ok(mut result) = cached {
-                    result.cache = Some(serde_json::json!({"status":"hit","key":key}));
-                    return Ok(result);
-                }
-                fs::remove_file(&path).map_err(|_| "source-cache-io")?;
-            }
+            result.cache = Some(serde_json::json!({"status":"hit","key":key}));
+            return Ok(result);
         }
         let mut result = compiler
             .build(CompilationRequest {
@@ -160,26 +166,7 @@ impl CompilationCache {
                 cache: None,
                 ..request
             })
-            .map_err(|mut error| {
-                if let Some(text) = &mut error.diagnostics {
-                    for (captured, original) in &snapshot.diagnostic_paths {
-                        *text = text.replace(captured, original);
-                    }
-                }
-                if let Some(record) = &mut error.structured
-                    && let Some(sources) = record["sources"].as_array_mut()
-                {
-                    for source in sources {
-                        if let Some(path) = source["path"].as_str()
-                            && let Some((_, original)) =
-                                snapshot.diagnostic_paths.iter().find(|(p, _)| p == path)
-                        {
-                            source["path"] = serde_json::json!(original);
-                        }
-                    }
-                }
-                error
-            })?;
+            .map_err(|error| snapshot.restore_diagnostics(error))?;
         // A concurrently rebuilt compiler must not publish under the prior binary.
         if compiler.capabilities()? != identity {
             return Err("source-compiler-changed".into());
@@ -209,6 +196,27 @@ struct Snapshot {
     diagnostic_paths: Vec<(String, String)>,
 }
 impl Snapshot {
+    fn restore_diagnostics(&self, mut error: Error) -> Error {
+        if let Some(text) = &mut error.diagnostics {
+            for (captured, original) in &self.diagnostic_paths {
+                *text = text.replace(captured, original);
+            }
+            error.diagnostics_truncated |= super::compiler::trim_diagnostics(text);
+        }
+        if let Some(record) = &mut error.structured
+            && let Some(sources) = record["sources"].as_array_mut()
+        {
+            for source in sources {
+                if let Some(path) = source["path"].as_str()
+                    && let Some((_, original)) =
+                        self.diagnostic_paths.iter().find(|(p, _)| p == path)
+                {
+                    source["path"] = serde_json::json!(original);
+                }
+            }
+        }
+        error
+    }
     fn capture(project: &Project) -> Result<Self, Error> {
         let directory = tempfile::tempdir().map_err(|_| "source-cache-io")?;
         let mut modules = std::collections::BTreeMap::new();
@@ -245,7 +253,8 @@ impl Snapshot {
             frame(&mut identity, header.as_bytes());
             frame(&mut identity, asset.unwrap_or("source").as_bytes());
             frame(&mut identity, &bytes);
-            let target = directory.path().join(index.to_string());
+            // Fixed-width names cannot prefix another input's name in diagnostics.
+            let target = directory.path().join(format!("{index:08x}"));
             fs::write(&target, bytes).map_err(|_| "source-cache-io")?;
             diagnostic_paths.push((
                 target.to_str().ok_or("source-cache-io")?.into(),
@@ -336,6 +345,63 @@ mod tests {
             cache.entries().unwrap().iter().map(|e| e.1).sum::<u64>(),
             80
         );
+    }
+    #[test]
+    fn replacing_a_record_does_not_evict_unrelated_entries() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = CompilationCache::new(root.path(), 160).unwrap();
+        let first = root.path().join(format!("{}.zkcache", "a".repeat(64)));
+        let second = root.path().join(format!("{}.zkcache", "b".repeat(64)));
+        assert!(cache.retain(&first, &[1; 80]).unwrap());
+        assert!(cache.retain(&second, &[2; 80]).unwrap());
+        assert!(cache.retain(&first, &[3; 80]).unwrap());
+        assert_eq!(fs::read(&first).unwrap(), vec![3; 80]);
+        assert_eq!(fs::read(&second).unwrap(), vec![2; 80]);
+    }
+    #[test]
+    fn snapshot_diagnostics_restore_distinct_paths_and_keep_source_indices() {
+        let root = tempfile::tempdir().unwrap();
+        let modules = (0..12)
+            .map(|index| {
+                let name = format!("module{index:02}");
+                let path = root.path().join(format!("{name}.zkc"));
+                fs::write(&path, format!("module {name};")).unwrap();
+                (name, path.to_str().unwrap().to_owned())
+            })
+            .collect();
+        let project = Project::explicit(modules, BTreeMap::new()).unwrap();
+        let mut snapshot = Snapshot::capture(&project).unwrap();
+        let mut error: Error = "source-compilation".into();
+        error.diagnostics = Some(
+            snapshot
+                .diagnostic_paths
+                .iter()
+                .map(|(path, _)| format!("{path}:1:2\n"))
+                .collect(),
+        );
+        error.structured = Some(
+            serde_json::json!({"sources":snapshot.diagnostic_paths.iter()
+            .map(|(path,_)| serde_json::json!({"path":path})).collect::<Vec<_>>()}),
+        );
+        let error = snapshot.restore_diagnostics(error);
+        let expected: String = snapshot
+            .diagnostic_paths
+            .iter()
+            .map(|(_, path)| format!("{path}:1:2\n"))
+            .collect();
+        assert_eq!(error.diagnostics.unwrap(), expected);
+        for (index, (_, original)) in snapshot.diagnostic_paths.iter().enumerate() {
+            assert_eq!(
+                error.structured.as_ref().unwrap()["sources"][index]["path"],
+                *original
+            );
+        }
+        snapshot.diagnostic_paths[0].1 = "xé".repeat(1300);
+        let mut error: Error = "source-compilation".into();
+        error.diagnostics = Some(snapshot.diagnostic_paths[0].0.repeat(20));
+        let error = snapshot.restore_diagnostics(error);
+        assert!(error.diagnostics_truncated);
+        assert!(error.diagnostics.unwrap().len() <= 65536);
     }
     #[test]
     fn cleanup_owns_only_complete_cache_entries_and_capacity_is_bounded() {

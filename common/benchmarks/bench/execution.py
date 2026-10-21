@@ -93,7 +93,7 @@ def prepare_case(args, output, capture, manifest, case):
         'requested_preparation_entries': args.preparation_entries if program.proof else None,
         'requested_preparation_bytes': args.preparation_bytes if program.proof else None,
         'notes': [case.limitation, 'SDK timing includes result checking in the source; excludes readable decoding, preowned input setup, per-call request construction, final diagnostics and proof-file writes.',
-                  'Generated-project compilation is a single compiler-process observation, excluding source generation.'],
+                  'Generated-project compilation is a single instrumented compiler-process observation, excluding source generation; it is not an uninstrumented compile-time baseline.'],
         'boundaries': {},
     }
     boundary = 'admitted_entry_call' if program.proof else 'admitted_run_call'

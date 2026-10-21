@@ -2,7 +2,6 @@
 #define ZKC_COMPILER_LANGUAGE_H
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeProof.h"
-#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Translation/Language.h"
 #include <memory>

@@ -6,6 +6,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"

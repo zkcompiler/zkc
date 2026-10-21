@@ -564,8 +564,10 @@ The manifest must define `profile.vector`; `default` selects root `[build]`.
 At most 16 distinct candidates are accepted. Profile candidates cannot combine
 with `--compiler-option`. Each candidate gets its own ordinary run manifest,
 correctness/refusal controls and samples; `candidates.json` links requests and
-results. Effective values and origins are retained as `configuration`. There is
-no weighted aggregate or automatic selection. Existing ingress, process, input,
+results under separate `requests/NAME` and `candidates/NAME` directories. All
+candidate settings resolve before measurement starts. Effective values and
+origins are retained as `configuration`. There is no weighted aggregate or
+automatic selection. Existing ingress, process, input,
 preparation and coordination options apply unchanged.
 
 Generated source controls retain a separate compiler observation and published

@@ -78,7 +78,10 @@ the executable identity is checked again after compilation.
 Counters and dumps identify truncation; no sidecar authorizes execution.
 
 Compiler failures retain structured codes and available primary/related byte
-spans, plus bounded plain diagnostics for upstream messages. Reports may contain
+spans, plus bounded plain diagnostics for upstream messages. Source indices use
+the checked catalog, including installation sources and their origin. Direct
+`zkc-compile` observation, diagnostic and time-trace paths must be fresh files;
+they cannot replace source files or prior evidence. Reports may contain
 source names and IR; review them before sharing. They do not capture witness data
 or randomness. For compiler development, use `zkc-opt`'s standard MLIR pipeline,
 IR-printing, pass timing/statistics and crash-reproducer options. A failure report

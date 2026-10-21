@@ -349,7 +349,8 @@ def test_comparison_reports_differing_compiler_policy(bench):
     assert result['compiler_options'] == {'baseline': [], 'current': ['--fuse-collect-fold']}
 
 
-def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatch, tmp_path, bench):
+@pytest.mark.parametrize('name', ['vector', 'requests'])
+def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatch, tmp_path, bench, name):
     """Profile candidates feed the existing runner, with no alternate timing loop."""
     import importlib.util
     source = Path(__file__).resolve().parents[3] / 'common/benchmarks/run.py'
@@ -358,7 +359,7 @@ def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatc
     spec.loader.exec_module(module)
     values = {'simplify':True,'finite-bulk':False,'release-storage':False,
               'fuse-vector-reductions':False,'fuse-collect-fold':False,'calculation-batching':True}
-    settings = {'profile':'vector','values':values,'origins':{k:'profile.vector' for k in values}}
+    settings = {'profile':name,'values':values,'origins':{k:f'profile.{name}' for k in values}}
     monkeypatch.setattr(module.Journal, 'report', lambda *a,**k: ({'settings':settings}, {}))
     requests = []
     monkeypatch.setattr(module, 'run', lambda args, prepare: requests.append(args) or 0)
@@ -366,7 +367,32 @@ def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatc
     manifest.write_text('format="zkc.project/0"')
     output = tmp_path/'study'
     assert module.main(['run', '--compiler=/bin/true','--runtime=/bin/true','--worker=/bin/true',
-        f'--output={output}', f'--profile-project={manifest}', '--profile=vector']) == 0
+        f'--output={output}', f'--profile-project={manifest}', f'--profile={name}']) == 0
     assert requests[0].compiler_option == ['--no-finite-bulk']
     assert requests[0].configuration == settings
-    assert json.loads((output/'candidates.json').read_text())['candidates'][0]['profile'] == 'vector'
+    assert requests[0].output == output/'candidates'/name
+    assert json.loads((output/'candidates.json').read_text())['candidates'][0]['profile'] == name
+
+
+def test_invalid_profile_panel_refuses_before_any_measurement(monkeypatch, tmp_path, bench):
+    import importlib.util
+    from bench.configuration import SETTINGS
+    source = Path(__file__).resolve().parents[3] / 'common/benchmarks/run.py'
+    spec = importlib.util.spec_from_file_location('benchmark_cli_invalid_panel_test', source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    values = {key:default for key,(default,_) in SETTINGS.items()}
+    settings = {'profile':'default','values':values,'origins':{key:'default' for key in values}}
+    def resolve(_journal, argv, **_kwargs):
+        if argv[-1] == '--profile=absent':
+            raise bench.io.MeasurementError('unknown profile')
+        return {'settings':settings}, {}
+    monkeypatch.setattr(module.Journal, 'report', resolve)
+    launches = []
+    monkeypatch.setattr(module, 'run', lambda *args: launches.append(args) or 0)
+    manifest = tmp_path/'zkc.toml'
+    manifest.write_text('format="zkc.project/0"')
+    assert module.main(['run', '--compiler=/bin/true','--runtime=/bin/true','--worker=/bin/true',
+        f'--output={tmp_path/"study"}', f'--profile-project={manifest}',
+        '--profile=default', '--profile=absent']) == 2
+    assert not launches

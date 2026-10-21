@@ -2,7 +2,7 @@
 use super::{Asset, CheckOptions, Compiler, NotationOptions, Project, Selection};
 use crate::{
     cli::Arguments,
-    entry::{BoundInterface, CompileOptions},
+    entry::BoundInterface,
     host::{inputs::hex, publication::Outputs},
 };
 use serde_json::{Value as Json, json};
@@ -12,7 +12,6 @@ type Result<T> = std::result::Result<T, String>;
 pub(crate) struct Source {
     pub project: Project,
     pub compiler: Compiler,
-    pub options: CompileOptions,
     pub settings: super::ResolvedSettings,
     pub compiler_argument: String,
     pub observations: Option<super::ObservationRequest>,
@@ -70,7 +69,6 @@ impl Source {
             None => Project::discover()?,
         };
         let settings = project.settings(args.value("--profile"), &overrides)?;
-        let options = settings.options();
         let dumps = args
             .value("--dump")
             .map(|s| s.split(',').map(str::to_owned).collect::<Vec<_>>())
@@ -96,7 +94,6 @@ impl Source {
             settings,
             project,
             compiler: Compiler::new(compiler).map_err(|e| e.code)?,
-            options,
             compiler_argument: compiler.into(),
         })
     }
@@ -111,7 +108,7 @@ impl Source {
             .build(super::CompilationRequest {
                 project: &self.project,
                 selection,
-                options: self.options,
+                options: self.settings.options(),
                 observations: self.observations.as_ref(),
                 cache: self.cache.as_ref(),
             })
@@ -122,13 +119,7 @@ impl Source {
         report["compilation_microseconds"] = json!(started.elapsed().as_micros());
         if let Some(mut observation) = result.observation {
             observation["package_sha256"] = json!(hex(result.package.identity()));
-            observation["published_options"] = json!({
-                "simplify":result.package.options().simplify,
-                "release_storage":result.package.options().release_storage,
-                "finite_bulk":result.package.options().finite_bulk,
-                "fuse_vector_reductions":result.package.options().fuse_vector_reductions,
-                "fuse_collect_fold":result.package.options().fuse_collect_fold,
-                "calculation_batching":result.package.options().calculation_batching});
+            observation["published_options"] = json!(result.package.options());
             if self.observations.is_some() {
                 report["compilation"] = observation;
             }
@@ -152,7 +143,7 @@ impl Source {
         report["settings"] = json!(self.settings);
         report["mode"] = json!("project");
         report["compiler"] = json!(self.compiler.path());
-        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions,"fuse_collect_fold":self.options.fuse_collect_fold,"calculation_batching":self.options.calculation_batching});
+        report["options"] = json!(self.settings.options());
         if let Some(path) = self.project.manifest() {
             report["project"] = json!(path);
         }
@@ -329,6 +320,7 @@ pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entry::CompileOptions;
 
     #[test]
     fn source_policy_and_request_metadata_keep_compilation_choices_independent() {
@@ -360,7 +352,7 @@ mod tests {
                         })
                         .unwrap();
                         assert_eq!(
-                            source.options,
+                            source.settings.options(),
                             CompileOptions {
                                 simplify: true,
                                 release_storage: false,
