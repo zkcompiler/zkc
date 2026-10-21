@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Source.Structured.Operations
 public import Zkc.Source.Structured.ProtocolContext
 
@@ -295,3 +298,9 @@ def Instruction.challengeFieldList : List Instruction → Option String
 end
 
 end Zkc.Construction
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Calculation.total
