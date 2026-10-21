@@ -66,8 +66,14 @@ impl Target {
             Self::Package { package, .. } => {
                 let view = CheckedInterface::read(package)?;
                 if matches!(&view, CheckedInterface::Function(_)) {
-                    report["invocations"] =
-                        super::super::FunctionInterface::deployment_requirements(package)?;
+                    let deployments =
+                        super::super::FunctionInterface::deployment_interfaces(package)?;
+                    report["invocations"] = json!(
+                        deployments
+                            .iter()
+                            .map(super::super::DeploymentInterface::describe)
+                            .collect::<Vec<_>>()
+                    );
                 }
                 Ok(view)
             }

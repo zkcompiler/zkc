@@ -845,9 +845,9 @@ Expected<json::Array> readHostFunctions(mlir::ModuleOp module,
     return error("target.admission", "Host original failed verification");
   return SSAReader(limits).run(module);
 }
-Expected<Correspondence> compareHostOriginal(const ClosedEntry &entry,
-                                             mlir::ModuleOp module,
-                                             const Limits &limits) {
+Expected<HostAnalysis> analyzeHostOriginal(const ClosedEntry &entry,
+                                           mlir::ModuleOp module,
+                                           const Limits &limits) {
   auto plan = planHost(entry, limits);
   if (!plan)
     return plan.takeError();
@@ -893,6 +893,15 @@ Expected<Correspondence> compareHostOriginal(const ClosedEntry &entry,
         mlir::isa<mlir::scf::IfOp, mlir::scf::ForOp>(op))
       ++report.operations;
   });
-  return report;
+  return HostAnalysis{std::move(plan->calculations), std::move(*actual),
+                      std::move(report)};
+}
+Expected<Correspondence> compareHostOriginal(const ClosedEntry &entry,
+                                             mlir::ModuleOp module,
+                                             const Limits &limits) {
+  auto analysis = analyzeHostOriginal(entry, module, limits);
+  if (!analysis)
+    return analysis.takeError();
+  return std::move(analysis->correspondence);
 }
 } // namespace zkc::language

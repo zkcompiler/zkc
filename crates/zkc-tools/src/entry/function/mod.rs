@@ -1,4 +1,9 @@
 //! Authenticated, statically admitted Entry control with native execution owners.
+//!
+//! Admission binds each numerical or deployment target to its result schema and
+//! installed owner. Setup authority and the selected proof operation stay with
+//! that deployment; invocation does not reinterpret the serialized carrier.
+//! Numerical bodies execute in the existing VM, not in this control evaluator.
 mod admission;
 mod carrier;
 mod data;
@@ -13,7 +18,7 @@ pub use data::TypedValue;
 pub use execution::{
     CallReceipt, FunctionFailure, FunctionReport, FunctionUsage, PreparedFunction,
 };
-pub use schema::FunctionInterface;
+pub use schema::{DeploymentInterface, FunctionInterface};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{LogicalType, Program};
@@ -106,22 +111,47 @@ pub struct FunctionRequest {
 }
 
 struct Calculation {
+    function: String,
+    results: Vec<Schema>,
     program: Program,
 }
-enum Deployment {
+struct Deployment {
+    result: Schema,
+    authority: SetupAuthority,
+    kind: DeploymentKind,
+}
+enum DeploymentKind {
     Run(Box<super::RunEntry>),
-    Proof(Box<super::ProofEntry>),
+    Proof {
+        entry: Box<super::ProofEntry>,
+        operation: super::ProofOperation,
+    },
+}
+impl Deployment {
+    fn operation(&self) -> &str {
+        match &self.kind {
+            DeploymentKind::Run(_) => "run",
+            DeploymentKind::Proof {
+                operation: super::ProofOperation::Prove,
+                ..
+            } => "prove",
+            DeploymentKind::Proof {
+                operation: super::ProofOperation::Verify,
+                ..
+            } => "verify",
+        }
+    }
 }
 /// A checked Host program. Only FunctionEntry admission can construct one.
 pub struct EntryHost {
-    document: carrier::Document,
+    entry: String,
+    functions: Vec<carrier::Function>,
     interface: FunctionInterface,
     calculations: BTreeMap<String, Calculation>,
     deployments: BTreeMap<String, Deployment>,
     types: BTreeMap<String, LogicalType>,
     schemas: BTreeMap<String, std::sync::Arc<Schema>>,
     options: FunctionOptions,
-    authority: BTreeMap<String, SetupAuthority>,
     assets: super::EntryAssets,
 }
 pub struct FunctionEntry {
@@ -139,10 +169,9 @@ impl FunctionEntry {
     }
     pub fn deployments(&self) -> impl Iterator<Item = (&str, &str)> {
         self.host
-            .document
             .deployments
             .iter()
-            .map(|d| (d.id.as_str(), d.operation.as_str()))
+            .map(|(id, deployment)| (id.as_str(), deployment.operation()))
     }
     pub fn package(&self) -> &Package {
         &self.package
@@ -178,15 +207,14 @@ impl EntryHost {
     }
     pub fn signature(&self) -> &FunctionSignature {
         &self
-            .document
             .functions
             .iter()
-            .find(|f| f.signature.symbol == self.document.entry)
+            .find(|f| f.signature.symbol == self.entry)
             .expect("admitted root")
             .signature
     }
     pub fn functions(&self) -> impl Iterator<Item = &FunctionSignature> {
-        self.document.functions.iter().map(|f| &f.signature)
+        self.functions.iter().map(|f| &f.signature)
     }
     pub fn describe(&self) -> serde_json::Value {
         self.interface.describe()

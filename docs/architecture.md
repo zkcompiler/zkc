@@ -96,8 +96,11 @@ VM program without a backend. Each execution links its owned backend and uses a
 VM instance for frames, calls, resource custody and budgets. The interpreter
 walks structured instructions and manages value environments and continuations.
 The [VM contract](spec/runtime/vm.md) defines their boundary. Entry control links those native numerical, proof and joint owners; it neither
-interprets retained MLIR nor installs its own mathematical kernels. Its shared
-ledger accounts for cumulative work and simultaneous parent/child value storage.
+interprets retained MLIR nor installs its own mathematical kernels. Admission
+binds each target to its installed owner and result schema; deployment bindings
+also retain setup authority and the selected proof operation. Execution uses
+these bindings without reinterpreting the serialized carrier. Its shared ledger
+accounts for cumulative work and simultaneous parent/child value storage.
 
 [Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
 mathematical operations and standard functions. Ordered Local calls invoke them;

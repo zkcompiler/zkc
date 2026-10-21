@@ -29,12 +29,18 @@ pub(super) fn execute(
             .any(|ty| zkc_backends::requires_setup(ty.clone()));
     let mut bindings = context::Bindings::load(args, capacity, output_setups)?;
     bindings.protect(&mut destinations)?;
-    let requirements = crate::entry::FunctionInterface::deployment_requirements(&package)?;
+    let deployments = crate::entry::FunctionInterface::deployment_interfaces(&package)?;
+    let requirements = json!(
+        deployments
+            .iter()
+            .map(crate::entry::DeploymentInterface::describe)
+            .collect::<Vec<_>>()
+    );
     describe_roles(&requirements, report);
     report["invocations"] = requirements;
-    bindings.complete(&report["invocations"])?;
+    bindings.complete(&deployments)?;
     let mut documents = files::Documents::new(capacity)?;
-    bindings.decode_inputs(&package, &mut documents, report)?;
+    bindings.decode_inputs(&deployments, &mut documents, report)?;
     report["deployments"] = json!(
         bindings
             .authority

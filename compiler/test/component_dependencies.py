@@ -214,6 +214,7 @@ def main():
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
+        ROOT / "lib/Compiler/LanguagePackageReader.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",

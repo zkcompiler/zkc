@@ -147,10 +147,11 @@ pub(super) fn setups(
         &json!({"inputs": arguments}),
     );
     let requirements = FunctionInterface::deployment_interfaces(&package).unwrap();
-    let [(id, operation, _)] = requirements.as_slice() else {
+    let [deployment] = requirements.as_slice() else {
         panic!("expected one setup-bearing joint child");
     };
-    assert_eq!(operation, "run");
+    assert_eq!(deployment.operation(), "run");
+    let id = deployment.id();
     let setup_files = producer
         .setups
         .keys()

@@ -2,6 +2,8 @@
 #include "Run.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include <map>
@@ -281,5 +283,22 @@ Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
     return error(check.exhausted() ? "run-correspondence-limit"
                                    : "run-correspondence");
   return Error::success();
+}
+Expected<program::Participants> readRunProgram(StringRef bytes) {
+  auto artifact = parseNaturalJson(bytes, 16 * 1024 * 1024, 256,
+                                   "entry.deployment", "source.limit");
+  if (!artifact)
+    return artifact.takeError();
+  auto *bundle = artifact->getAsObject();
+  if (!bundle || bundle->size() != 5 ||
+      bundle->getString("format") != "zkc.run/0" ||
+      !bundle->getString("candidate"))
+    return error("entry.deployment", "invalid child joint deployment");
+  auto program = program::parse(*bundle->getString("candidate"));
+  if (!program)
+    return program.takeError();
+  if (auto e = protocol::admit(*program))
+    return e;
+  return std::move(*program);
 }
 } // namespace zkc::detail

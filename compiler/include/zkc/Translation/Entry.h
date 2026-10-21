@@ -12,6 +12,15 @@ struct HostPlan {
   llvm::json::Array functions, signatures;
   std::vector<NumericalFragment> calculations;
 };
+struct HostAnalysis {
+  std::vector<NumericalFragment> calculations;
+  llvm::json::Array functions;
+  Correspondence correspondence;
+};
+/// Compare independent source and SSA views and retain checked compilation
+/// inputs.
+llvm::Expected<HostAnalysis>
+analyzeHostOriginal(const ClosedEntry &, mlir::ModuleOp, const Limits & = {});
 std::string entryDeploymentId(HostInvocation::Kind, llvm::StringRef target,
                               llvm::ArrayRef<Type> arguments);
 llvm::json::Value encodeEntrySchema(const Layout &);

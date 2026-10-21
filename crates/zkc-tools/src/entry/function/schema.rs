@@ -33,11 +33,8 @@ impl FunctionInterface {
     /// Static context requirements. This does not import keys or grant authority.
     pub fn deployment_interfaces(
         package: &crate::entry::Package,
-    ) -> super::Result<Vec<(String, String, crate::entry::Interface)>> {
+    ) -> super::Result<Vec<DeploymentInterface>> {
         super::admission::interfaces(package)
-    }
-    pub fn deployment_requirements(package: &crate::entry::Package) -> super::Result<Value> {
-        super::admission::requirements(package)
     }
     pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
         use sha2::{Digest, Sha256};
@@ -144,5 +141,74 @@ impl FunctionInterface {
     pub fn describe(&self) -> Value {
         json!({"kind":"function","entry":self.entry(),"capture":self.capture(),"original":self.original(),"toolchain":self.toolchain(),
             "signature":self.signature().describe(),"functions":self.functions().map(FunctionSignature::describe).collect::<Vec<_>>()})
+    }
+}
+
+/// Inspected static child contract, without native installation or setup authority.
+/// Executable admission remains FunctionEntry::admit's separate obligation.
+#[derive(Debug)]
+pub struct DeploymentInterface {
+    pub(super) id: String,
+    pub(super) operation: String,
+    pub(super) interface: crate::entry::Interface,
+    pub(super) parameters: Vec<Schema>,
+    pub(super) result: Schema,
+}
+impl DeploymentInterface {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn operation(&self) -> &str {
+        &self.operation
+    }
+    pub fn interface(&self) -> &crate::entry::Interface {
+        &self.interface
+    }
+    pub fn describe(&self) -> Value {
+        let id = self.id();
+        let operation = self.operation();
+        let view = self.interface();
+        let groups = view.context_input_groups(operation);
+        let selected_role = view.proof().and_then(|proof| match operation {
+            "prove" => Some(proof.prover),
+            "verify" => Some(proof.verifier),
+            _ => None,
+        });
+        let roles = view
+            .roles()
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| selected_role.is_none_or(|selected| *index == selected))
+            .map(|(_, role)| {
+                let inputs = groups
+                    .iter()
+                    .find(|group| group.name() == role.name)
+                    .map(|group| group.describe());
+                let services = view
+                    .services(role)
+                    .map(|service| json!({"name": service.name, "contract": service.contract}))
+                    .collect::<Vec<_>>();
+                serde_json::json!({
+                    "role": role.name,
+                    "native_role": role.native_name,
+                    "inputs": inputs,
+                    "services": services,
+                })
+            })
+            .collect::<Vec<_>>();
+        let parameters = self
+            .parameters
+            .iter()
+            .map(Schema::describe)
+            .collect::<Vec<_>>();
+        serde_json::json!({
+            "id": id,
+            "operation": operation,
+            "entry": view.entry(),
+            "setups": view.setup_names().collect::<Vec<_>>(),
+            "roles": roles,
+            "parameters": parameters,
+            "result": self.result.describe(),
+        })
     }
 }

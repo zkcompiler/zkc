@@ -56,15 +56,16 @@ pub(super) struct Bindings {
 impl Bindings {
     pub fn decode_inputs(
         &mut self,
-        package: &Package,
+        deployments: &[crate::entry::DeploymentInterface],
         documents: &mut files::Documents,
         report: &mut Json,
     ) -> Result<()> {
-        for (id, operation, interface) in
-            crate::entry::FunctionInterface::deployment_interfaces(package)?
-        {
-            let mut supplied = self.inputs.remove(&id).unwrap_or_default();
-            let groups = interface.context_input_groups(&operation);
+        for deployment in deployments {
+            let id = deployment.id();
+            let operation = deployment.operation();
+            let interface = deployment.interface();
+            let mut supplied = self.inputs.remove(id).unwrap_or_default();
+            let groups = interface.context_input_groups(operation);
             if operation == "run"
                 && supplied
                     .keys()
@@ -102,7 +103,7 @@ impl Bindings {
                 match self
                     .context
                     .deployments
-                    .get_mut(&id)
+                    .get_mut(id)
                     .ok_or("entry-host-context")?
                 {
                     InvocationBinding::Run(context) => {
@@ -122,53 +123,45 @@ impl Bindings {
         }
         Ok(())
     }
-    /// Consume the Host owner's checked inventory, never the carrier itself.
-    pub fn complete(&mut self, requirements: &Json) -> Result<()> {
-        let rows = requirements.as_array().ok_or("entry-invocation-format")?;
-        let deployments = rows
-            .iter()
-            .map(|row| {
-                Ok((
-                    row["id"].as_str().ok_or("entry-invocation-format")?,
-                    row["operation"].as_str().ok_or("entry-invocation-format")?,
-                    !row["setups"]
-                        .as_array()
-                        .ok_or("entry-invocation-format")?
-                        .is_empty(),
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        self.defaults(deployments.into_iter())?;
-        for row in rows {
-            let id = row["id"].as_str().ok_or("entry-invocation-format")?;
-            let roles = row["roles"].as_array().ok_or("entry-invocation-format")?;
-            let check = |role: &Json, services: &BTreeMap<String, u64>| -> Result<()> {
-                let declared = role["services"]
-                    .as_array()
-                    .ok_or("entry-invocation-format")?;
+    /// Consume the Host owner's checked inventory, never diagnostic JSON.
+    pub fn complete(&mut self, deployments: &[crate::entry::DeploymentInterface]) -> Result<()> {
+        self.defaults(deployments.iter().map(|child| {
+            (
+                child.id(),
+                child.operation(),
+                child.interface().setup_names().len() != 0,
+            )
+        }))?;
+        for child in deployments {
+            let interface = child.interface();
+            let check = |role, services: &BTreeMap<String, u64>| -> Result<()> {
                 if services
                     .keys()
-                    .any(|name| !declared.iter().any(|s| s["name"] == *name))
+                    .any(|name| !interface.services(role).any(|s| s.name == *name))
                 {
                     return Err("entry-service-names".into());
                 }
                 Ok(())
             };
-            match &self.context.deployments[id] {
+            match &self.context.deployments[child.id()] {
                 InvocationBinding::Run(context) => {
                     for (name, values) in &context.roles {
-                        let role = roles
+                        let role = interface
+                            .roles()
                             .iter()
-                            .find(|r| r["role"] == *name)
+                            .find(|r| r.name == *name)
                             .ok_or("entry-host-context-role")?;
                         check(role, &values.services)?;
                     }
                 }
                 InvocationBinding::Proof(context) => {
-                    if roles.len() != 1 {
-                        return Err("entry-invocation-format".into());
-                    }
-                    check(&roles[0], &context.private.services)?;
+                    let proof = interface.proof().ok_or("entry-invocation-format")?;
+                    let role = if child.operation() == "prove" {
+                        proof.prover
+                    } else {
+                        proof.verifier
+                    };
+                    check(&interface.roles()[role], &context.private.services)?;
                 }
             }
         }

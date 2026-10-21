@@ -770,6 +770,7 @@ impl NativeDeployment {
             cancelled: false,
             instructions: 0,
             resources: Vec::new(),
+            service_draws: 0,
             attempts: Vec::new(),
             return_at: None,
             stop: None,
@@ -936,11 +937,16 @@ fn retire_resources(
     }
     for reference in services {
         match registry.retire(reference) {
-            Ok(o) => observations.push(json!({"kind":"service", "owner":o.owner,
-                "leased":o.leased, "poisoned":o.poisoned,
-                "state":o.state.map(|s| json!({"generation":s.generation, "transitions":s.draw_count,
-                    "budget":s.budget, "stage":s.stage}))})),
-            Err(e) => { report.cleanup_errors.push(e.to_string()); }
+            Ok(o) => {
+                report.service_draws += o.state.as_ref().map_or(0, |s| s.draw_count);
+                observations.push(json!({"kind":"service", "owner":o.owner,
+                    "leased":o.leased, "poisoned":o.poisoned,
+                    "state":o.state.map(|s| json!({"generation":s.generation, "transitions":s.draw_count,
+                        "budget":s.budget, "stage":s.stage}))}));
+            }
+            Err(e) => {
+                report.cleanup_errors.push(e.to_string());
+            }
         }
     }
     if backend.active_frames() != 0 {
@@ -990,6 +996,8 @@ pub struct NativeProofReport {
     pub cancelled: bool,
     pub instructions: u64,
     pub resources: Vec<Json>,
+    /// Known service draws observed during retirement, before JSON rendering.
+    pub(crate) service_draws: u64,
     pub attempts: Vec<AttemptRecord>,
     pub attempt_policy: Option<String>,
     /// One-shot owner-local completion. Attempts keep their own coordinates.

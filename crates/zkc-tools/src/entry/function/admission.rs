@@ -116,7 +116,14 @@ pub(super) fn admit(
                 .local_asset_references(&c.function)
                 .map_err(|e| EntryError::new(EntryPhase::Assets, e))?,
         );
-        native_calculations.insert(c.id.clone(), super::Calculation { program });
+        native_calculations.insert(
+            c.id.clone(),
+            super::Calculation {
+                function: c.function.clone(),
+                results: c.results.clone(),
+                program,
+            },
+        );
     }
     let assets = super::super::EntryAssets::admit_references(package, references)
         .map_err(|e| EntryError::new(EntryPhase::Assets, e))?;
@@ -124,7 +131,6 @@ pub(super) fn admit(
         authority.len() == document.deployments.len(),
         "entry-host-authority",
     )?;
-    let context_authority = authority.clone();
     let mut native_deployments = BTreeMap::new();
     let mut families = BTreeMap::new();
     for d in &document.deployments {
@@ -137,31 +143,42 @@ pub(super) fn admit(
             .remove(&d.id)
             .ok_or_else(|| error("entry-host-authority"))?;
         let native = match d.operation.as_str() {
-            "run" => super::Deployment::Run(Box::new(super::super::RunEntry::admit_host(
+            "run" => super::DeploymentKind::Run(Box::new(super::super::RunEntry::admit_host(
                 child,
                 options.limits,
-                authority,
+                authority.clone(),
             )?)),
             "prove" | "verify" => {
-                super::Deployment::Proof(Box::new(super::super::ProofEntry::admit_host_operation(
-                    child,
-                    super::super::ProofOptions {
-                        capacity: options.limits.capacity,
-                        external_work: options.limits.external_work,
-                        binding: options.binding,
-                    },
-                    authority,
-                    if d.operation == "prove" {
-                        super::super::ProofOperation::Prove
-                    } else {
-                        super::super::ProofOperation::Verify
-                    },
-                )?))
+                let operation = if d.operation == "prove" {
+                    super::super::ProofOperation::Prove
+                } else {
+                    super::super::ProofOperation::Verify
+                };
+                super::DeploymentKind::Proof {
+                    entry: Box::new(super::super::ProofEntry::admit_host_operation(
+                        child,
+                        super::super::ProofOptions {
+                            capacity: options.limits.capacity,
+                            external_work: options.limits.external_work,
+                            binding: options.binding,
+                        },
+                        authority.clone(),
+                        operation,
+                    )?),
+                    operation,
+                }
             }
             _ => return Err(error("entry-host-stage")),
         };
         deployment::check(d, &native, &mut families)?;
-        native_deployments.insert(d.id.clone(), native);
+        native_deployments.insert(
+            d.id.clone(),
+            super::Deployment {
+                result: d.results[0].clone(),
+                authority,
+                kind: native,
+            },
+        );
     }
     let mut schema_pool = BTreeMap::new();
     fn intern(s: &Schema, pool: &mut BTreeMap<String, std::sync::Arc<Schema>>) {
@@ -219,14 +236,14 @@ pub(super) fn admit(
     let types = validator.schemas.finish();
     drop(validator.calls);
     Ok(EntryHost {
-        document,
+        entry: document.entry,
+        functions: document.functions,
         interface,
         types,
         schemas: schema_pool,
         calculations: native_calculations,
         deployments: native_deployments,
         options,
-        authority: context_authority,
         assets,
     })
 }
@@ -637,9 +654,7 @@ impl<'a> Validator<'a> {
 
 /// Inspect static invocation requirements without importing setup authority.
 /// Native code admission remains FunctionEntry::admit's separate obligation.
-pub(super) fn interfaces(
-    package: &Package,
-) -> Result<Vec<(String, String, crate::entry::Interface)>> {
+pub(super) fn interfaces(package: &Package) -> Result<Vec<super::DeploymentInterface>> {
     let interface = FunctionInterface::read(package)?;
     let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
     let mut validator = structure(&document, &interface)?;
@@ -659,62 +674,13 @@ pub(super) fn interfaces(
         let view = crate::entry::BoundInterface::read(&child)
             .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
         deployment::check_interface(d, &view, &mut families)?;
-        result.push((d.id.clone(), d.operation.clone(), view.into_view()));
+        result.push(super::DeploymentInterface {
+            id: d.id.clone(),
+            operation: d.operation.clone(),
+            interface: view.into_view(),
+            parameters: d.parameters.clone(),
+            result: d.results[0].clone(),
+        });
     }
     Ok(result)
-}
-pub(super) fn requirements(package: &Package) -> Result<serde_json::Value> {
-    let views = interfaces(package)?;
-    let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
-    let requirements = views
-        .into_iter()
-        .zip(&document.deployments)
-        .map(|((id, operation, view), deployment)| {
-            let groups = view.context_input_groups(&operation);
-            let selected_role = view.proof().and_then(|proof| match operation.as_str() {
-                "prove" => Some(proof.prover),
-                "verify" => Some(proof.verifier),
-                _ => None,
-            });
-            let roles = view
-                .roles()
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| selected_role.is_none_or(|selected| *index == selected))
-                .map(|(_, role)| {
-                    let inputs = groups
-                        .iter()
-                        .find(|group| group.name() == role.name)
-                        .map(|group| group.describe());
-                    let services = view
-                        .services(role)
-                        .map(|service| {
-                            serde_json::json!({"name": service.name, "contract": service.contract})
-                        })
-                        .collect::<Vec<_>>();
-                    serde_json::json!({
-                        "role": role.name,
-                        "native_role": role.native_name,
-                        "inputs": inputs,
-                        "services": services,
-                    })
-                })
-                .collect::<Vec<_>>();
-            let parameters = deployment
-                .parameters
-                .iter()
-                .map(Schema::describe)
-                .collect::<Vec<_>>();
-            serde_json::json!({
-                "id": id,
-                "operation": operation,
-                "entry": view.entry(),
-                "setups": view.describe()["setups"],
-                "roles": roles,
-                "parameters": parameters,
-                "result": deployment.results[0].describe(),
-            })
-        })
-        .collect::<Vec<_>>();
-    Ok(serde_json::json!(requirements))
 }

@@ -232,11 +232,11 @@ use zkc_tools::entry::{RoleInputs,ProofRequest,FunctionEntry,FunctionInterface,
     InvocationContext,InvocationBinding,RunContext,Package,SetupAuthority};
 fn authority(bytes:&[u8],pin:&[u8;32])->std::collections::BTreeMap<String,SetupAuthority> {
     let package=Package::capture(bytes,pin,Package::MAX_BYTES).unwrap();
-    let requirements=FunctionInterface::deployment_requirements(&package).unwrap();
-    requirements.as_array().unwrap().iter().map(|child|{
-        assert_eq!(child["operation"],"run");
-        assert!(child["setups"].as_array().unwrap().is_empty());
-        (child["id"].as_str().unwrap().into(),Default::default())
+    let children=FunctionInterface::deployment_interfaces(&package).unwrap();
+    children.iter().map(|child|{
+        assert_eq!(child.operation(),"run");
+        assert_eq!(child.interface().setup_names().len(),0);
+        (child.id().into(),Default::default())
     }).collect()
 }
 fn context(host:&FunctionEntry,session:&str)->InvocationContext {

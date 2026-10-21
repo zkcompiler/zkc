@@ -7,6 +7,8 @@ pub struct HostReport {
     pub phase: &'static str,
     pub failure: Option<String>,
     pub resources: Vec<Json>,
+    /// Known service draws observed during retirement, before JSON rendering.
+    pub(crate) service_draws: u64,
     pub cleanup_errors: Vec<Json>,
     identity: String,
     session: String,
@@ -23,6 +25,7 @@ impl HostReport {
             phase: "issuance",
             failure: None,
             resources: Vec::new(),
+            service_draws: 0,
             cleanup_errors: Vec::new(),
             identity: host.identity.clone(),
             session: session.into(),
@@ -74,10 +77,15 @@ impl HostReport {
             }
             for (i, reference) in services[role].iter().enumerate() {
                 match registry.retire(reference) {
-                    Ok(state)=>self.resources.push(json!({"role":role,"kind":"service","index":i,
-                        "leased":state.leased,"poisoned":state.poisoned,"state":state.state.map(|s|json!({
-                        "generation":s.generation,"transitions":s.draw_count,"budget":s.budget,"stage":s.stage}))})),
-                    Err(error)=>self.cleanup_errors.push(json!({"role":role,"kind":"service","index":i,"code":error.code})),
+                    Ok(state) => {
+                        self.service_draws += state.state.as_ref().map_or(0, |s| s.draw_count);
+                        self.resources.push(json!({"role":role,"kind":"service","index":i,
+                            "leased":state.leased,"poisoned":state.poisoned,"state":state.state.map(|s|json!({
+                            "generation":s.generation,"transitions":s.draw_count,"budget":s.budget,"stage":s.stage}))}));
+                    }
+                    Err(error) => self
+                        .cleanup_errors
+                        .push(json!({"role":role,"kind":"service","index":i,"code":error.code})),
                 }
             }
             if backend.active_frames() != 0

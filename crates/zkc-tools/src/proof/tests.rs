@@ -388,6 +388,7 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         cancelled: false,
         instructions: 0,
         resources: vec![],
+        service_draws: 0,
         attempts: vec![],
         return_at: None,
         stop: None,

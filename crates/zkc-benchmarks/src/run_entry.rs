@@ -58,20 +58,13 @@ pub fn run(
     let start = Instant::now();
     // This inventory is checked by the common Host owner, before executable
     // admission. Setup authority is never inferred from a child package.
-    let requirements =
-        FunctionInterface::deployment_requirements(&package).map_err(|e| e.to_string())?;
-    let children = requirements
-        .as_array()
-        .ok_or("invalid Function deployment inventory")?;
+    let children = FunctionInterface::deployment_interfaces(&package).map_err(|e| e.to_string())?;
     let mut authority = BTreeMap::new();
     for child in children {
-        if child["operation"] != "run" || child["setups"].as_array().is_none_or(|v| !v.is_empty()) {
+        if child.operation() != "run" || child.interface().setup_names().len() != 0 {
             return Err("benchmark Function requires setup-free run children".into());
         }
-        let id = child["id"]
-            .as_str()
-            .ok_or("missing checked deployment id")?;
-        authority.insert(id.into(), Default::default());
+        authority.insert(child.id().into(), Default::default());
     }
     let options = FunctionOptions::default();
     let entry = FunctionEntry::admit(package, options, authority).map_err(|e| e.to_string())?;

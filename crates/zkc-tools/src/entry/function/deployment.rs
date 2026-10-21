@@ -46,12 +46,12 @@ fn output_record<'a>(s: &Schema, ports: impl Iterator<Item = &'a Port>) -> Resul
 }
 pub(super) fn check(
     d: &carrier::Deployment,
-    native: &Deployment,
+    native: &DeploymentKind,
     families: &mut BTreeMap<String, String>,
 ) -> Result<()> {
     let interface = match native {
-        Deployment::Run(n) => n.interface(),
-        Deployment::Proof(n) => n.interface(),
+        DeploymentKind::Run(n) => n.interface(),
+        DeploymentKind::Proof { entry: n, .. } => n.interface(),
     };
     check_interface(d, interface, families)
 }
@@ -451,13 +451,13 @@ pub(super) fn context_check(
     let mut imports =
         crate::host::setups::VerifierKeys::new(host.options.limits.capacity.backend().ark_bounds());
     imports.set_ledger(Some(ledger.clone()));
-    for (id, native) in &host.deployments {
+    for (id, deployment) in &host.deployments {
         let value = context
             .deployments
             .get(id)
             .ok_or_else(|| error("entry-host-context"))?;
-        let (interface, material) = match (native, value) {
-            (Deployment::Run(entry), InvocationBinding::Run(v)) => {
+        let (interface, material) = match (&deployment.kind, value) {
+            (DeploymentKind::Run(entry), InvocationBinding::Run(v)) => {
                 if let Some(session) = &v.session {
                     crate::run::RunHost::check_session(session)
                         .map_err(|e| EntryError::new(EntryPhase::Request, e))?;
@@ -474,7 +474,7 @@ pub(super) fn context_check(
                 }
                 (interface, &v.setups)
             }
-            (Deployment::Proof(entry), InvocationBinding::Proof(v)) => {
+            (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(v)) => {
                 require(v.context.len() <= 4096, "native-proof-context-limit")?;
                 if let Some(budget) = v.transcript_budget {
                     require(
@@ -489,14 +489,7 @@ pub(super) fn context_check(
                 }
                 let interface = entry.interface();
                 let proof = interface.proof().expect("admitted proof");
-                let producing = host
-                    .document
-                    .deployments
-                    .iter()
-                    .find(|d| d.id == *id)
-                    .expect("admitted deployment")
-                    .operation
-                    == "prove";
+                let producing = *operation == super::super::ProofOperation::Prove;
                 check_role(
                     interface,
                     &interface.roles()[if producing {
@@ -512,14 +505,14 @@ pub(super) fn context_check(
         };
         let keys = super::super::setups::check_pinned_material(
             interface,
-            &host.authority[id],
+            &deployment.authority,
             material,
             host.options.limits.capacity,
             &mut imports,
         )
         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
-        match value {
-            InvocationBinding::Run(v) => {
+        match (&deployment.kind, value) {
+            (DeploymentKind::Run(_), InvocationBinding::Run(v)) => {
                 for role in interface.roles() {
                     if let Some(context) = v.roles.get(&role.name) {
                         check_context_data(
@@ -534,16 +527,9 @@ pub(super) fn context_check(
                     }
                 }
             }
-            InvocationBinding::Proof(v) => {
+            (DeploymentKind::Proof { operation, .. }, InvocationBinding::Proof(v)) => {
                 let proof = interface.proof().expect("checked proof");
-                let producing = host
-                    .document
-                    .deployments
-                    .iter()
-                    .find(|d| d.id == *id)
-                    .expect("checked deployment")
-                    .operation
-                    == "prove";
+                let producing = *operation == super::super::ProofOperation::Prove;
                 check_context_data(
                     interface,
                     &interface.roles()[if producing {
@@ -558,6 +544,7 @@ pub(super) fn context_check(
                 )
                 .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
             }
+            _ => unreachable!("checked invocation binding"),
         }
     }
     Ok(())

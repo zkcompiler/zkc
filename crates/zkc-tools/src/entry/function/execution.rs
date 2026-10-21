@@ -135,7 +135,7 @@ impl PreparedFunction<'_> {
         ) {
             Ok(live) => {
                 execution.journal_live.extend(live);
-                execution.function(&self.host.document.entry, self.arguments)
+                execution.function(&self.host.entry, self.arguments)
             }
             Err(error) => Err(execution.fail(error)),
         };
@@ -202,7 +202,6 @@ impl Execution<'_> {
         self.charge(1, 0)?;
         let f = self
             .host
-            .document
             .functions
             .iter()
             .find(|f| f.signature.symbol == symbol)
@@ -416,14 +415,7 @@ impl Execution<'_> {
     fn numeric(&mut self, id: &str, values: Vec<TypedValue>) -> ExecResult<Vec<TypedValue>> {
         let index = self.begin(id, "numeric")?;
         self.dispatch()?;
-        let c = self
-            .host
-            .document
-            .calculations
-            .iter()
-            .find(|c| c.id == id)
-            .expect("admitted calculation");
-        let program = &self.host.calculations[id].program;
+        let c = &self.host.calculations[id];
         let _input_vector = crate::host::shared::allocation(
             Some(&self.ledger),
             values.iter().map(|v| v.schema().leaves.len() * 512).sum(),
@@ -452,7 +444,7 @@ impl Execution<'_> {
             )
             .with_sequence_work_limit(16_777_216u64.saturating_sub(self.usage.sequence_work));
         let result = LocalRunner::new_with_ledger(
-            program,
+            &c.program,
             &c.function,
             "entry-host",
             backend,
@@ -509,17 +501,10 @@ impl Execution<'_> {
             .collect()
     }
     fn invoke(&mut self, id: &str, values: &[TypedValue]) -> ExecResult<TypedValue> {
-        let d = self
-            .host
-            .document
-            .deployments
-            .iter()
-            .find(|d| d.id == id)
-            .expect("admitted deployment");
-        let index = self.begin(id, &d.operation)?;
+        let deployment = &self.host.deployments[id];
+        let index = self.begin(id, deployment.operation())?;
         self.dispatch()?;
         let binding = &self.context.deployments[id];
-        let native = &self.host.deployments[id];
         // Source values retain their original backing guards. Withhold the
         // additional request products and copied application setup bytes before
         // converting the checked values to the owning native request format.
@@ -551,8 +536,8 @@ impl Execution<'_> {
             context_copy.saturating_add(descriptors),
         )
         .map_err(|e| self.fail(e))?;
-        match (native, binding) {
-            (Deployment::Run(entry), InvocationBinding::Run(context)) => {
+        match (&deployment.kind, binding) {
+            (DeploymentKind::Run(entry), InvocationBinding::Run(context)) => {
                 let request = deployment::run_request(entry, &values[0], context)
                     .map_err(|e| self.fail(e))?;
                 let service_budgets = entry
@@ -602,13 +587,7 @@ impl Execution<'_> {
                     }
                 }
                 let completed = report.is_success();
-                self.usage.service_draws += report
-                    .native
-                    .resources
-                    .iter()
-                    .filter(|r| r["kind"] == "service")
-                    .filter_map(|r| r["state"]["transitions"].as_u64())
-                    .sum::<u64>();
+                self.usage.service_draws += report.native.service_draws;
                 let diagnostics = bounded_native(report.native.diagnostics_summary());
                 self.end(index, completed, diagnostics);
                 let output = report.outputs.filter(|_| completed).ok_or_else(|| {
@@ -618,12 +597,12 @@ impl Execution<'_> {
                             .unwrap_or_else(|| "entry-host-run-failed".into()),
                     )
                 })?;
-                let raw = deployment::run_value(&d.results[0], output);
-                data::from_output(self.host, &d.results[0], raw, &self.ledger)
+                let raw = deployment::run_value(&deployment.result, output);
+                data::from_output(self.host, &deployment.result, raw, &self.ledger)
                     .map_err(|e| self.fail(e))
             }
-            (Deployment::Proof(entry), InvocationBinding::Proof(context)) => {
-                let producer = d.operation == "prove";
+            (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(context)) => {
+                let producer = *operation == super::super::ProofOperation::Prove;
                 let request = deployment::proof_request(entry, producer, values, context)
                     .map_err(|e| self.fail(e))?;
                 let p = entry.interface().proof().expect("proof");
@@ -679,13 +658,7 @@ impl Execution<'_> {
                 self.usage.wire_bytes += report.native.bytes;
                 let decision = report.verification_result();
                 let completed = report.is_success() || decision == Some(false);
-                self.usage.service_draws += report
-                    .native
-                    .resources
-                    .iter()
-                    .filter(|r| r["kind"] == "service")
-                    .filter_map(|r| r["state"]["transitions"].as_u64())
-                    .sum::<u64>();
+                self.usage.service_draws += report.native.service_draws;
                 let diagnostics = bounded_native(report.native.diagnostics_summary());
                 self.end(index, completed, diagnostics);
                 if !completed {
@@ -720,7 +693,7 @@ impl Execution<'_> {
                         None
                     })
                 };
-                data::from_output(self.host, &d.results[0], raw, &self.ledger)
+                data::from_output(self.host, &deployment.result, raw, &self.ledger)
                     .map_err(|e| self.fail(e))
             }
             _ => unreachable!("checked invocation binding"),

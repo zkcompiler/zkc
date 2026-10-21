@@ -309,3 +309,33 @@ run Main(){{return Check::run(Check::Inputs{{{','.join(f'R{i:02}:Check::Inputs::
     assert failure['after'][0] == 'stopped'
     assert failure['after'][1]['cause'][0] == 'explicit'
     assert failure['after'][1]['site']
+
+
+@pytest.mark.parametrize('operation', ['run', 'prove'])
+@pytest.mark.parametrize('stopped', [False, True])
+def test_native_service_usage_survives_success_and_stop(toolchain, journal, directory,
+                                                        operation, stopped):
+    source = '''module example;
+domain F=field("bls12-381.fr");
+protocol Sample roles(P,V)(complete:bool@P,coins:Random<F>@P)->(accepted:bool@V){
+  let value=coins.draw();
+  require @P complete;
+  let received=send P->V(value);
+  let accepted=received==received;
+  return(accepted=accepted);
+}
+proof Core=Sample{prover P;verifier V;public{};accept accepted;construction authored;}
+run Joint(complete:bool){
+  return Sample::run(Sample::Inputs{P:Sample::Inputs::P{complete:complete},V:Sample::Inputs::V{}});
+}
+run Produce(complete:bool){return Core::prove(Core::Public{},Core::Witness{complete:complete});}
+'''
+    entry = 'Joint' if operation == 'run' else 'Produce'
+    package, pin = compile_function(toolchain, journal, directory, source, entry)
+    report, _ = execute(toolchain, journal, directory, package, pin, 'sample',
+                          {'complete': not stopped}, flags=['--allow-authored'],
+                          refuses=True if stopped else None)
+    assert report['execution']['usage']['service_draws'] == 1
+    calls = report['execution']['calls']
+    assert calls[-1]['operation'] == operation
+    assert calls[-1]['completed'] is not stopped

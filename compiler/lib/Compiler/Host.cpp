@@ -1,5 +1,8 @@
 #include "zkc/Compiler/Host.h"
 #include "LanguageInterface.h"
+#include "LanguagePackageReader.h"
+#include "NativeDeployment.h"
+#include "Run.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/LanguagePackage.h"
@@ -12,7 +15,6 @@
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
-#include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -137,9 +139,6 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
                                    const EntryOptions &options) {
   const auto &entry = original.entry();
   const auto &limits = original.admissionLimits();
-  auto plan = planHost(entry, limits);
-  if (!plan)
-    return plan.takeError();
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
@@ -148,16 +147,13 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
       mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
   if (!module)
     return error("entry.original", "admitted Host original no longer parses");
-  auto checked = compareHostOriginal(entry, *module, limits);
-  if (!checked)
-    return checked.takeError();
-  auto actual = readHostFunctions(*module, limits);
-  if (!actual)
-    return actual.takeError();
+  auto analysis = analyzeHostOriginal(entry, *module, limits);
+  if (!analysis)
+    return analysis.takeError();
   json::Array calculations, deployments;
   Layouts layouts(entry, limits);
   Error failure = Error::success();
-  for (const auto &fragment : plan->calculations) {
+  for (const auto &fragment : analysis->calculations) {
     mlir::ModuleOp nested;
     for (auto child : module->getOps<mlir::ModuleOp>())
       if (child->getAttrOfType<mlir::StringAttr>("entry.calculation")
@@ -184,7 +180,7 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
                                         {"program", std::move(*program)}});
   }
   std::map<std::string, std::pair<json::Array, json::Array>> required;
-  for (const auto &f : *actual)
+  for (const auto &f : analysis->functions)
     if (auto e = references(*f.getAsObject()->get("body"), required))
       return e;
   for (const auto &invocation : entry.invocations()) {
@@ -222,7 +218,7 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
       printJson(json::Object{{"format", "zkc.host/0"},
                              {"original", original.identity().str()},
                              {"entry", entry.root().symbol},
-                             {"functions", std::move(*actual)},
+                             {"functions", std::move(analysis->functions)},
                              {"calculations", std::move(calculations)},
                              {"deployments", std::move(deployments)}});
   if (auto e = checkHostArtifact(artifact, original.interface(), limits))
@@ -914,92 +910,18 @@ public:
               operation != "verify")
             return error("entry.deployment", "unknown deployment operation");
           auto package =
-              parseNaturalJson(*o->getString("package"), entryPackageByteLimit,
-                               256, "entry.deployment", "source.limit");
+              detail::readPackagedEntry(*o->getString("package"), limits);
           if (!package)
             return package.takeError();
-          auto *p = package->getAsObject();
-          if (!p || p->size() != 6 || p->getString("format") != "zkc.entry/0" ||
-              !p->getString("original") || !p->getString("interface") ||
-              !p->getString("artifact") || !p->getArray("assets") ||
-              !p->getObject("options"))
-            return error("entry.deployment", "invalid exact child package");
-          auto *options = p->getObject("options");
-          if (options->size() != 6)
-            return error("entry.deployment", "invalid child compiler options");
-          for (StringRef option : {"simplify", "release_storage", "finite_bulk",
-                                   "fuse_vector_reductions",
-                                   "fuse_collect_fold", "calculation_batching"})
-            if (!options->getBoolean(option))
-              return error("entry.deployment", "invalid child compiler option");
-          std::vector<Asset> assets;
-          std::set<std::string> identities;
-          uint64_t assetBytes = 0;
-          for (const auto &value : *p->getArray("assets")) {
-            auto *asset = value.getAsArray();
-            if (!asset || asset->size() != 2 || !(*asset)[0].getAsString() ||
-                !(*asset)[1].getAsString())
-              return error("entry.deployment", "invalid child asset record");
-            auto id = *(*asset)[0].getAsString(),
-                 bytes = *(*asset)[1].getAsString();
-            assetBytes += bytes.size();
-            if (assets.size() == 256 || bytes.size() > 8 * 1024 * 1024 ||
-                assetBytes > 32 * 1024 * 1024 ||
-                !identities.insert(id.str()).second)
-              return error("entry.deployment",
-                           "child asset limit or duplicate");
-            auto definition = json::parse(bytes);
-            if (!definition)
-              return definition.takeError();
-            StringRef format;
-            if (auto *array = definition->getAsArray();
-                array && !array->empty()) {
-              auto tag = (*array)[0].getAsString();
-              if (tag == "zkc.relation.r1cs/0")
-                format = "r1cs-json";
-              else if (tag == "zkc.relation-bundle/0")
-                format = "relation-bundle-json";
-              else if (tag == "zkc.ring/0")
-                format = "ring-json";
-            } else if (auto *object = definition->getAsObject();
-                       object && object->getString("schema") == "zkc.air.v0")
-              format = "air-json";
-            auto admitted =
-                Asset::read({id.str(), format.str(), bytes.str(), id.str()});
-            if (!admitted)
-              return admitted.takeError();
-            if (admitted->identity() != id)
-              return error("entry.deployment", "child asset identity differs");
-            assets.push_back(std::move(*admitted));
-          }
-          auto child =
-              readInterface(*p->getString("original"),
-                            *p->getString("interface"), limits, assets);
-          if (!child)
-            return child.takeError();
+          auto *child = &package->interface;
           if (child->host || (operation == "run") != !bool(child->proof))
             return error("entry.deployment", "child operation kind differs");
           if (!deploymentContract(*o, *child))
             return std::move(failure);
-          StringRef candidate;
           if (operation == "run") {
-            auto artifact =
-                parseNaturalJson(*p->getString("artifact"), 16 * 1024 * 1024,
-                                 256, "entry.deployment", "source.limit");
-            if (!artifact)
-              return artifact.takeError();
-            auto *bundle = artifact->getAsObject();
-            if (!bundle || bundle->size() != 5 ||
-                bundle->getString("format") != "zkc.run/0" ||
-                !bundle->getString("candidate"))
-              return error("entry.deployment",
-                           "invalid child joint deployment");
-            // Copy before the temporary JSON owner leaves scope.
-            auto program = program::parse(*bundle->getString("candidate"));
+            auto program = zkc::detail::readRunProgram(package->artifact);
             if (!program)
               return program.takeError();
-            if (auto e = protocol::admit(*program))
-              return e;
             const auto &protocol = child->selectedProtocol();
             auto root = find_if(program->entries, [&](const auto &entry) {
               return entry.name == protocol.symbol;
@@ -1022,48 +944,12 @@ public:
                              "joint child root participant binding differs");
             }
           } else {
-            auto artifact =
-                parseJson(*p->getString("artifact"), 16 * 1024 * 1024);
-            if (!artifact)
-              return artifact.takeError();
-            auto *deployment = artifact->getAsArray();
-            if (!deployment || deployment->size() != 9 ||
-                (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
-                (*deployment)[1].getAsString() != child->original ||
-                !(*deployment)[4].getAsString() ||
-                !(*deployment)[6].getAsArray() ||
-                (*deployment)[6].getAsArray()->size() != 1)
-              return error(
-                  "entry.deployment",
-                  "invalid operation-specific native proof deployment");
-            auto digest = [](StringRef bytes) {
-              return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-            };
-            auto descriptor = encodeLogicalTree((*deployment)[2]);
-            if (!descriptor)
-              return descriptor.takeError();
-            candidate = *(*deployment)[4].getAsString();
-            if ((*deployment)[3].getAsString() != digest(*descriptor) ||
-                (*deployment)[5].getAsString() != digest(candidate))
-              return error("entry.deployment",
-                           "child native deployment identities differ");
-            auto program = program::parse(candidate);
-            if (!program)
-              return program.takeError();
-            if (auto e = protocol::admit(*program))
-              return e;
             auto role =
                 nativeRoleName(operation == "verify" ? child->proof->verifier
                                                      : child->proof->prover);
-            if (program->participants.size() != 1 ||
-                program->entries.size() != 1 ||
-                program->participants.front().role != role)
-              return error("entry.closure",
-                           "proof child retained the wrong operation closure");
-            auto *map = (*(*deployment)[6].getAsArray())[0].getAsArray();
-            if (!map || map->size() != 6 || (*map)[0].getAsString() != role ||
-                (*map)[1].getAsString() != program->participants.front().name)
-              return error("entry.signature", "proof child port map differs");
+            if (auto e = zkc::detail::checkNativeOperationArtifact(
+                    package->artifact, child->original, role))
+              return e;
           }
         }
       }
