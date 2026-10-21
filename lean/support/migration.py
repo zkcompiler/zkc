@@ -16,16 +16,17 @@ import tempfile
 
 FORMAT = 'zkc.migration-declarations/0'
 NAME_ENCODING = 'lean-name-components/0'
-AXIOM_PROVENANCE = 'owning-module-environment/0'
+AXIOM_PROVENANCE = 'resolved-constant-info/0'
+REFERENCE_PROVENANCE = 'checked-stored-module/0'
 FIELDS = {'name', 'display_name', 'module', 'kind', 'universes', 'type', 'body', 'shape', 'axioms',
-          'type_dependencies', 'body_dependencies'}
+          'type_dependencies', 'body_dependencies', 'references'}
 SEMANTIC_FIELDS = ('kind', 'universes', 'type', 'body', 'shape', 'axioms')
-HEADER_FIELDS = {'format', 'name_encoding', 'axiom_provenance', 'modules', 'declarations'}
+HEADER_FIELDS = {'format', 'name_encoding', 'axiom_provenance', 'reference_provenance', 'modules', 'declarations'}
 
 
 def record_header(modules, count):
     return {'format': FORMAT, 'name_encoding': NAME_ENCODING,
-            'axiom_provenance': AXIOM_PROVENANCE, 'modules': modules, 'declarations': count}
+            'axiom_provenance': AXIOM_PROVENANCE, 'reference_provenance': REFERENCE_PROVENANCE, 'modules': modules, 'declarations': count}
 
 
 def read_header(stream):
@@ -34,7 +35,8 @@ def read_header(stream):
     except StopIteration as error:
         raise ValueError('empty declaration record') from error
     if (not isinstance(header, dict) or set(header) != HEADER_FIELDS or header['format'] != FORMAT or
-        header['name_encoding'] != NAME_ENCODING or header['axiom_provenance'] != AXIOM_PROVENANCE):
+        header['name_encoding'] != NAME_ENCODING or header['axiom_provenance'] != AXIOM_PROVENANCE or
+        header['reference_provenance'] != REFERENCE_PROVENANCE):
         raise ValueError('invalid declaration record header; regenerate using the current exporter')
     selected, count = header['modules'], header['declarations']
     if (not isinstance(selected, list) or not selected or
@@ -140,11 +142,14 @@ def validate_row(row, selected):
 
 def validate_semantics(row):
     """Validate every name position, including references outside selected modules."""
-    def names(values):
+    references = {row['name']}
+
+    def names(values, constants=False):
         if not isinstance(values, list):
             raise ValueError('expected encoded name list')
         for value in values:
             validate_name(value)
+            if constants: references.add(value)
 
     def tree(value):
         if not isinstance(value, list) or not value or not isinstance(value[0], str):
@@ -153,6 +158,7 @@ def validate_semantics(row):
         if tag in ('constant', 'projection', 'parameter', 'free', 'metavariable'):
             if not args: raise ValueError('missing semantic name')
             validate_name(args[0])
+            if tag in ('constant', 'projection'): references.add(args[0])
         if tag == 'constant' and len(args) == 2 and isinstance(args[1], list):
             for u in args[1]: tree(u)
         elif tag == 'projection' and len(args) == 3 and type(args[1]) is int and args[1] >= 0:
@@ -180,7 +186,7 @@ def validate_semantics(row):
 
     validate_name(row['name'])
     for field in ('universes', 'axioms', 'type_dependencies', 'body_dependencies'):
-        names(row[field])
+        names(row[field], constants=field != 'universes')
         if len(set(row[field])) != len(row[field]):
             raise ValueError(f'duplicate name in {field}')
     tree(row['type'])
@@ -199,8 +205,9 @@ def validate_semantics(row):
         if not isinstance(shape, dict) or set(shape) != fields[row['kind']]:
             raise ValueError('invalid declaration shape fields')
         for key in ('mutual', 'constructors'):
-            if key in shape: names(shape[key])
-        if 'inductive' in shape: validate_name(shape['inductive'])
+            if key in shape: names(shape[key], constants=True)
+        if 'inductive' in shape:
+            validate_name(shape['inductive']); references.add(shape['inductive'])
         if 'hints' in shape: tree(shape['hints'])
         for key in ('parameters', 'indices', 'nested', 'index', 'fields', 'motives', 'minors'):
             if key in shape and (type(shape[key]) is not int or shape[key] < 0):
@@ -219,12 +226,32 @@ def validate_semantics(row):
                     raise ValueError('invalid recursor rule')
                 if type(rule['fields']) is not int or rule['fields'] < 0:
                     raise ValueError('invalid recursor field count')
-                validate_name(rule['constructor']); tree(rule['rhs'])
+                validate_name(rule['constructor']); references.add(rule['constructor']); tree(rule['rhs'])
+
+    provenance = row['references']
+    if not isinstance(provenance, dict) or set(provenance) != references:
+        raise ValueError('missing or extraneous stored reference provenance')
+    for name, owner in provenance.items():
+        validate_name(name); validate_name(owner)
+    if provenance[row['name']] != module_key(row['module']):
+        raise ValueError('declaration identity disagrees with its stored provider')
+
+
+def module_key(module):
+    """Encode an exact module selector, never a diagnostic declaration spelling."""
+    if not isinstance(module, str) or not module or any(not p for p in module.split('.')):
+        raise ValueError('invalid exact module selector')
+    return name_key([['str', part] for part in module.split('.')])
+
+
+def identity(module, name):
+    return module_key(module), name
 
 
 def canonical(record, renames=None):
     """Alpha-normalize bound universes and apply an explicit declaration bijection.
 
+    Mappings are keyed by (encoded stored module, encoded kernel name).
     Only semantic name positions are rewritten. A string literal or an unknown
     universe is never renamed merely because its bytes match a declaration.
     """
@@ -233,6 +260,10 @@ def canonical(record, renames=None):
     if len(parameters) != len(record['universes']):
         raise ValueError('duplicate universe binder')
 
+    def reference(name):
+        source = (record['references'][name], name)
+        return list(renames.get(source, source))
+
     def expression(value):
         if not isinstance(value, list) or not value:
             return value
@@ -240,9 +271,9 @@ def canonical(record, renames=None):
         if tag == 'parameter' and len(value) == 2:
             return ['parameter-index', parameters[value[1]]] if value[1] in parameters else value
         if tag == 'constant' and len(value) == 3:
-            return [tag, renames.get(value[1], value[1]), [expression(u) for u in value[2]]]
+            return [tag, reference(value[1]), [expression(u) for u in value[2]]]
         if tag == 'projection' and len(value) == 4:
-            return [tag, renames.get(value[1], value[1]), value[2], expression(value[3])]
+            return [tag, reference(value[1]), value[2], expression(value[3])]
         if tag in ('string', 'natural', 'bound', 'free', 'metavariable'):
             return value
         return [expression(item) for item in value]
@@ -253,13 +284,13 @@ def canonical(record, renames=None):
         result = dict(value)
         for key in ('inductive',):
             if key in result:
-                result[key] = renames.get(result[key], result[key])
+                result[key] = reference(result[key])
         for key in ('mutual', 'constructors'):
             if key in result:
-                result[key] = [renames.get(name, name) for name in result[key]]
+                result[key] = [reference(name) for name in result[key]]
         if 'rules' in result:
             result['rules'] = [rule | {
-                'constructor': renames.get(rule['constructor'], rule['constructor']),
+                'constructor': reference(rule['constructor']),
                 'rhs': expression(rule['rhs']),
             } for rule in result['rules']]
         return result
@@ -267,7 +298,7 @@ def canonical(record, renames=None):
     return {'kind': record['kind'], 'universes': list(range(len(parameters))),
             'type': expression(record['type']), 'body': expression(record['body']),
             'shape': shape(record['shape']),
-            'axioms': sorted(renames.get(name, name) for name in record['axioms'])}
+            'axioms': sorted(reference(name) for name in record['axioms'])}
 
 
 def fingerprint(record, renames=None):
@@ -313,18 +344,9 @@ def compare(before, after, moves=None, renames=None):
     similar suffix. All references and definition bodies must still agree.
     """
     moves = {} if moves is None else moves
-    renames = {} if renames is None else renames
-    if not isinstance(moves, dict) or not isinstance(renames, dict):
-        raise ValueError('migration maps must be JSON objects')
-    for source, destination in renames.items():
-        validate_name(source); validate_name(destination)
-    before_names = {name for _, name in before.declarations}
-    after_names = {name for _, name in after.declarations}
-    if set(renames) - before_names or set(renames.values()) - after_names:
-        raise ValueError('rename map names an unselected declaration')
-    effective = [renames.get(name, name) for name in before_names]
-    if len(set(effective)) != len(effective):
-        raise ValueError('declaration rename map is not injective')
+    renames = [] if renames is None else renames
+    if not isinstance(moves, dict) or not isinstance(renames, list):
+        raise ValueError('module map must be an object; declaration map must be an explicit identity-pair list')
     if set(moves) - before.modules:
         raise ValueError('move map names an unselected baseline module')
     targets = {module: moves.get(module, [module]) for module in before.modules}
@@ -333,37 +355,69 @@ def compare(before, after, moves=None, renames=None):
            len(set(destinations)) != len(destinations)
            for destinations in targets.values()):
         raise ValueError('every module needs explicit, nonempty, unique destinations')
+    explicit = {}
+    for entry in renames:
+        if not isinstance(entry, dict) or set(entry) != {'before', 'after'}:
+            raise ValueError('expected before/after declaration identity pair')
+        for side in ('before', 'after'):
+            pair = entry[side]
+            if not isinstance(pair, list) or len(pair) != 2:
+                raise ValueError('declaration identity must be [exact module, encoded kernel name]')
+            module_key(pair[0]); validate_name(pair[1])
+        source, destination = tuple(entry['before']), tuple(entry['after'])
+        if source not in before.declarations or destination not in after.declarations:
+            raise ValueError('rename map names an unselected declaration')
+        if source in explicit: raise ValueError('duplicate declaration mapping source')
+        if destination[0] not in targets[source[0]]:
+            raise ValueError('declaration destination is outside the explicit module move')
+        explicit[source] = destination
+    correspondence = {}
+    for source in before.declarations:
+        if source in explicit:
+            correspondence[source] = explicit[source]
+        else:
+            candidates = [(destination, source[1]) for destination in targets[source[0]]
+                          if (destination, source[1]) in after.declarations]
+            if len(candidates) > 1:
+                raise ValueError('ambiguous declaration destination; supply an explicit identity pair')
+            if candidates: correspondence[source] = candidates[0]
+    if len(set(correspondence.values())) != len(correspondence):
+        raise ValueError('declaration mapping is not injective')
+    # Only selected stored identities participate. An unselected import sharing
+    # a kernel name keeps its own provider and cannot inherit another rename.
+    reference_map = {identity(*source): identity(*destination)
+                     for source, destination in correspondence.items()}
     required = {module for destinations in targets.values() for module in destinations}
     missing_modules = sorted(required - after.modules)
     changes, seen = [], set()
     preserved = 0
     for (module, name), old in sorted(before.declarations.items()):
-        renamed = renames.get(name, name)
-        candidates = [(destination, renamed) for destination in targets[module]
-                      if (destination, renamed) in after.declarations]
+        destination = correspondence.get((module, name))
+        candidates = [destination] if destination else []
         if not candidates:
             changes.append({'module': module, 'name': name, 'display_name': old['display_name'], 'status': 'missing',
-                            'expected_modules': targets[module], 'before': fingerprint(old, renames)})
+                            'expected_modules': targets[module], 'before': fingerprint(old, reference_map)})
             continue
         seen.update(candidates)
-        exact = [key for key in candidates if fingerprint(old, renames) == fingerprint(after.declarations[key])]
+        exact = [key for key in candidates if fingerprint(old, reference_map) == fingerprint(after.declarations[key])]
         if exact and len(exact) == len(candidates):
             preserved += 1
             continue
         for key in candidates:
             current = after.declarations[key]
-            previous, following = canonical(old, renames), canonical(current)
+            previous, following = canonical(old, reference_map), canonical(current)
             fields = [field for field in SEMANTIC_FIELDS if previous[field] != following[field]]
             if fields:
                 changes.append({'module': module, 'name': name, 'display_name': old['display_name'], 'status': 'changed',
                                 'destination': key[0], 'fields': fields,
-                                'before': fingerprint(old, renames), 'after': fingerprint(current)})
+                                'before': fingerprint(old, reference_map), 'after': fingerprint(current)})
     return {'format': 'zkc.migration-comparison/0',
             'status': 'preserved' if not changes and not missing_modules else 'review-required',
             'baseline_declarations': len(before.declarations), 'preserved_declarations': preserved,
             'missing_modules': missing_modules, 'changes': changes,
-            'declaration_renames': dict(sorted(renames.items())),
-            'normalization': 'bound-universe alpha-equivalence and explicit declaration renaming only',
+            'declaration_renames': [{'before': list(source), 'after': list(destination)}
+                                    for source, destination in sorted(explicit.items())],
+            'normalization': 'bound-universe alpha-equivalence and explicit stored-identity correspondence only',
             'added_declarations': [{'module': module, 'name': name,
                                     'display_name': after.declarations[(module, name)]['display_name']}
                                    for module, name in sorted(set(after.declarations) - seen)],

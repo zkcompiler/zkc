@@ -19,8 +19,8 @@ from support.migration import capture_records, compare, name_key, read_records  
 
 
 def run(package, *args):
-    subprocess.run(['lake', 'env', 'lean', *map(str, args)], cwd=package,
-                   stdin=subprocess.DEVNULL, check=True)
+    return subprocess.run(['lake', 'env', 'lean', *map(str, args)], cwd=package,
+                          stdin=subprocess.DEVNULL, check=True, capture_output=True, text=True)
 
 
 def controls(package, output):
@@ -31,7 +31,7 @@ def controls(package, output):
     # Lake retains the caller's LEAN_PATH after its own package paths.
     original = os.environ.get('LEAN_PATH')
     os.environ['LEAN_PATH'] = str(scratch) + (os.pathsep + original if original else '')
-    results = []
+    results, observations = [], {}
 
     def check(label, condition):
         if not condition: raise AssertionError(label)
@@ -40,7 +40,9 @@ def controls(package, output):
     def build(module, source):
         path = scratch / f'{module}.lean'
         path.write_text(source)
-        run(package, '-R', scratch, '-o', scratch / f'{module}.olean', path)
+        result = run(package, '-R', scratch, '-o', scratch / f'{module}.olean', path)
+        observations[module] = result.stdout.strip()
+        return result.stdout.strip()
 
     def capture(label, modules):
         path = output / f'{label}.jsonl'
@@ -71,6 +73,79 @@ theorem Shared.indirect : True := Shared.helper
         check('same-name theorem proof changes are detected solely through axioms',
               result['status'] == 'review-required' and len(result['changes']) == 3 and
               all(row['fields'] == ['axioms'] for row in result['changes']))
+
+        build('ImportedBefore', 'import ProvenancePure\ntheorem Client.claim : True := Shared.claim\n')
+        observed = build('ImportedAfter', '''import ProvenancePure
+import ProvenanceChoice
+theorem Client.claim : True := Shared.claim
+open Lean Elab Command
+run_cmd do
+  let info ← getConstInfo `Shared.claim
+  logInfo m!"actual imported body = {info.value? true}"
+  let axioms ← collectAxioms `Shared.claim
+  logInfo m!"imported closure = {axioms}"
+''')
+        check('actual imported body/cache disagreement is independently reproduced',
+              'Classical.choice' in observed and 'imported closure = []' in observed)
+        imported_before = capture('imported-before', ['ImportedBefore'])
+        check('unambiguous imported pure proof has no axioms',
+              next(iter(imported_before.declarations.values()))['axioms'] == [])
+        refused = output / 'ambiguous-import-must-not-exist.jsonl'
+        try:
+            capture_records(package, ['ImportedAfter'], refused)
+        except subprocess.CalledProcessError:
+            check('ambiguous imported stored versions are explicitly refused', not refused.exists())
+        else:
+            raise AssertionError('ambiguous imported theorem accepted')
+        build('ImportedChoice', 'import ProvenanceChoice\ntheorem Client.claim : True := Shared.claim\n')
+        imported_choice = capture('imported-choice', ['ImportedChoice'])
+        changed = compare(imported_before, imported_choice, {'ImportedBefore': ['ImportedChoice']})
+        check('actual imported choice proof is traversed without the precomputed axiom cache',
+              changed['status'] == 'review-required' and changed['changes'][0]['fields'] == ['axioms'])
+
+        build('ProvenanceIdentical', 'import Lean\ntheorem Shared.claim : True := True.intro\n')
+        build('ImportedIdentical', 'import ProvenancePure\nimport ProvenanceIdentical\ntheorem Client.claim : True := Shared.claim\n')
+        identical = capture('imported-identical', ['ImportedIdentical'])
+        check('identical stored imported proofs remain supported after full field comparison',
+              next(iter(identical.declarations.values()))['axioms'] == [])
+        build('CyclicClosure', '''import Lean
+axiom Cycle.bound : Nat
+mutual
+  inductive Cycle.First where
+    | mk : Cycle.Second → Fin Cycle.bound → Cycle.First
+  inductive Cycle.Second where
+    | mk : Cycle.First → Cycle.Second
+end
+''')
+        cyclic = capture('cyclic-closure', ['CyclicClosure'])
+        check('completed axiom caching retains axioms through mutual inductive cycles',
+              all(cyclic.declarations[('CyclicClosure', key('Cycle', name))]['axioms'] == [key('Cycle', 'bound')]
+                  for name in ('First', 'Second')))
+
+        scope_sources = {
+            'ScopeSelected': 'import Lean\ndef Shared.value : Nat := 0\n',
+            'ScopeExternal': 'import Lean\ndef Shared.value : Nat := 1\n',
+            'ScopeBefore': 'import ScopeExternal\ndef Client.target : Nat := Shared.value\n#eval Client.target\n',
+            'ScopeMoved': 'import Lean\ndef Relocated.value : Nat := 0\n',
+            'ScopeAfter': 'import ScopeMoved\ndef Client.target : Nat := Relocated.value\n#eval Client.target\n',
+        }
+        for module, source in scope_sources.items(): build(module, source)
+        check('compiled unselected-import client actually changes from one to zero',
+              observations['ScopeBefore'] == '1' and observations['ScopeAfter'] == '0')
+        scope_before = capture('scope-before', ['ScopeSelected', 'ScopeBefore'])
+        scope_after = capture('scope-after', ['ScopeMoved', 'ScopeAfter'])
+        scope_moves = {'ScopeSelected': ['ScopeMoved'], 'ScopeBefore': ['ScopeAfter']}
+        scope_renames = [{'before': ['ScopeSelected', key('Shared', 'value')],
+                          'after': ['ScopeMoved', key('Relocated', 'value')]}]
+        scoped = compare(scope_before, scope_after, scope_moves, scope_renames)
+        check('selected identity rename cannot rewrite an unselected same-name import',
+              scoped['status'] == 'review-required' and scoped['preserved_declarations'] == 1 and
+              scoped['changes'][0]['fields'] == ['body'])
+        check('actual imported reference retains its unselected stored module',
+              scope_before.declarations[('ScopeBefore', key('Client', 'target'))]['references'][
+                  key('Shared', 'value')] == key('ScopeExternal'))
+        (output / 'scope-renames.json').write_text(json.dumps(scope_renames, indent=2) + '\n')
+        (output / 'scope-comparison.json').write_text(json.dumps(scoped, indent=2) + '\n')
 
         build('NameOwners', '''import Lean
 open Lean Elab Command
@@ -133,7 +208,7 @@ run_cmd do
               one.declarations[('ReferenceOne', target)]['body'] == ['constant', flat, []] and
               two.declarations[('ReferenceTwo', target)]['body'] == ['constant', nested, []])
         try:
-            compare(one, two, {'ReferenceOne': ['ReferenceTwo']}, {flat: nested})
+            compare(one, two, {'ReferenceOne': ['ReferenceTwo']}, [{'before': ['NameOwners', flat], 'after': ['NameOwners', nested]}])
         except ValueError:
             results.append('unselected upstream names cannot be silently renamed')
         else:
@@ -175,7 +250,8 @@ def PrivateClient.target : Nat := helper
         old_helpers = [name for (_, name), row in old.declarations.items() if row['display_name'].startswith('_private.')]
         new_helpers = [name for (_, name), row in new.declarations.items() if row['display_name'].startswith('_private.')]
         check('private relocation fixture owns exactly one helper per module', len(old_helpers) == len(new_helpers) == 1)
-        renames = {old_helpers[0]: new_helpers[0]}
+        renames = [{'before': ['PrivateOriginal', old_helpers[0]],
+                    'after': ['PrivateRelocated', new_helpers[0]]}]
         (output / 'private-renames.json').write_text(json.dumps(renames, indent=2) + '\n')
         check('explicit injective private-name relocation preserves actual records',
               compare(old, new, moves, renames)['status'] == 'preserved')
@@ -196,6 +272,7 @@ def PrivateClient.target : Nat := helper
     emitter = Path(__file__).with_name('MigrationRecords.lean')
     receipt = {'status': 'pass', 'checks': results, 'count': len(results),
                'package': str(package), 'scratch': str(output), 'shared_builds': 0}
+    (output / 'compiled-observations.json').write_text(json.dumps(observations, indent=2) + '\n')
     receipt['emitter_sha256'] = hashlib.sha256(emitter.read_bytes()).hexdigest()
     (output / 'result.json').write_text(json.dumps(receipt, indent=2) + '\n')
     return receipt

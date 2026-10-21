@@ -16,15 +16,24 @@ def key(name):
     return audit().name_key([['str', part] for part in name.split('.')])
 
 
+def rename(old_module, old_name, new_module, new_name):
+    return {'before': [old_module, key(old_name)], 'after': [new_module, key(new_name)]}
+
+
 def fixture(module='Old'):
     row = {'name': key('Family.target'), 'display_name': 'Family.target', 'module': module, 'kind': 'definition',
            'universes': [], 'type': ['sort', ['zero']],
            'body': ['constant', key('True'), []], 'shape': {'safety': 'Lean.DefinitionSafety.safe', 'hints': ['abbreviation']}, 'axioms': [],
-           'type_dependencies': [], 'body_dependencies': [key('True')]}
+           'type_dependencies': [], 'body_dependencies': [key('True')],
+           'references': {key('Family.target'): key(module), key('True'): key('Init.Prelude'),
+                          key('False'): key('Init.Prelude'), key('Classical.choice'): key('Init.Classical')}}
     theorem = row | {'name': key('Family.claim'), 'kind': 'theorem',
                      'type': ['forall', 'explicit', ['constant', key('Family.target'), []],
                               ['constant', key('Family.target'), []]],
-                     'body': None, 'shape': None, 'body_dependencies': []}
+                     'body': None, 'shape': None, 'body_dependencies': [],
+                     'references': row['references'] | {key('Family.claim'): key(module)}}
+    row['references'] = {key('Family.target'): key(module), key('True'): key('Init.Prelude')}
+    theorem['references'] = {key('Family.claim'): key(module), key('Family.target'): key(module)}
     return audit().Records({module}, {(module, row['name']): row, (module, theorem['name']): theorem})
 
 
@@ -38,6 +47,7 @@ def test_explicit_module_move_preserves_declarations():
 def test_definition_change_is_found_when_claim_type_is_unchanged():
     before, after = fixture(), fixture()
     after.declarations[('Old', key('Family.target'))]['body'] = ['constant', key('False'), []]
+    after.declarations[('Old', key('Family.target'))]['references'][key('False')] = key('Init.Prelude')
     result = audit().compare(before, after)
     assert result['status'] == 'review-required'
     assert result['preserved_declarations'] == 1
@@ -48,6 +58,7 @@ def test_definition_change_is_found_when_claim_type_is_unchanged():
 def test_new_permitted_axiom_is_still_a_preservation_change():
     before, after = fixture(), fixture()
     after.declarations[('Old', key('Family.claim'))]['axioms'] = [key('Classical.choice')]
+    after.declarations[('Old', key('Family.claim'))]['references'][key('Classical.choice')] = key('Init.Classical')
     result = audit().compare(before, after)
     assert result['changes'][0]['fields'] == ['axioms']
 
@@ -74,8 +85,7 @@ def test_split_requires_every_declared_destination_to_be_emitted():
 @pytest.mark.parametrize('change', ['empty', 'count', 'duplicate', 'unselected'])
 def test_record_reader_rejects_incomplete_or_ambiguous_coverage(tmp_path, change):
     rows = list(fixture().declarations.values())
-    header = {'format': audit().FORMAT, 'name_encoding': audit().NAME_ENCODING,
-              'axiom_provenance': audit().AXIOM_PROVENANCE, 'modules': ['Old'], 'declarations': 2}
+    header = audit().record_header(['Old'], 2)
     if change == 'empty':
         header['declarations'] = 0
         rows = []
@@ -110,10 +120,13 @@ def test_explicit_private_rename_checks_references_and_definitions():
     claim = after.declarations[('New', key('Family.claim'))]
     claim['type'] = ['forall', 'explicit', ['constant', key('Moved.target'), []],
                      ['constant', key('Moved.target'), []]]
-    moves, renames = {'Old': ['New']}, {key('Family.target'): key('Moved.target')}
+    row['references'][key('Moved.target')] = key('New')
+    claim['references'][key('Moved.target')] = key('New')
+    moves, renames = {'Old': ['New']}, [rename('Old', 'Family.target', 'New', 'Moved.target')]
     assert audit().compare(before, after, moves)['status'] == 'review-required'
     assert audit().compare(before, after, moves, renames)['status'] == 'preserved'
     row['body'] = ['constant', key('False'), []]
+    row['references'][key('False')] = key('Init.Prelude')
     assert audit().compare(before, after, moves, renames)['changes'][0]['fields'] == ['body']
 
 
@@ -123,12 +136,15 @@ def test_renaming_never_rewrites_string_literals():
     after.declarations[('Old', key('Family.target'))]['body'] = ['string', 'Moved.target']
     assert audit().compare(before, after)['status'] == 'review-required'
     assert audit().canonical(before.declarations[('Old', key('Family.target'))],
-                             {key('Family.target'): key('Moved.target')})['body'] == ['string', 'Family.target']
+                             {audit().identity('Old', key('Family.target')):
+                              audit().identity('Old', key('Moved.target'))})['body'] == ['string', 'Family.target']
 
 
 @pytest.mark.parametrize('renames', [
-    {key('Missing'): key('Family.target')}, {key('Family.target'): key('Missing')},
-    {key('Family.target'): key('Family.claim')},
+    [rename('Old', 'Missing', 'Old', 'Family.target')],
+    [rename('Old', 'Family.target', 'Old', 'Missing')],
+    [rename('Old', 'Family.target', 'Old', 'Family.claim')],
+    {key('Family.target'): key('Family.target')},
 ])
 def test_rename_map_cannot_hide_missing_or_duplicate_declarations(renames):
     with pytest.raises(ValueError):
@@ -150,6 +166,7 @@ def test_structural_name_keys_are_injective_and_display_names_are_diagnostics(tm
     for name in names:
         row = deepcopy(next(iter(fixture().declarations.values())))
         row.update(name=name, display_name='same diagnostic spelling')
+        row['references'] = {name: key('Old'), key('True'): key('Init.Prelude')}
         rows.append(row)
     path = tmp_path / 'records.jsonl'
     write_records(path, rows)
@@ -237,7 +254,8 @@ def test_explicit_renaming_covers_projection_shape_rules_and_axioms():
     new.update(body=['projection', destination, 0, ['constant', destination, []]],
                axioms=[destination], shape={'mutual': [destination], 'rules': [
                    {'constructor': destination, 'fields': 0, 'rhs': ['constant', destination, []]}]})
-    assert audit().canonical(old, {source: destination}) == audit().canonical(new)
+    new['references'][destination] = key('Old')
+    assert audit().canonical(old, {audit().identity('Old', source): audit().identity('Old', destination)}) == audit().canonical(new)
 
 
 def test_capture_runs_modules_independently_and_keeps_an_existing_result_on_failure(tmp_path, monkeypatch):
@@ -263,3 +281,69 @@ def test_capture_runs_modules_independently_and_keeps_an_existing_result_on_fail
         module.capture_records(tmp_path, ['Old', 'New'], output)
     assert output.read_bytes() == previous
     assert sorted(path.name for path in tmp_path.iterdir()) == ['capture.jsonl']
+
+
+@pytest.mark.parametrize('change', ['missing', 'extra', 'owner', 'self', 'legacy'])
+def test_reader_requires_complete_checked_module_provenance(tmp_path, change):
+    row = deepcopy(next(iter(fixture().declarations.values())))
+    header = audit().record_header(['Old'], 1)
+    if change == 'missing': row['references'].pop(key('True'))
+    elif change == 'extra': row['references'][key('Outside')] = key('External')
+    elif change == 'owner': row['references'][key('True')] = 'Init.Prelude'
+    elif change == 'self': row['references'][row['name']] = key('External')
+    else:
+        header.pop('reference_provenance')
+        header['axiom_provenance'] = 'owning-module-environment/0'
+    path = tmp_path / 'records.jsonl'
+    write_records(path, [row], header=header)
+    with pytest.raises(ValueError): audit().read_records([path])
+
+
+def test_reference_renaming_is_scoped_to_selected_stored_identity_in_every_position():
+    old = deepcopy(next(iter(fixture().declarations.values())))
+    source, destination = key('Family.target'), key('Moved.target')
+    old.update(kind='recursor', type=['constant', source, []],
+               body=['projection', source, 0, ['constant', source, []]], axioms=[source],
+               shape={'mutual': [source], 'constructors': [source], 'inductive': source,
+                      'rules': [{'constructor': source, 'fields': 0, 'rhs': ['constant', source, []]}]})
+    mapping = {audit().identity('Old', source): audit().identity('New', destination)}
+    old['references'][source] = key('External')
+    assert audit().canonical(old, mapping) == audit().canonical(old)
+    old['references'][source] = key('Old')
+    assert audit().canonical(old, mapping) != audit().canonical(old)
+
+
+def test_same_kernel_names_in_isolated_modules_have_independent_mappings():
+    old, new = fixture(), fixture('New')
+    external = deepcopy(old.declarations[('Old', key('Family.target'))])
+    external.update(module='External', body=['natural', 1])
+    external['references'][external['name']] = key('External')
+    old.modules.add('External'); old.declarations[('External', external['name'])] = external
+    new.modules.add('External'); new.declarations[('External', external['name'])] = deepcopy(external)
+    moved = new.declarations.pop(('New', key('Family.target')))
+    moved.update(name=key('Moved.target'))
+    moved['references'][key('Moved.target')] = key('New')
+    new.declarations[('New', moved['name'])] = moved
+    # The theorem refers to External's version, despite the selected Old version.
+    for records, module in [(old, 'Old'), (new, 'New')]:
+        claim = records.declarations[(module, key('Family.claim'))]
+        claim['references'][key('Family.target')] = key('External')
+    result = audit().compare(old, new, {'Old': ['New']},
+                             [rename('Old', 'Family.target', 'New', 'Moved.target')])
+    assert result['status'] == 'preserved'
+    assert result['preserved_declarations'] == 3
+
+
+def test_ambiguous_split_needs_explicit_selected_identity_and_mapping_stays_injective():
+    before, after = fixture(), fixture('New')
+    extra = fixture('Other')
+    after.modules |= extra.modules; after.declarations.update(extra.declarations)
+    moves = {'Old': ['New', 'Other']}
+    with pytest.raises(ValueError, match='ambiguous declaration destination'):
+        audit().compare(before, after, moves)
+    explicit = [rename('Old', name, 'New', name) for name in ('Family.target', 'Family.claim')]
+    assert audit().compare(before, after, moves, explicit)['status'] == 'preserved'
+    with pytest.raises(ValueError, match='duplicate declaration mapping source'):
+        audit().compare(before, after, moves, explicit + explicit[:1])
+    with pytest.raises(ValueError, match='outside the explicit module move'):
+        audit().compare(before, after, {'Old': ['New']}, [rename('Old', 'Family.target', 'Other', 'Family.target')])

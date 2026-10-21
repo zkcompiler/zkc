@@ -18,8 +18,8 @@ def main():
     parser.add_argument('--capture-modules', type=Path, help='JSON list of exact modules to capture independently')
     parser.add_argument('--modules', type=Path, help='JSON object mapping old modules to destination lists')
     parser.add_argument('--declarations', type=Path,
-                        help='JSON object mapping encoded kernel name keys to encoded keys; '
-                             'display names are not identities')
+                        help='JSON list of {before: [module, encoded name], after: [module, encoded name]}; '
+                             'only selected stored identities may be mapped')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -33,7 +33,7 @@ def main():
         if not args.before or not args.after:
             raise ValueError('comparison requires --before and --after')
         modules = json.loads(args.modules.read_text()) if args.modules else {}
-        declarations = json.loads(args.declarations.read_text()) if args.declarations else {}
+        declarations = json.loads(args.declarations.read_text()) if args.declarations else []
         result = compare(read_records(args.before), read_records(args.after), modules, declarations)
     except (OSError, ValueError, TypeError, KeyError, IndexError, subprocess.CalledProcessError) as error:
         parser.exit(2, f'migration records refused: {error}\n')
