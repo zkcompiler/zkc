@@ -1,6 +1,6 @@
 # Run mathematical IR
 
-`zkc run-bundle` executes a compiler-produced joint bundle with the same role
+`zkc bundle run` executes a compiler-produced joint bundle with the same role
 interpreter used by proof hosts. It needs the compiler and Rust tools; this route
 does not call Lean. The [bundle specification](../spec/runtime/joint.md)
 defines its authority, input formats, limits and reports.
@@ -41,7 +41,7 @@ cat > "$work_dir/inputs.json" <<'JSON'
  [["Alice", [["0", "bool@native.bool/0", ["wire", "5a4b4356000500"]]], []],
   ["Bob", [], []]], []]
 JSON
-"$native" --json run-bundle "$work_dir/message.bundle" "$pin" "$work_dir/inputs.json"
+"$native" --json bundle run "$work_dir/message.bundle" "$pin" "$work_dir/inputs.json"
 ```
 
 The result is `status: executed`, `outcome: ["completed"]`, and Bob returns the
@@ -91,7 +91,7 @@ prefixes do not identify an artifact-specific execution path.
 ## Independent proofs
 
 For noninteractive execution, use the compiler's selected transcript construction
-and the separate `prove-bundle` and `verify-bundle` processes,
+and the separate `bundle prove` and `bundle verify` processes,
 described in [native proof deployments](../compiler/construction.md). A joint
 bundle is an interactive scheduling artifact, not the proof format. The installed
 joint host currently refuses transcript-typed entry inputs because it has no
@@ -135,8 +135,8 @@ JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
 ["zkc.native-proof-inputs/0", [], [], "", [], "0"]
 JSON
-"$native" --json prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/producer.json"
-"$native" --json verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/validator.json"
+"$native" --json bundle prove "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/producer.json"
+"$native" --json bundle verify "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/validator.json"
 cat "$work_dir/validator.json"
 printf 'Proof files: %s\n' "$work_dir"
 ```

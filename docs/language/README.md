@@ -105,7 +105,7 @@ Reports include the selected compiler, manifest when used, output path and packa
 SHA-256. Paths do not enter source capture identity. The `.zkpkg` extension is a
 filename convention; readers check the package format.
 
-`zkc check --api` also reports `project_graph` when using a manifest. Its
+`zkc inspect --view=api` also reports `project_graph` when using a manifest. Its
 `zkc.project-graph/0` diagnostic format records the root manifest and packages
 sorted by manifest context. Each package retains its own explicit module and
 asset maps and direct dependencies, mapping dependency labels to manifest
@@ -120,10 +120,10 @@ manifest regardless of how it was selected. Both maps are sorted by label.
 ## Inspect completed declarations
 
 ```sh
-zkc check --project=libraries/core/polynomial/zkc.toml --declarations
+zkc inspect --project=libraries/core/polynomial/zkc.toml --view=placement
 ```
 
-The report's `declarations` array lists public mathematical functions,
+The report's `checked.declarations` array lists public mathematical functions,
 local functions and protocols by qualified name. It shows static parameters,
 permissions, input/output types, participant roles, services, completed
 requirements and effects. Members name their interface/module owner and mark

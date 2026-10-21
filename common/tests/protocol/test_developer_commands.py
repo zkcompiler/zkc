@@ -26,22 +26,22 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
     assert not list(directory.iterdir()), "discovery should not create input or report files"
 
 
-@pytest.mark.parametrize("command", ["run-bundle", "prove-bundle", "verify-bundle",
+@pytest.mark.parametrize("command", ["bundle run", "bundle prove", "bundle verify",
                                     "new", "init", "prepare", "check", "compile", "inspect",
                                     "run", "prove", "verify", "bindings"])
 def test_runtime_command_help(toolchain, directory, command):
-    result = run_process([toolchain.runtime, '--json', command, "--help"], cwd=directory,
+    result = run_process([toolchain.runtime, '--json', *command.split(), "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert command in result.stdout and "Usage:" in result.stdout
-    later = run_process([toolchain.runtime, '--json', command, "missing", "--help"], cwd=directory,
+    later = run_process([toolchain.runtime, '--json', *command.split(), "missing", "--help"], cwd=directory,
                         capture_output=True, text=True, timeout=15)
     assert later.returncode == 0 and later.stdout == result.stdout
-    if command in ("verify", "verify-bundle"):
+    if command in ("verify", "bundle verify"):
         assert "--attempt" not in result.stdout
     if command == "prove":
         assert "--attempts=COUNT" in result.stdout
-    if command == "prove-bundle":
+    if command == "bundle prove":
         assert "--attempt-policy=FILE" in result.stdout
 
 
@@ -105,5 +105,32 @@ def test_published_mathematical_walkthrough(marker, toolchain, directory, journa
                                  (proof, "native-proof-deployment-binding", "00" * 32)]:
         candidate = output / "invalid.bin"
         candidate.write_bytes(data)
-        journal.json([toolchain.runtime, '--json', "verify-bundle", deployment, expected,
+        journal.json([toolchain.runtime, '--json', "bundle", "verify", deployment, expected,
                       output / "validator-inputs.json", candidate, "--allow-authored"], refuses=code)
+
+
+@pytest.mark.parametrize('command', [
+    ['inputs', 'init'], ['inputs', 'check'],
+    ['run-bundle'], ['prove-bundle'], ['verify-bundle'],
+])
+def test_removed_commands_have_no_compatibility_aliases(toolchain, directory, command):
+    for suffix in ([], ['--help']):
+        result = run_process([toolchain.runtime, '--json', *command, *suffix], cwd=directory,
+                             capture_output=True, text=True, timeout=15)
+        assert result.returncode == 2 and 'Unknown command' in result.stderr
+        assert not result.stdout
+    assert list(directory.iterdir()) == []
+
+
+def test_bundle_group_discovery_and_unknown_operations(toolchain, directory):
+    def invoke(*args):
+        return run_process([toolchain.runtime, *args], cwd=directory,
+                           capture_output=True, text=True, timeout=15)
+    help_result = invoke('bundle', '--help')
+    assert help_result.returncode == 0 and 'run|prove|verify' in help_result.stdout
+    assert invoke('bundle').returncode == 2
+    invalid = invoke('bundle', 'missing', '--help')
+    assert invalid.returncode == 2 and 'Unknown command' in invalid.stderr
+    top = invoke('--help').stdout
+    assert 'bundle' in top and 'bundle run' not in top and 'inputs init' not in top
+    assert list(directory.iterdir()) == []

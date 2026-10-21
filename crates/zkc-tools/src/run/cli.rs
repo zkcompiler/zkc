@@ -17,7 +17,7 @@ pub(crate) fn run(args: &crate::cli::Arguments<'_>) -> Json {
                 "--setups" => setups = SetupAuthority::parse(&read_regular(path, 64 * 1024)?)?,
                 "--capacity" => limits.capacity = Capacity::parse(&read_regular(path, 4096)?)?,
                 "--limits" => limits = limits.with_work_limits(&read_regular(path, 4096)?)?,
-                _ => unreachable!("validated run-bundle option"),
+                _ => unreachable!("validated bundle run option"),
             }
         }
         report["limits"] = limits.record();

@@ -50,7 +50,9 @@ it uses the policy of the authenticated package.
 `inspect` defaults to the checked Entry interface. `--view=project` shows the
 resolved dependency graph and settings; `api` shows checked public contracts and
 exports; `placement` shows completed callable contracts. Expression placement is
-available in Protocol IR dumps. `toolchain` works outside a project and reports
+available in Protocol IR dumps. `notations` shows syntax metadata, with optional
+`--notation-private` and `--notation-installation` visibility. Source inventories
+appear under `checked` in JSON reports. `toolchain` works outside a project and reports
 the selected compiler's installation, actual executable SHA-256 and capabilities,
 alongside the calling Rust runtime's count-instrument capability.
 
@@ -157,3 +159,11 @@ requires a separate frontend snapshot and recovery contract.
 The existing [benchmark runner](../../common/benchmarks/README.md) accepts named
 profile candidates, validates them before timing, and retains settings and
 compiler observations. It does not automatically select an optimization policy.
+
+## Command responsibilities
+
+`check` validates source; `inspect` queries checked metadata.
+`prepare` creates missing input templates, preserving existing regular files.
+`run --dry-run`, `prove --dry-run` and `verify --dry-run` validate the selected
+invocation without protocol execution, resource issuance or proof/result publication. Lower-level
+authenticated artifacts use `bundle run`, `bundle prove` and `bundle verify`.

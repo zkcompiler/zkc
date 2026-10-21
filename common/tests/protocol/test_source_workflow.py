@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[3]
                                       *(ROOT / 'common/tests/fixtures/projects').glob('*/zkc.toml')]),
                          ids=lambda path: path.parent.name)
 def test_example_project_declarations_match_explicit_inputs(toolchain, journal, directory, project):
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', '--declarations']
+    command = [toolchain.runtime, '--json', 'inspect', '--view=placement', f'--compiler={toolchain.compiler}']
     checked = journal.json([*command, f'--project={project}'], cwd=directory)
     explicit = project_arguments(project)
     assert checked.pop("project") == str(project)
     assert checked == journal.json([*command, *explicit], cwd=directory)
-    assert checked['scope'] == 'definitions'
+    assert checked['status'] == 'inspected' and 'entry' not in checked['checked']
 
 
 def test_mapped_library_inference_and_admission_scopes(toolchain, journal, directory):
@@ -48,7 +48,8 @@ run Job=Run;
         **{name: str(path) for name, path in library_inputs(*core_packages()).items()},
         'zkc::vector': str(ROOT / 'libraries/core/collections/vector.zkc')}, 'assets': {}})
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', f'--project={project}']
-    checked = journal.json([*command, '--declarations'])
+    checked = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
+                            f'--compiler={toolchain.compiler}', f'--project={project}'])['checked']
     fold = next(d for d in checked['declarations'] if d['name'] == 'main::fold')
     assert fold['outputs'][0]['type'] == fold['inputs'][0]['type']
     assert fold['outputs'][0]['type'] != fold['inputs'][2]['type']
@@ -128,18 +129,19 @@ def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal,
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                f'--project={project}', 'main::Job']
     baseline = journal.json(command)
-    inspected = journal.json([*command, '--api', '--declarations', '--notations',
-                              '--notation-private', '--notation-installation'])
-    assert inspected['api']['format'] == 'zkc.source-api/0'
-    assert inspected['api']['roots'] == ['main']
-    assert 'main::Job' in {item['name'] for item in inspected['api']['declarations']}
-    assert {key: value for key, value in inspected.items()
-            if key not in ('api', 'project_graph', 'declarations', 'notations')} == baseline
+    inspected = journal.json([toolchain.runtime, '--json', 'inspect', '--view=api',
+                              f'--compiler={toolchain.compiler}', f'--project={project}', 'main::Job'])
+    checked = inspected['checked']
+    assert checked['api']['format'] == 'zkc.source-api/0'
+    assert checked['api']['roots'] == ['main']
+    assert 'main::Job' in {item['name'] for item in checked['api']['declarations']}
+    identity = ('capture', 'installation', 'entries', 'entry', 'original')
+    assert {key: checked[key] for key in identity} == {key: baseline[key] for key in identity}
     assert inspected['project_graph']['format'] == 'zkc.project-graph/0'
     assert inspected['project_graph']['packages'][0]['modules'].keys() == {'main'}
-    explicit = journal.json([toolchain.runtime, '--json', 'check',
+    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--view=api',
                              f'--compiler={toolchain.compiler}',
-                             f'--module=main={directory / "main.zkc"}', '--api'])
+                             f'--module=main={directory / "main.zkc"}'])
     assert 'project_graph' not in explicit
 
 
@@ -160,8 +162,9 @@ def test_check_validates_requested_api_report(toolchain, journal, directory, req
     compiler = directory / 'compiler'
     compiler.write_text(f'#!{sys.executable}\nprint({json.dumps(baseline)!r})\n')
     compiler.chmod(0o755)
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={compiler}',
-               f'--project={project}', *(['--api'] if requested else [])]
+    command = [toolchain.runtime, '--json', 'inspect' if requested else 'check',
+               f'--compiler={compiler}', f'--project={project}',
+               *(['--view=api'] if requested else [])]
     journal.json(command, refuses='source-check-format')
 
 
@@ -263,11 +266,12 @@ def test_project_ambiguity_duplicates_and_io_refuse(toolchain, journal, director
 
 def test_relative_project_and_module_paths_share_the_callers_directory(toolchain, journal, directory):
     source, _ = source_project(directory)
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}']
-    checked = journal.json([*command, '--project=zkc.toml', 'main::Job', '--declarations'], cwd=directory)
-    assert checked['scope'] == 'entry' and checked['entry'] == 'main::Job'
-    assert 'declarations' in checked and 'check' not in checked
-    explicit = journal.json([*command, '--module=main=main.zkc', 'main::Job', '--declarations'], cwd=directory)
+    checked = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
+                            f'--compiler={toolchain.compiler}', '--project=zkc.toml', 'main::Job'], cwd=directory)
+    assert checked['checked']['entry'] == 'main::Job'
+    assert 'declarations' in checked['checked']
+    explicit = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
+                            f'--compiler={toolchain.compiler}', '--module=main=main.zkc', 'main::Job'], cwd=directory)
     assert checked.pop("project") == str(directory / "zkc.toml")
     assert checked == explicit
     before = source.read_bytes()
@@ -351,7 +355,8 @@ pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
     report = journal.json(command, refuses='source-compilation')
     assert 'ambiguous participant (P, V)' in report['diagnostics'] and '@Role' in report['diagnostics']
     source.write_text(source.read_text().replace('unresolved =', 'unresolved @P ='))
-    checked = journal.json([*command, '--declarations'])
+    checked = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
+                            *command[3:]])['checked']
     declarations = checked['declarations']
     assert [d['name'] for d in declarations] == ['library', 'library::identity', 'library::zero', 'main', 'main::Run']
     declarations = [d for d in declarations if d['kind'] != 'module']

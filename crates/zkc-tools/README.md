@@ -41,9 +41,9 @@ Host admission or trusted deployment configuration.
 
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 
-- `new`, `init`, `prepare`, `check`, `test`, `compile`, `inspect`, `inputs init`, `inputs check`.
-- `run`, `prove`, `verify`, `bindings`.
-- `run-bundle`, `prove-bundle`, `verify-bundle`.
+- `new`, `init`, `prepare`, `check`, `test`, `compile`, `inspect`.
+- `run`, `prove`, `verify` (each accepts `--dry-run`), `bindings`.
+- `bundle run`, `bundle prove`, `bundle verify`.
 
 An expected SHA-256 comes from trusted compilation or deployment configuration.
 Run preparation validates all role inputs before issuing execution resources.

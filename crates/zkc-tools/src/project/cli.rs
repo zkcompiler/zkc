@@ -176,29 +176,13 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         if checking {
             let checked = source
                 .compiler
-                .check(
-                    &source.project,
-                    entry,
-                    CheckOptions {
-                        declarations: args.has("--declarations"),
-                        api: args.has("--api"),
-                        notations: args.has("--notations").then(|| NotationOptions {
-                            include_private: args.has("--notation-private"),
-                            include_installation: args.has("--notation-installation"),
-                        }),
-                    },
-                )
+                .check(&source.project, entry, CheckOptions::default())
                 .map_err(|e| compiler_error(&mut report, e))?;
             let fields = serde_json::to_value(checked).expect("serializable check result");
             report
                 .as_object_mut()
                 .unwrap()
                 .extend(fields.as_object().unwrap().clone());
-            if args.has("--api")
-                && let Some(graph) = source.project.graph()
-            {
-                report["project_graph"] = json!(graph);
-            }
             report["scope"] = json!(if entry.is_some() {
                 "entry"
             } else {
@@ -284,7 +268,7 @@ pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
                     report["project_graph"] =
                         json!(source.project.graph().ok_or("source-project-required")?);
                 }
-                "api" | "placement" => {
+                "api" | "placement" | "notations" => {
                     let checked = source
                         .compiler
                         .check(
@@ -292,12 +276,20 @@ pub(crate) fn inspect(args: &Arguments<'_>) -> Json {
                             args.positional.first().copied(),
                             CheckOptions {
                                 api: view == "api",
-                                declarations: true,
-                                notations: None,
+                                declarations: view != "notations",
+                                notations: (view == "notations").then(|| NotationOptions {
+                                    include_private: args.has("--notation-private"),
+                                    include_installation: args.has("--notation-installation"),
+                                }),
                             },
                         )
                         .map_err(|e| compiler_error(&mut report, e))?;
                     report["checked"] = json!(checked);
+                    if view == "api"
+                        && let Some(graph) = source.project.graph()
+                    {
+                        report["project_graph"] = json!(graph);
+                    }
                     if view == "placement" {
                         report["placement_scope"] = json!(
                             "completed callable contracts; local expression placement is retained in Protocol IR dumps"

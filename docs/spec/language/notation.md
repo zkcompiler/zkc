@@ -259,9 +259,10 @@ bound module, separately from the source location's `module` name.
 `inspectNotations(CheckedProject, NotationInspectionOptions, Limits)` is the
 read-only Language inspection surface. `NotationInspectionOptions` has
 `includePrivate` and `includeInstallation`, both false by default. The
-CLI view is `zkc check --notations`; `--notation-private` includes captured
+CLI view is `zkc inspect --view=notations`; `--notation-private` includes captured
 private/local records and `--notation-installation` includes installation records.
-Both visibility switches require `--notations` and apply only to source checking.
+Both visibility switches require `--view=notations` and apply only to source inspection.
+The command report exposes the inventory under `checked.notations`.
 See [status](../../status.md#source-and-application-boundary) for API and CLI
 availability.
 

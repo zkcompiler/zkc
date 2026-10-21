@@ -44,7 +44,7 @@ pub fn human(report: &Value) -> String {
         let field = match view {
             "toolchain" => "toolchain",
             "project" => "project_graph",
-            "api" | "placement" => "checked",
+            "api" | "placement" | "notations" => "checked",
             _ => "interface",
         };
         if let Some(value) = report.get(field) {

@@ -45,8 +45,22 @@ pub struct Preparation {
     pub templates: Vec<Template>,
 }
 impl Compiler {
-    pub fn prepare(&self, project: &Project, name: Option<&str>) -> Result<Preparation, Error> {
-        let layout = project.layout().ok_or("source-project-required")?;
+    /// Without an output override, prepare all project Entries or a named one.
+    /// An explicit directory selects exactly one interface, including outside a project.
+    pub fn prepare(
+        &self,
+        project: &Project,
+        name: Option<&str>,
+        output: Option<&Path>,
+    ) -> Result<Preparation, Error> {
+        if let Some(directory) = output {
+            let interface = self.inspect(project, Selection { name, kind: None })?;
+            return Ok(Preparation {
+                templates: Template::inputs(directory, &interface)?,
+                entries: vec![interface],
+            });
+        }
+        let layout = project.layout().ok_or("source-output-required")?;
         let names = if let Some(name) = name {
             vec![name.to_owned()]
         } else {

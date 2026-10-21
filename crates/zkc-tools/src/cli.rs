@@ -32,7 +32,10 @@ macro_rules! entry_options {
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
 build/zkc/<qualified.name>.zkproof; run results use .results.json. Explicit paths win.
 Outside a project, input and proof paths must be explicit unless the input group is empty.
-Run sessions are generated when omitted. Use run --no-results to skip result publication.";
+Run sessions are generated when omitted. Use run --no-results to skip result publication.
+--dry-run checks inputs, setup authority and bounds without executing or issuing resources.
+It neither reads proof bytes nor publishes proofs/results; output paths need not exist.
+It cannot be combined with --instrument.";
 const COMMANDS: &[Command] = &[
     Command {
         name: "test", summary: "Run manifest test recipes through ordinary consumer Entries", positional: "[TEST]",
@@ -48,23 +51,13 @@ const COMMANDS: &[Command] = &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--report=DIRECTORY"),
-            Opt::new("--declarations"),
-            Opt::new("--api"),
-            Opt::new("--notations"),
-            Opt::new("--notation-private"),
-            Opt::new("--notation-installation"),
             Opt::new("--compiler=PATH"),
         ],
         description:
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name. The report lists Entries.
---declarations reports completed public callable contracts.
---api reports the public export graph, type contracts and checked source references.
---notations reports diagnostic syntax metadata. Add --notation-private for local/private
-records or --notation-installation for installation records; both require --notations.
-Syntax metadata is not a native interface. Named-call views are tooling aids,
-not capture-preserving rewrites.\nChecking does not execute the protocol or establish its security.",
+Use inspect for API, placement and notation inventories.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
         name: "compile",
@@ -100,49 +93,23 @@ Existing projects and conflicting files refuse; use prepare for an existing proj
     },
     Command {
         name: "prepare",
-        summary: "Prepare missing input templates for project Entries",
+        summary: "Prepare missing input templates",
         positional: "[ENTRY]",
-        options: &[Opt::new("--project=FILE"), Opt::new("--compiler=PATH")],
-        description: "Prepare all declared Entries, or one selected Entry. Repeated calls preserve existing files.
+        options: entry_options!(@inspection Opt::new("--output=DIRECTORY")),
+        description: "Prepare all project Entries, or one selected Entry. Explicit --output selects one Entry.
+Package and explicit-module modes require --output. Existing regular files are preserved.
 Values, dynamic lengths and variant cases must be filled by the user.
-Use inputs check to validate existing input contents; no protocol is executed.",
+Use run, prove or verify --dry-run to validate inputs without protocol execution.",
     },
     Command {
         name: "inspect",
         summary: "Show a checked Entry interface and input schema",
         positional: "[ENTRY]",
-        options: entry_options!(@inspection Opt::new("--view=entry|project|api|placement|toolchain"), Opt::new("--profile=NAME")),
-        description: ENTRY,
-    },
-    Command {
-        name: "inputs init",
-        summary: "Generate empty input templates for one Entry",
-        positional: "[ENTRY]",
-        options: entry_options!(@inspection Opt::new("--output=DIRECTORY")),
-        description: "Create only required files under inputs/<qualified.name>/ in a project.\nPackage and explicit-module modes require --output. Existing files are never replaced.\nNull placeholders need values; no witness, dynamic length or variant is invented.",
-    },
-    Command {
-        name: "inputs check",
-        summary: "Prepare invocation inputs without execution",
-        positional: "[ENTRY]",
-        options: entry_options!(
-            Opt::new("--operation=run|prove|verify"),
-            Opt::new("--session=LABEL"),
-            Opt::new("--input=ROLE=FILE").repeated(),
-            Opt::new("--public=FILE"),
-            Opt::new("--witness=FILE"),
-            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
-            Opt::new("--key=SLOT=FILE").repeated(),
-            Opt::new("--context=HEX").hex(None),
-            Opt::new("--transcript-budget=COUNT").unsigned(),
-            Opt::new("--external-work=COUNT").unsigned(),
-            SETUPS,
-            CAPACITY,
-            AUTHORED,
-            Opt::new("--limits=LIMITS"),
-            Opt::new("--attempts=COUNT").unsigned(),
-        ),
-        description: "--operation is required. Apply the same inputs and policies as execution.\nChecks setup material and native inputs; issues no resources and executes no protocol.\nVerification checks never open witness data or proof bytes.",
+        options: entry_options!(@inspection Opt::new("--view=entry|project|api|placement|notations|toolchain"), Opt::new("--profile=NAME"), Opt::new("--notation-private"), Opt::new("--notation-installation")),
+        description: "Inspect the selected Entry by default; other views show project, API, completed callable
+placement, notation or toolchain metadata. Notation visibility options require --view=notations.
+Source inventories check definitions and optionally a selected Entry; they do not execute it.
+Pinned packages support only the Entry view.",
     },
     Command {
         name: "run",
@@ -150,6 +117,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         positional: "[ENTRY]",
         options: entry_options!(
             Opt::new("--instrument=counts"),
+            Opt::new("--dry-run"),
             Opt::new("--session=LABEL"),
             Opt::new("--input=ROLE=FILE").repeated(),
             Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
@@ -168,6 +136,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         positional: "[ENTRY]",
         options: entry_options!(
             Opt::new("--instrument=counts"),
+            Opt::new("--dry-run"),
             Opt::new("--public=FILE"),
             Opt::new("--witness=FILE"),
             Opt::new("--output=PROOF"),
@@ -190,6 +159,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         positional: "[ENTRY]",
         options: entry_options!(
             Opt::new("--instrument=counts"),
+            Opt::new("--dry-run"),
             Opt::new("--public=FILE"),
             Opt::new("--proof=FILE"),
             Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
@@ -212,21 +182,21 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         description: "Generate typed inputs and an admission helper for the compiled package.\nProtocol execution uses the common Entry Host.",
     },
     Command {
-        name: "run-bundle",
+        name: "bundle run",
         summary: "Execute an authenticated run bundle",
         positional: "BUNDLE EXPECTED_SHA256 INPUTS",
         options: &[SETUPS, CAPACITY, Opt::new("--limits=LIMITS")],
         description: "BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs/0 array.\nEXPECTED_SHA256 comes from trusted compilation or deployment configuration.\nCompleted execution does not interpret protocol acceptance outputs.",
     },
     Command {
-        name: "prove-bundle",
+        name: "bundle prove",
         summary: "Produce a proof from a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
         options: &[SETUPS, Opt::new("--attempt-policy=FILE"), CAPACITY, AUTHORED],
         description: BUNDLE_PROOF,
     },
     Command {
-        name: "verify-bundle",
+        name: "bundle verify",
         summary: "Verify a proof with a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
         options: &[SETUPS, CAPACITY, AUTHORED],
@@ -238,23 +208,27 @@ fn command(name: &str) -> Option<&'static Command> {
 }
 fn help() -> String {
     let mut text = "zkc — compile and execute zero-knowledge protocols\n\nUsage: zkc COMMAND [ARGUMENTS]\n\nCommands:\n".to_owned();
-    for command in COMMANDS {
+    for command in COMMANDS
+        .iter()
+        .filter(|command| !command.name.contains(' '))
+    {
         text.push_str(&format!("  {:<24} {}\n", command.name, command.summary));
     }
+    text.push_str("  bundle                   Execute lower-level authenticated bundles (run, prove, verify)\n");
     text.push_str("\nOptions:\n  -h, --help                Show help\n  --version                 Show the package version\n  --json                    Print a structured command report\n\nUse 'zkc COMMAND --help' for arguments; use zkc-compile for direct IR.\nDocumentation: https://github.com/zkcompiler/zkc/tree/main/docs\n");
     text
 }
 
 /// Handle discovery without opening inputs or starting execution.
 pub fn discover(args: &[String]) -> Option<i32> {
-    if args.first().is_some_and(|s| s == "inputs") {
+    if args.first().is_some_and(|s| s == "bundle") {
         if args.len() == 1 || args[1] == "--help" || args[1] == "-h" {
             println!(
-                "Usage: zkc inputs init|check [ENTRY] [OPTIONS]\nUse zkc inputs COMMAND --help for details."
+                "Usage: zkc bundle run|prove|verify [ARGUMENTS]\nUse zkc bundle COMMAND --help for details."
             );
             return Some(if args.len() == 1 { 2 } else { 0 });
         }
-        let mut flattened = vec![format!("inputs {}", args[1])];
+        let mut flattened = vec![format!("bundle {}", args[1])];
         flattened.extend_from_slice(&args[2..]);
         return discover(&flattened);
     }
@@ -271,7 +245,7 @@ pub fn discover(args: &[String]) -> Option<i32> {
             println!("zkc {}", env!("CARGO_PKG_VERSION"));
             Some(0)
         }
-        [name, ..] if name != "inputs" && command(name).is_none() => {
+        [name, ..] if command(name).is_none() => {
             eprintln!("Unknown command '{name}'. Run zkc --help for commands.");
             Some(2)
         }
@@ -291,11 +265,11 @@ pub fn discover(args: &[String]) -> Option<i32> {
 /// Run a named command without process exit or printing. Structural argument
 /// errors are reported before file access, with a stable code and a message.
 pub fn run(name: &str, args: &[String]) -> serde_json::Value {
-    if name == "inputs" {
+    if name == "bundle" {
         let Some((subcommand, rest)) = args.split_first() else {
             return serde_json::json!({"status":"refused","phase":"arguments","code":"cli-usage"});
         };
-        return run(&format!("inputs {subcommand}"), rest);
+        return run(&format!("bundle {subcommand}"), rest);
     }
     let Some(spec) = command(name) else {
         return serde_json::json!({"status":"refused", "phase":"arguments", "code":"unknown-command"});
@@ -308,9 +282,9 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
                 "compile" => "zkc.entry-build/0",
                 "check" => "zkc.source-check/0",
                 "inspect" => "zkc.entry-inspection/0",
-                "init" | "new" | "prepare" | "inputs init" => "zkc.project-init/0",
-                "run-bundle" => "zkc.bundle-result/0",
-                "prove-bundle" | "verify-bundle" => "zkc.native-proof-run/0",
+                "init" | "new" | "prepare" => "zkc.project-init/0",
+                "bundle run" => "zkc.bundle-result/0",
+                "bundle prove" | "bundle verify" => "zkc.native-proof-run/0",
                 _ => "zkc.entry-result/0",
             };
             return serde_json::json!({"format":format, "status":"refused", "phase":"arguments",
@@ -320,16 +294,19 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     // Presentation is shared by all commands; execution adapters only receive
     // options that affect the requested operation.
     args.options.retain(|(key, _)| *key != "--json");
-    if name == "check"
-        && !args.options.iter().any(|(name, _)| *name == "--notations")
-        && args
-            .options
-            .iter()
-            .any(|(name, _)| matches!(*name, "--notation-private" | "--notation-installation"))
+    if args
+        .options
+        .iter()
+        .any(|(name, _)| matches!(*name, "--notation-private" | "--notation-installation"))
+        && args.value("--view") != Some("notations")
     {
-        return serde_json::json!({"format":"zkc.source-check/0", "status":"refused",
+        return serde_json::json!({"format":"zkc.tool-inspection/0", "status":"refused",
             "phase":"arguments", "code":"cli-option",
-            "message":"notation visibility options require --notations"});
+            "message":"notation visibility options require --view=notations"});
+    }
+    if args.has("--dry-run") && args.has("--instrument") {
+        return serde_json::json!({"status":"refused", "phase":"arguments", "code":"cli-option",
+            "message":"--dry-run does not execute; remove --instrument"});
     }
     if let Some(instrument) = args.value("--instrument")
         && (instrument != "counts" || !zkc_runtime::vm::ExecutionCounts::ENABLED)
@@ -353,8 +330,8 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
             crate::project::cli::inspect(&args)
         }
         "compile" | "check" => crate::project::cli::run(name, &args),
-        "run-bundle" => crate::run::cli::run(&args),
-        "prove-bundle" | "verify-bundle" => crate::proof::cli::run(name == "prove-bundle", &args),
+        "bundle run" => crate::run::cli::run(&args),
+        "bundle prove" | "bundle verify" => crate::proof::cli::run(name == "bundle prove", &args),
         _ => crate::entry::cli::run(name, &args),
     };
     if directory.is_some() || args.has("--instrument") {
@@ -403,34 +380,73 @@ mod tests {
     }
 
     #[test]
-    fn notation_flags_are_check_only_unique_and_require_the_inventory() {
-        let check = command("check").unwrap();
-        assert!(check.parse(&args(&["--notations"])).is_ok());
+    fn inventory_flags_belong_to_inspect_and_require_the_notation_view() {
+        let inspect = command("inspect").unwrap();
         let values = args(&[
-            "--notations",
+            "--view=notations",
             "--notation-private",
             "--notation-installation",
         ]);
-        let parsed = check.parse(&values).unwrap();
-        assert_eq!(parsed.options.len(), 3);
+        assert_eq!(inspect.parse(&values).unwrap().options.len(), 3);
         for flag in [
+            "--api",
+            "--declarations",
             "--notations",
             "--notation-private",
             "--notation-installation",
         ] {
-            assert_eq!(run("compile", &args(&[flag]))["code"], "cli-option");
-            assert_eq!(run("check", &args(&[flag, flag]))["code"], "cli-option");
             assert_eq!(
-                run("check", &[format!("{flag}=true")])["code"],
+                run("check", &args(&[flag, "--project=/missing"]))["code"],
                 "cli-option"
             );
-            assert_eq!(run("check", &[format!("{flag}=")])["code"], "cli-option");
+            assert_eq!(run("compile", &args(&[flag]))["code"], "cli-option");
         }
         for flag in ["--notation-private", "--notation-installation"] {
-            let report = run("check", &args(&[flag, "--project=does-not-exist.toml"]));
-            assert_eq!(report["code"], "cli-option");
-            assert_eq!(report["phase"], "arguments");
+            for options in [
+                args(&[flag, "--project=/missing"]),
+                args(&["--view=api", flag, "--project=/missing"]),
+            ] {
+                let report = run("inspect", &options);
+                assert_eq!(report["code"], "cli-option");
+                assert_eq!(report["phase"], "arguments");
+            }
+            assert_eq!(
+                inspect.parse(&args(&[flag, flag])).err().unwrap().code,
+                "cli-option"
+            );
+            assert_eq!(
+                inspect.parse(&[format!("{flag}=true")]).err().unwrap().code,
+                "cli-option"
+            );
         }
+    }
+    #[test]
+    fn dry_run_uses_each_operations_options_and_cannot_collect_execution_counts() {
+        for name in ["run", "prove", "verify"] {
+            let spec = command(name).unwrap();
+            assert!(spec.parse(&args(&["--dry-run"])).unwrap().has("--dry-run"));
+            for values in [
+                args(&["--dry-run=true"]),
+                args(&["--dry-run", "--dry-run"]),
+                args(&["--operation=run"]),
+                args(&["--dry-run", "--instrument=counts", "--project=/missing"]),
+            ] {
+                let report = run(name, &values);
+                assert_eq!(report["code"], "cli-option", "{name}: {report}");
+                assert_eq!(report["phase"], "arguments");
+            }
+        }
+        assert_eq!(
+            run("verify", &args(&["--dry-run", "--witness=/missing"]))["code"],
+            "cli-option"
+        );
+        assert_eq!(
+            run(
+                "run",
+                &args(&["--dry-run", "--no-results", "--results=/missing"])
+            )["code"],
+            "cli-option"
+        );
     }
 
     #[test]
@@ -460,7 +476,7 @@ mod tests {
             assert_eq!(report["phase"], "arguments", "{option}");
             assert_eq!(report["code"], "cli-option", "{option}");
         }
-        for name in ["inspect", "inputs init"] {
+        for name in ["inspect", "prepare"] {
             assert!(!command(name).unwrap().help().contains("--no-simplify"));
             assert!(!command(name).unwrap().help().contains("--release-storage"));
             assert!(
@@ -494,7 +510,7 @@ mod tests {
                 "cli-option"
             );
         }
-        for name in ["verify", "verify-bundle"] {
+        for name in ["verify", "bundle verify"] {
             assert!(!command(name).unwrap().help().contains("--attempt"));
             assert_eq!(
                 run(name, &args(&["p", "h", "i", "o", "--attempts=3"]))["code"],
@@ -530,14 +546,7 @@ mod tests {
     }
     #[test]
     fn collect_fold_flag_is_unique_valueless_and_requires_source_compilation() {
-        for name in [
-            "compile",
-            "run",
-            "prove",
-            "verify",
-            "inputs check",
-            "bindings",
-        ] {
+        for name in ["compile", "run", "prove", "verify", "bindings"] {
             let spec = command(name).unwrap();
             assert!(spec.help().contains("--fuse-collect-fold"), "{name}");
             let values = args(&["--fuse-collect-fold"]);
@@ -567,7 +576,7 @@ mod tests {
                 assert_eq!(report["phase"], "arguments", "{name}");
             }
         }
-        for name in ["check", "inspect", "inputs init"] {
+        for name in ["check", "inspect", "prepare"] {
             let spec = command(name).unwrap();
             assert!(!spec.help().contains("--fuse-collect-fold"));
             assert_eq!(
@@ -597,7 +606,17 @@ mod tests {
     }
     #[test]
     fn removed_commands_are_not_aliases() {
-        for name in ["run-entry", "produce-native-proof", "validate-native-proof"] {
+        for name in [
+            "run-entry",
+            "produce-native-proof",
+            "validate-native-proof",
+            "inputs",
+            "inputs init",
+            "inputs check",
+            "run-bundle",
+            "prove-bundle",
+            "verify-bundle",
+        ] {
             assert!(command(name).is_none());
             assert_eq!(run(name, &[])["code"], "unknown-command");
         }

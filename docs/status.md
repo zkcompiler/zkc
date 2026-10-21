@@ -22,8 +22,8 @@ defines when versions change.
 | Native proof | [Policy, descriptor, deployment, construction map and invocation binding](spec/formats/proof.md), with `zkc.native-origin/0` occurrences |
 | Installed declarations | [`zkc.contract-declarations/0`](compiler/operation-contracts.md), declaration inventory; the language catalog contributes an opaque compiler fingerprint |
 
-Use `zkc run`, `prove` and `verify` for named Entries, and `run-bundle`,
-`prove-bundle` and `verify-bundle` for lower-level artifacts. In the C++ SDK,
+Use `zkc run`, `prove` and `verify` for named Entries, and `bundle run`,
+`bundle prove` and `bundle verify` for lower-level artifacts. In the C++ SDK,
 `Zkc::Compiler` owns compilation and packaging;
 `Zkc::Driver` separately owns CLI parsing. Request `Tools` for installed commands.
 See the [SDK reference](../compiler/README.md#components-and-ownership).
@@ -72,7 +72,7 @@ correspondence.
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
 Explicit local workspace catalogs select leaf packages alongside path
 dependencies, preserve capture identity, and report selected-edge provenance in
-`check --api`. The installed package includes the catalog and library sources.
+`inspect --view=api`. The installed package includes the catalog and library sources.
 Batch coset extension is installed on BN254 Fr, KoalaBear and its quartic/octic
 extensions. It constructs one private column-major output and retains non-base
 shifts; shrinking checks each column's actual normalized degree. Compiler,
@@ -98,8 +98,9 @@ names by run/proof kind; inspection and compilation require a single Entry.
 `new` and `init` create separate protocol and Entry files with input templates;
 `prepare` creates missing maps while preserving existing values. Manifest-relative
 paths supply omitted inputs, proof files and run results. Runs obtain a fresh
-session unless supplied explicitly. `inputs check` shares native preparation without
-execution. Source execution compiles in memory; pinned package mode is explicit.
+session unless supplied explicitly. `run --dry-run`, `prove --dry-run` and
+`verify --dry-run` share native input validation without execution. Source
+execution compiles in memory; pinned package mode is explicit.
 The public Rust `project` API owns project/compiler access, path layout and
 preparation plans. Commands print human summaries; automation uses `--json`.
 `zkc check` reports canonical Entry names and checks definitions without selection; a positional Entry selector also checks closure
@@ -232,7 +233,7 @@ and [SDK dependencies](../compiler/README.md#installed-package-discovery) own th
 encoding and pinned Unicode/NFC boundary.
 
 Checked public API inspection is available through `inspectPublicAPI` and
-`zkc check --api`. Its compact export graph covers aliases, types and notation
+`zkc inspect --view=api`. Its compact export graph covers aliases, types and notation
 routes; captured source references retain the selected provider and canonical
 target. Private field names and associated representations are omitted from
 public type contracts. The bounded diagnostic view supplies no linking authority
@@ -241,7 +242,7 @@ and changes no source or executable identity. The
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
-`includeInstallation`, and `zkc check --notations` with `--notation-private` and
+`includeInstallation`, and `zkc inspect --view=notations` with `--notation-private` and
 `--notation-installation`. The version-0 diagnostic view covers descriptors,
 bindings, scopes and occurrences, with private/local data hidden by default and
 installation data opt-in. [Notation limits](spec/language/notation.md#bounds)

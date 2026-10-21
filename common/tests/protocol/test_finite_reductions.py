@@ -186,8 +186,7 @@ def test_published_finite_reductions_project(toolchain, journal, directory, flag
     assert built['options'] == json.loads(package.read_text())['options']
     source = [f'--compiler={toolchain.compiler}',
               f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml', *flags]
-    checked = journal.json([toolchain.runtime, '--json', 'inputs', 'check',
-                            '--operation=run', *source, *request])
+    checked = journal.json([toolchain.runtime, '--json', 'run', '--dry-run', *source, *request])
     assert checked['status'] == 'inputs-checked'
     direct_outputs = directory / 'direct.outputs.json'
     direct = journal.json([toolchain.runtime, '--json', 'run', *source, *request,
@@ -441,7 +440,7 @@ def test_mathematical_flag_requires_source_compilation(toolchain, journal, direc
                  f'--module=sample={source}', flag], refuses='source.options')
     journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', flag], refuses='cli-option')
-    for operation in ('run', 'prove', 'verify', 'bindings', 'inputs check'):
+    for operation in ('run', 'prove', 'verify', 'bindings'):
         refused = journal.json([toolchain.runtime, '--json', *operation.split(),
                                 '--package=missing.zkpkg', f'--sha256={"0" * 64}',
                                 flag], refuses='cli-usage')

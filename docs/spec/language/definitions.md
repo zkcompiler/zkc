@@ -243,8 +243,8 @@ the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
-`zkc check --declarations` adds a diagnostic array of public modules, interfaces,
-completed callable contracts and constructions from captured modules, sorted by qualified name, under `declarations`.
+`zkc inspect --view=placement` reports a diagnostic array of public modules, interfaces,
+completed callable contracts and constructions from captured modules, sorted by qualified name, under `checked.declarations`.
 Module/interface records report directly declared public member names and any
 implemented contract. The inventory uses canonical declaration paths with public
 owners; it does not enumerate import alias or reexport routes.
@@ -267,7 +267,7 @@ not a serialization accepted by the checker. The view never supplies linking
 or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
 an exceeded bound refuses without publishing a partial result.
 
-`zkc check --api` adds a diagnostic `api` object with format `zkc.source-api/0`.
+`zkc inspect --view=api` reports a diagnostic `checked.api` object with format `zkc.source-api/0`.
 Its `roots` are the captured root modules. Its `exports` form a compact graph:
 each edge records the canonical `owner`, exported `name`, canonical `target`,
 whether it is `imported`, and its source location. Following an alias does not

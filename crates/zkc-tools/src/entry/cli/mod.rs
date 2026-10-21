@@ -25,7 +25,7 @@ type Result<T> = std::result::Result<T, String>;
 pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     let format = match command {
         "inspect" => "zkc.entry-inspection/0",
-        "inputs init" | "init" | "new" | "prepare" => "zkc.project-init/0",
+        "init" | "new" | "prepare" => "zkc.project-init/0",
         _ => "zkc.entry-result/0",
     };
     let mut report = json!({"format":format,"status":"refused","phase":"arguments"});
@@ -57,35 +57,30 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     if matches!(command, "init" | "new") {
         return initialize::project(command, args, report);
     }
+    Target::validate(args)?;
     if command == "prepare" {
         return initialize::prepare(args, report);
     }
-    Target::validate(args)?;
-    let checking = command == "inputs check";
-    let operation = if checking {
-        Some(Operation::parse(
-            args.value("--operation").ok_or("cli-usage")?,
-        )?)
-    } else if matches!(command, "run" | "prove" | "verify") {
-        Some(Operation::parse(command)?)
+    let checking = args.has("--dry-run");
+    if checking {
+        report["dry_run"] = json!(true);
+    }
+    let operation = if matches!(command, "run" | "prove" | "verify") {
+        let operation = Operation::parse(command)?;
+        operation.validate(args, checking)?;
+        Some(operation)
     } else {
         None
     };
-    if let Some(operation) = operation {
-        operation.validate(args, checking)?;
-    }
     if command == "bindings" && !args.has("--output") {
         return Err("cli-usage".into());
     }
     let target = Target::load(args, report)?;
     let name = args.positional.first().copied();
-    if matches!(command, "inspect" | "inputs init") {
+    if command == "inspect" {
         report["phase"] = json!("interface");
         let interface = target.inspect(name, report)?;
         report["entry"] = json!(interface.entry());
-        if command == "inputs init" {
-            return initialize::inputs(&target, &interface, args, report);
-        }
         report["interface"] = interface.describe();
         report["status"] = json!("inspected");
         report["phase"] = json!("complete");
