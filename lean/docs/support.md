@@ -95,21 +95,30 @@ soundness, randomness or transcript encoding.
 
 ## Compiled subjects
 
-One row per subject manifest, from its generated [assurance report](spec/assurance-report.md).
+One row per selected source claim, or per subject with no selected claim, from its
+generated [assurance report](spec/assurance-report.md). A certified row establishes
+the requested interpreted claim under its recorded assumptions; native execution
+correspondence remains open. Other Entry trials stay visible in the full report.
 
 <!-- BEGIN GENERATED subject-rows: lean/checks/check_records.py --write -->
 | Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
 |---|---|---|---|---|---|---|
-| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| composed-sumcheck | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
-| deferred-rounds | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
-| gkr | `example::Proof` | ideal-meaning | soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: the manifest names no application declaration |
-| guess | `example::Proof` | ideal-meaning | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| okamoto-proof | `example::Proof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| okamoto | `` |  |  |  |  | unresolved: the manifest claims no property |
-| schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
+| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| composed-sumcheck | `example::Proof` |  |  |  |  | no-claim |
+| deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
+| gkr | `example::Proof` |  |  |  |  | no-claim |
+| guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| okamoto-proof | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| okamoto | `` |  |  |  |  | open: no bound source claim export was produced |
+| schnorr-and | `example::AndProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | interpreted-executable-bytes | knowledge |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | ideal-meaning | user.view_equal |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | ideal-meaning | user.view_equal |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | interpreted-executable-bytes | soundness |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 <!-- END GENERATED subject-rows -->
 
 ## Finite fold subjects
