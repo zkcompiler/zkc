@@ -80,6 +80,113 @@ int main() {
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
       throw std::runtime_error(toString(std::move(e)));
   });
+  for (StringRef disposal : {"drop", "consume"})
+    for (bool reuse : {false, true})
+      cases.run(
+          "source disposal publishes with Copy reuse " + disposal +
+              (reuse ? " reused" : " discarded"),
+          [=] {
+            auto type = disposal == "drop" ? "bool" : "Item";
+            auto fallback = disposal == "drop" ? "false" : "Item{bit:false}";
+            auto text =
+                "module sample;struct Item{pub bit:bool}entry fn Demo(x:" +
+                std::string(type) + ")->" + type + "{" + disposal.str() +
+                " x;return " + (reuse ? "x" : fallback) + ";}";
+            auto entry = take(compileEntry(original(text)));
+            auto artifact = take(json::parse(entry.bytes()));
+            auto &body = *artifact.getAsObject()
+                              ->getArray("functions")
+                              ->front()
+                              .getAsObject()
+                              ->getObject("body");
+            auto input = *body.getArray("arguments")
+                              ->front()
+                              .getAsObject()
+                              ->getInteger("id");
+            auto &operations = *body.getArray("operations");
+            require(operations.size() >= 3,
+                    "disposal omitted copy, drop or logical unit");
+            auto &copy = *operations[0].getAsObject();
+            auto &drop = *operations[1].getAsObject();
+            auto &unit = *operations[2].getAsObject();
+            auto temporary =
+                *copy.getArray("results")->front().getAsObject()->getInteger(
+                    "id");
+            require(copy.getString("op") == "project" &&
+                        copy.getArray("path")->empty() &&
+                        *copy.getArray("operands") == json::Array{input} &&
+                        temporary != input && drop.getString("op") == "drop" &&
+                        *drop.getArray("operands") == json::Array{temporary} &&
+                        drop.getArray("results")->empty() &&
+                        unit.getString("op") == "construct" &&
+                        unit.getArray("operands")->empty() &&
+                        unit.getArray("results")
+                                ->front()
+                                .getAsObject()
+                                ->getObject("schema")
+                                ->getString("kind") == "unit",
+                    "disposal does not preserve source Copy/unit semantics");
+            if (reuse)
+              require(*body.getArray("returns") == json::Array{input},
+                      "disposal removed the original Copy value");
+            take(packageEntry(entry));
+            auto admitted = take(admitOriginal(
+                entry.original().entry(), entry.original().bytes(),
+                entry.original().interfaceJson()));
+            require(admitted.identity() == entry.original().identity(),
+                    "disposal changed original re-admission");
+            drop["operands"] = json::Array{input};
+            if (reuse)
+              rejects(checkHostArtifact(printJson(artifact),
+                                        entry.original().interface()),
+                      "entry.scope");
+            else {
+              drop["results"] = json::Array(*unit.getArray("results"));
+              rejects(checkHostArtifact(printJson(artifact),
+                                        entry.original().interface()),
+                      "entry.operation");
+            }
+          });
+  cases.run("non-Copy disposal stays inside numerical helpers", [] {
+    auto entry = take(compileEntry(original(R"(module sample;
+      #[affine] struct Disposable {value:bool}
+      #[linear] struct Required {value:bool}
+      fn dispose(x:bool)->bool {
+        let a=Disposable{value:x};drop a;
+        let b=Required{value:x};consume b;
+        return x;
+      }
+      entry fn Demo(x:bool)->bool{return dispose(x);})")));
+    take(packageEntry(entry));
+  });
+  cases.run("owner-module opaque factories and numerical pass-through publish",
+            [] {
+              auto entry = take(compileEntry(original(R"(module sample;
+      module Vault {
+        pub type Item:Copy+Drop=bool;
+        pub fn make(x:bool)->Item{return Item(x);}
+        pub fn read(x:Item)->bool{return unpack(x);}
+      }
+      fn retain(x:Vault::Item)->Vault::Item{return x;}
+      entry fn Demo(x:bool)->bool{return Vault::read(retain(Vault::make(x)));}
+    )")));
+              auto artifact = take(json::parse(entry.bytes()));
+              bool opaqueResult = false, opaquePass = false;
+              for (const auto &value :
+                   *artifact.getAsObject()->getArray("calculations")) {
+                auto &calculation = *value.getAsObject();
+                auto &result =
+                    *calculation.getArray("results")->front().getAsObject();
+                if (result.getString("kind") != "associated")
+                  continue;
+                opaqueResult |= !*result.getBoolean("constructible");
+                auto &parameter = calculation.getArray("parameters")->front();
+                opaquePass |= parameter == json::Value(json::Object(result));
+              }
+              require(opaqueResult && opaquePass,
+                      "opaque factory or pass-through lost its logical schema");
+              take(packageEntry(entry));
+            });
   cases.run("stopped branches retain valid structured continuations", [] {
     auto entry = take(compileEntry(original(R"(module sample;
       entry fn Demo(go:bool)->bool {
@@ -156,6 +263,32 @@ int main() {
       }
       rejects(checkHostArtifact(bytes, entry.original().interface()), code);
     });
+  cases.run("Host publication shares Rust lexical resource bounds", [] {
+    auto entry = compiled();
+    auto check = [&](StringRef bytes, StringRef code) {
+      rejects(checkHostArtifact(bytes, entry.original().interface()), code);
+    };
+    // One array and 199999 scalar tokens reach structural admission. One more
+    // token must refuse before shape checks, just as the independent reader.
+    std::string nodes = "[0";
+    for (unsigned i = 1; i < 199999; ++i)
+      nodes += ",0";
+    nodes += ']';
+    check(nodes, "entry.artifact");
+    nodes.insert(nodes.size() - 1, ",0");
+    check(nodes, "source.limit");
+    check("{\"x\":12345678901}", "source.limit");
+    // Resource refusal precedes invalid numeric spelling throughout the scan.
+    check("[-0,12345678901]", "source.limit");
+    check("[-0," + std::string(256, '[') + "0" + std::string(256, ']') + "]",
+          "source.limit");
+    check("[-0]", "entry.artifact");
+    // Host carriers embed programs larger than an interface metadata string.
+    // That allowance does not bypass the document's fixed 16 MiB ceiling.
+    check("{\"program\":\"" + std::string(2 * 1024 * 1024, 'x') + "\"}",
+          "entry.artifact");
+    check(std::string(16 * 1024 * 1024 + 1, ' '), "source.limit");
+  });
   cases.run("Host call depth includes cached callee suffixes", [] {
     auto entry = take(compileEntry(original(R"(module sample;
       entry fn A(x:bool)->bool{return x;}
@@ -313,9 +446,12 @@ int main() {
       auto signature = operation == "verify" ? "candidate:Family::Proof"
                                              : "witness:Family::Witness";
       auto argument = operation == "verify" ? "candidate" : "witness";
-      auto source = definition + "entry fn Demo(public:Family::Public," +
-                    signature + "){return Family::" + operation.str() +
-                    "(public," + argument + ");}";
+      auto result = operation == "verify" ? "Family::VerifyResult"
+                                          : "Family::ProveResult";
+      auto source = definition + "fn retain(x:" + result + ")->" + result +
+                    "{return x;}entry fn Demo(public:Family::Public," +
+                    signature + "){return retain(Family::" + operation.str() +
+                    "(public," + argument + "));}";
       auto entry = take(compileEntry(original(source)));
       auto artifact = take(json::parse(entry.bytes()));
       const auto &deployments =
@@ -324,6 +460,9 @@ int main() {
                   deployments[0].getAsObject()->getString("operation") ==
                       operation,
               "proof deployment inventory");
+      require(!artifact.getAsObject()->getArray("calculations")->empty(),
+              "native result did not cross the numerical helper");
+      take(packageEntry(entry));
       auto package = take(
           json::parse(*deployments[0].getAsObject()->getString("package")));
       auto proof = take(parseJson(*package.getAsObject()->getString("artifact"),

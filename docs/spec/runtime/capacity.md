@@ -32,6 +32,16 @@ live/cumulative budgets all apply. For example, a 32-byte scalar vector reaches
 the 64 MiB decoding peak bound before 1,048,576 elements. The 16 MiB invocation
 JSON envelope also counts hexadecimal text and duplicated public/data rows.
 
+Entry function output conversion preserves owner validation for standalone
+native leaves, including leaves in source products. Constructing a native
+variant checks its complete active arm's element/group totals and retained
+construction peak. Opaque opening-state collections count handles, not elements
+of their backing tables; singular key/state handles add no backing-element
+collection count. Retained-byte and owner validation limits still apply.
+Before each native payload measurement, the Host charges its conservative
+retained-byte bound to the invocation-wide logical work allowance, including
+repeated uses of shared data. Standalone output leaves need no such scan.
+
 The selected policy reaches native data loading, backend kernels, setup import,
 service registry and runner budgets. Attempts cannot exceed these invocation
 ceilings. Signature-only deployment admission uses a dummy default backend;

@@ -22,6 +22,10 @@ values in that schema. `Client.prove` returns exact candidate proof bytes;
 `Execution.report` retains native diagnostics on success or failure. Failed
 execution publishes no source value. A source `Rejected` result is ordinary data.
 
+Pass `options=["--dry-run"]` to `run`, `prove` or `verify` to validate inputs
+through native admission. Success has status `inputs-checked`, `ok == True`,
+and no returned value or proof; execution artifacts are not read.
+
 Use `Client(package=path, sha256=trusted_pin)` for pinned deployment. Services,
 setup authority and limits use the same explicit options as the CLI. Calls start
 fresh processes; the Rust SDK also supports retaining admitted Hosts for reuse.

@@ -1,5 +1,6 @@
 //! Public VM API controls with an independent, noncryptographic test backend.
 use serde_json::{Value as Json, json};
+use std::cell::Cell;
 use std::sync::{Arc, Barrier, Mutex};
 use zkc_runtime::{
     interpreter::{LocalRunner, Runner},
@@ -16,6 +17,8 @@ enum Number {
     Bool(bool),
     Shared(Arc<u64>),
     Watched(Arc<LiveDropProbe>),
+    WatchedInline(Arc<LiveDropProbe>),
+    WatchedIndex(Arc<LiveDropProbe>),
 }
 struct LiveDropProbe {
     ledger: ExecutionLedger,
@@ -42,7 +45,7 @@ impl Drop for LiveDropProbe {
 impl Value for Number {
     fn physical_type(&self) -> PhysicalType {
         PhysicalType::parse(match self {
-            Self::Index(_) => INDEX,
+            Self::Index(_) | Self::WatchedIndex(_) => INDEX,
             Self::Bool(_) => BOOL,
             _ => FIELD,
         })
@@ -57,7 +60,7 @@ impl Value for Number {
                 shared(Backing::of(value, 8));
                 0
             }
-            Self::Watched(value) => {
+            Self::Watched(value) | Self::WatchedIndex(value) => {
                 shared(Backing::of(value, 8));
                 0
             }
@@ -67,7 +70,7 @@ impl Value for Number {
     fn validation_backing(&self) -> Option<Backing> {
         match self {
             Self::Shared(value) => Some(Backing::of(value, 8)),
-            Self::Watched(value) => Some(Backing::of(value, 8)),
+            Self::Watched(value) | Self::WatchedIndex(value) => Some(Backing::of(value, 8)),
             _ => None,
         }
     }
@@ -77,6 +80,7 @@ impl Value for Number {
     fn control_index(&self) -> Result<u64, BackendError> {
         match self {
             Self::Index(n) => Ok(*n),
+            Self::WatchedIndex(_) => Ok(1),
             _ => Err(BackendError::new("index")),
         }
     }
@@ -100,8 +104,11 @@ struct Arithmetic {
     leaves: Vec<(FrameId, FrameExit)>,
     calls: usize,
     fail_leave: bool,
+    fail_enter: bool,
+    fail_leave_at: Option<u64>,
     wrong_signature: bool,
     reject_values: bool,
+    value_validations: Cell<usize>,
     // A deliberately unavailable producer-only implementation.
     allow_multiply: bool,
     fail_apply: bool,
@@ -130,6 +137,7 @@ impl Backend for Arithmetic {
         })
     }
     fn validate_value(&self, _: &Number) -> Result<(), BackendError> {
+        self.value_validations.set(self.value_validations.get() + 1);
         if self.reject_values {
             Err(BackendError::new("independent-value-refusal"))
         } else {
@@ -138,6 +146,9 @@ impl Backend for Arithmetic {
     }
     fn enter_frame(&mut self, frame: &Frame, _: &[Number]) -> Result<(), BackendError> {
         assert_eq!(frame.parent(), self.frames.last().copied());
+        if self.fail_enter {
+            return Err(BackendError::new("entry-refused"));
+        }
         self.frames.push(frame.id());
         self.entered.push(frame.kind().clone());
         Ok(())
@@ -150,7 +161,7 @@ impl Backend for Arithmetic {
     ) -> Result<(), BackendError> {
         assert_eq!(self.frames.pop(), Some(frame.id()));
         self.leaves.push((frame.id(), exit));
-        if self.fail_leave {
+        if self.fail_leave || self.fail_leave_at == Some(frame.id().get()) {
             Err(BackendError::new(format!("cleanup:{}", frame.id().get())))
         } else {
             Ok(())
@@ -178,6 +189,31 @@ impl Backend for Arithmetic {
             [Number::Field(a), Number::Field(b)] => Ok(vec![Number::Field(a + b)]),
             _ => Err(BackendError::new("arithmetic-operands")),
         }
+    }
+    fn service_support(&self, contract: ServiceContract, method: &str) -> Option<ServiceSupport> {
+        if contract != ServiceContract::RandomExtensionField {
+            return None;
+        }
+        let signature = match method {
+            "draw" => ServiceSignature {
+                inputs: vec![],
+                outputs: vec![
+                    PhysicalType::default_for(
+                        LogicalType::parse("field:koala-bear.ext8-binomial3").unwrap(),
+                    )
+                    .unwrap(),
+                ],
+            },
+            "index" => ServiceSignature {
+                inputs: vec![PhysicalType::parse(INDEX).unwrap()],
+                outputs: vec![PhysicalType::parse(INDEX).unwrap()],
+            },
+            _ => return None,
+        };
+        Some(ServiceSupport {
+            signature,
+            max_retained_bytes: 8,
+        })
     }
 }
 fn module(functions: Json, participants: Json, entries: Json) -> Json {
@@ -289,6 +325,7 @@ fn standalone_helper_uses_entry_custody_and_local_frames_with_stable_results() {
     .ok()
     .unwrap();
     assert_eq!(runner.backend().entered, [FrameKind::Entry]);
+    assert_eq!(runner.backend().value_validations.get(), 2);
     assert!(matches!(runner.execute(),Action::Returned(values) if values == &[Number::Field(7)]));
     let usage = runner.usage();
     assert_eq!(usage.instructions, 2);
@@ -615,6 +652,496 @@ fn live_allowance_counts_parent_child_and_retained_outputs_until_drop() {
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
     assert_eq!(child.backend().entered, [FrameKind::Entry]);
     assert!(child.backend().frames.is_empty());
+}
+
+#[test]
+fn failed_loading_drops_inputs_before_releasing_live_allowance() {
+    let program = identity_program();
+    for participant in [false, true] {
+        for failure in ["validation", "arity", "retention", "entry"] {
+            let ledger = ExecutionLedger::new(values(128, 4096), WorkBudget::default());
+            let observations = Arc::new(Mutex::new(Vec::new()));
+            let mut inputs = vec![Number::Watched(Arc::new(LiveDropProbe {
+                ledger: ledger.clone(),
+                observations: observations.clone(),
+            }))];
+            if failure == "arity" {
+                inputs.push(Number::Field(0));
+            }
+            let backend = Arithmetic {
+                reject_values: failure == "validation",
+                fail_enter: failure == "entry",
+                ..Arithmetic::default()
+            };
+            let budget = values(128, if failure == "retention" { 0 } else { 1024 });
+            let refusal = if participant {
+                Runner::new_for_role_with_ledger(
+                    &program,
+                    "main",
+                    "P",
+                    "session",
+                    backend,
+                    inputs,
+                    budget,
+                    WorkBudget::default(),
+                    Some(ledger.clone()),
+                )
+                .err()
+                .unwrap()
+            } else {
+                LocalRunner::new_with_ledger(
+                    &program,
+                    "identity",
+                    "session",
+                    backend,
+                    inputs,
+                    budget,
+                    WorkBudget::default(),
+                    Some(ledger.clone()),
+                )
+                .err()
+                .unwrap()
+            };
+            match failure {
+                "validation" => assert!(matches!(&refusal.error, RuntimeError::Backend(e)
+                    if e.code == "independent-value-refusal")),
+                "arity" => assert_eq!(refusal.error, RuntimeError::Inputs),
+                "retention" => assert_eq!(refusal.error, RuntimeError::Limit),
+                "entry" => assert!(matches!(&refusal.error, RuntimeError::Backend(e)
+                    if e.code == "entry-refused")),
+                _ => unreachable!(),
+            }
+            assert!(refusal.backend.frames.is_empty());
+            assert!(refusal.backend.entered.is_empty());
+            assert_eq!(refusal.usage.live_value_bytes, 0);
+            assert_eq!(
+                refusal.usage.total_value_bytes,
+                if failure == "entry" { 8 } else { 0 }
+            );
+            assert_eq!(
+                *observations.lock().unwrap(),
+                [128],
+                "{participant} {failure}"
+            );
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+            assert_eq!(
+                ledger.snapshot().total_value_bytes,
+                refusal.usage.total_value_bytes
+            );
+        }
+    }
+}
+
+fn identity_program() -> Program {
+    decode(module(
+        json!([function(
+            "identity",
+            json!([["x", FIELD]]),
+            json!([FIELD]),
+            json!([["return", ["x"]]])
+        )]),
+        json!([[
+            "participant",
+            "identity_role",
+            "root",
+            "P",
+            [["x", FIELD]],
+            [FIELD],
+            [["return", ["x"]]],
+            []
+        ]]),
+        json!([["entry", "main", [["P", "identity_role"]]]]),
+    ))
+}
+
+#[test]
+fn pending_action_payloads_drop_before_releasing_live_allowance() {
+    for query in [false, true] {
+        let (ty, body, services) = if query {
+            (
+                INDEX,
+                json!([
+                    ["query", "sample", "coins", "index", ["x"], ["y"]],
+                    ["return", []]
+                ]),
+                json!([["coins", "random.koala-bear.ext8-binomial3/0", "1"]]),
+            )
+        } else {
+            (
+                FIELD,
+                json!([["send", "message", "scalar", "V", "x"], ["return", []]]),
+                json!([]),
+            )
+        };
+        let program = decode(module(
+            json!([]),
+            json!([
+                [
+                    "participant",
+                    "sender",
+                    "root",
+                    "P",
+                    [["x", ty]],
+                    [],
+                    body,
+                    services
+                ],
+                [
+                    "participant",
+                    "receiver",
+                    "root",
+                    "V",
+                    [],
+                    [],
+                    [["return", []]],
+                    []
+                ]
+            ]),
+            json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
+        ));
+        for destination in ["cancel", "drop", "backend", "outputs"] {
+            let ledger = ExecutionLedger::new(values(128, 4096), WorkBudget::default());
+            let observations = Arc::new(Mutex::new(Vec::new()));
+            let probe = Arc::new(LiveDropProbe {
+                ledger: ledger.clone(),
+                observations: observations.clone(),
+            });
+            let input = if query {
+                Number::WatchedIndex(probe)
+            } else {
+                Number::Watched(probe)
+            };
+            let mut runner = Runner::new_for_role_with_ledger(
+                &program,
+                "main",
+                "P",
+                "session",
+                Arithmetic::default(),
+                vec![input],
+                values(128, 1024),
+                WorkBudget::default(),
+                Some(ledger.clone()),
+            )
+            .ok()
+            .unwrap();
+            // Borrow the pending action: the runner owns every payload reference.
+            assert!(matches!(
+                (query, runner.poll_ref()),
+                (true, Action::Query(_)) | (false, Action::Send(_))
+            ));
+            assert!(observations.lock().unwrap().is_empty());
+            let used = ledger.snapshot();
+            match destination {
+                "cancel" => {
+                    runner.cancel();
+                    assert_eq!(runner.stop().unwrap().kind, StopKind::Cancelled);
+                    assert!(runner.backend().frames.is_empty());
+                    assert_eq!(runner.backend().leaves.len(), 1);
+                    assert_eq!(runner.backend().leaves[0].0.get(), 1);
+                    assert_eq!(runner.backend().leaves[0].1, FrameExit::Cancelled);
+                    assert_eq!(runner.usage().live_value_bytes, 0);
+                    // The last payload is gone before cancel returns, even while the runner lives.
+                    assert_eq!(*observations.lock().unwrap(), [128]);
+                    runner.cancel();
+                }
+                "drop" => drop(runner),
+                "backend" => assert!(runner.into_backend().frames.is_empty()),
+                "outputs" => {
+                    let (backend, outputs) = runner.into_retained_outputs();
+                    assert!(backend.frames.is_empty());
+                    assert!(outputs.is_none());
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                *observations.lock().unwrap(),
+                [128],
+                "{query} {destination}"
+            );
+            let after = ledger.snapshot();
+            assert_eq!(after.live_reserved_bytes, 0);
+            assert_eq!(after.total_value_bytes, used.total_value_bytes);
+            assert_eq!(after.instructions, used.instructions);
+        }
+    }
+}
+
+#[test]
+fn failed_return_payloads_drop_before_releasing_live_allowance() {
+    let program = identity_program();
+    for participant in [false, true] {
+        for shared_backing in [false, true] {
+            for failure in ["cleanup", "retention"] {
+                if shared_backing && failure == "retention" {
+                    continue; // Shared terminal aliases do not consume fresh capacity.
+                }
+                let ledger = ExecutionLedger::new(values(128, 4096), WorkBudget::default());
+                let observations = Arc::new(Mutex::new(Vec::new()));
+                let probe = Arc::new(LiveDropProbe {
+                    ledger: ledger.clone(),
+                    observations: observations.clone(),
+                });
+                let input = if shared_backing {
+                    Number::Watched(probe)
+                } else {
+                    Number::WatchedInline(probe)
+                };
+                let backend = Arithmetic {
+                    fail_leave_at: (failure == "cleanup").then_some(1),
+                    ..Arithmetic::default()
+                };
+                let budget = values(
+                    128,
+                    if failure == "retention" {
+                        if participant { 8 } else { 16 }
+                    } else {
+                        1024
+                    },
+                );
+                let (stop, usage, backend, outputs) = if participant {
+                    let mut runner = Runner::new_for_role_with_ledger(
+                        &program,
+                        "main",
+                        "P",
+                        "session",
+                        backend,
+                        vec![input],
+                        budget,
+                        WorkBudget::default(),
+                        Some(ledger.clone()),
+                    )
+                    .ok()
+                    .unwrap();
+                    assert!(matches!(runner.poll_ref(), Action::Stopped(_)));
+                    let stop = runner.stop().unwrap().clone();
+                    let usage = runner.usage();
+                    let (backend, outputs) = runner.into_retained_outputs();
+                    (stop, usage, backend, outputs)
+                } else {
+                    let mut runner = LocalRunner::new_with_ledger(
+                        &program,
+                        "identity",
+                        "session",
+                        backend,
+                        vec![input],
+                        budget,
+                        WorkBudget::default(),
+                        Some(ledger.clone()),
+                    )
+                    .ok()
+                    .unwrap();
+                    assert!(matches!(runner.execute(), Action::Stopped(_)));
+                    let stop = runner.stop().unwrap().clone();
+                    let usage = runner.usage();
+                    let (backend, outputs) = runner.into_retained_outputs();
+                    (stop, usage, backend, outputs)
+                };
+                if failure == "cleanup" {
+                    assert!(matches!(&stop.kind, StopKind::Backend(e) if e.code == "cleanup:1"));
+                } else {
+                    assert_eq!(stop.kind, StopKind::Limit);
+                }
+                assert!(stop.cleanup_errors.is_empty());
+                assert!(outputs.is_none());
+                assert!(backend.frames.is_empty());
+                assert_eq!((usage.live_values, usage.live_value_bytes), (0, 0));
+                assert_eq!(
+                    *observations.lock().unwrap(),
+                    [128],
+                    "{participant} {shared_backing} {failure}"
+                );
+                assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+                assert_eq!(ledger.snapshot().total_value_bytes, usage.total_value_bytes);
+            }
+        }
+    }
+}
+
+#[test]
+fn received_payloads_drop_before_releasing_live_allowance_on_instruction_refusal() {
+    let program = decode(module(
+        json!([]),
+        json!([
+            [
+                "participant",
+                "receiver",
+                "root",
+                "V",
+                [],
+                [FIELD],
+                [
+                    ["receive", "message", "scalar", "P", "x", FIELD],
+                    ["return", ["x"]]
+                ],
+                []
+            ],
+            [
+                "participant",
+                "sender",
+                "root",
+                "P",
+                [],
+                [],
+                [["return", []]],
+                []
+            ]
+        ]),
+        json!([["entry", "main", [["P", "sender"], ["V", "receiver"]]]]),
+    ));
+    for native_receive in [false, true] {
+        let ledger = ExecutionLedger::new(values(128, 4096), work(0, 100, 4096));
+        let observations = Arc::new(Mutex::new(Vec::new()));
+        let mut runner = Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "V",
+            "session",
+            Arithmetic::default(),
+            vec![],
+            values(128, 1024),
+            if native_receive {
+                WorkBudget::default()
+            } else {
+                work(0, 100, 4096)
+            },
+            Some(ledger.clone()),
+        )
+        .ok()
+        .unwrap();
+        let input = Number::Watched(Arc::new(LiveDropProbe {
+            ledger: ledger.clone(),
+            observations: observations.clone(),
+        }));
+        if native_receive {
+            let cut = runner.poll_ref().cut().unwrap();
+            assert_eq!(
+                runner.complete_receive(&cut, Ok(input)).unwrap(),
+                ReceiveCompletion::Stopped
+            );
+        } else {
+            let packet = Packet {
+                envelope: Envelope {
+                    origin: runner.root_origin().clone(),
+                    site: "message".into(),
+                    schema: "scalar".into(),
+                    sender: "P".into(),
+                    receiver: "V".into(),
+                },
+                ty: PhysicalType::parse(FIELD).unwrap(),
+                payload: input,
+            };
+            assert_eq!(runner.deliver(packet), Err(RuntimeError::WrongAction));
+        }
+        assert_eq!(runner.stop().unwrap().kind, StopKind::Limit);
+        assert!(runner.backend().frames.is_empty());
+        assert_eq!(runner.usage(), Usage::default());
+        assert_eq!(*observations.lock().unwrap(), [128], "{native_receive}");
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    }
+}
+
+#[test]
+fn loop_arguments_drop_before_releasing_live_allowance_on_iteration_refusal() {
+    let program = decode(module(
+        json!([]),
+        json!([[
+            "participant",
+            "looping",
+            "root",
+            "P",
+            [["n", INDEX], ["x", FIELD]],
+            [FIELD],
+            [
+                [
+                    "loop",
+                    "rounds",
+                    ["value", "n", "4", "i"],
+                    [["carry", "x"]],
+                    [],
+                    [["yield", ["carry"]]],
+                    ["result"]
+                ],
+                ["return", ["result"]]
+            ],
+            []
+        ]]),
+        json!([["entry", "main", [["P", "looping"]]]]),
+    ));
+    let ledger = ExecutionLedger::new(values(128, 4096), work(100, 0, 4096));
+    let observations = Arc::new(Mutex::new(Vec::new()));
+    let mut runner = Runner::new_for_role_with_ledger(
+        &program,
+        "main",
+        "P",
+        "session",
+        Arithmetic::default(),
+        vec![
+            Number::Index(1),
+            Number::Watched(Arc::new(LiveDropProbe {
+                ledger: ledger.clone(),
+                observations: observations.clone(),
+            })),
+        ],
+        values(128, 1024),
+        WorkBudget::default(),
+        Some(ledger.clone()),
+    )
+    .ok()
+    .unwrap();
+    assert!(runner.advance_local_control().unwrap());
+    assert_eq!(runner.stop().unwrap().kind, StopKind::Limit);
+    assert_eq!(runner.backend().entered, [FrameKind::Entry]);
+    assert!(runner.backend().frames.is_empty());
+    assert_eq!(runner.usage().live_value_bytes, 0);
+    assert_eq!(runner.usage().total_value_bytes, 16);
+    assert_eq!(ledger.snapshot().instructions, 1);
+    assert_eq!(ledger.snapshot().iterations, 0);
+    assert_eq!(*observations.lock().unwrap(), [128]);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
+fn participant_output_guard_keeps_payloads_and_allowance_until_destruction() {
+    let program = identity_program();
+    for shared_backing in [false, true] {
+        let ledger = ExecutionLedger::new(values(128, 4096), WorkBudget::default());
+        let observations = Arc::new(Mutex::new(Vec::new()));
+        let probe = Arc::new(LiveDropProbe {
+            ledger: ledger.clone(),
+            observations: observations.clone(),
+        });
+        let input = if shared_backing {
+            Number::Watched(probe)
+        } else {
+            Number::WatchedInline(probe)
+        };
+        let mut runner = Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "P",
+            "session",
+            Arithmetic::default(),
+            vec![input],
+            values(128, 1024),
+            WorkBudget::default(),
+            Some(ledger.clone()),
+        )
+        .ok()
+        .unwrap();
+        assert!(matches!(runner.poll_ref(), Action::Returned(_)));
+        let (backend, outputs) = runner.into_retained_outputs();
+        assert!(backend.frames.is_empty());
+        let outputs = outputs.unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs.reservation_bytes(), 128);
+        assert!(observations.lock().unwrap().is_empty());
+        assert!(matches!(ledger.reserve_live(1), Err(RuntimeError::Limit)));
+        let used = ledger.snapshot();
+        drop(outputs);
+        assert_eq!(*observations.lock().unwrap(), [128]);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
+    }
 }
 
 #[test]

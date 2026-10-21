@@ -63,55 +63,56 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
         }
         counts.nodes = add(counts.nodes, 1)?;
         counts.admit(policy)?;
-        if let Some(tag) = tag(ty) {
-            match (tag, value) {
-                (69, Value::Sequence(v)) => {
-                    let logical = ty.logical();
-                    let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
-                    for child in v.iter() {
-                        visit(&element, child, policy, counts)?;
-                    }
+        match value {
+            Value::Sequence(v) => {
+                let logical = ty.logical();
+                let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
+                for child in v.iter() {
+                    visit(&element, child, policy, counts)?;
                 }
-                (65, Value::Variant(v)) => {
-                    let logical = ty.logical();
-                    let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
-                    let arm = descriptor
-                        .alternatives()
-                        .get(v.alternative())
-                        .ok_or_else(unsupported)?;
-                    if arm.payload().len() != v.payload().len() {
+            }
+            Value::Variant(v) => {
+                let logical = ty.logical();
+                let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
+                let arm = descriptor
+                    .alternatives()
+                    .get(v.alternative())
+                    .ok_or_else(unsupported)?;
+                if arm.payload().len() != v.payload().len() {
+                    return Err(unsupported());
+                }
+                for (leaf, child) in arm.payload().iter().zip(v.payload()) {
+                    visit(&physical(leaf)?, child, policy, counts)?;
+                }
+            }
+            Value::Indices(v) => counts.add(v.len(), 0)?,
+            Value::Bytes(v) => policy.bytes(v.len()).map_err(|_| Error::Limit)?,
+            _ => {
+                if super::bulk::format(ty).is_some() {
+                    let (elements, groups) = super::bulk::value_counts(value, policy)?;
+                    counts.add(elements, groups)?;
+                } else if let Some((_, width)) = super::frame(ty) {
+                    let (elements, groups) = fixed_counts(ty, width);
+                    counts.add(elements, groups)?;
+                } else if super::pcs::tag(ty).is_some() {
+                    match value {
+                        Value::Commitment(_) => counts.add(0, 1)?,
+                        Value::Proof(p) => counts.add(0, p.metadata().arity())?,
+                        _ => return Err(unsupported()),
+                    }
+                } else if super::table_type(ty) {
+                    let Value::Table(table) = value else {
                         return Err(unsupported());
-                    }
-                    for (leaf, child) in arm.payload().iter().zip(v.payload()) {
-                        visit(&physical(leaf)?, child, policy, counts)?;
-                    }
+                    };
+                    counts.add(
+                        policy.table_len(table.arity()).map_err(|_| Error::Limit)?,
+                        0,
+                    )?;
+                } else {
+                    let (elements, groups) = internal_counts(value, policy)?;
+                    counts.add(elements, groups)?;
                 }
-                (68, Value::Indices(v)) => counts.add(v.len(), 0)?,
-                (70, Value::Bytes(v)) => policy.bytes(v.len()).map_err(|_| Error::Limit)?,
-                _ => return Err(unsupported()),
             }
-        } else if super::bulk::format(ty).is_some() {
-            let (elements, groups) = super::bulk::value_counts(value, policy)?;
-            counts.add(elements, groups)?;
-        } else if let Some((_, width)) = super::frame(ty) {
-            let (elements, groups) = fixed_counts(ty, width);
-            counts.add(elements, groups)?;
-        } else if super::pcs::tag(ty).is_some() {
-            match value {
-                Value::Commitment(_) => counts.add(0, 1)?,
-                Value::Proof(p) => counts.add(0, p.metadata().arity())?,
-                _ => return Err(unsupported()),
-            }
-        } else if super::table_type(ty) {
-            let Value::Table(table) = value else {
-                return Err(unsupported());
-            };
-            counts.add(
-                policy.table_len(table.arity()).map_err(|_| Error::Limit)?,
-                0,
-            )?;
-        } else {
-            return Err(unsupported());
         }
         counts.admit(policy)
     }
@@ -120,6 +121,46 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
     Ok(counts)
 }
 
+// Runtime-owned data shares the complete-value counter without acquiring a
+// wire format. Preserve the owner's collection units: opaque handle collections
+// count handles, while their backing storage remains in the retained charge.
+fn internal_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
+    Ok(match value {
+        Value::Polynomial(v) => (v.len(), 0),
+        Value::Bn254Polynomial(v) => (v.len(), 0),
+        Value::RistrettoPolynomial(v) => (v.len(), 0),
+        Value::KoalaBearPolynomial(v) => (v.len(), 0),
+        Value::KoalaBearExt4Polynomial(v) => (v.len(), 0),
+        Value::KoalaBearExt8Polynomial(v) => (v.len(), 0),
+        Value::Binary64Polynomial(v) => (v.len(), 0),
+        Value::Binary64Ext3Polynomial(v) => (v.len(), 0),
+        Value::FieldArray(v) => (v.elements().len(), 0),
+        Value::FixedVector(v) => (v.elements().len(), 0),
+        Value::Round(_)
+        | Value::Bn254Round(_)
+        | Value::RistrettoRound(_)
+        | Value::KoalaBearRound(_)
+        | Value::KoalaBearExt4Round(_)
+        | Value::KoalaBearExt8Round(_)
+        | Value::Binary64Round(_)
+        | Value::Binary64Ext3Round(_) => (3, 0),
+        Value::Point(v) => (v.len(), 0),
+        Value::FrDiagonal(v) => (add(v.factors().len(), v.backing().len())?, 0),
+        Value::RistrettoDiagonal(v) => (v.factors().len(), v.backing().len()),
+        Value::TableMsb(v) => (policy.table_len(v.arity()).map_err(|_| Error::Limit)?, 0),
+        Value::OpeningState(_)
+        | Value::ProverKey(_)
+        | Value::VerifierKey(_)
+        | Value::OracleState(_)
+        | Value::MerkleTree(_) => (0, 0),
+        Value::OracleRoots(_, v) => (v.len(), 0),
+        Value::OracleStates(_, v) => (v.len(), 0),
+        Value::MerkleDigests(scheme, v) => (v.len() / scheme.digest_bytes(), 0),
+        Value::MerkleTrees(_, v) => (v.len(), 0),
+        Value::Shake128State(_) => (0, 0),
+        _ => return Err(unsupported()),
+    })
+}
 pub(super) fn fixed_counts(ty: &PhysicalType, width: usize) -> (usize, usize) {
     (
         match ty.kind() {

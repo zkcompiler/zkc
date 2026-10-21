@@ -60,6 +60,15 @@ each subprocess (default 300); a timeout is a failed sample. There is no silent
 retry, higher runtime capacity, skipped refusal or timing threshold. Existing
 runtime capacity records and work limits are retained in each report.
 
+Interactive storage comparisons require the current Entry function contract on
+both sides: function source syntax, `--input=FILE`, `--results=FILE`, and function
+result reports. Before any timed trial, the harness compiles every selected
+storage Entry, checks its function interface and validates its arguments through
+the selected runtime's `run --dry-run`. Pre-function baselines, including
+`0948dbbc9`, are unsupported with `--interactive-storage` and fail in this setup
+preflight with no timing samples. Omit that option for proof-only comparisons
+against those revisions. The harness supplies no legacy CLI or source aliases.
+
 ## Workloads
 
 | Case | Profile and inputs |
@@ -118,7 +127,8 @@ does not change this preparation pass.
 
 The current proof report does not expose live retained-value bytes or live
 resource units. `--interactive-storage` obtains available exit counters through
-the corresponding interactive protocol instead. The product case adds an
+the corresponding interactive protocol instead. FRI selects its default
+`example::Fri` Entry. The product case adds an
 interactive Entry to an output-local copy. Interactive execution uses its own
 randomness/session and is a separate observation; it is not Fiat–Shamir proof
 timing or a substitute for missing proof live counters. Exit storage can be zero

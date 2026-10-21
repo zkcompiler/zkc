@@ -234,7 +234,7 @@ impl Hooks<Host> for Controls {
         }
     }
 }
-fn stopped(report: &Report<Host>, role: usize) -> &StopSummary {
+fn stopped<B: Backend>(report: &Report<B>, role: usize) -> &StopSummary {
     assert_eq!(report.outcome, Outcome::ParticipantStopped { role });
     let State::Stopped(stop) = &report.roles[role].before else {
         panic!("stopped snapshot")
@@ -547,6 +547,85 @@ fn malformed_bytes_stop_receive_and_consume_slot_with_prior_effects() {
             }
         );
         assert!(report.roles[0].cancelled);
+    }
+}
+#[test]
+fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity() {
+    struct Replacement(Vec<u8>);
+    impl Hooks<NativeBackend> for Replacement {
+        fn transfer(
+            &mut self,
+            _: Exchange<'_>,
+            _: &[u8],
+            _: usize,
+        ) -> Result<Option<Vec<u8>>, String> {
+            Ok(Some(std::mem::take(&mut self.0)))
+        }
+    }
+    let backend = |role| {
+        NativeBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new(role, "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap()
+    };
+    let bundle = Bundle::admit(
+        message_bundle("bytes@native.bytes/0")
+            .to_string()
+            .as_bytes(),
+        &backend("Alice"),
+        BundleLimits::default(),
+    )
+    .unwrap();
+    for shared in [false, true] {
+        let ledger = shared.then(|| {
+            zkc_runtime::vm::ExecutionLedger::new(
+                ValueBudget {
+                    live_bytes: 1024 * 1024,
+                    ..Default::default()
+                },
+                Default::default(),
+            )
+        });
+        let report = run_with_ledger(
+            &bundle,
+            "session",
+            vec![
+                RoleInput {
+                    role: "Alice".into(),
+                    backend: backend("Alice"),
+                    values: vec![Value::Bytes(std::sync::Arc::from(&b"payload"[..]))],
+                },
+                RoleInput {
+                    role: "Bob".into(),
+                    backend: backend("Bob"),
+                    values: vec![],
+                },
+            ],
+            RunLimits {
+                values: ValueBudget {
+                    live_bytes: 4096,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            &mut Replacement(b"ZKCV\x00\x46\x01\x00\x00\x00".to_vec()),
+            ledger.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            stopped(&report, 1).cause,
+            StopCause::Decode(DecodeReason::Length)
+        );
+        assert_eq!(stopped(&report, 1).site.as_deref(), Some("message"));
+        assert_eq!(report.wire.sends, 1);
+        assert_eq!(report.wire.receives, 1);
+        assert!(report.pending.is_none());
+        assert_eq!(report.roles[1].usage.unwrap().instructions, 1);
+        if let Some(ledger) = ledger {
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        }
     }
 }
 #[test]

@@ -2,6 +2,99 @@ use super::*;
 use zkc_runtime::interpreter::Runner;
 mod admission;
 #[test]
+fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
+    use zkc_runtime::vm::{ExecutionLedger, Program, StopKind, ValueBudget};
+    let program = Program::decode(
+        json!([
+            "zkc.program/0",
+            [],
+            [],
+            [[
+                "participant",
+                "v",
+                "root",
+                "V",
+                [["yes", "bool@native.bool/0"]],
+                ["bool@native.bool/0"],
+                [
+                    [
+                        "receive",
+                        "message",
+                        "message",
+                        "P",
+                        "payload",
+                        "bytes@native.bytes/0"
+                    ],
+                    ["return", ["yes"]]
+                ],
+                []
+            ]],
+            [["entry", "main", [["V", "v"]]]]
+        ])
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap();
+    let binding = [7; 32];
+    let mut writer = ProofWriter::new(ProofFormat::Native, &binding);
+    writer.message(b"ZKCV\x00\x46\x01\x00\x00\x00").unwrap();
+    let proof = writer.finish().unwrap();
+    for shared in [false, true] {
+        let ledger = shared.then(|| {
+            ExecutionLedger::new(
+                ValueBudget {
+                    live_bytes: 1024 * 1024,
+                    ..Default::default()
+                },
+                Default::default(),
+            )
+        });
+        let backend = NativeBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new("V", "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let mut runner = Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "V",
+            "session",
+            backend,
+            vec![Value::Bool(true)],
+            ValueBudget {
+                live_bytes: 4096,
+                ..Default::default()
+            },
+            Default::default(),
+            ledger.clone(),
+        )
+        .unwrap_or_else(|error| panic!("{}", error.error));
+        let report = driver::validate_native_shared(
+            &mut runner,
+            &proof,
+            &binding,
+            driver::Transport::Messages(ProofFormat::Native),
+            0,
+            ledger.clone(),
+        );
+        let Err(ArtifactFailure::Stopped(stop)) = report.outcome else {
+            panic!("malformed native message must stop the receive");
+        };
+        assert!(matches!(
+            stop.kind,
+            StopKind::Decode(zkc_runtime::vm::DecodeReason::Length)
+        ));
+        assert_eq!(stop.site.as_deref(), Some("message"));
+        assert_eq!(runner.usage().instructions, 1);
+        assert_eq!(report.messages, 1);
+        assert!(report.cancelled.is_none());
+        if let Some(ledger) = ledger {
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        }
+    }
+}
+#[test]
 fn nested_wire_permission_is_exact() {
     for spelling in [
         "matrix:bls12-381.fr",

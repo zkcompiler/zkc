@@ -27,6 +27,22 @@ impl NativeBackend {
         if !ty.is_duplicable() || !super::has_native_wire(&ty) {
             return Err(unsupported());
         }
+        self.measure_native_value(value)
+    }
+    /// Measure immutable runtime-owned data, including internal mathematical
+    /// values without wire codecs. This grants neither ingress nor setup or
+    /// constructor authority; the owning backend must already validate values.
+    /// Counts retain owner collection units, including opaque handle counts.
+    /// Callers must charge repeated walks before measurement, using the value's
+    /// conservative retained-byte bound without recursively scanning it first.
+    pub fn measure_native_value(&self, value: &Value) -> Result<NativeInputSize> {
+        let ty = value.physical_type();
+        if !ty.is_duplicable()
+            || !value.is_resource_free()
+            || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(&ty)
+        {
+            return Err(unsupported());
+        }
         self.policy()
             .output(value.retained_bytes(), usize::MAX)
             .map_err(|_| Error::Limit)?;
@@ -73,13 +89,18 @@ impl NativeBackend {
     }
     /// Check a complete active arm before assembling any of its payload values.
     /// Inactive arms allocate no values, but the complete descriptor is charged.
+    /// Internal data need no wire codec; complete type and resource restrictions
+    /// still apply. This measurement does not authorize external construction.
     pub fn measure_native_variant(
         &self,
         ty: &PhysicalType,
         alternative: usize,
         payload: &[NativeInputSize],
     ) -> Result<NativeInputSize> {
-        if structured::tag(ty) != Some(65) || !ty.is_duplicable() {
+        if ty.kind() != zkc_runtime::vm::Type::Variant
+            || !ty.is_duplicable()
+            || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty)
+        {
             return Err(unsupported());
         }
         let logical = ty.logical();

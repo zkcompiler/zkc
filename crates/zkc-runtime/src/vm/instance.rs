@@ -44,7 +44,6 @@ pub(crate) struct Instance<B: Backend> {
     operations: Vec<Option<B::Operation>>,
     shared: Option<ExecutionLedger>,
     live_reservation: Option<LiveReservation>,
-    closing: bool,
     calls: Vec<Option<B::Call>>,
     arguments: Vec<B::Value>,
     usage: Usage,
@@ -260,14 +259,12 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn take_live_reservation(&mut self) -> Option<LiveReservation> {
         self.live_reservation.take()
     }
-    pub(crate) fn release_live_reservation(&mut self) {
-        self.closing = true;
-        self.release_closed_reservation();
-    }
-    fn release_closed_reservation(&mut self) {
-        if self.closing && self.usage.live_value_bytes == 0 {
-            self.live_reservation = None;
-        }
+    pub(crate) fn restore_live_reservation(&mut self, reservation: Option<LiveReservation>) {
+        debug_assert!(
+            self.live_reservation.is_none(),
+            "one live reservation owner"
+        );
+        self.live_reservation = reservation;
     }
     pub(crate) fn take_backend(&mut self) -> B {
         self.unwind(FrameExit::Cancelled, |_, _| {});

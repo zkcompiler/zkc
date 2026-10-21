@@ -87,6 +87,58 @@ def test_standalone_calculation_static_calls_and_reached_control(toolchain, jour
         assert report['execution']['failure'] is None
 
 
+@pytest.mark.parametrize('disposal', ['drop', 'consume'])
+@pytest.mark.parametrize('reuse', [False, True])
+def test_source_disposal_publishes_and_preserves_copy_values(toolchain, journal, directory,
+                                                            disposal, reuse):
+    source = f'''module example;
+struct Pair{{pub bit:bool,pub count:index}}
+entry fn Dispose(x:Pair)->Pair{{{disposal} x;return {'x' if reuse else 'Pair{bit:false,count:0}'};}}
+entry fn Main(x:Pair,go:bool)->Pair{{
+  if go {{for _ in 0..2 {{let discarded=Dispose(x);{disposal} discarded;}}}}
+  return Dispose(x);
+}}
+'''
+    package, pin = compile_function(toolchain, journal, directory, source)
+    for go in (False, True):
+        _, value = execute(toolchain, journal, directory, package, pin, f'dispose-{go}',
+                            {'x': {'bit': True, 'count': 7}, 'go': go})
+        assert value == ({'bit': True, 'count': '7'} if reuse else {'bit': False, 'count': '0'})
+
+
+def test_non_copy_disposal_executes_inside_a_numerical_helper(toolchain, journal, directory):
+    source = '''module example;
+#[affine] struct Disposable{value:bool}
+#[linear] struct Required{value:bool}
+fn dispose(x:bool)->bool{
+  let a=Disposable{value:x};drop a;
+  let b=Required{value:x};consume b;
+  return x;
+}
+entry fn Main(x:bool)->bool{return dispose(x);}
+'''
+    package, pin = compile_function(toolchain, journal, directory, source)
+    for bit in (False, True):
+        _, value = execute(toolchain, journal, directory, package, pin, f'dispose-{bit}', {'x': bit})
+        assert value is bit
+
+
+def test_opaque_owner_factory_and_numerical_pass_through_execute(toolchain, journal, directory):
+    source = '''module example;
+module Vault{
+  pub type Item:Copy+Drop=bool;
+  pub fn make(x:bool)->Item{return Item(x);}
+  pub fn read(x:Item)->bool{return unpack(x);}
+}
+fn retain(x:Vault::Item)->Vault::Item{return x;}
+entry fn Main(x:bool)->bool{return Vault::read(retain(Vault::make(x)));}
+'''
+    package, pin = compile_function(toolchain, journal, directory, source)
+    for bit in (False, True):
+        _, value = execute(toolchain, journal, directory, package, pin, f'opaque-{bit}', {'x': bit})
+        assert value is bit
+
+
 def test_false_is_data_and_require_retains_a_failed_call_prefix(toolchain, journal, directory):
     source = '''module example;
 entry fn Checked(go:bool)->bool{require go;return go;}
@@ -197,6 +249,31 @@ def test_independent_generated_proof_operations_and_semantic_rejection(toolchain
     assert not malformed['execution']['completed']
     assert malformed['execution']['calls'][0]['operation'] == 'verify'
     assert not malformed['execution']['calls'][0]['completed']
+
+
+def test_generated_native_results_pass_through_local_numerical_helpers(toolchain, journal, directory):
+    source = PROOF.replace('entry fn Produce', '''
+fn retain_proof(x:Family::ProveResult)->Family::ProveResult{return x;}
+fn retain_verification(x:Family::VerifyResult)->Family::VerifyResult{return x;}
+entry fn Produce''')
+    source = source.replace('return Family::prove(public,witness);',
+                            'return retain_proof(Family::prove(public,witness));')
+    source = source.replace('return Family::verify(public,candidate);',
+                            'return retain_verification(Family::verify(public,candidate));')
+    producer, producer_pin = compile_function(toolchain, journal, directory, source, 'Produce')
+    verifier, verifier_pin = compile_function(toolchain, journal, directory, source, 'Verify')
+    for bit in (False, True):
+        _, produced = execute(toolchain, journal, directory, producer, producer_pin,
+                               f'produce-{bit}',
+                               {'public': {'expected': True}, 'witness': {'candidate': bit}},
+                               flags=['--allow-authored'])
+        assert produced['outputs'] == {'value': bit}
+        _, verified = execute(toolchain, journal, directory, verifier, verifier_pin,
+                               f'verify-{bit}',
+                               {'public': {'expected': True}, 'candidate': produced['proof']},
+                               flags=['--allow-authored'])
+        assert verified == ({'case': 'Accepted', 'fields': {'outputs': {'accepted': True}}}
+                             if bit else {'case': 'Rejected', 'fields': {}})
 
 
 @pytest.mark.parametrize('body', [

@@ -525,6 +525,23 @@ with `requirements`; `new` and `init` report requirements per Entry as well.
 slots requiring independent `--setups` authority and `--key` material. Neither is
 synthesized.
 
+Source function preparation reports `allow_authored: null` and
+`unresolved: ["child_policies"]`: the logical function interface does not expose
+its children's proof binding or setup policies. This includes `new` and `init`.
+`prepare` supplies a `requirements.check_command` using `run --dry-run` with
+the same selection and arguments as the suggested run command. Fill the inputs
+and run that check before execution. An `entry-proof-binding-policy` refusal
+requires explicit `--allow-authored` acknowledgement; preparation does not add
+that flag. Other admission refusals retain their own requirements.
+
+Pinned-package function preparation reads the checked child deployment
+interfaces. It reports the aggregate `allow_authored` requirement and a
+`deployments` list with each child's ID, operation, Entry, acknowledgement and
+setup slots. Child setup authority belongs in `--invocations=FILE`; independent
+children can require different authority even when slot names agree. A suggested
+command is a starting point, not a claim that unresolved admission policies have
+been satisfied.
+
 [File admission and publication](publication.md) defines regular-file checks,
 protected output paths, result formats, staging and diagnostics. Opened input
 and reference descriptors also protect their file identities from output aliasing.

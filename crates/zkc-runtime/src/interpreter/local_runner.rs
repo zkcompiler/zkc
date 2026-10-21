@@ -180,11 +180,11 @@ impl<B: Backend> LocalRunner<B> {
         if let Some(LocalInvocation { scope, inputs, .. }) = self.initial.take() {
             // The root input scope is owned here, outside Runner's stack.
             // Keep its allowance through both unwind and payload destruction.
-            let reservation = self.runner.instance.take_live_reservation();
-            self.runner.cancel();
-            self.runner.instance.close_scope(scope, inputs.iter());
-            drop(inputs);
-            drop(reservation);
+            self.runner.with_live_reservation(|runner| {
+                runner.cancel();
+                runner.instance.close_scope(scope, inputs.iter());
+                drop(inputs);
+            });
         } else {
             self.runner.cancel();
         }
@@ -198,22 +198,7 @@ impl<B: Backend> LocalRunner<B> {
     /// An unexecuted function is cancelled; callers execute explicitly first.
     pub fn into_retained_outputs(mut self) -> (B, Option<RetainedOutputs<B::Value>>) {
         self.cancel();
-        let outputs = match self.runner.pending.take() {
-            Some(Action::Returned(values)) => {
-                self.runner.instance.release_returned(&values);
-                Some(RetainedOutputs {
-                    values,
-                    reservation: self.runner.instance.take_live_reservation(),
-                })
-            }
-            terminal => {
-                self.runner.pending = terminal;
-                None
-            }
-        };
-        if outputs.is_some() {
-            self.runner.pending = Some(Action::Returned(vec![]));
-        }
+        let outputs = self.runner.take_retained_outputs();
         (self.runner.instance.take_backend(), outputs)
     }
 }

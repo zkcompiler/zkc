@@ -1004,8 +1004,9 @@ Error checkHostFunctions(const json::Array &functions,
 }
 Error checkHostArtifact(StringRef bytes, const LanguageInterface &interface,
                         const Limits &limits) {
-  auto parsed = parseNaturalJson(bytes, limits.irBytes, 256, "entry.artifact",
-                                 "source.limit");
+  auto parsed = detail::parseEntryJson(
+      bytes, std::min<uint64_t>(limits.irBytes, 16 * 1024 * 1024),
+      16 * 1024 * 1024, "entry.artifact");
   if (!parsed)
     return parsed.takeError();
   return Admission(interface, limits).run(*parsed);

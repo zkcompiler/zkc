@@ -31,5 +31,11 @@ llvm::Expected<std::shared_ptr<const InterfaceSchema>>
 decodeHostSchema(const llvm::json::Value &, const Limits &);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,
                                                  const Limits &);
+/// Common lexical bounds for interfaces and executable Host carriers. Embedded
+/// program/package strings use the carrier ceiling instead of the metadata cap.
+llvm::Expected<llvm::json::Value> parseEntryJson(llvm::StringRef,
+                                                 size_t byteLimit,
+                                                 size_t stringLimit,
+                                                 llvm::StringRef invalidCode);
 } // namespace zkc::language::detail
 #endif

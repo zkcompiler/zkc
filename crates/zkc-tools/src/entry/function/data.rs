@@ -8,6 +8,9 @@ use zkc_runtime::vm::{
 };
 
 type DataResult<T> = std::result::Result<T, String>;
+// Measurement vectors can grow geometrically within the existing conservative
+// 512-byte slot reservation, before any native payload is constructed.
+const _: () = assert!(std::mem::size_of::<zkc_backends::NativeInputSize>() <= 256);
 #[derive(Clone)]
 pub struct TypedValue {
     schema: Arc<Schema>,
@@ -119,6 +122,25 @@ impl TypedValue {
         }
         Ok(())
     }
+    fn measure_leaves(
+        &self,
+        backend: &NativeBackend,
+        ledger: &ExecutionLedger,
+        out: &mut Vec<zkc_backends::NativeInputSize>,
+    ) -> DataResult<()> {
+        match self.payload.as_ref() {
+            Payload::Unit => {}
+            Payload::Product(values) => {
+                for value in values {
+                    value.measure_leaves(backend, ledger, out)?;
+                }
+            }
+            Payload::Native(value) | Payload::Alternative { native: value, .. } => {
+                out.push(measure_native_value(backend, value, ledger)?);
+            }
+        }
+        Ok(())
+    }
 }
 pub(super) fn backend(capacity: Capacity) -> DataResult<NativeBackend> {
     backend_for(capacity, "entry")
@@ -145,6 +167,28 @@ fn charge(ledger: &ExecutionLedger, fresh: usize) -> DataResult<Arc<LiveReservat
     ledger
         .reserve_live(fresh)
         .map(Arc::new)
+        .map_err(|e| e.to_string())
+}
+fn measure_native_value(
+    backend: &NativeBackend,
+    value: &Native,
+    ledger: &ExecutionLedger,
+) -> DataResult<zkc_backends::NativeInputSize> {
+    // Charge the retained bound before walking payloads, including repeated
+    // uses of shared data. Recursive sequences and variants cache that bound.
+    ledger
+        .charge(
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: u64::try_from(value.retained_bytes())
+                    .map_err(|_| "entry-host-output-limit")?,
+            },
+            0,
+        )
+        .map_err(|e| e.to_string())?;
+    backend
+        .measure_native_value(value)
         .map_err(|e| e.to_string())
 }
 pub(super) fn pack(
@@ -174,6 +218,16 @@ pub(super) fn pack(
                     .sum::<usize>(),
             );
         let live = charge(ledger, bytes)?;
+        let backend = backend(host.options.limits.capacity)?;
+        let mut sizes = Vec::new();
+        for value in &values {
+            value.measure_leaves(&backend, ledger, &mut sizes)?;
+        }
+        let physical = PhysicalType::default_for(ty.clone()).map_err(|e| e.to_string())?;
+        backend
+            .measure_native_variant(&physical, index, &sizes)
+            .map_err(|e| e.to_string())?;
+        drop(sizes);
         let mut payload = Vec::new();
         for v in &values {
             v.flatten(&mut payload)?;
@@ -402,56 +456,103 @@ pub(super) fn from_output(
     value: super::super::Value,
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
-    fn bound(s: &Schema, v: &super::super::Value) -> DataResult<usize> {
+    fn bound(
+        host: &EntryHost,
+        backend: &NativeBackend,
+        ledger: &ExecutionLedger,
+        s: &Schema,
+        v: &super::super::Value,
+        mut leaves: Option<&mut Vec<zkc_backends::NativeInputSize>>,
+    ) -> DataResult<usize> {
         use super::super::Value;
-        let children = match v {
-            Value::Unit if s.kind == SchemaKind::Unit => 0,
-            Value::Leaf(InputValue::Native(v)) if s.leaves.len() == 1 => v.retained_bytes(),
-            Value::Tuple(v) | Value::Array(v) if v.len() == s.fields.len() => s
-                .fields
-                .iter()
-                .zip(v)
-                .map(|(f, v)| bound(&f.schema, v))
-                .collect::<DataResult<Vec<_>>>()?
-                .into_iter()
-                .sum(),
-            Value::Record(v) if v.len() == s.fields.len() => s
-                .fields
-                .iter()
-                .map(|f| bound(&f.schema, v.get(&f.name).ok_or("entry-host-output-shape")?))
-                .collect::<DataResult<Vec<_>>>()?
-                .into_iter()
-                .sum(),
+        let add = |a: usize, b: usize| {
+            a.checked_add(b)
+                .ok_or_else(|| "entry-host-output-limit".to_owned())
+        };
+        match v {
+            Value::Unit if s.kind == SchemaKind::Unit => Ok(0),
+            Value::Leaf(InputValue::Native(v)) if s.leaves.len() == 1 => {
+                if v.physical_type().logical().spelling() != s.leaves[0] {
+                    return Err("entry-host-output-type".into());
+                }
+                if let Some(leaves) = leaves {
+                    leaves.push(measure_native_value(backend, v, ledger)?);
+                }
+                Ok(v.retained_bytes())
+            }
+            Value::Tuple(v) if s.kind == SchemaKind::Tuple && v.len() == s.fields.len() => {
+                s.fields.iter().zip(v).try_fold(0, |n, (f, v)| {
+                    add(
+                        n,
+                        bound(host, backend, ledger, &f.schema, v, leaves.as_deref_mut())?,
+                    )
+                })
+            }
+            Value::Array(v) if s.kind == SchemaKind::Array && v.len() == s.fields.len() => {
+                s.fields.iter().zip(v).try_fold(0, |n, (f, v)| {
+                    add(
+                        n,
+                        bound(host, backend, ledger, &f.schema, v, leaves.as_deref_mut())?,
+                    )
+                })
+            }
+            Value::Record(v) if s.kind == SchemaKind::Record && v.len() == s.fields.len() => {
+                s.fields.iter().try_fold(0, |n, f| {
+                    add(
+                        n,
+                        bound(
+                            host,
+                            backend,
+                            ledger,
+                            &f.schema,
+                            v.get(&f.name).ok_or("entry-host-output-shape")?,
+                            leaves.as_deref_mut(),
+                        )?,
+                    )
+                })
+            }
             Value::Associated(v) if s.kind == SchemaKind::Associated => {
-                bound(&s.fields[0].schema, v)?
+                bound(host, backend, ledger, &s.fields[0].schema, v, leaves)
             }
             Value::Variant {
                 alternative,
                 fields,
             } if s.kind == SchemaKind::Variant => {
-                let arm = s
+                let (index, arm) = s
                     .alternatives
                     .iter()
-                    .find(|a| a.name == *alternative)
+                    .enumerate()
+                    .find(|(_, a)| a.name == *alternative)
                     .ok_or("entry-host-output-shape")?;
                 if arm.fields.len() != fields.len() {
                     return Err("entry-host-output-shape".into());
                 }
-                arm.fields
-                    .iter()
-                    .map(|f| {
+                let mut payload = Vec::new();
+                let bytes = arm.fields.iter().try_fold(0, |n, f| {
+                    add(
+                        n,
                         bound(
+                            host,
+                            backend,
+                            ledger,
                             &f.schema,
                             fields.get(&f.name).ok_or("entry-host-output-shape")?,
-                        )
-                    })
-                    .collect::<DataResult<Vec<_>>>()?
-                    .into_iter()
-                    .sum()
+                            Some(&mut payload),
+                        )?,
+                    )
+                })?;
+                let ty = PhysicalType::default_for(host.types[&s.leaves[0]].clone())
+                    .map_err(|e| e.to_string())?;
+                let size = backend
+                    .measure_native_variant(&ty, index, &payload)
+                    .map_err(|e| e.to_string())?;
+                if let Some(leaves) = leaves {
+                    leaves.push(size);
+                }
+                Ok(bytes)
             }
-            _ => return Err("entry-host-output-shape".into()),
-        };
-        Ok(children)
+            _ => Err("entry-host-output-shape".into()),
+        }
     }
     fn collect_owned(
         host: &EntryHost,
@@ -551,9 +652,16 @@ pub(super) fn from_output(
             _live: live,
         })
     }
-    let bytes = bound(schema, &value)?
+    // Bound measurement scratch before walking the source shape. The complete
+    // active variants are checked before collect_owned builds any native spine.
+    let planning = charge(ledger, metadata(schema))?;
+    let backend = backend(host.options.limits.capacity)?;
+    // Standalone native leaves retain their owner's validation and count units;
+    // only a newly assembled active variant needs aggregate payload counts.
+    let bytes = bound(host, &backend, ledger, schema, &value, None)?
         .checked_add(metadata(schema))
         .ok_or("entry-host-output-limit")?;
+    drop(planning);
     let live = charge(ledger, bytes)?;
     collect_owned(host, schema, value, live)
 }

@@ -82,7 +82,17 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
                 Target::Package { .. } => unreachable!(),
             },
         };
-        entry["commands"] = commands(&target, interface, &directory)?;
+        let commands = commands(&target, interface, &directory)?;
+        if interface.kind() == EntryKind::Function {
+            if let Target::Package { package, .. } = &target {
+                let deployments = crate::entry::FunctionInterface::deployment_interfaces(package)?;
+                entry["requirements"] = deployment_requirements(&deployments);
+            }
+            let mut check = commands[0].as_array().unwrap().clone();
+            check.push(json!("--dry-run"));
+            entry["requirements"]["check_command"] = json!(check);
+        }
+        entry["commands"] = commands;
     }
     create(&plan.templates, true, report, |outputs| {
         target.protect(outputs)
@@ -106,8 +116,29 @@ fn requirements(interface: &CheckedInterface) -> Json {
             "allow_authored": v.proof().is_some_and(|p| p.suite.is_none()),
             "setups": v.setup_names().collect::<Vec<_>>(),
         }),
-        CheckedInterface::Function(_) => json!({"invocations":"--invocations=FILE"}),
+        // The logical function interface has no child policy inventory.
+        CheckedInterface::Function(_) => json!({
+            "invocations": "--invocations=FILE",
+            "allow_authored": null,
+            "unresolved": ["child_policies"],
+        }),
     }
+}
+fn deployment_requirements(deployments: &[crate::entry::DeploymentInterface]) -> Json {
+    let authored = |child: &crate::entry::DeploymentInterface| {
+        child.interface().proof().is_some_and(|p| p.suite.is_none())
+    };
+    json!({
+        "invocations": "--invocations=FILE",
+        "allow_authored": deployments.iter().any(authored),
+        "deployments": deployments.iter().map(|child| json!({
+            "id": child.id(),
+            "entry": child.interface().entry(),
+            "operation": child.operation(),
+            "allow_authored": authored(child),
+            "setups": child.interface().setup_names().collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    })
 }
 fn commands(
     target: &Target,

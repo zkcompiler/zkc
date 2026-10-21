@@ -160,8 +160,27 @@ class Planner {
         op["op"] = "require";
         inputs = {require->condition};
       } else if (auto *consume = std::get_if<Consume>(&source.action)) {
-        op["op"] = "drop";
-        inputs = {consume->input};
+        // Host values are Copy. Dispose of a copy, since artifact drop removes
+        // its operand from scope while source disposal preserves Copy values.
+        auto found = ids.find(consume->input.index);
+        if (found == ids.end())
+          return error("entry.scope", "checked Host operand does not dominate");
+        auto temporary = next;
+        auto copy = value(body.values[consume->input.index].type);
+        if (!copy)
+          return copy.takeError();
+        steps.push_back(
+            json::Object{{"op", "project"},
+                         {"path", json::Array{}},
+                         {"operands", json::Array{found->second}},
+                         {"results", json::Array{std::move(*copy)}}});
+        steps.push_back(json::Object{{"op", "drop"},
+                                     {"operands", json::Array{temporary}},
+                                     {"results", json::Array{}}});
+        // The checked action still produces a logical unit; artifact drop has
+        // no results, so materialize that unit with ordinary construction.
+        op["op"] = "construct";
+        op["alternative"] = "";
       } else if (auto *call = std::get_if<HelperCall>(&source.action);
                  call && entry.declarations()[call->callee.index].kind ==
                              Declaration::Kind::EntryFunction) {

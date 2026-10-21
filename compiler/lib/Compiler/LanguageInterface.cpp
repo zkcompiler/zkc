@@ -17,23 +17,24 @@ namespace zkc::language {
 namespace {
 // LLVM JSON replaces duplicate object members. Reject them before parsing so a
 // second spelling cannot silently replace an identity-bearing field.
-Error preflight(StringRef bytes) {
+Error preflight(StringRef bytes, size_t stringLimit, StringRef invalidCode) {
   if (!json::isUTF8(bytes))
-    return error("source.interface", "interface is not UTF-8");
+    return error(invalidCode, "Entry JSON is not UTF-8");
   std::vector<std::optional<std::set<std::string>>> stack;
   unsigned nodes = 0;
+  bool invalidNumeric = false;
   for (size_t i = 0; i < bytes.size();) {
     char c = bytes[i++];
     if (c == '{' || c == '[') {
       ++nodes;
       if (stack.size() == 256)
-        return error("source.limit", "interface nesting limit exceeded");
+        return error("source.limit", "Entry JSON nesting limit exceeded");
       stack.push_back(c == '{'
                           ? std::optional<std::set<std::string>>(std::in_place)
                           : std::nullopt);
     } else if (c == '}' || c == ']') {
       if (stack.empty() || bool(stack.back()) != (c == '}'))
-        return error("source.interface", "unbalanced interface JSON");
+        return error(invalidCode, "unbalanced Entry JSON");
       stack.pop_back();
     } else if (c == '"') {
       ++nodes;
@@ -44,28 +45,28 @@ Error preflight(StringRef bytes) {
         ++i;
       }
       if (i >= bytes.size())
-        return error("source.interface", "unterminated interface string");
-      // JSON can spell one ASCII byte as six characters (\uXXXX). The
-      // decoded string ceiling follows the native variant carrier limit.
-      if (i - start - 1 > 6 * protocol::VariantSpellingBytes)
-        return error("source.limit", "interface string limit exceeded");
+        return error(invalidCode, "unterminated Entry JSON string");
+      // Metadata allows escaped variant spellings; executable carriers allow
+      // larger embedded program/package strings under their document ceiling.
+      if (i - start - 1 > stringLimit)
+        return error("source.limit", "Entry JSON string limit exceeded");
       StringRef spelling = bytes.slice(start, ++i);
       if (!validStringEncoding(spelling))
-        return error("source.interface", "invalid interface string encoding");
+        return error(invalidCode, "invalid Entry JSON string encoding");
       size_t next = i;
       while (next < bytes.size() && isSpace(bytes[next]))
         ++next;
       if (next < bytes.size() && bytes[next] == ':') {
         if (stack.empty() || !stack.back())
-          return error("source.interface", "object key outside object");
+          return error(invalidCode, "object key outside object");
         auto parsed = json::parse(spelling);
         if (!parsed) {
           consumeError(parsed.takeError());
-          return error("source.interface", "invalid interface object key");
+          return error(invalidCode, "invalid Entry JSON object key");
         }
         auto key = parsed->getAsString();
         if (!key || !stack.back()->insert(key->str()).second)
-          return error("source.interface", "duplicate interface key");
+          return error(invalidCode, "duplicate Entry JSON key");
       }
     } else if (!isSpace(c) && c != ',' && c != ':') {
       ++nodes;
@@ -74,16 +75,18 @@ Error preflight(StringRef bytes) {
              !StringRef("[]{}\",:").contains(bytes[i]))
         ++i;
       if (i - start > 10)
-        return error("source.limit", "interface scalar limit exceeded");
+        return error("source.limit", "Entry JSON scalar limit exceeded");
       auto token = bytes.slice(start, i);
       if (token != "true" && token != "false" && token != "null" &&
           ((token.size() > 1 && token.front() == '0') ||
            !all_of(token, [](char digit) { return isDigit(digit); })))
-        return error("source.interface", "invalid interface numeric spelling");
+        invalidNumeric = true;
     }
     if (nodes > 200000)
-      return error("source.limit", "interface node limit exceeded");
+      return error("source.limit", "Entry JSON node limit exceeded");
   }
+  if (invalidNumeric)
+    return error(invalidCode, "invalid Entry JSON numeric spelling");
   return Error::success();
 }
 } // namespace
@@ -121,14 +124,20 @@ Expected<json::Value> detail::parseInterface(StringRef bytes,
                                              const Limits &limits) {
   if (auto error = checkLimits(limits))
     return std::move(error);
-  if (bytes.size() > limits.interfaceBytes)
-    return error("source.limit", "interface byte limit exceeded");
-  if (auto error = preflight(bytes))
+  return parseEntryJson(bytes, limits.interfaceBytes,
+                        6 * protocol::VariantSpellingBytes, "source.interface");
+}
+Expected<json::Value> detail::parseEntryJson(StringRef bytes, size_t byteLimit,
+                                             size_t stringLimit,
+                                             StringRef invalidCode) {
+  if (bytes.size() > byteLimit)
+    return error("source.limit", "Entry JSON byte limit exceeded");
+  if (auto error = preflight(bytes, stringLimit, invalidCode))
     return std::move(error);
   auto actual = json::parse(bytes);
   if (!actual) {
     consumeError(actual.takeError());
-    return error("source.interface", "invalid interface JSON");
+    return error(invalidCode, "invalid Entry JSON");
   }
   return actual;
 }

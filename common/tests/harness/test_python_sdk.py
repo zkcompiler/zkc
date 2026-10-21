@@ -103,6 +103,56 @@ def test_run_refuses_success_reports_from_other_operations(tmp_path, status):
         Client(executable=tool).run({})
 
 
+def call(client, command, options=()):
+    if command == "run":
+        return client.run({"value": "7"}, options=options)
+    if command == "prove":
+        return client.prove({"claim": "7"}, {"secret": "8"}, options=options)
+    if command == "verify":
+        return client.verify({"claim": "7"}, b"candidate", options=options)
+    return client.inspect()
+
+
+@pytest.mark.parametrize("command", ["run", "prove", "verify"])
+def test_dry_run_validates_inputs_without_execution_artifacts(tmp_path, command):
+    tool = executable(tmp_path, '''import json, pathlib, sys
+assert "--dry-run" in sys.argv
+flags = dict(x.split("=", 1) for x in sys.argv if x.startswith("--") and "=" in x)
+for name in ("--input", "--public", "--witness"):
+    if name in flags:
+        assert isinstance(json.loads(pathlib.Path(flags[name]).read_text()), dict)
+if "--proof" in flags:
+    assert pathlib.Path(flags["--proof"]).read_bytes() == b"candidate"
+assert not any(pathlib.Path(flags[name]).exists() for name in ("--output", "--results") if name in flags)
+print(json.dumps({"status": "inputs-checked"}))
+''')
+    outcome = call(Client(executable=tool), command, ["--dry-run"])
+    assert outcome.require_success().ok
+    assert outcome.report["status"] == "inputs-checked"
+    assert outcome.value is None and outcome.proof is None
+
+
+@pytest.mark.parametrize("command", ["run", "prove", "verify", "inspect"])
+def test_input_check_status_requires_an_actual_dry_run(tmp_path, command):
+    tool = executable(tmp_path, 'print(\'{"status":"inputs-checked"}\')')
+    with pytest.raises(ToolError, match="different command or execution mode"):
+        call(Client(executable=tool), command)
+
+
+@pytest.mark.parametrize("command,status", [("run", "executed"), ("prove", "produced"), ("verify", "accepted")])
+def test_dry_run_refuses_execution_status_and_preserves_validation_failure(tmp_path, command, status):
+    tool = executable(tmp_path, f'print(\'{{"status":"{status}"}}\')')
+    with pytest.raises(ToolError, match="execution mode"):
+        call(Client(executable=tool), command, ["--dry-run"])
+    tool = executable(tmp_path, 'import sys; print(\'{"status":"inputs-checked"}\'); sys.exit(1)')
+    with pytest.raises(ToolError, match="exit status disagrees"):
+        call(Client(executable=tool), command, ["--dry-run"])
+    tool = executable(tmp_path, 'import sys; print(\'{"status":"refused","code":"entry-input-unfilled"}\'); sys.exit(1)')
+    outcome = call(Client(executable=tool), command, ["--dry-run"])
+    assert not outcome.ok and outcome.value is None and outcome.proof is None
+    assert outcome.report["code"] == "entry-input-unfilled"
+
+
 @pytest.mark.skipif(os.name != "posix", reason="process group cancellation is POSIX")
 def test_timeout_kills_children_even_when_the_group_leader_exits(tmp_path):
     import time

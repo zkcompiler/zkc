@@ -817,7 +817,7 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
-                let _decoded_live = if let Some(ledger) = &self.shared_ledger {
+                let (_decoded_live, invalid) = if let Some(ledger) = &self.shared_ledger {
                     ledger
                         .charge(
                             WorkBudget {
@@ -828,18 +828,25 @@ impl<B: WireBackend> Execution<B> {
                             0,
                         )
                         .map_err(|_| limit())?;
-                    let bound = runner
-                        .backend()
-                        .decoding_bound(ty, &pending.bytes)
-                        .map_err(codec)?;
-                    crate::host::shared::allocation(Some(ledger), bound).map_err(|_| limit())?
+                    match runner.backend().decoding_bound(ty, &pending.bytes) {
+                        Ok(bound) => (
+                            crate::host::shared::allocation(Some(ledger), bound)
+                                .map_err(|_| limit())?,
+                            None,
+                        ),
+                        Err(NativeWireError::Invalid(reason)) => (None, Some(reason)),
+                        Err(error) => return Err(codec(error)),
+                    }
                 } else {
-                    None
+                    (None, None)
                 };
-                let decoded = match runner.backend().decode_native(ty, &pending.bytes) {
-                    Ok(value) => Ok(value),
-                    Err(NativeWireError::Invalid(reason)) => Err(reason),
-                    Err(error) => return Err(codec(error)),
+                let decoded = match invalid {
+                    Some(reason) => Err(reason),
+                    None => match runner.backend().decode_native(ty, &pending.bytes) {
+                        Ok(value) => Ok(value),
+                        Err(NativeWireError::Invalid(reason)) => Err(reason),
+                        Err(error) => return Err(codec(error)),
+                    },
                 };
                 let receives = self.report.wire.receives.checked_add(1).ok_or_else(limit)?;
                 match runner.complete_receive(cut, decoded) {

@@ -534,6 +534,45 @@ int main() {
                   .str()),
         "source.host-result");
   });
+  for (StringRef result :
+       {"ProveResult", "VerifyResult::Accepted", "VerifyResult::Rejected"})
+    for (bool dormant : {false, true})
+      cases.run(
+          "Local helpers refuse native result fabrication " + result +
+              (dormant ? " dormant" : " direct"),
+          [=] {
+            bool proving = result == "ProveResult";
+            auto type =
+                proving ? "Family::ProveResult" : "Family::VerifyResult";
+            auto outputs =
+                proving ? "Family::ProverOutputs" : "Family::VerifierOutputs";
+            auto expression = proving ? "Family::ProveResult{proof:p,outputs:o}"
+                              : result.ends_with("Accepted")
+                                  ? "Family::VerifyResult::Accepted(o)"
+                                  : "Family::VerifyResult::Rejected()";
+            std::string text = proof.str() +
+                               "fn fabricate(p:Family::Proof,o:" + outputs +
+                               ",existing:" + type + ")->" + type + "{return ";
+            if (dormant)
+              text +=
+                  "if false {" + std::string(expression) + "} else {existing}";
+            else
+              text += expression;
+            text += ";}entry fn Demo(){return ();}";
+            refuses(check(text), "source.host-result");
+          });
+  cases.run("non-Copy disposal still transfers its operand", [] {
+    refuses(check(R"(module sample;
+      #[affine] struct Item {value:bool}
+      fn dispose(x:Item)->Item{drop x;return x;}
+      entry fn Demo(){return ();})"),
+            "source.move");
+    refuses(check(R"(module sample;
+      #[linear] struct Item {value:bool}
+      fn dispose(x:Item)->Item{consume x;return x;}
+      entry fn Demo(){return ();})"),
+            "source.move");
+  });
   cases.run("distinct proof declarations retain distinct nominal candidates",
             [] {
               refuses(check((proof + R"(

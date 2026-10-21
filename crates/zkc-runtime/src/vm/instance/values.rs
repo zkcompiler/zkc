@@ -350,7 +350,6 @@ impl<B: Backend> Instance<B> {
     fn unpin_return(&mut self, values: &[B::Value]) {
         self.counts.add(Event::Unpin, values.len() as u64);
         self.usage.live_value_bytes -= self.ledger.unpin(values);
-        self.release_closed_reservation();
     }
 
     pub(crate) fn release_return(&mut self, mut values: Transfer<B::Value>) -> Vec<B::Value> {
@@ -447,6 +446,5 @@ impl<B: Backend> Instance<B> {
         debug_assert_eq!(closed_values, scope.bindings);
         self.usage.live_values -= scope.bindings;
         self.usage.live_value_bytes -= released + scope.released_storage;
-        self.release_closed_reservation();
     }
 }

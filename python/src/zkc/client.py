@@ -19,7 +19,7 @@ from typing import Any, Mapping, Sequence
 
 _MAX_BYTES = 64 * 1024 * 1024
 _COMMAND_SUCCESS = {"run": "executed", "prove": "produced", "verify": "accepted", "inspect": "inspected"}
-_SUCCESS = set(_COMMAND_SUCCESS.values())
+_SUCCESS = {*_COMMAND_SUCCESS.values(), "inputs-checked"}
 Input = Mapping[str, Any] | str | Path
 
 
@@ -188,9 +188,14 @@ class Client:
             raise ToolError("zkc did not return a complete JSON report") from error
         if not isinstance(report, dict) or not isinstance(report.get("status"), str):
             raise ToolError("invalid zkc machine report")
-        if report["status"] in _SUCCESS and report["status"] != _COMMAND_SUCCESS[command]:
-            raise ToolError("zkc report belongs to a different command")
-        successful = report["status"] == _COMMAND_SUCCESS[command]
+        expected = (
+            "inputs-checked"
+            if command in {"run", "prove", "verify"} and "--dry-run" in flags
+            else _COMMAND_SUCCESS[command]
+        )
+        if report["status"] in _SUCCESS and report["status"] != expected:
+            raise ToolError("zkc report belongs to a different command or execution mode")
+        successful = report["status"] == expected
         if (returncode == 0) != successful:
             raise ToolError("zkc exit status disagrees with its machine report")
         return report

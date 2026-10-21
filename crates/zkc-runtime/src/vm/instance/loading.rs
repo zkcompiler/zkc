@@ -18,6 +18,20 @@ pub(crate) struct LoadedLocal<B: Backend> {
     pub inputs: Vec<B::Value>,
 }
 
+pub(crate) enum Installation {
+    FullProgram,
+    SelectedRoot,
+}
+
+enum InitializationRoot<'a> {
+    Participant {
+        entry: &'a str,
+        role: &'a str,
+        installation: Installation,
+    },
+    Local(&'a str),
+}
+
 impl<B: Backend> Instance<B> {
     #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
@@ -32,13 +46,15 @@ impl<B: Backend> Instance<B> {
     ) -> std::result::Result<Self, LoadError<B>> {
         Self::initialize(
             admitted,
-            Some((entry, role)),
-            None,
+            InitializationRoot::Participant {
+                entry,
+                role,
+                installation: Installation::FullProgram,
+            },
             session,
             backend,
             value_budget,
             work_budget,
-            false,
             None,
         )
     }
@@ -46,13 +62,11 @@ impl<B: Backend> Instance<B> {
     #[allow(clippy::too_many_arguments)]
     fn initialize(
         admitted: &Program,
-        role_root: Option<(&str, &str)>,
-        local_root: Option<&str>,
+        root: InitializationRoot<'_>,
         session: &str,
         backend: B,
         value_budget: ValueBudget,
         work_budget: WorkBudget,
-        selected: bool,
         shared: Option<ExecutionLedger>,
     ) -> std::result::Result<Self, LoadError<B>> {
         let start = (|| {
@@ -70,19 +84,29 @@ impl<B: Backend> Instance<B> {
             {
                 return Err(RuntimeError::Session);
             }
-            let operations = if let Some(function) = local_root {
-                crate::vm::link::install_local(admitted, function, &backend)
-            } else if selected {
-                let (entry, role) = role_root.expect("role root");
-                crate::vm::link::install_role(admitted, entry, role, &backend)
-            } else {
-                crate::vm::link::install(admitted, &backend)
-                    .map(|operations| operations.into_iter().map(Some).collect())
+            let operations = match &root {
+                InitializationRoot::Local(function) => {
+                    crate::vm::link::install_local(admitted, function, &backend)
+                }
+                InitializationRoot::Participant {
+                    entry,
+                    role,
+                    installation,
+                } => match installation {
+                    Installation::SelectedRoot => {
+                        crate::vm::link::install_role(admitted, entry, role, &backend)
+                    }
+                    Installation::FullProgram => crate::vm::link::install(admitted, &backend)
+                        .map(|operations| operations.into_iter().map(Some).collect()),
+                },
             }
             .map_err(RuntimeError::Admission)?;
-            let participant = role_root
-                .map(|(entry, role)| admitted.participant(entry, role))
-                .transpose()?;
+            let participant = match &root {
+                InitializationRoot::Participant { entry, role, .. } => {
+                    Some(admitted.participant(entry, role)?)
+                }
+                InitializationRoot::Local(_) => None,
+            };
             let live = shared
                 .as_ref()
                 .map(|ledger| ledger.reserve_live(value_budget.live_bytes))
@@ -109,7 +133,6 @@ impl<B: Backend> Instance<B> {
             calls,
             shared,
             live_reservation,
-            closing: false,
             arguments: Vec::new(),
             usage: Usage::default(),
             ledger: Ledger::default(),
@@ -118,7 +141,11 @@ impl<B: Backend> Instance<B> {
             next_frame: 0,
             frames: Vec::new(),
             pending_frame: None,
-            role: role_root.map_or("", |(_, role)| role).to_owned(),
+            role: match root {
+                InitializationRoot::Participant { role, .. } => role,
+                InitializationRoot::Local(_) => "",
+            }
+            .to_owned(),
             returned: Scope::new(),
         })
     }
@@ -143,7 +170,7 @@ impl<B: Backend> Instance<B> {
             inputs,
             value_budget,
             work_budget,
-            false,
+            Installation::FullProgram,
             None,
         )
     }
@@ -158,18 +185,20 @@ impl<B: Backend> Instance<B> {
         inputs: Vec<B::Value>,
         value_budget: ValueBudget,
         work_budget: WorkBudget,
-        selected: bool,
+        installation: Installation,
         shared: Option<ExecutionLedger>,
     ) -> std::result::Result<Loaded<B>, LoadError<B>> {
         let mut instance = Self::initialize(
             admitted,
-            Some((entry, role)),
-            None,
+            InitializationRoot::Participant {
+                entry,
+                role,
+                installation,
+            },
             session,
             backend,
             value_budget,
             work_budget,
-            selected,
             shared,
         )?;
         let start = (|| {
@@ -195,11 +224,16 @@ impl<B: Backend> Instance<B> {
                 body,
                 inputs,
             }),
-            Err(error) => Err(LoadError {
-                error,
-                usage: instance.usage(),
-                backend: instance.take_backend(),
-            }),
+            Err(error) => {
+                // The consumed inputs may be their payloads' final owners.
+                // Backend recovery releases the live allowance only afterward.
+                drop(inputs);
+                Err(LoadError {
+                    error,
+                    usage: instance.usage(),
+                    backend: instance.take_backend(),
+                })
+            }
         }
     }
 
@@ -216,21 +250,15 @@ impl<B: Backend> Instance<B> {
     ) -> std::result::Result<LoadedLocal<B>, LoadError<B>> {
         let mut instance = Self::initialize(
             admitted,
-            None,
-            Some(function),
+            InitializationRoot::Local(function),
             session,
             backend,
             value_budget,
             work_budget,
-            true,
             shared,
         )?;
         let code = admitted.function(function);
         let start = (|| {
-            if inputs.len() != code.body.inputs.len() {
-                return Err(RuntimeError::Inputs);
-            }
-            instance.validate_values(&inputs, code.body.inputs.iter().map(|(_, ty)| ty))?;
             let frame = instance.function_entry_frame(
                 Origin {
                     session: session.into(),
@@ -251,11 +279,14 @@ impl<B: Backend> Instance<B> {
                 code,
                 inputs,
             }),
-            Err(error) => Err(LoadError {
-                error,
-                usage: instance.usage(),
-                backend: instance.take_backend(),
-            }),
+            Err(error) => {
+                drop(inputs);
+                Err(LoadError {
+                    error,
+                    usage: instance.usage(),
+                    backend: instance.take_backend(),
+                })
+            }
         }
     }
 

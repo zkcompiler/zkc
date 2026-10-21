@@ -68,8 +68,14 @@ operation signatures are `D::prove(public, witness)` and
 `D::verify(public, proof)`. Exact specialization identity is part of each generated
 type; structurally equal products do not make deployments interchangeable.
 Service, setup and resource authority are not freely constructible data fields.
-Only ordinary importable/exportable data crosses the Host numerical boundary;
-affine managed custody remains with its native owner.
+Only ordinary copyable native data crosses the Host numerical boundary;
+affine managed custody remains with its native owner. Internal numerical
+transport may preserve opaque or restricted nominal types, including existing
+native results. It grants no source constructor authority: opaque factories
+require their defining module's authority, and generated native results remain
+projection-only. Compiler publication checks this source correspondence.
+External input construction separately requires the schema's constructor
+permission; numerical result reconstruction does not grant that permission.
 
 Only successful explicit source return roots are published. Normal joint-run
 false is ordinary data. Semantic verifier rejection produces Rejected without

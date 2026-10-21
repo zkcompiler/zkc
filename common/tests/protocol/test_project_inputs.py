@@ -72,8 +72,14 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     for entry, group in [('Interactive', 'arguments'), ('Proof', 'witness')]:
         report = journal.json([toolchain.runtime, '--json', 'prepare', entry, *options])
         assert report['files'] == [str(project / f'inputs/example.{entry}/{group}.json')]
-        assert report['entries'][0]['requirements'] == ({'allow_authored': True, 'setups': []} if entry == 'Proof'
-                                          else {'invocations': '--invocations=FILE'})
+        requirements = report['entries'][0]['requirements']
+        if entry == 'Proof':
+            assert requirements == {'allow_authored': True, 'setups': []}
+        else:
+            assert requirements['invocations'] == '--invocations=FILE'
+            assert requirements['allow_authored'] is None
+            assert requirements['unresolved'] == ['child_policies']
+            assert requirements['check_command'] == [*report['entries'][0]['commands'][0], '--dry-run']
         Path(report['files'][0]).write_text(json.dumps(
             {'b': True} if entry == 'Proof' else {'inputs': {'P': {'b': True}, 'V': {}}}))
     p = project / 'inputs/example.Interactive/arguments.json'

@@ -311,6 +311,13 @@ function symbol. The interface uses `selection: {kind: "function", function}` an
 a `functions` signature inventory. Its `protocols`, `relations` and `setups`
 arrays are empty: child native packages own those contracts.
 
+Compiler publication and Rust admission bound the Host artifact to 16 MiB,
+JSON nesting to 256 and lexical nodes to 200,000 before structural decoding.
+Scalar tokens have at most ten bytes. Embedded program and package strings
+share the artifact byte ceiling; interface metadata retains its narrower string
+limit. Duplicate decoded keys, invalid Unicode and noncanonical numeric tokens
+refuse. The compiler may apply tighter source limits.
+
 Each signature has `symbol`, ordered named `parameters` with a logical `schema`,
 and one `result` schema. Schemas retain the same nominal, constructor, permission
 and native leaf contracts as protocol interfaces. Each function has `signature`

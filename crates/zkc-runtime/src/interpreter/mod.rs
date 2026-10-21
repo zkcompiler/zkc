@@ -146,7 +146,7 @@ impl<B: Backend> Runner<B> {
             inputs,
             value_budget,
             work_budget,
-            true,
+            crate::vm::instance::loading::Installation::SelectedRoot,
             ledger,
         )?)
     }
@@ -306,9 +306,11 @@ impl<B: Backend> Runner<B> {
     /// Consume a terminal runner and move its live reservation with returned
     /// values. An unfinished runner is cancelled and returns no output guard.
     pub fn into_retained_outputs(mut self) -> (B, Option<RetainedOutputs<B::Value>>) {
-        if !self.is_terminal() {
-            self.cancel();
-        }
+        self.cancel();
+        let outputs = self.take_retained_outputs();
+        (self.instance.take_backend(), outputs)
+    }
+    fn take_retained_outputs(&mut self) -> Option<RetainedOutputs<B::Value>> {
         let outputs = match self.pending.take() {
             Some(Action::Returned(values)) => {
                 self.instance.release_returned(&values);
@@ -326,7 +328,7 @@ impl<B: Backend> Runner<B> {
         if outputs.is_some() {
             self.pending = Some(Action::Returned(vec![]));
         }
-        (self.instance.take_backend(), outputs)
+        outputs
     }
     pub fn cancel(&mut self) {
         if !self.is_terminal() {
@@ -417,28 +419,42 @@ impl<B: Backend> Runner<B> {
             .last()
             .map_or_else(|| self.root.clone(), |f| f.frame.origin().clone())
     }
+    /// Keep the allowance through destruction of values owned by an action,
+    /// including those no longer represented by a retained scope or backing pin.
+    /// Successful executions retain it; stopped executions release it afterward.
+    fn with_live_reservation<T>(&mut self, action: impl FnOnce(&mut Self) -> T) -> T {
+        let reservation = self.instance.take_live_reservation();
+        let result = action(self);
+        if !matches!(self.pending, Some(Action::Stopped(_))) {
+            self.instance.restore_live_reservation(reservation);
+        }
+        result
+    }
     fn halt(&mut self, kind: StopKind, site: Option<String>, origin: Option<Origin>) {
-        let origin = origin.unwrap_or_else(|| self.active_origin());
-        let exit = if matches!(kind, StopKind::Cancelled) {
-            FrameExit::Cancelled
-        } else {
-            FrameExit::Stopped
-        };
-        let stack = &mut self.stack;
-        let cleanup_errors = self.instance.unwind(exit, |instance, frame| {
-            if let Some(execution) = stack.pop_if(|execution| execution.frame.identical(frame)) {
-                instance.close_scope(execution.scope, execution.env.values());
-            }
+        self.with_live_reservation(|runner| {
+            let origin = origin.unwrap_or_else(|| runner.active_origin());
+            let exit = if matches!(kind, StopKind::Cancelled) {
+                FrameExit::Cancelled
+            } else {
+                FrameExit::Stopped
+            };
+            let stack = &mut runner.stack;
+            let cleanup_errors = runner.instance.unwind(exit, |instance, frame| {
+                if let Some(execution) = stack.pop_if(|execution| execution.frame.identical(frame))
+                {
+                    instance.close_scope(execution.scope, execution.env.values());
+                }
+            });
+            // Replacing the action destroys any final Send/Query payload owner.
+            runner.pending = Some(Action::Stopped(Stop {
+                origin,
+                role: runner.role().to_owned(),
+                site,
+                kind,
+                cleanup_errors,
+                local: None,
+            }));
         });
-        self.instance.release_live_reservation();
-        self.pending = Some(Action::Stopped(Stop {
-            origin,
-            role: self.role().to_owned(),
-            site,
-            kind,
-            cleanup_errors,
-            local: None,
-        }));
     }
     fn failed(&mut self, error: RuntimeError, site: Option<String>, origin: Option<Origin>) {
         let kind = match error {
@@ -602,6 +618,7 @@ impl<B: Backend> Runner<B> {
             iteration: 0,
         });
         if let Err(error) = self.instance.iteration() {
+            drop(values);
             self.failed(error, Some(site.clone()), Some(child_origin));
             return Ok(());
         }
@@ -1008,9 +1025,13 @@ impl<B: Backend> Runner<B> {
         values: Transfer<B::Value>,
         accept: impl FnOnce(&mut Self, &Transfer<B::Value>) -> Result<T>,
     ) -> Result<T> {
-        let result = accept(self, &values);
-        self.instance.release_return(values);
-        result
+        // Acceptance may stop after closing the last environment. The transfer
+        // still owns payloads, even when they report no shared backing charge.
+        self.with_live_reservation(|runner| {
+            let result = accept(runner, &values);
+            drop(runner.instance.release_return(values));
+            result
+        })
     }
 
     /// Consume one pending send. The caller owns delivery; no peer state is accessed.
@@ -1106,6 +1127,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Payload);
         }
         if let Err(error) = self.instance.tick() {
+            drop(decoded);
             self.failed(error, Some(expected.site.clone()), None);
             return Ok(ReceiveCompletion::Stopped);
         }
@@ -1141,21 +1163,23 @@ impl<B: Backend> Runner<B> {
     /// Reject a malformed/misrouted packet without advancing or changing the request.
     /// Wire decoding and its byte limits belong to the installed Value adapter.
     pub fn deliver(&mut self, packet: Packet<B::Value>) -> Result<()> {
-        self.check_delivery(&packet)?;
-        self.instance.tick()?;
-        let execution = self.stack.last().expect("receiver");
-        let body = execution.body.clone();
-        let Instruction::Receive { output, .. } = &body[execution.pc] else {
-            unreachable!("checked receive")
-        };
-        self.bind(
-            std::slice::from_ref(output),
-            vec![packet.payload],
-            Retention::Input,
-        )?;
-        self.stack.last_mut().expect("receiver").pc += 1;
-        self.pending = None;
-        Ok(())
+        self.with_live_reservation(|runner| {
+            runner.check_delivery(&packet)?;
+            runner.instance.tick()?;
+            let execution = runner.stack.last().expect("receiver");
+            let body = execution.body.clone();
+            let Instruction::Receive { output, .. } = &body[execution.pc] else {
+                unreachable!("checked receive")
+            };
+            runner.bind(
+                std::slice::from_ref(output),
+                vec![packet.payload],
+                Retention::Input,
+            )?;
+            runner.stack.last_mut().expect("receiver").pc += 1;
+            runner.pending = None;
+            Ok(())
+        })
     }
 }
 

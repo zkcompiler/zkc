@@ -269,11 +269,18 @@ pub(super) fn validate_native_shared(
                     )
                     .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
                 let retained = match transport.format() {
-                    ProofFormat::Native => runner
-                        .backend()
-                        .measure_native_wire(&request.ty, bytes)
-                        .map_err(ArtifactFailure::NativeWire)?
-                        .retained_bytes(),
+                    ProofFormat::Native => {
+                        match runner.backend().measure_native_wire(&request.ty, bytes) {
+                            Ok(size) => size.retained_bytes(),
+                            Err(zkc_backends::NativeWireError::Invalid(reason)) => {
+                                // Measurement may reject framing before allocation. It is
+                                // still an accepted receive attempt with a Decode stop.
+                                runner.complete_receive(&cut, Err(reason))?;
+                                return Ok(());
+                            }
+                            Err(error) => return Err(ArtifactFailure::NativeWire(error)),
+                        }
+                    }
                     ProofFormat::RawBytes => bytes.len(),
                 };
                 crate::host::shared::allocation(Some(ledger), retained)

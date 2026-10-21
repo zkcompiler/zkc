@@ -43,7 +43,11 @@ fn variant(name: &str, arms: Vec<(&str, Vec<(&str, Json)>)>, constructible: bool
                 format!("case{i:08}"),
                 fields
                     .iter()
-                    .flat_map(|(_, s)| s["leaves"].as_array().unwrap().iter().cloned())
+                    .flat_map(|(_, s)| s["leaves"].as_array().unwrap().iter())
+                    .map(|leaf| match leaf.as_str() {
+                        Some(s) if s.starts_with("variant:") => zkc_test_support::variants::tree(s),
+                        _ => leaf.clone(),
+                    })
                     .collect::<Vec<_>>()
             ])
         })
@@ -1618,4 +1622,498 @@ fn packing_existing_native_results_does_not_authorize_external_fabrication() {
         crate::entry::value::check_import(&schema).unwrap_err(),
         "entry-input-constructor"
     );
+}
+
+fn pair_variant_document(leaf: Json, nested: bool) -> Json {
+    let inner = variant("Inner", vec![("One", vec![("value", leaf.clone())])], true);
+    let child = if nested { inner.clone() } else { leaf.clone() };
+    let pair = variant(
+        "Two",
+        vec![
+            ("Empty", vec![]),
+            ("Pair", vec![("a", child.clone()), ("b", child)]),
+        ],
+        true,
+    );
+    let mut operations = Vec::new();
+    let input = if nested {
+        operations.push(json!({"op":"construct","alternative":"One","operands":[0],"results":[definition(1,inner)]}));
+        1
+    } else {
+        0
+    };
+    operations.push(json!({"op":"construct","alternative":"Pair","operands":[input,input],"results":[definition(2,pair.clone())]}));
+    document(vec![("x", leaf)], pair, json!(operations), json!([2]))
+}
+fn admit_with_capacity(doc: &Json, capacity: crate::execution::Capacity) -> FunctionEntry {
+    let mut options = FunctionOptions::default();
+    options.limits.capacity = capacity;
+    FunctionEntry::admit(capture(doc), options, BTreeMap::new()).unwrap()
+}
+fn pair_value(value: &zkc_backends::Value, nested: bool) -> Value {
+    let child = || {
+        if nested {
+            Value::Variant {
+                alternative: "One".into(),
+                fields: BTreeMap::from([("value".into(), value.clone().into())]),
+            }
+        } else {
+            value.clone().into()
+        }
+    };
+    Value::Variant {
+        alternative: "Pair".into(),
+        fields: BTreeMap::from([("a".into(), child()), ("b".into(), child())]),
+    }
+}
+
+#[test]
+fn host_variant_pack_and_owned_outputs_enforce_complete_active_counts() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::ExecutionLedger;
+    let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
+    let groups = schema("builtin", "Groups", json!(["groups:bls12-381.g1"]));
+    for nested in [false, true] {
+        for group in [false, true] {
+            let leaf = if group {
+                groups.clone()
+            } else {
+                vector.clone()
+            };
+            let native = if group {
+                zkc_backends::Value::Groups(vec![zkc_backends::GroupPoint::generator(); 3].into())
+            } else {
+                zkc_backends::Value::Vector(vec![zkc_backends::Scalar::from(7); 3].into())
+            };
+            let doc = pair_variant_document(leaf, nested);
+            for legal in [false, true] {
+                let capacity = Capacity {
+                    elements: if group {
+                        32
+                    } else if legal {
+                        6
+                    } else if nested {
+                        5
+                    } else {
+                        4
+                    },
+                    groups: if legal { 6 } else { 4 },
+                    ..Capacity::default()
+                };
+                let entry = admit_with_capacity(&doc, capacity);
+                let prepared = entry
+                    .prepare(request(vec![("x", native.clone().into())]))
+                    .unwrap();
+                let report = prepared.execute();
+                assert_eq!(
+                    report.is_success(),
+                    legal,
+                    "nested={nested}, group={group}: {}",
+                    report.diagnostics()
+                );
+                if !legal {
+                    assert!(report.value.is_none());
+                    assert_eq!(report.failure.unwrap().code, "native-wire-limit");
+                }
+                let ledger = ExecutionLedger::new(capacity.values, capacity.work);
+                let output = data::from_output(
+                    entry.host(),
+                    &entry.signature().result,
+                    pair_value(&native, nested),
+                    &ledger,
+                );
+                assert_eq!(
+                    output.is_ok(),
+                    legal,
+                    "nested={nested}, group={group}: {output:?}"
+                );
+                if !legal {
+                    assert_eq!(output.as_ref().unwrap_err(), "native-wire-limit");
+                }
+                drop(output);
+                assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn owned_variants_accept_internal_polynomials_and_count_shared_occurrences() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::ExecutionLedger;
+    let polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
+    let doc = pair_variant_document(polynomial, true);
+    let native = zkc_backends::Value::Polynomial(vec![zkc_backends::Scalar::from(7); 3].into());
+    for elements in [5, 6] {
+        let capacity = Capacity {
+            elements,
+            ..Capacity::default()
+        };
+        let entry = admit_with_capacity(&doc, capacity);
+        let ledger = ExecutionLedger::new(capacity.values, capacity.work);
+        let result = data::from_output(
+            entry.host(),
+            &entry.signature().result,
+            pair_value(&native, true),
+            &ledger,
+        );
+        assert_eq!(result.is_ok(), elements == 6, "{result:?}");
+        if elements == 5 {
+            assert_eq!(result.unwrap_err(), "native-wire-limit");
+        }
+        let backend = data::backend(capacity).unwrap();
+        assert!(
+            backend.measure_native_input(&native).is_err(),
+            "public codec stays closed"
+        );
+        let live = std::sync::Arc::new(ledger.reserve_live(8192).unwrap());
+        let leaf = &entry.signature().parameters[0].schema;
+        let mut leaves = [native.clone()].into_iter();
+        let value = data::collect(entry.host(), leaf, &mut leaves, live).unwrap();
+        let outer = &entry.signature().result;
+        let inner = &outer.alternatives[1].fields[0].schema;
+        let inner = data::pack(entry.host(), inner, "One", vec![value], &ledger).unwrap();
+        let result = data::pack(
+            entry.host(),
+            outer,
+            "Pair",
+            vec![inner.clone(), inner],
+            &ledger,
+        );
+        assert_eq!(result.is_ok(), elements == 6, "{result:?}");
+    }
+}
+
+#[test]
+fn host_variant_retention_preflight_checks_peak_before_assembly() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::{ExecutionLedger, PhysicalType};
+    let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
+    let doc = pair_variant_document(vector, false);
+    let entry = admit(&doc).unwrap();
+    let native = zkc_backends::Value::Vector(vec![zkc_backends::Scalar::from(7); 3].into());
+    let capacity = Capacity::default();
+    let backend = data::backend(capacity).unwrap();
+    let sizes = [
+        backend.measure_native_value(&native).unwrap(),
+        backend.measure_native_value(&native).unwrap(),
+    ];
+    let ty =
+        PhysicalType::default_for(entry.host.types[&entry.signature().result.leaves[0]].clone())
+            .unwrap();
+    let retained = backend
+        .measure_native_variant(&ty, 1, &sizes)
+        .unwrap()
+        .retained_bytes();
+    for sufficient in [false, true] {
+        let capacity = Capacity {
+            value_bytes: 2 * retained - usize::from(!sufficient),
+            ..capacity
+        };
+        let entry = admit_with_capacity(&doc, capacity);
+        let backend = data::backend(capacity).unwrap();
+        assert!(
+            backend.measure_native_input(&native).is_ok(),
+            "each child fits"
+        );
+        let report = entry
+            .prepare(request(vec![("x", native.clone().into())]))
+            .unwrap()
+            .execute();
+        assert_eq!(report.is_success(), sufficient, "{}", report.diagnostics());
+        if !sufficient {
+            assert_eq!(report.failure.unwrap().code, "native-wire-limit");
+        }
+        let ledger = ExecutionLedger::new(capacity.values, capacity.work);
+        let output = data::from_output(
+            entry.host(),
+            &entry.signature().result,
+            pair_value(&native, false),
+            &ledger,
+        );
+        assert_eq!(output.is_ok(), sufficient, "{output:?}");
+        drop(output);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    }
+    // The allocation ledger remains independently authoritative at the exact
+    // per-value policy boundary; no native spine can be retained on refusal.
+    let capacity = Capacity {
+        values: zkc_runtime::vm::ValueBudget {
+            live_bytes: 1,
+            ..capacity.values
+        },
+        ..capacity
+    };
+    let ledger = ExecutionLedger::new(capacity.values, capacity.work);
+    assert!(
+        data::from_output(
+            entry.host(),
+            &entry.signature().result,
+            pair_value(&native, false),
+            &ledger
+        )
+        .is_err()
+    );
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
+fn standalone_outputs_keep_owner_policy_without_native_measurement() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
+    let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
+    let native = zkc_backends::Value::Curve(zkc_backends::GroupPoint::generator());
+    let capacity = Capacity {
+        groups: 0,
+        ..Capacity::default()
+    };
+    data::backend(capacity)
+        .unwrap()
+        .validate_value(&native)
+        .unwrap();
+    let product = record(
+        "Groups",
+        vec![("a", group.clone()), ("b", group.clone())],
+        true,
+    );
+    for (s, value) in [
+        (group.clone(), native.clone().into()),
+        (
+            product,
+            Value::Record(BTreeMap::from([
+                ("a".into(), native.clone().into()),
+                ("b".into(), native.clone().into()),
+            ])),
+        ),
+        (index(), Value::from(zkc_backends::Value::Index(7))),
+    ] {
+        let doc = document(vec![("x", s.clone())], s, json!([]), json!([0]));
+        let entry = admit_with_capacity(&doc, capacity);
+        let ledger = ExecutionLedger::new(
+            capacity.values,
+            WorkBudget {
+                logical_bytes: 0,
+                ..capacity.work
+            },
+        );
+        let output = data::from_output(entry.host(), &entry.signature().result, value, &ledger)
+            .expect("standalone leaves retain their owner's validation");
+        assert_eq!(ledger.snapshot().logical_bytes, 0);
+        drop(output);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    }
+
+    let doc = pair_variant_document(group, false);
+    let entry = admit_with_capacity(&doc, capacity);
+    let ledger = ExecutionLedger::new(capacity.values, capacity.work);
+    let result = data::from_output(
+        entry.host(),
+        &entry.signature().result,
+        pair_value(&native, false),
+        &ledger,
+    );
+    assert_eq!(result.unwrap_err(), "native-wire-limit");
+    assert_eq!(
+        ledger.snapshot().logical_bytes,
+        native.retained_bytes() as u64
+    );
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    let value = data::from_output(
+        entry.host(),
+        &entry.signature().parameters[0].schema,
+        native.clone().into(),
+        &ledger,
+    )
+    .unwrap();
+    let result = data::pack(
+        entry.host(),
+        &entry.signature().result,
+        "Pair",
+        vec![value.clone(), value],
+        &ledger,
+    );
+    assert_eq!(result.unwrap_err(), "native-wire-limit");
+    assert_eq!(
+        ledger.snapshot().logical_bytes,
+        2 * native.retained_bytes() as u64
+    );
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
+fn repeated_native_measurements_share_logical_work_before_walking() {
+    use crate::execution::Capacity;
+    use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
+    let capacity = Capacity::default();
+    let policy = capacity.backend();
+    let scalar = zkc_backends::Value::Field(zkc_backends::Scalar::from(7));
+    let inner = zkc_backends::Value::Sequence(
+        zkc_backends::Sequence::new(scalar.physical_type().logical(), vec![scalar; 32], &policy)
+            .unwrap(),
+    );
+    let native = zkc_backends::Value::Sequence(
+        zkc_backends::Sequence::new(inner.physical_type().logical(), vec![inner; 32], &policy)
+            .unwrap(),
+    );
+    let leaf = schema(
+        "builtin",
+        "NestedSequence",
+        json!([native.physical_type().logical().spelling()]),
+    );
+    let wrapper = variant(
+        "Measured",
+        vec![("One", vec![("value", leaf.clone())])],
+        true,
+    );
+    let doc = document(
+        vec![("x", leaf)],
+        wrapper.clone(),
+        json!([{"op":"construct","alternative":"One","operands":[0],"results":[definition(1,wrapper)]}]),
+        json!([1]),
+    );
+    let entry = admit_with_capacity(&doc, capacity);
+    let work = native.retained_bytes() as u64;
+    let ledger = ExecutionLedger::new(
+        capacity.values,
+        WorkBudget {
+            logical_bytes: 3 * work,
+            ..capacity.work
+        },
+    );
+    let value = data::from_output(
+        entry.host(),
+        &entry.signature().parameters[0].schema,
+        native.clone().into(),
+        &ledger,
+    )
+    .unwrap();
+    let held = ledger.snapshot().live_reserved_bytes;
+    let output = || Value::Variant {
+        alternative: "One".into(),
+        fields: BTreeMap::from([("value".into(), native.clone().into())]),
+    };
+    for iteration in 1..=3 {
+        let result = if iteration == 2 {
+            data::from_output(entry.host(), &entry.signature().result, output(), &ledger)
+        } else {
+            data::pack(
+                entry.host(),
+                &entry.signature().result,
+                "One",
+                vec![value.clone()],
+                &ledger,
+            )
+        }
+        .unwrap();
+        assert_eq!(ledger.snapshot().logical_bytes, iteration * work);
+        drop(result);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, held);
+    }
+    // This owner would reject the payload during its recursive count scan.
+    // Exhausted shared work must refuse first, through either Host path.
+    let strict = admit_with_capacity(
+        &doc,
+        Capacity {
+            elements: 1,
+            ..capacity
+        },
+    );
+    assert_eq!(
+        data::backend(strict.host().options.limits.capacity)
+            .unwrap()
+            .measure_native_value(&native)
+            .unwrap_err()
+            .to_string(),
+        "native-wire-limit"
+    );
+    for host in [entry.host(), strict.host()] {
+        for owned in [false, true] {
+            let result = if owned {
+                data::from_output(host, &entry.signature().result, output(), &ledger)
+            } else {
+                data::pack(
+                    host,
+                    &entry.signature().result,
+                    "One",
+                    vec![value.clone()],
+                    &ledger,
+                )
+            };
+            assert_eq!(result.unwrap_err(), "Limit");
+            let usage = ledger.snapshot();
+            assert_eq!(usage.logical_bytes, 3 * work);
+            assert_eq!(usage.live_reserved_bytes, held);
+            assert_eq!(usage.pending_logical_bytes, 0);
+            assert_eq!(usage.pending_value_bytes, 0);
+        }
+    }
+    drop(value);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+
+    // A partial active-arm walk keeps its committed work on later refusal.
+    let pair = admit_with_capacity(
+        &pair_variant_document(
+            doc["functions"][0]["signature"]["parameters"][0]["schema"].clone(),
+            false,
+        ),
+        capacity,
+    );
+    let ledger = ExecutionLedger::new(
+        capacity.values,
+        WorkBudget {
+            logical_bytes: work,
+            ..capacity.work
+        },
+    );
+    let result = data::from_output(
+        pair.host(),
+        &pair.signature().result,
+        pair_value(&native, false),
+        &ledger,
+    );
+    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(ledger.snapshot().logical_bytes, work);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+
+    // Pack scratch must be reserved before measurement, even when all payload
+    // storage is shared and the live allowance is held by the existing leaf.
+    let leaf = &entry.signature().parameters[0].schema;
+    let ledger = ExecutionLedger::new(
+        zkc_runtime::vm::ValueBudget {
+            live_bytes: data::metadata(leaf) + native.retained_bytes(),
+            ..capacity.values
+        },
+        capacity.work,
+    );
+    let value = data::from_output(entry.host(), leaf, native.clone().into(), &ledger).unwrap();
+    let held = ledger.snapshot().live_reserved_bytes;
+    let result = data::pack(
+        entry.host(),
+        &entry.signature().result,
+        "One",
+        vec![value.clone()],
+        &ledger,
+    );
+    assert_eq!(result.unwrap_err(), "Limit");
+    assert_eq!(ledger.snapshot().logical_bytes, 0);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, held);
+    drop(value);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+
+    // Output planning scratch fits, but retaining the result cannot. Completed
+    // measurement work stays charged and neither scratch nor output stays live.
+    let ledger = ExecutionLedger::new(
+        zkc_runtime::vm::ValueBudget {
+            live_bytes: data::metadata(&entry.signature().result),
+            ..capacity.values
+        },
+        capacity.work,
+    );
+    let result = data::from_output(entry.host(), &entry.signature().result, output(), &ledger);
+    assert_eq!(result.unwrap_err(), "Limit");
+    let usage = ledger.snapshot();
+    assert_eq!(usage.logical_bytes, work);
+    assert_eq!(usage.live_reserved_bytes, 0);
+    assert_eq!(usage.pending_logical_bytes, 0);
+    assert_eq!(usage.pending_value_bytes, 0);
 }
