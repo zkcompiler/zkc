@@ -2,25 +2,25 @@
   "format": "zkc.claims-lock/0",
   "theorems": {
     "TestsSecurity.Counterexamples.Couplings.chain_collision": {
-      "package": "arklib",
+      "package": "security",
       "module": "TestsSecurity.Counterexamples.Couplings",
       "structural": "50f1ffc281912dac",
       "explicit": "567061e6c514c535"
     },
     "TestsSecurity.Counterexamples.Laws.correlated_not_realized": {
-      "package": "arklib",
+      "package": "security",
       "module": "TestsSecurity.Counterexamples.Laws",
       "structural": "0d89fde22188976e",
       "explicit": "10ce69ad74abe44b"
     },
     "TestsSecurity.Counterexamples.Openings.depth_not_fixed": {
-      "package": "arklib",
+      "package": "security",
       "module": "TestsSecurity.Counterexamples.Openings",
       "structural": "ded92006a56a65f6",
       "explicit": "ea2f1e13cbc8db8a"
     },
     "TestsSecurity.Counterexamples.Operands.count_not_authenticated": {
-      "package": "arklib",
+      "package": "security",
       "module": "TestsSecurity.Counterexamples.Operands",
       "structural": "96448e4b6e36a7da",
       "explicit": "fc194d8c3dccc9cd"
@@ -50,8 +50,8 @@
       "explicit": "d5c9df13d858efdf"
     },
     "Zkc.Protocols.Sumcheck.Common.VerifierContract.soundness": {
-      "package": "main",
-      "module": "Zkc.Protocols.Sumcheck.Common",
+      "package": "security",
+      "module": "ZkcSecurity.Families.Sumcheck.Common",
       "structural": "ae9e1c258d2eea74",
       "explicit": "602a75700106a092"
     },
@@ -297,234 +297,234 @@
     },
     "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.ArkLib.Fri.Soundness",
+      "module": "ZkcArkLib.Fri.Soundness",
       "structural": "833b5a6cea6d6869",
       "explicit": "35cd466924de58b4"
     },
     "ZkcSecurity.ArkLib.Fri.soundness_generalizedJohnson": {
       "package": "arklib",
-      "module": "ZkcSecurity.ArkLib.Fri.GeneralizedJohnson",
+      "module": "ZkcArkLib.Fri.GeneralizedJohnson",
       "structural": "0288f20f0aad885d",
       "explicit": "6b98f1fd288ebf8b"
     },
     "ZkcSecurity.ArkLib.Fri.soundness_uniqueDecoding": {
       "package": "arklib",
-      "module": "ZkcSecurity.ArkLib.Fri.UniqueDecoding",
+      "module": "ZkcArkLib.Fri.UniqueDecoding",
       "structural": "363105869088808d",
       "explicit": "226ec3634e9050ab"
     },
     "ZkcSecurity.ArkLib.Sumcheck.Multilinear.publicTable_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.ArkLib.Sumcheck.Multilinear.Soundness",
+      "module": "ZkcArkLib.Sumcheck.Multilinear.Soundness",
       "structural": "4323d3790c83b06e",
       "explicit": "a5f97b67a04c6737"
     },
     "ZkcSecurity.ArkLib.Sumcheck.Multilinear.residual_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.ArkLib.Sumcheck.Multilinear.Residual",
+      "module": "ZkcArkLib.Sumcheck.Multilinear.Residual",
       "structural": "2398061a54c95d55",
       "explicit": "2d41c944f756af71"
     },
     "ZkcSecurity.Commitment.soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Commitment.Soundness",
       "structural": "1843a0f3d367e2e2",
       "explicit": "fe6ff8e32df88264"
     },
     "ZkcSecurity.Commitment.soundness_weighted": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Commitment.Soundness",
       "structural": "c8c572c6e0b743bc",
       "explicit": "64a843f7f500aeb4"
     },
     "ZkcSecurity.Examples.CausalSumcheck.Iteration.repeat_uniform_residual_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CausalSumcheck.Iteration",
+      "module": "ZkcArkLib.Examples.CausalSumcheck.Iteration",
       "structural": "40e9181c6d44db11",
       "explicit": "603852e21bda9018"
     },
     "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.reduction_residual_bound": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier",
+      "module": "ZkcArkLib.Examples.CausalSumcheck.SourceVerifier",
       "structural": "611a132126b44a20",
       "explicit": "dad5013bd2632208"
     },
     "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.source_returned_true_bound": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier",
+      "module": "ZkcArkLib.Examples.CausalSumcheck.SourceVerifier",
       "structural": "97387bcfda6ab8fa",
       "explicit": "ea9420e678be5c0b"
     },
     "ZkcSecurity.Examples.ChaumPedersenSigma.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.ChaumPedersenSigma",
       "structural": "d063589455a7c9cb",
       "explicit": "bdfd7b71e654c7b1"
     },
     "ZkcSecurity.Examples.CommittedOpening.intendedBound": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.CommittedOpeningBound",
       "structural": "a3733e41bdecca5a",
       "explicit": "35f88928660adbae"
     },
     "ZkcSecurity.Examples.CommittedOpeningBridge.soundness": {
-      "package": "arklib",
-      "module": "ZkcSecurity.Examples.CommittedOpeningBridge",
+      "package": "security",
+      "module": "ZkcSecurity.Commitment.Opening",
       "structural": "3eab6d069fdf428a",
       "explicit": "b3871b2d5d64e890"
     },
     "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CompiledGkrFiatShamir",
+      "module": "ZkcArkLib.Examples.CompiledGkrFiatShamir",
       "structural": "b195e9e03c75bba8",
       "explicit": "d477f272033f2bc8"
     },
     "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness_charged": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CompiledGkrFiatShamir",
+      "module": "ZkcArkLib.Examples.CompiledGkrFiatShamir",
       "structural": "3bb333dd4f6f6701",
       "explicit": "eabf8c146af26cd0"
     },
     "ZkcSecurity.Examples.CompiledGuessFiatShamir.soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CompiledGuessFiatShamir",
+      "module": "ZkcArkLib.Examples.CompiledGuessFiatShamir",
       "structural": "3fb1023f65ce8643",
       "explicit": "9e77fecf3b954872"
     },
     "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.CompiledSchnorrFiatShamir",
       "structural": "b123b60def0c0db8",
       "explicit": "c199eb19183c575c"
     },
     "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CompiledSumcheckFiatShamir",
+      "module": "ZkcArkLib.Examples.CompiledSumcheckFiatShamir",
       "structural": "36d7cdf366080edf",
       "explicit": "96149abd88bb195d"
     },
     "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.CompiledSumcheckFiatShamir",
+      "module": "ZkcArkLib.Examples.CompiledSumcheckFiatShamir",
       "structural": "f3edb829387ba691",
       "explicit": "67755a6097387a8b"
     },
     "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir",
       "structural": "fc4f65b66be35144",
       "explicit": "645df88809daee91"
     },
     "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir",
+      "module": "ZkcArkLib.Examples.ExecutableSumcheckFiatShamir",
       "structural": "8b0d5a9e2f1fa473",
       "explicit": "b8a5f6a99b55cd55"
     },
     "ZkcSecurity.Examples.FriFiatShamir.fiatShamir_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.FriFiatShamir",
+      "module": "ZkcArkLib.Examples.FriFiatShamir",
       "structural": "adb26221495a8c63",
       "explicit": "d47c45f7a07eb5f0"
     },
     "ZkcSecurity.Examples.GkrFiatShamir.soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.GkrFiatShamir",
+      "module": "ZkcArkLib.Examples.GkrFiatShamir",
       "structural": "a358bbef1fea7063",
       "explicit": "4c19e4bf36de8d2a"
     },
     "ZkcSecurity.Examples.GkrFiatShamir.soundness_charged": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.GkrFiatShamir",
+      "module": "ZkcArkLib.Examples.GkrFiatShamir",
       "structural": "5acff77ba1a13987",
       "explicit": "bc9f3b04df31b0be"
     },
     "ZkcSecurity.Examples.SchnorrAndSigma.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.SchnorrAndSigma",
       "structural": "0ed2db0116e0c273",
       "explicit": "3cf4ad057b59c7c1"
     },
     "ZkcSecurity.Examples.StructuredSchnorrSigma.fresh_challenge_hvzk": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.StructuredSchnorrSigma",
       "structural": "c70aa30a6fa1fb94",
       "explicit": "52cd03d62f4fe6ab"
     },
     "ZkcSecurity.Examples.Subjects.ChaumPedersen.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.Subjects.ChaumPedersen.Claims",
       "structural": "7b6e8e00e8cf61a8",
       "explicit": "3b0f618693e216e3"
     },
     "ZkcSecurity.Examples.Subjects.Okamoto.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.Subjects.Okamoto.Claims",
       "structural": "ceb690933087408f",
       "explicit": "9745660a78f63d02"
     },
     "ZkcSecurity.Examples.Subjects.SchnorrAnd.knowledge_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims",
       "structural": "3081e0732ee5bbd4",
       "explicit": "05cbb5a71b799395"
     },
     "ZkcSecurity.Examples.SumcheckFiatShamir.compiled_adaptive_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.Examples.SumcheckFiatShamir",
+      "module": "ZkcArkLib.Examples.SumcheckFiatShamir",
       "structural": "db6e282b917b006a",
       "explicit": "b6baf6d1ec0d3be8"
     },
     "ZkcSecurity.FiatShamir.Obligations.not_determines": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.FiatShamir.Obligations",
       "structural": "5eb618cf26e66029",
       "explicit": "3a9fa956422d701e"
     },
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.FiatShamir.Typed",
       "structural": "cc41e7a527528a08",
       "explicit": "b4ea63c3eb64b1d8"
     },
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.FiatShamir.Typed",
       "structural": "25ee8d4f0e177a04",
       "explicit": "aec857cc27459d26"
     },
     "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted": {
       "package": "arklib",
-      "module": "ZkcSecurity.FiatShamir.Upstream",
+      "module": "ZkcArkLib.FiatShamir.Upstream",
       "structural": "8c6aae762781d793",
       "explicit": "54047805cbe1ea91"
     },
     "ZkcSecurity.FiatShamir.Upstream.worstCase_soundness": {
       "package": "arklib",
-      "module": "ZkcSecurity.FiatShamir.Upstream",
+      "module": "ZkcArkLib.FiatShamir.Upstream",
       "structural": "2e1fe5e595c67c66",
       "explicit": "b04b8290960c81ca"
     },
     "ZkcSecurity.FiatShamir.adaptive_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.FiatShamir.Soundness",
       "structural": "11818ff65fe95844",
       "explicit": "4a524afa17fcbd4d"
     },
     "ZkcSecurity.HashChain.Encoding.frame_prefixFree": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.HashChain.Encoding",
       "structural": "6c58d74152a63fe2",
       "explicit": "0c0a0d4c93fea6de"
     },
     "ZkcSecurity.HashChain.concrete_le_simulated": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.HashChain.Bound",
       "structural": "ea5efb0e53bbdaba",
       "explicit": "d7094ccfea80cd3a"
     },
     "ZkcSecurity.HashChain.concrete_soundness": {
-      "package": "arklib",
+      "package": "security",
       "module": "ZkcSecurity.HashChain.Instance",
       "structural": "6788c6374a88fc32",
       "explicit": "ab906f31b08450fc"

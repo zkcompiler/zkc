@@ -182,44 +182,394 @@ a declaration audit may intentionally select just one client module. -/
 -- BEGIN DEPENDENCY POLICY
 private def dependencyPolicyJson : String := r##"{
   "layers": [
-    ["TestsSecurity", "tests"],
-    ["TestsClean", "tests"],
-    ["Tests", "tests"],
-    ["CleanExamplesAudit", "tests"],
-    ["CleanExamples", "clean-subjects"],
-    ["ZkcSecurity.Examples", "subjects"],
-    ["ZkcExamples", "subjects"],
-    ["ZkcTools", "tools"],
-    ["Zkc.Probability", "probability"],
-    ["Zkc.Protocols", "families"],
-    ["ZkcSecurity.ArkLib", "adapters"],
-    ["ZkcSecurity.VCVio", "adapters"],
-    ["ZkcSecurity.Families", "security-families"],
-    ["ZkcClean", "clean"],
-    ["ZkcSecurity", "security"],
-    ["Zkc", "core"],
-    ["ArkLib", "security-upstream"],
-    ["VCVio", "security-upstream"],
-    ["PolyFun", "security-upstream"],
-    ["Clean", "clean-upstream"],
-    ["CompPoly", "algebra-upstream"]
+    [
+      "TestsArkLib",
+      "tests"
+    ],
+    [
+      "TestsSecurity",
+      "tests"
+    ],
+    [
+      "TestsClean",
+      "tests"
+    ],
+    [
+      "Tests",
+      "tests"
+    ],
+    [
+      "CleanExamplesAudit",
+      "tests"
+    ],
+    [
+      "CleanExamples",
+      "clean-subjects"
+    ],
+    [
+      "ZkcArkLib.Examples",
+      "optional-subjects"
+    ],
+    [
+      "ZkcArkLib",
+      "adapters"
+    ],
+    [
+      "ZkcSecurity.Examples",
+      "security-subjects"
+    ],
+    [
+      "ZkcExamples",
+      "subjects"
+    ],
+    [
+      "ZkcTools",
+      "tools"
+    ],
+    [
+      "Zkc.Protocols",
+      "families"
+    ],
+    [
+      "ZkcSecurity.Families",
+      "security-families"
+    ],
+    [
+      "ZkcSecurity.Probability",
+      "probability"
+    ],
+    [
+      "ZkcSecurity",
+      "security"
+    ],
+    [
+      "ZkcClean",
+      "clean"
+    ],
+    [
+      "Zkc",
+      "core"
+    ],
+    [
+      "ArkLib",
+      "arklib-upstream"
+    ],
+    [
+      "VCVio",
+      "security-upstream"
+    ],
+    [
+      "Examples",
+      "security-upstream"
+    ],
+    [
+      "ToMathlib",
+      "security-upstream"
+    ],
+    [
+      "PolyFun",
+      "security-upstream"
+    ],
+    [
+      "Clean",
+      "clean-upstream"
+    ],
+    [
+      "CompPoly",
+      "algebra-upstream"
+    ]
   ],
   "allowed": [
-    ["core", ["core", "upstream"]],
-    ["probability", ["core", "probability", "upstream"]],
-    ["families", ["core", "families", "upstream"]],
-    ["security", ["core", "probability", "security", "security-upstream", "upstream", "algebra-upstream"]],
-    ["security-families", ["core", "probability", "families", "security", "security-families", "security-upstream", "upstream", "algebra-upstream"]],
-    ["adapters", ["core", "probability", "families", "security", "security-families", "adapters", "security-upstream", "upstream", "algebra-upstream"]],
-    ["clean", ["core", "families", "clean", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["subjects", ["core", "probability", "families", "security", "security-families", "adapters", "subjects", "security-upstream", "upstream", "algebra-upstream"]],
-    ["clean-subjects", ["core", "families", "clean", "clean-subjects", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["tools", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["tests", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["security-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["clean-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["algebra-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
-    ["upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]]
+    [
+      "core",
+      [
+        "core",
+        "upstream"
+      ]
+    ],
+    [
+      "probability",
+      [
+        "core",
+        "probability",
+        "upstream"
+      ]
+    ],
+    [
+      "families",
+      [
+        "core",
+        "families",
+        "upstream"
+      ]
+    ],
+    [
+      "security",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-families",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "adapters",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "adapters",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "clean",
+      [
+        "core",
+        "families",
+        "clean",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "subjects",
+      [
+        "core",
+        "families",
+        "subjects",
+        "upstream"
+      ]
+    ],
+    [
+      "clean-subjects",
+      [
+        "core",
+        "families",
+        "clean",
+        "clean-subjects",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "tools",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "tests",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "security-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "clean-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "algebra-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "security-subjects",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "subjects",
+        "security-subjects"
+      ]
+    ],
+    [
+      "optional-subjects",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "subjects",
+        "security-subjects",
+        "adapters",
+        "optional-subjects",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "arklib-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ]
   ],
   "guards": [
     {
@@ -229,22 +579,24 @@ private def dependencyPolicyJson : String := r##"{
       ],
       "exact": true,
       "dependencies": [
-        "ZkcSecurity.ArkLib",
+        "ZkcArkLib",
         "ArkLib",
         "ZkcSecurity.Examples",
         "Zkc.Protocols",
-        "Zkc.Source"
+        "Zkc.Source",
+        "ZkcArkLib.Examples"
       ]
     },
     {
       "name": "causal-source-independence",
       "owners": [
-        "ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal"
+        "ZkcArkLib.Sumcheck.Multilinear.Causal"
       ],
       "exact": false,
       "dependencies": [
         "ZkcSecurity.Examples",
-        "Zkc.Source"
+        "Zkc.Source",
+        "ZkcArkLib.Examples"
       ]
     },
     {
@@ -261,7 +613,7 @@ private def dependencyPolicyJson : String := r##"{
     {
       "name": "probability-without-source",
       "owners": [
-        "Zkc.Probability"
+        "ZkcSecurity.Probability"
       ],
       "exact": false,
       "dependencies": [
@@ -275,137 +627,11 @@ private def dependencyPolicyJson : String := r##"{
       "name": "clean-subjects-to-tests",
       "reason": "Move reusable native Clean clients out of the test library.",
       "edges": [
-        ["CleanExamples", "TestsClean.NativeClients", true]
-      ]
-    },
-    {
-      "name": "families-to-probability",
-      "reason": "Move probabilistic Sumcheck clients with the probability foundation; retain deterministic family mathematics in core.",
-      "edges": [
-        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.UniformTape", false],
-        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.AdaptiveTape", false],
-        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.Observation", false],
-        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.UniformTape", true]
-      ]
-    },
-    {
-      "name": "security-families-to-adapters",
-      "reason": "Separate the reusable Sigma extraction interface from the VCVio instantiation.",
-      "edges": [
-        ["ZkcSecurity.Families.Schnorr", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.SigmaAnd", false],
-        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.SigmaAndSchnorr", true]
-      ]
-    },
-    {
-      "name": "security-to-adapters",
-      "reason": "Separate generic VCVio probability/execution infrastructure from concrete external adapters before enforcing adapter leaves.",
-      "edges": [
-        ["ZkcSecurity.Commitment.HistoryKeys", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.Commitment.Repeats", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.Commitment.Repeats", "ZkcSecurity.VCVio.Memo", true],
-        ["ZkcSecurity.Endpoint.Evidence", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.Endpoint.Knowledge", "ZkcSecurity.VCVio.Pruning", true],
-        ["ZkcSecurity.Endpoint.Sigma", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.Endpoint.Soundness", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Composition", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Decoding", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Laws", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Lifting", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Realization", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Reduction", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.FiatShamir.Soundness", "ZkcSecurity.VCVio.Pruning", true],
-        ["ZkcSecurity.FiatShamir.Upstream", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.Bound", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Bridge", "ZkcSecurity.VCVio.Deferral", true],
-        ["ZkcSecurity.HashChain.Bridge", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Memo", false],
-        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Memo", true],
-        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Memo", false],
-        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Provider", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Reduction", "ZkcSecurity.VCVio.UntilBad", false],
-        ["ZkcSecurity.HashChain.Steps", "ZkcSecurity.VCVio.UntilBad", true],
-        ["ZkcSecurity.Oracle.Keys", "ZkcSecurity.VCVio.Deferral", true],
-        ["ZkcSecurity.Stage.Commitment", "ZkcSecurity.VCVio.Pruning", false],
-        ["ZkcSecurity.Stage.FiatShamir", "ZkcSecurity.VCVio.Pruning", true],
-        ["ZkcSecurity.Stage.Joint", "ZkcSecurity.VCVio.Deferral", false],
-        ["ZkcSecurity.Stage.Joint", "ZkcSecurity.VCVio.Pruning", false]
-      ]
-    },
-    {
-      "name": "security-to-subjects",
-      "reason": "Move the reusable committed-opening bridge out of examples.",
-      "edges": [
-        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.Examples.CommittedOpeningBridge", true]
+        [
+          "CleanExamples",
+          "TestsClean.NativeClients",
+          true
+        ]
       ]
     }
   ]

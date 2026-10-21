@@ -788,12 +788,12 @@ class Driver(Runner):
         }
         for key, text in sources.items():
             path = subject.generated(key)
-            expected = ROOT / evidence.module_path(namespace, key.capitalize())
+            expected = subject.generated("claims").with_name(key.capitalize() + ".lean")
             self.check(f"{subject.name}:claims-path:{key}", path == expected,
                        f"[generated] {key} must be {expected.relative_to(ROOT)}")
             self.generated(subject, key, text, record)
-        claims_module = evidence.module_name(namespace, "Claims")
-        self.lake("build", claims_module, cwd=LEAN / "integrations/arklib", name=f"{subject.name}:claims-build")
+        claims_module = subject.module_name("claims")
+        self.lake("build", claims_module, cwd=subject.generated_package("claims"), name=f"{subject.name}:claims-build")
         record_accepted(record, "claim-application", module=claims_module,
                         application=evidence.names(subject.data)["application"])
 

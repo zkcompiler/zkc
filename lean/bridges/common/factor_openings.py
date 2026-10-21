@@ -59,7 +59,7 @@ def check_factor_forms(suite, root, execute):
         constructor = fixture.parent.parent / 'Variants' / f'Factor{form}Data.lean'
         assert render(data, f'ZkcExamples.NativePrograms.Variants.Factor{form}Data') == constructor.read_text()
         request = read_json(root / 'lean/bridges/common/requests/factor-openings.json')
-        client = root / f'lean/ZkcExamples/NativePrograms/Factor{form}.lean'
+        client = root / f'lean/security/ZkcSecurity/Examples/NativePrograms/Factor{form}.lean'
         assert render_client(data, request, f'Factor{form}') == client.read_text()
         sources[form] = text, symbol
         fixtures.append({'form': form, 'source': data[1]})

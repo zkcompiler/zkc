@@ -15,8 +15,8 @@ data = "lean/ZkcExamples/Construction/GuessProofData.lean"
 bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GuessProof.lean"
-artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Guess/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Guess/Claims.lean"
+artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Claims.lean"
 
 [family]
 module = "ZkcSecurity.FiatShamir.Realization"

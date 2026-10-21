@@ -25,8 +25,8 @@ facts = "lean/ZkcExamples/Executable/SchnorrProofFacts.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrInteractiveData.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
-artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
+artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
+claims = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
 
 [family]
 module = "ZkcSecurity.Families.Schnorr"

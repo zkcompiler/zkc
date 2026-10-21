@@ -3,7 +3,7 @@
 
 Select an exact Mathlib commit and, when needed, exact ArkLib/Clean commits.
 Mathlib selects the Lean release; each package keeps its own Lake manifest.
-Resolve all three packages with that toolchain, verify common revisions, and
+Resolve all four packages with that toolchain, verify common revisions, and
 refresh Nix source hashes. Builds and proof audits remain separate checks.
 A failed resolution leaves its edits available for inspection.
 """
@@ -21,6 +21,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "lean"
 INTEGRATIONS = {"Arklib": MAIN / "integrations/arklib", "Clean": MAIN / "integrations/clean"}
+SECURITY = MAIN / "security"
 NIX_LEAN = ROOT / "nix/lean-toolchain.nix"
 TOOLCHAIN = re.compile(r"leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)")
 
@@ -112,6 +113,7 @@ def check(toolchain, selected):
     shared = {}
     origins = {}
     for directory, expected in [(MAIN, {"mathlib": selected["mathlib"]}),
+                                (SECURITY, {"mathlib": selected["mathlib"]}),
                                 *((path, {name: selected[name], "mathlib": selected["mathlib"]})
                                   for name, path in INTEGRATIONS.items())]:
         if (directory / "lean-toolchain").read_text().strip() != toolchain:
@@ -140,7 +142,7 @@ def check(toolchain, selected):
 
 def detach_dependency_links():
     """Lake update replaces changed checkouts; do not let it traverse shared sources."""
-    for directory in INTEGRATIONS.values():
+    for directory in [SECURITY, *INTEGRATIONS.values()]:
         packages = directory / ".lake/packages"
         if packages.is_dir():
             for package in packages.iterdir():
@@ -171,7 +173,8 @@ def main():
     for name, directory in packages.items():
         (directory / "lean-toolchain").write_text(toolchain + "\n")
         set_required_rev(directory / "lakefile.toml", name, requirements[name][1], selected[name])
-    for directory in INTEGRATIONS.values():
+    for directory in [SECURITY, *INTEGRATIONS.values()]:
+        (directory / "lean-toolchain").write_text(toolchain + "\n")
         lakefile = directory / "lakefile.toml"
         _, old_mathlib = required(lakefile, "mathlib")
         set_required_rev(lakefile, "mathlib", old_mathlib, selected["mathlib"])
@@ -179,7 +182,8 @@ def main():
     run(["nix", "develop", f"{ROOT}#lean", "--command", "bash", "-e", "-c",
          "export MATHLIB_NO_CACHE_ON_UPDATE=1; "
          "cd lean; lake --keep-toolchain update; "
-         "cd integrations/arklib; lake --keep-toolchain update; "
+         "cd security; lake --keep-toolchain update; "
+         "cd ../integrations/arklib; lake --keep-toolchain update; "
          "cd ../clean; lake --keep-toolchain update"])
     check(toolchain, selected)
     run(["nix", "develop", f"{ROOT}#maintenance", "--command",

@@ -260,7 +260,7 @@ def claims_module(subject):
         "applied below the claim, at the same artifacts"
         + (", contract and regime." if prop == "soundness" else " and contract."))
     imports = ["ZkcSecurity.Endpoint.Soundness" if prop == "soundness" else "ZkcSecurity.Endpoint.Knowledge",
-               module_name(namespace, "Evidence")]
+               subject.module_name("claims").rsplit(".", 1)[0] + ".Evidence"]
     source = HEADER.format(imports="\n".join(f"public import {name}" for name in imports), doc=doc)
     source += f"""namespace {namespace}
 open ZkcSecurity.Endpoint

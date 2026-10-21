@@ -19,8 +19,8 @@ participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SumcheckProof.lean"
 program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
-artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Sumcheck/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Sumcheck/Claims.lean"
+artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.lean"
 
 [normal_forms]
 request = "lean/bridges/structured/normal-forms/sumcheck-round.toml"

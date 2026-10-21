@@ -33,8 +33,8 @@ def test_deleted_owner_removed_import_and_relocated_violation_are_refused(graph)
 
 
 def test_transitive_exception_does_not_authorize_new_direct_import():
-    graph = {'Zkc.Protocols.Sumcheck.Acceptance': ['Zkc.Probability.UniformTape']}
-    with pytest.raises(ValueError, match='new direct dependency'):
+    graph = {'Zkc.Protocols.Sumcheck.Acceptance': ['ZkcSecurity.Probability.UniformTape']}
+    with pytest.raises(ValueError, match='forbidden dependency'):
         policy().audit_graph(graph, ['Zkc.Protocols.Sumcheck.Acceptance'])
 
 
@@ -69,3 +69,21 @@ def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
     path.write_text(audit.BEGIN + json.dumps(data) + audit.END)
     with pytest.raises(ValueError):
         audit.load_policy(path)
+
+
+@pytest.mark.parametrize('owner,dependency', [
+    ('Zkc.Source.Client', 'ZkcSecurity.Endpoint.Knowledge'),
+    ('ZkcSecurity.FiatShamir.Client', 'ArkLib.ProofSystem.Sumcheck.Domain'),
+    ('ZkcSecurity.Families.Client', 'ZkcArkLib.FiatShamir.Upstream'),
+    ('ZkcSecurity.HashChain.Client', 'ZkcSecurity.Examples.Subjects.Schnorr.Evidence'),
+    ('ZkcArkLib.Sumcheck.Multilinear.Causal.Client', 'Zkc.Source.Structure'),
+])
+def test_separated_boundaries_are_enforced(owner, dependency):
+    with pytest.raises(ValueError, match='forbidden dependency'):
+        policy().audit_graph({owner: [dependency]}, [owner])
+
+
+@pytest.mark.parametrize('dependency', ['Examples.Schnorr.SigmaProtocol', 'VCVio.CryptoFoundations',
+                                       'Zkc.Protocols.Sumcheck.Verifier'])
+def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
+    assert policy().permitted('ZkcSecurity.Families.Schnorr', dependency)

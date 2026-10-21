@@ -12,15 +12,17 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from support.lean_headers import HeaderParser
+from support.packages import PACKAGES, selected as select_packages, check_closure
 from support.dependencies import audit_graph, permitted  # noqa: F401 -- enforcement controls
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATIONS = {'arklib': ('ZkcSecurity', 'TestsSecurity'), 'clean': ('ZkcClean', 'TestsClean', 'CleanExamples', 'CleanExamplesAudit')}
+INTEGRATIONS = {name: roots for name, (_, roots) in PACKAGES.items() if name != 'main'}
 
 
 def check(selected, lake):
-    packages = [(ROOT, ('Zkc', 'ZkcExamples', 'ZkcTools', 'Tests'))]
-    packages.extend((ROOT / 'integrations' / name, INTEGRATIONS[name]) for name in selected)
+    packages = [PACKAGES[name] for name in select_packages(selected)]
+    for name in select_packages(selected):
+        check_closure(name, PACKAGES[name][0])
     pins, graph, source_hashes = {}, {}, {}
     import hashlib
     toolchain = (ROOT / 'lean-toolchain').read_text()
@@ -32,7 +34,7 @@ def check(selected, lake):
             assert dep['name'] not in names, f'duplicate dependency: {dep["name"]}'
             names.add(dep['name'])
             if dep['type'] == 'path':
-                assert directory != ROOT and dep['name'] == 'zkc' and (directory / dep['dir']).resolve() == ROOT
+                assert any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])
                 continue
             assert dep['type'] == 'git' and re.fullmatch('[0-9a-f]{40}', dep['rev']), dep
             value = (dep['url'].removesuffix('.git'), dep['rev'])
@@ -51,8 +53,26 @@ def check(selected, lake):
                 owner = '.'.join(path.relative_to(directory).with_suffix('').parts)
                 graph[owner] = headers.imports(source, path)
                 source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
-                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.')):
+                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcArkLib.')):
                     assert source.startswith('module\n'), f'{path}: expected module-system source'
+    ownership = []
+    for directory, families in packages:
+        config = tomllib.loads((directory / 'lakefile.toml').read_text())
+        for library in config.get('lean_lib', []):
+            roots = library.get('roots', [library['name']])
+            globs = library.get('globs', roots)
+            ownership += [(directory, glob.removesuffix('.+').removesuffix('.*'), glob.endswith(('.+', '.*')))
+                          for glob in globs]
+    for i, (owner, prefix, broad) in enumerate(ownership):
+        for other, target, other_broad in ownership[:i]:
+            if owner == other:
+                continue
+            overlap = prefix == target or broad and target.startswith(prefix + '.') or other_broad and prefix.startswith(target + '.')
+            assert not overlap, f'overlapping Lake ownership: {owner}:{prefix} and {other}:{target}'
+    for owner, imports in graph.items():
+        for dep in imports:
+            if dep.startswith(('ZkcSecurity.', 'ZkcArkLib.')):
+                assert dep in graph, f'unselected or missing owned import: {owner} -> {dep}'
     dependencies = audit_graph(graph, [family for _, families in packages for family in families])
     return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
             'modules': len(graph), 'dependencies': dependencies, 'pins': pins, 'source_sha256': source_hashes}

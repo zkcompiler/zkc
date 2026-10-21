@@ -21,11 +21,13 @@ FORMAT = "zkc.declarations/0"
 PACKAGES = {
     "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/CommonSource/Reference.lean",
                     "ZkcTools/JsonSupport.lean", "ZkcTools/StructuredSource"]),
-    "arklib": (LEAN / "integrations/arklib", ["ZkcSecurity", "TestsSecurity"]),
+    "security": (LEAN / "security", ["ZkcSecurity", "TestsSecurity"]),
+    "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "TestsArkLib"]),
     "clean": (LEAN / "integrations/clean", ["ZkcClean", "TestsClean"]),
 }
 # The registry tables the emitter evaluates where the package defines them.
-REGISTRY = {"arklib": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints")}
+REGISTRY = {"security": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints"),
+            "arklib": ("ZkcArkLib.Registry.reportTable", "ZkcArkLib.Registry.reportEndpoints")}
 
 
 def emit(package, output, *, lake="lake", baseline=None, details=(), log=None):
@@ -78,11 +80,31 @@ class Records:
         return set(self.headers)
 
     def registry(self):
-        """The registry entries and registered endpoints, from the package that defines them."""
+        """Combine compatible registry metadata from every emitted package."""
+        entries, schemas, endpoints = {}, {}, {}
+        found = False
         for header in self.headers.values():
-            if header.get("registry") is not None:
-                return header["registry"], header.get("endpoints") or []
-        return None, []
+            registry = header.get("registry")
+            if registry is None:
+                continue
+            found = True
+            for entry in registry:
+                identifier = entry["identifier"]
+                if identifier in entries and entries[identifier] != entry:
+                    raise ValueError(f"conflicting registry identifier: {identifier}")
+                schema = entry.get("schema")
+                if schema and schema in schemas and schemas[schema] != entry:
+                    raise ValueError(f"conflicting registry schema: {schema}")
+                if schema:
+                    schemas[schema] = entry
+                entries[identifier] = entry
+            for entry in header.get("endpoints") or []:
+                key = (entry["endpoint"], entry["property"], entry["statement"])
+                if key in endpoints and endpoints[key] != entry:
+                    raise ValueError(f"conflicting registered endpoint: {key}")
+                endpoints[key] = entry
+        return (list(entries.values()) if found else None), list(endpoints.values())
+
 
 
 def forbidden_axioms(record):

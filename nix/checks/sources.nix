@@ -45,8 +45,22 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.lean}/lean/ZkcTools/CommonSource.lean
   test -f ${sources.lean}/lean/ZkcExamples/NativePrograms/CustomProperty.lean
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
+  test -f ${sources.security}/lean/security/lake-manifest.json
+  test ! -e ${sources.security}/lean/integrations/arklib
   test ! -e ${sources.arklib}/lean/integrations/clean
   test -f ${sources.arklib}/lean/checks/check_clients.py
+  test -f ${sources.security}/lean/checks/check_library.py
+  test -f ${sources.security}/lean/checks/check_package_ownership.py
+  test -f ${sources.security}/lean/checks/audit_imports.py
+  test -f ${sources.security}/lean/support/packages.py
+  test -f ${sources.security}/lean/support/dependencies.py
+  test -f ${sources.security}/lean/support/lean_headers.py
+  test -f ${sources.arklib}/lean/checks/check_library.py
+  test -f ${sources.arklib}/lean/checks/check_package_ownership.py
+  test -f ${sources.arklib}/lean/checks/audit_imports.py
+  test -f ${sources.arklib}/lean/support/packages.py
+  test -f ${sources.arklib}/lean/support/dependencies.py
+  test -f ${sources.arklib}/lean/support/lean_headers.py
   test -f ${sources.application}/libraries/core/traversal/finite.zkc
   test -f ${sources.application}/libraries/core/primitives/collections/sequence.zkc
   test -f ${sources.application}/common/tests/support/project.py

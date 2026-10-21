@@ -473,7 +473,7 @@ the rounds compose by the fold invariant: the claim is the sum of the table
 restricted at the point. At two rounds the bound is 186 instructions, the
 runtime's measured threshold.
 
-`ZkcSecurity.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
+`ZkcArkLib.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
 Sumcheck bounds to provers of proof bytes. `decoded` decodes a byte prover's
 proofs at the receive types of the statement's round count; with
 `Prunes.prEvent_le`, the executable accepts at most as often as the compiled

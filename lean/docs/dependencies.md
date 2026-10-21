@@ -1,7 +1,8 @@
 # Dependency baseline
 
 The owning `lean-toolchain`, `lakefile.toml` and `lake-manifest.json` files are
-normative for exact sources. The core depends on Mathlib; optional packages own
+normative for exact sources. The core depends on Mathlib. Reusable security owns VCVio, PolyFun and CompPoly
+without ArkLib in its closure; optional packages own
 their external requirements and override shared transitive pins consistently.
 
 | Component | Selected version or exact revision |

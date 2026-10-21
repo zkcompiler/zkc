@@ -423,8 +423,9 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
         path.write_text(candidate)
         receipt['certificate_sha256'] = hashlib.sha256(candidate.encode()).hexdigest()
         contract = CONTRACTS[request['contract']]
-        environment = (ROOT / 'integrations/arklib' if any(
-            contract.properties[prop].module for prop in request['properties']) else ROOT)
+        modules = [contract.properties[prop].module or contract.module for prop in request['properties']]
+        environment = (ROOT / 'integrations/arklib' if any(m.startswith('ZkcArkLib.') for m in modules)
+                       else ROOT / 'security' if any(m.startswith('ZkcSecurity.') for m in modules) else ROOT)
         receipt['toolchain'] = (environment / 'lean-toolchain').read_text().strip()
         receipt['dependency_manifest_sha256'] = hashlib.sha256(
             (environment / 'lake-manifest.json').read_bytes()).hexdigest()

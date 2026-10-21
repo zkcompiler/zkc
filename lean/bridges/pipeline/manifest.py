@@ -19,6 +19,7 @@ import tomllib
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import NAMESPACE, ROOT, Refused, require  # noqa: E402
+from support.packages import PACKAGES  # noqa: E402
 
 sys.path.append(str(ROOT / "common/tests/support"))
 from project import project_inputs  # noqa: E402
@@ -131,13 +132,24 @@ class Subject:
         value = self.get("generated", key)
         return None if value is None else ROOT / value
 
-    def module_name(self, key):
-        """The Lean module a generated file defines, from its path under `lean/`."""
+    def generated_package(self, key):
+        """Actual Lake provider, independent of declaration namespaces."""
         path = self.generated(key)
         if path is None:
             return None
-        relative = path.relative_to(ROOT / "lean").with_suffix("")
-        return ".".join(relative.parts)
+        for directory, roots in PACKAGES.values():
+            if path.is_relative_to(directory):
+                relative = path.relative_to(directory)
+                if relative.parts and relative.parts[0] in roots:
+                    return directory
+        raise Refused(f"{self.name}: generated.{key} is not owned by a Lean package")
+
+    def module_name(self, key):
+        """The module path relative to its unique owning Lake package."""
+        path = self.generated(key)
+        if path is None:
+            return None
+        return ".".join(path.relative_to(self.generated_package(key)).with_suffix("").parts)
 
     def module_arguments(self):
         return ([f"--module={name}={source.relative_to(ROOT)}" for name, source in sorted(self.modules.items())]

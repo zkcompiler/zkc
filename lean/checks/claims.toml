@@ -37,7 +37,7 @@ theorems = [
 subject = "Interactive Schnorr"
 result = '''
 Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation'''
-owners = [["Schnorr subject", "docs/support.md#interactive-schnorr"], ["security integration", "integrations/arklib/README.md"]]
+owners = [["Schnorr subject", "docs/support.md#interactive-schnorr"], ["reusable security", "security/README.md"]]
 theorems = [
   "ZkcExamples.Structured.SchnorrInteractive.perfect_completeness",
   "ZkcExamples.Structured.SchnorrInteractive.special_soundness",
