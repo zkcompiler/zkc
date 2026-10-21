@@ -427,6 +427,7 @@ EMITTED_STAGE_RECEIPTS = {
     "HigherOrder.unattributedReceipt": ("idealData", None),
     "HigherOrder.extraPremiseReceipt": ("idealData", "omitted premise"),
     "HigherOrder.symbolicProvenanceReceipt": ("idealData", None),
+    "HigherOrder.optionalNotesReceipt": ("idealData", None),
     "manualReceipt": ("manualData", None),
     "appliedEvidenceReceipt": ("idealData", None),
     "manualBareReceipt": ("manualData", "missing typed security model admission"),
@@ -476,16 +477,33 @@ def run_emitted_stage_receipts(data):
         if not record or not wire:
             failures.append(f"interpreted receipt control {name}: missing fresh request/receipt extraction")
             continue
-        audited, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
+        audited, assumptions, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
         passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
         extracted = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
         if short in {"manualReceipt", "appliedEvidenceReceipt"}:
             admission = extracted.get("admission") or {}
             passed = passed and admission.get("association") == "typed-certificate" and admission.get("model_status") == "admitted" and admission.get("certificate_checked") is True
+        if short in {"HigherOrder.unattributedReceipt", "HigherOrder.unprovedNoteReceipt"}:
+            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+            expected = ({"invoke", "positiveProof"} if short.endswith("unattributedReceipt") else
+                        {"notedEvidence", "assumedNote", "notedProof"})
+            prefix = "TestsSecurity.ClaimReporting.HigherOrder."
+            passed = passed and {prefix + name for name in expected} <= names
+            passed = passed and [row["id"] for row in assumptions] == ["source.correspondence"]
         if short in {"HigherOrder.unattributedReceipt", "HigherOrder.symbolicProvenanceReceipt"}:
             passed = passed and audited.get("root_route") == "unattributed" and bool(audited.get("attribution_diagnostics"))
         if short == "HigherOrder.symbolicProvenanceReceipt":
             passed = passed and bool(extracted.get("provenance_error"))
+        if short == "HigherOrder.optionalNotesReceipt":
+            helper = data.get("TestsSecurity.ClaimReporting.HigherOrder.withNotes") or {}
+            detail = helper.get("detail") or {}
+            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+            passed = passed and helper.get("name") in names
+            passed = passed and "hypotheses" in detail and detail["hypotheses"] is None
+            passed = passed and "unresolved list" in (detail.get("hypotheses_error") or "")
+            _, _, legacy_reasons = reports.hypotheses(helper, registry)
+            passed = passed and any("were not recorded" in reason for reason in legacy_reasons)
+            passed = passed and [row["id"] for row in assumptions] == ["source.correspondence"]
         if short in {"wrongTargetReceipt", "wrongAcceptanceReceipt"}:
             passed = passed and (extracted.get("admission") or {}).get("subject_checked") is False
         if short == "chargedExtensionReceipt":
@@ -525,8 +543,10 @@ def run_emitted_receipts(data):
         if record is None:
             failures.append(f"receipt control {name} was not emitted")
             continue
-        _, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data)
+        audited, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data)
         passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
+        if name.rsplit(".", 1)[-1].startswith("forged"):
+            passed = passed and audited.get("root_route") == "unattributed" and bool(audited.get("attribution_diagnostics"))
         label = "emitted-receipt-" + name.rsplit(".", 1)[1]
         if passed:
             rows.append(label)

@@ -224,6 +224,22 @@ def test_legacy_security_controls_still_pass():
     assert len(cli.controls.run()) >= 31
 
 
+@pytest.mark.parametrize("detail", [
+    {},
+    {"hypotheses": None, "hypotheses_error": "unresolved list in declaration data"},
+    {"hypotheses": "unreadable", "hypotheses_error": "unresolved list in declaration data"},
+])
+def test_legacy_unreadable_hypotheses_are_not_empty(api, detail):
+    found, discharged, reasons = api.hypotheses({"name": "Demo.withNotes", "detail": detail}, api.Registry([], []))
+    assert found == discharged == []
+    assert reasons == ["the named hypotheses of Demo.withNotes were not recorded"]
+
+
+def test_optional_hypotheses_diagnostic_does_not_refuse_receipt(api, receipt_case):
+    receipt_case[2]["detail"].update(hypotheses=None, hypotheses_error="unresolved list in declaration data")
+    assert audit(api, receipt_case)[3] == []
+
+
 def test_all_source_claims_survive_incomplete_and_failed_attempts(api, receipt_case, tmp_path, monkeypatch):
     request, _, _, _, records = receipt_case
     manifest = tmp_path / "sample.toml"

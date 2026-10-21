@@ -945,7 +945,7 @@ def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std
     binders.mapM fun binder => do
       let declaration ← binder.fvarId!.getDecl
       return Json.str (toString (← ppExpr declaration.type))
-  let (typeHead, typeArguments, property, hypotheses, claimData) ← forallTelescope info.type fun binders body => do
+  let (typeHead, typeArguments, property, hypotheses, hypothesesError, claimData) ← forallTelescope info.type fun binders body => do
     let head := headName body
     let property ← match head with
       | some name =>
@@ -957,14 +957,17 @@ def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std
             | none => pure Json.null
           else pure Json.null
       | none => pure Json.null
-    let hypotheses ← match head with
-      | some name =>
-          if evidenceStructures.contains name then
-            match info.value? (allowOpaque := true) with
-            | some _ => hypothesesJson binders (mkAppN (mkConst info.name (info.levelParams.map Level.param)) binders) name
-            | none => pure Json.null
-          else pure Json.null
-      | none => pure Json.null
+    let (hypotheses, hypothesesError) ← try
+      let hypotheses ← match head with
+        | some name =>
+            if evidenceStructures.contains name then
+              match info.value? (allowOpaque := true) with
+              | some _ => hypothesesJson binders (mkAppN (mkConst info.name (info.levelParams.map Level.param)) binders) name
+              | none => pure Json.null
+            else pure Json.null
+        | none => pure Json.null
+      pure (hypotheses, Json.null)
+      catch error => pure (Json.null, Json.str (← error.toMessageData.toString))
     let value := mkAppN (mkConst info.name (info.levelParams.map Level.param)) binders
     let claimData ← try
       if head == some `Zkc.Claims.Wire.Request then
@@ -973,7 +976,7 @@ def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std
         pure (Json.mkObj [("receipt", ← receiptJson env info binders body value)])
       else pure Json.null
       catch error => pure (Json.mkObj [("extraction_error", Json.str (← error.toMessageData.toString))])
-    return (head, ← argumentsJson body, property, hypotheses, claimData)
+    return (head, ← argumentsJson body, property, hypotheses, hypothesesError, claimData)
   let (valueHead, valueArguments) ← match info.value? (allowOpaque := true) with
     | some value => lambdaTelescope value fun _ body => do return (headName body, ← argumentsJson body)
     | none => pure (none, Json.null)
@@ -986,7 +989,7 @@ def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std
     ("value_head", nameJson valueHead),
     ("value_arguments", valueArguments),
     ("property", property),
-    ("hypotheses", hypotheses),
+    ("hypotheses", hypotheses), ("hypotheses_error", hypothesesError),
     ("claim_data", claimData),
     ("dependencies", dependencyJson env #[info.name]),
     ("registered", Json.arr ((reached env registered info.name).map (Json.str ·.toString)))]

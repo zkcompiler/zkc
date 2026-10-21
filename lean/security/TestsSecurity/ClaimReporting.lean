@@ -576,7 +576,21 @@ noncomputable def notedEvidence :=
       (subject (F := F) (G := G) .idealMeaning).lowering with
     hypotheses := [assumedNote] }
 
+/-- Generic notes need not be readable before the helper is applied. -/
+noncomputable def withNotes (notes : List Hypothesis) :=
+  { notedEvidence (F := F) (G := G) with hypotheses := notes }
+
 include F G
+
+/-- An applied empty note list cannot prevent extraction of a valid receipt. -/
+theorem optionalNotesProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
+  Nat.rec (positiveProof (F := F) (G := G)) (fun _ proof => proof)
+    (withNotes (F := F) (G := G) []).handle
+
+noncomputable def optionalNotesReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (optionalNotesProof (F := F) (G := G))
+    { provenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.optionalNotesProof" }
+    (subject .idealMeaning).stageLinkProofs
 
 /-- Reading a legacy note is not assuming its False claim. The actual theorem
 still has a kernel proof and no extra premise in its remaining telescope. -/

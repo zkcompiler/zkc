@@ -364,7 +364,7 @@ def hypotheses(record, registry):
     detail = record.get("detail") or {}
     found, discharged, reasons = [], [], []
     listed = detail.get("hypotheses")
-    if listed is None:
+    if not isinstance(listed, list):
         return found, discharged, [f"the named hypotheses of {record['name']} were not recorded"]
     named_premises = set()
     for item in listed:
