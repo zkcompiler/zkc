@@ -18,7 +18,7 @@ open Zkc.Claims Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcSecurity.En
 
 section
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-  [SampleableType F] [Fintype F] [Inhabited F] {art : Artifacts} {endpoint : Semantics}
+  [SampleableType F] [Fintype F] {art : Artifacts} {endpoint : Semantics}
 
 /-- Resolve semantic data only from the admitted subject's registry. The small
 request stores a proof of availability, never a second copy of that data. -/
@@ -40,11 +40,11 @@ variable {subject : Subject F G art endpoint} (request : KnowledgeRequest subjec
 abbrev profile : ExtractionProfile subject.compiled F G :=
   (subject.extractionProfile.get request.registered).val
 
-omit [SampleableType F] [Fintype F] [Inhabited F] in
+omit [SampleableType F] [Fintype F] in
 theorem selected : subject.target = .retained request.profile.target :=
   (subject.extractionProfile.get request.registered).property
 
-omit [SampleableType F] [Fintype F] [Inhabited F] in
+omit [SampleableType F] [Fintype F] in
 /-- A singleton standard registration fixes the whole interface, not just the
 name of its recovery arithmetic. -/
 theorem profile_eq (profile : ExtractionProfile subject.compiled F G)
@@ -152,7 +152,7 @@ def evidence : KnowledgeEvidence art endpoint justification.Stmt profile.Witness
   lowering := subject.lowering
   hypotheses := []
 
-omit [SampleableType F] [Fintype F] [Inhabited F] in
+omit [SampleableType F] [Fintype F] in
 /-- The actual cached verifier has the family's verification result at the
 registered challenge. No constant challenge is supplied at unrelated sites. -/
 theorem verify_eq (statement : art.Statement F G) (initial : History F G)
@@ -168,7 +168,7 @@ theorem verify_eq (statement : art.Statement F G) (initial : History F G)
     justification.family.transform_shape, justification.shape, profile.shape.route_append]
   cases cache (.inl initial, commitment) <;> rfl
 
-omit [Fintype F] [Inhabited F] in
+omit [Fintype F] in
 /-- The registered experiment equals the existing endpoint's replay algorithm
 only after checking shape and recovery correspondence. -/
 theorem extract_eq (statement : art.Statement F G) (initial : History F G)
@@ -200,7 +200,7 @@ theorem extract_eq (statement : art.Statement F G) (initial : History F G)
 end SigmaJustification
 
 /-- The endpoint is a proof method for the independently fixed request. -/
-theorem knowledgeEndpoint {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
+theorem knowledgeEndpoint [Inhabited F] {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
     (justification : SigmaJustification subject request.profile) : request.meaning := by
   cases endpoint with
   | idealMeaning =>
