@@ -331,9 +331,9 @@ impl ProofEntry {
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> EntryResult<ProofReport> {
         let producer = proof.is_none();
-        let attempts = self.attempt_policy(producer, attempts)?;
+        let attempts = self.attempt_policy(producer, attempts, self.native.capacity())?;
         let inputs = self
-            .inputs(request, producer)
+            .inputs(request, producer, self.native.capacity())
             .map_err(|e| E::new(P::Request, e))?;
         Ok(self.report(
             self.native
@@ -362,9 +362,15 @@ impl ProofEntry {
         ledger: zkc_runtime::vm::ExecutionLedger,
     ) -> EntryResult<ProofReport> {
         let producer = proof.is_none();
-        let attempts = self.attempt_policy(producer, None)?;
+        let attempts = self.attempt_policy(producer, None, capacity)?;
+        // Public binding owns one wire copy per verifier-key port. Reserve all
+        // copies before argument construction, under the effective child limit.
+        let key_bytes = setups::material_bytes(&self.interface, &request.setups, capacity)
+            .map_err(|e| E::new(P::Request, e))?;
+        let _keys_live = crate::host::shared::allocation(Some(&ledger), key_bytes)
+            .map_err(|e| E::new(P::Preparation, e))?;
         let inputs = self
-            .inputs(request, producer)
+            .inputs(request, producer, capacity)
             .map_err(|e| E::new(P::Request, e))?;
         let native = self
             .native
@@ -396,9 +402,9 @@ impl ProofEntry {
         if !producer && attempts.is_some() {
             return Err(E::new(P::Request, "entry-attempt-operation"));
         }
-        let attempts = self.attempt_policy(producer, attempts)?;
+        let attempts = self.attempt_policy(producer, attempts, self.native.capacity())?;
         let inputs = self
-            .inputs(request, producer)
+            .inputs(request, producer, self.native.capacity())
             .map_err(|e| E::new(P::Request, e))?;
         let invocation = attempts.as_ref().map_or_else(
             || {
@@ -418,6 +424,7 @@ impl ProofEntry {
         &self,
         producer: bool,
         attempts: Option<AttemptOptions>,
+        capacity: Capacity,
     ) -> EntryResult<Option<AttemptPolicy>> {
         Ok(
             if producer && (attempts.is_some() || self.completion.is_some()) {
@@ -425,7 +432,6 @@ impl ProofEntry {
                 let completion = self
                     .completion
                     .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
-                let capacity = self.native.capacity();
                 Some(AttemptPolicy {
                     completion,
                     // Source randomness enters through managed services; no affine RNG ports.
@@ -442,17 +448,22 @@ impl ProofEntry {
             },
         )
     }
-    fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
+    fn inputs(
+        &self,
+        request: ProofRequest,
+        producer: bool,
+        capacity: Capacity,
+    ) -> Result<ProofInputs> {
         let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
         let managed = self.native.entry().transcript().is_some();
-        let keys = setups::public_keys(&self.interface, &request.setups, self.native.capacity())?;
+        let keys = setups::public_keys(&self.interface, &request.setups, capacity)?;
         let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
         let inputs = arguments::proof_inputs(
             &self.interface,
             role,
             &public,
             request.private.inputs,
-            self.native.capacity(),
+            capacity,
         )?;
         Ok(ProofInputs {
             public,

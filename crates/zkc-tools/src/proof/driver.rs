@@ -268,11 +268,15 @@ pub(super) fn validate_native_shared(
                         0,
                     )
                     .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
-                let size = runner
-                    .backend()
-                    .measure_native_wire(&request.ty, bytes)
-                    .map_err(ArtifactFailure::NativeWire)?;
-                crate::host::shared::allocation(Some(ledger), size.retained_bytes())
+                let retained = match transport.format() {
+                    ProofFormat::Native => runner
+                        .backend()
+                        .measure_native_wire(&request.ty, bytes)
+                        .map_err(ArtifactFailure::NativeWire)?
+                        .retained_bytes(),
+                    ProofFormat::RawBytes => bytes.len(),
+                };
+                crate::host::shared::allocation(Some(ledger), retained)
                     .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?
             } else {
                 None

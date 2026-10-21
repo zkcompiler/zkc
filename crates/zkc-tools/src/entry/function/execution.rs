@@ -728,8 +728,18 @@ impl Execution<'_> {
     }
 }
 // Retain bounded control diagnostics; large native reports/backends are dropped.
-fn bounded_native(value: Json) -> Json {
-    crate::host::diagnostics::trim(&value, &mut 256, &mut 4096, 0)
+fn bounded_native(mut value: Json) -> Json {
+    // These summaries are already bounded by their native owners. Keep the
+    // primary failure even when observational prefixes exhaust the trim budget.
+    let object = value.as_object_mut().expect("native diagnostic object");
+    let primary = ["failure_role", "stop"].map(|key| (key, object.remove(key)));
+    let mut summary = crate::host::diagnostics::trim(&value, &mut 256, &mut 4096, 0);
+    for (key, value) in primary {
+        if let Some(value) = value {
+            summary[key] = value;
+        }
+    }
+    summary
 }
 
 impl std::fmt::Debug for FunctionReport {

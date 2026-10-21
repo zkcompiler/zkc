@@ -54,11 +54,6 @@ pub fn run(
     if job.operation != Operation::Run {
         return Err("function worker requires a run operation".into());
     }
-    if zkc_runtime::vm::ExecutionCounts::ENABLED {
-        return Err(
-            "benchmark-counts: Function Host execution observations are unavailable".into(),
-        );
-    }
     let (package, capture_ns) = capture(path, sha256)?;
     let start = Instant::now();
     // This inventory is checked by the common Host owner, before executable
@@ -141,6 +136,11 @@ pub fn run(
         // input adaptation, cleanup and construction of its typed source return.
         |input| Ok(entry.prepare(input).map_err(|e| e.to_string())?.execute()),
         |report| {
+            calls
+                .borrow_mut()
+                .last_mut()
+                .expect("constructed call")
+                .execution_counts = report.execution_counts.json();
             if !report.is_success() {
                 return Err(format!("function failed: {}", report.diagnostics()).into());
             }
@@ -264,10 +264,6 @@ mod tests {
                 "plan":{"warmups":1,"samples":2,"iterations":2},"proof":directory.join("unused")})).unwrap();
             std::fs::write(&arguments, r#"{"accepted":true}"#).unwrap();
             let report = run(&job, &path, &hash(package.as_bytes()), &arguments, "P");
-            if zkc_runtime::vm::ExecutionCounts::ENABLED {
-                assert!(report.is_err());
-                continue;
-            }
             let report = report.unwrap();
             assert_eq!(report.boundary, "admitted_function_call");
             assert_eq!(report.diagnostics["completed"], true);
@@ -279,6 +275,12 @@ mod tests {
             );
             let life = report.lifecycle.unwrap();
             assert_eq!(life.calls.len(), 6);
+            assert!(
+                life.calls
+                    .iter()
+                    .all(|c| c.execution_counts.is_some()
+                        == zkc_runtime::vm::ExecutionCounts::ENABLED)
+            );
             assert_eq!(life.input_setup.len(), usize::from(ingress != "json"));
             assert!(
                 life.calls

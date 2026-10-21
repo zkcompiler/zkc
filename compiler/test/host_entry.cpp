@@ -1,3 +1,4 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Host.h"
@@ -7,6 +8,8 @@
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -153,6 +156,84 @@ int main() {
       }
       rejects(checkHostArtifact(bytes, entry.original().interface()), code);
     });
+  cases.run("Host call depth includes cached callee suffixes", [] {
+    auto entry = take(compileEntry(original(R"(module sample;
+      run A(x:bool)->bool{return x;}
+      run B(x:bool)->bool{return A(x);}
+      run C(x:bool)->bool{return B(x);}
+      run Demo(x:bool)->bool{let a=A(x);let b=B(a);return C(b);})")));
+    Limits limits;
+    limits.callDepth = 3;
+    if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface(),
+                                   limits))
+      throw std::runtime_error(toString(std::move(e)));
+    limits.callDepth = 2;
+    rejects(
+        checkHostArtifact(entry.bytes(), entry.original().interface(), limits),
+        "entry.cycle");
+  });
+  for (StringRef operation : {"require", "numeric", "invoke"})
+    cases.run("original admission checks malformed " + operation, [=] {
+      auto checked =
+          original("module sample; run Demo(x:index)->index{return x;}");
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      context.loadAllAvailableDialects();
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+      auto function = *module->getOps<mlir::func::FuncOp>().begin();
+      auto body = take(json::parse(
+          function->getAttrOfType<mlir::StringAttr>("entry.body").getValue()));
+      auto &b = *body.getAsObject();
+      auto id =
+          *b.getArray("arguments")->front().getAsObject()->getInteger("id");
+      b.getArray("operations")
+          ->push_back(json::Object{{"op", operation.str()},
+                                   {"operands", json::Array{id}},
+                                   {"results", json::Array{}}});
+      function->setAttr("entry.body",
+                        mlir::StringAttr::get(&context, printJson(body)));
+      mlir::OpBuilder builder(&context);
+      builder.setInsertionPointToStart(&function.getBody().front());
+      mlir::OperationState state(function.getLoc(), "entry." + operation.str());
+      state.addOperands(function.getArgument(0));
+      state.addAttribute("descriptor",
+                         builder.getStringAttr(
+                             printJson(json::Object{{"op", operation.str()}})));
+      builder.create(state);
+      std::string bytes;
+      raw_string_ostream stream(bytes);
+      module->print(stream);
+      auto iface = take(json::parse(checked.interfaceJson()));
+      (*iface.getAsObject())["original"] =
+          toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+      refuses(readInterface(bytes, printJson(iface)),
+              operation == "require" ? "entry.operation" : "entry.reference");
+    });
+  cases.run("joint deployment binds the closed static specialization", [] {
+    auto compile = [](StringRef field) {
+      std::string text = R"(module sample;
+        domain F=field(")" +
+                         field.str() + R"(");
+        protocol Work<T:Field> roles(P)(x:bool@P)->(value:bool@P){return(value=x);}
+        run Demo(inputs:Work<F>::Inputs){return Work<F>::run(inputs);})";
+      return take(compileEntry(original(text)));
+    };
+    auto first = compile("koala-bear");
+    auto second = compile("bls12-381.fr");
+    auto artifact = take(json::parse(first.bytes()));
+    auto replacement = take(json::parse(second.bytes()));
+    (*artifact.getAsObject()->getArray("deployments"))[0]
+        .getAsObject()
+        ->get("package")
+        ->operator=(*(*replacement.getAsObject()->getArray("deployments"))[0]
+                         .getAsObject()
+                         ->get("package"));
+    rejects(
+        checkHostArtifact(printJson(artifact), first.original().interface()),
+        "entry.signature");
+  });
   cases.run("Host dropped values cannot be returned", [] {
     auto entry = take(compileEntry(
         original("module sample; run Demo(x:bool)->bool{return x;}")));

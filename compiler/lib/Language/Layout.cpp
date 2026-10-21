@@ -457,6 +457,22 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   result->constructible =
       *construction == detail::Semantics::Admission::Accepted &&
       (!decl || !decl->generated || decl->generated->constructible);
+  // Product construction packs already typed fields. External import separately
+  // requires construction authority for every nested field and alternative.
+  if (type.kind == K::Tuple ||
+      (type.kind == K::Array && !result->fields.empty()))
+    result->constructible = true;
+  else if ((type.kind == K::Record || type.kind == K::Variant) && decl &&
+           !decl->sealed && !decl->resource &&
+           (!decl->generated || decl->generated->constructible)) {
+    result->constructible =
+        llvm::all_of(decl->fields,
+                     [](const auto &field) { return field.isPublic; }) &&
+        llvm::all_of(decl->alternatives, [](const auto &alternative) {
+          return llvm::all_of(alternative.fields,
+                              [](const auto &field) { return field.isPublic; });
+        });
+  }
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;

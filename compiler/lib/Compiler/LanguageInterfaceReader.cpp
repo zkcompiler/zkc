@@ -1,5 +1,6 @@
 #include "LanguageInterface.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
@@ -233,7 +234,7 @@ class Reader {
   }
   bool fields(const json::Array &array, ArrayRef<std::string> leaves,
               unsigned start, unsigned depth, Permissions parent,
-              bool constructible, std::vector<InterfaceField> &result) {
+              std::vector<InterfaceField> &result) {
     unsigned offset = start;
     std::set<std::string> names;
     std::optional<bool> positional;
@@ -269,8 +270,7 @@ class Reader {
           child->leaves.size() > leaves.size() - offset ||
           !llvm::equal(child->leaves,
                        leaves.slice(offset, child->leaves.size())) ||
-          (!child->permissions.includes(parent) ||
-           (constructible && !child->constructible)))
+          !child->permissions.includes(parent))
         return fail("field leaves or permissions differ from parent");
       offset += child->leaves.size();
       result.push_back({name->str(), *at, std::move(child)});
@@ -411,7 +411,8 @@ class Reader {
         return {};
       if (!(result->custody && index == 0) &&
           (!policy->includes(*caps) ||
-           (*constructible &&
+           (*constructible && *kind != K::Record && *kind != K::Tuple &&
+            *kind != K::Array && *kind != K::Variant &&
             !nativeLeaves.at(spelling->str()).constructible))) {
         fail("source permissions exceed native leaf permissions");
         return {};
@@ -472,14 +473,12 @@ class Reader {
           return {};
         }
         InterfaceAlternative arm{name->str(), {}};
-        if (!fields(*payload, expected.payload, 0, depth, *caps, *constructible,
-                    arm.fields))
+        if (!fields(*payload, expected.payload, 0, depth, *caps, arm.fields))
           return {};
         result->alternatives.push_back(std::move(arm));
       }
     } else if (!fs->empty()) {
-      if (!fields(*fs, result->leaves, start, depth, *caps, *constructible,
-                  result->fields))
+      if (!fields(*fs, result->leaves, start, depth, *caps, result->fields))
         return {};
     } else if (result->leaves.size() > (start ? start : 1) ||
                (!start && !result->leaves.empty() &&
@@ -1514,7 +1513,8 @@ class Reader {
         !selection->getString("function"))
       return fail("invalid Host selection");
     auto root = module->getAttrOfType<mlir::StringAttr>("entry.root");
-    if (!root || root.getValue() != *selection->getString("function"))
+    if (!root || module->getAttrs().size() != 1 ||
+        root.getValue() != *selection->getString("function"))
       return fail("Host selected function differs");
     auto actual = readHostFunctions(module, limits);
     if (!actual) {
@@ -1558,8 +1558,13 @@ class Reader {
       f.result = std::move(result);
       view.host->functions.push_back(std::move(f));
     }
-    return symbols.count(view.host->function) ||
-           fail("Host selected function is absent");
+    if (!symbols.count(view.host->function))
+      return fail("Host selected function is absent");
+    if (auto e = checkHostFunctions(*actual, view, module, limits)) {
+      failure = std::move(e);
+      return false;
+    }
+    return true;
   }
   bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
     if (value.getAsObject() && value.getAsObject()->get("selection"))

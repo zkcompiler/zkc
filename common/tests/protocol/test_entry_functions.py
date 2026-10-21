@@ -227,3 +227,85 @@ run Main(go:bool,count:index)->bool{
                             {'go': True, 'count': str(count)})
     assert value is True
     assert sum(call['operation'] == 'entry' for call in report['execution']['calls']) == count
+
+
+@pytest.mark.parametrize('complete', [True, False])
+def test_generated_proving_uses_the_effective_child_attempt_limits(toolchain, journal, directory, complete):
+    source = PROOF.replace('value:bool@P,accepted:bool@V', 'value:bool@P,ready:bool@P,accepted:bool@V')
+    source = source.replace('return(value=candidate,accepted=accepted);',
+                            f'return(value=candidate,ready={str(complete).lower()},accepted=accepted);')
+    source = source.replace('accept accepted;', 'accept accepted;complete ready;')
+    package, pin = compile_function(toolchain, journal, directory, source, 'Produce')
+    report, value = execute(toolchain, journal, directory, package, pin, 'completion',
+                            {'public': {'expected': True}, 'witness': {'candidate': True}},
+                            flags=['--allow-authored'], refuses=None if complete else 'native-attempt-limit')
+    if complete:
+        assert value['outputs'] == {'value': True, 'ready': True}
+        assert value['proof']
+    else:
+        assert value is None and not report['execution']['completed']
+
+
+@pytest.mark.parametrize('payload', ['726177207061796c6f6164', ''])
+def test_generated_verification_preserves_raw_proof_transport(toolchain, journal, directory, payload):
+    source = '''module example;
+type Bytes=builtin("bytes");
+fn equal(a:Bytes,b:Bytes)->bool{return kernel("bytes.equal",a,b);}
+protocol Check roles(P,V)(payload:Bytes@P)->(accepted:bool@V){
+  let received=send P->V(payload);
+  let accepted@V=equal(received,received);
+  return(accepted=accepted);
+}
+construction Raw for Check{base authored;format RawBytes;}
+proof Family=Check{prover P;verifier V;public{};accept accepted;construction Raw;}
+run Produce(witness:Family::Witness){return Family::prove(Family::Public{},witness);}
+run Verify(candidate:Family::Proof){return Family::verify(Family::Public{},candidate);}
+'''
+    producer, producer_pin = compile_function(toolchain, journal, directory, source, 'Produce')
+    verifier, verifier_pin = compile_function(toolchain, journal, directory, source, 'Verify')
+    _, produced = execute(toolchain, journal, directory, producer, producer_pin, 'raw-produce',
+                           {'witness': {'payload': list(bytes.fromhex(payload))}}, flags=['--allow-authored'])
+    assert produced['proof'] == {'bytes': list(bytes.fromhex(payload))}
+    _, verified = execute(toolchain, journal, directory, verifier, verifier_pin, 'raw-verify',
+                           {'candidate': produced['proof']}, flags=['--allow-authored'])
+    assert verified == {'case': 'Accepted', 'fields': {'outputs': {'accepted': True}}}
+
+
+@pytest.mark.parametrize('wrapper', ['tuple', 'record'])
+def test_native_results_pack_into_ordinary_aggregates(toolchain, journal, directory, wrapper):
+    source = """module example;
+protocol Check roles(P)(x:bool@P)->(value:bool@P){return(value=x);}
+"""
+    if wrapper == 'record':
+        source += 'struct Wrapped{pub result:Check::RunResult,pub ok:bool}\n'
+        expression = 'Wrapped{result:result,ok:true}'
+    else:
+        expression = '(result,true)'
+    source += f'run Main(inputs:Check::Inputs){{let result=Check::run(inputs);return {expression};}}'
+    package, pin = compile_function(toolchain, journal, directory, source)
+    _, value = execute(toolchain, journal, directory, package, pin, 'wrapped',
+                        {'inputs': {'P': {'x': True}}})
+    if wrapper == 'record':
+        assert value == {'result': {'P': {'value': True}}, 'ok': True}
+    else:
+        assert value == [{'P': {'value': True}}, True]
+
+
+def test_failure_beyond_the_participant_prefix_keeps_its_stop(toolchain, journal, directory):
+    roles = ','.join(f'R{i:02}' for i in range(20))
+    source = f"""module example;
+protocol Check roles({roles})()->(accepted:bool@R19){{
+  require @R19 false;
+  let accepted@R19=true;
+  return(accepted=accepted);
+}}
+run Main(){{return Check::run(Check::Inputs{{{','.join(f'R{i:02}:Check::Inputs::R{i:02}{{}}' for i in range(20))}}});}}
+"""
+    package, pin = compile_function(toolchain, journal, directory, source)
+    report, _ = execute(toolchain, journal, directory, package, pin, 'late-stop', {},
+                          refuses='entry-host-run-failed')
+    failure = report['execution']['failure']['native']['failure_role']
+    assert failure['role'] == 'role00000013'
+    assert failure['after'][0] == 'stopped'
+    assert failure['after'][1]['cause'][0] == 'explicit'
+    assert failure['after'][1]['site']

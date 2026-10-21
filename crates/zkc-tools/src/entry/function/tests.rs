@@ -370,6 +370,40 @@ fn normal_false_is_data_and_entry_calls_share_one_execution() {
     refusal(&doc, "entry-host-callee");
 }
 #[test]
+fn call_depth_includes_previously_admitted_callee_suffixes() {
+    for length in [64, 65] {
+        let mut doc = document(vec![("flag", boolean())], boolean(), json!([]), json!([0]));
+        let mut operations = Vec::new();
+        for i in 0..length {
+            let callee = format!("example::Step{i:03}");
+            operations.push(json!({"op":"call","callee":callee,"operands":[0],
+                "results":[definition(i + 1, boolean())]}));
+            let body = if i == 0 {
+                block(json!([definition(0, boolean())]), json!([]), json!([0]))
+            } else {
+                block(
+                    json!([definition(0, boolean())]),
+                    json!([{"op":"call","callee":format!("example::Step{:03}", i - 1),
+                        "operands":[0],"results":[definition(1, boolean())]}]),
+                    json!([1]),
+                )
+            };
+            doc["functions"].as_array_mut().unwrap().push(json!({
+                "signature":signature(&callee, vec![("flag", boolean())], boolean()), "body":body}));
+        }
+        doc["functions"][0]["body"]["operations"] = json!(operations);
+        doc["functions"][0]["body"]["returns"] = json!([length]);
+        if length == 64 {
+            assert!(
+                admit(&doc).is_ok(),
+                "the exact depth boundary must remain valid"
+            );
+        } else {
+            refusal(&doc, "entry-host-depth");
+        }
+    }
+}
+#[test]
 fn dormant_branches_are_admitted_without_speculative_execution() {
     let branch = |id| block(json!([definition(id, boolean())]), json!([]), json!([id]));
     let mut doc = document(
@@ -1504,4 +1538,84 @@ fn repeated_joint_calls_draw_fresh_sessions_unless_explicitly_selected() {
             assert_ne!(sessions[0], sessions[1]);
         }
     }
+}
+
+#[test]
+fn child_specialization_is_bound_independently_of_parent_schemas() {
+    fn specialize(value: &mut Json) {
+        match value {
+            Json::Object(o) => {
+                if o.get("identity").is_some()
+                    && o.get("type")
+                        .and_then(Json::as_str)
+                        .is_some_and(|s| s.starts_with("main::"))
+                {
+                    let name = format!("{}<1>", o["type"].as_str().unwrap());
+                    o.insert("identity".into(), json!(digest(&name)));
+                    o.insert("type".into(), json!(name));
+                }
+                for v in o.values_mut() {
+                    specialize(v);
+                }
+            }
+            Json::Array(a) => {
+                for v in a {
+                    specialize(v);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut doc = joint_document();
+    specialize(&mut doc);
+    let mut child: Json =
+        serde_json::from_str(doc["deployments"][0]["package"].as_str().unwrap()).unwrap();
+    let mut interface: Json = serde_json::from_str(child["interface"].as_str().unwrap()).unwrap();
+    for (argument, valid) in [("1", true), ("2", false)] {
+        interface["entry"] = json!(format!(
+            "main::run_{}",
+            digest(&format!("main<{argument}>"))
+        ));
+        child["interface"] = json!(interface.to_string());
+        doc["deployments"][0]["package"] = json!(child.to_string());
+        let admitted = FunctionEntry::admit(
+            capture(&doc),
+            Default::default(),
+            BTreeMap::from([("joint".into(), SetupAuthority::default())]),
+        );
+        if valid {
+            admitted.unwrap();
+        } else {
+            assert_eq!(admitted.err().unwrap().code(), "entry-host-nominal");
+        }
+    }
+}
+
+#[test]
+fn packing_existing_native_results_does_not_authorize_external_fabrication() {
+    let mut doc = joint_document();
+    let result = doc["functions"][0]["signature"]["result"].clone();
+    let wrapper = record("example::Wrapped", vec![("result", result)], true);
+    doc["functions"][0]["signature"]["result"] = wrapper.clone();
+    doc["functions"][0]["body"]["operations"].as_array_mut().unwrap().push(
+        json!({"op":"construct","alternative":"","operands":[1],"results":[definition(2,wrapper.clone())]}));
+    doc["functions"][0]["body"]["returns"] = json!([2]);
+    let entry = FunctionEntry::admit(
+        capture(&doc),
+        Default::default(),
+        BTreeMap::from([("joint".into(), SetupAuthority::default())]),
+    )
+    .unwrap();
+    assert!(
+        entry
+            .prepare(joint_request())
+            .unwrap()
+            .execute()
+            .is_success()
+    );
+    let schema = serde_json::from_value(wrapper).unwrap();
+    assert_eq!(
+        crate::entry::value::check_import(&schema).unwrap_err(),
+        "entry-input-constructor"
+    );
 }

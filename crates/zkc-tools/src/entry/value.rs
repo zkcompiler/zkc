@@ -31,11 +31,18 @@ impl From<InputValue> for Value {
     }
 }
 
-/// Constructor permission is checked once at Entry admission. The validated
-/// schema inherits that permission through all product fields and alternatives.
+/// External input must have construction authority at every nested layer.
+/// Packing an existing typed field does not grant authority to fabricate it.
 pub(super) fn check_import(schema: &Schema) -> Result<()> {
     if schema.custody || !schema.constructible {
         return Err("entry-input-constructor".into());
+    }
+    for field in schema
+        .fields
+        .iter()
+        .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
+    {
+        check_import(&field.schema)?;
     }
     Ok(())
 }

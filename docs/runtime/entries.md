@@ -144,6 +144,7 @@ paths follow the table above; verification never opens a witness map.
 | Variant | `{"case":"Name","fields":{"0":"7"}}` |
 | KoalaBear extension field | Eight ascending coefficient strings, or a base-field decimal string |
 | Sparse matrix | `{"rows":"2","columns":"3","entries":[["0","1","7"]]}` |
+| Bytes | Array of byte integers from `0` through `255` |
 | Group element | `{"bytes":"CANONICAL_ELEMENT_HEX"}` |
 | Explicit native encoding | `{"wire":"COMPLETE_ZKCV_FRAME_HEX"}` |
 

@@ -62,17 +62,29 @@ pub(super) fn check_interface(
 ) -> Result<()> {
     require(d.results.len() == 1, "entry-host-deployment-signature")?;
     let r = &d.results[0];
-    let source = interface
-        .entry()
-        .strip_suffix(&format!("::{}", d.operation))
-        .unwrap_or(interface.entry());
-    let arguments = d
-        .parameters
-        .first()
-        .and_then(|s| s.display_type.find('<').map(|i| &s.display_type[i..]))
-        .unwrap_or("");
-    let family = format!("{source}{arguments}");
+    let source = interface.entry();
+    let family = if d.operation == "run" {
+        let (base, _) = source.rsplit_once("::").expect("qualified child entry");
+        let args = r.display_type.strip_prefix(&format!("{base}::RunResult"));
+        require(args.is_some(), "entry-host-nominal")?;
+        let args = args.expect("checked family prefix");
+        let family = format!("{base}{args}");
+        let expected = if args.is_empty() {
+            format!("{base}::run")
+        } else {
+            use sha2::{Digest, Sha256};
+            format!(
+                "{base}::run_{}",
+                crate::host::inputs::hex(&Sha256::digest(family.as_bytes()))
+            )
+        };
+        require(source == expected, "entry-host-nominal")?;
+        family
+    } else {
+        source.to_owned()
+    };
     let family = family.as_str();
+    let source = family.split('<').next().expect("family base");
     // Identical nominal families cannot be rebound to a different checked source.
     let family_pin = format!(
         "{}:{}:{}",

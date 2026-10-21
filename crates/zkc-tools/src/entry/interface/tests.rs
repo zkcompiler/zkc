@@ -762,6 +762,17 @@ fn setup_alias_keys_share_the_pin_and_original_representative() {
     let native = crate::entry::setups::proof_authority(&interface, authority).unwrap();
     assert_eq!(native.keys, [(0, [9; 32]), (3, [9; 32])].into());
     assert_eq!(native.inputs, [(1, 0), (2, 0)].into());
+    let material = [("pcs".into(), vec![1, 2, 3])].into();
+    let mut capacity = crate::execution::Capacity::default();
+    assert_eq!(
+        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap(),
+        6
+    );
+    capacity.values.live_bytes = 5;
+    assert_eq!(
+        crate::entry::setups::material_bytes(&interface, &material, capacity).unwrap_err(),
+        "entry-setup-limit"
+    );
 }
 
 #[test]

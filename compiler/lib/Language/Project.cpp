@@ -675,7 +675,11 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
   owner.module = target.module;
   owner.span = target.span;
   owner.name = target.name + "_deployment";
+  Type family(Type::Kind::Record, target.qualifiedName);
+  family.arguments = invocation.arguments;
   owner.qualifiedName = target.qualifiedName + "::run";
+  if (!invocation.arguments.empty())
+    owner.qualifiedName += "_" + detail::digest(spelling(family));
   owner.symbol = target.symbol + "_run";
   owner.target = target.id;
   owner.staticArguments = invocation.arguments;

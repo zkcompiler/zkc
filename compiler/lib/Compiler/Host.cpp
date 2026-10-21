@@ -90,9 +90,10 @@ json::Array schemas(ArrayRef<Port> ports, Layouts &layouts, Error &failure) {
   }
   return out;
 }
-void references(
+Error references(
     const json::Value &block,
-    std::map<std::string, std::pair<json::Array, json::Array>> &deployments) {
+    std::map<std::string, std::pair<json::Array, json::Array>> &deployments,
+    StringRef kind = "invoke") {
   auto &b = *block.getAsObject();
   std::map<int64_t, json::Value> values;
   for (const auto &v : *b.getArray("arguments"))
@@ -100,23 +101,36 @@ void references(
                    *v.getAsObject()->get("schema"));
   for (const auto &v : *b.getArray("operations")) {
     auto &op = *v.getAsObject();
-    if (op.getString("op") == "invoke") {
+    if (op.getString("op") == kind) {
       json::Array inputs, outputs;
-      for (const auto &id : *op.getArray("operands"))
-        inputs.push_back(values.at(*id.getAsInteger()));
+      auto target =
+          op.getString(kind == "numeric" ? "calculation" : "deployment");
+      if (!target)
+        return error("entry.reference", "static boundary target is absent");
+      for (const auto &id : *op.getArray("operands")) {
+        auto found = values.find(*id.getAsInteger());
+        if (found == values.end())
+          return error("entry.scope",
+                       "static boundary operand is out of scope");
+        inputs.push_back(found->second);
+      }
       for (const auto &r : *op.getArray("results"))
         outputs.push_back(*r.getAsObject()->get("schema"));
       deployments.emplace(
-          op.getString("deployment")->str(),
-          std::make_pair(std::move(inputs), std::move(outputs)));
+          target->str(), std::make_pair(std::move(inputs), std::move(outputs)));
     }
-    if (auto *regions = op.getArray("regions"))
-      for (const auto &region : *regions)
-        references(region, deployments);
+    // SSAReader has checked regions only for structured control. Metadata on
+    // other operations is rejected by body admission, never traversed here.
+    if (op.getString("op") == "if" || op.getString("op") == "for" ||
+        op.getString("op") == "match")
+      for (const auto &region : *op.getArray("regions"))
+        if (auto e = references(region, deployments, kind))
+          return e;
     for (const auto &r : *op.getArray("results"))
       values.emplace(*r.getAsObject()->getInteger("id"),
                      *r.getAsObject()->get("schema"));
   }
+  return Error::success();
 }
 } // namespace
 Expected<CompiledHost> compileHost(const CheckedOriginal &original,
@@ -171,7 +185,8 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
   }
   std::map<std::string, std::pair<json::Array, json::Array>> required;
   for (const auto &f : *actual)
-    references(*f.getAsObject()->get("body"), required);
+    if (auto e = references(*f.getAsObject()->get("body"), required))
+      return e;
   for (const auto &invocation : entry.invocations()) {
     auto operation = invocation.kind == HostInvocation::Kind::Run ? "run"
                      : invocation.kind == HostInvocation::Kind::Prove
@@ -331,12 +346,26 @@ class Admission {
          results = resultTypes(deployment, false);
     auto operation = *deployment.getString("operation");
     auto family = StringRef(child.entry);
+    std::string arguments;
     if (operation == "run") {
-      if (!family.consume_back("::run"))
-        return fail("entry.deployment",
-                    "joint child lost its generated source family");
+      auto split = family.rsplit("::");
+      family = split.first;
+      auto resultType = results.size() == 1
+                            ? results[0]->getAsObject()->getString("type")
+                            : std::nullopt;
+      if (!resultType ||
+          !resultType->consume_front(family.str() + "::RunResult"))
+        return fail("entry.signature", "joint child family differs");
+      arguments = resultType->str();
+      auto expected = family.str() + "::run";
+      if (!arguments.empty())
+        expected +=
+            "_" +
+            toHex(SHA256::hash(arrayRefFromStringRef(family.str() + arguments)),
+                  true);
+      if (child.entry != expected)
+        return fail("entry.signature", "joint child specialization differs");
     }
-    std::optional<std::string> suffix;
     auto nominal = [&](const json::Value &value, StringRef member,
                        bool constructible) {
       const auto &s = *value.getAsObject();
@@ -347,9 +376,7 @@ class Admission {
           *s.getBoolean("constructible") != constructible)
         return fail("entry.deployment",
                     "generated nominal schema differs from child family");
-      if (!suffix)
-        suffix = actual.str();
-      if (*suffix != actual)
+      if (arguments != actual)
         return fail("entry.deployment", "generated static arguments differ");
       return true;
     };
@@ -725,36 +752,29 @@ class Admission {
            fail("entry.signature", "Host return signature differs");
   }
   bool visit(const std::string &f, std::set<std::string> &active,
-             std::set<std::string> &reached, unsigned depth = 0) {
+             std::map<std::string, unsigned> &heights, unsigned depth = 0) {
     if (depth > limits.callDepth || active.count(f))
       return fail("entry.cycle",
                   "recursive or excessively deep Entry call graph");
-    if (!reached.insert(f).second)
-      return true;
+    // A shared callee may first be reached along a shorter path. Retain its
+    // longest suffix so later callers still satisfy the full depth bound.
+    if (auto found = heights.find(f); found != heights.end())
+      return uint64_t(depth) + found->second <= limits.callDepth ||
+             fail("entry.cycle", "excessively deep Entry call graph");
     active.insert(f);
-    for (const auto &child : calls[f])
-      if (!visit(child, active, reached, depth + 1))
+    unsigned height = 0;
+    for (const auto &child : calls[f]) {
+      if (!visit(child, active, heights, depth + 1))
         return false;
+      height = std::max(height, heights.at(child) + 1);
+    }
     active.erase(f);
+    heights.emplace(f, height);
     return true;
   }
 
-public:
-  Admission(const LanguageInterface &interface, const Limits &limits)
-      : interface(interface), limits(limits) {
-    (void)!!failure;
-  }
-  Error run(const json::Value &value) {
-    auto *root = value.getAsObject();
-    if (!interface.host || !root || root->size() != 6 ||
-        root->getString("format") != "zkc.host/0" ||
-        root->getString("original") != interface.original ||
-        root->getString("entry") != interface.host->function ||
-        !root->getArray("functions") || !root->getArray("calculations") ||
-        !root->getArray("deployments"))
-      return error("entry.artifact",
-                   "invalid Host artifact identity or fields");
-    for (const auto &v : *root->getArray("functions")) {
+  Error signatures(const json::Array &definitions) {
+    for (const auto &v : definitions) {
       auto *f = v.getAsObject();
       auto *s = f ? f->getObject("signature") : nullptr;
       if (!f || f->size() != 2 || !f->get("body") || !s || s->size() != 3 ||
@@ -793,6 +813,83 @@ public:
                 p.name)
           return error("entry.signature", "Host interface parameter differs");
     }
+    return Error::success();
+  }
+  Error bodies() {
+    for (const auto &[name, f] : functions) {
+      std::set<int64_t> ids;
+      auto &s = *f->getObject("signature");
+      if (!block(*f->get("body"), parameterTypes(s, true), resultTypes(s, true),
+                 name, ids))
+        return std::move(failure);
+    }
+    std::set<std::string> active;
+    std::map<std::string, unsigned> heights;
+    if (!visit(interface.host->function, active, heights))
+      return std::move(failure);
+    if (heights.size() != functions.size() ||
+        usedCalculations.size() != calculations.size() ||
+        usedDeployments.size() != deployments.size())
+      return error("entry.closure",
+                   "Host artifact has an unreferenced static dependency");
+    return Error::success();
+  }
+
+public:
+  Admission(const LanguageInterface &interface, const Limits &limits)
+      : interface(interface), limits(limits) {
+    (void)!!failure;
+  }
+  Error original(const json::Array &definitions, mlir::ModuleOp module) {
+    if (auto e = signatures(definitions))
+      return e;
+    // Original SSA names native boundaries but has not lowered them yet. Reuse
+    // body/graph admission with their reconstructed call signatures; native
+    // installation and child authority are checked during executable admission.
+    std::map<std::string, json::Object> numericContracts, deploymentContracts;
+    for (bool numeric : {true, false}) {
+      std::map<std::string, std::pair<json::Array, json::Array>> contracts;
+      for (const auto &f : definitions)
+        if (auto e = references(*f.getAsObject()->get("body"), contracts,
+                                numeric ? "numeric" : "invoke"))
+          return e;
+      auto &storage = numeric ? numericContracts : deploymentContracts;
+      auto &inventory = numeric ? calculations : deployments;
+      for (auto &[id, signature] : contracts) {
+        auto [it, inserted] = storage.emplace(
+            id, json::Object{{"parameters", std::move(signature.first)},
+                             {"results", std::move(signature.second)}});
+        inventory.emplace(id, &it->second);
+      }
+    }
+    if (auto e = bodies())
+      return e;
+    std::set<std::string> actual;
+    for (auto &op : *module.getBody()) {
+      if (mlir::isa<mlir::func::FuncOp>(op))
+        continue;
+      auto nested = mlir::dyn_cast<mlir::ModuleOp>(op);
+      auto id = op.getAttrOfType<mlir::StringAttr>("entry.calculation");
+      if (!nested || !id || nested->getAttrs().size() != 1 ||
+          !actual.insert(id.getValue().str()).second)
+        return error("entry.closure", "unexpected numerical original");
+    }
+    if (actual != usedCalculations)
+      return error("entry.reference", "numerical original inventory differs");
+    return Error::success();
+  }
+  Error run(const json::Value &value) {
+    auto *root = value.getAsObject();
+    if (!interface.host || !root || root->size() != 6 ||
+        root->getString("format") != "zkc.host/0" ||
+        root->getString("original") != interface.original ||
+        root->getString("entry") != interface.host->function ||
+        !root->getArray("functions") || !root->getArray("calculations") ||
+        !root->getArray("deployments"))
+      return error("entry.artifact",
+                   "invalid Host artifact identity or fields");
+    if (auto e = signatures(*root->getArray("functions")))
+      return e;
     for (bool numerical : {true, false}) {
       auto &inventory = numerical ? calculations : deployments;
       for (const auto &v :
@@ -973,25 +1070,15 @@ public:
       if (inventory.size() > limits.instances)
         return error("source.limit", "static boundary inventory limit");
     }
-    for (const auto &[name, f] : functions) {
-      std::set<int64_t> ids;
-      auto &s = *f->getObject("signature");
-      if (!block(*f->get("body"), parameterTypes(s, true), resultTypes(s, true),
-                 name, ids))
-        return std::move(failure);
-    }
-    std::set<std::string> active, reached;
-    if (!visit(interface.host->function, active, reached))
-      return std::move(failure);
-    if (reached.size() != functions.size() ||
-        usedCalculations.size() != calculations.size() ||
-        usedDeployments.size() != deployments.size())
-      return error("entry.closure",
-                   "Host artifact has an unreferenced static dependency");
-    return Error::success();
+    return bodies();
   }
 };
 } // namespace
+Error checkHostFunctions(const json::Array &functions,
+                         const LanguageInterface &interface,
+                         mlir::ModuleOp module, const Limits &limits) {
+  return Admission(interface, limits).original(functions, module);
+}
 Error checkHostArtifact(StringRef bytes, const LanguageInterface &interface,
                         const Limits &limits) {
   auto parsed = parseNaturalJson(bytes, limits.irBytes, 256, "entry.artifact",

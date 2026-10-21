@@ -48,7 +48,11 @@ native leaf indices in `native`, and recursive `schema`. A schema has `kind`,
 `fields` and `alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
 have `name` and payload `fields`. Zero-leaf ports retain empty native indices.
 Offsets are relative to their product or alternative payload. `constructible` is
-a required Boolean for source external construction authority. `permissions` is
+a required Boolean for construction of that outer value. External input also
+requires construction authority for every nested field and alternative payload;
+packing already typed values does not fabricate their contents. Zero-length
+arrays retain their element construction policy despite having no fields.
+`permissions` is
 the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
 
 ### Source names and native correspondence
@@ -349,3 +353,9 @@ Host independently checks structure, signatures, schemas, references and native
 children after package authentication. Neither check turns a package digest into
 a protocol security theorem. All schemas remain version zero; there is one
 current grammar and no legacy source-run reader.
+
+A generated joint child uses `Protocol::run` as its internal Entry name. A closed
+static specialization appends `_` and the lowercase SHA-256 of its canonical
+closed family type, such as `module::Protocol<Field>`. Host admission checks this
+identity against every generated nominal signature. Equal native port shapes do
+not permit replacing a child with a different specialization.

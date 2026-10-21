@@ -92,6 +92,15 @@ impl HostReport {
     pub fn diagnostics_summary(&self) -> Json {
         use crate::host::diagnostics::{text, values};
         let execution = self.execution.as_ref();
+        // The actual stop is independent of the bounded observational prefix.
+        let failure_role = execution.and_then(|e| {
+            let Outcome::ParticipantStopped { role } = &e.outcome else {
+                return None;
+            };
+            e.roles
+                .get(*role)
+                .map(|r| json!({"role":text(&r.role),"after":state_summary(&r.after)}))
+        });
         json!({"phase":self.phase,"session":self.session,"failure":self.failure.as_deref().map(text),
             "cleanup_errors":values(self.cleanup_errors.iter()),
             "cleanup_omitted":self.cleanup_errors.len().saturating_sub(16),
@@ -101,6 +110,7 @@ impl HostReport {
             "reached":execution.map(|e|e.reached.iter().take(16).map(|r|json!({"role":r.step.role,"instruction":r.step.instruction,"progress":format!("{:?}",r.progress)})).collect::<Vec<_>>()),
             "wire":execution.map(|e|json!({"sends":e.wire.sends,"receives":e.wire.receives,"sent_bytes":e.wire.sent_bytes,"replacement_bytes":e.wire.replacement_bytes})),
             "outcome":execution.map(|e|outcome_summary(&e.outcome)),
+            "failure_role":failure_role,
             "role_count":execution.map_or(0,|e|e.roles.len()),
             "roles":execution.map(|e|e.roles.iter().take(16).map(|r| {
                 let backend=&e.backends.iter().find(|(name,_)|name==&r.role).expect("role custody").1;

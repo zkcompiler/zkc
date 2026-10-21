@@ -322,15 +322,18 @@ fn structure<'a>(
             0,
         )?;
     }
-    let mut reachable = BTreeSet::new();
+    let mut heights = BTreeMap::new();
     visit(
         &document.entry,
         &validator.calls,
         &mut BTreeSet::new(),
-        &mut reachable,
+        &mut heights,
         0,
     )?;
-    require(reachable == functions, "entry-host-coverage")?;
+    require(
+        heights.keys().copied().collect::<BTreeSet<_>>() == functions,
+        "entry-host-coverage",
+    )?;
     require(
         validator.calculations == calculations && validator.deployments == deployments,
         "entry-host-coverage",
@@ -342,21 +345,26 @@ fn visit<'a>(
     s: &'a str,
     graph: &BTreeMap<&'a str, BTreeSet<&'a str>>,
     active: &mut BTreeSet<&'a str>,
-    seen: &mut BTreeSet<&'a str>,
+    heights: &mut BTreeMap<&'a str, usize>,
     depth: usize,
 ) -> Result<()> {
     require(depth <= 64, "entry-host-depth")?;
     require(!active.contains(s), "entry-host-cycle")?;
-    if !seen.insert(s) {
-        return Ok(());
+    // Reused callees retain their longest suffix: a previous shorter path
+    // must not hide the full depth of a later caller.
+    if let Some(height) = heights.get(s) {
+        return require(depth + height <= 64, "entry-host-depth");
     }
     active.insert(s);
+    let mut height = 0;
     if let Some(calls) = graph.get(s) {
         for c in calls {
-            visit(c, graph, active, seen, depth + 1)?;
+            visit(c, graph, active, heights, depth + 1)?;
+            height = height.max(heights[c] + 1);
         }
     }
     active.remove(s);
+    heights.insert(s, height);
     Ok(())
 }
 struct Validator<'a> {

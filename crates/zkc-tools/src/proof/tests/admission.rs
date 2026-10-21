@@ -185,6 +185,33 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     assert!(empty.outcome.is_ok());
     assert_eq!(empty.messages, 1);
     assert_eq!(empty.bytes, 0);
+
+    // Application calls attach one cumulative ledger; it must retain the same
+    // raw format, including the single empty message, without native framing.
+    for payload in [b"raw payload".as_slice(), b"".as_slice()] {
+        let ledger =
+            zkc_runtime::vm::ExecutionLedger::new(host.capacity.values, host.capacity.work);
+        let mut capacity = host.capacity;
+        capacity.values.live_bytes /= 2;
+        let shared = host
+            .clone()
+            .with_invocation_limits(
+                capacity,
+                host.external_work_limit,
+                host.ring_work_limit,
+                host.sequence_work_limit,
+                host.proof_bytes_limit,
+            )
+            .with_shared_ledger(ledger.clone());
+        let report = shared
+            .execute(&request(false, true, true), Invocation::Verify(payload))
+            .unwrap();
+        assert!(report.outcome.is_ok(), "{:?}", report.outcome);
+        assert!(report.cleanup_errors.is_empty());
+        assert_eq!(report.messages, 1);
+        assert_eq!(report.bytes, payload.len());
+        assert_eq!(ledger.snapshot().pending_value_bytes, 0);
+    }
 }
 
 fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
