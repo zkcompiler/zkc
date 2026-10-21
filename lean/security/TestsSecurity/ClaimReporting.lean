@@ -500,5 +500,139 @@ noncomputable def appliedEvidenceReceipt : AdmittedReceipt (modelRegistry .ideal
   checked := rfl
   modelAdmitted := ⟨model, rfl⟩
 
+namespace HigherOrder
+
+/-- The callback's Evidence ancestry is absent from this generic definition. -/
+def invoke {A : Type} {B : Sort _} (function : A → B) (argument : A) : B :=
+  function argument
+
+noncomputable def labeledEvidence (label : String) :=
+  { ZkcSecurity.Examples.Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning
+      (subject (F := F) (G := G) .idealMeaning).lowering with
+    hypotheses := [⟨label, .model, True, .proved True.intro⟩] }
+
+theorem directProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
+  knowledgeEndpoint (knowledge .idealMeaning)
+    (ReplayClass.ofEvidence _ _
+      (labeledEvidence (F := F) (G := G) "unregistered.higherorder.control") rfl HEq.rfl)
+
+theorem wrappedProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
+  invoke (fun label : String => knowledgeEndpoint (knowledge .idealMeaning)
+    (ReplayClass.ofEvidence _ _ (labeledEvidence (F := F) (G := G) label) rfl HEq.rfl))
+    "unregistered.higherorder.control"
+
+theorem positiveProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
+  invoke (fun _ : String => knowledgeEndpoint (knowledge .idealMeaning) (replay .idealMeaning)) ""
+
+noncomputable def directReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (directProof (F := F) (G := G))
+    { provenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.directProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+
+noncomputable def wrappedReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (wrappedProof (F := F) (G := G))
+    { provenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.wrappedProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+
+noncomputable def positiveReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (positiveProof (F := F) (G := G))
+    { provenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.positiveProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+
+end HigherOrder
+
+
+namespace ProjectedCarrier
+
+/-- The callback is carried in data rather than a function-typed argument. -/
+structure Box where
+  callback : String → Nat
+  argument : String
+
+structure Runner where
+  run : Box → Nat
+
+def runner : Runner := ⟨fun box => box.callback box.argument⟩
+opaque hiddenRunner : Runner := runner
+noncomputable def blockedRunner : Runner := Classical.choice ⟨runner⟩
+
+-- Retain a kernel projection as the applied head rather than its named wrapper.
+elab "raw_carrier_runner% " term:term : term => do
+  let value ← Lean.Elab.Term.elabTerm term none
+  pure (.proj ``Runner 0 value)
+
+noncomputable def callback (label : String) : Nat :=
+  (HigherOrder.labeledEvidence (F := F) (G := G) label).handle
+
+noncomputable def validCallback (_ : String) : Nat :=
+  (ZkcSecurity.Examples.Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning
+    (subject (F := F) (G := G) .idealMeaning).lowering).handle
+
+include F G
+
+theorem directProof : True :=
+  Nat.rec True.intro (fun _ proof => proof)
+    (callback (F := F) (G := G) "unregistered.projected.carrier")
+
+theorem carrierProof : True :=
+  Nat.rec True.intro (fun _ proof => proof)
+    ((raw_carrier_runner% runner)
+      ⟨callback (F := F) (G := G), "unregistered.projected.carrier"⟩)
+
+theorem opaqueProof : True :=
+  Nat.rec True.intro (fun _ proof => proof)
+    ((raw_carrier_runner% hiddenRunner)
+      ⟨callback (F := F) (G := G), "unregistered.projected.carrier"⟩)
+
+theorem blockedProof : True :=
+  Nat.rec True.intro (fun _ proof => proof)
+    ((raw_carrier_runner% blockedRunner)
+      ⟨callback (F := F) (G := G), "unregistered.projected.carrier"⟩)
+
+theorem positiveProof : True :=
+  Nat.rec True.intro (fun _ proof => proof)
+    ((raw_carrier_runner% runner) ⟨validCallback (F := F) (G := G), ""⟩)
+
+noncomputable def directReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (directProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.ProjectedCarrier.directProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
+
+noncomputable def carrierReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (carrierProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.ProjectedCarrier.carrierProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
+
+noncomputable def opaqueReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (opaqueProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.ProjectedCarrier.opaqueProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
+
+noncomputable def blockedReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (blockedProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.ProjectedCarrier.blockedProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
+
+noncomputable def positiveReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (positiveProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.ProjectedCarrier.positiveProof", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
+
+end ProjectedCarrier
 
 end TestsSecurity.ClaimReporting

@@ -147,7 +147,18 @@ audits remain in use for the mathematical ledger and legacy endpoints. For a
 receipt, the extractor follows actual applied Evidence values and records their
 instantiated named hypotheses in the receipt's free context. Generic Evidence
 constructors applied to concrete endpoint, form, binding and lowering arguments
-do not introduce free parameters into their callers. The caller's actual free
+do not introduce free parameters into their callers. Supplied arguments also
+carry Evidence relevance into generic higher-order wrappers:
+the extractor substitutes supplied callbacks and values before pruning such
+applications. Concrete projected owners are reduced before relevance pruning,
+including their stored owned opaque bodies, and reapplied to the actual
+arguments. This also follows callbacks carried inside constructor data. A
+blocked relevant callback consumer, including a blocked owned carrier, leaves
+extraction open. An abstract scalar relation whose scalar arguments have
+already been audited does not itself constitute an Evidence callback consumer.
+Concrete matchers are reduced with their actual arguments.
+Unapplied lambdas never gain
+invented arbitrary arguments. The caller's actual free
 telescope and all its proof/Type-wrapper premises remain audited. A proved named
 hypothesis using an outer assumption remains conditional. Proof bodies and types contribute
 to the dependency closure. Claimed dischargers and dependencies must reconcile

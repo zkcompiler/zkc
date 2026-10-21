@@ -415,6 +415,14 @@ EMITTED_RECEIPTS = {
 }
 
 EMITTED_STAGE_RECEIPTS = {
+    "ProjectedCarrier.directReceipt": ("manualData", "unregistered.projected.carrier"),
+    "ProjectedCarrier.carrierReceipt": ("manualData", "unregistered.projected.carrier"),
+    "ProjectedCarrier.opaqueReceipt": ("manualData", "unregistered.projected.carrier"),
+    "ProjectedCarrier.positiveReceipt": ("manualData", None),
+    "ProjectedCarrier.blockedReceipt": ("manualData", "unresolved Evidence-bearing projected function"),
+    "HigherOrder.directReceipt": ("idealData", "unregistered.higherorder.control"),
+    "HigherOrder.wrappedReceipt": ("idealData", "unregistered.higherorder.control"),
+    "HigherOrder.positiveReceipt": ("idealData", None),
     "manualReceipt": ("manualData", None),
     "appliedEvidenceReceipt": ("idealData", None),
     "manualBareReceipt": ("manualData", "missing typed security model admission"),
@@ -473,6 +481,39 @@ def run_emitted_stage_receipts(data):
         if short == "appliedEvidenceReceipt":
             evidence = extracted.get("evidence_audit") or {}
             passed = passed and evidence.get("checked") is True and bool(evidence.get("applications"))
+        if short.startswith("HigherOrder."):
+            evidence = extracted.get("evidence_audit") or {}
+            applications = evidence.get("applications") or []
+            passed = passed and evidence.get("checked") is True and bool(applications)
+            if diagnostic:
+                passed = passed and any(hypothesis.get("identifier") == diagnostic
+                    for application in applications for hypothesis in application.get("hypotheses") or [])
+            if short == "HigherOrder.wrappedReceipt":
+                names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+                passed = passed and {"TestsSecurity.ClaimReporting.HigherOrder.invoke",
+                    "TestsSecurity.ClaimReporting.HigherOrder.labeledEvidence"} <= names
+        if short.startswith("ProjectedCarrier.") and short != "ProjectedCarrier.blockedReceipt":
+            admission = extracted.get("admission") or {}
+            evidence = extracted.get("evidence_audit") or {}
+            applications = evidence.get("applications") or []
+            passed = passed and admission.get("certificate_checked") is True and admission.get("model_status") == "admitted"
+            passed = passed and evidence.get("checked") is True and bool(applications)
+            if diagnostic:
+                passed = passed and any(hypothesis.get("identifier") == diagnostic
+                    for application in applications for hypothesis in application.get("hypotheses") or [])
+            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+            namespace = "TestsSecurity.ClaimReporting.ProjectedCarrier."
+            expected = {namespace + ("validCallback" if diagnostic is None else "callback")}
+            if short != "ProjectedCarrier.directReceipt":
+                expected.add(namespace + "runner")
+            if short == "ProjectedCarrier.opaqueReceipt":
+                expected.add(namespace + "hiddenRunner")
+            if diagnostic:
+                expected.add("TestsSecurity.ClaimReporting.HigherOrder.labeledEvidence")
+            passed = passed and expected <= names
+        if short == "ProjectedCarrier.blockedReceipt":
+            claim_data = (record.get("detail") or {}).get("claim_data") or {}
+            passed = passed and "unresolved Evidence-bearing projected function" in claim_data.get("extraction_error", "")
         if short in {"wrongTargetReceipt", "wrongAcceptanceReceipt"}:
             passed = passed and (extracted.get("admission") or {}).get("subject_checked") is False
         if short == "chargedExtensionReceipt":

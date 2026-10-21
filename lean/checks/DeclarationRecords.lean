@@ -553,8 +553,8 @@ def receiptRoot (expression : Expr) : MetaM String := do
       | none => return "constructor"
   return "constructor"
 
-/-- Only unfold owned declarations that can reach an Evidence value. This
-keeps application auditing separate from generic dependency telescopes. -/
+/-- Static Evidence ancestry is a pruning aid. Actual supplied arguments can
+also carry Evidence into a generic higher-order declaration. -/
 def evidenceAncestors (env : Environment) (starts : Array Name) : Std.HashSet Name := Id.run do
   let mut pending := starts.toList
   let mut seen : Std.HashSet Name := {}
@@ -589,6 +589,55 @@ structure EvidenceApplications where
   rows : Array Json := #[]
   steps : Nat := 0
 
+/-- The application audit may inspect stored opaque implementations in its
+owned modules, just as the dependency and axiom audits do. -/
+def ownedDeclaration (env : Environment) (name : Name) : Bool :=
+  ((env.getModuleIdxFor? name).bind fun index =>
+    (env.header.modules[index.toNat]?).map (·.module)).any fun module =>
+      repositoryRoots.any (·.isPrefixOf module)
+
+/-- Expose a concrete projected owner, retaining its supplied arguments.
+Ordinary reduction respects opacity; the audit also needs the actual stored
+owned opaque body. A blocked owner is returned unchanged, never guessed. -/
+def exposeOwnedValue (env : Environment) (expression : Expr) : Nat → MetaM Expr
+  | 0 => pure expression
+  | fuel + 1 => do
+    let expression := expression.consumeMData.headBeta
+    if let .letE _ _ value body _ := expression then
+      return ← exposeOwnedValue env (body.instantiate1 value) fuel
+    if let .proj structureName index value := expression then
+      let value ← exposeOwnedValue env value fuel
+      let projected := Expr.proj structureName index value
+      if let some reduced ← reduceProj? projected then
+        return ← exposeOwnedValue env reduced fuel
+      return projected
+    let reduced ← whnfD expression
+    if reduced != expression then return ← exposeOwnedValue env reduced fuel
+    let .const name levels := expression.getAppFn | return expression
+    unless ownedDeclaration env name do return expression
+    let some info := env.find? name | return expression
+    let some body := info.value? true | return expression
+    exposeOwnedValue env
+      (mkAppN (body.instantiateLevelParams info.levelParams levels) expression.getAppArgs) fuel
+
+/-- Recognize actual callback values, including constructor payloads such as
+Box (String → Nat). Do not search inside arbitrary scalar computations: their
+already visited Evidence subterms do not make an abstract scalar operation a
+callback consumer. A blocked relevant owned carrier is conservatively unknown. -/
+def carriesEvidenceCallback (env : Environment) (relevant : Std.HashSet Name)
+    (expression : Expr) : Nat → MetaM Bool
+  | 0 => pure true
+  | fuel + 1 => do
+    unless expression.getUsedConstants.any relevant.contains do return false
+    let type ← whnfD (← inferType expression)
+    if type.isForall then return true
+    let value ← exposeOwnedValue env expression 64
+    if let some name := headName value then
+      if let some (.ctorInfo _) := env.find? name then
+        return ← value.getAppArgs.anyM fun argument =>
+          carriesEvidenceCallback env relevant argument fuel
+    return type.getUsedConstants.any (ownedDeclaration env)
+
 /-- Inspect actual applications after beta/zeta substitution. Parameters of an
 Evidence function disappear when supplied; only the receipt's external context
 is used to classify a proved named hypothesis as conditional. Local lambdas are
@@ -596,10 +645,15 @@ never turned into new arbitrary application contexts. Only instantiated or
 closed Evidence subterms are audited, using the actual receipt context. -/
 partial def inspectEvidence (env : Environment) (relevant : Std.HashSet Name)
     (outerBinders : Array Expr) (expression : Expr) : StateRefT EvidenceApplications MetaM Unit := do
-  let expression := expression.headBeta.consumeMData
+  let expression := expression.consumeMData
   if (← get).seen.contains expression then return
   modify fun state => { state with seen := state.seen.insert expression, steps := state.steps + 1 }
   if (← get).steps > 200000 then throwError "instantiated Evidence audit exceeded its traversal bound"
+  if expression.isHeadBetaTarget then
+    -- Substitution can expose another applied callback. Keep reducing actual
+    -- arguments until the application has a stable head, without opening lambdas.
+    inspectEvidence env relevant outerBinders expression.headBeta
+    return
   if let .letE _ _ value body _ := expression then
     inspectEvidence env relevant outerBinders (body.instantiate1 value)
     return
@@ -614,8 +668,33 @@ partial def inspectEvidence (env : Environment) (relevant : Std.HashSet Name)
     return
   for argument in expression.getAppArgs do inspectEvidence env relevant outerBinders argument
   if expression.hasLooseBVars then return
+  let carried := expression.getAppArgs.any fun argument =>
+    argument.getUsedConstants.any relevant.contains
+  if let .proj _ _ value := expression.getAppFn then
+    inspectEvidence env relevant outerBinders value
+    -- A concrete owner can consume a callback inside data even when neither
+    -- the owner nor the whole argument has function-valued Evidence ancestry.
+    -- Reduce first, then reapply precisely the actual supplied arguments.
+    let .proj structureName index _ := expression.getAppFn | return
+    let owner ← exposeOwnedValue env value 128
+    if let some function ← reduceProj? (.proj structureName index owner) then
+      inspectEvidence env relevant outerBinders (mkAppN function expression.getAppArgs)
+      return
+    let callbacks ← expression.getAppArgs.anyM fun argument =>
+      carriesEvidenceCallback env relevant argument 64
+    -- A scalar argument may depend on Evidence without making an abstract
+    -- field operation an Evidence callback consumer. Its argument was already
+    -- inspected above. Follow actual callbacks, Evidence results and owners.
+    unless callbacks || value.getUsedConstants.any relevant.contains ||
+        (carried && (← inferType value).getUsedConstants.any (ownedDeclaration env)) ||
+        (headName (← inferType expression)).any evidenceStructures.contains do return
+    throwError "unresolved Evidence-bearing projected function: {← ppExpr expression.getAppFn}"
+    return
   let some name := headName expression | return
-  unless relevant.contains name do return
+  -- Relevance belongs to this application, not just its declaration. A
+  -- generic invoke f x := f x has no static Evidence ancestry, but the actual
+  -- callback may carry it. Unfold with the supplied arguments before pruning.
+  unless relevant.contains name || carried do return
   let type ← inferType expression
   if let some structureName := headName type then
     if evidenceStructures.contains structureName then
@@ -628,7 +707,10 @@ partial def inspectEvidence (env : Environment) (relevant : Std.HashSet Name)
       -- Continue through the actual implementation as well: a wrapper must
       -- not hide the named hypotheses of an Evidence value it consumes.
   let some info := env.find? name | return
-  let some body := info.value? true | return
+  let some body := info.value? true | do
+    if let some reduced ← reduceRecMatcher? expression then
+      inspectEvidence env relevant outerBinders reduced
+    return
   let .const _ levels := expression.getAppFn | return
   inspectEvidence env relevant outerBinders
     (mkAppN (body.instantiateLevelParams info.levelParams levels) expression.getAppArgs)
