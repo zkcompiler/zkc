@@ -211,7 +211,7 @@ pub(super) fn run(directory: &Path) {
     );
 
     let host = RunEntry::admit(
-        package(directory, "Run", 0),
+        package(directory, "native-Run", 0),
         HostLimits::default(),
         Default::default(),
     )

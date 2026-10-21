@@ -149,6 +149,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   if (signatureState[id.index] == 2)
     return true;
+  if (decl.generated)
+    return generatedSignature(decl, depth);
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
     return types.fail("source.limit", "type declaration depth limit",
                       decl.span);
@@ -367,6 +369,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                       decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
+      decl.kind == Declaration::Kind::EntryFunction ||
       decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Relation) {
@@ -612,6 +615,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                         "scoped callbacks or an effect allowance",
                         decl.span);
   }
+  if (decl.kind == Declaration::Kind::Protocol &&
+      !configureSetups(decl, decl, source.setups))
+    return false;
   if (!dataRequirements(decl))
     return false;
   if (decl.kind == Declaration::Kind::Relation && !relation(decl))

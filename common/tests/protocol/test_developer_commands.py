@@ -68,7 +68,7 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
     assert report["code"] == "cli-option" and "--attempts" in report["message"]
     # A real execution command still reports the existing machine-readable refusal.
     result = invoke("run", "--package=missing.zkpkg", "--sha256=" + "0" * 64,
-                    "--session=missing", "--input=P=inputs.json")
+                    "--input=inputs.json")
     assert result.returncode == 1
     report = json.loads(result.stdout)
     assert report["status"] == "refused" and report["code"] == "artifact-io"

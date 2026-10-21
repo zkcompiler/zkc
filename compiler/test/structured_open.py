@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, records
 
 commands = Commands(records())
@@ -57,12 +58,19 @@ def trace(replies):
             for event in [['request', i, row[1]], ['reply', i, row[2]]]]
 
 
-def frontend(entry, modules):
+def frontend(entry, modules, *, proof=False):
     retained = entry.replace('::', '-')
     flags = ['--source-format=zkc', '--entry=' + entry,
              *[f'--module={name}={path}' for name, path in modules.items()]]
-    source = commands.run([compiler, 'language-emit', *flags], keep=retained + '.mlir')
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags], keep=retained + '-interface.json'))
+    if proof:
+        source = commands.run([compiler, 'language-emit', *flags], keep=retained + '.mlir')
+        interface = json.loads(commands.run([compiler, 'language-interface', *flags], keep=retained + '-interface.json'))
+    else:
+        child = compile_run_package(commands, *flags)
+        source = child['original']
+        interface = json.loads(child['interface'])
+        (commands.directory / (retained + '.mlir')).write_text(source)
+        (commands.directory / (retained + '-interface.json')).write_text(child['interface'])
     symbol = interface['protocol']
     return source, symbol, export(source, symbol, keep=retained + '-structured.json')
 
@@ -451,7 +459,7 @@ with case('actual-schnorr-library-interactive-retains-formula-and-relation'):
     assert run(source, ['2', '6', None, None, '29'], 'role00000001', script, symbol=symbol) == returned([True], trace(script), 4)
     _, proof_symbol, proof = frontend('example::Proof', {
         'example': repository_root / 'examples/projects/schnorr/main.zkc',
-        'schnorr': repository_root / 'libraries/protocols/sigma/schnorr/lib.zkc'})
+        'schnorr': repository_root / 'libraries/protocols/sigma/schnorr/lib.zkc'}, proof=True)
     assert any(op[0][0] == 'statement' for op in definitions(proof)[proof_symbol][9][1])
 
 for form in ['Helpers', 'Reordered', 'EarlyChallenge']:

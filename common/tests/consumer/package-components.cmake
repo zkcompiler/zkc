@@ -85,7 +85,7 @@ file(WRITE "${TEST_ROOT}/CMakeLists.txt"
   "cmake_minimum_required(VERSION 3.21)\nproject(ComponentControl LANGUAGES C CXX)\n${body}")
 execute_process(COMMAND "${CMAKE_COMMAND}" -S "${TEST_ROOT}" -B "${TEST_ROOT}/build"
   "-DZkcCompiler_DIR=${PACKAGE_DIR}" "-DMLIR_DIR=${MLIR_DIR}" "-DLLVM_DIR=${LLVM_DIR}"
-  "-DCMAKE_C_COMPILER=${C_COMPILER}" "-DCMAKE_CXX_COMPILER=${CXX_COMPILER}" ${options}
+  "-Dutf8proc_DIR=${utf8proc_DIR}" "-DCMAKE_C_COMPILER=${C_COMPILER}" "-DCMAKE_CXX_COMPILER=${CXX_COMPILER}" ${options}
   RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(refusal)
   if(result EQUAL 0 OR NOT "${output}${error}" MATCHES "${refusal}")

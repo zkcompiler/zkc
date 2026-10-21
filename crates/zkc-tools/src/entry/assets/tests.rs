@@ -614,3 +614,56 @@ fn packaged_arenas_serve_both_independent_proof_participants() {
         "entry-asset-carrier",
     );
 }
+#[test]
+fn selected_verifier_assets_exclude_producer_only_numerical_roots() {
+    let base = arenas(Identity::KoalaBear);
+    let pairs = base.pairs();
+    let mut artifact: Json = serde_json::from_str(&deployment(BASE, &base)).unwrap();
+    let mut program: Json = serde_json::from_str(artifact[4].as_str().unwrap()).unwrap();
+    program[3][0][6][0][2] = json!("inner");
+    artifact[4] = json!(program.to_string());
+    artifact[5] = json!(hash(artifact[4].as_str().unwrap().as_bytes()));
+    let artifact = artifact.to_string();
+    let interface = proof_interface(BASE);
+    let options = ProofOptions {
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    let producer = ProofEntry::admit_operation(
+        package(&interface, &artifact, &pairs),
+        options,
+        SetupAuthority::default(),
+        crate::entry::ProofOperation::Prove,
+    )
+    .unwrap();
+    let proof = producer.prove(proof_request()).unwrap();
+    assert!(proof.is_success());
+    // The candidate still contains the producer's function and its asset
+    // reference. Independent verification neither installs nor needs that root.
+    let validator_assets = pairs
+        .iter()
+        .filter(|(id, _)| id != &sha(&base.looped))
+        .cloned()
+        .collect::<Vec<_>>();
+    let validator = ProofEntry::admit_operation(
+        package(&interface, &artifact, &validator_assets),
+        options,
+        SetupAuthority::default(),
+        crate::entry::ProofOperation::Verify,
+    )
+    .unwrap();
+    assert_eq!(validator.assets().references().len(), 2);
+    let report = validator
+        .verify(proof_request(), &proof.native.outcome.unwrap())
+        .unwrap();
+    assert!(report.is_success(), "{:?}", report.native.outcome);
+    let refused = ProofEntry::admit_operation(
+        package(&interface, &artifact, &validator_assets),
+        options,
+        SetupAuthority::default(),
+        crate::entry::ProofOperation::Prove,
+    )
+    .err()
+    .expect("producer needs its own asset");
+    assert_eq!(refused.code(), "entry-asset-missing");
+}

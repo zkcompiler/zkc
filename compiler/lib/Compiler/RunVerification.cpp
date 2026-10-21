@@ -2,6 +2,8 @@
 #include "Run.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include <map>
@@ -124,18 +126,24 @@ class RunCorrespondence {
           return false;
         Cursor enter{*group->getArray("loop")};
         SmallVector<unsigned> owners;
-        for (auto owner : repeat.getRoles()) {
-          auto role = index(cast<StringAttr>(owner).getValue());
-          if (!role || !prefix(enter, *role, source))
+        // Loop boundaries use the enclosing participant roster, as do the
+        // projected targets. Application substitution can permute the loop's
+        // owner set without changing that execution coordinate order.
+        for (unsigned role = 0; role < roles.size(); ++role) {
+          if (!llvm::is_contained(
+                  repeat.getRoles(),
+                  StringAttr::get(op.getContext(), roles[role].program->role)))
+            continue;
+          if (!prefix(enter, role, source))
             return false;
-          auto *instruction = next(*role);
+          auto *instruction = next(role);
           auto *loop =
               instruction ? instruction->get<program::Loop>() : nullptr;
           if (!loop || instruction->site != repeat.getSite() ||
               loop->count.maximum != repeat.getMaximum() ||
-              !step(enter, *role, source))
+              !step(enter, role, source))
             return false;
-          owners.push_back(*role);
+          owners.push_back(role);
         }
         Cursor inner{*group->getArray("body")};
         if (!enter.done() ||
@@ -275,5 +283,22 @@ Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
     return error(check.exhausted() ? "run-correspondence-limit"
                                    : "run-correspondence");
   return Error::success();
+}
+Expected<program::Participants> readRunProgram(StringRef bytes) {
+  auto artifact = parseNaturalJson(bytes, 16 * 1024 * 1024, 256,
+                                   "entry.deployment", "source.limit");
+  if (!artifact)
+    return artifact.takeError();
+  auto *bundle = artifact->getAsObject();
+  if (!bundle || bundle->size() != 5 ||
+      bundle->getString("format") != "zkc.run/0" ||
+      !bundle->getString("candidate"))
+    return error("entry.deployment", "invalid child joint deployment");
+  auto program = program::parse(*bundle->getString("candidate"));
+  if (!program)
+    return program.takeError();
+  if (auto e = protocol::admit(*program))
+    return e;
+  return std::move(*program);
 }
 } // namespace zkc::detail

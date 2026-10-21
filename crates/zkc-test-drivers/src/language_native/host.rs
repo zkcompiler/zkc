@@ -125,9 +125,11 @@ fn refuses(host: &RunEntry, request: RunRequest, expected: &str) {
     }
 }
 pub(super) fn run(directory: &Path) {
+    standalone_sequence_capacity(directory);
+    deep_schema(directory);
     services(directory);
     shared_inputs(directory);
-    let publication = package(directory, "typed-host_values.zkpkg");
+    let publication = package(directory, "native-host-values.zkpkg");
     let host = RunEntry::admit(
         publication.clone(),
         HostLimits::default(),
@@ -243,14 +245,6 @@ pub(super) fn run(directory: &Path) {
         Err(code) => assert_eq!(code.code(), "entry-input-constructor"),
         Ok(_) => panic!("private constructor admitted"),
     }
-    match RunEntry::admit(
-        package(directory, "host-custody.zkpkg"),
-        HostLimits::default(),
-        SetupAuthority::default(),
-    ) {
-        Err(code) => assert_eq!(code.code(), "entry-output-custody"),
-        Ok(_) => panic!("affine output admitted"),
-    }
     let mut limits = HostLimits::default();
     limits.capacity.work.instructions = 0;
     let stopped = RunEntry::admit(publication, limits, SetupAuthority::default()).unwrap();
@@ -263,9 +257,33 @@ pub(super) fn run(directory: &Path) {
     ));
 }
 
+fn deep_schema(directory: &Path) {
+    use zkc_tools::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
+    let entry = FunctionEntry::admit(
+        package(directory, "deep-schema.zkpkg"),
+        FunctionOptions::default(),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let mut value = Value::from(Native::Bool(true));
+    for _ in 0..31 {
+        value = Value::Tuple(vec![value]);
+    }
+    let expected = normalized(&value);
+    let report = entry
+        .prepare(FunctionRequest {
+            arguments: fields([("value", value)]),
+            ..Default::default()
+        })
+        .unwrap()
+        .execute();
+    assert!(report.is_success(), "{:?}", report.failure);
+    assert_eq!(normalized(&report.value.unwrap().into_value()), expected);
+}
+
 fn services(directory: &Path) {
     let host = RunEntry::admit(
-        package(directory, "host-services.zkpkg"),
+        package(directory, "native-host-services.zkpkg"),
         HostLimits::default(),
         SetupAuthority::default(),
     )
@@ -315,7 +333,7 @@ fn services(directory: &Path) {
 }
 fn shared_inputs(directory: &Path) {
     let host = RunEntry::admit(
-        package(directory, "transfer.zkpkg"),
+        package(directory, "native-transfer.zkpkg"),
         HostLimits::default(),
         SetupAuthority::default(),
     )
@@ -348,4 +366,56 @@ fn shared_inputs(directory: &Path) {
     let outputs = report.outputs.unwrap();
     assert!(outputs["P"].is_empty());
     assert_eq!(normalized(&outputs["V"]["delta"]), normalized(&scalar(2)));
+}
+
+// Use the exact same compiler fixture as the aggregate source Entry control.
+fn standalone_sequence_capacity(directory: &Path) {
+    let entry = RunEntry::admit(
+        package(directory, "native-sequence-capacity.zkpkg"),
+        HostLimits::default(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    let report = entry
+        .prepare(RunRequest {
+            session: "sequence-capacity".into(),
+            setups: BTreeMap::new(),
+            roles: BTreeMap::from([(
+                "P".into(),
+                RoleInputs {
+                    inputs: fields([
+                        ("n", Native::Index(8192).into()),
+                        ("last", Native::Index(8191).into()),
+                    ]),
+                    services: BTreeMap::new(),
+                },
+            )]),
+        })
+        .unwrap()
+        .execute();
+    assert!(
+        report.is_success(),
+        "{}",
+        report.native.diagnostics_summary()
+    );
+    let outputs = report.outputs.unwrap();
+    let Value::Tuple(values) = &outputs["P"]["r"] else {
+        panic!("tuple")
+    };
+    let index = |v: &Value| match v {
+        Value::Leaf(InputValue::Native(v)) => match v.as_ref() {
+            Native::Index(i) => *i,
+            _ => panic!("index"),
+        },
+        _ => panic!("native leaf"),
+    };
+    assert_eq!(values.len(), 3);
+    assert_eq!(index(&values[0]), 8192);
+    for (value, expected) in values[1..].iter().zip([0, 8191]) {
+        let Value::Record(fields) = value else {
+            panic!("record")
+        };
+        assert_eq!(index(&fields["first"]), expected);
+        assert_eq!(index(&fields["second"]), expected);
+    }
 }

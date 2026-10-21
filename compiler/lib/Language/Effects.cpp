@@ -203,7 +203,8 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                      action.contract != "index.constant" &&
                      !mathematicalIntrinsic(action.contract));
                 return true;
-              } else if constexpr (std::is_same_v<Action, Require> ||
+              } else if constexpr (std::is_same_v<Action, HostInvocation> ||
+                                   std::is_same_v<Action, Require> ||
                                    std::is_same_v<Action, BulkApplication>) {
                 result.fixed.mayStop = true;
                 return true;

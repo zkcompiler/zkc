@@ -102,6 +102,10 @@ public:
   bool withinModule(DeclarationId context, DeclarationId owner) const;
   bool constructorAllowed(const Declaration &, const Type &) const;
   bool ingress(const Type &, Span);
+  /// Setup authority is never ordinary Host data, including nested payloads.
+  /// Open generic leaves are checked again after specialization.
+  std::optional<bool> setupAuthority(const Type &, Span, unsigned = 1);
+  bool hostData(const Type &, Span, const Declaration * = nullptr);
   // Checks representation, not permissions: even a zero-length formal array
   // cannot become a runtime Type argument, port, region carrier or local value.
   bool executableType(const Type &, Span, unsigned = 1);
@@ -141,6 +145,7 @@ private:
   unsigned normalizationDepth = 0;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
-                       Work &, DeclarationId);
+                       Work &, DeclarationId,
+                       std::optional<HostInvocation::Kind> = {});
 } // namespace zkc::language::detail
 #endif

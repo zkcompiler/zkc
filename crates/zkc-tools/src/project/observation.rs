@@ -41,11 +41,13 @@ impl ReportDirectory {
                 compilation["time_trace_file"] = json!("time-trace.json");
             }
             if let Some(phases) = compilation["phases"].as_array_mut() {
-                for phase in phases {
+                for (index, phase) in phases.iter_mut().enumerate() {
                     let Some(name) = phase["phase"].as_str().map(str::to_owned) else {
                         continue;
                     };
-                    if !["protocol", "participant", "exec", "physical"].contains(&name.as_str()) {
+                    if !["entry", "protocol", "participant", "exec", "physical"]
+                        .contains(&name.as_str())
+                    {
                         continue;
                     }
                     if let Some(ir) = phase
@@ -53,7 +55,7 @@ impl ReportDirectory {
                         .and_then(|o| o.remove("ir"))
                         .and_then(|s| s.as_str().map(str::to_owned))
                     {
-                        let file = format!("{name}.mlir");
+                        let file = format!("{index:03}-{name}.mlir");
                         write(&self.path.join(&file), ir.as_bytes())?;
                         files.push(file.clone());
                         phase["ir_file"] = json!(file);

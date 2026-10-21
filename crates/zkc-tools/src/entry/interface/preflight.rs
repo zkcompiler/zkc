@@ -2,8 +2,21 @@
 //! a lexical resource and natural-number check; serde owns JSON syntax/UTF-8.
 use super::{InterfaceError, Result};
 
-pub(super) fn check(bytes: &[u8]) -> Result<()> {
-    if bytes.len() > super::super::package::INTERFACE_BYTES {
+pub(in crate::entry) fn check(bytes: &[u8]) -> Result<()> {
+    check_limit(bytes, super::super::package::INTERFACE_BYTES)
+}
+pub(in crate::entry) fn check_limit(bytes: &[u8], limit: usize) -> Result<()> {
+    check_document(bytes, limit, 6 * 256 * 1024)
+}
+
+/// Executable carriers embed serialized programs and packages. Their string
+/// payloads share the document ceiling; metadata uses its narrower string cap.
+pub(in crate::entry) fn check_carrier(bytes: &[u8], limit: usize) -> Result<()> {
+    check_document(bytes, limit, limit)
+}
+
+fn check_document(bytes: &[u8], limit: usize, string_limit: usize) -> Result<()> {
+    if bytes.len() > limit {
         return Err(InterfaceError::Limit);
     }
     let (mut depth, mut nodes, mut length) = (0usize, 0usize, 0usize);
@@ -17,7 +30,7 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
             }
             length += 1;
             // A Unicode escape uses at most six bytes per decoded byte.
-            if length > 6 * 256 * 1024 {
+            if length > string_limit {
                 return Err(InterfaceError::Limit);
             }
             if escaped {
@@ -70,4 +83,23 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
         return Err(InterfaceError::Format);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn executable_strings_use_the_carrier_ceiling_without_relaxing_metadata() {
+        let bytes = format!("{{\"program\":\"{}\"}}", "a".repeat(2 * 1024 * 1024));
+        assert!(matches!(
+            check(bytes.as_bytes()),
+            Err(InterfaceError::Limit)
+        ));
+        assert!(check_carrier(bytes.as_bytes(), 4 * 1024 * 1024).is_ok());
+        assert!(matches!(
+            check_carrier(bytes.as_bytes(), bytes.len() - 1),
+            Err(InterfaceError::Limit)
+        ));
+    }
 }

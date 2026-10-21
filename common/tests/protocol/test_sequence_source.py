@@ -38,16 +38,16 @@ protocol Run roles(P,V)(a:F@P,b:F@P,i:index@V)
  ->(xs:Sequence<Sequence<Entry<F>>>@V,r:(F,F,F,[F;2],(F,F),Choice,index)@V){
   let xs @P =produce(a,b);let ys=send P->V(xs);
   let r @V =inspect(ys,i);return(xs=ys,r=r);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
-    result = entry.run_roles('valid', {'P': {'inputs': {'a': '7', 'b': '19'}},
-                                      'V': {'inputs': {'i': '0'}}})['V']
+    result = entry.run_roles('valid', {'P': {'a': '7', 'b': '19'},
+                                      'V': {'i': '0'}})['V']
     assert result['r'][:5] == ['7', '7', '19', ['7', '19'], ['7', '19']]
     assert result['r'][5] == {'case': 'Some', 'fields': {'0': '7'}}
     assert result['r'][6] == '1'
-    refused = entry.run_roles('bounds', {'P': {'inputs': {'a': '7', 'b': '19'}},
-                               'V': {'inputs': {'i': '1'}}}, refuses='entry-run-incomplete')
+    refused = entry.run_roles('bounds', {'P': {'a': '7', 'b': '19'},
+                               'V': {'i': '1'}}, refuses='entry-host-run-failed')
     assert names(str(refused), 'sequence-index')
     # Returned native JSON feeds a separately compiled source Entry, preserving
     # every nested nominal carrier through decode, sequence.at and encode.
@@ -55,7 +55,7 @@ protocol Run roles(P,V)(a:F@P,b:F@P,i:index@V)
 protocol Run roles(P)(xs:Sequence<Sequence<Entry<F>>>@P,i:index@P)
  ->(xs:Sequence<Sequence<Entry<F>>>@P,r:(F,F,F,[F;2],(F,F),Choice,index)@P){
   let r @P =inspect(xs,i);return(xs=xs,r=r);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     replay_dir = directory / 'replay'
     replay_dir.mkdir()
@@ -63,7 +63,7 @@ protocol Run roles(P)(xs:Sequence<Sequence<Entry<F>>>@P,i:index@P)
     assert replay.run('codec', {'xs': result['xs'], 'i': '0'}) == result
 
 
-@pytest.mark.parametrize('record,count', [(False, 16384), (True, 8192)])
+@pytest.mark.parametrize('record,count', [(False, 16384), (True, 4096)])
 def test_source_sequence_collection_default_capacity(toolchain, journal, directory, record, count):
     element = 'Pair' if record else 'index'
     item = 'Pair{first:i,second:i}' if record else 'i'
@@ -77,25 +77,25 @@ fn collect(n:index)->Sequence<{element}>{{
 }}
 '''
     if record:
-        # Native execution validates every record. Export only observations here:
-        # the codec's independent peak-allocation ceiling also budgets a copy.
-        source += '''
-fn observe(n:index,last:index)->(index,Pair,Pair){
-  let xs=collect(n);return(length(xs),get(xs,0),get(xs,last));
-}
-protocol Run roles(P)(n:index@P,last:index@P)->(r:(index,Pair,Pair)@P){return observe(n,last);}
-run Demo=Run;
-'''
+        source = (ROOT / 'compiler/test/fixtures/language/sequence-capacity.zkc').read_text()
     else:
         source += f'''
 protocol Run roles(P)(n:index@P)->(xs:Sequence<{element}>@P){{return collect(n);}}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     if record:
         result = entry.run('collect', {'n': str(count), 'last': str(count - 1)})['r']
         assert result == [str(count), {'first': '0', 'second': '0'},
                           {'first': str(count - 1), 'second': str(count - 1)}]
+        # Keep the independent native 8192-record success control in
+        # compiler/test/fixtures/language/sequence-capacity.zkc (language_native).
+        # The same aggregate allowance
+        # also covers the parent and transport here; exhausted children publish
+        # no root (checked by Entry.run), even when the returned tuple is small.
+        refused = entry.run('shared-limit', {'n': '8192', 'last': '8191'},
+                            refuses='entry-host-run-failed')
+        assert names(str(refused), 'output-bytes')
         return
     result = entry.run('collect', {'n': str(count)})['xs']
     assert result == [str(i) for i in range(count)]

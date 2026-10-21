@@ -592,6 +592,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
 }
 bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
+  if (decl.generated && decl.generated->operation)
+    return true;
   if (depth > work.limits.callDepth)
     return types.fail("source.limit", "helper call depth limit exceeded",
                       decl.span);
@@ -617,8 +619,13 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   result.mode = (decl.kind == Declaration::Kind::Math ||
                  decl.kind == Declaration::Kind::Relation)
                     ? Body::Mode::Math
-                : decl.kind == Declaration::Kind::Local ? Body::Mode::Local
-                                                        : Body::Mode::Protocol;
+                : (decl.kind == Declaration::Kind::Local ||
+                   decl.kind == Declaration::Kind::EntryFunction)
+                    ? Body::Mode::Local
+                    : Body::Mode::Protocol;
+  result.stage = decl.kind == Declaration::Kind::EntryFunction
+                     ? Body::Stage::Host
+                     : Body::Stage::Computation;
   if (!resolveBindings(*this, decl, *sources[id.index]))
     return false;
   std::set<std::string> sites;
@@ -660,6 +667,11 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       !effectsWithin(types, result.effects, *decl.effectAllowance, decl.span))
     return types.fail("source.effect",
                       "body exceeds its written effect allowance", decl.span);
+  if (decl.kind == Declaration::Kind::EntryFunction)
+    for (const auto *ports : {&decl.inputs, &decl.outputs})
+      for (const auto &port : *ports)
+        if (!types.hostData(port.type, port.span, &decl))
+          return false;
   decl.body = std::make_shared<Body>(std::move(result));
   bodyState[id.index] = 2;
   inferredContracts.erase(&decl);

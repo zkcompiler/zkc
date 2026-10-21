@@ -59,7 +59,7 @@ protocol Run roles(P)(a:K@P, b:K@P, c:E@P, d:E@P, xs:Vector<E>@P, m:Matrix<E>@P,
   let codecs @P = codec_work(c, raw);
   return (base=base, cubic=cubic, codecs=codecs);
 }}
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 
@@ -114,7 +114,7 @@ def test_binary_kernels_match_carry_less_arithmetic(toolchain, journal, director
     _, one, decoded, many, words = entry.run('short', inputs)['codecs']
     assert (one, decoded, many, words) == (False, readable([0, 0, 0]), False, [])
     inputs['a'] = '0x0'
-    report = entry.run('zero-inverse', inputs, refuses='entry-run-incomplete')
+    report = entry.run('zero-inverse', inputs, refuses='entry-host-run-failed')
     assert 'zero-inverse' in str(report)
     # Readable values are bit patterns: decimals and noncanonical spellings refuse.
     for bad in ['3', '0x03', '0X3', '0x10000000000000000']:
@@ -134,7 +134,7 @@ protocol Run roles(P)(a:K@P, xs:Vector<K>@P) -> (result:{result}@P) {{
   let result @P = body(a, xs);
   return (result=result);
 }}
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 

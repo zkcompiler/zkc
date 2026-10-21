@@ -45,7 +45,8 @@ int main() {
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       let r @P =swap(x);return(r=r);
     }
-    run Demo=Run;)",
+    protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);})",
         "consumer.zkc"}},
       {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
         "unused.json"}},
@@ -102,24 +103,42 @@ int main() {
     llvm::errs() << llvm::toString(inventory.takeError());
     return 13;
   }
-  if (checked->entries().size() != 1 ||
+  if (checked->entries().size() != 2 ||
       checked->declarations()[selected->index].entryKind() !=
-          zkc::language::EntryKind::Run ||
+          zkc::language::EntryKind::Function ||
       inventory->find("m::Demo") == std::string::npos)
     return 14;
-  auto entry = zkc::language::closeEntry(*checked, "");
+  auto generic = zkc::language::resolveEntry(*checked, "Echo<index>");
+  if (!generic) {
+    llvm::errs() << llvm::toString(generic.takeError());
+    return 21;
+  }
+  auto specialized = zkc::language::closeEntry(*checked, generic->name);
+  if (!specialized) {
+    llvm::errs() << llvm::toString(specialized.takeError());
+    return 22;
+  }
+  if (generic->arguments.size() != 1 ||
+      specialized->name() != "m::Echo<index>" ||
+      specialized->invocations().size() != 1)
+    return 23;
+  auto entry = zkc::language::closeEntry(*checked, "Demo");
   if (!entry) {
     llvm::errs() << llvm::toString(entry.takeError());
     return 3;
   }
   zkc::language::Layouts layouts(*checked);
-  auto layout = layouts.get(entry->protocol().inputs.front().type);
+  if (entry->invocations().size() != 1 ||
+      !entry->invocations().front().deployment)
+    return 20;
+  const auto &protocol = entry->invocations().front().deployment->protocol();
+  auto layout = layouts.get(protocol.inputs.front().type);
   if (!layout) {
     llvm::errs() << llvm::toString(layout.takeError());
     return 4;
   }
   return (*layout)->fields.size() == 2 && (*layout)->leaves.size() == 2 &&
-                 entry->protocol().symbol == "s1h6d3h52756e"
+                 protocol.symbol == "s1h6d3h52756e"
              ? 0
              : 5;
 }

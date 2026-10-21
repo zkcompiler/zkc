@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package, single_run_package
 from tools import compiler, records
 
 OUT = records()
@@ -52,10 +53,14 @@ with case('definition checking never treats empty Entry selection as omission'):
 
 with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
-    original = commands.run([compiler, 'language-emit', *options])
-    interface = json.loads(commands.run([compiler, 'language-interface', *options]))
+    host_original = commands.run([compiler, 'language-emit', *options])
+    host_interface = json.loads(commands.run([compiler, 'language-interface', *options]))
+    assert host_interface['selection']['kind'] == 'function'
+    child = compile_run_package(commands, *options)
+    original = child['original']
+    interface = json.loads(child['interface'])
     assert interface['format'] == 'zkc.language-interface/0'
-    assert interface['entry'] == 'transfer::Demo'
+    assert host_interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8h7472616e736665728h5472616e73666572'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
     assert protocol['clauses'] == []
@@ -70,9 +75,9 @@ with case('explicit assets change capture without changing executable original')
                   f'--asset=trace_constraints=air-json={relations / "squaring.air.json"}']
     commands.run([compiler, 'language-check', *options, *asset_args])
     captured = json.loads(commands.run([compiler, 'language-interface', *options, *asset_args]))
-    assert captured['capture'] != interface['capture']
-    assert captured['original'] == interface['original']
-    assert commands.run([compiler, 'language-emit', *options, *asset_args]) == original
+    assert captured['capture'] != host_interface['capture']
+    assert captured['original'] == host_interface['original']
+    assert commands.run([compiler, 'language-emit', *options, *asset_args]) == host_original
     commands.run([compiler, 'language-check', *options, *asset_args, asset_args[0]], refuses='source.asset')
     commands.run([compiler, 'language-check', *options,
                   f'--asset=bad=guess={relations / "multiply.r1cs.json"}'], refuses='source.options')
@@ -83,7 +88,7 @@ for optimized in (0, 1):
     for released in (0, 1):
         with case(f'participant compilation {optimized=} {released=}'):
             flags = ([] if optimized else ['--no-simplify']) + (['--release-storage'] if released else [])
-            bundle = commands.run([compiler, 'language-bundle', *options, *flags])
+            bundle = compile_run_package(commands, *options, *flags)['artifact']
             value = json.loads(bundle)
             assert value['entry'] == interface['protocol']
             assert value['roles'] == ['role00000000', 'role00000001']
@@ -95,13 +100,14 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert set(package) == {'format', 'original', 'interface', 'artifact', 'assets', 'options'}
     assert package['format'] == 'zkc.entry/0'
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
-    assert json.loads(package['interface']) == interface
+    assert json.loads(package['interface']) == host_interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
     assert package['options'] == {'simplify': True, 'release_storage': False,
                                   'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False,
                                   'calculation_batching': True}
     assert package_bytes.endswith('}')
     (OUT / 'transfer.zkpkg').write_text(package_bytes)
+    (OUT / 'native-transfer.zkpkg').write_text(json.dumps(single_run_package(package_bytes)))
 
 for flags, expected in [
     (['--no-calculation-batching'],
@@ -134,17 +140,19 @@ with case('same-signature protocols execute through distinct Entries'):
       protocol Helpers roles(P,)(x:Fr@P,)->(r:Fr@P,b:bool@P,){
         return(b=is_three(x,),r=entries::plus(x,),);
       }
-      run One=First; run Two=Second; run Alias=First; run Math=Helpers;
+      entry fn One(inputs: First::Inputs) { return First::run(inputs); } entry fn Two(inputs: Second::Inputs) { return Second::run(inputs); } entry fn Alias(inputs: First::Inputs) { return First::run(inputs); } entry fn Math(inputs: Helpers::Inputs) { return Helpers::run(inputs); }
     ''')
     for name, protocol in [('One', 'First'), ('Two', 'Second'), ('Alias', 'First'), ('Math', 'Helpers')]:
         args = ['--source-format=zkc', f'--entry=entries::{name}', f'--module=entries={source}']
-        bundle = commands.run([compiler, 'language-bundle', *args])
+        child = compile_run_package(commands, *args)
+        bundle = child['artifact']
         value = json.loads(bundle)
         assert value['entry'] == f's7h656e7472696573{len(protocol)}h{protocol.encode().hex()}'
         (OUT / f'{name}.bundle').write_text(bundle)
         selected = json.loads(commands.run([compiler, 'language-interface', *args]))
         assert selected['entry'] == f'entries::{name}'
-        assert selected['protocol'] == value['entry']
+        assert selected['selection']['kind'] == 'function'
+        assert json.loads(child['interface'])['protocol'] == value['entry']
 
 for args, refusal in [
     (options[1:], 'source.options'),
@@ -152,7 +160,7 @@ for args, refusal in [
     ([*options, '--source-format=zkc'], 'source.options'),
     ([*options, '--guess'], 'source.options'),
     (['--source-format=json', *options[1:]], 'source.format'),
-    (['--source-format=zkc', '--entry=transfer::Transfer', *modules], 'source.entry'),
+    (['--source-format=zkc', '--entry=transfer::Transfer::run', *modules], 'source.entry'),
     (['--source-format=zkc', '--entry=missing::Demo', *modules], 'source.entry'),
     (['--source-format=zkc', '--entry=transfer::Demo', modules[0]], 'source.import'),
     ([*options, modules[0]], 'source.module'),
@@ -166,11 +174,11 @@ with case('target admission failure names its phase and related source declarati
     helpers += [f'math fn f{i}()->Fr{{return f{i-1}()+f{i-1}();}}' for i in range(1, 18)]
     source.write_text('module expansion; domain Fr=field("bls12-381.fr");\n' + '\n'.join(helpers) +
                       '\nprotocol Small roles(P)()->(r:Fr@P){return(r=1);}' +
-                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}run Demo=Unused;')
+                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry fn Demo(inputs: Unused::Inputs) { return Unused::run(inputs); }')
     definitions = json.loads(commands.run([compiler, 'language-check', '--source-format=zkc',
                                              f'--module=expansion={source}']))
     assert definitions['scope'] == 'definitions'
-    attempt = commands.attempt([compiler, 'language-check', '--source-format=zkc',
+    attempt = commands.attempt([compiler, 'language-package', '--source-format=zkc',
                                 '--entry=expansion::Demo', f'--module=expansion={source}'])
     assert attempt.returncode > 0 and not attempt.stdout
     diagnostic = attempt.stderr
@@ -185,12 +193,14 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'module',
     with case(f'typed source participant compilation: {name}'):
         for optimized in (0, 1):
             flags = [] if optimized else ['--no-simplify']
-            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            bundle = compile_run_package(commands, *args, *flags)['artifact']
             (OUT / f'typed-{name}-{optimized}.bundle').write_text(bundle)
             if optimized:
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 (OUT / f'typed-{name}.zkpkg').write_text(package)
-        schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+                if name == 'host_values':
+                    (OUT / 'native-host-values.zkpkg').write_text(json.dumps(single_run_package(package)))
+        schema = json.loads(compile_run_package(commands, *args)['interface'])
         schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
         for direction in ('inputs', 'outputs'):
             native = [index for port in schema[direction] for index in port['native']]
@@ -208,44 +218,46 @@ for entry in ('Demo', 'LocalDemo'):
         for optimized in (0, 1):
             for released in (0, 1):
                 flags = ([] if optimized else ['--no-simplify']) + (['--release-storage'] if released else [])
-                bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+                bundle = compile_run_package(commands, *args, *flags)['artifact']
                 (OUT / f'polynomial-{entry}-{optimized}-{released}.bundle').write_text(bundle)
 
 with case('protocol composition preserves distributed results'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "application.zkc"}']
-    original = commands.run([compiler, 'language-emit', *args])
+    original = compile_run_package(commands, *args)['original']
     assert original.count('"protocol.apply"') == 3
     for optimized in (0, 1):
         flags = [] if optimized else ['--no-simplify']
-        bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+        bundle = compile_run_package(commands, *args, *flags)['artifact']
         (OUT / f'application-{optimized}.bundle').write_text(bundle)
 
 with case('managed aliases retain ordered queries and owner guards'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "services.zkc"}']
-    original = commands.run([compiler, 'language-emit', *args])
+    original = compile_run_package(commands, *args)['original']
     assert original.count('"protocol.query"') == 2
     assert original.count('"protocol.guard"') == 1
-    schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+    schema = json.loads(compile_run_package(commands, *args)['interface'])
     schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
     assert schema['services'] == [{'name': 'coins', 'owner': 'V',
                                    'contract': 'random.bls12-381.fr/0', 'native': 1}]
-    (OUT / 'host-services.zkpkg').write_text(commands.run([compiler, 'language-package', *args]))
+    service_package = commands.run([compiler, 'language-package', *args])
+    (OUT / 'host-services.zkpkg').write_text(service_package)
+    (OUT / 'native-host-services.zkpkg').write_text(json.dumps(single_run_package(service_package)))
     for optimized in (0, 1):
         flags = [] if optimized else ['--no-simplify']
-        bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+        bundle = compile_run_package(commands, *args, *flags)['artifact']
         (OUT / f'services-{optimized}.bundle').write_text(bundle)
 
 for fixture in ('repeat', 'conditional_query', 'repeat_nested', 'repeat_affine'):
     with case(f'distributed control retains its region: {fixture}'):
         args = ['--source-format=zkc', '--entry=sample::Demo',
                 f'--module=sample={FIXTURES / (fixture + ".zkc")}']
-        original = commands.run([compiler, 'language-emit', *args])
+        original = compile_run_package(commands, *args)['original']
         assert original.count('"protocol.repeat"') == (2 if fixture == 'repeat_nested' else 1)
         for optimized in (0, 1):
             flags = [] if optimized else ['--no-simplify']
-            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            bundle = compile_run_package(commands, *args, *flags)['artifact']
             (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
 
 
@@ -253,11 +265,16 @@ for fixture in ('completion', 'completion_nested', 'completion_affine'):
     with case(f'owner completion preserves native control: {fixture}'):
         args = ['--source-format=zkc', '--entry=sample::Demo',
                 f'--module=sample={FIXTURES / (fixture + ".zkc")}']
-        original = commands.run([compiler, 'language-emit', *args])
+        if fixture == 'completion_affine':
+            # The native custody controls retain this affine protocol through
+            # closeNativeRun; ordinary source Host results require Copy/Drop.
+            commands.run([compiler, 'language-package', *args], refuses='source.host-data')
+            continue
+        original = compile_run_package(commands, *args)['original']
         assert original.count('"protocol.finish_if"') == 1
         for optimized in (0, 1):
             flags = [] if optimized else ['--no-simplify']
-            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            bundle = compile_run_package(commands, *args, *flags)['artifact']
             (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
 
 
@@ -267,7 +284,7 @@ for fixture in ('dispatch', 'service_order'):
                 f'--module=sample={FIXTURES / (fixture + ".zkc")}']
         for optimized in (0, 1):
             flags = [] if optimized else ['--no-simplify']
-            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            bundle = compile_run_package(commands, *args, *flags)['artifact']
             (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
 
 for fixture, entry in [('relation_sumcheck', 'Demo'), ('relation_sumcheck', 'ProductControl'),
@@ -276,21 +293,29 @@ for fixture, entry in [('relation_sumcheck', 'Demo'), ('relation_sumcheck', 'Pro
     with case(f'source relation execution boundary: {fixture}::{entry}'):
         args = ['--source-format=zkc', f'--entry=sample::{entry}',
                 f'--module=sample={FIXTURES / (fixture + ".zkc")}']
-        schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+        schema = json.loads(compile_run_package(commands, *args)['interface'])
         selected = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
         assert len(selected['clauses']) == (0 if entry == 'ProductControl' else 1)
         if selected['clauses']:
             assert schema['relations']
         for optimized in (0, 1):
             flags = [] if optimized else ['--no-simplify']
-            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            bundle = compile_run_package(commands, *args, *flags)['artifact']
             (OUT / f'{fixture}-{entry}-{optimized}.bundle').write_text(bundle)
 
 with case('source Host export admission retains affine custody obligations'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "completion_affine.zkc"}']
-    package = commands.run([compiler, 'language-package', *args])
-    (OUT / 'host-custody.zkpkg').write_text(package)
+    commands.run([compiler, 'language-package', *args], refuses='source.host-data')
+    assert not (OUT / 'host-custody.zkpkg').exists()
+
+with case('standalone sequence capacity uses the exact source-generated child'):
+    root = Path(__file__).resolve().parents[2]
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / "sequence-capacity.zkc"}',
+            f'--module=zkc::sequence={root / "libraries/core/primitives/collections/sequence.zkc"}']
+    package = compile_run_package(commands, *args)
+    (OUT / 'native-sequence-capacity.zkpkg').write_text(json.dumps(package))
 
 with case('maximum source schema depth binds in the native Host'):
     nested = 'bool'
@@ -300,12 +325,13 @@ with case('maximum source schema depth binds in the native Host'):
     source.write_text(f"""module deep;
 type Inner = {nested};
 type Deep = (Inner,);
-protocol Identity roles(P)(value:Deep@P)->(result:Deep@P){{return(result=value);}}
-run Demo=Identity;
+entry fn Demo(value:Deep)->Deep {{ return value; }}
 """)
     args = ['--source-format=zkc', '--entry=deep::Demo', f'--module=deep={source}']
     package = commands.run([compiler, 'language-package', *args])
-    schema = json.loads(json.loads(package)['interface'])['protocols'][0]['inputs'][0]['schema']
+    interface = json.loads(json.loads(package)['interface'])
+    selected = next(f for f in interface['functions'] if f['symbol'] == interface['selection']['function'])
+    schema = selected['parameters'][0]['schema']
     depth = 1
     while schema['fields']:
         schema = schema['fields'][0]['schema']
@@ -348,10 +374,12 @@ for entry in ('Run', 'Prove'):
         args = ['--source-format=zkc', f'--entry=sample::{entry}',
                 f'--module=sample={FIXTURES / "pcs_setup.zkc"}']
         package = commands.run([compiler, 'language-package', *args])
-        interface = json.loads(json.loads(package)['interface'])
+        interface = json.loads((single_run_package(package) if entry == 'Run' else json.loads(package))['interface'])
         assert [slot['name'] for slot in interface['setups']] == ['first', 'second']
         assert interface['setups'][1]['inputs'] == [{'port': 4, 'path': []}, {'port': 5, 'path': []}]
         (OUT / f'pcs-setup-{entry}.zkpkg').write_text(package)
+        if entry == 'Run':
+            (OUT / 'pcs-setup-native-Run.zkpkg').write_text(json.dumps(single_run_package(package)))
 
 for entry in ('Derived', 'Plain', 'Once', 'Run'):
     with case(f'named attempt selection and operational budgets: {entry}'):
@@ -368,5 +396,7 @@ for entry in ('Derived', 'Plain', 'Once', 'Run'):
             elif entry == 'Once':
                 assert view['job']['completion'] is None
             (OUT / f'attempt-{entry}-{suite}.zkpkg').write_text(package)
+            if entry == 'Run':
+                (OUT / f'attempt-native-Run-{suite}.zkpkg').write_text(json.dumps(single_run_package(package)))
 
 counted()

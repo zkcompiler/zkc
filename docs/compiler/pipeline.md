@@ -1,8 +1,12 @@
 # Compilation pipeline
 
-Checked `.zkc` source and direct Protocol IR use the same compiler,
-executable format and Rust Runner. The [protocol contract](../spec/ir/protocols.md)
-owns exact formation and projection rules.
+Protocol source and direct Protocol IR share the mathematical compilation
+pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`scf`
+and typed `entry` operations, published as `zkc.host/0`. Its numerical helpers
+reuse Kernel realization and physical export; its protocol and proof calls invoke
+the existing participant pipelines. The [architecture map](../architecture.md)
+shows both paths. The [protocol contract](../spec/ir/protocols.md) owns exact
+formation and projection rules for participant mathematics.
 
 ## Profiles and dialects
 

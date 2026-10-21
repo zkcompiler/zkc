@@ -208,6 +208,22 @@ impl Interface {
     ) -> impl Iterator<Item = InputPort<'a>> {
         role.inputs.iter().map(|&i| self.input(i))
     }
+    /// Authority-bearing setup inputs are application context, never fields of
+    /// generated source constructors. Verifier keys use the separate slot map.
+    pub(in crate::entry) fn is_source_data(&self, p: InputPort<'_>) -> bool {
+        p.key.is_none()
+            && !self
+                .setups
+                .iter()
+                .any(|s| p.native.iter().any(|i| s.inputs.contains(&(*i as usize))))
+    }
+    pub(in crate::entry) fn context_ports<'a>(
+        &'a self,
+        role: &'a RolePorts,
+    ) -> impl Iterator<Item = InputPort<'a>> {
+        self.input_ports(role)
+            .filter(|p| !self.is_source_data(*p) && p.key != Some(Type::VerifierKey))
+    }
     pub(in crate::entry) fn named_inputs<'a>(
         &'a self,
         role: &'a RolePorts,

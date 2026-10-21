@@ -3,10 +3,18 @@ use ethereum::eip4844::{Commit, Prove, Challenge, PointEvaluation};
 use ethereum::eip4844::{PointOpening, Point, BlobOpening, Blob, BlobBatch, Batch};
 
 // The polynomial-commitment functions of EIP-4844 as Entries.
-run BlobToCommitment = Commit;
-run ComputeKzgProof = Prove;
-run ComputeChallenge = Challenge;
-run PointEvaluationPrecompile = PointEvaluation;
+entry fn BlobToCommitment(inputs: Commit::Inputs) {
+  return Commit::run(inputs);
+}
+entry fn ComputeKzgProof(inputs: Prove::Inputs) {
+  return Prove::run(inputs);
+}
+entry fn ComputeChallenge(inputs: Challenge::Inputs) {
+  return Challenge::run(inputs);
+}
+entry fn PointEvaluationPrecompile(inputs: PointEvaluation::Inputs) {
+  return PointEvaluation::run(inputs);
+}
 
 proof KzgProof = PointOpening {
   prover P;

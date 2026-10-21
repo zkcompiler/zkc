@@ -2,4 +2,4 @@ module sample; domain Fr=field("bls12-381.fr");
 #[affine] struct Ticket {}
 fn make()->Ticket{return Ticket{};}
 fn close(t:Ticket)->(){consume t;return ();}
-protocol Run roles(P)()->(){let t @P =make();let done @P =close(t);return();}run Demo=Run;
+protocol Run roles(P)()->(){let t @P =make();let done @P =close(t);return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

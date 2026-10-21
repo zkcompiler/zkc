@@ -1,5 +1,6 @@
 #include "LanguageInterface.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
@@ -18,6 +19,7 @@
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/Entry.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -232,7 +234,7 @@ class Reader {
   }
   bool fields(const json::Array &array, ArrayRef<std::string> leaves,
               unsigned start, unsigned depth, Permissions parent,
-              bool constructible, std::vector<InterfaceField> &result) {
+              std::vector<InterfaceField> &result) {
     unsigned offset = start;
     std::set<std::string> names;
     std::optional<bool> positional;
@@ -268,8 +270,7 @@ class Reader {
           child->leaves.size() > leaves.size() - offset ||
           !llvm::equal(child->leaves,
                        leaves.slice(offset, child->leaves.size())) ||
-          (!child->permissions.includes(parent) ||
-           (constructible && !child->constructible)))
+          !child->permissions.includes(parent))
         return fail("field leaves or permissions differ from parent");
       offset += child->leaves.size();
       result.push_back({name->str(), *at, std::move(child)});
@@ -410,7 +411,8 @@ class Reader {
         return {};
       if (!(result->custody && index == 0) &&
           (!policy->includes(*caps) ||
-           (*constructible &&
+           (*constructible && *kind != K::Record && *kind != K::Tuple &&
+            *kind != K::Array && *kind != K::Variant &&
             !nativeLeaves.at(spelling->str()).constructible))) {
         fail("source permissions exceed native leaf permissions");
         return {};
@@ -471,14 +473,12 @@ class Reader {
           return {};
         }
         InterfaceAlternative arm{name->str(), {}};
-        if (!fields(*payload, expected.payload, 0, depth, *caps, *constructible,
-                    arm.fields))
+        if (!fields(*payload, expected.payload, 0, depth, *caps, arm.fields))
           return {};
         result->alternatives.push_back(std::move(arm));
       }
     } else if (!fs->empty()) {
-      if (!fields(*fs, result->leaves, start, depth, *caps, *constructible,
-                  result->fields))
+      if (!fields(*fs, result->leaves, start, depth, *caps, result->fields))
         return {};
     } else if (result->leaves.size() > (start ? start : 1) ||
                (!start && !result->leaves.empty() &&
@@ -1473,7 +1473,102 @@ class Reader {
     return count == unsigned(proof && proof->target) ||
            fail("native Entry statement omitted");
   }
+  std::shared_ptr<const InterfaceSchema> hostSchema(const json::Value &value) {
+    std::vector<std::string> leaves;
+    auto *obj = value.getAsObject();
+    auto *ls = obj ? obj->getArray("leaves") : nullptr;
+    if (!ls) {
+      fail("missing Host schema leaves");
+      return {};
+    }
+    for (const auto &v : *ls) {
+      auto text = v.getAsString();
+      if (!text) {
+        fail("invalid Host leaf");
+        return {};
+      }
+      leaves.push_back(text->str());
+    }
+    return schema(value, 0, leaves);
+  }
+  bool host(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
+    auto *obj = object(value, {"format", "capture", "original", "toolchain",
+                               "entry", "selection", "functions", "protocols",
+                               "relations", "setups"});
+    if (!obj || obj->getString("format") != "zkc.language-interface/0" ||
+        obj->getString("original") != digest ||
+        obj->getString("toolchain") != compilerToolchainIdentity())
+      return fail("Host interface identity differs");
+    for (StringRef key : {"capture", "original", "toolchain", "entry"})
+      if (!obj->getString(key))
+        return fail("Host interface identity is absent");
+    if (!hash(*obj->getString("capture")))
+      return fail("invalid Host capture identity");
+    for (StringRef key : {"protocols", "relations", "setups"})
+      if (!obj->getArray(key) || !obj->getArray(key)->empty())
+        return fail("Host interface has protocol selection metadata");
+    auto *selection = obj->getObject("selection");
+    if (!selection || selection->size() != 2 ||
+        selection->getString("kind") != "function" ||
+        !selection->getString("function"))
+      return fail("invalid Host selection");
+    auto root = module->getAttrOfType<mlir::StringAttr>("entry.root");
+    if (!root || module->getAttrs().size() != 1 ||
+        root.getValue() != *selection->getString("function"))
+      return fail("Host selected function differs");
+    auto actual = readHostFunctions(module, limits);
+    if (!actual) {
+      failure = actual.takeError();
+      return false;
+    }
+    auto *functions = obj->getArray("functions");
+    if (!functions || functions->size() != actual->size() ||
+        functions->size() > limits.instances)
+      return fail("Host function inventory differs");
+    view.capture = obj->getString("capture")->str();
+    view.original = digest.str();
+    view.toolchain = obj->getString("toolchain")->str();
+    view.entry = obj->getString("entry")->str();
+    view.host = InterfaceHostEntry{root.getValue().str(), {}};
+    std::set<std::string> symbols;
+    for (auto [i, v] : enumerate(*functions)) {
+      auto *sig = object(v, {"symbol", "parameters", "result"});
+      if (!sig || v != *(*actual)[i].getAsObject()->get("signature"))
+        return fail("Host signature differs from actual SSA");
+      auto symbol = text(*sig, "symbol", limits.symbolBytes);
+      auto *parameters = array(*sig, "parameters");
+      if (!symbol || !parameters || !symbols.insert(symbol->str()).second)
+        return fail("invalid Host symbol");
+      InterfaceFunction f;
+      f.symbol = symbol->str();
+      std::set<std::string> names;
+      for (const auto &p : *parameters) {
+        auto *parameter = object(p, {"name", "schema"});
+        if (!parameter)
+          return false;
+        auto name = text(*parameter, "name", limits.identifierBytes);
+        auto type = hostSchema(*parameter->get("schema"));
+        if (!name || !type || !names.insert(name->str()).second)
+          return fail("invalid Host parameter");
+        f.parameters.push_back({name->str(), std::move(type)});
+      }
+      auto result = hostSchema(*sig->get("result"));
+      if (!result)
+        return false;
+      f.result = std::move(result);
+      view.host->functions.push_back(std::move(f));
+    }
+    if (!symbols.count(view.host->function))
+      return fail("Host selected function is absent");
+    if (auto e = checkHostFunctions(*actual, view, module, limits)) {
+      failure = std::move(e);
+      return false;
+    }
+    return true;
+  }
   bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
+    if (value.getAsObject() && value.getAsObject()->get("selection"))
+      return host(value, module, digest);
     auto *obj =
         object(value, {"format", "capture", "original", "toolchain", "entry",
                        "protocol", "protocols", "relations", "job", "setups"});
@@ -1554,6 +1649,13 @@ public:
         formulas(remaining, limits.irBytes) {
     (void)!!failure;
   }
+  Expected<std::shared_ptr<const InterfaceSchema>>
+  runSchema(const json::Value &value) {
+    auto result = hostSchema(value);
+    if (!result)
+      return std::move(failure);
+    return result;
+  }
   Expected<LanguageInterface> run(const json::Value &value,
                                   mlir::ModuleOp module, StringRef digest) {
     if (!read(value, module, digest))
@@ -1562,6 +1664,10 @@ public:
   }
 };
 } // namespace
+Expected<std::shared_ptr<const InterfaceSchema>>
+decodeHostSchema(const json::Value &value, const Limits &limits) {
+  return Reader(limits, {}).runSchema(value);
+}
 Expected<LanguageInterface> decodeInterface(mlir::ModuleOp module,
                                             StringRef digest,
                                             const json::Value &value,

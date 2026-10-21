@@ -1,6 +1,9 @@
+#include "LanguageInterface.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/Entry.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
@@ -451,8 +454,7 @@ public:
     if (!inventory())
       return std::move(failure);
     if (view.capture != entry.project().capture().identity() ||
-        view.entry != entry.entry().qualifiedName ||
-        view.selected >= view.protocols.size() ||
+        view.entry != entry.name() || view.selected >= view.protocols.size() ||
         view.protocols[view.selected].symbol != entry.protocol().symbol)
       return error("source.correspondence",
                    "source capture or selected Entry differs");
@@ -504,6 +506,41 @@ Error compareInterface(const ClosedEntry &entry, const LanguageInterface &view,
                        const Limits &limits) {
   if (auto error = checkLimits(limits))
     return error;
+  if (entry.entry().kind == Declaration::Kind::EntryFunction) {
+    if (!view.host || view.capture != entry.project().capture().identity() ||
+        view.entry != entry.name() ||
+        view.host->function != entry.root().symbol || !view.protocols.empty() ||
+        !view.relations.empty() || view.proof || !view.setups.empty())
+      return error("source.correspondence",
+                   "Host source/interface identity differs");
+    auto plan = planHost(entry, limits);
+    if (!plan)
+      return plan.takeError();
+    if (plan->signatures.size() != view.host->functions.size())
+      return error("source.correspondence", "Host interface closure differs");
+    // The reader independently bound these schemas and signatures to actual
+    // SSA. The canonical source interface fixes nominal fields and permissions.
+    for (auto [i, declared] : enumerate(view.host->functions)) {
+      const auto &expected = *plan->signatures[i].getAsObject();
+      if (expected.getString("symbol") != declared.symbol ||
+          expected.getArray("parameters")->size() !=
+              declared.parameters.size() ||
+          !declared.result ||
+          *expected.get("result") !=
+              detail::encodeInterfaceSchema(*declared.result))
+        return error("source.correspondence", "Host source signature differs");
+      for (auto [j, parameter] : enumerate(declared.parameters)) {
+        const auto &source =
+            *(*expected.getArray("parameters"))[j].getAsObject();
+        if (!parameter.schema || source.getString("name") != parameter.name ||
+            *source.get("schema") !=
+                detail::encodeInterfaceSchema(*parameter.schema))
+          return error("source.correspondence",
+                       "Host source parameter differs");
+      }
+    }
+    return Error::success();
+  }
   return Comparison(entry, view, limits).run();
 }
 } // namespace zkc::language

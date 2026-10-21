@@ -19,9 +19,32 @@ same instruction, frame, failure and work boundaries.
 `Program::check_installation` is an optional deployment preflight. It checks
 Boolean literal support, service interfaces and exact installed operation
 signatures. It transfers no handles or authority to execution. Each instance
-links its own backend, including operations in retained dormant definitions,
-before entering any frame. Linking is read-only: it cannot draw randomness,
+links its own backend before entering any frame. The existing Runner constructors
+retain full-program installation, including dormant definitions.
+`check_local_installation(function, backend)` and
+`check_role_installation(entry, role, backend)` instead resolve a root from the
+admitted Program and check precisely its potential execution closure. The Local
+closure includes every nested region, even an unchosen branch or zero-trip loop;
+the role closure includes its service ports and every Local function called by
+its participant control. Callers cannot supply a binding/reference inventory.
+`Runner::new_for_role_with_ledger` uses role-specific installation; an absent
+ledger still selects this installation scope. Dormant producer-only bindings
+therefore do not prevent an independent verifier role from installing.
+All retained structure is admitted before either installation mode. Linking is read-only: it cannot draw randomness,
 consume resources or validate invocation-dependent attributes early.
+
+`interpreter::LocalRunner` evaluates an admitted Local function independently of
+any participant or protocol. `Program::local_function` exposes its exact ordered
+physical signature. `new`, `new_with_budgets`, and `new_with_ledger` accept native
+backend values, validate the signature and enter a generic `Entry` custody frame
+with those ports and no service interface. The role is empty; the origin's entry
+and instance are the function symbol. A native backend must be configured for
+that exact domain; its ordinary entry policy still applies. `execute` enters a
+Local child frame and runs the existing Local evaluator, including structured
+control, bound operations, stops, custody, metering and return handoffs. It
+returns a stable borrowed terminal `Action::Returned` or `Action::Stopped`.
+There is no participant record or arithmetic interpreter specific to this root.
+Cancellation, abandonment and backend recovery close entered frames in order.
 
 `interpreter::Runner` evaluates one role. An internal VM instance owns its
 backend, linked handles, reached-call preparation, retained-value ledger,
@@ -103,7 +126,8 @@ frame stack. Only its latest outstanding frame proposal may attempt backend
 entry, once. Frames from another instance, superseded proposals and already
 attempted frames cannot enter. Frame custody uses object identity; equal
 instance-local IDs and diagnostic metadata do not establish it.
-Entry frames carry the admitted service interface. Participant loop
+Participant Entry frames carry the admitted service interface; function Entry
+frames have none. Participant loop
 frames inherit that interface; local calls receive their explicit operand view.
 Backend entry atomically checks custody and leaves no child active on refusal.
 Only a successful entry pushes the VM frame. An exit must match the innermost
@@ -146,6 +170,10 @@ A cache hit preserves outer frame hooks, cumulative charges,
 subsequent frame IDs and the normal result handoff. Reuse requires compatible
 policy and sufficient remaining capacity; otherwise the original body executes.
 Private state, resource authority and proof inputs do not become shared state.
+Runners using a shared execution ledger refuse computation preparation with
+`computation-preparation-context`. Its separate retained cache and replay
+receipts do not establish invocation-wide storage/work ownership; these runners
+execute and meter the original Local body.
 
 An alternate evaluator for the same admitted artifact must preserve outputs,
 ordered interactions, refusals and stopped prefixes, resource successors,

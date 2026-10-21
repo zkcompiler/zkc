@@ -158,6 +158,27 @@ pub fn proof_outputs(
         },
     })
 }
+/// Encode only the explicit successful source return, using native wire codecs.
+pub fn function_output(
+    value: &Value,
+    capacity: Capacity,
+    setups: zkc_backends::SetupRegistry,
+) -> Result<Vec<u8>> {
+    #[derive(Serialize)]
+    struct Document<T> {
+        format: &'static str,
+        value: T,
+    }
+    let backend = backend(capacity, setups)?;
+    encode(Document {
+        format: "zkc.entry-outputs/0",
+        value: Item {
+            value,
+            backend: &backend,
+            depth: 1,
+        },
+    })
+}
 struct Named<'a> {
     values: &'a NamedValues,
     backend: &'a NativeBackend,
@@ -252,6 +273,32 @@ mod tests {
     use crate::host::inputs::hex;
     use zkc_backends::Value as Native;
     use zkc_runtime::vm::Identity;
+    #[test]
+    fn function_returns_use_one_value_envelope_and_existing_codecs() {
+        let value = Value::Record(
+            [
+                ("ok".into(), false.into()),
+                ("count".into(), u64::MAX.into()),
+                ("unit".into(), Value::Unit),
+            ]
+            .into(),
+        );
+        let encoded = function_output(&value, Capacity::default(), Default::default()).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(
+            document,
+            serde_json::json!({"format":"zkc.entry-outputs/0",
+            "value":{"ok":false,"count":u64::MAX.to_string(),"unit":null}})
+        );
+        let small = Capacity {
+            wire_bytes: 0,
+            ..Default::default()
+        };
+        assert_eq!(
+            function_output(&value, small, Default::default()).unwrap_err(),
+            "entry-output-encoding"
+        );
+    }
     #[test]
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
         let capacity = Capacity::default();

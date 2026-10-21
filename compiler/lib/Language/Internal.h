@@ -38,6 +38,12 @@ struct SyntaxType {
   std::vector<SyntaxType> arguments;
   std::vector<ArgumentLabel> labels;
 };
+struct EntrySelector {
+  SyntaxType target;
+  /// Whitespace/comments removed, with string tokens preserved verbatim.
+  std::string arguments;
+};
+llvm::Expected<EntrySelector> parseEntrySelector(llvm::StringRef, Work &);
 struct NotationSyntax {
   std::shared_ptr<const NotationDescriptor> descriptor;
   Span span;
@@ -306,6 +312,7 @@ struct Import {
   bool isPublic = false, indexing = false;
 };
 struct SyntaxDeclaration {
+  std::optional<std::string> generated;
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
   /// installed identity or, for an asset domain, the captured asset name.

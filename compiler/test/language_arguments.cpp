@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 using namespace llvm;
 using namespace zkc::language;
@@ -12,7 +13,8 @@ Expected<CheckedProject> check(StringRef source, const Limits &limits = {}) {
   return analyze(*captured, limits).checkedProject();
 }
 void compile(StringRef source) {
-  auto entry = take(closeEntry(take(check(source)), "m::Demo"));
+  auto entry =
+      take(zkc::test::closeProtocolDeployment(take(check(source)), "m::Demo"));
   auto original = take(prepareOriginal(entry));
   for (bool simplify : {false, true})
     take(compileEntry(original, {simplify, false}));
@@ -31,7 +33,8 @@ int main() {
               arguments.str() +
               " ;}"
               "protocol Run roles(P)(x:bool@P,n:index@P)->(r:(bool,index)@P){"
-              "return f(n=n,x=x);}run Demo=Run;");
+              "return f(n=n,x=x);}entry fn Demo(inputs: Run::Inputs) { return "
+              "Run::run(inputs); }");
     });
   for (StringRef arguments :
        {"(missing=x,right=n)", "(left=x,left=x)", "(x,left=x)", "(right=n,x)",
@@ -60,7 +63,7 @@ int main() {
       struct Box<T:Type> {pub value:T}
       fn f(x:Box<T=bool>){return x.value;}
       protocol Run<T:Type+Copy+Drop> roles(P)(x:T@P)->(r:T@P){return x;}
-      run Demo=Run<T=Box<T=bool>>;
+      entry fn Demo(inputs: Run<T=Box<T=bool>>::Inputs) { return Run<T=Box<T=bool>>::run(inputs); }
     )");
     take(check(R"(
       enum Choice<T:Type>{Some(T),None()}
@@ -104,7 +107,7 @@ int main() {
       protocol Run roles(P)(x:bool@P,n:index@P)->(r:(bool,index)@P){
         let unused=concrete_call(n=n,x=x);
         return abstract_call<C=Impl<T=bool>>(n=n,x=x);
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check(R"(
       interface Ops<T:Type>{fn f(x:T)->T effects(stop, opaque);}
@@ -121,7 +124,7 @@ int main() {
       }
       protocol Run roles(P)(x:bool@P,a:Random<F>@P,b:Random<F>@P)->(r:F@P){
         let r=Draw(second=a,flag=x,first=b);return r;
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
   });
   cases.run("named calls preserve participant constraints", [] {
@@ -130,7 +133,7 @@ int main() {
       fn id(x:bool){return x;}
       protocol Run roles(P,V)(a:bool@P,b:bool@V)->(r:bool@P){
         return select(b=b,a=id(a));
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check(R"(
       fn both(a:bool,b:bool){return a==b;}
@@ -168,7 +171,7 @@ int main() {
         let choice=Choice::Some<N=2,T=bool>(value.values);
         return match choice{Some(values)=>{values[0]},None()=>{false}};
       }
-      protocol Run roles(P)(x:bool@P)->(r:bool@P){return f(x=x);}run Demo=Run;
+      protocol Run roles(P)(x:bool@P)->(r:bool@P){return f(x=x);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check("domain F=field(\"bls12-381.fr\");"
                   "protocol Run "
@@ -197,7 +200,7 @@ int main() {
       protocol Run roles(P)(x:F@P)->(r:bool@P)
         spec{target claim=Same<T=F>(in.x,in.x) accept out.r;}
         {return true;}
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     take(check(R"(
       domain F=field("bls12-381.fr");
@@ -215,7 +218,7 @@ int main() {
       }
       protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,r:F@P)
           ->(result:Vector<F>@P){return mapped(r=r,ys=ys,xs=xs);}
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     const std::string declarations = R"(
       domain F=field("bls12-381.fr");

@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 using namespace llvm;
 using namespace zkc::language;
@@ -19,7 +20,8 @@ const Declaration &declaration(const CheckedProject &project, StringRef name) {
   throw std::runtime_error("missing declaration " + name.str());
 }
 void compile(StringRef source) {
-  auto entry = take(closeEntry(take(check(source)), "m::Demo"));
+  auto entry =
+      take(zkc::test::closeProtocolDeployment(take(check(source)), "m::Demo"));
   auto original = take(prepareOriginal(entry));
   for (bool simplify : {false, true})
     take(compileEntry(original, {simplify, false}));
@@ -69,7 +71,7 @@ int main() {
       fn run(x:F){return f(Choice::Some(x));}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return run(x);
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
   });
   cases.run(
@@ -128,7 +130,7 @@ int main() {
         let Token{value}=f(Token{value:b},b);return value;
       }
       protocol Run roles(P)(b:bool@P)->(r:bool@P){return run(b);}
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check(identity + R"(
       #[affine] struct Token {}
@@ -153,7 +155,7 @@ int main() {
       fn choose(x:F,go:bool){return if go{x}else{x+x};}
       protocol Run roles(P)(x:F@P,b:bool@P)->(r:F@P){
         return choose(x,b);
-      } run Demo=Run;
+      } entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check("fn f(x:bool){return g(x);}fn g(x:bool){return f(x);}"),
             "source.cycle");
@@ -225,7 +227,7 @@ int main() {
       fn root<T:Field>(n:index){return kernel<T>("poly.domain_root",n);}
       protocol Run<T:Field> roles(P)(n:index@P)->(r:T@P){
         return root<T>(n);
-      } run Demo=Run<F>;
+      } entry fn Demo(inputs: Run<F>::Inputs) { return Run<F>::run(inputs); }
     )");
   });
   cases.run("natural preconditions are inferred and checked at closure", [] {
@@ -271,7 +273,11 @@ int main() {
       const auto &decl = declaration(project, "m::Parent");
       require(decl.bounds.size() == 1 && decl.bounds[0].inferred,
               "caller missed a specification precondition");
-      refuses(check(source + "run Demo=Parent<0>;"), "source.bound");
+      auto invalid =
+          take(check(source + "entry fn Demo(inputs: Parent<0>::Inputs) { "
+                              "return Parent<0>::run(inputs); }"));
+      refuses(zkc::test::closeProtocolDeployment(invalid, "m::Demo"),
+              "source.bound");
     }
   });
   cases.run("written usage contracts remain complete", [] {
@@ -322,7 +328,7 @@ int main() {
       }
       protocol Run roles(P)(x:bool@P,coins:Random<F>@P)->(r:F@P){
         let alias=coins;let result=Draw(alias,x,coins);return result;
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )";
         auto project = take(check(source));
         const auto &draw = declaration(project, "m::Draw");
@@ -385,7 +391,7 @@ int main() {
       math fn indirect<T:Field,C:Increment<T>>(x:T)->T{return C::add(x);}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return Plus::add<F,G>(x)+indirect<F,Plus<F,G>>(x);
-      }run Demo=Run;
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
   });
   return cases.result();

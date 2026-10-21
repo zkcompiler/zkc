@@ -28,11 +28,17 @@ bool within(ArrayRef<std::string> path, ArrayRef<std::string> parent) {
 } // namespace
 
 bool Checker::constructions() {
+  if (constructionsReady)
+    return true;
   std::vector<unsigned> state(output.declarations.size());
   std::vector<unsigned> height(output.declarations.size());
   std::function<bool(DeclarationId, unsigned)> check;
   check = [&](DeclarationId id, unsigned depth) {
+    if (!signature(id))
+      return false;
     auto &decl = output.declarations[id.index];
+    if (decl.target && !body(*decl.target, 1))
+      return false;
     if (depth > work.limits.typeDepth ||
         height[id.index] > work.limits.typeDepth - depth)
       return types.fail("source.limit", "construction inheritance depth",
@@ -58,7 +64,7 @@ bool Checker::constructions() {
     result.base = syntax.base;
     if (syntax.parent) {
       auto parent = resolve(decl, syntax.parent->name, syntax.parent->span);
-      if (!parent)
+      if (!parent || !signature(*parent))
         return false;
       const auto &base = output.declarations[parent->index];
       if (base.kind != Declaration::Kind::Construction || !base.target ||
@@ -369,7 +375,7 @@ bool Checker::constructions() {
         return types.fail("source.construction",
                           "duplicate construction application", source.span);
       auto selected = resolve(decl, source.construction.name, source.span);
-      if (!selected)
+      if (!selected || !signature(*selected))
         return false;
       const auto &child = output.declarations[selected->index];
       if (child.kind != Declaration::Kind::Construction || !child.target)
@@ -756,6 +762,7 @@ bool Checker::constructions() {
   for (const auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Construction && !check(decl.id, 1))
       return false;
+  constructionsReady = true;
   return true;
 }
 } // namespace zkc::language::detail

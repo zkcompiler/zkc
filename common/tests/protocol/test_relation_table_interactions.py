@@ -11,6 +11,8 @@ independent integer model of `koala-bear.ext8-binomial3`. A synthetic Bundle
 covers the interaction forms the machine does not use. Agreement on these
 carriers is evidence about the kernels, not a reduction or a proof.
 """
+
+from entry import joint_execution, joint_artifact, replace_joint_artifact, replace_joint_assets
 from hashlib import sha256
 from input_files import input_files
 import json
@@ -86,7 +88,7 @@ protocol View roles(Evaluator)
   return (policy = p, counts = c, descriptor = d, subgroup_records = s,
           subgroup_residuals = r, ood_records = o, facts = f);
 }
-run Interactions = View;
+entry fn Interactions(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 # Only the policy: no execution height is involved.
@@ -105,7 +107,7 @@ protocol Policy roles(Evaluator)(unused: index @Evaluator)
   let p @Evaluator = policy_of<FIELD,TABLE,Machine>();
   return (policy = p);
 }
-run Interactions = Policy;
+entry fn Interactions(inputs: Policy::Inputs) { return Policy::run(inputs); }
 '''
 
 
@@ -152,7 +154,7 @@ class Client:
         self.pin = None if refuses else report['package_sha256']
 
     def run(self, name, inputs, refuses=None):
-        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': inputs}})
+        path = input_files(self.journal, name, package=self.package, arguments={'inputs': {'Evaluator': inputs}})
         output = self.directory / f'{name}.outputs.json'
         command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
@@ -161,7 +163,7 @@ class Client:
             assert not output.exists(), 'a refused run published outputs'
             return report
         assert report['status'] == 'executed'
-        values = json.loads(output.read_text())['roles']['Evaluator']
+        values = json.loads(output.read_text())['value']['Evaluator']
         for key in ('descriptor', 'counts', 'policy'):
             if key in values:
                 values[key] = [int(v) for v in values[key]]
@@ -176,7 +178,7 @@ class Client:
 
 
 def stopped(report):
-    (role,) = report['execution']['roles']
+    (role,) = joint_execution(report)['roles']
     state, detail = role['after']
     assert state == 'stopped' and detail['cause'][0] == 'backend'
     return detail['cause'][1]['text']
@@ -392,7 +394,7 @@ def test_base_records_are_the_lifted_extension_records(toolchain, journal, direc
 def test_execution_refuses_heights_indices_and_lengths(
         toolchain, journal, directory, name, change, cause):
     client = Client(toolchain, journal, directory, source(0))
-    report = client.run(name, {**inputs(), **change}, refuses='entry-run-incomplete')
+    report = client.run(name, {**inputs(), **change}, refuses='entry-host-run-failed')
     journal.check(f'{name}: {cause}', stopped(report) == f'refused:{cause}')
 
 
@@ -408,7 +410,7 @@ def test_zero_rows_and_tables_without_interactions(toolchain, journal, directory
     recurrence = json.loads(RECURRENCE.read_text())
     client = Client(toolchain, journal, directory / 'recurrence', source(0), recurrence)
     actual = client.run('recurrence', inputs(8, 0, [0] * 33, 3, points(4, 22), 2),
-                        refuses='entry-run-incomplete')
+                        refuses='entry-host-run-failed')
     journal.check('the recurrence has no interaction 0',
                   stopped(actual) == 'refused:relation-table-interaction-index')
     text = source(0).replace('interaction_of<Base,0,Machine>(height, interaction)',
@@ -424,7 +426,7 @@ def test_zero_rows_and_tables_without_interactions(toolchain, journal, directory
     for name, change in [('short', {'ood': frame(points(4, 21), extension=True)}),
                          ('rows', {'ood_rows': 3})]:
         report = counts.run(name, {**inputs(8, 0, [0] * 33, 3, points(4, 22), 2), **change},
-                            refuses='entry-run-incomplete')
+                            refuses='entry-host-run-failed')
         journal.check(f'{name}: shape', stopped(report) == 'refused:relation-table-point-shape')
 
 
@@ -501,7 +503,7 @@ def test_every_interaction_form_is_described_and_substituted(toolchain, journal,
     for height, cause in [(2, 'bundle-scope-height'), (4, 'bundle-window'),
                           (128, 'bundle-height')]:
         report = client.run(f'window-{height}', inputs(height, 0, ood, 3, ood, 3, extension=True),
-                            refuses='entry-run-incomplete')
+                            refuses='entry-host-run-failed')
         journal.check(f'height {height}: {cause}', stopped(report) == f'refused:{cause}')
 
 
@@ -546,7 +548,7 @@ def test_host_preflight_checks_every_interaction_reference(
     client = Client(toolchain, journal, directory, source(0))
     package = json.loads(client.package.read_text())
     identity = sha256(MACHINE_TEXT.encode()).hexdigest()
-    artifact = json.loads(package['artifact'])
+    artifact = joint_artifact(package)
     candidate = artifact['candidate']
 
     def replace_asset(body):
@@ -554,14 +556,14 @@ def test_host_preflight_checks_every_interaction_reference(
         text = json.dumps(body, separators=(',', ':'))
         replacement = sha256(text.encode()).hexdigest()
         candidate = candidate.replace(identity, replacement)
-        package['assets'] = [[replacement, text]]
+        replace_joint_assets(package, [[replacement, text]])
 
     if mutation == 'missing':
-        package['assets'] = []
+        replace_joint_assets(package, [])
     elif mutation == 'tampered':
         body = json.loads(MACHINE_TEXT)
         body[3][0][0] = 'changed-table-name'
-        package['assets'] = [[identity, json.dumps(body, separators=(',', ':'))]]
+        replace_joint_assets(package, [[identity, json.dumps(body, separators=(',', ':'))]])
     elif mutation.endswith('-table'):
         contract = {'records': 'relation.table_record_points',
                     'policy': 'relation.table_policy'}[mutation.split('-')[0]]
@@ -579,7 +581,7 @@ def test_host_preflight_checks_every_interaction_reference(
         # references do not.
         replace_asset(assorted())
     artifact['candidate'] = candidate
-    package['artifact'] = json.dumps(artifact, separators=(',', ':'))
+    replace_joint_artifact(package, artifact)
     client.repackage(package)
     result = client.run(mutation, inputs(), refuses=code)
     assert result['phase'] == 'admission'
@@ -594,10 +596,10 @@ def test_host_admits_a_policy_reference_without_a_two_adic_height(
     body[3][0][2] = ['fixed', 12]
     text = json.dumps(body, separators=(',', ':'))
     replacement = sha256(text.encode()).hexdigest()
-    artifact = json.loads(package['artifact'])
+    artifact = joint_artifact(package)
     artifact['candidate'] = artifact['candidate'].replace(identity, replacement)
-    package['artifact'] = json.dumps(artifact, separators=(',', ':'))
-    package['assets'] = [[replacement, text]]
+    replace_joint_artifact(package, artifact)
+    replace_joint_assets(package, [[replacement, text]])
     client.repackage(package)
     actual = client.run('fixed-twelve', {'unused': 0})
     journal.check('the declared fixed height', actual['policy'] == [0, 0, 12, 12, 0])

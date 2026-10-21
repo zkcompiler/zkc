@@ -40,11 +40,7 @@ impl ProofInputs {
         if text(&row[3])?.len() > CONTEXT_LIMIT * 2 {
             return Err("native-proof-context-limit".into());
         }
-        let role = if producer {
-            host.entry.producer()
-        } else {
-            host.entry.validator()
-        };
+        let role = host.selected_role(producer)?;
         let mapping = &host.maps[&role.role];
         let public_rows = list(&row[1])?;
         let data_rows = list(&row[2])?;
@@ -63,7 +59,7 @@ impl ProofInputs {
             .zip(&host.public)
             .map(|(row, port)| {
                 let row = array(row, 3)?;
-                if text(&row[0])? != host.entry.validator().role || index(&row[1])? != port.original
+                if text(&row[0])? != host.entry.validator_role() || index(&row[1])? != port.original
                 {
                     return Err("native-proof-public-inputs".into());
                 }
@@ -135,6 +131,8 @@ pub(super) struct Prepared {
     pub planned: Vec<Operand>,
     pub root: Vec<u8>,
     pub binding: [u8; 32],
+    pub loading: Option<zkc_runtime::vm::LiveReservation>,
+    pub encoding: Vec<zkc_runtime::vm::LiveReservation>,
 }
 pub(super) fn check_budget(value: u64) -> Result<()> {
     if value > RESOURCE_BUDGET_LIMIT {
@@ -174,6 +172,14 @@ pub(super) fn prepare(
     // bound compound traversal in shared Admission; foreign capabilities cannot
     // enter through an immutable data constructor.
     for (input, (_, ty)) in request.inputs.iter().zip(&role.inputs) {
+        if host.retained_inputs
+            && !zkc_backends::has_native_wire(ty)
+            && ty.is_duplicable()
+            && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
+        {
+            crate::host::admission::check_retained_data(ty, input, host.capacity)?;
+            continue;
+        }
         match (input_kind(ty)?, input) {
             ("wire", input) => crate::host::admission::check_native_data(ty, input, host.capacity)?,
             ("rng" | "nonce", InputValue::Resource { budget }) => check_budget(*budget)?,
@@ -188,7 +194,9 @@ pub(super) fn prepare(
         }
     }
     let policy = host.capacity.backend();
-    let mut admission = Admission::new(host.capacity.loading())?;
+    let mut admission = Admission::new(host.capacity.loading())?
+        .with_shared_ledger(host.shared_ledger.clone())
+        .with_retained_inputs(host.retained_inputs);
     for (input, port) in request.public.iter().zip(&host.public) {
         if port.logical.kind() == Type::VerifierKey {
             let InputValue::Wire(bytes) = input else {
@@ -201,14 +209,19 @@ pub(super) fn prepare(
             crate::host::admission::check_native_data(&ty, input, host.capacity)?;
         }
     }
+    let _root_tree = crate::host::shared::allocation(
+        host.shared_ledger.as_ref(),
+        host.binding_metadata_bytes
+            .saturating_add(request.context.len() * 2),
+    )?;
     let root = json!([
         "zkc.native-proof-binding/0",
         "sha256",
         host.descriptor[2],
         host.source,
         host.entry.entry(),
-        host.entry.producer().role,
-        host.entry.validator().role,
+        host.entry.producer_role(),
+        host.entry.validator_role(),
         host.descriptor,
         [],
         hex(&request.context)
@@ -279,7 +292,8 @@ pub(super) fn prepare(
         .with_relation_assets(host.relation_assets.clone())
         .map_err(|e| e.to_string())?
         .with_ring_work_limit(host.ring_work_limit)
-        .with_external_work_limit(host.external_work_limit);
+        .with_external_work_limit(host.external_work_limit)
+        .with_sequence_work_limit(host.sequence_work_limit);
     let selected = |original| {
         host.setups
             .inputs
@@ -387,7 +401,12 @@ pub(super) fn prepare(
             budget: request.transcript_budget,
         })?;
     }
-    let loaded = admission.load(&backend, &policy)?;
+    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
+        let (values, guard) = admission.load_shared(&backend, &policy, ledger, 0)?;
+        (values, Some(guard))
+    } else {
+        (admission.load(&backend, &policy)?, None)
+    };
     let mut values = entry_values(&planned, &loaded);
     if host.entry.transcript().is_some() {
         values.push(None);
@@ -404,7 +423,14 @@ pub(super) fn prepare(
     // Only public data needs canonical serialization. Private native inputs stay
     // in process. Wire inputs have already passed the canonical codec loader.
     let mut public_bytes = BTreeMap::new();
+    let mut encoding_retained = Vec::new();
     for (port, input) in host.public.iter().zip(&request.public) {
+        if input.wire_bytes().is_none() {
+            encoding_retained.extend(crate::host::shared::allocation(
+                host.shared_ledger.as_ref(),
+                crate::host::shared::wire_bound(&loaded[public_ids[&port.original]]),
+            )?);
+        }
         let bytes = canonical(&backend, &loaded[public_ids[&port.original]], input)?;
         host.capacity.check_wire(bytes.len())?;
         // Account for the complete row before retaining its canonical bytes.
@@ -412,7 +438,7 @@ pub(super) fn prepare(
         let original = port.original.to_string();
         let spelling = port.logical.spelling();
         let row = [
-            logical::Tree::Text(&host.entry.validator().role),
+            logical::Tree::Text(host.entry.validator_role()),
             logical::Tree::Text(&original),
             logical::Tree::Text(&spelling),
             logical::Tree::Hex(&bytes),
@@ -426,6 +452,14 @@ pub(super) fn prepare(
         public_bytes.insert(port.original, bytes);
     }
     for (original, id, input) in shared {
+        let _live = if input.wire_bytes().is_none() {
+            crate::host::shared::allocation(
+                host.shared_ledger.as_ref(),
+                crate::host::shared::wire_bound(&loaded[id]),
+            )?
+        } else {
+            None
+        };
         if canonical(&backend, &loaded[id], input)? != public_bytes[&original] {
             return Err("native-proof-shared-public-input".into());
         }
@@ -441,7 +475,7 @@ pub(super) fn prepare(
         .zip(&labels)
         .map(|(port, (index, ty))| {
             [
-                logical::Tree::Text(&host.entry.validator().role),
+                logical::Tree::Text(host.entry.validator_role()),
                 logical::Tree::Text(index),
                 logical::Tree::Text(ty),
                 logical::Tree::Hex(&public_bytes[&port.original]),
@@ -463,6 +497,22 @@ pub(super) fn prepare(
     if retain_root {
         host.capacity.check_wire(encoding.size())?;
     }
+    encoding_retained.extend(crate::host::shared::allocation(
+        host.shared_ledger.as_ref(),
+        if retain_root { encoding.size() } else { 0 },
+    )?);
+    if let Some(ledger) = &host.shared_ledger {
+        ledger
+            .charge(
+                zkc_runtime::vm::WorkBudget {
+                    instructions: 0,
+                    iterations: 0,
+                    logical_bytes: encoding.size() as u64,
+                },
+                0,
+            )
+            .map_err(|e| e.to_string())?;
+    }
     let (root, binding) = encode_binding(&encoding, retain_root)?;
     Ok(Prepared {
         backend,
@@ -470,6 +520,8 @@ pub(super) fn prepare(
         planned,
         root,
         binding,
+        loading,
+        encoding: encoding_retained,
     })
 }
 

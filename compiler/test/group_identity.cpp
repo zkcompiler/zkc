@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
@@ -43,10 +44,11 @@ int main() {
                        : "{return intrinsic<T>(\"curve.identity\");}") +
             R"(
           protocol Run roles(P,V)()->(z:G@(P,V)){return(z=zero<G>());}
-          run Demo=Run;
+          entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
         )";
-        auto original = take(language::prepareOriginal(
-            take(language::closeEntry(take(check(source)), "sample::Demo"))));
+        auto original = take(
+            language::prepareOriginal(take(zkc::test::closeProtocolDeployment(
+                take(check(source)), "sample::Demo"))));
         require(original.bytes().contains("algebra.group_identity"),
                 "source identity did not reach total Algebra");
         for (bool simplify : {false, true})
@@ -118,11 +120,12 @@ int main() {
     }
     require(found, "missing native contract");
   });
-  auto original = take(language::prepareOriginal(
-      take(language::closeEntry(take(check(R"(domain G=group("bn254.g1");
+  auto original =
+      take(language::prepareOriginal(take(zkc::test::closeProtocolDeployment(
+          take(check(R"(domain G=group("bn254.g1");
         math fn zero()->G{return intrinsic<G>("curve.identity");}
-        protocol Run roles(P)()->(z:G@P){return(z=zero());}run Demo=Run;)")),
-                                "sample::Demo"))));
+        protocol Run roles(P)()->(z:G@P){return(z=zero());}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })")),
+          "sample::Demo"))));
   auto projected = parseSourceString<ModuleOp>(original.bytes(), &context);
   require(bool(projected), "mutation source");
   run(*projected, protocol::createProjectProtocolPass(false));

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, records
 
 commands = Commands(records())
@@ -57,9 +58,11 @@ def stopped(reason, site, replies=(), extra=()):
 
 def frontend(path):
     flags = ['--source-format=zkc', '--entry=sample::Demo', f'--module=sample={path}']
-    source = commands.run([compiler, 'language-emit', *flags], keep=path.stem + '.mlir')
-    interface = json.loads(commands.run([compiler, 'language-interface', *flags],
-                                        keep=path.stem + '-interface.json'))
+    child = compile_run_package(commands, *flags)
+    source = child['original']
+    interface = json.loads(child['interface'])
+    (commands.directory / (path.stem + '.mlir')).write_text(source)
+    (commands.directory / (path.stem + '-interface.json')).write_text(child['interface'])
     return source, interface['protocol']
 
 

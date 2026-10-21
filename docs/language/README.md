@@ -77,7 +77,7 @@ zkc compile example::Proof --output=proof.zkpkg
 ```
 
 `check` checks every definition, including generic library bodies. Its `entries`
-array lists canonical names and `run`/`proof` kinds. Selecting an Entry also
+array lists canonical names and `function`/`proof` kinds. Selecting an Entry also
 checks its closure, Protocol IR and source correspondence. A definitions check
 alone does not establish that every specialization can compile. Neither form
 executes a protocol. `scope` distinguishes `definitions` from `entry`.
@@ -88,6 +88,10 @@ A selector is a qualified name or a unique short name across all captured
 modules. `compile` can omit it when exactly one Entry exists. Aliases count as
 separate candidates. Ambiguity is an error with candidate names; the compiler
 never prefers one execution kind or module.
+Generic protocols take closed source arguments, for example
+`zkc compile 'Schnorr<G>'`. The shell quotes protect the brackets. See
+[default protocol runs](entries.md#default-protocol-runs) for argument resolution
+and discovery rules.
 
 The CLI discovers the nearest `zkc.toml` in the current directory or its ancestors.
 An invalid nearer manifest fails instead of selecting a parent. `--project=FILE`
@@ -96,8 +100,10 @@ options disable discovery and cannot be combined with `--project`. SDKs use
 explicit captures. The manifest chooses no Entry, backend, transcript or setup
 policy. See [relation inputs](relations.md) for asset formats.
 
-Project compilation defaults to `build/zkc/<qualified.name>.zkpkg` beside the
-manifest. It creates that directory and replaces prior output at the exact
+Project compilation defaults to `build/zkc/<entry-stem>.zkpkg` beside the
+manifest. Named Entries use their qualified name with dots in place of `::`;
+generic runs append the full SHA-256 of their reported selection name to the
+qualified protocol stem. Compilation creates that directory and replaces prior output at the exact
 filename, including obsolete or damaged packages. Input aliases and filenames
 differing only in case are refused. Use `--output` for another filename; explicit
 module mode requires it. Explicit command-line paths are relative to the invocation directory.

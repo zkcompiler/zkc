@@ -291,6 +291,14 @@ struct ProtocolApplication {
   std::vector<unsigned> roles;
   std::vector<ServiceId> services;
 };
+/// A generated Host operation. Authority is supplied by the admitting Host,
+/// separately from these ordinary data operands.
+struct HostInvocation {
+  enum class Kind { Run, Prove, Verify } kind;
+  DeclarationId target;
+  std::vector<Type> arguments;
+  std::vector<ValueId> operands;
+};
 struct ServiceQuery {
   ServiceId service;
   /// The static UniformIndex domain size of an `index` query; absent for
@@ -428,7 +436,7 @@ struct Operation {
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
                ProtocolCompletion, ScopedInvoke, FiniteApplication,
-               FiniteComputation>
+               FiniteComputation, HostInvocation>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;
@@ -440,6 +448,7 @@ struct Operation {
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
+  enum class Stage { Computation, Host } stage = Stage::Computation;
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
   std::vector<DomainBinding> domainBindings;
@@ -560,7 +569,7 @@ struct SetupSlot {
   std::vector<InputSelector> inputs;
   Span span;
 };
-enum class EntryKind { Run, Proof };
+enum class EntryKind { Run, Proof, Function };
 struct RunEntry {};
 /// A checked association of ordinary Local code with a protocol occurrence.
 struct ConstructionRule {
@@ -643,6 +652,7 @@ struct Declaration {
     Protocol,
     Construction,
     Entry,
+    EntryFunction,
     Alias,
     Record,
     Variant,
@@ -651,6 +661,17 @@ struct Declaration {
     Associated,
     Relation
   } kind;
+  struct Generated {
+    DeclarationId target;
+    std::string member;
+    bool constructible = true;
+    std::optional<HostInvocation::Kind> operation = {};
+    /// Field order maps back to the target protocol's logical port roster.
+    std::vector<InputSelector> ports = {};
+    std::optional<unsigned> role = {};
+    std::string identity = {};
+  };
+  std::optional<Generated> generated;
   DeclarationId id;
   /// Cached owning module, derived from the declaration tree; self for modules.
   DeclarationId module;
@@ -713,7 +734,16 @@ struct Declaration {
   std::optional<protocol::ProofFormat> proofFormat;
   std::optional<ConstructionDefinition> construction;
   std::variant<RunEntry, ProofEntry> configuration;
+  /// A protocol's generated run function is selected by the protocol name.
+  llvm::StringRef entryName() const {
+    llvm::StringRef name = qualifiedName;
+    return generated && generated->operation == HostInvocation::Kind::Run
+               ? name.drop_back(5)
+               : name;
+  }
   EntryKind entryKind() const {
+    if (kind == Kind::EntryFunction)
+      return EntryKind::Function;
     return std::holds_alternative<ProofEntry>(configuration) ? EntryKind::Proof
                                                              : EntryKind::Run;
   }
@@ -743,12 +773,28 @@ Analysis analyze(const CapturedProject &, const Limits & = {});
 /// Select from checked declarations: exact qualified name, unique short name,
 /// or the sole eligible Entry when the selector is empty. An explicit name is
 /// resolved before checking its kind, so filtering cannot hide ambiguity.
+/// Generic protocol selectors return their generated run declaration; use
+/// resolveEntry to retain their checked static arguments.
 llvm::Expected<DeclarationId> selectEntry(const CheckedProject &,
                                           llvm::StringRef, const Limits & = {},
                                           std::optional<EntryKind> = {});
+struct EntrySelection {
+  DeclarationId declaration;
+  std::vector<Type> arguments;
+  std::string name;
+};
+llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
+                                            llvm::StringRef,
+                                            const Limits & = {},
+                                            std::optional<EntryKind> = {});
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {},
                                        std::optional<EntryKind> = {});
+/// Operation policy is used by generated child deployments; verifier ingress
+/// excludes producer-only ports while retaining the checked comparison graph.
+llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
+                                       const Limits &, std::optional<EntryKind>,
+                                       std::optional<HostInvocation::Kind>);
 
 class CapturedProject {
 public:
@@ -801,6 +847,10 @@ private:
                    const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
+  friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
+                                                     llvm::StringRef,
+                                                     const Limits &,
+                                                     std::optional<EntryKind>);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
@@ -817,11 +867,19 @@ private:
   std::shared_ptr<const detail::AnalysisStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);
 };
+struct ClosedInvocation;
 class ClosedEntry {
 public:
   const CheckedProject &project() const { return checked; }
   const Declaration &entry() const;
+  /// Selected public name, including supplied static argument syntax.
+  llvm::StringRef name() const;
+  const Declaration &root() const;
+  const Declaration *protocolOrNull() const;
   const Declaration &protocol() const;
+  llvm::ArrayRef<ClosedInvocation> invocations() const;
+  /// Child policy chooses executable construction dependencies downstream.
+  std::optional<HostInvocation::Kind> invocationKind() const;
   /// Canonical evaluator assets required by reachable closed operations.
   /// Sorted and deduplicated by definition identity.
   llvm::ArrayRef<Asset> assets() const;
@@ -838,9 +896,21 @@ private:
   CheckedProject checked;
   DeclarationId selected;
   std::shared_ptr<const detail::ClosedStorage> storage;
-  friend llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &,
-                                                llvm::StringRef, const Limits &,
-                                                std::optional<EntryKind>);
+  friend llvm::Expected<ClosedEntry> closeInvocation(const CheckedProject &,
+                                                     const HostInvocation &,
+                                                     const Limits &);
+  friend llvm::Expected<ClosedEntry>
+  closeEntry(const CheckedProject &, llvm::StringRef, const Limits &,
+             std::optional<EntryKind>, std::optional<HostInvocation::Kind>);
+};
+llvm::Expected<ClosedEntry> closeInvocation(const CheckedProject &,
+                                            const HostInvocation &,
+                                            const Limits & = {});
+struct ClosedInvocation {
+  HostInvocation::Kind kind;
+  DeclarationId target;
+  std::vector<Type> arguments;
+  std::shared_ptr<const ClosedEntry> deployment;
 };
 llvm::Expected<std::string> encodeSymbol(llvm::StringRef qualifiedName,
                                          const Limits & = {});

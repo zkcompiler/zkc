@@ -49,6 +49,10 @@ def check_output(output, expected):
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
     ("crates/zkc-tools/build.rs", False, True),
+    ("python/src/zkc/client.py", False, True),
+    ("python/src/zkc/client.py", True, True),
+    ("python/pyproject.toml", False, True),
+    ("python/README.md", False, False),
     ("common/unicode/README.md", False, False),
     ("docs/README.md", False, False),
 ])

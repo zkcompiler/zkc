@@ -70,12 +70,10 @@
           "ingress": "prepared",
           "kind": "run",
           "package": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/entry.zkpkg",
-          "roles": {
-            "P": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/0-P.json"
-          },
-          "sha256": "23a56c3ef27366433a4f77bd66c1a25243aa6b0aaf975d474256a692d418197f"
+          "sha256": "23a56c3ef27366433a4f77bd66c1a25243aa6b0aaf975d474256a692d418197f",
+          "arguments": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/0-P.json"
         },
-        "boundary": "admitted_run_call",
+        "boundary": "admitted_function_call",
         "case": "host-vector-kb-length-65536",
         "executable": "/benchmark-fixtures/source/target/native/release/zkc-benchmarks",
         "implementation": "zkc",
@@ -563,7 +561,7 @@
         "validated_proofs": 0,
         "worker": {
           "admission_ns": 493086,
-          "boundary": "admitted_run_call",
+          "boundary": "admitted_function_call",
           "build": {
             "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
             "debug_assertions": false,

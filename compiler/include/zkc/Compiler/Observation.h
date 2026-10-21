@@ -17,6 +17,21 @@ class CompilationObservation {
   std::unique_ptr<Storage> storage;
 
 public:
+  /// Identify nested application calculations and child deployments in one
+  /// bounded journal. The scope never changes executable identity or policy.
+  class Scope {
+    CompilationObservation *owner = nullptr;
+    friend class CompilationObservation;
+    Scope(CompilationObservation &, llvm::StringRef);
+
+  public:
+    Scope() = default;
+    Scope(const Scope &) = delete;
+    Scope &operator=(const Scope &) = delete;
+    ~Scope();
+  };
+  Scope scope(llvm::StringRef);
+  llvm::json::Value unit() const;
   explicit CompilationObservation(std::vector<std::string> dumps = {});
   ~CompilationObservation();
   void phase(llvm::StringRef, mlir::ModuleOp);

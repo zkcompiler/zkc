@@ -95,7 +95,7 @@ fn identifier(value: &Json) -> Result<&str> {
     }
     Ok(value)
 }
-fn valid_identifier(value: &str) -> bool {
+pub(super) fn valid_identifier(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value
@@ -237,6 +237,13 @@ fn check_declaration(
     ty: &PhysicalType,
     value: &InputValue,
 ) -> Result<()> {
+    if host.retained_inputs
+        && !zkc_backends::has_native_wire(ty)
+        && ty.is_duplicable()
+        && !matches!(ty.kind(), Type::VerifierKey | Type::ProverKey)
+    {
+        return crate::host::admission::check_retained_data(ty, value, host.limits.capacity);
+    }
     match (kind(ty), value) {
         ("unsupported-transcript", _) => Err("bundle-transcript-input-unsupported".into()),
         ("rng" | "nonce", InputValue::Resource { budget }) => checked_budget(*budget).map(|_| ()),
@@ -310,7 +317,9 @@ pub(super) fn prepare<'a>(
         }
     }
     let policy = host.limits.capacity.backend();
-    let mut admission = Admission::new(host.limits.capacity.loading())?;
+    let mut admission = Admission::new(host.limits.capacity.loading())?
+        .with_shared_ledger(host.shared_ledger.clone())
+        .with_retained_inputs(host.retained_inputs);
     // Charge setup scans before importing even receive-only material.
     for bytes in request.setups.values() {
         host.limits.capacity.check_wire(bytes.len())?;
@@ -373,7 +382,8 @@ pub(super) fn prepare<'a>(
         .with_relation_assets(host.relation_assets.clone())
         .map_err(|e| e.to_string())?
         .with_ring_work_limit(host.ring_work_limit)
-        .with_external_work_limit(host.limits.external_work);
+        .with_external_work_limit(host.limits.external_work)
+        .with_sequence_work_limit(host.sequence_work_limit);
         let mut pending = Vec::new();
         for (i, (value, (_, ty))) in row.inputs.iter().zip(&role.entry.inputs).enumerate() {
             let selected = host
@@ -425,7 +435,12 @@ pub(super) fn prepare<'a>(
     // Charge the entire invocation, not a separate resettable budget per role.
     // Key files are frozen and imported only after every declaration is checked.
     // All roles share this native codec policy and authorized key registry.
-    let loaded = admission.load(&roles[0].1, &policy)?;
+    let (loaded, loading) = if let Some(ledger) = &host.shared_ledger {
+        let (values, guard) = admission.load_shared(&roles[0].1, &policy, ledger, 0)?;
+        (values, Some(guard))
+    } else {
+        (admission.load(&roles[0].1, &policy)?, None)
+    };
     let roles = roles
         .into_iter()
         .map(
@@ -447,5 +462,6 @@ pub(super) fn prepare<'a>(
         session: session.to_owned(),
         roles,
         loaded,
+        loading,
     })
 }

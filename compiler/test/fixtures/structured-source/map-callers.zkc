@@ -63,8 +63,8 @@ protocol RealizeValues roles(P)
   return (result = result);
 }
 
-run FirstEntry = First;
-run PrefixEntry = Prefix;
-run LinearCombinationEntry = LinearCombination;
-run ConstantRowsEntry = ConstantRows;
-run RealizeValuesEntry = RealizeValues;
+entry fn FirstEntry(inputs: First::Inputs) { return First::run(inputs); }
+entry fn PrefixEntry(inputs: Prefix::Inputs) { return Prefix::run(inputs); }
+entry fn LinearCombinationEntry(inputs: LinearCombination::Inputs) { return LinearCombination::run(inputs); }
+entry fn ConstantRowsEntry(inputs: ConstantRows::Inputs) { return ConstantRows::run(inputs); }
+entry fn RealizeValuesEntry(inputs: RealizeValues::Inputs) { return RealizeValues::run(inputs); }

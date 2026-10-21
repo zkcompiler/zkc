@@ -39,6 +39,8 @@ pub(crate) fn check_input(value: &Value, key: &zkc_arkworks::VerifierKey) -> Res
 /// change an authenticated cache entry. This context ends with one invocation.
 pub(crate) struct VerifierKeys {
     bounds: zkc_arkworks::Bounds,
+    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    retained: Vec<zkc_runtime::vm::LiveReservation>,
     keys: std::collections::BTreeMap<[u8; 32], Vec<ImportedVerifierKey>>,
 }
 struct ImportedVerifierKey {
@@ -49,8 +51,13 @@ impl VerifierKeys {
     pub fn new(bounds: zkc_arkworks::Bounds) -> Self {
         Self {
             bounds,
+            ledger: None,
+            retained: Vec::new(),
             keys: Default::default(),
         }
+    }
+    pub(crate) fn set_ledger(&mut self, ledger: Option<zkc_runtime::vm::ExecutionLedger>) {
+        self.ledger = ledger;
     }
     pub(crate) fn check_bounds(&self, bounds: zkc_arkworks::Bounds) -> Result<()> {
         if self.bounds != bounds {
@@ -71,6 +78,15 @@ impl VerifierKeys {
         {
             return Ok(imported.key.clone());
         }
+        // Fixed compressed points expand by less than this factor, including
+        // both decoded key material and the retained canonical snapshot.
+        let bound = bytes
+            .len()
+            .checked_mul(16)
+            .and_then(|n| n.checked_add(4096))
+            .ok_or("native-setup-capacity")?;
+        let guard = crate::host::shared::allocation(self.ledger.as_ref(), bound)?;
+        self.retained.extend(guard);
         let key = zkc_arkworks::VerifierKey::from_bytes(bytes, pin, &self.bounds)
             .map_err(|e| e.to_string())?;
         if key.to_bytes(&self.bounds).map_err(|e| e.to_string())? != bytes {

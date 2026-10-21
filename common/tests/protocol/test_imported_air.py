@@ -7,6 +7,9 @@ committed fixtures and never build the optional adapter; its fixture check
 regenerates the same files from the pinned upstream AIR.
 """
 
+from entry import (joint_execution, joint_artifact, replace_joint_artifact,
+                   replace_joint_assets, joint_package, replace_joint_package)
+
 from input_files import input_files
 import json
 from hashlib import sha256
@@ -83,7 +86,7 @@ class Client:
         self.pin = report['package_sha256']
 
     def run(self, name, request, refuses=None):
-        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': request}})
+        path = input_files(self.journal, name, package=self.package, arguments={'inputs': {'Evaluator': request}})
         output = self.directory / f'{name}.outputs.json'
         command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
@@ -92,12 +95,12 @@ class Client:
             assert not output.exists(), 'a refused run published outputs'
             return report
         assert report['status'] == 'executed'
-        return json.loads(output.read_text())['roles']['Evaluator']
+        return json.loads(output.read_text())['value']['Evaluator']
 
 
 def stopped(report):
     """The backend cause that stopped the only participant."""
-    (role,) = report['execution']['roles']
+    (role,) = joint_execution(report)['roles']
     state, detail = role['after']
     assert state == 'stopped' and detail['cause'][0] == 'backend'
     return detail['cause'][1]['text']
@@ -105,7 +108,7 @@ def stopped(report):
 
 def test_source_binds_the_exported_arena(toolchain, journal, directory):
     client = Client(toolchain, journal, directory, 'RowResiduals')
-    package = json.loads(client.package.read_text())
+    package = joint_package(json.loads(client.package.read_text()))
     arena = (RECURRENCE / 'arena.json').read_bytes()
     instance = json.loads((RECURRENCE / 'instance.json').read_text())
     assert [EXPORT['arena_sha256'], arena.decode()] in package['assets']
@@ -182,7 +185,7 @@ def test_wrong_shapes_refuse_before_evaluation(toolchain, journal, directory):
                          ('row-count', {'rows': inputs['rows'] - 1})]:
         changed = json.loads(json.dumps(request))
         changed.update(change)
-        report = rows.run(f'rows-{name}', changed, refuses='entry-run-incomplete')
+        report = rows.run(f'rows-{name}', changed, refuses='entry-host-run-failed')
         journal.check(f'rows {name}: ring-input-shape', stopped(report) == 'refused:ring-input-shape')
 
     polynomials = Client(toolchain, journal, directory, 'CoefficientResiduals')
@@ -197,7 +200,7 @@ def test_wrong_shapes_refuse_before_evaluation(toolchain, journal, directory):
              'refused:ring-coefficient-width')]:
         changed = json.loads(json.dumps(request))
         changed.update(change)
-        report = polynomials.run(f'coefficients-{name}', changed, refuses='entry-run-incomplete')
+        report = polynomials.run(f'coefficients-{name}', changed, refuses='entry-host-run-failed')
         journal.check(f'coefficients {name}: {cause}', stopped(report) == cause)
 
     points = Client(toolchain, journal, directory, 'PointResiduals')
@@ -206,7 +209,7 @@ def test_wrong_shapes_refuse_before_evaluation(toolchain, journal, directory):
     changed = json.loads(json.dumps(request))
     changed['assignments'] = frame(
         unframe(inputs['assignments'], extension=True)[:-1], extension=True)
-    report = points.run('points-short', changed, refuses='entry-run-incomplete')
+    report = points.run('points-short', changed, refuses='entry-host-run-failed')
     journal.check('points short: ring-input-shape', stopped(report) == 'refused:ring-input-shape')
     # Extension coordinates require the exact native degree.
     changed['assignments'] = [['1', '0']]
@@ -222,7 +225,8 @@ def test_arena_authority_comes_from_the_package(toolchain, journal, directory):
         ('stale', [[EXPORT['arena_sha256'],
                     (FIXTURES / 'counter-guarded/arena.json').read_text()]], 'ring-asset-identity'),
     ]:
-        package = {**original, 'assets': assets}
+        package = json.loads(json.dumps(original))
+        replace_joint_assets(package, assets)
         text = json.dumps(package, separators=(',', ':'))
         client.package.write_text(text)
         client.pin = sha256(text.encode()).hexdigest()
@@ -231,7 +235,7 @@ def test_arena_authority_comes_from_the_package(toolchain, journal, directory):
     changed = json.loads(json.dumps(ARENA))
     constant = next(node for node in changed[2] if node[0] == 'constant')
     constant[2] = str(int(constant[2]) + 1)
-    original['assets'] = [[EXPORT['arena_sha256'], json.dumps(changed, separators=(',', ':'))]]
+    replace_joint_assets(original, [[EXPORT['arena_sha256'], json.dumps(changed, separators=(',', ':'))]])
     text = json.dumps(original, separators=(',', ':'))
     client.package.write_text(text)
     client.pin = sha256(text.encode()).hexdigest()
@@ -294,7 +298,7 @@ def test_trace_view_refuses_fabricated_assignments_and_wrong_shapes(toolchain, j
     for name, port, value, cause in cases:
         changed = json.loads(json.dumps(request))
         changed[port] = value
-        report = client.run(name, changed, refuses='entry-run-incomplete')
+        report = client.run(name, changed, refuses='entry-host-run-failed')
         assert stopped(report) == f'refused:{cause}'
 
 
@@ -365,28 +369,34 @@ def test_host_independently_checks_packaged_bundle_and_references(
     client = Client(toolchain, journal, directory, 'TraceResiduals')
     package = json.loads(client.package.read_text())
     if mutation == 'missing':
-        package['assets'] = []
+        replace_joint_assets(package, [])
     elif mutation == 'noncanonical':
-        package['assets'][0][1] += ' '
+        assets = joint_package(package)['assets']
+        assets[0][1] += ' '
+        replace_joint_assets(package, assets)
     elif mutation == 'identity':
-        body = json.loads(package['assets'][0][1])
+        assets = joint_package(package)['assets']
+        body = json.loads(assets[0][1])
         body[3][0][0] = 'changed-table-name'
-        package['assets'][0][1] = json.dumps(body, separators=(',', ':'))
+        assets[0][1] = json.dumps(body, separators=(',', ':'))
+        replace_joint_assets(package, assets)
     elif mutation == 'table':
-        artifact = json.loads(package['artifact'])
+        artifact = joint_artifact(package)
         program = json.loads(artifact['candidate'])
         for binding in program[1]:
             if binding[1] == 'relation.table_rows':
                 binding[2][1] = '1'
         artifact['candidate'] = json.dumps(program, separators=(',', ':'))
-        package['artifact'] = json.dumps(artifact, separators=(',', ':'))
+        replace_joint_artifact(package, artifact)
     else:
-        interface = json.loads(package['interface'])
+        child = joint_package(package)
+        interface = json.loads(child['interface'])
         proof_client = Client(toolchain, journal, directory, 'DisclosedTraceProof')
         proof_package = json.loads(proof_client.package.read_text())
         interface['relations'] = json.loads(proof_package['interface'])['relations']
         interface['relations'][0]['inputs'][0]['purpose'] = 'parameter'
-        package['interface'] = json.dumps(interface, separators=(',', ':'))
+        child['interface'] = json.dumps(interface, separators=(',', ':'))
+        replace_joint_package(package, child)
     text = json.dumps(package, separators=(',', ':'))
     client.package.write_text(text)
     client.pin = sha256(text.encode()).hexdigest()
@@ -414,7 +424,7 @@ protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
   let out @V = evaluate(w, c, p, h);
   return (out = out);
 }}
-run Run = Check;
+entry fn Run(inputs: Check::Inputs) {{ return Check::run(inputs); }}
 ''')
     journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=reference={source}',

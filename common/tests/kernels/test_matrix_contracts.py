@@ -49,7 +49,7 @@ fn work(m:Matrix<F>,v:Vector<F>,selected:index)->F {{
 protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,selected:index@P)->(result:F@P) {{
   return work(m,v,selected);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     row = contract == 'row_dot'
@@ -80,11 +80,11 @@ run Demo=Run;
 
     for selected in [4 if row else 5, 2**32, 2**64 - 1]:
         report = entry.run(f'bad-index-{selected}', inputs | {'selected': str(selected)},
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'matrix-index' in str(report)
     for selected in ['0', str(2**64 - 1)]:
         report = entry.run(f'bad-shape-{selected}', inputs | {'selected': selected, 'v': []},
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'matrix-shape' in str(report)
 
     rows, columns = (65536, 0) if row else (0, 65536)
@@ -96,7 +96,7 @@ run Demo=Run;
                           'v': [encode(coefficient(1)) for _ in range(columns if row else rows)],
                           'selected': '0'}
         report = entry.run(f'empty-selected-{rows}-{columns}', empty_selected,
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'matrix-index' in str(report)
 
 
@@ -120,7 +120,7 @@ protocol Run roles(P)(m:Matrix<F>@P,x:Vector<F>@P,y:Vector<F>@P)
   let result @P =work(m,x,y);
   return(result=result);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(82731)
@@ -148,7 +148,7 @@ run Demo=Run;
 
     for name, port, values in [('bad-columns', 'x', [1, 2]), ('bad-rows', 'y', [1])]:
         report = entry.run(name, inputs | {port: [str(v) for v in values]},
-                           refuses='entry-run-incomplete')
+                           refuses='entry-host-run-failed')
         assert 'matrix-shape' in str(report)
     for name, bad in [
         ('zero', [(0, 1, 0)]), ('duplicate', [(0, 1, 1), (0, 1, 2)]),

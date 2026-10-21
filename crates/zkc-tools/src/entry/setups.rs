@@ -72,11 +72,11 @@ pub(super) fn proof_authority(
     }
     Ok(result)
 }
-pub(super) fn check_material(
+pub(super) fn material_bytes(
     interface: &Interface,
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
-) -> Result<()> {
+) -> Result<usize> {
     if material.len() != interface.setups.len() {
         return Err("entry-setup-material".into());
     }
@@ -97,14 +97,14 @@ pub(super) fn check_material(
             return Err("entry-setup-limit".into());
         }
     }
-    Ok(())
+    Ok(bytes)
 }
 pub(super) fn public_keys<'a>(
     interface: &Interface,
     material: &'a BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
 ) -> Result<BTreeMap<u32, &'a [u8]>> {
-    check_material(interface, material, capacity)?;
+    material_bytes(interface, material, capacity)?;
     Ok(interface
         .setups
         .iter()
@@ -121,7 +121,7 @@ pub(super) fn run_material(
     mut material: BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
 ) -> Result<BTreeMap<String, Vec<u8>>> {
-    check_material(interface, &material, capacity)?;
+    material_bytes(interface, &material, capacity)?;
     interface
         .setups
         .iter()
@@ -129,6 +129,33 @@ pub(super) fn run_material(
             Ok((
                 slot.native_name.clone(),
                 material.remove(&slot.name).ok_or("entry-setup-material")?,
+            ))
+        })
+        .collect()
+}
+
+/// Validate every static context's material against application-owned identities,
+/// independently of whether execution eventually reaches that deployment.
+pub(super) fn check_pinned_material(
+    interface: &Interface,
+    authority: &SetupAuthority,
+    material: &BTreeMap<String, Vec<u8>>,
+    capacity: crate::execution::Capacity,
+    imports: &mut crate::host::setups::VerifierKeys,
+) -> Result<BTreeMap<String, std::sync::Arc<zkc_arkworks::VerifierKey>>> {
+    check(interface, authority)?;
+    material_bytes(interface, material, capacity)?;
+    interface
+        .setups
+        .iter()
+        .map(|slot| {
+            Ok((
+                slot.name.clone(),
+                imports.import(
+                    &material[&slot.name],
+                    authority.keys[&slot.name],
+                    "entry-setup-canonical",
+                )?,
             ))
         })
         .collect()

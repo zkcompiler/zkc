@@ -28,7 +28,7 @@ pub module Box''' + (';' if external else '<N:nat>{' + child + '}'))
 use library::Box as Reader;
 domain F=field("koala-bear");
 protocol Compute roles(P)(xs:[F;2]@P)->(value:F@P){return Reader::first<F,2>(xs);}
-run Demo=Compute;
+entry fn Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
 ''')
         manifest = '''format="zkc.project/0"
 [modules]
@@ -46,15 +46,15 @@ library="library.zkc"
         assert modules['library::Box']['owner']['name'] == 'library'
         assert [p['inherited'] for p in modules['library::Box']['parameters']] == [True, False]
         package = project / 'module.zkpkg'
-        built = journal.json([toolchain.runtime, '--json', 'compile',
+        built = journal.json([toolchain.runtime, '--json', 'compile', 'Demo',
                               f'--compiler={toolchain.compiler}', f'--output={package}',
                               *flags], cwd=project)
         inputs = input_files(journal, f'{external}.inputs.json', session='module_test',
-                             roles={'P': {'inputs': {'xs': ['3', '7']}}})
+                             package=package, arguments={'inputs': {'P': {'xs': ['3', '7']}}})
         output = project / 'results.json'
         executed = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                                  f'--sha256={built["package_sha256"]}', *inputs,
                                  f'--results={output}'])
         assert executed['status'] == 'executed'
-        results.append(json.loads(output.read_text())['roles']['P'])
+        results.append(json.loads(output.read_text())['value']['P'])
     assert results == [{'value': '4'}, {'value': '4'}]

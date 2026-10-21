@@ -64,7 +64,18 @@ fn path(parent: &std::path::Path, name: &str, suffix: &str) -> Result<std::path:
 }
 
 fn portable_name(entry: &str, suffix: &str) -> Result<String> {
-    let name = format!("{}{suffix}", entry.replace("::", "."));
+    let (protocol, arguments) = super::selection::parts(entry);
+    let stem = if arguments.is_empty() {
+        entry.replace("::", ".")
+    } else {
+        use sha2::{Digest, Sha256};
+        format!(
+            "{}-{}",
+            protocol.replace("::", "."),
+            crate::host::inputs::hex(&Sha256::digest(entry.as_bytes()))
+        )
+    };
+    let name = format!("{stem}{suffix}");
     // Keep the convention usable on common filesystems. Callers can select a
     // shorter explicit output for long source names or reserved device names.
     let stem = name.split('.').next().unwrap().to_ascii_uppercase();
@@ -96,4 +107,22 @@ pub(crate) fn check_collision(parent: &std::path::Path, name: &str) -> Result<()
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn generic_paths_keep_only_the_protocol_name_and_a_complete_digest() {
+        let a = portable_name("sigma::Schnorr<example::G>", ".zkpkg").unwrap();
+        let b = portable_name("sigma::Schnorr<other::G>", ".zkpkg").unwrap();
+        assert!(a.starts_with("sigma.Schnorr-") && a.ends_with(".zkpkg"));
+        assert_eq!(a.len(), "sigma.Schnorr-".len() + 64 + ".zkpkg".len());
+        assert_ne!(a, b);
+        assert!(!a.contains(['<', '>', ':', '/', '\\']));
+        assert_eq!(
+            portable_name("sigma::Interactive", "").unwrap(),
+            "sigma.Interactive"
+        );
+    }
 }

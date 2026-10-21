@@ -1,7 +1,7 @@
 //! Explicit trust roots for local compilation and pinned packages.
 use super::*;
 use crate::project::{
-    EntryKind, Selection,
+    CheckedInterface, EntryKind, Selection,
     cli::{Source, compiler_error},
 };
 
@@ -64,11 +64,22 @@ impl Target {
             Ok(Self::Project(source))
         }
     }
-    pub fn inspect(&self, name: Option<&str>, report: &mut Json) -> Result<Interface> {
+    pub fn inspect(&self, name: Option<&str>, report: &mut Json) -> Result<CheckedInterface> {
         match self {
-            Self::Package { package, .. } => BoundInterface::read(package)
-                .map(|v| v.into_view())
-                .map_err(|e| e.to_string()),
+            Self::Package { package, .. } => {
+                let view = CheckedInterface::read(package)?;
+                if matches!(&view, CheckedInterface::Function(_)) {
+                    let deployments =
+                        super::super::FunctionInterface::deployment_interfaces(package)?;
+                    report["invocations"] = json!(
+                        deployments
+                            .iter()
+                            .map(super::super::DeploymentInterface::describe)
+                            .collect::<Vec<_>>()
+                    );
+                }
+                Ok(view)
+            }
             Self::Project(source) => source
                 .compiler
                 .inspect(&source.project, Selection { name, kind: None })
@@ -85,6 +96,10 @@ impl Target {
             Self::Package { package, .. } => package.clone(),
             Self::Project(source) => source.compile(Selection { name, kind }, report)?,
         };
+        let view = CheckedInterface::read(&package)?;
+        if !(Selection { name, kind }).matches(&view) {
+            return Err("source-entry-selection".into());
+        }
         report["package_sha256"] = json!(hex(package.identity()));
         Ok(package)
     }

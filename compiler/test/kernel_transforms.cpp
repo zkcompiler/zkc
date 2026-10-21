@@ -6,6 +6,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -1232,7 +1233,8 @@ module {
             take(language::capture({{"raw_kernel", (*bytes)->getBuffer().str(),
                                      "raw-polynomial.zkc"}}));
         auto project = take(language::analyze(captured).checkedProject());
-        auto closed = take(language::closeEntry(project, "raw_kernel::Demo"));
+        auto closed = take(
+            zkc::test::closeProtocolDeployment(project, "raw_kernel::Demo"));
         auto original =
             parse(take(language::emitOriginal(closed, context)), context);
         take(language::compareOriginal(closed, *original));

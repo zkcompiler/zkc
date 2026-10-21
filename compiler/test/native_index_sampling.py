@@ -9,6 +9,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
+from entry_artifacts import single_run_package
 from tools import canonical_program, compiler, records
 
 OUT = records()
@@ -24,6 +25,11 @@ manifest = []
 def language(subcommand, source, entry, *options, refuses=None, name="source"):
     path = OUT / f"{name}.zkc"
     path.write_text(source)
+    if subcommand == "run-original":
+        package = commands.run([compiler, "language-package", "--source-format=zkc",
+                                f"--entry=sample::{entry}", f"--module=sample={path}",
+                                *options], refuses=refuses)
+        return single_run_package(package)['original']
     return commands.run([compiler, subcommand, "--source-format=zkc",
                          f"--entry=sample::{entry}", f"--module=sample={path}",
                          *options], refuses=refuses)
@@ -38,14 +44,14 @@ protocol Pick roles(P, V)(coins: Random<E> @V)
   let p = send V -> P(v);
   return (p = p, v = v);
 }
-run Demo = Pick;
+entry fn Demo(inputs: Pick::Inputs) { return Pick::run(inputs); }
 '''
 
 with case("a static power-of-two domain emits a constant bound and an index query"):
-    emitted = language("language-emit", PICK, "Demo", name="pick")
+    emitted = language("run-original", PICK, "Demo", name="pick")
     assert re.search(r'"data.index"\(\) <\{value = "8"\}> : \(\) -> ui64', emitted)
     assert 'method = "index"' in emitted and 'method = "draw"' not in emitted
-    largest = language("language-emit", PICK.replace("index<8>", "index<pow2(63)>"),
+    largest = language("run-original", PICK.replace("index<8>", "index<pow2(63)>"),
                        "Demo", name="pick_largest")
     assert 'value = "9223372036854775808"' in largest
     language("language-check", PICK.replace("index<8>", "index<1>"), "Demo",
@@ -61,7 +67,7 @@ protocol Run roles(P, V)(coins: Random<E> @V) -> (v: index @V) {
   let v = Pick<E, SIZE>(coins);
   return (v = v);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 with case("explicit generic contracts retain the IndexRandomness requirement"):

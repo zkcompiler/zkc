@@ -44,12 +44,14 @@ def case_catalog():
     cases = []
     for size, rounds in [(32, 3), (64, 4), (1024, 6)]:
         cases.append({'name': f'fri-{size}', 'project': 'fri', 'entry': 'example::Proof',
+                      'storage_entry': 'example::Fri',
                       'size': size, 'rounds': rounds,
                       'replacement': ['LowDegree<Rows,5,0,3,8>',
                                       f'LowDegree<Rows,{size.bit_length()-1},0,{rounds},8>']})
     for size in (32, 64, 1024):
         cases.append({'name': f'air-stark-{size}', 'project': 'air-stark',
                       'entry': 'air_stark_example::Proof', 'size': size,
+                      'storage_entry': 'air_stark_example::Run',
                       'replacement': ['TableArgument<0,Recurrence,3,5,8,8>',
                                       f'TableArgument<0,Recurrence,3,{size.bit_length()-1},8,8>']})
     for reduction, entry in [('logup', 'ProofLogUp'), ('product', 'ProofProduct')]:
@@ -57,6 +59,7 @@ def case_catalog():
             cases.append({'name': f'machine-{reduction}-{shape}',
                           'project': 'accumulator-machine',
                           'entry': f'accumulator_machine::{entry}',
+                          'storage_entry': f'accumulator_machine::{"Storage" if reduction == "product" else "Run"}',
                           'fixture': fixture, 'memory_present': shape == 'present'})
     return cases
 
@@ -245,36 +248,71 @@ def execution_metrics(report):
             'external_work_limit': execution.get('external_work_limit')}
 
 
-def observe_storage(case, policy, flags, inputs, directory, tools, journal):
-    """Separate interactive observation: exit storage, not proof cost or peak RSS."""
+def storage_invocation(case, policy, flags, inputs, directory, tools, journal):
+    """Current Entry function contract, also checked before any timed trials."""
     compiler, runtime, _ = tools
     module = case['entry'].split('::')[0]
-    entry = f'{module}::Run'
+    entry = case['storage_entry']
     if case['entry'].endswith('::ProofProduct'):
         source = directory / 'storage.zkc'
         source.write_text((inputs / 'main.zkc').read_text() +
-                          '\nrun Storage = MachineProof<GrandProduct<Extension>>;\n')
+                          '\nentry fn Storage(inputs: MachineProof<GrandProduct<Extension>>::Inputs) {'
+                          ' return MachineProof<GrandProduct<Extension>>::run(inputs); }\n')
         flags = [f'--module={module}={source}' if x.startswith(f'--module={module}=') else x
                  for x in flags]
-        entry = f'{module}::Storage'
     package = directory / 'storage.zkpkg'
     journal.command([compiler, 'language-package', '--source-format=zkc', f'--entry={entry}',
                      *flags, *POLICIES[policy]], cwd=directory, stdout=package)
+    interface = json.loads(json.loads(package.read_text())['interface'])
+    require(interface.get('format') == 'zkc.language-interface/0'
+            and interface.get('selection', {}).get('kind') == 'function',
+            'interactive storage requires an Entry function interface')
     public = json.loads((inputs / 'public.json').read_text())
     witness = json.loads((inputs / 'witness.json').read_text())
-    prover, verifier = directory / 'P.json', directory / 'V.json'
-    write_json(prover, public | witness)
-    write_json(verifier, public)
+    arguments = directory / 'storage-arguments.json'
+    write_json(arguments, {'inputs': {'P': public | witness, 'V': public}})
     outputs = directory / 'storage-outputs.json'
-    report, command = journal.report([runtime, '--json', 'run', f'--package={package}',
-        f'--sha256={digest(package)}', '--session=protocol-measurement-storage',
-        f'--input=P={prover}', f'--input=V={verifier}', f'--results={outputs}'],
+    return package, outputs, [runtime, '--json', 'run', f'--package={package}',
+        f'--sha256={digest(package)}', f'--input={arguments}', f'--results={outputs}']
+
+
+def check_storage_support(case, flags, inputs, directory, tools, journal):
+    """Refuse unsupported source/compiler/CLI combinations before measurements."""
+    directory.mkdir(parents=True)
+    try:
+        _, outputs, command = storage_invocation(case, 'default', flags, inputs,
+                                                 directory, tools, journal)
+        journal.report([*command, '--dry-run'], cwd=directory, status='inputs-checked')
+        require(not outputs.exists(), 'storage dry run unexpectedly published results')
+    except (MeasurementError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
+        raise MeasurementError(
+            f'{case["name"]}: interactive storage preflight failed; requires Entry functions '
+            f'with --input=FILE and --results=FILE; pre-function baselines are unsupported: {error}'
+        ) from error
+
+
+def observe_storage(case, policy, flags, inputs, directory, tools, journal):
+    """Separate interactive observation: exit storage, not proof cost or peak RSS."""
+    package, outputs, argv = storage_invocation(case, policy, flags, inputs,
+                                               directory, tools, journal)
+    report, command = journal.report(argv,
         cwd=directory, status='executed')
-    require(json.loads(outputs.read_text())['roles']['V']['accepted'] is True,
+    values = json.loads(outputs.read_text())
+    require(set(values) == {'format', 'value'} and values['format'] == 'zkc.entry-outputs/0',
+            'interactive storage observation has an invalid result envelope')
+    require(values['value']['V']['accepted'] is True,
             'interactive storage observation did not accept')
-    execution = report['execution']
+    function = report['execution']
+    require(function['format'] == 'zkc.entry-function-result/0' and function['completed'],
+            'interactive storage function did not complete')
+    calls = [call for call in function['calls'] if call['operation'] == 'run']
+    require(len(calls) == 1 and calls[0]['completed'],
+            'interactive storage observation needs exactly one completed joint call')
+    execution = calls[0]['native']
     roles = execution['roles']
-    require(all('usage' in role and 'live_resource_units' in role and
+    require(roles and len(roles) == execution['role_count'],
+            'interactive storage observation needs a complete native role snapshot')
+    require(all(isinstance(role.get('usage'), dict) and 'live_resource_units' in role and
                 'retained_output_units' in role for role in roles),
             'interactive report missing exit storage counters')
     return {'scope': 'separate interactive Entry; per-role exit snapshot, not proof work or peak memory',
@@ -480,6 +518,12 @@ def run(args, argv=None):
                 if 'current' in labels:
                     current = json.loads((prepared['current', case['name']][1] / f'{name}.json').read_text())
                     require(current == baseline, f'{case["name"]}: baseline/current {name} inputs differ')
+        if args.interactive_storage:
+            for label in labels:
+                for case in cases:
+                    flags, inputs = prepared[label, case['name']]
+                    check_storage_support(case, flags, inputs,
+                        output / 'storage-preflight' / label / case['name'], binaries[label], journal)
         variants = [('baseline', 'default')]
         if 'current' in labels:
             variants += [('current', 'default'), ('current', 'no-finite-bulk')]

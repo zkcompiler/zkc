@@ -749,7 +749,9 @@ class Admission {
         return false;
     if (!bodies(functions, true) || !bodies(participants, false) || !cycles())
       return false;
-    if (m.entries.empty())
+    if (m.entries.empty() && (!m.participants.empty() || m.functions.empty()))
+      return fail("interactive-entry");
+    if (m.participants.empty() && !m.entries.empty())
       return fail("interactive-entry");
     for (const auto &entry : m.entries) {
       if (!name(entry.name) || !symbols.insert(entry.name).second)

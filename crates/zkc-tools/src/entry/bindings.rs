@@ -1,4 +1,4 @@
-//! Rust data bindings for a trusted Entry publication. No protocol code is emitted.
+//! Rust data and callable bindings for a trusted Entry publication.
 use super::{
     Package,
     interface::raw::{Field, Kind, Port, Schema},
@@ -347,14 +347,21 @@ impl Generator {
         Ok(())
     }
     fn ports<'a>(&mut self, name: &str, ports: impl Iterator<Item = &'a Port>) -> Result<()> {
+        self.named(name, ports.map(|port| (port.name.as_str(), &port.schema)))
+    }
+    fn named<'a>(
+        &mut self,
+        name: &str,
+        parameters: impl Iterator<Item = (&'a str, &'a Schema)>,
+    ) -> Result<()> {
         let preferred = name.strip_prefix("r#").unwrap_or(name);
         let mut fields = Vec::new();
         let scope = self.names.scope();
-        for port in ports {
+        for (source, schema) in parameters {
             fields.push(Member {
-                source: port.name.clone(),
-                name: self.names.member(scope, &port.name)?,
-                ty: self.schema(&port.schema, &format!("{preferred}_{}", port.name))?,
+                source: source.to_owned(),
+                name: self.names.member(scope, source)?,
+                ty: self.schema(schema, &format!("{preferred}_{source}"))?,
             });
         }
         self.structure(name, &fields)?;
@@ -379,6 +386,11 @@ impl Generator {
 /// trusted package. Mathematical leaves use entry::Value and keep native checks;
 /// this is not protocol algorithm generation or a new authority source.
 pub fn rust(package: &Package) -> Result<String> {
+    let document: serde_json::Value =
+        serde_json::from_str(package.interface()).map_err(|_| "entry-bindings-interface")?;
+    if document["selection"]["kind"] == "function" {
+        return function(package);
+    }
     let interface = crate::entry::BoundInterface::read(package).map_err(|e| e.to_string())?;
     super::arguments::check_ports(&interface)?;
     let mut generator = Generator {
@@ -480,6 +492,91 @@ pub fn rust(package: &Package) -> Result<String> {
             "pub const PROVER: &::core::primitive::str = {prover:?};\npub const VERIFIER: &::core::primitive::str = {verifier:?};\n"
         ))?;
     }
+    Ok(generator.code)
+}
+
+/// An SDK conversion never hides the native report, including on failure.
+#[derive(Debug)]
+pub struct CallResult<T> {
+    pub value: Option<T>,
+    pub report: super::FunctionReport,
+    pub conversion_error: Option<String>,
+}
+impl<T: TryFrom<super::Value>> CallResult<T>
+where
+    T::Error: std::fmt::Display,
+{
+    /// Check the generated binding's package before preparing any inputs.
+    pub fn execute(
+        host: &super::FunctionEntry,
+        expected: &[u8; 32],
+        request: super::FunctionRequest,
+    ) -> std::result::Result<Self, super::EntryError> {
+        if host.package().identity() != expected {
+            return Err(super::EntryError::new(
+                super::EntryPhase::Binding,
+                "entry-binding-package",
+            ));
+        }
+        Ok(Self::from_report(host.prepare(request)?.execute()))
+    }
+    pub fn from_report(report: super::FunctionReport) -> Self {
+        let result = report
+            .value
+            .as_ref()
+            .cloned()
+            .map(|value| T::try_from(value.into_value()).map_err(|error| error.to_string()));
+        match result {
+            Some(Ok(value)) => Self {
+                value: Some(value),
+                report,
+                conversion_error: None,
+            },
+            Some(Err(error)) => Self {
+                value: None,
+                report,
+                conversion_error: Some(error),
+            },
+            None => Self {
+                value: None,
+                report,
+                conversion_error: None,
+            },
+        }
+    }
+}
+
+fn function(package: &Package) -> Result<String> {
+    let interface = super::FunctionInterface::read(package).map_err(|e| e.to_string())?;
+    let mut generator = Generator {
+        names: Names::default(),
+        types: BTreeMap::new(),
+        code: String::new(),
+    };
+    generator.names.used.insert(
+        0,
+        ["__zkc_decode", "PACKAGE_SHA256", "admit", "call"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+    );
+    generator.add("// Generated from an authenticated zkc Entry function package.\n// Mathematical leaves retain native Value ingress; all execution uses FunctionEntry.\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc_tools::entry::Value>>(value: ::zkc_tools::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
+    generator.add(format!(
+        "pub const PACKAGE_SHA256:[::core::primitive::u8;32]={:?};\n",
+        package.identity()
+    ))?;
+    let arguments = generator.names.ty("Arguments")?;
+    let signature = interface.signature();
+    generator.named(
+        &arguments,
+        signature
+            .parameters
+            .iter()
+            .map(|p| (p.name.as_str(), &p.schema)),
+    )?;
+    let result = generator.schema(&signature.result, "Result")?;
+    generator.add("pub fn admit(bytes: &[::core::primitive::u8], options: ::zkc_tools::entry::FunctionOptions, authority: ::std::collections::BTreeMap<::std::string::String, ::zkc_tools::entry::SetupAuthority>) -> ::core::result::Result<::zkc_tools::entry::FunctionEntry, ::zkc_tools::entry::EntryError> { let package = ::zkc_tools::entry::Package::capture(bytes, &PACKAGE_SHA256, ::zkc_tools::entry::Package::MAX_BYTES)?; ::zkc_tools::entry::FunctionEntry::admit(package, options, authority) }\n")?;
+    generator.add(format!("/// Execute the selected source function using its admitted common Host.\npub fn call(host: &::zkc_tools::entry::FunctionEntry, arguments: {arguments}, context: ::zkc_tools::entry::InvocationContext) -> ::core::result::Result<::zkc_tools::entry::bindings::CallResult<{result}>, ::zkc_tools::entry::EntryError> {{ ::zkc_tools::entry::bindings::CallResult::execute(host, &PACKAGE_SHA256, ::zkc_tools::entry::FunctionRequest {{ arguments: arguments.into(), context }}) }}\n"))?;
     Ok(generator.code)
 }
 

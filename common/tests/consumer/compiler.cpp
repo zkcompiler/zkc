@@ -13,6 +13,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <array>
 
 int main(int argc, char **argv) {
   auto captured = zkc::language::capture({{"m", R"(module m;
@@ -20,7 +21,7 @@ int main(int argc, char **argv) {
     protocol Step roles(P)(x:bool@P)->(r:bool@P)
       spec {output contract=Same(in.x,out.r);}{return(r=x);}
     protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=Step(x);return(r=r);}
-    run Demo=Run;
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
     protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
       let received=send P->V(x);return(accepted=received);
     }
@@ -84,29 +85,47 @@ int main(int argc, char **argv) {
   }
   auto observations = observation.json();
   auto *phases = observations.getAsObject()->getArray("phases");
+  const std::array<llvm::StringRef, 5> expectedPhases = {
+      "entry", "protocol", "participant", "exec", "physical"};
   if (observedPackage->bytes() != package->bytes() || !phases ||
-      phases->size() != 4)
+      phases->size() != expectedPhases.size())
     return 53;
+  for (size_t i = 0; i < expectedPhases.size(); ++i) {
+    const auto *phase = (*phases)[i].getAsObject();
+    const auto *unit = phase ? phase->getArray("unit") : nullptr;
+    if (!phase || phase->getString("phase") != expectedPhases[i] || !unit ||
+        unit->empty() || (*unit)[0].getAsString() != "m::Demo")
+      return 54;
+  }
   if (auto error =
           zkc::language::checkInterface(*original, original->interfaceJson())) {
     llvm::errs() << llvm::toString(std::move(error));
     return 35;
   }
-  auto interface = zkc::language::readInterface(original->bytes(),
-                                                original->interfaceJson());
+  if (entry->invocations().size() != 1 ||
+      !entry->invocations().front().deployment)
+    return 44;
+  const auto &nativeEntry = *entry->invocations().front().deployment;
+  auto nativeOriginal = zkc::language::prepareOriginal(nativeEntry);
+  if (!nativeOriginal) {
+    llvm::errs() << llvm::toString(nativeOriginal.takeError());
+    return 45;
+  }
+  auto interface = zkc::language::readInterface(
+      nativeOriginal->bytes(), nativeOriginal->interfaceJson());
   if (!interface) {
     llvm::errs() << llvm::toString(interface.takeError());
     return 36;
   }
-  if (interface->selectedProtocol().symbol != entry->protocol().symbol ||
+  if (interface->selectedProtocol().symbol != nativeEntry.protocol().symbol ||
       interface->selectedProtocol().inputs.size() != 1 ||
-      original->interface().selectedProtocol().symbol !=
+      nativeOriginal->interface().selectedProtocol().symbol !=
           interface->selectedProtocol().symbol ||
-      original->interface().selectedProtocol().inputs.size() != 1)
+      nativeOriginal->interface().selectedProtocol().inputs.size() != 1)
     return 37;
   unsigned applications = 0;
   if (auto error = zkc::language::inspectApplications(
-          original->bytes(), original->interfaceJson(),
+          nativeOriginal->bytes(), nativeOriginal->interfaceJson(),
           [&](const zkc::language::ApplicationOccurrence &call) -> llvm::Error {
             ++applications;
             if (call.clauses.size() != 1 ||

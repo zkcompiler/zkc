@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/NativePolicy.h"
@@ -14,6 +15,21 @@ Expected<CheckedProject> check(StringRef text) {
     return source.takeError();
   return analyze(*source).checkedProject();
 }
+Expected<ClosedEntry> admitRun(StringRef text) {
+  auto project = check(text);
+  if (!project)
+    return project.takeError();
+  return zkc::test::closeProtocolDeployment(*project, "m::Demo");
+}
+Expected<ClosedEntry> admitNativeRelay(StringRef definitions,
+                                       StringRef argument = "Secret") {
+  auto project = check(definitions.str() + "protocol Inspect roles(P,V)(x:" +
+                       argument.str() + "@P)->(r:" + argument.str() +
+                       "@V){return Relay<" + argument.str() + ">(x);}");
+  if (!project)
+    return project.takeError();
+  return zkc::test::closeNativeRun(*project, "m::Inspect");
+}
 const Declaration &declaration(const CheckedProject &project, StringRef name) {
   for (const auto &decl : project.declarations())
     if (decl.name == name)
@@ -21,7 +37,8 @@ const Declaration &declaration(const CheckedProject &project, StringRef name) {
   throw std::runtime_error("missing declaration");
 }
 void compile(StringRef text) {
-  auto closed = take(closeEntry(take(check(text)), "m::Demo"));
+  auto closed =
+      take(zkc::test::closeProtocolDeployment(take(check(text)), "m::Demo"));
   auto original = take(prepareOriginal(closed));
   for (bool simplify : {false, true})
     take(compileEntry(original, {simplify, false}));
@@ -71,7 +88,7 @@ protocol Outer<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let result=Forward(x
     }
     compile(relay + R"(
 protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let result=Relay(x);return result;}
-run Demo=Forward<bool>;
+entry fn Demo(inputs: Forward<bool>::Inputs) { return Forward<bool>::run(inputs); }
 )");
   });
   cases.run("shared components derive admission independently of Copy", [] {
@@ -86,7 +103,7 @@ protocol Shared<T:Type> roles(P,V)(x:T@(P,V))->(r:T@(P,V)) where () {return x;}
               "unexpected sharing condition");
     compile(R"(
 protocol Shared<T:Type> roles(P,V)(x:T@(P,V))->(r:T@(P,V)) where () {return x;}
-run Demo=Shared<bool>;
+entry fn Demo(inputs: Shared<bool>::Inputs) { return Shared<bool>::run(inputs); }
 )");
     refuses(check(R"(
 #[linear] struct Token {}
@@ -104,22 +121,22 @@ protocol Bad roles(P,V)(x:Key@(P,V))->(r:Key@(P,V)){return x;}
     for (StringRef type :
          {"bool", "[bool;2]", "(bool,bool)", "Record", "Choice"})
       compile(relay +
-              "struct Record{pub value:bool}enum Choice{Some(bool),None()}run "
-              "Demo=Relay<" +
-              type.str() + ">;");
-    compile(relay + "type Sequence<T:Type+Copy>=builtin(\"sequence\",T);run "
-                    "Demo=Relay<Sequence<bool>>;");
+              "struct Record{pub value:bool}enum Choice{Some(bool),None()}"
+              "entry fn Demo(inputs: Relay<" +
+              type.str() + ">::Inputs) { return Relay<" + type.str() +
+              ">::run(inputs); }");
+    compile(relay + "type Sequence<T:Type+Copy>=builtin(\"sequence\",T);entry "
+                    "fn Demo(inputs: Relay<Sequence<bool>>::Inputs) { return "
+                    "Relay<Sequence<bool>>::run(inputs); }");
   });
   cases.run("privacy and explicit resources survive generic substitution", [] {
     for (StringRef definition :
          {"struct Secret{value:bool}",
           "#[sealed] struct Secret{pub value:bool}",
           "#[affine] struct Secret{}", "#[linear] struct Secret{}"})
-      refuses(check(definition.str() + relay + "run Demo=Relay<Secret>;"),
-              "source.ingress");
-    refuses(
-        check(relay + "struct Secret{value:bool}run Demo=Relay<[Secret;0]>;"),
-        "source.ingress");
+      refuses(admitNativeRelay(definition.str() + relay), "source.ingress");
+    refuses(admitNativeRelay(relay + "struct Secret{value:bool}", "[Secret;0]"),
+            "source.ingress");
   });
   cases.run("symbolic array lengths retain element boundary conditions", [] {
     auto project = take(check(R"(
@@ -129,7 +146,7 @@ protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let res
     require(decl.admissions.size() == 2, "symbolic aggregate obligations lost");
     compile(R"(
 protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let result=send P->V(x);return result;}
-run Demo=Relay<bool,2>;
+entry fn Demo(inputs: Relay<bool,2>::Inputs) { return Relay<bool,2>::run(inputs); }
 )");
   });
   cases.run("opaque associated constructors cannot be invented by transport",
@@ -159,7 +176,7 @@ protocol Bad roles(P,V)(x:Polynomial@P)->(r:Polynomial@V){let result=send P->V(x
 fn make()->Checked{return Checked{value:true};}
 fn duplicate(x:Checked)->(Checked,Checked){return(x,x);}
 protocol Run roles(P,V)()->(p:Checked@P,v:Checked@V){let p@P=make();let v@V=make();return(p,v);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
             });
   cases.run(
@@ -178,8 +195,7 @@ run Demo=Run;
         require(obligation->getObject("source") &&
                     obligation->getArray("calls"),
                 "inspection lost origins");
-        auto invalid =
-            check(relay + "struct Secret{value:bool}run Demo=Relay<Secret>;");
+        auto invalid = admitNativeRelay(relay + "struct Secret{value:bool}");
         require(!invalid, "private generic ingress accepted");
         bool located = false;
         handleAllErrors(invalid.takeError(), [&](const DiagnosticError &error) {
@@ -206,10 +222,12 @@ protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let r=Relay(x);ret
     const auto project = take(check(source));
     require(declaration(project, "Forward").admissions.size() == 2,
             "later explicit-contract callee lost its boundaries");
-    compile(source + "run Demo=Forward<bool>;");
-    refuses(
-        check(source + "struct Secret{value:bool}run Demo=Forward<Secret>;"),
-        "source.ingress");
+    compile(source + "entry fn Demo(inputs: Forward<bool>::Inputs) { return "
+                     "Forward<bool>::run(inputs); }");
+    refuses(admitRun(source + "struct Secret{value:bool}entry fn Demo(inputs: "
+                              "Forward<Secret>::Inputs) { return "
+                              "Forward<Secret>::run(inputs); }"),
+            "source.ingress");
   });
   cases.run("recursive calls refuse before propagating boundary conditions",
             [] {
@@ -247,7 +265,10 @@ protocol Forward roles(P,V)(x:Box::Item@(P,V))->(r:Box::Item@(P,V)){let r=Shared
 )";
         take(check(source));
         refuses(
-            closeEntry(take(check(source + "run Demo=Forward;")), "m::Demo"),
+            zkc::test::closeProtocolDeployment(
+                take(check(source + "entry fn Demo(inputs: Forward::Inputs) { "
+                                    "return Forward::run(inputs); }")),
+                "m::Demo"),
             "source.ingress");
       });
   return cases.result();

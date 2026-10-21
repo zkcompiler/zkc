@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
@@ -44,13 +45,15 @@ void refuses(StringRef source, StringRef code, const Limits &limits = {}) {
 void closureRefuses(StringRef source, StringRef code,
                     const Limits &limits = {}) {
   auto project = check(source, limits);
-  auto selected = closeEntry(project, "m::Demo", limits);
+  auto selected =
+      zkc::test::closeProtocolDeployment(project, "m::Demo", limits);
   require(!selected, "Entry closure unexpectedly accepted");
   auto message = toString(selected.takeError());
   require(namesIdentifier(message, code), message);
 }
 CheckedOriginal original(StringRef source) {
-  return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
+  return must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(check(source), "m::Demo"))));
 }
 mlir::Operation *first(mlir::ModuleOp module, StringRef name) {
   mlir::Operation *found = nullptr;
@@ -79,7 +82,9 @@ void mutation(const CheckedOriginal &source,
           "wrong mutation refusal phase");
 }
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
-const std::string unit = "protocol Run roles(P)()->(){return();}run Demo=Run;";
+const std::string unit =
+    "protocol Run roles(P)()->(){return();}entry fn Demo(inputs: Run::Inputs) "
+    "{ return Run::run(inputs); }";
 
 const std::string sequence = R"(
 type Sequence<T:Type+Copy+Drop> = builtin("sequence",T);
@@ -100,7 +105,7 @@ enum Choice{Some(Fr),None()}
 protocol Run roles(P)(x:)" +
                          type + R"(@P)->(r:)" + type + R"(@P){
   let r @P =roundtrip(x);return(r=r);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(source));
 }
@@ -109,7 +114,7 @@ void mutations() {
 struct Pair{pub first:Fr,pub second:Fr}
 protocol Run roles(P)(x:Pair@P)->(r:Pair@P){
   let r @P =roundtrip(x);return(r=r);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   require(source.bytes().contains("local.variant_inject") &&
               source.bytes().contains("local.match"),
@@ -210,11 +215,11 @@ void kernelProducts() {
     protocol Run roles(P,V)(x:Pair@P)->(r:Pair@V){
       let xs @P =singleton(x);let ys=send P->V(xs);
       let r @V =first(ys);return(r=r);
-    }run Demo=Run;
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(source));
   auto unitSource = original(prefix + sequence + R"(
-    protocol Run roles(P)()->(){let value @P =roundtrip(());return();}run Demo=Run;
+    protocol Run roles(P)()->(){let value @P =roundtrip(());return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   mutation(unitSource,
            [](auto module) { first(module, "local.match")->erase(); });
@@ -238,10 +243,10 @@ void authority() {
   auto selected = must(project(R"(
     fn work(x:bool)->bool{return lib::open(roundtrip(lib::make(x)));}
     protocol Run roles(P)(x:bool@P)->(r:bool@P){let r @P =work(x);return(r=r);}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
-  must(compileEntry(
-      must(prepareOriginal(must(closeEntry(selected, "m::Demo"))))));
+  must(compileEntry(must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(selected, "m::Demo"))))));
   for (
       auto body :
       {R"(fn bad(x:lib::Secret)->bool{let item=roundtrip(x);return item.value;})",
@@ -255,9 +260,10 @@ void authority() {
   auto alias = must(project(R"(
     fn work(x:lib::Public)->lib::Alias{return get<lib::Alias>(append(empty<lib::Public>(),x),0);}
     protocol Run roles(P)(x:lib::Public@P)->(r:lib::Alias@P){let r @P =work(x);return(r=r);}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
-  must(compileEntry(must(prepareOriginal(must(closeEntry(alias, "m::Demo"))))));
+  must(compileEntry(must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(alias, "m::Demo"))))));
 }
 
 void mathematicalPacking() {
@@ -322,15 +328,15 @@ void refusals() {
               "type Bad=builtin(\"sequence\",formal(\"polynomial\",Fr,1));" +
               unit,
           "source.builtin");
-  refuses(prefix + sequence + R"(
-struct Secret{value:Fr}
-protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}
-run Demo=Relay<Sequence<Secret>>;
-)",
-          "source.ingress");
   closureRefuses(prefix + sequence + R"(
 struct Secret{value:Fr}
-protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}run Demo=Run;
+protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}
+entry fn Demo(inputs: Relay<Sequence<Secret>>::Inputs) { return Relay<Sequence<Secret>>::run(inputs); }
+)",
+                 "source.ingress");
+  closureRefuses(prefix + sequence + R"(
+struct Secret{value:Fr}
+protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                  "source.ingress");
   refuses(prefix + sequence + R"(

@@ -6,6 +6,8 @@ hand from the Bundle text; point values are compared with the recurrence's
 constraints, written from its AIR definition and evaluated in the independent
 integer model of `koala-bear.ext8-binomial3`.
 """
+
+from entry import joint_package, joint_execution, joint_artifact, replace_joint_artifact, replace_joint_assets
 from input_files import input_files, decimal_values
 import json
 from hashlib import sha256
@@ -60,7 +62,7 @@ protocol View roles(Evaluator)
   let b @Evaluator = point_of<Base,TABLE,Recurrence>(base);
   return (shape = s, input = i, scope = c, ood_values = e, base_values = b);
 }
-run Polynomial = View;
+entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 
@@ -122,7 +124,7 @@ class Client:
         self.pin = None if refuses else report['package_sha256']
 
     def run(self, name, inputs, refuses=None):
-        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': inputs}})
+        path = input_files(self.journal, name, package=self.package, arguments={'inputs': {'Evaluator': inputs}})
         output = self.directory / f'{name}.outputs.json'
         command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
@@ -131,7 +133,7 @@ class Client:
             assert not output.exists(), 'a refused run published outputs'
             return report
         assert report['status'] == 'executed'
-        return json.loads(output.read_text())['roles']['Evaluator']
+        return json.loads(output.read_text())['value']['Evaluator']
 
     def repackage(self, package):
         text = json.dumps(package, separators=(',', ':'))
@@ -140,7 +142,7 @@ class Client:
 
 
 def stopped(report):
-    (role,) = report['execution']['roles']
+    (role,) = joint_execution(report)['roles']
     state, detail = role['after']
     assert state == 'stopped' and detail['cause'][0] == 'backend'
     return detail['cause'][1]['text']
@@ -166,7 +168,7 @@ def test_shape_descriptors_scopes_and_points_match_independent_derivations(
         toolchain, journal, directory):
     client = Client(toolchain, journal, directory, source())
     package = json.loads(client.package.read_text())
-    assert package['assets'] == [[sha256(BUNDLE.encode()).hexdigest(), BUNDLE]]
+    assert joint_package(package)['assets'] == [[sha256(BUNDLE.encode()).hexdigest(), BUNDLE]]
     for case, (slot, assertion) in enumerate(zip(range(11), [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 0])):
         ood = points(10 + case, 11)
         row = [v[0] for v in points(30 + case, 11)]
@@ -193,7 +195,7 @@ def test_shape_descriptors_scopes_and_points_match_independent_derivations(
 def test_execution_refuses_heights_indices_and_lengths(
         toolchain, journal, directory, name, change, cause):
     client = Client(toolchain, journal, directory, source())
-    report = client.run(name, {**inputs(), **change}, refuses='entry-run-incomplete')
+    report = client.run(name, {**inputs(), **change}, refuses='entry-host-run-failed')
     journal.check(f'{name}: {cause}', stopped(report) == f'refused:{cause}')
 
 
@@ -246,13 +248,13 @@ def test_host_preflight_checks_every_polynomial_reference(
     package = json.loads(client.package.read_text())
     identity = sha256(BUNDLE.encode()).hexdigest()
     if mutation == 'missing':
-        package['assets'] = []
+        replace_joint_assets(package, [])
     elif mutation == 'tampered':
         body = json.loads(BUNDLE)
         body[3][0][0] = 'changed-table-name'
-        package['assets'] = [[identity, json.dumps(body, separators=(',', ':'))]]
+        replace_joint_assets(package, [[identity, json.dumps(body, separators=(',', ':'))]])
     else:
-        artifact = json.loads(package['artifact'])
+        artifact = joint_artifact(package)
         candidate = artifact['candidate']
         if mutation == 'table':
             program = json.loads(candidate)
@@ -266,9 +268,9 @@ def test_host_preflight_checks_every_polynomial_reference(
             body = json.dumps(body, separators=(',', ':'))
             replacement = sha256(body.encode()).hexdigest()
             candidate = candidate.replace(identity, replacement)
-            package['assets'] = [[replacement, body]]
+            replace_joint_assets(package, [[replacement, body]])
         artifact['candidate'] = candidate
-        package['artifact'] = json.dumps(artifact, separators=(',', ':'))
+        replace_joint_artifact(package, artifact)
     client.repackage(package)
     result = client.run(mutation, inputs(), refuses=code)
     assert result['phase'] == 'admission'
@@ -311,7 +313,7 @@ protocol Batch roles(Evaluator)
   let d @Evaluator = rows_of<Base,0,Recurrence>(witness, configuration, public_data, height);
   return (subgroup_values = s, ood_values = o, single_values = p, dense = d);
 }
-run Polynomial = Batch;
+entry fn Polynomial(inputs: Batch::Inputs) { return Batch::run(inputs); }
 '''
 
 # The recurrence fixture's honest data: one witness group of width 4, one
@@ -387,7 +389,7 @@ def test_empty_batches_and_shape_refusals(toolchain, journal, directory):
     for name, change in [('long', {'subgroup': frame([0] * 89)}),
                          ('short-rows', {'ood_rows': 6}),
                          ('huge-rows', {'ood_rows': 2**40})]:
-        report = client.run(name, batch_inputs(**change), refuses='entry-run-incomplete')
+        report = client.run(name, batch_inputs(**change), refuses='entry-host-run-failed')
         journal.check(f'{name}: point shape',
                       stopped(report) == 'refused:relation-table-point-shape')
 
@@ -395,7 +397,7 @@ def test_empty_batches_and_shape_refusals(toolchain, journal, directory):
 def test_host_preflight_checks_batch_references(toolchain, journal, directory):
     client = Client(toolchain, journal, directory, BATCH)
     package = json.loads(client.package.read_text())
-    artifact = json.loads(package['artifact'])
+    artifact = joint_artifact(package)
     program = json.loads(artifact['candidate'])
     changed = 0
     for binding in program[1]:
@@ -404,7 +406,7 @@ def test_host_preflight_checks_batch_references(toolchain, journal, directory):
             changed += 1
     assert changed
     artifact['candidate'] = json.dumps(program, separators=(',', ':'))
-    package['artifact'] = json.dumps(artifact, separators=(',', ':'))
+    replace_joint_artifact(package, artifact)
     client.repackage(package)
     result = client.run('points-table', batch_inputs(), refuses='relation-table-index')
     assert result['phase'] == 'admission'

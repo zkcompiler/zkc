@@ -45,6 +45,8 @@ struct LayoutAlternative {
 /// Custody, when present, is the first leaf and is never a user data field.
 struct Layout {
   Type type;
+  /// Generated nominal identity binds exact source, family and installation.
+  std::string generatedIdentity;
   Permissions permissions;
   std::vector<LayoutLeaf> leaves;
   std::vector<LayoutField> fields;

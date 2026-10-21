@@ -132,6 +132,13 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
           return false;
       if (call->module && !types.chargeType(*call->module, op.span))
         return false;
+    } else if (const auto *call = std::get_if<HostInvocation>(&op.action)) {
+      if (!types.charge(call->operands.size() + call->arguments.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &argument : call->arguments)
+        if (!types.chargeType(argument, op.span))
+          return false;
     } else if (const auto *bulk = std::get_if<BulkApplication>(&op.action)) {
       if (!types.charge(bulk->operands.size() + bulk->mapped.size() + 1,
                         op.span))
@@ -163,7 +170,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
 } // namespace
 llvm::Error specialize(std::vector<Declaration> &declarations,
                        ArrayRef<Asset> assets, Work &work,
-                       DeclarationId selected) {
+                       DeclarationId selected,
+                       std::optional<HostInvocation::Kind> operation) {
   Semantics types(declarations, assets, work);
   auto close = [&]() -> bool {
     const unsigned templates = declarations.size();
@@ -474,6 +482,20 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             return false;
           // Target and family retain their definition identities. The action
           // below selects instances; notation is never resolved at a caller.
+        }
+        if (auto *invocation = std::get_if<HostInvocation>(&op.action)) {
+          if (body.stage != Body::Stage::Host)
+            return types.fail("source.stage",
+                              "Host invocation outside Host body", op.span);
+          for (auto &argument : invocation->arguments)
+            if (!closeType(argument, bindings, op.span))
+              return false;
+          for (auto value : invocation->operands)
+            if (!types.hostData(body.values[value.index].type, op.span))
+              return false;
+          for (auto value : op.results)
+            if (!types.hostData(body.values[value.index].type, op.span))
+              return false;
         }
         if (auto *primitive = std::get_if<LocalPrimitive>(&op.action)) {
           for (auto &argument : primitive->staticArguments)
@@ -953,8 +975,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       }
       auto mode = source.kind == Declaration::Kind::Protocol
                       ? Body::Mode::Protocol
-                  : source.kind == Declaration::Kind::Local ? Body::Mode::Local
-                                                            : Body::Mode::Math;
+                  : (source.kind == Declaration::Kind::Local ||
+                     source.kind == Declaration::Kind::EntryFunction)
+                      ? Body::Mode::Local
+                      : Body::Mode::Math;
       if ((!source.body && source.kind != Declaration::Kind::Relation &&
            source.kind != Declaration::Kind::Construction) ||
           source.abstract) {
@@ -1160,7 +1184,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       auto bindings = callableSubstitution(result, args);
       for (auto *ports : {&result.inputs, &result.outputs})
         for (auto &port : *ports)
-          if (!closeType(port.type, bindings, port.span))
+          if (!closeType(port.type, bindings, port.span) ||
+              (result.kind == Declaration::Kind::EntryFunction &&
+               !types.hostData(port.type, port.span)))
             return {};
       if (result.primitive)
         for (auto &argument : result.primitive->arguments)
@@ -1403,7 +1429,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       active.erase(key);
       return id;
     };
-    auto target = declarations[selected.index].target;
+    bool function =
+        declarations[selected.index].kind == Declaration::Kind::EntryFunction;
+    auto target = function ? std::optional(selected)
+                           : declarations[selected.index].target;
     auto args = declarations[selected.index].staticArguments;
     if (!target)
       return types.fail("source.entry", "Entry has no checked target",
@@ -1411,8 +1440,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     auto instance = instantiate(*target, args, 1, {}, {}, {});
     if (!instance)
       return false;
-    if (!types.checkProofEntry(declarations[selected.index],
-                               declarations[instance->index]))
+    if (!function && !types.checkProofEntry(declarations[selected.index],
+                                            declarations[instance->index]))
       return false;
     if (const auto *proof = declarations[selected.index].proof();
         proof && proof->selectedConstruction) {
@@ -1427,6 +1456,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     const auto &inputs = declarations[instance->index].inputs;
     for (unsigned i = 0; i < inputs.size(); ++i) {
       const auto &port = inputs[i];
+      if (operation == HostInvocation::Kind::Verify &&
+          !llvm::is_contained(port.roles,
+                              declarations[selected.index].proof()->verifier))
+        continue;
       // Whole key ports use Entry setup initialization. Exact setup coverage is
       // checked from the closed layout before closeEntry publishes its handle.
       bool key = port.type.kind == Type::Kind::Builtin &&

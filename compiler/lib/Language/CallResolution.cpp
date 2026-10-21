@@ -30,6 +30,8 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
       auto &interface = output.declarations[parameter.interface->index];
       for (auto id : interface.members)
         if (output.declarations[id.index].name == parts.second) {
+          if (!signature(id))
+            return {};
           if (!recordReference(decl,
                                moduleParameterProviders.at(parameter.atom), id,
                                name, span, formatType(*module)))
@@ -48,7 +50,7 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
       return CallableReference{*nominal, {}};
   }
   auto id = resolve(decl, name, span);
-  if (!id)
+  if (!id || !signature(*id))
     return {};
   if (output.declarations[id->index].abstract &&
       output.declarations[id->index].kind != Declaration::Kind::Associated) {

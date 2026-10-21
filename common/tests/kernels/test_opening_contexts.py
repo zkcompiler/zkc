@@ -33,7 +33,7 @@ protocol Run roles(P)(shift:F@P,bound_shift:F@P,state_shift:F@P,
    bound_width,height,zeta,descriptors);
  let next=CONTINUE;
  return(result=RESULT,weight=WEIGHT);
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -76,7 +76,7 @@ def test_context_joins_and_weight_continuation(toolchain, journal, directory, op
     else:
         invalid += [{'position': '4'}, {'state_position': '1'}, {'width': '2'}]
     for number, change in enumerate(invalid):
-        entry.run(f'invalid-{number}', base | change, refuses='entry-run-incomplete')
+        entry.run(f'invalid-{number}', base | change, refuses='entry-host-run-failed')
     for number, change in enumerate([{'bound_shift': '7'}, {'bound_width': '2'}, {'height': '0'}]):
         entry.run(f'empty-invalid-{number}', base | {'empty': True} | change,
-                  refuses='entry-run-incomplete')
+                  refuses='entry-host-run-failed')

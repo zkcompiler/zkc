@@ -17,6 +17,7 @@ let
     "uv.lock"
     "common/tests/conftest.py"
     "common/tests/support"
+    "python/src"
   ];
   compiler = [
     "compiler/CMakeLists.txt"

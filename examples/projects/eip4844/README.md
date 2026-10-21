@@ -6,13 +6,13 @@ byte-compatible with c-kzg-4844 v2.1.8.
 
 | Entry | Kind | EIP-4844 function |
 |---|---|---|
-| `BlobToCommitment` | run | `blob_to_kzg_commitment` |
-| `ComputeKzgProof` | run | `compute_kzg_proof` |
-| `ComputeChallenge` | run | `compute_challenge` |
-| `PointEvaluationPrecompile` | run | point evaluation precompile `0x0A` |
-| `KzgProof` | proof | `verify_kzg_proof` (prover: the opening for a stated point and value) |
-| `BlobProof` | proof | `compute_blob_kzg_proof` and `verify_blob_kzg_proof` |
-| `BlobBatchProof` | proof | `verify_blob_kzg_proof_batch` (prover: every blob proof), at most 64 blobs |
+| `BlobToCommitment` | `entry fn` | `blob_to_kzg_commitment` |
+| `ComputeKzgProof` | `entry fn` | `compute_kzg_proof` |
+| `ComputeChallenge` | `entry fn` | `compute_challenge` |
+| `PointEvaluationPrecompile` | `entry fn` | point evaluation precompile `0x0A` |
+| `KzgProof` | `proof` | `verify_kzg_proof` (prover: the opening for a stated point and value) |
+| `BlobProof` | `proof` | `compute_blob_kzg_proof` and `verify_blob_kzg_proof` |
+| `BlobBatchProof` | `proof` | `verify_blob_kzg_proof_batch` (prover: every blob proof), at most 64 blobs |
 
 Blobs and the prover's setup are large, so the sample inputs reference native
 frame files beside each document. `prepare.py` writes them from the
@@ -22,7 +22,7 @@ run here:
 
 ```sh
 python3 prepare.py
-zkc run BlobToCommitment --input=P=build/inputs/example.BlobToCommitment/P.json
+zkc run BlobToCommitment --input=build/inputs/example.BlobToCommitment/arguments.json
 zkc prove BlobProof --public=build/inputs/example.BlobProof/public.json \
   --witness=build/inputs/example.BlobProof/witness.json --output=build/blob.proof --allow-authored
 zkc verify BlobProof --public=build/inputs/example.BlobProof/public.json \
@@ -53,7 +53,7 @@ this block in a separate consumer tree using only declared package dependencies.
 ```sh zkc-example
 python3 prepare.py --output=build/inputs
 zkc check
-zkc run ComputeChallenge --input=P=build/inputs/example.ComputeChallenge/P.json
+zkc run ComputeChallenge --input=build/inputs/example.ComputeChallenge/arguments.json
 zkc prove BlobProof --public=build/inputs/example.BlobProof/public.json --witness=build/inputs/example.BlobProof/witness.json --output=build/blob.proof --allow-authored
 zkc verify BlobProof --public=build/inputs/example.BlobProof/public.json --proof=build/blob.proof --allow-authored
 ```

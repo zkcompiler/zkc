@@ -53,7 +53,7 @@ protocol Run roles(P)(cs:Vector<F>@P,shift:F@P,beta:F@P,n:index@P,query:index@P)
   let result @P =work(cs,shift,beta,n,query);
   return(result=result);
 }}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(619 + d)
@@ -84,7 +84,7 @@ run Demo=Run;
     for name, port, value in [('non-power', 'n', 3), ('zero-shift', 'shift', wire('field', ZERO, extension)),
                               ('out-of-range', 'query', 4), ('max-query', 'query', 2**64 - 1),
                               ('singleton', 'n', 1)]:
-        entry.run(name, inputs | {port: value}, refuses='entry-run-incomplete')
+        entry.run(name, inputs | {port: value}, refuses='entry-host-run-failed')
 
 
 def test_index_collection_transport_preserves_duplicates_above_field_characteristic(toolchain, journal, directory):
@@ -102,10 +102,10 @@ protocol Run roles(P,V)(q:index@P)->(result:Indices@V,count:index@V) {
   let count @V =size(received);
   return(result=received,count=count);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source)
     for query in (0, P + 1, 2**64 - 1):
-        outputs = entry.run_roles(str(query), {'P': {'inputs': {'q': query}}, 'V': {'inputs': {}}})
+        outputs = entry.run_roles(str(query), {'P': {'q': query}, 'V': {}})
         expected = [str(query)] * 2
         assert outputs == {'P': {}, 'V': {'result': expected, 'count': '2'}}

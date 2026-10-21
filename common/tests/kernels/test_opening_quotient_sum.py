@@ -3,7 +3,7 @@
 import pytest
 
 from coset_reference import CosetReference
-from entry import Entry
+from entry import Entry, joint_execution
 
 
 FIELDS = ('bn254.fr', 'koala-bear', 'koala-bear.ext4-binomial3',
@@ -39,7 +39,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,
     selected,points,claims,weights,initial);
   return(result=result,alias=xs,initial=initial);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 
@@ -106,8 +106,8 @@ run Demo=Work;
               'weights': list(map(f.encode, weights))}, expected)
 
     def refuse(name, changes, cause):
-        report = entry.run(name, data | changes, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, data | changes, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'backend', {'omitted_bytes': 0, 'text': cause}]
 
     for name, changes, cause in [

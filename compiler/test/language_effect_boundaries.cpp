@@ -1,5 +1,6 @@
 #include "../lib/Language/Effects.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::language::detail;
@@ -119,10 +120,11 @@ protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
  }
  return x;
 }
-run Run=Demo;
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )",
                                   limits));
-        auto closed = take(closeEntry(project, "m::Run", limits));
+        auto closed =
+            take(zkc::test::closeProtocolDeployment(project, "m::Run", limits));
         succeeds(checkScopedSpecialization(closed, limits));
         limits.expressionDepth = 1;
         refuses(checkScopedSpecialization(closed, limits), "source.limit");
@@ -158,7 +160,7 @@ run Run=Demo;
           statements + "}protocol Demo roles(P)(go:" + flagType +
           "@P,n:index@P,x:Fr@P)->(r:Fr@P){"
           "return pick(go,n,x,fn(v)=>v,fn(v)=>{require v==1;v});}"
-          "run Run=Demo;";
+          "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }";
       auto project = take(check(source));
       const auto &decl = named(project.declarations(), "pick");
       require(decl.body->effects.dependencies ==
@@ -166,7 +168,7 @@ run Run=Demo;
                   decl.body->effects.fixed == Effects{},
               "region capture changed callback effect identity");
       succeeds(checkScopedElaboration(project));
-      auto closed = take(closeEntry(project, "m::Run"));
+      auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
       const auto &closedEffects =
           named(closed.declarations(), "pick").body->effects;
       require(closedEffects.fixed == Effects{true, false} &&
@@ -338,7 +340,7 @@ fn branches(go:bool,x:Fr)->Fr effects(stop){
               else {require go; x};
 }
 protocol Demo roles(P)(go:bool@P,x:Fr@P)->(r:Fr@P){return branches(go,x);}
-run Run=Demo;
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
   const std::string protocolRegions = R"(
 protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
@@ -349,7 +351,7 @@ protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
  }
  return x;
 }
-run Run=Demo;
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
   for (bool specialized : {false, true})
     for (bool protocol : {false, true}) {
@@ -365,7 +367,8 @@ run Run=Demo;
             [&] {
               auto project =
                   take(check(protocol ? protocolRegions : localRegions));
-              auto closed = take(closeEntry(project, "m::Run"));
+              auto closed =
+                  take(zkc::test::closeProtocolDeployment(project, "m::Run"));
               succeeds(checkScopedElaboration(project));
               succeeds(checkScopedSpecialization(closed));
               auto declarations =

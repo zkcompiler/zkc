@@ -22,7 +22,9 @@ algorithms live in [`libraries/`](../../libraries/README.md). Language feature
 clients and compiler edge cases live under `common/tests/fixtures/projects/`.
 
 With built tools on `PATH`, run `zkc check` inside a project, then `zkc prove`
-and `zkc verify`. `zkc run` selects an interactive Entry when one is declared.
+and `zkc verify`. `zkc run ProtocolName` uses a concrete protocol's default run;
+`zkc run 'ProtocolName<Arguments>'` selects a closed generic specialization.
+An `entry fn` can name that configuration or add application logic.
 `zkc prepare` creates missing input templates and preserves existing values.
 See the [walkthrough](../../docs/getting-started.md) and
 [Entry guide](../../docs/runtime/entries.md) for selection and input paths.

@@ -27,6 +27,8 @@ struct BodyPlan {
 class Checker {
 public:
   Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
+  /// Static selection over completed signatures and frozen source namespaces.
+  Checker(CheckedStorage &, Work &, const NameEnvironment &);
   // Lazy signature completion captures this driver; keep its address stable.
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
@@ -114,12 +116,9 @@ private:
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, DeclarationId> modules;
   std::vector<DeclarationId> moduleIds;
-  struct ScopeBinding {
-    DeclarationId target;
-    Span span;
-    bool isPublic;
-    std::optional<DeclarationId> provider;
-  };
+  using ScopeBinding = SourceBinding;
+  bool externalSelection = false;
+  std::map<std::string, std::set<uint32_t>> externalNames;
   bool checkingVisibility = false;
   std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
@@ -150,6 +149,10 @@ private:
   std::set<unsigned> formingParameters;
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   bool entries();
+  bool entry(DeclarationId, unsigned = 1);
+  bool generatedSignature(Declaration &, unsigned);
+  std::vector<unsigned> entryStates;
+  bool constructionsReady = false;
   bool constructions();
   std::optional<DeclarationId> constructionMember(const Type &, llvm::StringRef,
                                                   Span);

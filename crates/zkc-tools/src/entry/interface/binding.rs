@@ -79,14 +79,19 @@ impl BoundInterface {
                         self.options.calculation_batching,
                     ]
                 && entry.entry() == p.symbol
-                && &entry.producer().role == prover
-                && &entry.validator().role == verifier
+                && native.producer == prover
+                && native.validator == verifier
                 && native.acceptance == proof.acceptance
                 && native.suite == suite
                 && native.construction == proof.construction.as_deref().unwrap_or("")
                 && native.format == proof.format
                 && native.services == services
-                && native.roles.len() == p.roles.len(),
+                && native.roles.len()
+                    == if native.operation.is_some() && native.roles.len() == 1 {
+                        1
+                    } else {
+                        p.roles.len()
+                    },
             E::NativeBinding,
         )?;
         let expected_public = leaves(self.public_ports().map(|p| p.definition));
@@ -96,7 +101,19 @@ impl BoundInterface {
         )?;
         for ports in self.roles() {
             let role = &ports.native_name;
-            let actual = native.roles.get(role).ok_or(E::NativeBinding)?;
+            let Some(actual) = native.roles.get(role) else {
+                require(
+                    native.operation.is_some_and(|producing| {
+                        if producing {
+                            role == verifier
+                        } else {
+                            role == prover
+                        }
+                    }),
+                    E::NativeBinding,
+                )?;
+                continue;
+            };
             self.ports(
                 &leaves(self.input_ports(ports).map(|p| p.definition)),
                 actual.data.iter().map(|p| (p.original, &p.logical)),
@@ -111,7 +128,8 @@ impl BoundInterface {
                 entry.producer()
             } else {
                 entry.validator()
-            };
+            }
+            .ok_or(E::NativeBinding)?;
             let contracts: Vec<_> = self.services(ports).collect();
             require(
                 contracts.len() == native_role.services.len(),

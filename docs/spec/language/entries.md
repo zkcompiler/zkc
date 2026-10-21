@@ -2,21 +2,98 @@
 
 This native contract defines closed Entry jobs and their source-level associations.
 
-## Entry jobs
+## Entry functions
 
-`run` selects joint execution; `proof` selects proving and verification. They
-are contextual at declaration positions, so ordinary variables and fields may be
-named `run` or `proof`. Both produce the same checked Entry abstraction, with an
-explicit execution kind.
+A protocol without static parameters provides a default run Entry selected by
+its qualified protocol name, or an unambiguous short name. It reuses the generated
+`Protocol::run` signature and has the Host body `return Protocol::run(inputs)`.
+Its Entry kind is `function`; compilation, preparation, bindings, execution and
+source correspondence follow the ordinary Entry function contracts. The internal
+generated function name is not a second selectable Entry name.
+
+The inventory includes these default Entries alongside authored Entry functions
+and proofs, including imported concrete protocols. Omitted selectors require one
+eligible candidate; defaults never shadow authored Entries. An explicit protocol
+selector may apply static arguments, as in `Schnorr<G>`. It uses the source path
+and static-argument grammar, consumes the entire selector, and checks all sorts,
+requirements and closedness through the ordinary argument checker. Selectors are
+bounded to 4096 UTF-8 bytes, including the reported qualified spelling, and the
+existing token/type/work limits. Protocol
+ambiguity is checked before argument or execution-kind validation. Non-protocol
+Entries cannot receive static arguments through this interface.
+
+Static names use the frozen checked namespaces of captured modules, including
+resolved imports. An unqualified binding must have one declaration identity
+across those namespaces; repeated imports of one declaration are not ambiguous.
+Qualified paths and associated projections use the source resolver; an absolute
+path such as `::example::G` explicitly starts at a captured module root. No module's
+lexical context or enclosing static arguments are selected implicitly. All
+required protocol parameters, including inherited module parameters, must be
+supplied. No runtime-value inference, proof configuration or Host authority is
+inferred.
+
+The public selected name is the qualified protocol path followed by the supplied
+argument tokens with whitespace/comments removed; string tokens are unchanged.
+Its spelling is replayable, independent of caller scope. Equivalent argument
+spellings may name different external selections, while the closed computation
+retains the existing normalized type-argument identity. Only a requested generic
+specialization joins that check response's finite Entry inventory. Definition
+discovery, omitted selection and selector-free preparation enumerate no generic
+instances. The captured project and checked source declarations remain unchanged.
+
+`entry fn Name(parameters) -> Result { body }` declares an externally callable
+Host function. Visibility, named arguments, ordinary generic helpers and Local
+body inference follow the existing callable rules. Result annotations may be
+omitted when uniquely inferable. The body has Host stage, independently of its
+Local computational mode. Ordinary Local and Math helpers cannot invoke Host
+functions or deployments. Calls resolve statically; cycles and ambiguous targets
+refuse. No runtime function-name dispatch is introduced.
+
+Entry functions may perform ordinary calculations, execute protocols or call
+proof operations. Calls between entry functions use ordinary function-call syntax
+and share the outer invocation's execution context and cumulative resource policy.
+
+Host control uses the existing let/mut, products, variants, if, match, finite for,
+require and final-return conventions. Numerical islands lower through the existing
+Kernel and physical program pipeline. Only reached calls execute, in operand and
+control order. No retry, memoization, parallel execution or effect reordering is
+implicit. Invalid dormant branches and callable contracts are checked eagerly.
+
+A closed protocol specialization `P<A>` generates nominal `Inputs`, `RunResult`
+and `run(inputs)`. Ordinary Inputs/RunResult fields are indexed by participant;
+shared ports retain distinct role components. A proof `D` generates `Public`,
+`Witness`, candidate `Proof { bytes }`, projection-only `ProveResult`, and
+`VerifyResult` with `Accepted { outputs }` and `Rejected` alternatives. The
+operation signatures are `D::prove(public, witness)` and
+`D::verify(public, proof)`. Exact specialization identity is part of each generated
+type; structurally equal products do not make deployments interchangeable.
+Service, setup and resource authority are not freely constructible data fields.
+Only ordinary copyable native data crosses the Host numerical boundary;
+affine managed custody remains with its native owner. Internal numerical
+transport may preserve opaque or restricted nominal types, including existing
+native results. It grants no source constructor authority: opaque factories
+require their defining module's authority, and generated native results remain
+projection-only. Compiler publication checks this source correspondence.
+External input construction separately requires the schema's constructor
+permission; numerical result reconstruction does not grant that permission.
+
+Only successful explicit source return roots are published. Normal joint-run
+false is ordinary data. Semantic verifier rejection produces Rejected without
+success outputs; malformed framing, native stops and cleanup failures do not
+produce a successful source return. Returning a candidate does not generate an
+implicit verifier for the wrapping Entry. Its declarative proof remains callable
+with an independently supplied public statement.
+
+## Proof declarations
+
+`proof` is contextual at declaration positions. A declaration closes a protocol's
+static parameters and chooses proving/verification policy:
 
 ```text
-entry-decl := ("run" | "proof") name "=" path static-args?
-              (";" | "{" clause* "}")
+proof-decl := "proof" name "=" path static-args? (";" | "{" clause* "}")
 ```
 
-`run Session = Protocol<Args>;` selects a joint run. Its optional block accepts
-only setup associations; an empty block is equivalent to the short form.
-A `proof` targeting a protocol requires a complete proof block:
+A protocol target requires a complete proof configuration block:
 
 ```text
 proof Proof = Schnorr<G> {
@@ -45,7 +122,7 @@ Optional `complete port.field;` selects a producer Boolean output or product
 field, for example `complete result.ready;`. True permits completion; false
 withholds that attempt's proof. This does not change the protocol body or add a
 guard. Ordinary `prove` uses one attempt and refuses an incomplete result; the
-application must call `prove_attempts` with a larger count to authorize retries. Run Entries cannot carry a completion selection.
+application must call `prove_attempts` with a larger count to authorize retries. Completion belongs to proof production, not ordinary joint execution.
 
 `construction authored;` selects the existing no-derived-transcript profile.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
@@ -94,7 +171,7 @@ native statement ABI.
 
 An Entry may name another complete Entry, including one declared later. An alias
 uses the short form without a block, even an empty one. Aliases
-must have the same run/proof kind and inherit the protocol, closed arguments,
+must be proof aliases and inherit the protocol, closed arguments,
 setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
@@ -240,8 +317,9 @@ correctness or protocol security.
 
 ### Selection
 
-The checked project exposes all Entry declaration IDs sorted by qualified name.
-`selectEntry` and `closeEntry` share these rules: an exact qualified name must
+The checked project exposes eligible concrete Entry declaration IDs sorted by
+qualified name. `resolveEntry`, `selectEntry` and `closeEntry` share these rules:
+an exact qualified name must
 name an Entry; a short name must match exactly one Entry's terminal identifier;
 an empty selector requires exactly one Entry across the capture. Complete
 aliases remain distinct candidates. Selectors use exact NFC names under the
@@ -249,17 +327,22 @@ aliases remain distinct candidates. Selectors use exact NFC names under the
 is performed. Missing or ambiguous selections refuse with
 `source.entry` and list canonical candidate names and kinds. Adding candidates
 cannot silently change a previously successful selection to another Entry.
+An explicit generic protocol selector follows the static argument rules above.
+`resolveEntry` returns the generated run declaration, checked arguments and public
+selection name; `selectEntry` returns only that declaration ID. `closeEntry`
+specializes through the same resolution, without changing the checked inventory.
 
 Definition checking without selection does not close every Entry. The compiler's
 `zkc.source-check/0` diagnostic report includes an `entries` array of objects with
-`name` (canonical qualified name) and `kind` (`run` or `proof`). A selected check
-reports its canonical `entry` and `original` identity, with `scope: "entry"`;
+`name` (qualified selection name) and `kind` (`function` or `proof`). A selected
+generic instance joins only that response's inventory. A selected check reports
+its qualified `entry` and `original` identity, with `scope: "entry"`;
 an unselected check has `scope: "definitions"` and no selected Entry. Detailed
 public callable inspection remains the optional `declarations` array.
 
 ### Setup associations
 
-Run and proof Entries may associate inputs with named setup slots:
+Proof declarations and protocol metadata may associate inputs with named setup slots:
 
 ```text
 proof Proof = Opening<Kzg> {
@@ -270,7 +353,9 @@ proof Proof = Opening<Kzg> {
   accept accepted;
   construction authored;
 }
-run Session = Opening<Kzg> { setup pcs { vk, pk, statement.commitment }; }
+entry fn Session(inputs: Opening<Kzg>::Inputs) {
+  return Opening<Kzg>::run(inputs);
+}
 ```
 
 A selector names an input or a visible product subtree. It retains logical port
@@ -292,8 +377,8 @@ at the verifier. Every verifier-key input must satisfy that rule; at most 64
 verifier-key ports are admitted in a proof Entry, independently of the slot count.
 Prover-key inputs must remain at the prover. The Host pins
 all keys in one slot to the same application-selected identity. Multiple slots
-may select different identities. A run slot does not require a verifier-key input.
-A run block accepts setup associations without proof choices. A proof block
+may select different identities. A joint invocation slot does not require a verifier-key input.
+A protocol association supplies the joint invocation contract. A proof block
 always requires its complete configuration, even if it also has setup slots.
 
 Explicit setup association admits whole builtin `prover_key` and `verifier_key`

@@ -75,6 +75,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   const auto id = uint32_t(&expr - syntax.expressions.data());
   const auto &target = inference->callees.at(id);
   auto &callee = checker.output.declarations[target.declaration.index];
+  if (callee.generated && !callee.generated->constructible &&
+      (callee.kind == Declaration::Kind::Record ||
+       callee.kind == Declaration::Kind::Variant)) {
+    fail("source.host-result", "native results cannot be constructed",
+         expr.span);
+    return {};
+  }
   if (callee.kind == Declaration::Kind::Variant) {
     auto split = StringRef(expr.text).rsplit("::");
     const auto &type = inference->expressions.at(id);
@@ -135,11 +142,18 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return emit(Construct{{*value}, {}}, type, {}, expr.span);
   }
   if (callee.kind != Declaration::Kind::Math &&
-      callee.kind != Declaration::Kind::Local) {
+      callee.kind != Declaration::Kind::Local &&
+      callee.kind != Declaration::Kind::EntryFunction) {
     fail("source.call", "expected a mathematical or local helper", expr.span);
     return {};
   }
-  bool ordered = callee.kind == Declaration::Kind::Local;
+  bool host = callee.kind == Declaration::Kind::EntryFunction ||
+              (callee.generated && callee.generated->operation);
+  if (host && body.stage != Body::Stage::Host) {
+    fail("source.stage", "Host calls require an entry function", expr.span);
+    return {};
+  }
+  bool ordered = callee.kind == Declaration::Kind::Local || host;
   if (ordered && math()) {
     fail("source.mode", "ordered calls require local or protocol mode",
          expr.span);
@@ -446,6 +460,19 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!mathematical)
       action.bindingArguments = std::move(roots);
     return emitCall(std::move(action), {});
+  }
+  if (callee.generated && callee.generated->operation) {
+    for (auto operand : args)
+      if (!checker.types.hostData(body.values[operand.index].type, expr.span,
+                                  &decl))
+        return {};
+    if (!checker.types.hostData(*resultType, expr.span, &decl))
+      return {};
+    body.effects.fixed.mayStop = true;
+    return emitCall(HostInvocation{*callee.generated->operation,
+                                   callee.generated->target, staticArgs,
+                                   std::move(args)},
+                    {});
   }
   auto result = emitCall(HelperCall{callee.id,
                                     std::move(args),

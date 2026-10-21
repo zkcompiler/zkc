@@ -90,6 +90,8 @@ pub(crate) fn run(args: &Arguments<'_>) -> Value {
             for argument in &recipe.args {
                 let resolved = if let Some((flag, value)) = argument.split_once('=') {
                     if [
+                        "--input",
+                        "--invocations",
                         "--public",
                         "--witness",
                         "--proof",
@@ -105,7 +107,7 @@ pub(crate) fn run(args: &Arguments<'_>) -> Value {
                             "{flag}={}",
                             manifest.parent().unwrap().join(value).display()
                         )
-                    } else if ["--input", "--key"].contains(&flag) {
+                    } else if flag == "--key" {
                         let (name, path) = value.split_once('=').ok_or("source-test-format")?;
                         format!(
                             "{flag}={name}={}",

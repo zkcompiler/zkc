@@ -13,18 +13,18 @@ PROJECT = 'examples/projects/sigma'
 @pytest.mark.parametrize('kind', ['And', 'Equality'])
 def test_published_sigma_entries(toolchain, journal, directory, kind):
     package, pin = build(toolchain, journal, directory, PROJECT, kind + 'Interactive', [])
-    roles = {role: {'inputs': read(PROJECT, role, kind + 'Interactive')} for role in ('P', 'V')}
-    public = roles['V']['inputs']
+    roles = {role: read(PROJECT, role, kind + 'Interactive') for role in ('P', 'V')}
+    public = roles['V']
     generator = point(public['first_base'])
     assert point(public['first_point']) == multiply(generator, 3)
     assert point(public['second_base']) == multiply(generator, 5)
     assert point(public['second_point']) == multiply(generator, 35 if kind == 'And' else 15)
-    inputs = input_files(journal, 'interactive', roles=roles)
+    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': roles})
     outputs = directory / 'outputs.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={pin}', *inputs, f'--results={outputs}'])
     assert report['status'] == 'executed'
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] is True
 
     entry = kind + 'Proof'
     package, pin = build(toolchain, journal, directory, PROJECT, entry, [])
@@ -77,30 +77,30 @@ def test_sigma_equations_against_independent_reference(toolchain, journal, direc
     protocol = 'SchnorrAnd' if kind == 'And' else 'ChaumPedersen'
     client.write_text(f'''module example;
 domain G=group("bls12-381.g1");
-run Demo=sigma::{protocol}<G>;
+entry fn Demo(inputs: sigma::{protocol}<G>::Inputs) {{ return sigma::{protocol}<G>::run(inputs); }}
 ''')
     package = directory / 'fixed.zkpkg'
     entry = kind + 'Interactive'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                              f'--module=sigma={library}', f'--module=example={client}',
                              'example::Demo', f'--output={package}'])
-    roles = {role: {'inputs': read(PROJECT, role, entry)} for role in ('P', 'V')}
-    roles['P']['inputs'].update(first_nonce='11', second_nonce='13', nonce='11')
-    roles['V']['inputs']['challenge'] = '17'
+    roles = {role: read(PROJECT, role, entry) for role in ('P', 'V')}
+    roles['P'].update(first_nonce='11', second_nonce='13', nonce='11')
+    roles['V']['challenge'] = '17'
     if change == 'point':
         for role in roles.values():
-            role['inputs']['first_point'] = role['inputs']['first_base']
+            role['first_point'] = role['first_base']
     if change == 'witness':
-        roles['P']['inputs']['first_scalar' if kind == 'And' else 'scalar'] = '4'
-    witness = roles['P']['inputs']
+        roles['P']['first_scalar' if kind == 'And' else 'scalar'] = '4'
+    witness = roles['P']
     scalars = ([int(witness['first_scalar']), int(witness['second_scalar'])] if kind == 'And'
                else [int(witness['scalar'])] * 2)
-    expected = accepts(roles['V']['inputs'], scalars, [11, 13] if kind == 'And' else [11, 11],
+    expected = accepts(roles['V'], scalars, [11, 13] if kind == 'And' else [11, 11],
                        delivered=18 if change == 'challenge' else 17,
                        response_delta=int(change == 'response'))
     assert expected == (change == 'valid')
-    inputs = input_files(journal, 'fixed', roles=roles)
+    inputs = input_files(journal, 'fixed', package=package, arguments={'inputs': roles})
     outputs = directory / 'fixed.json'
     journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                   f'--sha256={compiled["package_sha256"]}', *inputs, f'--results={outputs}'])
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] == expected
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] == expected

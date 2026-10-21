@@ -49,6 +49,35 @@ pub trait Value: Clone {
     fn control_index(&self) -> Result<u64, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
+    /// Conservative retained allocation bound for native control scalar
+    /// construction, before invoking either constructor. The default covers the
+    /// installed native leaves. An adapter with larger control values must
+    /// override it; constructors must not exceed their advertised bound.
+    fn control_allocation_bound() -> usize {
+        512
+    }
+    /// Conservative allocation bound before packing a variant. This includes
+    /// the descriptor, payload slots and full payload charges, so aliases may
+    /// be overreserved. Override only with an independently valid upper bound.
+    /// Borrow operands so this bound needs no owned payload allocation or clones.
+    fn variant_allocation_bound<'a>(
+        descriptor: &super::VariantDescriptor,
+        payload: impl ExactSizeIterator<Item = &'a Self>,
+    ) -> usize
+    where
+        Self: 'a,
+    {
+        let slots = payload
+            .len()
+            .checked_mul(std::mem::size_of::<Self>().max(512))
+            .and_then(|n| n.checked_add(descriptor.retained_bytes()))
+            .and_then(|n| n.checked_add(512));
+        payload
+            .fold(slots, |sum, value| {
+                sum.and_then(|n| n.checked_add(value.retained_bytes()))
+            })
+            .unwrap_or(usize::MAX)
+    }
     /// Construct the native Boolean literal; the instance checks its full type
     /// and charges the ordinary instruction and retained-value budgets.
     fn from_control_bool(_value: bool) -> Result<Self, BackendError> {

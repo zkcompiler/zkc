@@ -3,7 +3,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc_tools::{
-    entry::{self, NamedValues, ProofRequest, SetupAuthority},
+    entry::{self, FunctionInterface, NamedValues, Package, ProofRequest, SetupAuthority},
     execution::Capacity,
 };
 fn hex(bytes: &[u8]) -> String {
@@ -118,14 +118,63 @@ pub(super) fn setups(
         .as_object_mut()
         .unwrap()
         .extend(public.as_object().unwrap().clone());
-    let p = save(directory, "cli-P.json", &producer_values);
-    let v = save(directory, "cli-V.json", &verifier_values);
+    save(directory, "cli-P.json", &producer_values);
+    save(directory, "cli-V.json", &verifier_values);
+    let bytes = std::fs::read(directory.join("pcs-setup-Run.zkpkg")).unwrap();
+    let package =
+        Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap();
+    let interface = FunctionInterface::read(&package).unwrap();
+    let mut arguments = serde_json::Map::new();
+    let mut external = serde_json::Map::new();
+    for role in &interface.signature().parameters[0].schema.fields {
+        let mut supplied = match role.name.as_str() {
+            "P" => producer_values.as_object().unwrap().clone(),
+            "V" => verifier_values.as_object().unwrap().clone(),
+            _ => panic!("unexpected setup role"),
+        };
+        let data = role
+            .schema
+            .fields
+            .iter()
+            .map(|field| (field.name.clone(), supplied.remove(&field.name).unwrap()))
+            .collect::<serde_json::Map<_, _>>();
+        arguments.insert(role.name.clone(), json!(data));
+        external.insert(role.name.clone(), json!(supplied));
+    }
+    let arguments_file = save(
+        directory,
+        "cli-run-arguments.json",
+        &json!({"inputs": arguments}),
+    );
+    let requirements = FunctionInterface::deployment_interfaces(&package).unwrap();
+    let [deployment] = requirements.as_slice() else {
+        panic!("expected one setup-bearing joint child");
+    };
+    assert_eq!(deployment.operation(), "run");
+    let id = deployment.id();
+    let setup_files = producer
+        .setups
+        .keys()
+        .map(|slot| (slot.clone(), format!("cli-vk-{slot}.bin")))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let context_file = save(
+        directory,
+        "cli-run-invocations.json",
+        &json!({
+            "format": "zkc.entry-invocations/0",
+            "deployments": {id: {
+                "operation": "run",
+                "session": "setup_files",
+                "authority": serde_json::from_slice::<Json>(&std::fs::read(&authority_file).unwrap()).unwrap(),
+                "services": {}, "setups": setup_files, "inputs": external,
+            }},
+        }),
+    );
     let mut running = target(directory, "pcs-setup-Run.zkpkg");
-    running.extend(settings);
     running.extend([
-        "--session=setup_files".into(),
-        format!("--input=P={p}"),
-        format!("--input=V={v}"),
+        format!("--input={arguments_file}"),
+        format!("--invocations={context_file}"),
+        "--no-results".into(),
     ]);
     let result = zkc_tools::cli::run("run", &running);
     assert_eq!(result["status"], "executed", "{result}");

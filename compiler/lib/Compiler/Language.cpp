@@ -3,6 +3,8 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/Host.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
@@ -249,10 +251,21 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   if (!compared)
     return located(compared.takeError());
   uint64_t remaining = limits.work;
-  if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
-    return located(std::move(error));
-  if (auto error = mathematical::checkMapFormulas(*module, remaining))
-    return located(std::move(error), true);
+  auto checkMathematics = [&](mlir::ModuleOp subject) -> Error {
+    if (auto e = mathematical::checkFormulaDefinitions(subject, remaining))
+      return e;
+    return mathematical::checkMapFormulas(subject, remaining);
+  };
+  if (entry.entry().kind == Declaration::Kind::EntryFunction) {
+    for (auto numeric : module->getOps<mlir::ModuleOp>()) {
+      auto copy = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::cast<mlir::ModuleOp>(numeric->clone()));
+      copy->getOperation()->removeAttr("entry.calculation");
+      if (auto e = checkMathematics(*copy))
+        return located(std::move(e), true);
+    }
+  } else if (auto e = checkMathematics(*module))
+    return located(std::move(e), true);
   auto storage = std::make_shared<CheckedOriginal::Storage>(entry);
   storage->limits = limits;
   storage->original = original.str();
@@ -321,10 +334,16 @@ const Correspondence &CheckedOriginal::correspondence() const {
 StringRef CompiledEntry::bytes() const {
   if (auto *run = std::get_if<CompiledRun>(&compiled))
     return run->bundle;
+  if (auto *host = std::get_if<CompiledHost>(&compiled))
+    return host->artifact;
   return std::get<CompiledNativeProof>(compiled).deployment;
 }
 Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                                      const EntryOptions &options) {
+  auto scope =
+      options.observations
+          ? options.observations->scope(original.entry().root().qualifiedName)
+          : CompilationObservation::Scope{};
   auto located = [&](Error error) -> Error {
     return handleErrors(
         std::move(error),
@@ -355,6 +374,12 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
               failure.code, failure.detail, original.entry().entry().span, {}});
         });
   };
+  if (original.interface().host) {
+    auto host = compileHost(original, options);
+    if (!host)
+      return located(host.takeError());
+    return CompiledEntry(original, EntryArtifact(std::move(*host)), options);
+  }
   const auto &view = original.interface();
   const auto &protocol = view.selectedProtocol();
   if (view.proof) {
@@ -374,6 +399,10 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     NativeProofOptions native;
     native.observations = options.observations;
     native.policy = NativeProofSelection{selection};
+    if (auto operation = original.entry().invocationKind())
+      native.operation = *operation == HostInvocation::Kind::Verify
+                             ? NativeProofOperation::Verify
+                             : NativeProofOperation::Prove;
     native.simplify = options.simplify;
     native.releaseStorage = options.releaseStorage;
     native.mathematicalSelection = options.mathematicalSelection;

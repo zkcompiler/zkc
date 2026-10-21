@@ -77,6 +77,8 @@ pub struct ProofWriter {
     bytes: Vec<u8>,
     messages: usize,
     limit: usize,
+    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    retained: Vec<zkc_runtime::vm::LiveReservation>,
 }
 impl ProofWriter {
     pub fn new(format: ProofFormat, expected_binding: &[u8; 32]) -> Self {
@@ -90,6 +92,8 @@ impl ProofWriter {
             bytes,
             messages: 0,
             limit: MAX_PROOF_BYTES,
+            ledger: None,
+            retained: Vec::new(),
         }
     }
     /// A host can lower the buffer ceiling, including the framing header.
@@ -110,6 +114,24 @@ impl ProofWriter {
         writer.limit = limit;
         Ok(writer)
     }
+    pub(super) fn with_shared_ledger(
+        format: ProofFormat,
+        expected_binding: &[u8; 32],
+        limit: usize,
+        ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    ) -> Result<Self, FormatError> {
+        let header = if format == ProofFormat::Native {
+            HEADER_BYTES
+        } else {
+            0
+        };
+        let guard = crate::host::shared::allocation(ledger.as_ref(), header)
+            .map_err(|_| FormatError::Limit)?;
+        let mut writer = Self::with_limit(format, expected_binding, limit)?;
+        writer.ledger = ledger;
+        writer.retained.extend(guard);
+        Ok(writer)
+    }
     pub fn message(&mut self, payload: &[u8]) -> Result<(), FormatError> {
         if self.format == ProofFormat::RawBytes && self.messages != 0 {
             return Err(FormatError::Trailing);
@@ -126,8 +148,11 @@ impl ProofWriter {
         if self.bytes.len().saturating_add(additional) > self.limit {
             return Err(FormatError::Limit);
         }
+        let guard = crate::host::shared::allocation(self.ledger.as_ref(), additional)
+            .map_err(|_| FormatError::Limit)?;
+        self.retained.extend(guard);
         self.bytes
-            .try_reserve(additional)
+            .try_reserve_exact(additional)
             .map_err(|_| FormatError::Allocation)?;
         if self.format == ProofFormat::Native {
             self.bytes
@@ -144,10 +169,15 @@ impl ProofWriter {
         self.bytes.len()
     }
     pub fn finish(self) -> Result<Vec<u8>, FormatError> {
+        self.finish_retained().map(|v| v.0)
+    }
+    pub(super) fn finish_retained(
+        self,
+    ) -> Result<(Vec<u8>, Vec<zkc_runtime::vm::LiveReservation>), FormatError> {
         if self.format == ProofFormat::RawBytes && self.messages != 1 {
             return Err(FormatError::Truncated);
         }
-        Ok(self.bytes)
+        Ok((self.bytes, self.retained))
     }
 }
 

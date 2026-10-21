@@ -69,7 +69,7 @@ def test_failed_report_checks_declared_backends_before_output(modules, tmp_path,
     document = saved_host_manifest(operation='verify')
     document.update(status='failed', results=[])
     job = document['matrix'][0]
-    job.update(boundary='admitted_entry_call' if kind == 'host' else 'admitted_run_call')
+    job.update(boundary='admitted_entry_call' if kind == 'host' else 'admitted_function_call')
     job['backend']['kind'] = kind
     if fault == 'absent_backend': del job['backend']
     elif fault == 'null_backend': job['backend'] = None
@@ -314,13 +314,13 @@ def test_run_case_and_incorrect_result_gate_keep_identity_and_ingress(modules, m
     assert selected == jobs and selected[0].case == 'same-case'
     assert selected[0].backend['ingress'] == negative[0]['backend']['ingress'] == policy
     assert manifest['contracts']['same-case']['ingress_policy'] == policy
-    assert negative[0]['backend']['roles'] != selected[0].backend['roles']
+    assert negative[0]['backend']['arguments'] != selected[0].backend['arguments']
 
 
 @pytest.mark.parametrize('policy', ['json', 'wire', 'native', 'prepared'])
 def test_run_worker_uses_one_statement_and_the_same_report_contract(modules, tmp_path, policy):
     report = lifecycle_worker() if policy == 'json' else preowned(policy)
-    report.update(boundary='admitted_run_call', proof_bytes=0)
+    report.update(boundary='admitted_function_call', proof_bytes=0)
     life = report['lifecycle']
     life['preparation_limits'] = None
     life['input_setup'] = life['input_setup'][:1]
@@ -331,8 +331,8 @@ def test_run_worker_uses_one_statement_and_the_same_report_contract(modules, tmp
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({report!r}))\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('same-run-case', 'zkc', 'run', executable,
-        {'kind': 'run', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'roles': {'P': 'captured'}, 'accept_role': 'P'},
-        tmp_path/'unused', 'admitted_run_call')
+        {'kind': 'run', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'arguments': 'captured', 'accept_role': 'P'},
+        tmp_path/'unused', 'admitted_function_call')
     result = modules['runner'].execute_job(job, tmp_path/'run', PLAN, 5)
     assert result['worker']['lifecycle']['ingress'] == policy
     assert [call['input_index'] for call in life['calls']] == [0, 0, 0, 0]

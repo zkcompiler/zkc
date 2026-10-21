@@ -365,6 +365,33 @@ fn collection_limits_accumulate_across_record_children() {
     }
 }
 #[test]
+fn immutable_variant_bounds_count_shared_payload_occurrences() {
+    let mut ty = String::from("bool");
+    let mut value = Value::Bool(true);
+    for _ in 0..3 {
+        ty = logical("Layer", json!([["record", [ty]]]));
+        value = variant(&ty, 0, vec![value]);
+    }
+    let pair_type = LogicalType::parse(&logical(
+        "SharedLayers",
+        json!([["pair", [ty.clone(), ty]]]),
+    ))
+    .unwrap();
+    let descriptor = pair_type.variant_descriptor().unwrap().clone();
+    // Expanded charges count both occurrences, even though cloned immutable
+    // variants share their backing. Decoding retains that same profile.
+    let expected = descriptor.retained_bytes() + 256 + 2 * 512 + 2 * value.retained_bytes();
+    let pair = Value::Variant(Variant::new(descriptor, 0, vec![value.clone(), value]).unwrap());
+    assert_eq!(pair.retained_bytes(), expected);
+    let backend = common::ark_backend(None);
+    let bytes = backend.encode_native_value(&pair).unwrap();
+    let decoded = backend
+        .decode_native_value(&pair.physical_type(), &bytes)
+        .unwrap();
+    assert_eq!(decoded.retained_bytes(), expected);
+    assert_eq!(pair.clone().retained_bytes(), expected);
+}
+#[test]
 fn formed_type_depth_and_leaf_preflight_define_the_boundary() {
     let mut ty = String::from("bool");
     let mut value = Value::Bool(true);
@@ -772,4 +799,241 @@ fn mixed_host_payloads_charge_wire_peak_with_retained_siblings() {
         bounded.measure_native_input(&vector).unwrap(),
     ];
     assert!(bounded.measure_native_variant(&ty, 0, &native).is_ok());
+}
+
+#[test]
+fn runtime_owned_measurements_preserve_nonwire_data_and_complete_counts() {
+    use zkc_runtime::vm::PhysicalType;
+    let polynomial = Value::Polynomial(vec![Scalar::from(7); 3].into());
+    let sequence = Value::Sequence(
+        zkc_backends::Sequence::new(
+            polynomial.physical_type().logical(),
+            vec![polynomial.clone(), polynomial.clone()],
+            &Policy::default(),
+        )
+        .unwrap(),
+    );
+    let ty = PhysicalType::default_for(
+        LogicalType::parse(&logical(
+            "Internal",
+            json!([
+                ["empty", []],
+                [
+                    "polynomials",
+                    [sequence.physical_type().logical().spelling()]
+                ]
+            ]),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let backend = bounded(Policy::default());
+    assert!(backend.measure_native_input(&polynomial).is_err());
+    assert!(backend.measure_native_input(&sequence).is_err());
+    let sizes = [backend.measure_native_value(&sequence).unwrap()];
+    let measured = backend.measure_native_variant(&ty, 1, &sizes).unwrap();
+    let value = Value::Variant(
+        Variant::new(
+            ty.logical().variant_descriptor().unwrap().clone(),
+            1,
+            vec![sequence],
+        )
+        .unwrap(),
+    );
+    assert_eq!(measured.retained_bytes(), value.retained_bytes());
+    assert_eq!(
+        backend
+            .measure_native_value(&value)
+            .unwrap()
+            .retained_bytes(),
+        value.retained_bytes()
+    );
+    assert!(
+        backend.encode_native_value(&value).is_err(),
+        "measurement grants no codec"
+    );
+    for elements in [5, 6] {
+        let backend = bounded(Policy {
+            max_table_elements: elements,
+            ..Policy::default()
+        });
+        let sizes = [
+            backend.measure_native_value(&polynomial).unwrap(),
+            backend.measure_native_value(&polynomial).unwrap(),
+        ];
+        let pair = PhysicalType::default_for(
+            LogicalType::parse(&logical(
+                "Pair",
+                json!([[
+                    "pair",
+                    ["polynomial:bls12-381.fr", "polynomial:bls12-381.fr"]
+                ]]),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            backend.measure_native_variant(&pair, 0, &sizes).is_ok(),
+            elements == 6
+        );
+        assert_eq!(backend.measure_native_value(&value).is_ok(), elements == 6);
+        // Inactive payloads do not count, but their descriptor is retained.
+        assert!(backend.measure_native_variant(&ty, 0, &[]).is_ok());
+    }
+    let affine = PhysicalType::default_for(
+        LogicalType::parse(&logical(
+            "Affine",
+            json!([["empty", []], ["rng", ["rng:bls12-381.fr"]]]),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        backend.measure_native_variant(&affine, 0, &[]).is_err(),
+        "inactive resource types remain affine"
+    );
+}
+
+#[test]
+fn runtime_owned_handle_collections_count_handles_and_keep_backing_limits() {
+    use std::sync::Arc;
+    use zkc_backends::{KoalaBear, merkle, oracle, plonky3::oracle as tree};
+    use zkc_runtime::vm::{Backend, PhysicalType};
+    let policy = Policy {
+        max_table_elements: 8,
+        ..Policy::default()
+    };
+    // Each table fits its constructor's policy. Sharing two handles does not
+    // turn the collection into a table with sixteen numeric elements.
+    let shape = tree::Shape::new(8, 1, policy.max_table_elements).unwrap();
+    let (_, state) =
+        tree::commit(vec![KoalaBear::default(); 8], shape, policy.max_value_bytes).unwrap();
+    let state = oracle::State::Base(Arc::new(state));
+    let (_, merkle) = merkle::commit::<merkle::poseidon2::Base>(
+        vec![KoalaBear::default(); 8],
+        shape,
+        policy.max_value_bytes,
+    )
+    .unwrap();
+    let merkle = merkle::State::Poseidon2KoalaBear(Arc::new(merkle));
+    let collections = [
+        (
+            Value::OracleState(state.clone()),
+            Value::OracleStates(oracle::Domain::Base, vec![state.clone(); 2].into()),
+            Value::OracleStates(oracle::Domain::Base, vec![state.clone(); 5].into()),
+            Value::OracleStates(oracle::Domain::Base, vec![state; 9].into()),
+        ),
+        (
+            Value::MerkleTree(merkle.clone()),
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBear,
+                vec![merkle.clone(); 2].into(),
+            ),
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBear,
+                vec![merkle.clone(); 5].into(),
+            ),
+            Value::MerkleTrees(merkle::Scheme::Poseidon2KoalaBear, vec![merkle; 9].into()),
+        ),
+    ];
+    let backend = bounded(policy);
+    for (state, collection, five, excessive) in collections {
+        for (value, legal) in [(&state, true), (&collection, true), (&five, false)] {
+            backend.validate_value(value).unwrap();
+            assert!(
+                backend.measure_native_input(value).is_err(),
+                "public input stays closed"
+            );
+            assert!(
+                backend.encode_native_value(value).is_err(),
+                "measurement grants no codec"
+            );
+            let spelling = value.physical_type().logical().spelling();
+            let ty = PhysicalType::default_for(
+                LogicalType::parse(&logical("Handles", json!([["pair", [spelling, spelling]]])))
+                    .unwrap(),
+            )
+            .unwrap();
+            let sizes = [
+                backend.measure_native_value(value).unwrap(),
+                backend.measure_native_value(value).unwrap(),
+            ];
+            let pair = Value::Variant(
+                Variant::new(
+                    ty.logical().variant_descriptor().unwrap().clone(),
+                    0,
+                    vec![value.clone(), value.clone()],
+                )
+                .unwrap(),
+            );
+            assert_eq!(
+                backend.measure_native_variant(&ty, 0, &sizes).is_ok(),
+                legal
+            );
+            assert_eq!(backend.measure_native_value(&pair).is_ok(), legal);
+            let short = bounded(Policy {
+                max_value_bytes: value.retained_bytes() - 1,
+                ..policy
+            });
+            assert!(short.validate_value(value).is_err());
+            assert_eq!(short.measure_native_value(value).unwrap_err(), Error::Limit);
+        }
+        assert!(
+            backend.validate_value(&excessive).is_err(),
+            "owner handle limit still applies"
+        );
+        assert_eq!(
+            backend.measure_native_value(&excessive).unwrap_err(),
+            Error::Limit
+        );
+    }
+}
+
+#[cfg(feature = "test-utils")]
+#[test]
+fn singular_pcs_handles_do_not_invent_backing_element_collection_counts() {
+    use std::sync::Arc;
+    use zkc_runtime::vm::{Backend, PhysicalType};
+    let policy = Policy {
+        max_table_elements: 8,
+        ..Policy::default()
+    };
+    let keys = zkc_arkworks::Keys::setup_for_development(3, &policy.ark_bounds()).unwrap();
+    let table =
+        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(7); 8], &policy.ark_bounds())
+            .unwrap();
+    let state = keys.prover_key().commit(&table).unwrap();
+    let backend = common::backend()
+        .policy(policy)
+        .verifier(keys.verifier_key().clone())
+        .build();
+    for value in [
+        Value::ProverKey(Arc::new(keys.prover_key().clone())),
+        Value::VerifierKey(Arc::new(keys.verifier_key().clone())),
+        Value::OpeningState(Arc::new(state)),
+    ] {
+        backend.validate_value(&value).unwrap();
+        let spelling = value.physical_type().logical().spelling();
+        let ty = PhysicalType::default_for(
+            LogicalType::parse(&logical("Handles", json!([["pair", [spelling, spelling]]])))
+                .unwrap(),
+        )
+        .unwrap();
+        let sizes = [
+            backend.measure_native_value(&value).unwrap(),
+            backend.measure_native_value(&value).unwrap(),
+        ];
+        assert!(backend.measure_native_variant(&ty, 0, &sizes).is_ok());
+        let pair = Value::Variant(
+            Variant::new(
+                ty.logical().variant_descriptor().unwrap().clone(),
+                0,
+                vec![value.clone(), value],
+            )
+            .unwrap(),
+        );
+        assert!(backend.measure_native_value(&pair).is_ok());
+        assert!(backend.measure_native_input(&pair).is_err());
+        assert!(backend.encode_native_value(&pair).is_err());
+    }
 }

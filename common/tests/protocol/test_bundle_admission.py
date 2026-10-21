@@ -170,8 +170,8 @@ protocol InspectAdmission<R: Reduction<Extension>> roles(P)
     public_width = public_width, inputs = inputs, assertions = assertions,
     records = records, auxiliary = auxiliary, claims = claims, chunks = chunks, scopes = scopes);
 }
-run AdmissionLogUp = InspectAdmission<LogUp<Extension>>;
-run AdmissionProduct = InspectAdmission<GrandProduct<Extension>>;
+entry fn AdmissionLogUp(inputs: InspectAdmission<LogUp<Extension>>::Inputs) { return InspectAdmission<LogUp<Extension>>::run(inputs); }
+entry fn AdmissionProduct(inputs: InspectAdmission<GrandProduct<Extension>>::Inputs) { return InspectAdmission<GrandProduct<Extension>>::run(inputs); }
 '''
 
 
@@ -186,12 +186,12 @@ def test_absent_layout_retains_configuration_but_has_no_contributions(
                                 source=source + ADMISSION, asset=asset)
     settings = {k: v for k, v in public.items()
                 if k not in ('round_count', 'query_count', 'attempt_count', 'channel_count')}
-    supplied = input_files(journal, 'admission', roles={'P': {'inputs': settings}})
+    supplied = input_files(journal, 'admission', package=package, arguments={'inputs': {'P': settings}})
     output = directory / 'admission.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={pin}', *supplied, f'--results={output}'])
     assert report['status'] == 'executed'
-    result = json.loads(output.read_text())['roles']['P']
+    result = json.loads(output.read_text())['value']['P']
     expected = dict.fromkeys(('height', 'witness_width', 'configuration_width', 'public_width',
                               'inputs', 'assertions', 'records', 'auxiliary', 'claims',
                               'chunks', 'scopes'), '0')

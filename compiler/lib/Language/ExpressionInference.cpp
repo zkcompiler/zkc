@@ -190,6 +190,14 @@ class ExpressionInference {
   std::map<uint32_t, CallContext> contexts;
   bool accountCall(uint32_t id, const Declaration &callee,
                    bool mapped = false) {
+    if (callee.kind == Declaration::Kind::EntryFunction ||
+        (callee.generated && callee.generated->operation)) {
+      if (owner.body.stage != Body::Stage::Host || contexts.at(id).scopedDepth)
+        return fail("source.stage", "Host calls require an entry function",
+                    syntax.expressions[id].span);
+      if (callee.generated)
+        return true;
+    }
     if (callee.abstract)
       return true;
     const auto &context = contexts.at(id);
@@ -729,6 +737,7 @@ class ExpressionInference {
       return;
     }
     if (callee.kind != Declaration::Kind::Local &&
+        callee.kind != Declaration::Kind::EntryFunction &&
         callee.kind != Declaration::Kind::Math &&
         callee.kind != Declaration::Kind::Protocol) {
       fail("source.call", "call target must be a callable", expr.span);

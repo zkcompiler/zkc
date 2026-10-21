@@ -11,8 +11,11 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def read(project, group, entry='Proof'):
-    path = ROOT / f'{project}/inputs/example.{entry}/{group}.json'
-    return json.loads(path.read_text()) if path.exists() else {}
+    directory = ROOT / f'{project}/inputs/example.{entry}'
+    if group in ('public', 'witness'):
+        path = directory / f'{group}.json'
+        return json.loads(path.read_text()) if path.exists() else {}
+    return json.loads((directory / 'arguments.json').read_text())['inputs'][group]
 
 
 def build(toolchain, journal, directory, project, entry, flags):
@@ -38,11 +41,13 @@ def test_library_entry_runs_and_independent_proofs(toolchain, journal, directory
     journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={truncated}'], refuses='proof-truncated')
 
     package, pin = build(toolchain, journal, directory, project, 'Interactive', flags)
-    inputs = input_files(journal, 'interactive', roles={role: {'inputs': read(project, role, 'Interactive')} for role in ['P', 'V']})
+    inputs = input_files(journal, 'interactive', package=package,
+                         arguments={'inputs': {role: read(project, role, 'Interactive')
+                                                for role in ('P', 'V')}})
     outputs = directory / 'outputs.json'
     report = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}']))
     assert report['status'] == 'executed'
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
+    assert json.loads(outputs.read_text())['value']['V']['accepted'] is True
 
 
 @pytest.mark.parametrize('project', ['examples/projects/schnorr', 'examples/projects/sumcheck'])
@@ -94,7 +99,7 @@ def test_published_source_walkthrough(toolchain, journal, directory):
     cargo = directory / 'cargo target'
     cargo.mkdir()
     (cargo / 'release').symlink_to(toolchain.directories['native'], target_is_directory=True)
-    env = dict(os.environ, TMPDIR=str(directory), CARGO_TARGET_DIR=str(cargo),
+    env = dict(os.environ, PS1='', TMPDIR=str(directory), CARGO_TARGET_DIR=str(cargo),
                ZKC_COMPILER_BIN=str(toolchain.directories['compiler']))
     env.pop('ZKC_NATIVE_BIN', None)
     # No Lean executable or prover state is needed by this published path.

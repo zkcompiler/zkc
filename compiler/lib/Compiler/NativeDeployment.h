@@ -10,5 +10,10 @@ llvm::Error verifyNativeDeployment(
     const NativeProofPolicy &policy, const NativeProofOptions &options,
     const llvm::json::Value &descriptor, const llvm::json::Array &wireSites,
     llvm::StringRef bytes);
+/// Admit one operation's executable closure and native deployment identities.
+/// The caller supplies the independently selected source identity and role.
+llvm::Error checkNativeOperationArtifact(llvm::StringRef bytes,
+                                         llvm::StringRef original,
+                                         llvm::StringRef role);
 } // namespace zkc::detail
 #endif

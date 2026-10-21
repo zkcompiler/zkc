@@ -104,10 +104,12 @@ json::Value cause(const mathematical::DecisionCause &cause) {
 class RemarkStream : public remark::detail::MLIRRemarkStreamerBase {
   json::Array &records;
   uint64_t &dropped;
+  const CompilationObservation &owner;
 
 public:
-  RemarkStream(json::Array &records, uint64_t &dropped)
-      : records(records), dropped(dropped) {}
+  RemarkStream(json::Array &records, uint64_t &dropped,
+               const CompilationObservation &owner)
+      : records(records), dropped(dropped), owner(owner) {}
   void streamOptimizationRemark(const remark::detail::Remark &r) override {
     if (records.size() == 4096) {
       ++dropped;
@@ -116,8 +118,9 @@ public:
     json::Array args;
     for (const auto &arg : r.getArgs())
       args.push_back(json::Object{{"key", arg.key}, {"value", arg.val}});
-    records.push_back(json::Object{{"name", r.getRemarkName()},
-                                   {"kind", r.getRemarkTypeString()},
+    records.push_back(json::Object{{"unit", owner.unit()},
+                                   {"name", r.getRemarkName().str()},
+                                   {"kind", r.getRemarkTypeString().str()},
                                    {"arguments", std::move(args)}});
   }
 };
@@ -144,12 +147,13 @@ class Instrumentation : public PassInstrumentation {
     json::Array statistics;
 #if LLVM_ENABLE_STATS
     for (auto *stat : pass->getStatistics().take_front(128))
-      statistics.push_back(
-          json::Object{{"name", stat->getName()}, {"value", stat->getValue()}});
+      statistics.push_back(json::Object{{"name", std::string(stat->getName())},
+                                        {"value", stat->getValue()}});
 #endif
     passes.push_back(json::Object{
-        {"pass", pass->getArgument()},
-        {"operation", op->getName().getStringRef()},
+        {"unit", owner.unit()},
+        {"pass", pass->getArgument().str()},
+        {"operation", op->getName().getStringRef().str()},
         {"completed", completed},
         {"inclusive_microseconds", elapsed},
         {"statistics", std::move(statistics)},
@@ -174,9 +178,13 @@ public:
   }
 };
 } // namespace
+// Journal strings outlive individual pass managers and child MLIR contexts.
+// Copy dynamic names at collection; StringRef JSON values retain only a view.
 struct CompilationObservation::Storage {
   std::set<std::string> dumps;
   json::Array phases, passes, events, remarks;
+  std::vector<std::string> units;
+  uint64_t droppedPhases = 0;
   uint64_t droppedPasses = 0, droppedEvents = 0, droppedRemarks = 0,
            journals = 0;
 };
@@ -185,14 +193,34 @@ CompilationObservation::CompilationObservation(std::vector<std::string> dumps)
   storage->dumps.insert(dumps.begin(), dumps.end());
 }
 CompilationObservation::~CompilationObservation() = default;
+CompilationObservation::Scope::Scope(CompilationObservation &owner,
+                                     StringRef name)
+    : owner(&owner) {
+  owner.storage->units.push_back(name.str());
+}
+CompilationObservation::Scope::~Scope() {
+  if (owner)
+    owner->storage->units.pop_back();
+}
+CompilationObservation::Scope CompilationObservation::scope(StringRef name) {
+  return Scope(*this, name);
+}
+json::Value CompilationObservation::unit() const {
+  json::Array result;
+  for (const auto &name : storage->units)
+    result.push_back(name);
+  return result;
+}
 void CompilationObservation::instrument(PassManager &pm) {
   pm.addInstrumentation(std::make_unique<Instrumentation>(
       *this, storage->passes, storage->droppedPasses));
 }
 void CompilationObservation::phase(StringRef name, ModuleOp module) {
-  if (storage->phases.size() == 32)
+  if (storage->phases.size() == 32) {
+    ++storage->droppedPhases;
     return;
-  json::Object record{{"phase", name}};
+  }
+  json::Object record{{"phase", name.str()}, {"unit", unit()}};
   uint64_t operations = 0, mappingBytes = 0, omittedLocations = 0;
   json::Object histogram;
   json::Array mapping;
@@ -200,7 +228,7 @@ void CompilationObservation::phase(StringRef name, ModuleOp module) {
     ++operations;
     auto key = op->getName().getStringRef();
     auto count = histogram.getInteger(key).value_or(0);
-    histogram[key] = count + 1;
+    histogram[key.str()] = count + 1;
     if (mapping.size() == 4096 || mappingBytes >= 1024 * 1024) {
       ++omittedLocations;
       return;
@@ -209,7 +237,7 @@ void CompilationObservation::phase(StringRef name, ModuleOp module) {
     BoundedStream out(location, 512);
     op->getLoc().print(out);
     json::Object mapped{{"ordinal", operations - 1},
-                        {"operation", key},
+                        {"operation", key.str()},
                         {"location", location},
                         {"mapping", isa<UnknownLoc>(op->getLoc())
                                         ? "unknown"
@@ -280,7 +308,7 @@ void CompilationObservation::decisions(
     if (failed(remark::enableOptimizationRemarks(
             context,
             std::make_unique<RemarkStream>(storage->remarks,
-                                           storage->droppedRemarks),
+                                           storage->droppedRemarks, *this),
             std::make_unique<remark::RemarkEmittingPolicyAll>(), categories)))
       ownEngine = false;
   }
@@ -296,10 +324,13 @@ void CompilationObservation::decisions(
       ++storage->droppedEvents;
       continue;
     }
-    json::Object record{
-        {"journal", journal},       {"sequence", event.sequence},
-        {"scope", event.scope},     {"parent", event.parent},
-        {"service", event.service}, {"subject", subject(event.subject)}};
+    json::Object record{{"unit", unit()},
+                        {"journal", journal},
+                        {"sequence", event.sequence},
+                        {"scope", event.scope},
+                        {"parent", event.parent},
+                        {"service", event.service},
+                        {"subject", subject(event.subject)}};
     std::visit(
         [&](const auto &p) {
           using T = std::decay_t<decltype(p)>;
@@ -357,6 +388,7 @@ json::Value CompilationObservation::json() const {
   object["passes"] = copy(storage->passes);
   object["decisions"] = copy(storage->events);
   object["remarks"] = copy(storage->remarks);
+  object["dropped_phases"] = storage->droppedPhases;
   object["dropped_passes"] = storage->droppedPasses;
   object["dropped_events"] = storage->droppedEvents;
   object["dropped_remarks"] = storage->droppedRemarks;

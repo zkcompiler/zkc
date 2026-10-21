@@ -165,8 +165,8 @@ int runLanguageCompiler(int argc, char **argv) {
       SmallVector<StringRef> names;
       arg.split(names, ',');
       for (auto name : names) {
-        if (name != "protocol" && name != "participant" && name != "exec" &&
-            name != "physical")
+        if (name != "entry" && name != "protocol" && name != "participant" &&
+            name != "exec" && name != "physical")
           return refuse(error("source.options", "unknown dump phase"));
         dumps.push_back(name.str());
       }
@@ -181,12 +181,12 @@ int runLanguageCompiler(int argc, char **argv) {
                             "Entry selection must be nonempty and unique"));
       entry = arg.str();
     } else if (arg.consume_front("--entry-kind=")) {
-      if (entryKind || (arg != "run" && arg != "proof") ||
+      if (entryKind || (arg != "function" && arg != "proof") ||
           command == "language-check")
-        return refuse(
-            error("source.options",
-                  "expected one --entry-kind=run|proof for Entry compilation"));
-      entryKind = arg == "run" ? EntryKind::Run : EntryKind::Proof;
+        return refuse(error(
+            "source.options",
+            "expected one --entry-kind=function|proof for Entry compilation"));
+      entryKind = arg == "function" ? EntryKind::Function : EntryKind::Proof;
     } else if (arg.consume_front("--module=")) {
       auto [name, path] = arg.split('=');
       if (name.empty() || path.empty() || path.size() > 4096 ||
@@ -357,7 +357,17 @@ int runLanguageCompiler(int argc, char **argv) {
   identities["source_locations_truncated"] =
       original->locations().size() > 4096;
   if (command == "language-check") {
-    checked["entry"] = selected->entry().qualifiedName;
+    checked["entry"] = selected->name();
+    // Requested generic specializations are finite, on-demand candidates.
+    if (!selected->entry().parameters.empty()) {
+      auto *entries = checked.getArray("entries");
+      entries->push_back(
+          json::Object{{"name", selected->name()}, {"kind", "function"}});
+      llvm::sort(*entries, [](const auto &a, const auto &b) {
+        return *a.getAsObject()->getString("name") <
+               *b.getAsObject()->getString("name");
+      });
+    }
     checked["original"] = original->identity();
     return publishCheck();
   }

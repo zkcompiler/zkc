@@ -27,7 +27,44 @@ pub struct EntryRole {
     pub outputs: Vec<PhysicalType>,
     pub services: Vec<super::ServicePort>,
 }
+/// Physical signature of an admitted Local function, independent of any role.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalFunction {
+    pub inputs: Vec<(String, PhysicalType)>,
+    pub outputs: Vec<PhysicalType>,
+}
 impl Program {
+    pub fn local_function_names(&self) -> impl Iterator<Item = &str> {
+        self.program.functions.keys().map(String::as_str)
+    }
+    pub fn local_function(&self, name: &str) -> Option<LocalFunction> {
+        self.program
+            .functions
+            .get(name)
+            .map(|function| LocalFunction {
+                inputs: function.inputs.clone(),
+                outputs: function.outputs.clone(),
+            })
+    }
+    /// Check every potential operation of one admitted function, without linking
+    /// dormant definitions. The caller cannot supply an unchecked reference set.
+    pub fn check_local_installation<B: super::Backend>(
+        &self,
+        function: &str,
+        backend: &B,
+    ) -> Result<()> {
+        super::link::install_local(self, function, backend).map(|_| ())
+    }
+    /// Check one role's services and all local bodies reachable from its control.
+    pub fn check_role_installation<B: super::Backend>(
+        &self,
+        entry: &str,
+        role: &str,
+        backend: &B,
+    ) -> Result<()> {
+        super::link::install_role(self, entry, role, backend).map(|_| ())
+    }
+
     pub(crate) fn participant(
         &self,
         entry: &str,

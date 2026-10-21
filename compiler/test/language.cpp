@@ -4,6 +4,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/CommandLine.h"
@@ -70,7 +71,8 @@ void sourceRefuses(StringRef source, StringRef code,
   require(StringRef(message).contains(code), message);
 }
 CheckedOriginal original(StringRef source) {
-  return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
+  return must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(check(source), "m::Demo"))));
 }
 std::string replace(std::string text, StringRef from, StringRef to) {
   auto at = text.find(from.str());
@@ -85,7 +87,7 @@ protocol Run roles(P, V)(x: Fr @P, c: Fr @(P,V)) -> (r: Fr @V) {
  let received = send P -> V(a);
  return (r = received);
 }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )";
 mlir::Operation *first(mlir::ModuleOp module, StringRef name,
                        unsigned occurrence = 0) {
@@ -141,11 +143,11 @@ void sourceControls() {
             "source.return"},
            {replace(basic.str(), "r: Fr @V", "r: Fr @P"), "source.roles"},
            {replace(basic.str(), "let a =", "let a @V ="), "source.roles"},
-           {replace(basic.str(), "roles(P, V)", "roles(P, P)"), "source.roles"},
+           {replace(basic.str(), "roles(P, V)", "roles(P, P)"),
+            "source.duplicate"},
            {replace(basic.str(), "let a = x + c", "let a = (x == c == x)"),
             "source.syntax"},
-           {replace(basic.str(), "run Demo = Run", "run Demo = Fr"),
-            "source.entry"},
+           {replace(basic.str(), "Run::Inputs", "Fr::Inputs"), "source.type"},
            {basic.str() + "math fn bad(x: Fr) -> Fr { return bad(x); }",
             "source.cycle"},
            {basic.str() + "math fn unused(x: Fr) -> Fr { return missing; }",
@@ -176,31 +178,32 @@ void sourceControls() {
   std::string helpers = R"(module m; domain Fr=field("bls12-381.fr");
 math fn first(a: Fr,b: Fr)->Fr {return a;}
 protocol Run roles(P,V)(a:Fr@P,b:Fr@V)->(r:Fr@P){let result=first(a,b);return(r=result);}
-run Demo=Run;)";
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })";
   auto ignored = original(helpers);
   must(compileEntry(ignored));
   sourceRefuses(replace(helpers, "{return a;}", "{let unused=a+b;return a;}"),
                 "source.roles");
   auto subset = original(
-      R"(module m;protocol Run roles(P,V)(x:bool@(P,V))->(a:bool@V,b:bool@V){return(b=true,a=x);}run Demo=Run;)");
+      R"(module m;protocol Run roles(P,V)(x:bool@(P,V))->(a:bool@V,b:bool@V){return(b=true,a=x);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   require(!subset.bytes().contains("restrict_roles"),
           "narrow output inserted a restriction");
   auto same = original(
-      R"(module m;protocol Run roles(P)(x:bool@P)->(r:bool@P){let y @P=x;return(r=y);}run Demo=Run;)");
+      R"(module m;protocol Run roles(P)(x:bool@P)->(r:bool@P){let y @P=x;return(r=y);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   require(!same.bytes().contains("restrict_roles"),
           "equal role annotation inserted a restriction");
-  auto qualified =
-      must(capture({{"a",
-                     "module a; pub domain F=field(\"bls12-381.fr\"); pub math "
-                     "fn identity(x:F)->F{return x;}",
-                     {}},
-                    {"m",
-                     "module m; protocol Run "
-                     "roles(P)(x:a::F@P)->(r:a::F@P){return(r=a::identity(x));}"
-                     " run Demo=Run;",
-                     {}}}));
-  must(compileEntry(must(prepareOriginal(must(
-      closeEntry(must(analyze(qualified).checkedProject()), "m::Demo"))))));
+  auto qualified = must(capture(
+      {{"a",
+        "module a; pub domain F=field(\"bls12-381.fr\"); pub math "
+        "fn identity(x:F)->F{return x;}",
+        {}},
+       {"m",
+        "module m; protocol Run "
+        "roles(P)(x:a::F@P)->(r:a::F@P){return(r=a::identity(x));}"
+        " entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+        {}}}));
+  must(
+      compileEntry(must(prepareOriginal(must(zkc::test::closeProtocolDeployment(
+          must(analyze(qualified).checkedProject()), "m::Demo"))))));
 }
 void nameResolution() {
   const std::string definitions = R"(module m;
@@ -288,14 +291,16 @@ void specializationSnapshotBounds() {
   for (unsigned i = 0; i < instances; ++i)
     source +=
         "let v" + std::to_string(i) + "@P=f<" + std::to_string(i) + ">(go);";
-  source += "return();}run Demo=Run;";
+  source += "return();}entry fn Demo(inputs: Run::Inputs) { return "
+            "Run::run(inputs); }";
   auto project = check(source);
-  must(closeEntry(project, "m::Demo"));
+  must(zkc::test::closeProtocolDeployment(project, "m::Demo"));
   Limits limit;
   limit.work = instances * literals * digits - 1;
   require(project.checkedWork() < limit.work,
           "snapshot fixture exceeds the checking budget");
-  refuses(closeEntry(project, "m::Demo", limit), "source.limit");
+  refuses(zkc::test::closeProtocolDeployment(project, "m::Demo", limit),
+          "source.limit");
 }
 void semanticDiagnosticLocations() {
   for (StringRef expression : {"18446744073709551615+1", "pow2(64)"}) {
@@ -335,7 +340,8 @@ void depthAndAggregateBounds() {
                 {}},
                {"m",
                 "module m; use a::{F,add}; protocol Run "
-                "roles(P)(x:F@P)->(r:F@P){return(r=add(x));} run Demo=Run;",
+                "roles(P)(x:F@P)->(r:F@P){return(r=add(x));} entry fn "
+                "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
                 {}}}));
   auto all = must(analyze(modules).checkedProject());
   Limits limits;
@@ -348,9 +354,10 @@ void depthAndAggregateBounds() {
   }
   for (auto member : {&Limits::parseDepth, &Limits::expressionDepth}) {
     limits = {};
-    limits.*member = 2;
+    // Protocol-generated role records add two declaration nesting levels.
+    limits.*member = member == &Limits::parseDepth ? 4 : 2;
     check(basic, limits);
-    limits.*member = 1;
+    --(limits.*member);
     sourceRefuses(basic, "source.limit", limits);
   }
   uint64_t tokenCount = 0;
@@ -384,8 +391,10 @@ void depthAndAggregateBounds() {
   refuses(capture({{"m", "module m;", {}}, {"n", "module n;", {}}},
                   {"zkc", limits}),
           "source.limit");
-  auto selected = must(closeEntry(check(basic), "m::Demo"));
-  refuses(closeEntry(selected.project(), std::string(4097, 'a')),
+  auto selected =
+      must(zkc::test::closeProtocolDeployment(check(basic), "m::Demo"));
+  refuses(zkc::test::closeProtocolDeployment(selected.project(),
+                                             std::string(4097, 'a')),
           "source.limit");
 }
 void reviewControls() {
@@ -400,7 +409,7 @@ void reviewControls() {
 math fn f(x:A,y:B)->A{return x+y;})",
       "source.operator");
   sourceRefuses(R"(module m;protocol Run roles(P,V)(x:bool@V)->(r:bool@V){
-let sent=send V->P(x);return(r=sent);}run Demo=Run;)",
+let sent=send V->P(x);return(r=sent);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
                 "source.roles");
   for (unsigned size : {128, 129}) {
     auto text = replace(
@@ -453,11 +462,15 @@ let sent=send V->P(x);return(r=sent);}run Demo=Run;)",
                  std::to_string(i - 1) + "()+f" + std::to_string(i - 1) +
                  "();}";
   expansion += "\nprotocol Small roles(P)()->(r:F@P){return(r=1);}";
-  expansion += "\nprotocol Unused roles(P)()->(r:F@P){return(r=f17());}run "
-               "Demo=Small;run Large=Unused;";
+  expansion +=
+      "\nprotocol Unused roles(P)()->(r:F@P){return(r=f17());}entry fn "
+      "Demo(inputs: Small::Inputs) { return Small::run(inputs); }entry fn "
+      "Large(inputs: Unused::Inputs) { return Unused::run(inputs); }";
   auto alternatives = check(expansion);
-  must(prepareOriginal(must(closeEntry(alternatives, "m::Demo"))));
-  auto failure = prepareOriginal(must(closeEntry(alternatives, "m::Large")));
+  must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(alternatives, "m::Demo"))));
+  auto failure = prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(alternatives, "m::Large")));
   require(!failure, "selected target expansion was not checked");
   bool identified = false;
   handleAllErrors(failure.takeError(), [&](const zkc::CompilationError &error) {
@@ -604,32 +617,33 @@ void reviewedSourceBoundaries() {
   }
   for (auto source : {
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}run Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
            R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}run Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
            R"(module m;domain Fr=field("bls12-381.fr");
 math fn pair(x:Fr,y:Fr)->(Fr,Fr){return(x,y);}
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}run Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
            R"(module m;math fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)",
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}run Demo=Run;)",
+protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
        })
     must(compileEntry(original(source)));
   must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)")));
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })")));
   auto emptyMessage = check(R"(module m;
-protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
-  refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
+protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry fn Demo(inputs: Relay<()>::Inputs) { return Relay<()>::run(inputs); })");
+  refuses(zkc::test::closeProtocolDeployment(emptyMessage, "m::Demo"),
+          "source.wire");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
 module Second:Mix {math fn mix(a:Fr,b:Fr)->Fr{return b;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
-protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}run Demo=Run;)");
+protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(distinct));
   mutation(distinct, "selected module changed", [](auto m) {
     std::vector<mlir::Operation *> calls;
@@ -645,11 +659,22 @@ void participantCompletion() {
   auto source = replace(read("completion.zkc"), "module sample;", "module m;");
   auto checked = original(source);
   for (auto fixture :
-       {"completion.zkc", "completion_nested.zkc", "completion_affine.zkc"})
+       {"completion.zkc", "completion_nested.zkc", "completion_affine.zkc"}) {
+    auto text = replace(read(fixture), "module sample;", "module m;");
+    // Affine output custody belongs to native Run, outside Host source data.
+    bool nativeRun = StringRef(fixture) == "completion_affine.zkc";
+    if (nativeRun)
+      text = replace(
+          text,
+          "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+          "");
+    auto native =
+        nativeRun ? must(prepareOriginal(
+                        must(zkc::test::closeNativeRun(check(text), "m::Run"))))
+                  : original(text);
     for (bool simplify : {false, true})
-      must(compileEntry(
-          original(replace(read(fixture), "module sample;", "module m;")),
-          {simplify, false}));
+      must(compileEntry(native, {simplify, false}));
+  }
   for (const auto &[from, to, code] :
        std::vector<std::tuple<std::string, std::string, std::string>>{
            {" completes", "", "source.completion"},
@@ -666,8 +691,9 @@ protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@
  let result=Run(go,x, coins);return(result=result);
 })",
                 "source.completion");
-  auto affine =
-      replace(read("completion_affine.zkc"), "module sample;", "module m;");
+  auto affine = replace(
+      replace(read("completion_affine.zkc"), "module sample;", "module m;"),
+      "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }", "");
   sourceRefuses(replace(affine, "state = next;", "state = state;"),
                 "source.move");
   sourceRefuses(replace(replace(affine, "state = next;", "state = state;"),
@@ -676,7 +702,7 @@ protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@
   must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");
 protocol Run<T:Type>roles(P)(x:T@P,go:bool@P)->(value:T@P)completes {
  let next=finish_if @P(go)(value=x);return(value=next);
-}run Demo=Run<Fr>;)")));
+}entry fn Demo(inputs: Run<Fr>::Inputs) { return Run<Fr>::run(inputs); })")));
   mutation(checked, "completion occurrence changed", [](auto m) {
     first(m, "protocol.finish_if")
         ->setAttr("site", mlir::StringAttr::get(m.getContext(), "changed"));
@@ -713,9 +739,12 @@ void distributedRepetition() {
   sourceRefuses(
       replace(replace(source, "vb = y;", "vb = x;"), "let (x, y)", "let x"),
       "source.binding");
-  auto generic = check(source + "run Large = Run<1048577>;");
-  must(prepareOriginal(must(closeEntry(generic, "m::Demo"))));
-  refuses(closeEntry(generic, "m::Large"), "source.bound");
+  auto generic = check(source + "entry fn Large(inputs: Run<1048577>::Inputs) "
+                                "{ return Run<1048577>::run(inputs); }");
+  must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(generic, "m::Demo"))));
+  refuses(zkc::test::closeProtocolDeployment(generic, "m::Large"),
+          "source.bound");
   mutation(checked, "repeat maximum changed", [](auto m) {
     first(m, "protocol.repeat")
         ->setAttr("maximum",
@@ -742,7 +771,7 @@ protocol Run roles(P)(n:index@P)->(){
  let mut state@P=make();
  for _ in 0..n roles(P) max 4 { state=identity(state); }
  let done@P=consume_state(state);return();
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )";
   must(compileEntry(original(affine)));
   sourceRefuses(replace(affine, "let mut state", "let state"),
@@ -753,7 +782,7 @@ protocol Run roles(P)(n:index@P)->(){
 fn truth()->bool{return true;}
 protocol Run roles(P,V)(n:index@V)->(){
  for _ in 0..n roles(V) max 2 {let x@V=truth();}return();
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(empty));
   auto restricted = R"(module m;
@@ -762,13 +791,13 @@ protocol Run roles(P,V)(n:index@V)->(){
  for _ in 0..n roles(V) max 2 {
    let literal@V=true;let constant@V=truth();
  }return();
-}run Demo=Run;)";
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })";
   must(compileEntry(original(restricted)));
   sourceRefuses(replace(restricted, "literal@V", "literal@P"), "source.roles");
   sourceRefuses(replace(restricted, "constant@V", "constant@P"),
                 "source.roles");
   auto nonparticipant = R"(module m;fn truth()->bool{return true;}
-protocol Run roles(P,V)(n:index@V)->(){for _ in 0..n roles(V) max 2{let x@P=truth();}return();}run Demo=Run;)";
+protocol Run roles(P,V)(n:index@V)->(){for _ in 0..n roles(V) max 2{let x@P=truth();}return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })";
   sourceRefuses(nonparticipant, "source.roles");
 }
 
@@ -808,18 +837,21 @@ void managedServices() {
            {"require @V go", "require @P go", "source.roles"},
            {"let unused = first.draw()", "let unused = send V -> P(first)",
             "source.service"},
-           {"run Demo = Run;",
-            "run Demo = Run;fn bad(x:Random<Fr>)->(){return ();}",
+           {"entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+            "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }fn "
+            "bad(x:Random<Fr>)->(){return ();}",
             "source.name"},
        })
     sourceRefuses(replace(source, from, to), code);
   auto alternate = source + R"(
     domain Small=field("koala-bear");
-    run Other=Draw<Small>;
+    entry fn Other(inputs: Draw<Small>::Inputs) { return Draw<Small>::run(inputs); }
   )";
   auto project = check(alternate);
-  must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
-  refuses(closeEntry(project, "m::Other"), "source.service");
+  must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(project, "m::Demo"))));
+  refuses(zkc::test::closeProtocolDeployment(project, "m::Other"),
+          "source.service");
   mutation(checked, "unused random occurrence omitted",
            [](auto m) { first(m, "protocol.query")->erase(); });
   mutation(checked, "guard omitted",
@@ -837,7 +869,7 @@ void selectedClosure() {
   auto source = replace(read("application.zkc"), "module sample;", "module m;");
   auto project = check(source);
   const auto definitions = project.declarations().size();
-  auto closed = must(closeEntry(project, "m::Demo"));
+  auto closed = must(zkc::test::closeProtocolDeployment(project, "m::Demo"));
   auto base = must(prepareOriginal(closed));
   require(closed.entry().target &&
               closed.entry().target->index == closed.protocol().id.index,
@@ -849,7 +881,8 @@ void selectedClosure() {
   auto extended =
       original(replace(source, "domain Fr",
                        "math fn unrelated(x:bool)->bool{return x;} domain Fr") +
-               "protocol Other roles(P)()->(){return();} run Extra=Other;");
+               "protocol Other roles(P)()->(){return();} entry fn "
+               "Extra(inputs: Other::Inputs) { return Other::run(inputs); }");
   require(base.bytes() == extended.bytes(),
           "unrelated declaration changed selected original");
   require(base.identity() == extended.identity(),
@@ -857,14 +890,15 @@ void selectedClosure() {
   require(base.entry().project().capture().identity() !=
               extended.entry().project().capture().identity(),
           "capture stopped binding unselected source");
-  must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
+  must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(project, "m::Demo"))));
   auto privateState = original(R"(module m;
     #[affine] struct State {} fn make()->State{return State{};}
     fn discard(state:State)->(){consume state;return ();}
     protocol Create roles(P)()->(state:State@P){let state @P =make();return(state=state);}
     protocol Consume roles(P)(state:State@P)->(){let done @P =discard(state);return();}
     protocol Run roles(P)()->(){let state=Create();let ()=Consume(state);return();}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(privateState));
 }
@@ -894,7 +928,7 @@ void bounds() {
   limits.files += 1;
   refuses(checkLimits(limits), "source.limit");
   auto project = check(basic);
-  auto selected = must(closeEntry(project, "m::Demo"));
+  auto selected = must(zkc::test::closeProtocolDeployment(project, "m::Demo"));
   auto full = must(prepareOriginal(selected));
   for (auto member :
        {&Limits::irBytes, &Limits::interfaceBytes, &Limits::locationBytes}) {
@@ -911,7 +945,9 @@ void bounds() {
   limits = {};
   limits.declarations = project.checkedDeclarations();
   check(basic, limits);
-  must(prepareOriginal(must(closeEntry(project, "m::Demo", limits)), limits));
+  must(prepareOriginal(
+      must(zkc::test::closeProtocolDeployment(project, "m::Demo", limits)),
+      limits));
   --limits.declarations;
   sourceRefuses(basic, "source.limit", limits);
   limits = {};
@@ -1000,7 +1036,8 @@ int main(int argc, char **argv) {
   auto captured = must(capture({{"transfer", transfer, "transfer.zkc"},
                                 {"algebra", algebra, "algebra.zkc"}}));
   auto checked = must(analyze(captured).checkedProject());
-  auto entry = must(closeEntry(checked, "transfer::Demo"));
+  auto entry =
+      must(zkc::test::closeProtocolDeployment(checked, "transfer::Demo"));
   auto full = must(prepareOriginal(entry));
   auto reversed = must(capture({{"algebra", algebra, "/elsewhere/a.zkc"},
                                 {"transfer", transfer, "/elsewhere/t.zkc"}}));
@@ -1008,8 +1045,9 @@ int main(int argc, char **argv) {
           "capture depends on paths or caller order");
   auto spaced = must(capture({{"algebra", "// comment 한글\n" + algebra, {}},
                               {"transfer", "\n  " + transfer, {}}}));
-  auto reformatted = must(prepareOriginal(must(
-      closeEntry(must(analyze(spaced).checkedProject()), "transfer::Demo"))));
+  auto reformatted =
+      must(prepareOriginal(must(zkc::test::closeProtocolDeployment(
+          must(analyze(spaced).checkedProject()), "transfer::Demo"))));
   require(full.bytes() == reformatted.bytes() &&
               captured.identity() != spaced.identity(),
           "spelling changed original semantics or capture lost bytes");
@@ -1047,12 +1085,17 @@ int main(int argc, char **argv) {
     raw_string_ostream(bytes) << altered;
     refuses(checkInterface(full, bytes), "source.interface");
   }
-  auto aliasProject = check(basic.str() + "run Alias=Run;");
+  auto aliasProject =
+      check(basic.str() +
+            "entry fn Alias(inputs: Run::Inputs) { return Run::run(inputs); }");
   auto selected =
       must(prepareOriginal(must(closeEntry(aliasProject, "m::Demo"))));
   auto alias =
       must(prepareOriginal(must(closeEntry(aliasProject, "m::Alias"))));
-  require(selected.bytes() == alias.bytes(), "aliases changed original IR");
+  require(
+      selected.entry().invocations().front().deployment->protocol().symbol ==
+          alias.entry().invocations().front().deployment->protocol().symbol,
+      "equivalent wrappers changed the native protocol");
   refuses(checkInterface(selected, alias.interfaceJson()), "source.interface");
   auto extra = must(json::parse(full.interfaceJson()));
   (*extra.getAsObject())["clauses"] = json::Array();

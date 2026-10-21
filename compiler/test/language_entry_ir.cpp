@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
@@ -24,7 +25,8 @@ CheckedOriginal original(StringRef source, StringRef entry = "sample::Demo") {
   auto capture = take(language::capture(
       {{entry.rsplit("::").first.str(), source.str(), "proof.zkc"}}));
   auto checked = take(analyze(capture).checkedProject());
-  return take(prepareOriginal(take(closeEntry(checked, entry))));
+  return take(prepareOriginal(
+      take(zkc::test::closeProtocolDeployment(checked, entry))));
 }
 } // namespace
 int main(int argc, char **argv) {
@@ -63,7 +65,7 @@ protocol 実行 roles(検証,role00000000)(入力:bool@role00000000,乱数:Rando
   require @検証 真偽;
   return(結果=記録{値:受信値},真偽=真偽);
 }
-run 公開=実行;)zkc",
+entry fn 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
                                 "数学::公開");
         const auto &p = checked.interface().selectedProtocol();
         require(p.roles == std::vector<std::string>({"検証", "role00000000"}) &&
@@ -343,7 +345,7 @@ proof Right=Run{
     const auto text =
         R"(module sample;protocol Verify roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
       proof Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;}
-      run Session=Verify;)";
+      entry fn Session(inputs: Verify::Inputs) { return Verify::run(inputs); })";
     auto proof = take(compileEntry(original(text)));
     require(std::holds_alternative<CompiledNativeProof>(proof.artifact()),
             "authored proof became run");
@@ -438,8 +440,8 @@ proof Right=Run{
             "proof Demo=" +
             name +
             "{prover P;verifier V;public{ok};accept accepted;construction "
-            "authored;}run Session=" +
-            name + ";";
+            "authored;}entry fn Session(inputs: " +
+            name + "::Inputs) { return " + name + "::run(inputs); }";
         for (StringRef entry : {"sample::Demo", "sample::Session"}) {
           auto checked = original(text, entry);
           require(StringRef(checked.entry().protocol().symbol)
@@ -460,7 +462,8 @@ proof Right=Run{
     text += "protocol Round roles(P,V)(ok:bool@V)->(accepted:bool@V,x:F@P)"
             "{return(accepted=ok,x=f14());}\n"
             "proof Demo=Round{prover P;verifier V;public{ok};accept accepted;"
-            "construction authored;}run Session=Round;";
+            "construction authored;}entry fn Session(inputs: Round::Inputs) { "
+            "return Round::run(inputs); }";
     for (StringRef entry : {"sample::Demo", "sample::Session"}) {
       auto result = compileEntry(original(text, entry), {false, false});
       require(!result, "oversized projection succeeded");
@@ -490,7 +493,8 @@ proof Right=Run{
           "roles(P,V)(x:bool@V)->(ok:bool@V){let ok @V =" +
           name +
           "(x);return(ok=ok);}proof Demo=Round{prover P;verifier V;"
-          "public{x};accept ok;construction authored;}run Session=Round;";
+          "public{x};accept ok;construction authored;}entry fn Session(inputs: "
+          "Round::Inputs) { return Round::run(inputs); }";
       for (StringRef entry : {"sample::Demo", "sample::Session"})
         take(compileEntry(original(text, entry)));
     }

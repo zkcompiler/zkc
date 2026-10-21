@@ -26,14 +26,14 @@ def test_field_balance_logup_signed_counts_and_inactive_poles(toolchain, journal
               'arity': ['1'], 'tuple_degree': ['1'], 'count_degree': ['1'],
               'height': '4', 'values': base([37, 1, 7, 1, 0, 2, p - 1, 3]),
               'challenges': base([37, 5])}
-    request = input_files(journal, 'weighted', roles={'P': {'inputs': inputs}})
+    request = input_files(journal, 'weighted', arguments={'inputs': {'P': inputs}})
     arguments = [f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         *library_modules('relations/air')]
     output = directory / 'weighted-results.json'
     journal.json([toolchain.runtime, '--json', 'run', *arguments,
                   'inspect_reduction::LogUpRun', *request, f'--results={output}'])
-    actual = json.loads(output.read_text())['roles']['P']
+    actual = json.loads(output.read_text())['value']['P']
     inverses = [0, pow(36, -1, p), pow(30, -1, p), pow(36, -1, p)]
     running, total = [], 0
     for count, inverse in zip([0, 2, p - 1, 3], inverses):
@@ -46,7 +46,7 @@ def test_field_balance_logup_signed_counts_and_inactive_poles(toolchain, journal
     # apply only on their respective row scopes.
     assert all(actual['residuals'][i] == ['0'] * 8 for i in [0, 1, 2, 3, 4, 9, 10, 11, 15])
     journal.json([toolchain.runtime, '--json', 'run', *arguments,
-                  'inspect_reduction::ProductRun', *request], refuses='entry-run-incomplete')
+                  'inspect_reduction::ProductRun', *request], refuses='entry-host-run-failed')
 
 
 def test_mixed_interactions_range_only_natural_counts(toolchain, journal, directory):
@@ -56,12 +56,12 @@ def test_mixed_interactions_range_only_natural_counts(toolchain, journal, direct
         'arity': ['1', '1'], 'tuple_degree': ['1', '1'], 'count_degree': ['1', '1'],
         'height': '2', 'values': base([1, 2, 3, 4, 5, 6, 0, 2]),
         'challenges': base([37, 5, 41, 7])}
-    request = input_files(journal, 'mixed', roles={'P': {'inputs': inputs}})
+    request = input_files(journal, 'mixed', arguments={'inputs': {'P': inputs}})
     output = directory / 'mixed-results.json'
     journal.json([toolchain.runtime, '--json', 'run', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         *library_modules('relations/air'), 'inspect_reduction::LogUpRun', *request, f'--results={output}'])
-    actual = json.loads(output.read_text())['roles']['P']
+    actual = json.loads(output.read_text())['value']['P']
     # Field weights 3 and 4 are unrestricted. The natural record's count 2
     # violates its Boolean range equation, regardless of the LogUp recurrence.
     assert actual['ranges'] == base([0, 2])
@@ -120,10 +120,10 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
             'count_degree': indices([1] * len(interactions)),
             'values': ext_vector(values), 'height': height,
             'challenges': ext_vector(challenges)}
-        request = input_files(journal, f'{entry}-{t}.json', session=f'{entry}{t}', roles={'P': {'inputs': inputs}})
+        request = input_files(journal, f'{entry}-{t}.json', session=f'{entry}{t}', package=package, arguments={'inputs': {'P': inputs}})
         result = directory / f'{entry}-{t}.out.json'
         journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={result}'])
-        actual = json.loads(result.read_text())['roles']['P']
+        actual = json.loads(result.read_text())['value']['P']
         columns = unext(actual['columns'])
         width = len(reduction.columns[t])
         expected = [decode(reduction.field, v) for v in assignment[2][0][2][t][0]]

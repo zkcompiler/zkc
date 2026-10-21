@@ -1,24 +1,139 @@
-# Selecting an Entry
+# Entry functions and proofs
 
-A `protocol` defines the interaction. An Entry closes its static parameters and
-selects how an application invokes it. The [declaration contract](../spec/language/entries.md)
-owns the exact syntax and checks.
+A `protocol` describes participant computation and interaction. A `proof`
+declaration chooses a closed proof construction. An `entry fn` is an application
+entry point: it prepares data, calls protocols or proofs, and returns a value.
+The [declaration contract](../spec/language/entries.md) defines the exact checks.
 
-```text
-run Demo = Transfer;
+## Default protocol runs
+
+A protocol without static parameters is directly runnable under its own name:
+
+```zkc
+protocol Echo roles(P, V)(value: bool @P) -> (received: bool @V) {
+  let received = send P -> V(value);
+  return received;
+}
 ```
 
-This selects a joint run. A `proof` Entry additionally chooses prover, verifier,
-public inputs, acceptance and either derived or authored construction. See the
-[Schnorr project](../../examples/projects/README.md) and the
-[source guide](mathematical.md) for complete declarations.
+`zkc inspect Echo` shows its generated argument and result schemas;
+`zkc prepare Echo` creates an argument template; `zkc run Echo` executes it.
+The argument file contains `{"inputs":{"P":{"value":true},"V":{}}}`.
+The returned value is `{"P":{},"V":{"received":true}}`.
 
-Setup slots associate input selectors with application-owned key identities.
-`complete result.ready;` selects a producer Boolean used by bounded attempts.
-A complete same-kind Entry alias inherits the entire configuration. None of these choices
-creates an application or embeds host filesystem paths in the protocol.
+The compiler uses the existing Entry function path to call `Echo::run(inputs)`.
+No wrapper is needed for a basic run. An omitted selector requires exactly one
+eligible Entry; multiple protocols or Entry functions require a name, qualified
+by module when necessary. Imported concrete protocols are also selectable.
+For a generic protocol, supply all static arguments directly:
 
-The compiler publishes the closed source, interface and selected artifact in an
-[Entry package](../spec/formats/entry.md). Applications authenticate that
-package and supply actual values through the common Host. Continue with
-[running Entries](../runtime/entries.md) for CLI use and Rust integration.
+```sh
+zkc inspect 'Schnorr<G>'
+zkc prepare 'Schnorr<G>'
+zkc run 'Schnorr<G>'
+```
+
+This uses the same static argument grammar and requirements as source calls,
+including named arguments, natural expressions and module arguments. The quotes
+protect `<` and `>` from the shell; they are not part of the selector. All static
+arguments must be closed. Runtime inputs still come from the prepared files.
+
+Protocol names follow the existing qualified/unique short-name selection rule.
+Static names resolve uniquely across captured module namespaces, including their
+imports; qualify an ambiguous name, for example `Schnorr<example::G>`. The selector
+does not inherit the selected protocol's lexical scope or guess its parameters.
+Discovery and selector-free preparation do not enumerate generic instances.
+The reported name qualifies the protocol and removes argument whitespace and
+comments while preserving string tokens. Argument aliases and equivalent natural
+expressions can have different public selection names; closed computations still
+use the existing canonical typed specialization identity. Generic input/build
+paths use the protocol path and a full SHA-256 digest of the reported name, so
+different selections never overwrite each other's default files.
+
+An `entry fn` remains useful to name a fixed configuration or prepare and compose
+calls. Proofs always require an explicit `proof` declaration.
+
+## Application control
+
+Entry functions use ordinary typed arguments and Local expressions. They may
+call numerical helpers and other Entry functions. A result annotation is optional
+when the compiler can infer it from the body.
+
+```zkc
+fn increment(value: index) -> index { return value + 1; }
+
+entry fn Next(value: index) {
+  return increment(value);
+}
+
+entry fn Twice(value: index) {
+  let next = Next(value);
+  return Next(next);
+}
+```
+
+`zkc run Twice` executes this function. Its argument file contains
+`{"value":"7"}`; its source result is `"9"`. An Entry function needs no protocol
+wrapper for an ordinary calculation. Its numerical work uses the same Kernel
+lowering and VM as participant computation.
+
+A protocol specialization exposes generated `Inputs`, `RunResult` and `run`:
+
+```zkc
+entry fn Interactive(inputs: Schnorr<G>::Inputs) {
+  return Schnorr<G>::run(inputs);
+}
+```
+
+`Inputs` is a record keyed by participant, with ordinary data ports in each
+participant's record. A shared port has a separate supplied value for each role;
+this does not assert that independently supplied copies agree. Services, setup
+keys and limits are supplied by the Host context, separately from ordinary data.
+A completed run can return a verifier Boolean of `false` as ordinary data.
+
+## Proof operations
+
+The declarative proof configuration remains separate:
+
+```zkc
+proof Core = Schnorr<G> {
+  prover P;
+  verifier V;
+  public { base, point };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+
+entry fn Produce(public: Core::Public, witness: Core::Witness) {
+  let result = Core::prove(public = public, witness = witness);
+  return result.proof;
+}
+
+entry fn Validate(public: Core::Public, candidate: Core::Proof) {
+  return Core::verify(public = public, proof = candidate);
+}
+```
+
+`Core::Public` and `Core::Witness` name generated records for public and
+producer-private data. `Core::Proof` contains exact candidate bytes; its type
+does not establish validity. `prove` returns a `ProveResult` containing the
+candidate and producer outputs. `verify` returns `VerifyResult::Accepted` with
+verifier outputs, or `VerifyResult::Rejected` without outputs. Framing, runtime,
+resource and cleanup failures remain execution failures.
+
+A trace- or witness-generating Entry calls an ordinary helper or another Entry,
+then calls `Core::prove` with the generated witness. This does not change `Core`:
+independent applications may still call `zkc prove Core` and `zkc verify Core`
+with explicit inputs. Only values explicitly returned by a successful Entry are
+published. A failure after a proof call does not publish that intermediate proof.
+
+## External calls
+
+`zkc inspect` shows checked signatures and generated API types; `zkc prepare`
+creates named argument templates. The compiler publishes source correspondence,
+interface, compilation choices and the executable artifact in an
+[Entry package](../spec/formats/entry.md). Applications authenticate the package
+before executing its common Host.
+
+See [running Entries](../runtime/entries.md) for CLI use, Rust bindings and the
+Python adapter. Entry execution does not establish a protocol security theorem.

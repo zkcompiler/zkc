@@ -1,18 +1,14 @@
 # zkc compiler
 
-The compiler implements one model:
-
-```
-.zkc Language → Protocol IR → generic participant programs
-```
-
-Language captures explicit module buffers and relation Assets, checks declarations
-and closes a selected Entry. Translation emits a mathematical `protocol.module`.
-Preparation expands local applications and protocol applications; projection
-assigns actions and values to participants. Mathematical lowering produces the
-`exec` profile with owned logical Kernel units and ordered Local control. Checked
-Kernel realization, representation and implementation selection produce `physical` programs,
-exported as `zkc.program/0` for the generic participant runtime.
+The compiler checks `.zkc` modules, Assets, protocols and application Entries.
+Protocol compilation uses mathematical Protocol IR, participant projection,
+Kernel realization and physical `zkc.program/0` export. Entry functions use
+standard MLIR `func`/`scf` control and typed `entry` operations, published as
+`zkc.host/0` inside an authenticated Entry package. Their numerical helpers reuse
+the existing Local/Math, Kernel and physical pipeline without a source protocol
+or participant wrapper. Static calls embed operation-specific native proof and
+joint deployments. The [architecture guide](../docs/architecture.md) defines the
+compiler and runtime owners.
 
 ## Build and validate
 
@@ -80,7 +76,7 @@ There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns
 checked typed Program records; `protocol::exportModule` returns the checked
 physical JSON carrier. Program codecs read only
 `zkc.program/0`, the physical executable carrier, with explicit participant
-arguments.
+arguments or a closed numerical function root.
 
 ## Components and ownership
 

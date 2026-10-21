@@ -19,6 +19,7 @@ import sys
 
 
 import check as structured
+from bridges.common.native_entry import native_run
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
@@ -247,8 +248,8 @@ class Suite(structured.Suite):
             flags = ["--source-format=zkc", "--entry=example::Interactive",
                      f"--module=example={ROOT}/examples/projects/schnorr/main.zkc",
                      f"--module=schnorr={ROOT}/libraries/protocols/sigma/schnorr/lib.zkc"]
-            source = self.command(name+":frontend", [self.tools["compiler"], "language-emit", *flags])
-            interface = json.loads(self.command(name+":interface", [self.tools["compiler"], "language-interface", *flags]))
+            source, interface = native_run(
+                lambda command: self.command(name+":frontend", command), self.tools["compiler"], flags)
             self.evidence.atomic_json(folder / "interface.json", interface); root = interface["protocol"]
             for part in ("examples/projects/schnorr/main.zkc", "libraries/protocols/sigma/schnorr/lib.zkc"):
                 (folder / ("example.zkc" if part.startswith("examples") else "library.zkc")).write_bytes((ROOT / part).read_bytes())

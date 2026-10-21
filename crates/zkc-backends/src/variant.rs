@@ -13,6 +13,9 @@ pub struct Variant {
     /// Charge of the payload allocation: descriptor, header, payload slots and
     /// storage the payload keeps inline. Payload allocations are separate.
     spine: usize,
+    /// Expanded physical-profile charge, counting every active occurrence.
+    /// Immutable payloads keep this bound available before recursive work.
+    retained: usize,
     /// No active leaf carries a capability.
     resource_free: bool,
 }
@@ -31,6 +34,11 @@ impl Variant {
         let spine = inline
             .and_then(|bytes| Self::storage_bytes(&descriptor, payload.len(), bytes))
             .unwrap_or(usize::MAX);
+        let retained = payload
+            .iter()
+            .try_fold(0usize, |sum, value| sum.checked_add(value.retained_bytes()))
+            .and_then(|bytes| Self::storage_bytes(&descriptor, payload.len(), bytes))
+            .unwrap_or(usize::MAX);
         let resource_free = payload.iter().all(Value::is_resource_free);
         let value = Self {
             physical_type,
@@ -38,6 +46,7 @@ impl Variant {
             alternative,
             payload: payload.into(),
             spine,
+            retained,
             resource_free,
         };
         value.validate()?;
@@ -99,13 +108,7 @@ impl Variant {
         const {
             assert!(std::mem::size_of::<Self>() <= 256);
         }
-        let payload = self
-            .payload
-            .iter()
-            .try_fold(0usize, |sum, value| sum.checked_add(value.retained_bytes()));
-        payload
-            .and_then(|bytes| Self::storage_bytes(&self.descriptor, self.payload.len(), bytes))
-            .unwrap_or(usize::MAX)
+        self.retained
     }
     pub(crate) fn storage_bytes(
         descriptor: &VariantDescriptor,

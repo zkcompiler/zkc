@@ -12,4 +12,4 @@ fn work(m:Matrix<F>,xs:Vector<F>,seed:F)->Vector<F>{
   return collect(row_indices(m),fn(r)=>fold(zip(row_values(m,r),elements(xs)),seed,fn(s,(a,b))=>s+a*b));
 }
 protocol Run roles(P)(m:Matrix<F>@P,xs:Vector<F>@P,seed:F@P)->(result:Vector<F>@P){return work(m,xs,seed);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

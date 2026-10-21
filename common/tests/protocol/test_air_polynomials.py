@@ -1,5 +1,7 @@
 """Source AIR polynomial helpers against independent extension arithmetic."""
 
+from entry import joint_execution
+
 from source_modules import library_modules
 from input_files import input_files
 import json
@@ -26,7 +28,7 @@ protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  let rows@P=transpose(extension,width,size);
  return (scope=scope,at=at,extension=extension,rows=rows);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -71,7 +73,7 @@ fn sample(height:index,begin:index,end:index,samples:Vector<E>) -> Vector<E> {
  }
  return results;
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -93,10 +95,10 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
         for begin, end in [(0, 7), (1, 8), (1, 7), (0, 8), (3, 3), (2, 5)]:
             inputs = {'height': height, 'begin': begin, 'end': end, 'size': size,
                       'shift': wire([shift], True), 'samples': wire(samples)}
-            request = input_files(journal, 'inputs.json', session='scope_roots', roles={'P': {'inputs': inputs}})
+            request = input_files(journal, 'inputs.json', session='scope_roots', package=package, arguments={'inputs': {'P': inputs}})
             output = directory / 'outputs.json'
             journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={report['package_sha256']}', *request, f'--results={output}'])
-            actual = json.loads(output.read_text())['roles']['P']
+            actual = json.loads(output.read_text())['value']['P']
             roots = subgroup[begin:end]
             assert actual['scope'] == wire([zero_polynomial_at(roots, at) for at in coset])
             assert actual['sampled'] == wire([zero_polynomial_at(roots, at) for at in samples])
@@ -125,10 +127,10 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
             inputs = {'height': height, 'begin': begin, 'end': end, 'size': size,
                       'shift': wire([SHIFT], True), 'x': wire([x], True),
                       'values': wire(columns), 'width': len(polynomials)}
-            request = input_files(journal, 'inputs.json', session='air_math', roles={'P': {'inputs': inputs}})
+            request = input_files(journal, 'inputs.json', session='air_math', package=package, arguments={'inputs': {'P': inputs}})
             output = directory / 'outputs.json'
             journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'])
-            values = json.loads(output.read_text())['roles']['P']
+            values = json.loads(output.read_text())['value']['P']
             roots = subgroup[begin:end]
             assert values['scope'] == wire([zero_polynomial_at(roots, at) for at in coset])
             assert values['at'] == wire([zero_polynomial_at(roots, x)], True)
@@ -139,8 +141,8 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
                 assert zero_polynomial_at(roots, x) == add(power(x, height), [P - 1] + [0] * 7)
 
     for change in [{'begin': 5, 'end': 2}, {'end': height + 1}, {'values': wire(columns[:-1])}]:
-        request = input_files(journal, 'invalid.json', session='air_math', roles={'P': {'inputs': inputs | change}})
+        request = input_files(journal, 'invalid.json', session='air_math', package=package, arguments={'inputs': {'P': inputs | change}})
         refused = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request],
-                               refuses='entry-run-incomplete')
-        cause = refused['execution']['roles'][0]['after'][1]['cause']
+                               refuses='entry-host-run-failed')
+        cause = joint_execution(refused)['roles'][0]['after'][1]['cause']
         assert cause[0] == 'explicit' and cause[1]['text'] == 'reject'

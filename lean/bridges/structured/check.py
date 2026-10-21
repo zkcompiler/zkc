@@ -21,6 +21,7 @@ import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
+from bridges.common.native_entry import native_run
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
 from bridges.common.lean_render import file_digest as digest  # noqa: E402
 
@@ -281,9 +282,8 @@ class Suite:
         source = Path(__file__).parent / "fixtures/accumulate.zkc"
         flags = ["--source-format=zkc", "--module=structured=" + str(source),
                  "--entry=structured::" + entry]
-        text = self.command(entry + ":frontend", [self.tools["compiler"], "language-emit", *flags])
-        interface = json.loads(self.command(entry + ":interface",
-            [self.tools["compiler"], "language-interface", *flags]))
+        text, interface = native_run(
+            lambda command: self.command(entry + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export("frontend-" + entry, text, interface["protocol"])
         write_json(subject[1].parent / "interface.json", interface)
         shutil.copy2(source, subject[1].parent / "source.zkc")

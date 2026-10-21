@@ -18,7 +18,7 @@ def fixture(directory):
                     'examples/projects/sumcheck/product/product.ring.json', leaf / 'unused.json')
     (directory / 'main.zkc').write_text('''module main; use formula::{identity};
 protocol Run roles(P)(value:bool@P)->(result:bool@P){return identity(value);}
-run Demo=Run;''')
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }''')
     catalog = directory / 'zkc.workspace.toml'
     catalog.write_text(project_text({'format': 'zkc.workspace/0',
                                     'packages': {'chosen': 'leaf', 'unselected': 'absent'}}))

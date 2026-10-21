@@ -3,6 +3,34 @@
 This native contract defines proof execution, completion and failure.
 [Transport](../formats/proof.md) owns bytes; [attempts](attempts.md) own retries.
 
+## Operation admission
+
+A combined deployment contains both actual producer and validator endpoints.
+An operation-specific deployment contains exactly the producer for proving or
+exactly the validator for verification, with one selected entry and participant.
+It cannot be used for the other operation. Descriptor identities of both roles
+remain available for canonical invocation binding; they do not create admitted
+endpoints. An absent role requires no executable, source-port map, runtime
+binding, service, witness or key material.
+
+Each present endpoint satisfies the same state-chain, transcript-event,
+dependency, physical wire-type and construction checks as in combined admission.
+The Host checks its complete ordered wire layout against the authenticated
+descriptor and wire-site map. Only a present validator's actual Boolean output
+can establish acceptance. Producer admission retains the acceptance selector as
+descriptor metadata without inventing verifier outputs. Authenticated public
+source-input indices classify producer witness dependencies independently of an
+absent verifier's executable input map. Selected source maps exactly cover the
+present endpoints and ordinary data inputs.
+
+Record codec plans preserve their descriptor identity and names. Helpers required
+by the selected transport direction must exist; opposite-direction helpers may
+be absent. Every retained codec helper is still checked, including its signature
+and prescribed slice or conditional-finalizer body. All potential selected
+calls and control regions undergo native installation checks before execution.
+Operation admission changes neither canonical proof bytes, transcript origins,
+construction plans nor the compiler's source-correspondence obligation.
+
 ## Completion and failure
 
 Validation accepts only after the selected Boolean result is true, the role has

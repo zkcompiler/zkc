@@ -9,6 +9,7 @@ const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
+const INVOCATIONS: Opt = Opt::new("--invocations=FILE");
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.";
 // Source and pinned package modes share spelling, but cannot be combined.
 macro_rules! entry_options {
@@ -29,13 +30,15 @@ macro_rules! entry_options {
             Opt::new("--no-calculation-batching"), $($extra),*)
     };
 }
-const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
-build/zkc/<qualified.name>.zkproof; run results use .results.json. Explicit paths win.
+const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.
+Generic protocol runs take closed arguments, e.g. 'Schnorr<G>'. Proofs require a proof declaration.
+Pinned execution uses --package and --sha256 together and no source options.
+Project inputs default to inputs/<entry-stem>/. Proofs default to
+build/zkc/<entry-stem>.zkproof; run results use .results.json. Explicit paths win.
+Named Entry stems replace :: with dots; generic runs append a full selector digest.
 Outside a project, input and proof paths must be explicit unless the input group is empty.
-Run sessions are generated when omitted. Use run --no-results to skip result publication.
---dry-run checks inputs, setup authority and bounds without executing or issuing resources.
-It neither reads proof bytes nor publishes proofs/results; output paths need not exist.
-It cannot be combined with --instrument.";
+Function arguments use one parameter-named arguments.json map. Static child context
+uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.";
 const COMMANDS: &[Command] = &[
     Command {
         name: "test", summary: "Run manifest test recipes through ordinary consumer Entries", positional: "[TEST]",
@@ -56,7 +59,8 @@ const COMMANDS: &[Command] = &[
         description:
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
-Select an Entry by unique short name or qualified module::Name. The report lists Entries.
+Select an Entry by unique short name or qualified module::Name, with closed arguments
+for generic runs, e.g. 'Schnorr<G>'. Discovery does not enumerate generic instances.
 Use inspect for API, placement and notation inventories.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
@@ -74,7 +78,11 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"),
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
+Project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
+Named Entry stems replace :: with dots; generic runs append a full selector digest.
+Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
         name: "new",
@@ -97,6 +105,7 @@ Existing projects and conflicting files refuse; use prepare for an existing proj
         positional: "[ENTRY]",
         options: entry_options!(@inspection Opt::new("--output=DIRECTORY")),
         description: "Prepare all project Entries, or one selected Entry. Explicit --output selects one Entry.
+Generic protocols require an explicit selector with closed arguments, e.g. 'Schnorr<G>'.
 Package and explicit-module modes require --output. Existing regular files are preserved.
 Values, dynamic lengths and variant cases must be filled by the user.
 Use run, prove or verify --dry-run to validate inputs without protocol execution.",
@@ -108,21 +117,20 @@ Use run, prove or verify --dry-run to validate inputs without protocol execution
         options: entry_options!(@inspection Opt::new("--view=entry|project|api|placement|notations|toolchain"), Opt::new("--profile=NAME"), Opt::new("--notation-private"), Opt::new("--notation-installation")),
         description: "Inspect the selected Entry by default; other views show project, API, completed callable
 placement, notation or toolchain metadata. Notation visibility options require --view=notations.
+Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 Source inventories check definitions and optionally a selected Entry; they do not execute it.
 Pinned packages support only the Entry view.",
     },
     Command {
         name: "run",
-        summary: "Compile and execute a run Entry",
+        summary: "Compile and execute an Entry function",
         positional: "[ENTRY]",
         options: entry_options!(
             Opt::new("--instrument=counts"),
             Opt::new("--dry-run"),
-            Opt::new("--session=LABEL"),
-            Opt::new("--input=ROLE=FILE").repeated(),
-            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
-            Opt::new("--key=SLOT=FILE").repeated(),
-            SETUPS,
+            Opt::new("--input=FILE"),
+            INVOCATIONS,
+            AUTHORED,
             CAPACITY,
             Opt::new("--limits=LIMITS"),
             RESULTS,
@@ -377,6 +385,58 @@ mod tests {
     use super::*;
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).into()).collect()
+    }
+
+    #[test]
+    fn function_failure_rendering_uses_each_childs_source_roles() {
+        let report = serde_json::json!({"format":"zkc.entry-result/0","status":"refused",
+        "code":"entry-host-run-failed","invocation_role_names":{
+            "first":{"role00000000":"証明者"},"second":{"role00000000":"検証者"}},
+        "execution":{"failure":{"code":"entry-host-run-failed"},"calls":[
+            {"target":"first","native":{"roles":[{"role":"role00000000","before":["stopped","require"],"after":["returned"]}]}},
+            {"target":"second","native":{"stop":{"role":"role00000000","kind":"require"}}}
+        ]}});
+        let text = human(&report);
+        assert!(text.contains("Invocation first:\nStopped 証明者:"));
+        assert!(text.contains("Invocation second:\nStopped 検証者:"));
+        assert!(!text.contains("Stopped role00000000:"));
+    }
+
+    #[test]
+    fn function_inputs_are_single_files_and_child_authority_is_explicit() {
+        let spec = command("run").unwrap();
+        let values = args(&["--input=arguments.json", "--invocations=context.json"]);
+        let parsed = spec.parse(&values).unwrap();
+        assert_eq!(parsed.value("--input"), Some("arguments.json"));
+        assert_eq!(parsed.value("--invocations"), Some("context.json"));
+        let repeated = args(&["--input=a.json", "--input=b.json"]);
+        assert_eq!(spec.parse(&repeated).err().unwrap().code, "cli-option");
+        assert!(spec.help().contains("--input=FILE"));
+        assert!(!spec.help().contains("--input=ROLE=FILE"));
+        for removed in [
+            "--session=x",
+            "--service=P.rng=1",
+            "--key=slot=file",
+            "--setups=file",
+        ] {
+            assert_eq!(run("run", &args(&[removed]))["code"], "cli-option");
+        }
+        for name in ["prove", "verify"] {
+            assert_eq!(
+                run(name, &args(&["--invocations=context.json"]))["code"],
+                "cli-option"
+            );
+        }
+        for flag in [
+            "--public=x",
+            "--witness=x",
+            "--session=x",
+            "--service=P.rng=1",
+        ] {
+            let report = run("run", &args(&["--dry-run", flag, "--project=/missing"]));
+            assert_eq!(report["code"], "cli-option");
+            assert_eq!(report["phase"], "arguments");
+        }
     }
 
     #[test]

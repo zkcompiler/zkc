@@ -11,15 +11,14 @@ mod layout;
 pub use layout::{Artifact, Layout, input_path};
 mod preparation;
 pub use preparation::{Preparation, Template};
-mod selection;
+mod inspection;
+pub(crate) mod selection;
+pub use inspection::CheckedInterface;
 
 mod settings;
 pub use settings::{BuildSettings, ResolvedSettings};
-
-pub(crate) mod observation;
-
 mod cache;
+pub(crate) mod observation;
 pub use cache::CompilationCache;
-
 pub(crate) mod testing;
 pub use testing::TestRecipe;

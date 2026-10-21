@@ -5,6 +5,8 @@ checks cover execution and rejection obligations; they are not a proximity or
 Fiat-Shamir soundness proof.
 """
 
+from entry import joint_execution, joint_package
+
 from input_files import input_files
 from source_modules import core_packages, library_modules
 import json
@@ -71,7 +73,8 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
     return package, report['package_sha256']
 
 
-def guard_sites(toolchain, journal, directory, *, entry='Proof', library=LIBRARY, flags=()):
+def guard_sites(toolchain, journal, directory, *, entry='Proof', library=LIBRARY, flags=(),
+                package=None):
     """The generated site of every LowDegree guard, read from the emitted program.
 
     The emitted program of the sources just compiled lists the guards in
@@ -79,9 +82,13 @@ def guard_sites(toolchain, journal, directory, *, entry='Proof', library=LIBRARY
     shape must be the library's, which also shows that a prover-only variant
     left the verifier's checks in place.
     """
-    emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
-                           f'--entry=example::{entry}', f'--module=example={directory / "fri.zkc"}',
-                           f'--module=fri={library}', *library_modules(*core_packages()), *flags])
+    if package is not None:
+        # A Function owns Host IR; the joint child's original owns these guards.
+        emitted = joint_package(json.loads(package.read_text()))['original']
+    else:
+        emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
+                               f'--entry=example::{entry}', f'--module=example={directory / "fri.zkc"}',
+                               f'--module=fri={library}', *library_modules(*core_packages()), *flags])
     regions, found = [], []
     for line in emitted.splitlines():
         text = line.strip()
@@ -352,14 +359,13 @@ def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     # V folds and evaluates with its own shift. A prover on another coset
     # commits layers that authenticate but do not chain, so V stops at the
     # first fold check.
-    run_package, run_pin = compile_entry(toolchain, journal, directory, entry='Run')
-    run_sites = guard_sites(toolchain, journal, directory, entry='Run')
+    run_package, run_pin = compile_entry(toolchain, journal, directory, entry='Fri')
+    run_sites = guard_sites(toolchain, journal, directory, package=run_package)
     counts = {'round_count': 3, 'query_count': 8}
-    inputs = input_files(journal, 'mismatched-shift.json', session='fri_shift_mismatch', roles={'P': {'inputs': counts | {'shift': wire([SHIFT], scalar=True), 'word': wire(values)}},
-                  'V': {'inputs': counts | {'shift': wire([[5, 2, 0, 0, 0, 0, 0, 0]], scalar=True)}}})
+    inputs = input_files(journal, 'mismatched-shift.json', session='fri_shift_mismatch', package=run_package, arguments={'inputs': {'P': counts | {'shift': wire([SHIFT], scalar=True), 'word': wire(values)}, 'V': counts | {'shift': wire([[5, 2, 0, 0, 0, 0, 0, 0]], scalar=True)}}})
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={run_package}', f'--sha256={run_pin}', *inputs],
-                          refuses='entry-run-incomplete')
-    after = {role['role']: role['after'] for role in report['execution']['roles']}
+                          refuses='entry-host-run-failed')
+    after = {role['role']: role['after'] for role in joint_execution(report)['roles']}
     assert after['role00000001'][0] == 'stopped' and after['role00000001'][1]['cause'][0] == 'explicit'
     assert stop_guard(after['role00000001'][1], run_sites) == ('chain', ['0', '1'])
 
@@ -389,12 +395,12 @@ use fri::{LowDegree};
         return selected
 
     # Interactive execution draws positions from the host's entropy.
-    package, pin = compile_entry(toolchain, journal, directory, entry='Run', text=text)
-    inputs = input_files(journal, 'run.json', session='fri_query_binding', roles={'P': {'inputs': shared | {'word': wire(cubic)}}, 'V': {'inputs': shared}})
+    package, pin = compile_entry(toolchain, journal, directory, entry='Fri', text=text)
+    inputs = input_files(journal, 'run.json', session='fri_query_binding', package=package, arguments={'inputs': {'P': shared | {'word': wire(cubic)}, 'V': shared}})
     outputs = directory / 'outputs.json'
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'])
     assert report['status'] == 'executed'
-    exact(json.loads(outputs.read_text())['roles']['V'], cubic)
+    exact(json.loads(outputs.read_text())['value']['V'], cubic)
 
     # Fiat-Shamir derives the positions from the transcript, so the same word
     # selects the same positions every time. Two words together reach both

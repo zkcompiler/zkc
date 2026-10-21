@@ -194,6 +194,8 @@ bool Checker::specifications(Declaration &decl) {
             : resolve(decl, source.relation.name, source.span);
     if (!target)
       return {};
+    if (!signature(*target))
+      return {};
     const auto &relation = output.declarations[target->index];
     if (relation.kind != Declaration::Kind::Relation) {
       types.fail("source.specification",

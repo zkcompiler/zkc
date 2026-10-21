@@ -11,6 +11,9 @@ use zkc_runtime::vm::{
 /// this trait is not a codec extension point. Invalid is a receive outcome;
 /// Limit and Backend are failures before accepting the receive completion.
 pub trait WireBackend: Backend {
+    fn decoding_bound(&self, _ty: &PhysicalType, _bytes: &[u8]) -> Result<usize, NativeWireError> {
+        Err(NativeWireError::Limit)
+    }
     fn encode_native(&self, value: &Self::Value) -> Result<Vec<u8>, NativeWireError>;
     fn decode_native(
         &self,
@@ -19,6 +22,10 @@ pub trait WireBackend: Backend {
     ) -> Result<Self::Value, NativeWireError>;
 }
 impl WireBackend for NativeBackend {
+    fn decoding_bound(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<usize, NativeWireError> {
+        self.measure_native_wire(ty, bytes)
+            .map(|s| s.retained_bytes())
+    }
     fn encode_native(&self, value: &Self::Value) -> Result<Vec<u8>, NativeWireError> {
         self.encode_native_value(value)
     }
@@ -161,9 +168,11 @@ impl<B: Backend> Slot<B> {
     }
 }
 struct Execution<B: WireBackend> {
+    wire_live: Option<zkc_runtime::vm::LiveReservation>,
     slots: Vec<Slot<B>>,
     report: Report<B>,
     limits: RunLimits,
+    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
 }
 enum StepResult {
     Completed,
@@ -189,9 +198,20 @@ fn codec(error: NativeWireError) -> Failure {
 pub fn run<B: WireBackend, H: Hooks<B>>(
     bundle: &Bundle,
     session: &str,
+    inputs: Vec<RoleInput<B>>,
+    limits: RunLimits,
+    hooks: &mut H,
+) -> Result<Report<B>, StartError<B>> {
+    run_with_ledger(bundle, session, inputs, limits, hooks, None)
+}
+/// Joint runners share cumulative charging before any owner begins execution.
+pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
+    bundle: &Bundle,
+    session: &str,
     mut inputs: Vec<RoleInput<B>>,
     limits: RunLimits,
     hooks: &mut H,
+    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
 ) -> Result<Report<B>, StartError<B>> {
     if let Err(failure) = limits.validate() {
         return Err(StartError { failure, inputs });
@@ -277,8 +297,10 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
         });
     }
     let mut execution = Execution {
+        wire_live: None,
         slots,
         limits,
+        shared_ledger,
         report: Report {
             session: session.into(),
             limits,
@@ -288,6 +310,8 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
             pending: None,
             roles: rows,
             backends,
+            retained: Vec::new(),
+            wire_live: None,
         },
     };
     let outcome = execution
@@ -299,7 +323,7 @@ impl<B: WireBackend> Execution<B> {
     fn initialize(&mut self, bundle: &Bundle, session: &str) -> Option<Outcome> {
         for (index, slot) in self.slots.iter_mut().enumerate() {
             let backend = slot.backend.take().expect("unstarted backend");
-            match Runner::new_with_budgets(
+            match Runner::new_for_role_with_ledger(
                 &bundle.admitted,
                 &bundle.entry,
                 &slot.role,
@@ -308,6 +332,7 @@ impl<B: WireBackend> Execution<B> {
                 std::mem::take(&mut slot.inputs),
                 self.limits.values,
                 self.limits.work,
+                self.shared_ledger.clone(),
             ) {
                 Ok(runner) => {
                     let stopped = runner.stop().is_some();
@@ -719,7 +744,30 @@ impl<B: WireBackend> Execution<B> {
                     unreachable!("checked send")
                 };
                 let value = packet.payload.clone();
+                let bound = crate::host::shared::wire_bound(&value);
+                // A retention-based allocation bound includes descriptor/slack
+                // bytes, not bytes sent. Only a fixed native width can decide
+                // this limit before encoding. Dynamic frames are fully reserved
+                // here and checked below before committing the send.
+                if self.shared_ledger.is_some()
+                    && native_wire_size(&value.physical_type()).is_some_and(|width| {
+                        width > self.limits.wire_bytes
+                            || width
+                                > self
+                                    .limits
+                                    .total_wire_bytes
+                                    .saturating_sub(self.report.wire.sent_bytes)
+                                    .saturating_sub(self.report.wire.replacement_bytes)
+                    })
+                {
+                    return Err(limit());
+                }
+                let wire_live = crate::host::shared::allocation(self.shared_ledger.as_ref(), bound)
+                    .map_err(|_| limit())?;
                 let bytes = runner.backend().encode_native(&value).map_err(codec)?;
+                if bytes.len() > bound {
+                    return Err(limit());
+                }
                 let ProgramAction::Send { ty, .. } = action else {
                     unreachable!("send")
                 };
@@ -750,6 +798,7 @@ impl<B: WireBackend> Execution<B> {
                     Ok(_) => {
                         self.report.wire.sent_bytes = total;
                         self.report.wire.sends = sends;
+                        self.wire_live = wire_live;
                         self.report.reached.last_mut().unwrap().sent_bytes = Some(bytes.len());
                         self.report.pending = Some(PendingMessage {
                             send_step: index,
@@ -768,10 +817,36 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
-                let decoded = match runner.backend().decode_native(ty, &pending.bytes) {
-                    Ok(value) => Ok(value),
-                    Err(NativeWireError::Invalid(reason)) => Err(reason),
-                    Err(error) => return Err(codec(error)),
+                let (_decoded_live, invalid) = if let Some(ledger) = &self.shared_ledger {
+                    ledger
+                        .charge(
+                            WorkBudget {
+                                instructions: 0,
+                                iterations: 0,
+                                logical_bytes: pending.bytes.len() as u64,
+                            },
+                            0,
+                        )
+                        .map_err(|_| limit())?;
+                    match runner.backend().decoding_bound(ty, &pending.bytes) {
+                        Ok(bound) => (
+                            crate::host::shared::allocation(Some(ledger), bound)
+                                .map_err(|_| limit())?,
+                            None,
+                        ),
+                        Err(NativeWireError::Invalid(reason)) => (None, Some(reason)),
+                        Err(error) => return Err(codec(error)),
+                    }
+                } else {
+                    (None, None)
+                };
+                let decoded = match invalid {
+                    Some(reason) => Err(reason),
+                    None => match runner.backend().decode_native(ty, &pending.bytes) {
+                        Ok(value) => Ok(value),
+                        Err(NativeWireError::Invalid(reason)) => Err(reason),
+                        Err(error) => return Err(codec(error)),
+                    },
                 };
                 let receives = self.report.wire.receives.checked_add(1).ok_or_else(limit)?;
                 match runner.complete_receive(cut, decoded) {
@@ -779,6 +854,7 @@ impl<B: WireBackend> Execution<B> {
                         self.report.reached.last_mut().unwrap().receive_completion =
                             Some(completion);
                         self.report.pending = None;
+                        self.wire_live = None;
                         self.report.wire.receives = receives;
                         Ok(())
                     }
@@ -828,11 +904,16 @@ impl<B: WireBackend> Execution<B> {
         }
         for slot in self.slots {
             let backend = match slot.runner {
-                Some(runner) => runner.into_backend(),
+                Some(runner) => {
+                    let (backend, outputs) = runner.into_retained_outputs();
+                    self.report.retained.extend(outputs);
+                    backend
+                }
                 None => slot.backend.expect("unstarted backend custody"),
             };
             self.report.backends.push((slot.role, backend));
         }
+        self.report.wire_live = self.wire_live.take();
         self.report
     }
 }

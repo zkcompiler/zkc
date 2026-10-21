@@ -113,7 +113,12 @@ int main() {
         auto bytes = take(inspectDeclarations(project));
         auto json = take(json::parse(bytes));
         auto *items = json.getAsArray();
-        require(items && items->size() == 4, bytes);
+        require(items && items->size() == 5, bytes);
+        auto *generated = (*items)[2].getAsObject();
+        require(generated && generated->getString("name") == "m::Run::run" &&
+                    generated->getString("stage") == "host" &&
+                    generated->getObject("generated"),
+                "generated callable is not discoverable");
         auto *first = (*items)[1].getAsObject();
         require(first->getString("name") == "m::Run",
                 "declarations are not sorted");

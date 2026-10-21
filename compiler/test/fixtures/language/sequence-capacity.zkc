@@ -1,0 +1,15 @@
+module sample;
+use zkc::sequence::{Sequence, empty, append, length, get};
+struct Pair { pub first: index, pub second: index }
+fn collect(n: index) -> Sequence<Pair> {
+  let mut xs = empty<Pair>();
+  for i in 0..n { xs = append(xs, Pair { first: i, second: i }); }
+  return xs;
+}
+fn observe(n: index, last: index) -> (index, Pair, Pair) {
+  let xs = collect(n);
+  return (length(xs), get(xs, 0), get(xs, last));
+}
+protocol Run roles(P)(n: index @P, last: index @P)
+  -> (r: (index, Pair, Pair) @P) { return observe(n, last); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

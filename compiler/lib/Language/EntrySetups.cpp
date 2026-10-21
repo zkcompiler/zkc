@@ -5,6 +5,8 @@
 using namespace llvm;
 namespace zkc::language::detail {
 Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
+  if (!entry.protocolOrNull())
+    return Error::success();
   const auto &protocol = entry.protocol();
   const auto &choices = entry.entry();
   std::set<unsigned> expected, covered;

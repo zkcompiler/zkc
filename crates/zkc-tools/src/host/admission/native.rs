@@ -46,6 +46,43 @@ pub(crate) fn check_native_data(
     }
 }
 
+/// Only private typed Host adapters enable this path. Public byte/native ingress
+/// retains its codec requirement; no file or resource declaration is executable.
+pub(crate) fn check_retained_data(
+    ty: &PhysicalType,
+    input: &InputValue,
+    capacity: crate::execution::Capacity,
+) -> Result<()> {
+    if zkc_backends::has_native_wire(ty) {
+        return check_native_data(ty, input, capacity);
+    }
+    if !ty.is_duplicable() || matches!(ty.kind(), Type::ProverKey | Type::VerifierKey) {
+        return Err("native-input-private".into());
+    }
+    match input {
+        InputValue::Native(v) if v.physical_type() == *ty => Ok(()),
+        InputValue::Variant {
+            alternative,
+            payload,
+        } => {
+            let logical = ty.logical();
+            let descriptor = logical.variant_descriptor().ok_or("native-input-type")?;
+            let arm = descriptor
+                .alternatives()
+                .get(*alternative)
+                .ok_or("native-input-alternative")?;
+            if arm.payload().len() != payload.len() {
+                return Err("native-input-payload".into());
+            }
+            for (logical, input) in arm.payload().iter().zip(payload) {
+                let ty = PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
+                check_retained_data(&ty, input, capacity)?;
+            }
+            Ok(())
+        }
+        _ => Err("native-input-private".into()),
+    }
+}
 impl<'a> Admission<'a> {
     /// Plan immutable native data using the same complete invocation budget.
     pub fn native_data(
@@ -55,8 +92,62 @@ impl<'a> Admission<'a> {
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
-        let (input, _) = self.plan(backend, ty, request, selected)?;
+        let input = if self.retained_inputs && !zkc_backends::has_native_wire(&ty) {
+            self.plan_retained(backend, ty, request, selected)?
+        } else {
+            self.plan(backend, ty, request, selected)?.0
+        };
         self.add(input)
+    }
+    fn plan_retained(
+        &mut self,
+        backend: &NativeBackend,
+        ty: PhysicalType,
+        request: &'a InputValue,
+        selected: Option<Arc<VerifierKey>>,
+    ) -> Result<Input<'a>> {
+        check_retained_data(&ty, request, crate::execution::Capacity::default())?;
+        self.work(1)?;
+        match request {
+            InputValue::Native(value) => {
+                self.work(value.retained_bytes())?;
+                Ok(Input::Retained {
+                    ty,
+                    value,
+                    selected,
+                })
+            }
+            InputValue::Variant {
+                alternative,
+                payload,
+            } => {
+                let logical = ty.logical();
+                let descriptor = logical.variant_descriptor().ok_or("native-input-type")?;
+                let arm = &descriptor.alternatives()[*alternative];
+                let mut children = Vec::new();
+                let mut bytes = descriptor.retained_bytes() + 256 + payload.len() * 512;
+                for (logical, input) in arm.payload().iter().zip(payload) {
+                    let physical =
+                        PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
+                    let child = if zkc_backends::has_native_wire(&physical) {
+                        self.plan(backend, physical, input, selected.clone())?.0
+                    } else {
+                        self.plan_retained(backend, physical, input, selected.clone())?
+                    };
+                    bytes = bytes
+                        .checked_add(child.estimate()?)
+                        .ok_or("artifact-input-bytes-limit")?;
+                    children.push(child);
+                }
+                Ok(Input::Variant {
+                    ty,
+                    alternative: *alternative,
+                    payload: children,
+                    estimate: bytes,
+                })
+            }
+            _ => Err("native-input-private".into()),
+        }
     }
     /// Canonical public binding and shared-input comparison traverse a loaded
     /// value once more. Reserve that work before loading any invocation data.
@@ -167,6 +258,15 @@ pub(super) fn check(backend: &NativeBackend, input: &Input<'_>) -> Result<()> {
         Input::Native {
             value, selected, ..
         } => check_native(backend, value, selected.as_deref()),
+        Input::Retained {
+            value, selected, ..
+        } => {
+            zkc_runtime::vm::Backend::validate_value(backend, value).map_err(|e| e.to_string())?;
+            if let Some(key) = selected {
+                super::super::setups::check_input(value, key)?;
+            }
+            Ok(())
+        }
         Input::Variant { payload, .. } => {
             for child in payload {
                 check(backend, child)?;
@@ -217,11 +317,17 @@ pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
             if value.retained_bytes() > estimate {
                 return Err("artifact-input-size-estimate".into());
             }
-            backend
-                .validate_native_input(&value)
-                .map_err(|e| e.to_string())?;
+            if zkc_backends::has_native_wire(&ty) {
+                backend
+                    .validate_native_input(&value)
+                    .map_err(|e| e.to_string())?;
+            } else {
+                zkc_runtime::vm::Backend::validate_value(backend, &value)
+                    .map_err(|e| e.to_string())?;
+            }
             Ok(value)
         }
+        Input::Retained { value, .. } => Ok(value.clone()),
         Input::Key { .. } | Input::Ready(_) => {
             unreachable!("only immutable data is planned as variant payload")
         }

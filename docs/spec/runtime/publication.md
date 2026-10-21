@@ -15,8 +15,8 @@ publication status distinguishes produced bytes from a successfully written file
 Project runs publish returned values to their standard results path unless
 `--no-results` is supplied. `--results=FILE` selects an explicit destination;
 it cannot be combined with `--no-results`. Other modes publish values only with
-`--results`. Run files contain a
-`roles` map; proof files contain `values` for the invoked participant. Both use
+`--results`. Run files contain the source return under `value`; proof files contain
+`values` for the invoked participant. Both use
 `zkc.entry-outputs/0`. Encoding honors admitted native capacity and a 16 MiB whole
 file limit. Requested output types without a native codec refuse with
 `entry-output-codec` before execution. Value-dependent encoding and size failures

@@ -33,4 +33,6 @@ protocol Okamoto<G: Group> roles(P, V)
   return (accepted = accepted);
 }
 
-run Interactive = Okamoto<G1>;
+entry fn Interactive(inputs: Okamoto<G1>::Inputs) {
+  return Okamoto<G1>::run(inputs);
+}

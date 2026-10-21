@@ -92,10 +92,14 @@ impl HostLimits {
 }
 /// Exact byte identity is supplied independently of invocation and bundle data.
 /// Native admission proves supplied structure, not source-order correspondence.
+#[derive(Clone)]
 pub struct RunHost {
     ring_assets: zkc_backends::ring::Registry,
     relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
+    sequence_work_limit: u64,
+    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    retained_inputs: bool,
     bundle: Bundle,
     identity: String,
     limits: HostLimits,
@@ -146,11 +150,21 @@ impl RunHost {
             ring_assets: Default::default(),
             relation_assets: Default::default(),
             ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
+            sequence_work_limit: 16_777_216,
+            shared_ledger: None,
+            retained_inputs: false,
             bundle,
             identity: hex(identity),
             limits,
             authority,
         })
+    }
+    pub(crate) fn check_session(session: &str) -> Result<()> {
+        if inputs::valid_identifier(session) {
+            Ok(())
+        } else {
+            Err("bundle-input-name".into())
+        }
     }
     pub fn bundle(&self) -> &Bundle {
         &self.bundle
@@ -160,6 +174,10 @@ impl RunHost {
     }
     pub fn limits(&self) -> HostLimits {
         self.limits
+    }
+    pub(crate) fn with_retained_inputs(mut self) -> Self {
+        self.retained_inputs = true;
+        self
     }
     pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
         self.ring_assets = assets;
@@ -175,6 +193,22 @@ impl RunHost {
         }
         self.ring_work_limit = limit;
         Ok(self)
+    }
+    /// Attach one outer ledger before constructing any joint runner.
+    pub fn with_shared_ledger(mut self, ledger: zkc_runtime::vm::ExecutionLedger) -> Self {
+        self.shared_ledger = Some(ledger);
+        self
+    }
+    pub(crate) fn with_invocation_limits(
+        mut self,
+        limits: HostLimits,
+        ring: u64,
+        sequence: u64,
+    ) -> Self {
+        self.limits = limits;
+        self.ring_work_limit = ring;
+        self.sequence_work_limit = sequence;
+        self
     }
     /// Positional interface. Candidate SSA and generated service names are not
     /// configuration keys; the authenticated bundle determines each position.
@@ -205,6 +239,7 @@ impl RunHost {
         request: &RunInputs,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<PreparedRun<'_>> {
+        imports.set_ledger(self.shared_ledger.clone());
         inputs::prepare(self, request, imports)
     }
 }
@@ -219,6 +254,7 @@ pub struct PreparedRun<'a> {
     session: String,
     roles: Vec<PreparedRole>,
     loaded: Vec<Value>,
+    loading: Option<zkc_runtime::vm::LiveReservation>,
 }
 impl PreparedRun<'_> {
     /// Every ordinary exit after issuance retires issued roots and preserves the
@@ -297,6 +333,14 @@ impl PreparedRun<'_> {
             });
         }
         drop(loaded);
+        let mut execution_limits = self.host.limits.execution();
+        if let Some(loading) = &self.loading {
+            let roles = inputs.len().max(1);
+            execution_limits.values.live_bytes = execution_limits
+                .values
+                .live_bytes
+                .saturating_sub(loading.bytes().div_ceil(roles));
+        }
         let mut report = HostReport::new(self.host, &self.session);
         if let Some(error) = failure {
             report.phase = "issuance";
@@ -304,12 +348,13 @@ impl PreparedRun<'_> {
             report.unstarted = inputs.into_iter().map(|i| (i.role, i.backend)).collect();
         } else {
             report.phase = "execution";
-            match run(
+            match run_with_ledger(
                 &self.host.bundle,
                 &self.session,
                 inputs,
-                self.host.limits.execution(),
+                execution_limits,
                 &mut NoHooks,
+                self.host.shared_ledger.clone(),
             ) {
                 Ok(execution) => {
                     if matches!(&execution.outcome, Outcome::DriverFailed(failure) if failure.kind == FailureKind::Setup)

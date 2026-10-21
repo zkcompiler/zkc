@@ -40,7 +40,9 @@ protocol HelpersProtocol roles(P, V)
   return (accepted = finalClaim == actual);
 }
 
-run Helpers = HelpersProtocol;
+entry fn Helpers(inputs: HelpersProtocol::Inputs) {
+  return HelpersProtocol::run(inputs);
+}
 
 protocol HornerProtocol roles(P, V)
     (a00: F @(P,V), a01: F @(P,V), a02: F @(P,V), a10: F @(P,V), a11: F @(P,V), a12: F @(P,V), a20: F @(P,V), a21: F @(P,V), a22: F @(P,V),
@@ -74,7 +76,9 @@ protocol HornerProtocol roles(P, V)
   return (accepted = finalClaim == actual);
 }
 
-run Horner = HornerProtocol;
+entry fn Horner(inputs: HornerProtocol::Inputs) {
+  return HornerProtocol::run(inputs);
+}
 
 protocol WrongResidualProtocol roles(P, V)
     (a00: F @(P,V), a01: F @(P,V), a02: F @(P,V), a10: F @(P,V), a11: F @(P,V), a12: F @(P,V), a20: F @(P,V), a21: F @(P,V), a22: F @(P,V),
@@ -108,4 +112,6 @@ protocol WrongResidualProtocol roles(P, V)
   return (accepted = finalClaim == actual);
 }
 
-run WrongResidual = WrongResidualProtocol;
+entry fn WrongResidual(inputs: WrongResidualProtocol::Inputs) {
+  return WrongResidualProtocol::run(inputs);
+}

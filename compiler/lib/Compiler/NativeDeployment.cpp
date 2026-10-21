@@ -4,6 +4,8 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Translation/Protocol.h"
@@ -22,14 +24,15 @@ bool owns(Attribute owners, StringAttr role) {
 }
 Expected<json::Array> ports(pir::MathematicalOp source,
                             const program::Participants &program,
-                            const NativeProofPolicy &policy) {
+                            const NativeProofPolicy &policy,
+                            StringRef selectedRole = {}) {
   const program::ParticipantEntry *entry = nullptr;
   for (const auto &candidate : program.entries)
     if (candidate.name == policy.entry)
       entry = &candidate;
-  if (!entry || entry->participants.size() != source.getRoles().size() ||
-      program.entries.size() != 1 ||
-      program.participants.size() != source.getRoles().size())
+  auto count = selectedRole.empty() ? source.getRoles().size() : 1;
+  if (!entry || entry->participants.size() != count ||
+      program.entries.size() != 1 || program.participants.size() != count)
     return error("native-deployment-correspondence");
   json::Array maps;
   unsigned stateInputs = !policy.suite.empty(), stateOutputs = stateInputs;
@@ -51,6 +54,8 @@ Expected<json::Array> ports(pir::MathematicalOp source,
   auto type = source.getFunctionType();
   for (auto item : source.getRoles()) {
     auto role = cast<StringAttr>(item);
+    if (!selectedRole.empty() && role.getValue() != selectedRole)
+      continue;
     const program::Participant *participant = nullptr;
     for (const auto &mapping : entry->participants)
       if (mapping.first == role.getValue())
@@ -168,7 +173,12 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   });
   if (!entry)
     return error("native-deployment-subject");
-  auto maps = ports(entry, *program, policy);
+  StringRef selectedRole;
+  if (options.operation)
+    selectedRole = *options.operation == NativeProofOperation::Verify
+                       ? policy.validator
+                       : policy.producer;
+  auto maps = ports(entry, *program, policy, selectedRole);
   if (!maps)
     return maps.takeError();
   if (!out[6].getAsArray() || *out[6].getAsArray() != *maps)
@@ -192,6 +202,42 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
     if ((*binding)[2].getAsString() != type->spelling())
       return error("native-deployment-correspondence");
   }
+  return Error::success();
+}
+Error checkNativeOperationArtifact(StringRef bytes, StringRef original,
+                                   StringRef role) {
+  auto artifact = parseJson(bytes, 16 * 1024 * 1024);
+  if (!artifact)
+    return artifact.takeError();
+  auto *deployment = artifact->getAsArray();
+  if (!deployment || deployment->size() != 9 ||
+      (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
+      (*deployment)[1].getAsString() != original ||
+      !(*deployment)[4].getAsString() || !(*deployment)[6].getAsArray() ||
+      (*deployment)[6].getAsArray()->size() != 1)
+    return error("entry.deployment",
+                 "invalid operation-specific native proof deployment");
+  auto descriptor = encodeLogicalTree((*deployment)[2]);
+  if (!descriptor)
+    return descriptor.takeError();
+  auto candidate = *(*deployment)[4].getAsString();
+  if ((*deployment)[3].getAsString() != digest(*descriptor) ||
+      (*deployment)[5].getAsString() != digest(candidate))
+    return error("entry.deployment",
+                 "child native deployment identities differ");
+  auto program = program::parse(candidate);
+  if (!program)
+    return program.takeError();
+  if (auto e = protocol::admit(*program))
+    return e;
+  if (program->participants.size() != 1 || program->entries.size() != 1 ||
+      program->participants.front().role != role)
+    return error("entry.closure",
+                 "proof child retained the wrong operation closure");
+  auto *map = (*(*deployment)[6].getAsArray())[0].getAsArray();
+  if (!map || map->size() != 6 || (*map)[0].getAsString() != role ||
+      (*map)[1].getAsString() != program->participants.front().name)
+    return error("entry.signature", "proof child port map differs");
   return Error::success();
 }
 } // namespace zkc::detail

@@ -389,58 +389,142 @@ Expected<std::string> encodeSymbol(StringRef path, const Limits &limits) {
 std::vector<DeclarationId> CheckedProject::entries() const {
   std::vector<DeclarationId> result;
   for (const auto &decl : declarations())
-    if (decl.kind == Declaration::Kind::Entry)
+    if (decl.kind == Declaration::Kind::Entry ||
+        (decl.kind == Declaration::Kind::EntryFunction &&
+         decl.parameters.empty()))
       result.push_back(decl.id);
   llvm::sort(result, [&](DeclarationId a, DeclarationId b) {
-    return declarations()[a.index].qualifiedName <
-           declarations()[b.index].qualifiedName;
+    return declarations()[a.index].entryName() <
+           declarations()[b.index].entryName();
   });
   return result;
 }
-Expected<DeclarationId> selectEntry(const CheckedProject &project,
-                                    StringRef name, const Limits &limits,
-                                    std::optional<EntryKind> kind) {
+Expected<EntrySelection> resolveEntry(const CheckedProject &project,
+                                      StringRef name, const Limits &limits,
+                                      std::optional<EntryKind> kind) {
   if (auto error = checkLimits(limits))
     return std::move(error);
-  if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
-    return detail::failure("source.limit", "Entry name byte limit exceeded");
+  if (name.size() > 4096 ||
+      (!name.contains('<') &&
+       name.size() > limits.moduleBytes + limits.identifierBytes + 2))
+    return detail::failure("source.limit",
+                           "Entry selector byte limit exceeded");
   if (project.checkedWork() > limits.work ||
       project.checkedDeclarations() > limits.declarations ||
       project.checkedNotationDescriptors() > limits.notationDescriptors ||
       project.checkedNotationHoles() > limits.notationHoles)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
+  if (name.contains('<')) {
+    detail::Work work{limits};
+    auto syntax = detail::parseEntrySelector(name, work);
+    if (!syntax)
+      return syntax.takeError();
+    // Reuse completed source signatures and the actual import namespaces.
+    // Template bodies and source buffers remain shared and immutable.
+    detail::CheckedStorage scope(project.capture());
+    if (auto error = work.charge(project.declarations().size()))
+      return std::move(error);
+    scope.declarations.assign(project.declarations().begin(),
+                              project.declarations().end());
+    scope.assets.assign(project.assets().begin(), project.assets().end());
+    scope.sources = project.storage->sources;
+    const auto &names = *project.storage->names;
+    for (const auto &bindings : names.visible)
+      for (const auto &[name, binding] : bindings)
+        if (auto error = work.charge(name.size() + 1))
+          return std::move(error);
+    detail::Checker checker(scope, work, names);
+    Declaration context{};
+    context.kind = Declaration::Kind::EntryFunction;
+    StringRef requested = syntax->target.name;
+    requested.consume_front("::");
+    std::optional<DeclarationId> selected;
+    for (const auto &candidate : project.declarations()) {
+      if (candidate.kind != Declaration::Kind::Entry &&
+          candidate.kind != Declaration::Kind::EntryFunction)
+        continue;
+      auto entryName = candidate.entryName();
+      if (requested.contains("::") ? entryName != requested
+                                   : entryName.rsplit("::").second != requested)
+        continue;
+      if (selected)
+        return detail::failure("source.entry",
+                               "ambiguous Entry: " + requested +
+                                   "; specify a qualified protocol name");
+      selected = candidate.id;
+    }
+    if (!selected)
+      return detail::failure("source.entry", "unknown Entry: " + requested);
+    const auto &generated = scope.declarations[selected->index];
+    if (!generated.generated ||
+        generated.generated->operation != HostInvocation::Kind::Run)
+      return detail::failure("source.entry",
+                             "static Entry selection requires a protocol",
+                             generated.span);
+    const auto &protocol =
+        scope.declarations[generated.generated->target.index];
+    if (kind && *kind != EntryKind::Function)
+      return detail::failure("source.entry-kind",
+                             "selected Entry has the wrong execution kind",
+                             protocol.span);
+    // Selector text is an external argument, not a captured source buffer.
+    // Type diagnostics point to the selected protocol's declared contract.
+    context.id = generated.id;
+    context.module = generated.module;
+    context.span = protocol.span;
+    std::function<void(detail::SyntaxType &)> anchor = [&](auto &type) {
+      type.span = protocol.span;
+      for (auto &label : type.labels)
+        label.span = protocol.span;
+      for (auto &argument : type.arguments)
+        anchor(argument);
+    };
+    anchor(syntax->target);
+    auto arguments =
+        checker.arguments(context, protocol, syntax->target.arguments,
+                          protocol.span, syntax->target.labels);
+    if (!arguments)
+      return checker.types.takeError();
+    for (const auto &argument : *arguments)
+      if (checker.types.symbolic(argument))
+        return detail::failure(
+            "source.generic",
+            "Entry selection requires closed static arguments", protocol.span);
+    auto selectedName = protocol.qualifiedName + syntax->arguments;
+    if (selectedName.size() > 4096)
+      return detail::failure("source.limit",
+                             "qualified Entry selector byte limit exceeded",
+                             protocol.span);
+    return EntrySelection{*selected, std::move(*arguments),
+                          std::move(selectedName)};
+  }
   auto eligible = [&](DeclarationId id) {
     return !kind || project.declarations()[id.index].entryKind() == *kind;
   };
-  auto selected = [&](DeclarationId id) -> Expected<DeclarationId> {
+  auto selected = [&](DeclarationId id) -> Expected<EntrySelection> {
     if (!eligible(id))
       return detail::failure("source.entry-kind",
                              "selected Entry has the wrong execution kind",
                              project.declarations()[id.index].span);
-    return id;
+    return EntrySelection{
+        id, {}, project.declarations()[id.index].entryName().str()};
   };
-  if (name.contains("::")) {
-    for (const auto &decl : project.declarations())
-      if (decl.qualifiedName == name) {
-        if (decl.kind != Declaration::Kind::Entry)
-          return detail::failure("source.entry",
-                                 "selection must name an Entry declaration",
-                                 decl.span);
-        return selected(decl.id);
-      }
-  }
   auto candidates = project.entries();
   std::vector<DeclarationId> matches;
-  for (auto id : candidates)
-    if (name.empty() ? eligible(id)
-                     : project.declarations()[id.index].name == name)
+  for (auto id : candidates) {
+    auto entryName = project.declarations()[id.index].entryName();
+    if (name.empty()          ? eligible(id)
+        : name.contains("::") ? entryName == name
+                              : entryName.rsplit("::").second == name)
       matches.push_back(id);
+  }
   if (matches.size() == 1)
     return selected(matches.front());
   if (candidates.empty())
-    return detail::failure("source.entry",
-                           "project has no Entries; declare run or proof");
+    return detail::failure(
+        "source.entry", "project has no Entries; declare a concrete protocol, "
+                        "entry fn or proof");
   std::string message;
   if (matches.empty() && name.empty())
     message = "no Entry of the required execution kind; available Entries:";
@@ -459,35 +543,25 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
       break;
     }
     const auto &decl = project.declarations()[id.index];
-    message += " " + decl.qualifiedName + " (" +
-               (decl.entryKind() == EntryKind::Proof ? "proof" : "run") + ")";
+    message += " " + decl.entryName().str() + " (" +
+               (decl.entryKind() == EntryKind::Proof      ? "proof"
+                : decl.entryKind() == EntryKind::Function ? "function"
+                                                          : "run") +
+               ")";
   }
   return detail::failure("source.entry", message);
 }
-Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
-                                 const Limits &limits,
-                                 std::optional<EntryKind> kind) {
-  if (auto error = checkScopedElaboration(project, limits))
-    return std::move(error);
-  auto selected = selectEntry(project, name, limits, kind);
+Expected<DeclarationId> selectEntry(const CheckedProject &project,
+                                    StringRef name, const Limits &limits,
+                                    std::optional<EntryKind> kind) {
+  auto selected = resolveEntry(project, name, limits, kind);
   if (!selected)
     return selected.takeError();
-  const auto &decl = project.declarations()[selected->index];
-  detail::Work work{limits};
-  // Metadata is bounded by definition checking. Immutable template bodies
-  // are shared; specialization starts with its own phase budget.
-  auto storage = std::make_shared<detail::ClosedStorage>();
-  storage->declarations.assign(project.declarations().begin(),
-                               project.declarations().end());
-  if (auto error = detail::specialize(storage->declarations, project.assets(),
-                                      work, decl.id))
-    return error;
-  storage->protocol = *storage->declarations[decl.id.index].target;
-  if (auto error = detail::closeAssets(project, *storage, work))
-    return error;
-  ClosedEntry entry(project, decl.id, std::move(storage));
-  if (auto error = checkScopedSpecialization(entry, limits))
-    return error;
+  return selected->declaration;
+}
+namespace {
+Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
+                         detail::Work &work) {
   Layouts layouts(entry, limits);
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;
@@ -517,7 +591,7 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
   for (const auto &definition : entry.declarations()) {
     if (definition.body)
       if (auto e = checkMessages(*definition.body))
-        return std::move(e);
+        return e;
     if (definition.relation && definition.origin)
       for (const auto &port : definition.inputs) {
         auto layout = layouts.get(port.type);
@@ -563,14 +637,185 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
         }
       }
   }
+  return Error::success();
+}
+} // namespace
+Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
+                                 const Limits &limits,
+                                 std::optional<EntryKind> kind) {
+  return closeEntry(project, name, limits, kind, {});
+}
+Expected<ClosedEntry>
+closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
+           std::optional<EntryKind> kind,
+           std::optional<HostInvocation::Kind> operation) {
+  if (auto error = checkScopedElaboration(project, limits))
+    return std::move(error);
+  auto selected = resolveEntry(project, name, limits, kind);
+  if (!selected)
+    return selected.takeError();
+  const auto &decl = project.declarations()[selected->declaration.index];
+  if (operation &&
+      (!decl.proof() || (*operation != HostInvocation::Kind::Prove &&
+                         *operation != HostInvocation::Kind::Verify)))
+    return detail::failure(
+        "source.host-invocation",
+        "proof operation policy requires a proof declaration", decl.span);
+  detail::Work work{limits};
+  // Metadata is bounded by definition checking. Immutable template bodies
+  // are shared; specialization starts with its own phase budget.
+  auto storage = std::make_shared<detail::ClosedStorage>();
+  if (auto error = work.charge(project.declarations().size()))
+    return error;
+  storage->declarations.assign(project.declarations().begin(),
+                               project.declarations().end());
+  storage->name = selected->name;
+  if (decl.kind == Declaration::Kind::EntryFunction)
+    storage->declarations[decl.id.index].staticArguments = selected->arguments;
+  if (auto error = detail::specialize(storage->declarations, project.assets(),
+                                      work, decl.id, operation))
+    return error;
+  storage->invocationKind = operation;
+  storage->root = *storage->declarations[decl.id.index].target;
+  if (decl.kind != Declaration::Kind::EntryFunction)
+    storage->protocol = storage->root;
+  if (auto error = detail::closeAssets(project, *storage, work))
+    return error;
+  ClosedEntry entry(project, decl.id, storage);
+  if (auto error = checkScopedSpecialization(entry, limits))
+    return error;
+  if (auto error = validateClosedData(entry, limits, work))
+    return error;
+  std::set<std::string> invoked;
+  std::function<Error(const Body &, unsigned)> collect =
+      [&](const Body &body, unsigned depth) -> Error {
+    if (depth > limits.callDepth)
+      return detail::failure("source.limit",
+                             "invocation traversal depth exceeded");
+    for (const auto &op : body.operations) {
+      if (auto e = work.charge(1, op.span))
+        return e;
+      if (const auto *call = std::get_if<HostInvocation>(&op.action)) {
+        std::string key = std::to_string(unsigned(call->kind)) + ":" +
+                          std::to_string(call->target.index);
+        for (const auto &argument : call->arguments)
+          detail::frame(key, typeIdentity(argument));
+        if (invoked.insert(key).second) {
+          if (invoked.size() > limits.instances)
+            return detail::failure("source.limit",
+                                   "Host invocation instance limit exceeded",
+                                   op.span);
+          auto child = closeInvocation(project, *call, limits);
+          if (!child)
+            return child.takeError();
+          if (auto e = work.charge(child->storage->work, op.span))
+            return e;
+          storage->invocations.push_back(
+              {call->kind, call->target, call->arguments,
+               std::make_shared<ClosedEntry>(std::move(*child))});
+        }
+      } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
+        for (const auto &region : control->regions)
+          if (auto e = collect(*region, depth + 1))
+            return e;
+      }
+    }
+    return Error::success();
+  };
+  for (const auto &definition : entry.declarations())
+    if (definition.body)
+      if (auto e = collect(*definition.body, 1))
+        return e;
+  storage->work = work.used;
   return entry;
+}
+
+Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
+                                      const HostInvocation &invocation,
+                                      const Limits &limits) {
+  if (auto e = checkScopedElaboration(project, limits))
+    return e;
+  if (invocation.kind != HostInvocation::Kind::Run &&
+      invocation.kind != HostInvocation::Kind::Prove &&
+      invocation.kind != HostInvocation::Kind::Verify)
+    return detail::failure("source.host-invocation", "unknown Host operation");
+  if (invocation.target.index >= project.declarations().size())
+    return detail::failure("source.host-invocation",
+                           "invocation target is outside the project");
+  const auto &target = project.declarations()[invocation.target.index];
+  if (invocation.kind != HostInvocation::Kind::Run) {
+    if (target.kind != Declaration::Kind::Entry || !target.proof() ||
+        !invocation.arguments.empty())
+      return detail::failure("source.host-invocation",
+                             "proof invocation requires a closed proof family",
+                             target.span);
+    return closeEntry(project, target.qualifiedName, limits, EntryKind::Proof,
+                      invocation.kind);
+  }
+  if (target.kind != Declaration::Kind::Protocol)
+    return detail::failure("source.host-invocation",
+                           "run invocation requires a protocol", target.span);
+  detail::Work work{limits};
+  auto storage = std::make_shared<detail::ClosedStorage>();
+  if (auto error = work.charge(project.declarations().size()))
+    return error;
+  storage->declarations.assign(project.declarations().begin(),
+                               project.declarations().end());
+  Declaration owner;
+  owner.kind = Declaration::Kind::Entry;
+  owner.id = {uint32_t(storage->declarations.size())};
+  owner.module = target.module;
+  owner.span = target.span;
+  owner.name = target.name + "_deployment";
+  Type family(Type::Kind::Record, target.qualifiedName);
+  family.arguments = invocation.arguments;
+  owner.qualifiedName = target.qualifiedName + "::run";
+  if (!invocation.arguments.empty())
+    owner.qualifiedName += "_" + detail::digest(spelling(family));
+  owner.symbol = target.symbol + "_run";
+  owner.target = target.id;
+  owner.staticArguments = invocation.arguments;
+  owner.setups = target.setups;
+  auto selected = owner.id;
+  storage->name = owner.qualifiedName;
+  storage->declarations.push_back(std::move(owner));
+  if (auto e = detail::specialize(storage->declarations, project.assets(), work,
+                                  selected))
+    return e;
+  storage->root = *storage->declarations[selected.index].target;
+  storage->protocol = storage->root;
+  storage->invocationKind = invocation.kind;
+  if (auto e = detail::closeAssets(project, *storage, work))
+    return e;
+  ClosedEntry child(project, selected, storage);
+  if (auto e = checkScopedSpecialization(child, limits))
+    return e;
+  if (auto e = validateClosedData(child, limits, work))
+    return e;
+  storage->work = work.used;
+  return child;
 }
 
 const Declaration &ClosedEntry::entry() const {
   return storage->declarations[selected.index];
 }
+StringRef ClosedEntry::name() const { return storage->name; }
+const Declaration &ClosedEntry::root() const {
+  return storage->declarations[storage->root.index];
+}
+const Declaration *ClosedEntry::protocolOrNull() const {
+  return storage->protocol ? &storage->declarations[storage->protocol->index]
+                           : nullptr;
+}
 const Declaration &ClosedEntry::protocol() const {
-  return storage->declarations[storage->protocol.index];
+  assert(protocolOrNull() && "entry function has no protocol root");
+  return *protocolOrNull();
+}
+std::optional<HostInvocation::Kind> ClosedEntry::invocationKind() const {
+  return storage->invocationKind;
+}
+ArrayRef<ClosedInvocation> ClosedEntry::invocations() const {
+  return storage->invocations;
 }
 ArrayRef<Asset> ClosedEntry::assets() const { return storage->assets; }
 ArrayRef<Declaration> ClosedEntry::declarations() const {

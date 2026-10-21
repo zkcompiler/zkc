@@ -105,7 +105,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
 | `merkle` | Poseidon2 base-row trees; separate height/row-width sweeps, single and pruned multi-openings | Independent expected rows and changed-row rejection; root/path authentication shares the provider |
-| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; selected Host/Run ingress, default capacities |
+| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; selected Host/Function ingress, default capacities |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -346,9 +346,17 @@ preparation policy.
 
 ## Input ingress
 
-`--ingress json|wire|native|prepared` selects Host/Run input ownership (default
+`--ingress json|wire|native|prepared` selects Host/Function input ownership (default
 `json`), independently of `--preparation`. All modes use the captured named input
-documents and the admitted interface's default physical codecs.
+documents and the admitted interface's default physical codecs. Source run jobs
+capture one `arguments.json` parameter map, such as `{"inputs":{"P":{...}}}`;
+the worker request uses `backend.arguments` for its path. Static run children
+receive explicit setup-free authority and benchmark sessions outside ordinary
+source data. The timed `admitted_function_call` boundary is the complete shared
+`FunctionEntry.prepare(...).execute()` call. Capture, admission, decoding, request
+construction, return-value inspection and final diagnostics retain their separate
+measurement boundaries. Proof jobs retain public/witness groups and native proof
+preparation measurements.
 
 | Mode | Input construction |
 |---|---|
@@ -357,7 +365,7 @@ documents and the admitted interface's default physical codecs.
 | `native` | Decode once, then use the native decoder and validator to retain typed immutable Values |
 | `prepared` | Decode once, then use `PreparedData::from_wire` to retain decoded data and its canonical encoding |
 
-Preowned modes retain one input tree per statement, run `Entry::check_inputs`
+Preowned modes retain one input tree per statement, run the admitted Entry's `check_inputs`
 during construction, and share data owners when constructing each request.
 Every SDK call still performs ordinary binding, quota, loading and authority
 checks. No execution plan or protocol result is retained by ingress selection.
@@ -369,7 +377,7 @@ limits apply across the input groups of each statement; execution capacities are
 unchanged.
 
 The current `zkc.benchmark/0` manifest requires `ingress`.
-`zkc.benchmark-worker/0` requires Host/Run backend `ingress`, report
+`zkc.benchmark-worker/0` requires Host/Function backend `ingress`, report
 `lifecycle.ingress`, `lifecycle.input_setup`, and each call's `input_index`,
 `decode_ns` and `request_ns`. JSON has an empty `input_setup` and numeric
 `decode_ns`; preowned modes have null `decode_ns` and one ordered setup row per
@@ -419,7 +427,13 @@ floor is recorded and never subtracted.
 
 ## Execution counts
 
-For runtime attribution, build a separate worker with execution observations:
+For runtime attribution, build a separate worker with execution observations.
+Function jobs require aggregate native execution observations from the shared
+Host; while that API is unavailable, the worker refuses these jobs explicitly.
+It does not publish zero counters or time an unwrapped native child. Native proof
+jobs retain their existing observation support.
+
+Build the observation worker with:
 
 ```sh
 cargo build --release --locked -p zkc-benchmarks --features execution-counts \

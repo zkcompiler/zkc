@@ -13,7 +13,7 @@ use super::{
 use std::sync::Arc;
 
 mod frames;
-mod loading;
+pub(crate) mod loading;
 mod preparation;
 pub(crate) use preparation::Recording;
 mod values;
@@ -38,10 +38,12 @@ impl<B> std::ops::DerefMut for BackendOwner<B> {
 
 pub(crate) struct Instance<B: Backend> {
     admitted: Program,
-    participant: Arc<code::Participant>,
+    participant: Option<Arc<code::Participant>>,
     counts: Counts,
     backend: BackendOwner<B>,
-    operations: Vec<B::Operation>,
+    operations: Vec<Option<B::Operation>>,
+    shared: Option<ExecutionLedger>,
+    live_reservation: Option<LiveReservation>,
     calls: Vec<Option<B::Call>>,
     arguments: Vec<B::Value>,
     usage: Usage,
@@ -65,11 +67,27 @@ impl<B: Backend> Drop for Instance<B> {
 }
 // Keep metering borrows separate from immutable frame context and mutable
 // backend state, so a call can borrow its active frame without cloning it.
-fn charge_logical(used: &mut u64, limit: u64, bytes: u64) -> Result<()> {
-    *used = used
+fn charge_logical(
+    used: &mut u64,
+    limit: u64,
+    bytes: u64,
+    shared: Option<&ExecutionLedger>,
+) -> Result<()> {
+    let next = (*used)
         .checked_add(bytes)
         .filter(|n| *n <= limit)
         .ok_or(RuntimeError::Limit)?;
+    if let Some(shared) = shared {
+        shared.charge(
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: bytes,
+            },
+            0,
+        )?;
+    }
+    *used = next;
     Ok(())
 }
 
@@ -102,6 +120,16 @@ impl<B: Backend> Instance<B> {
         if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);
         }
+        if let Some(shared) = &self.shared {
+            shared.charge(
+                WorkBudget {
+                    instructions: 1,
+                    iterations: 0,
+                    logical_bytes: 0,
+                },
+                0,
+            )?;
+        }
         self.usage.instructions += 1;
         self.counts.event(Event::Tick);
         Ok(())
@@ -110,6 +138,16 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn iteration(&mut self) -> Result<()> {
         if self.usage.iterations >= self.work_budget.iterations {
             return Err(RuntimeError::Limit);
+        }
+        if let Some(shared) = &self.shared {
+            shared.charge(
+                WorkBudget {
+                    instructions: 0,
+                    iterations: 1,
+                    logical_bytes: 0,
+                },
+                0,
+            )?;
         }
         self.usage.iterations += 1;
         Ok(())
@@ -157,21 +195,37 @@ impl<B: Backend> Instance<B> {
             let full = Self::operand_bytes(&arguments);
             let read = self
                 .backend
-                .operand_work(&self.operations[binding.index], &context, &arguments)
+                .operand_work(
+                    self.operations[binding.index]
+                        .as_ref()
+                        .expect("installed root binding"),
+                    &context,
+                    &arguments,
+                )
                 .map_or(full, |declared| declared.min(full));
             charge_logical(
                 &mut self.usage.logical_bytes,
                 self.work_budget.logical_bytes,
                 read,
+                self.shared.as_ref(),
             )?;
+            let reservation = self
+                .shared
+                .as_ref()
+                .map(|ledger| ledger.reserve_output(self.output_allowance(), true));
+            let maximum = reservation
+                .as_ref()
+                .map_or(self.output_allowance(), |r| r.bytes());
             let invocation = Invocation {
                 context,
-                max_output_bytes: self.output_allowance(),
+                max_output_bytes: maximum,
                 retained: self.ledger.view(),
             };
             self.counts.operation(binding.index);
             let values = self.backend.apply_prepared(
-                &self.operations[binding.index],
+                self.operations[binding.index]
+                    .as_ref()
+                    .expect("installed root binding"),
                 &mut self.calls[call.index],
                 &invocation,
                 &arguments,
@@ -182,7 +236,7 @@ impl<B: Backend> Instance<B> {
                 )));
             }
             self.validate_values(&values, signature.outputs.iter())?;
-            self.retain_in(scope, &values, Retention::Result)?;
+            self.retain_reserved(scope, &values, Retention::Result, reservation)?;
             Ok(values)
         })();
         arguments.clear();
@@ -202,8 +256,19 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn has_backend(&self) -> bool {
         self.backend.0.is_some()
     }
+    pub(crate) fn take_live_reservation(&mut self) -> Option<LiveReservation> {
+        self.live_reservation.take()
+    }
+    pub(crate) fn restore_live_reservation(&mut self, reservation: Option<LiveReservation>) {
+        debug_assert!(
+            self.live_reservation.is_none(),
+            "one live reservation owner"
+        );
+        self.live_reservation = reservation;
+    }
     pub(crate) fn take_backend(&mut self) -> B {
         self.unwind(FrameExit::Cancelled, |_, _| {});
+        self.live_reservation = None;
         self.backend
             .0
             .take()
@@ -271,7 +336,19 @@ impl<B: Backend> Instance<B> {
             &mut self.usage.logical_bytes,
             self.work_budget.logical_bytes,
             read,
+            self.shared.as_ref(),
         )?;
+        let reservation = self
+            .shared
+            .as_ref()
+            .map(|ledger| ledger.reserve_output(bound, true));
+        let reservation = match reservation {
+            Some(reservation) if reservation.bytes() < bound => {
+                reservation.settle(0, 0)?;
+                return Err(RuntimeError::Limit);
+            }
+            reservation => reservation,
+        };
         let invocation = ServiceInvocation {
             frame: &frame,
             site: &query.cut.site,
@@ -293,7 +370,7 @@ impl<B: Backend> Instance<B> {
             if actual > bound {
                 return Err(RuntimeError::Limit);
             }
-            self.retain_in(scope, &values, Retention::Result)?;
+            self.retain_reserved(scope, &values, Retention::Result, reservation)?;
             Ok(values)
         })();
         if result.is_err() {

@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/Support/JSON.h"
 #include <set>
@@ -48,7 +49,7 @@ pub fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){
   return (r=f(xs,ys,a,b));
 }
-run Run=Demo;
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
 } // namespace
 int main() {
@@ -57,7 +58,8 @@ int main() {
             [] {
               auto project = take(check(program));
               success(checkScopedElaboration(project));
-              auto closed = take(closeEntry(project, "m::Run"));
+              auto closed =
+                  take(zkc::test::closeProtocolDeployment(project, "m::Run"));
               success(checkScopedSpecialization(closed));
               const auto &function = declaration(project, "m::f");
               require(function.body->scopedBindings.size() == 2,
@@ -203,7 +205,8 @@ math fn identity(x:Fr)->Fr{return x;}
     for (unsigned i = 0; i != 64; ++i)
       source += "let r" + std::to_string(i) + "=∑ x in xs,(x+1);";
     source += "return r63;}protocol Demo "
-              "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return f(xs);}run Run=Demo;";
+              "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return f(xs);}entry fn "
+              "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }";
     auto first = take(check(source)), second = take(check(source));
     const auto &bindings = declaration(first, "m::f").body->scopedBindings;
     require(bindings.size() == 64, "binder site lost");
@@ -211,8 +214,8 @@ math fn identity(x:Fr)->Fr{return x;}
     for (const auto &binding : bindings)
       require(expressions.insert(binding.computation->expression).second,
               "binder identity collided");
-    auto closed = take(closeEntry(first, "m::Run")),
-         other = take(closeEntry(second, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(first, "m::Run")),
+         other = take(zkc::test::closeProtocolDeployment(second, "m::Run"));
     require(closed.declarations().size() == other.declarations().size(),
             "unstable specialization count");
     for (unsigned i = 0; i != closed.declarations().size(); ++i)

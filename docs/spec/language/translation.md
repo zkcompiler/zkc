@@ -218,8 +218,11 @@ operation and operand graph.
 `CheckedOriginal` owns immutable source, original bytes, comparison counts,
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
-protocol symbol. Run jobs emit `zkc.run/0`; proof jobs use the native proof policy
-and deployment schemas. Both contain ordinary `zkc.program/0` participant programs.
+protocol symbol for a native deployment. Proof declarations use the native proof
+policy and deployment schemas. Entry functions retain `func`/`scf` control with
+explicit `entry` operations and publish `zkc.host/0`; numerical fragments contain
+role-free Local `zkc.program/0` roots, while static child packages contain native
+joint bundles or proof deployments.
 Every protocol in the selected closure passes target preparation.
 
 The selected Entry interface represents this association as

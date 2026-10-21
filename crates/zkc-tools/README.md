@@ -1,13 +1,14 @@
 # Entry and native execution hosts
 
-`zkc` compiles `.zkc` Entry packages through the mathematical compiler and executes
-the resulting `zkc.program/0` with the generic runtime. The public library separates project compilation, execution owners and shared values:
+`zkc` compiles `.zkc` Entry functions into authenticated Host packages. Host
+control invokes native protocol/proof deployments and numerical `zkc.program/0`
+functions through the generic runtime. The public library separates project compilation, execution owners and shared values:
 
 | Owner | Responsibility |
 |---|---|
 | `project` | Manifest discovery, source maps, Entry selection, standard paths, template plans and bounded compiler invocation |
 | `execution` | Shared `Capacity`, `InputValue`, immutable `PreparedData` and authenticated `ProverMaterial` |
-| `entry` | Authenticated packages, named input binding, execution and generated Rust data bindings |
+| `entry` | Authenticated packages, named input binding, execution and generated Rust data and callable bindings |
 | `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
 | `proof` | Independently admitted producer/verifier deployments, public binding, proof execution, attempts and setup authority |
 
@@ -80,3 +81,10 @@ compiler-generated programs. They use the generic Runner and installed backends;
 their success is bounded execution evidence. Build the product with
 `cargo build -p zkc-tools --bin zkc`; test providers are disabled by default.
 Run Rust tests with `cargo test --workspace --all-features`.
+
+Entry functions use `FunctionInterface`, `FunctionEntry`, `FunctionRequest` and
+`FunctionReport`. Their Host control invokes existing numerical, joint and proof
+owners; it does not interpret mathematical primitives. Generated `bindings::call`
+checks its package pin and returns the typed source result with the complete
+native report. The [Python adapter](../../python/README.md) invokes the installed
+CLI and uses the same argument/result schema.

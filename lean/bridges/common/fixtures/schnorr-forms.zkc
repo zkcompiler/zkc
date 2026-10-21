@@ -21,7 +21,9 @@ protocol HelpersProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run Helpers = HelpersProtocol;
+entry fn Helpers(inputs: HelpersProtocol::Inputs) {
+  return HelpersProtocol::run(inputs);
+}
 
 protocol ReorderedProtocol roles(P, V)
     (base: G @(P,V), point: G @(P,V), scalar: F @P,
@@ -35,7 +37,9 @@ protocol ReorderedProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run Reordered = ReorderedProtocol;
+entry fn Reordered(inputs: ReorderedProtocol::Inputs) {
+  return ReorderedProtocol::run(inputs);
+}
 
 protocol EarlyChallengeProtocol roles(P, V)
     (base: G @(P,V), point: G @(P,V), scalar: F @P,
@@ -49,4 +53,6 @@ protocol EarlyChallengeProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run EarlyChallenge = EarlyChallengeProtocol;
+entry fn EarlyChallenge(inputs: EarlyChallengeProtocol::Inputs) {
+  return EarlyChallengeProtocol::run(inputs);
+}

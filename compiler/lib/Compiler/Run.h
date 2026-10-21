@@ -1,6 +1,7 @@
 #ifndef ZKC_LIB_COMPILER_RUN_H
 #define ZKC_LIB_COMPILER_RUN_H
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Program/Model.h"
 #include "llvm/Support/Error.h"
 namespace zkc::detail {
 /// The prepared source remains alive through publication so source ordering
@@ -10,5 +11,8 @@ llvm::Expected<std::string> buildRunBundle(mlir::ModuleOp prepared,
                                            llvm::StringRef entry);
 llvm::Error verifyRunBundle(mlir::ModuleOp prepared, mlir::ModuleOp physical,
                             llvm::StringRef bytes, llvm::StringRef entry);
+/// Decode the current bundle and independently admit its executable program.
+/// Source role correspondence and publication checks remain separate.
+llvm::Expected<program::Participants> readRunProgram(llvm::StringRef);
 } // namespace zkc::detail
 #endif

@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Language/Diagnostics.h"
 using namespace llvm;
@@ -52,7 +53,7 @@ int main() {
     auto project = take(check(R"(module m;
       module Inner { pub math fn yes()->bool{return true;} }
       protocol Demo roles(P)()->(ok:bool@P){return Inner::yes();}
-      run Run=Demo;
+      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     const auto &root = named(project, "m");
     const auto &inner = named(project, "m::Inner");
@@ -63,16 +64,18 @@ int main() {
                 function.module.index == inner.id.index &&
                 root.span.source.index == function.span.source.index,
             "logical module ownership is separate from source identity");
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
   });
   cases.run("private names are available to descendants", [] {
     auto project = take(check(R"(module m;
       math fn helper()->bool{return true;}
       module Child { pub math fn call()->bool{return helper();} }
       protocol Demo roles(P)()->(ok:bool@P){return Child::call();}
-      run Run=Demo;
+      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
   });
   for (StringRef path : {"Child::secret", "::m::Child::secret"})
     cases.run("parent cannot read child private member through " + path, [&] {
@@ -98,10 +101,11 @@ int main() {
       )",
                                               "a.zkc"},
                                              {"b", R"(module b;use a::{value};
-        protocol Demo roles(P)()->(ok:bool@P){return value();}run Run=Demo;
+        protocol Demo roles(P)()->(ok:bool@P){return value();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
       )",
                                               "b.zkc"}}));
-    take(prepareOriginal(take(closeEntry(project, "b::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "b::Run"))));
     refuses(
         check(std::vector<SourceBuffer>{
             {"a",
@@ -122,12 +126,13 @@ int main() {
       }
       math fn apply<C:I>()->bool{return C::value();}
       protocol Demo roles(P)()->(ok:bool@P){return apply<M>();}
-      run Run=Demo;
+      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
     require(named(project, "m::M::value").isPublic &&
                 !named(project, "m::M::helper").isPublic,
             "only required interface members are implicitly public");
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
   });
   cases.run("interface bound hides extra implementation members", [] {
     refuses(check(R"(module m;interface I{math fn value()->bool;}
@@ -139,7 +144,8 @@ int main() {
     auto project = take(check(std::vector<SourceBuffer>{
         {"m",
          "module m;math fn helper()->bool{return true;}module Child;protocol "
-         "Demo roles(P)()->(ok:bool@P){return Child::value();}run Run=Demo;",
+         "Demo roles(P)()->(ok:bool@P){return Child::value();}entry fn "
+         "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
          "main.zkc"},
         {"m::Child",
          "module m::Child;pub math fn value()->bool{return helper();}",
@@ -149,7 +155,8 @@ int main() {
     require(child.parent->index == root.id.index &&
                 child.span.source.index != root.span.source.index,
             "external module retains its own source");
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
   });
   cases.run("nested modules inherit statics and close common helpers", [] {
     auto project = take(check(R"(module m;
@@ -162,9 +169,10 @@ int main() {
       }
       use m::Generic as Alias;
       protocol Demo roles(P)(x:[bool;2]@P)->(out:[bool;2]@P){return Alias::Inner::copy<2>(x);}
-      run Run=Demo;
+      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
   });
   cases.run("associated identity depends on module and static arguments", [] {
     auto project = take(check(R"(module m;
@@ -235,13 +243,15 @@ int main() {
     auto project = take(check(std::vector<SourceBuffer>{
         {"m",
          "module m;type Secret:Copy+Drop=bool;module Child;protocol Demo "
-         "roles(P)()->(ok:bool@P){return Child::roundtrip();}run Run=Demo;",
+         "roles(P)()->(ok:bool@P){return Child::roundtrip();}entry fn "
+         "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }",
          "root"},
         {"m::Child",
          "module m::Child;pub fn roundtrip()->bool{let x=Secret(true);return "
          "unpack(x);}",
          "child"}}));
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
     for (StringRef operation : {"Child::Secret(true)", "unpack(x)"}) {
       std::string body =
           operation == "unpack(x)"
@@ -258,8 +268,9 @@ int main() {
             "pub math fn apply(x:[bool;N])->[bool;N]{return x;}";
         const std::string client =
             "module client;use library::Box::{apply};protocol Demo "
-            "roles(P)(x:[bool;2]@P)->(out:[bool;2]@P){return apply<2>(x);}run "
-            "Run=Demo;";
+            "roles(P)(x:[bool;2]@P)->(out:[bool;2]@P){return "
+            "apply<2>(x);}entry fn Run(inputs: Demo::Inputs) { return "
+            "Demo::run(inputs); }";
         for (bool external : {false, true}) {
           std::vector<SourceBuffer> files = {
               {"library",
@@ -271,7 +282,8 @@ int main() {
             files.push_back(
                 {"library::Box", "module library::Box;" + child, "box"});
           auto project = take(check(std::move(files)));
-          take(prepareOriginal(take(closeEntry(project, "client::Run"))));
+          take(prepareOriginal(take(
+              zkc::test::closeProtocolDeployment(project, "client::Run"))));
           require(named(project, "library::Box::apply").parameters.size() == 1,
                   "external child lost the enclosing generic binder");
         }
@@ -286,14 +298,19 @@ int main() {
          "impl"},
         {"client",
          "module client;protocol Demo roles(P)()->(out:index@P){return "
-         "impl::count<2>();}run Run=Demo;",
+         "impl::count<2>();}entry fn Run(inputs: Demo::Inputs) { return "
+         "Demo::run(inputs); }",
          "client"}}));
-    take(prepareOriginal(take(closeEntry(project, "client::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "client::Run"))));
   });
   cases.run("generic modules do not expose uninstantiated Entries", [] {
-    refuses(check("module m<N:nat>;protocol Demo "
-                  "roles(P)()->(ok:bool@P){return true;}run Run=Demo;"),
-            "source.entry");
+    auto project =
+        take(check("module m<N:nat>;protocol Demo "
+                   "roles(P)()->(ok:bool@P){return true;}entry fn Run(inputs: "
+                   "Demo::Inputs) { return Demo::run(inputs); }"));
+    require(project.entries().empty(), "generic module acquired an Entry");
+    refuses(closeEntry(project, "m::Run"), "source.entry");
   });
   cases.run("captured declaration cannot hijack an authored protocol path", [] {
     refuses(check(std::vector<SourceBuffer>{
@@ -312,9 +329,10 @@ int main() {
       operator infixl(60) ⊕ = add;
       operator ⊕ = add;
       module Child {pub math fn value()->bool{return true⊕false;}}
-      protocol Demo roles(P)()->(out:bool@P){return value();}run Run=Demo;
+      protocol Demo roles(P)()->(out:bool@P){return value();}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
-        take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+        take(prepareOriginal(
+            take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
       });
   cases.run("child notation cannot feed its own inherited parent environment",
             [] {
@@ -343,9 +361,10 @@ int main() {
       auto project = take(check(
           "module m;module Library{pub math fn value()->bool{return true;}}" +
           (reverse ? b + a : a + b) +
-          "protocol Demo roles(P)()->(ok:bool@P){return Again::value();}run "
-          "Run=Demo;"));
-      take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+          "protocol Demo roles(P)()->(ok:bool@P){return Again::value();}entry "
+          "fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }"));
+      take(prepareOriginal(
+          take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
     }
     refuses(check("module m;use A as B;use B as A;"), "source.cycle");
   });
@@ -447,9 +466,10 @@ int main() {
         pub math fn make(x:[bool;N])->Row{return S<T=bool>{x:x};}
       }
       protocol Demo roles(P)(x:[bool;2]@P)->(out:M::Row<2>@P){return M::make<2>(x);}
-      run Run=Demo;
+      entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
     )"));
-    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "m::Run"))));
     refuses(check("module m;module M<N:nat>{struct S<T:Type>{pub x:[T;N]}type "
                   "Bad=S;}"),
             "source.generic");

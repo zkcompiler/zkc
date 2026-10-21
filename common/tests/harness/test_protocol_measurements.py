@@ -238,3 +238,116 @@ def test_existing_evidence_is_never_overwritten(measurement, tmp_path):
     marker.write_text('previous run')
     assert measurement.main(args) == 2
     assert marker.read_text() == 'previous run'
+
+
+def storage_tools(measurement, directory, case, contract='function'):
+    directory.mkdir()
+    compiler = directory / 'compiler'
+    compiler.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+assert sys.argv[1] == 'language-package'
+assert '--entry={case['storage_entry']}' in sys.argv
+if {contract!r} == 'legacy-source':
+    source = Path(next(x.split('=',2)[2] for x in sys.argv if x.startswith('--module=accumulator_machine=')))
+    assert 'entry fn Storage(' in source.read_text()
+    print('entry fn is unsupported', file=sys.stderr); exit(1)
+kind = 'protocol' if {contract!r} == 'legacy-interface' else 'function'
+print(json.dumps({{'interface': json.dumps({{'format':'zkc.language-interface/0', 'selection':{{'kind':kind}}}})}}))
+''')
+    compiler.chmod(0o755)
+    runtime = directory / 'runtime'
+    runtime.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+assert sys.argv[1:3] == ['--json','run']
+flags = dict(x.split('=',1) for x in sys.argv if x.startswith('--') and '=' in x)
+if {contract!r} == 'legacy-cli':
+    assert not flags['--input'].startswith('P=')
+    print(json.dumps({{'status':'refused','code':'cli-usage'}})); exit(1)
+assert json.loads(Path(flags['--input']).read_text()) == {{'inputs': {{'P': {{'query_count':'8','word':[]}}, 'V': {{'query_count':'8'}}}}}}
+assert '--results' in flags
+if '--dry-run' in sys.argv:
+    print(json.dumps({{'status':'inputs-checked'}})); exit(0)
+outputs = {{'format':'zkc.entry-outputs/0','value':{{'V':{{'accepted':True}}}}}}
+if {contract!r} == 'legacy-results': outputs = {{'V':{{'accepted':True}}}}
+Path(flags['--results']).write_text(json.dumps(outputs))
+native = {{'role_count':1,'roles':[{{'usage':{{}},'live_resource_units':0,'retained_output_units':0}}]}}
+print(json.dumps({{'status':'executed','execution':{{'format':'zkc.entry-function-result/0',
+ 'completed':True,'calls':[{{'operation':'run','completed':True,'native':native}}]}}}}))
+''')
+    runtime.chmod(0o755)
+    return compiler, runtime, None
+
+
+def storage_inputs(measurement, directory):
+    measurement.write_json(directory / 'public.json', {'query_count': '8'})
+    measurement.write_json(directory / 'witness.json', {'word': []})
+    (directory / 'main.zkc').write_text('module accumulator_machine;\n')
+
+
+@pytest.mark.parametrize('name', ['fri-32', 'fri-64', 'fri-1024', 'air-stark-32', 'machine-product-absent'])
+def test_storage_selectors_and_current_function_contract(measurement, tmp_path, name):
+    case = next(c for c in measurement.case_catalog() if c['name'] == name)
+    expected = ('example::Fri' if name.startswith('fri-') else
+                'air_stark_example::Run' if name.startswith('air-stark-') else
+                'accumulator_machine::Storage')
+    assert case['storage_entry'] == expected
+    tools = storage_tools(measurement, tmp_path / 'tools', case)
+    inputs = tmp_path / 'inputs'
+    storage_inputs(measurement, inputs)
+    flags = [f'--module=accumulator_machine={inputs / "main.zkc"}']
+    journal = measurement.Journal(tmp_path / 'commands', 5)
+    measurement.check_storage_support(case, flags, inputs, tmp_path / 'preflight', tools, journal)
+    observation = tmp_path / 'observation'
+    observation.mkdir()
+    measured = measurement.observe_storage(case, 'default', flags, inputs, observation, tools, journal)
+    assert measured['roles'][0]['live_resource_units'] == 0
+    assert not (tmp_path / 'preflight/storage-outputs.json').exists()
+    if name.startswith('machine-product-'):
+        assert 'entry fn Storage(' in (observation / 'storage.zkc').read_text()
+        assert 'entry fn Storage(' not in (inputs / 'main.zkc').read_text()
+
+
+@pytest.mark.parametrize('contract', ['legacy-interface', 'legacy-cli', 'legacy-source'])
+@pytest.mark.parametrize('refused_label', ['baseline', 'current'])
+def test_unsupported_storage_contract_refuses_before_any_measurements(
+        measurement, tmp_path, monkeypatch, contract, refused_label):
+    name = 'machine-product-absent' if contract == 'legacy-source' else 'air-stark-32'
+    case = next(c for c in measurement.case_catalog() if c['name'] == name)
+    output = tmp_path / 'out'
+    argv = ['--baseline-revision=expected', f'--baseline-source={tmp_path}',
+            f'--output={output}', '--interactive-storage', f'--case={name}']
+    for label in ('baseline', 'current'):
+        tools = storage_tools(measurement, tmp_path / label, case,
+                              contract if label == refused_label else 'function')
+        argv += [f'--{label}-compiler={tools[0]}', f'--{label}-runtime={tools[1]}']
+    if refused_label == 'baseline':
+        argv = [arg for arg in argv if not arg.startswith('--current-')] + ['--baseline-only']
+    else:
+        argv += [f'--current-source={tmp_path}']
+    monkeypatch.setattr(measurement, 'snapshot', lambda *args: {'files': {}})
+
+    def prepare(root, case, directory, journal):
+        storage_inputs(measurement, directory)
+        return [f'--module=accumulator_machine={directory / "main.zkc"}']
+
+    monkeypatch.setattr(measurement, 'prepare_case', prepare)
+    monkeypatch.setattr(measurement, 'trial', lambda *args: pytest.fail('measurement started before preflight'))
+    assert measurement.main(argv) == 1
+    result = json.loads((output / 'manifest.json').read_text())
+    assert result['results'] == [] and result['summary'] == []
+    assert 'pre-function baselines are unsupported' in result['error']
+    assert not (output / 'runs').exists()
+
+
+def test_storage_does_not_accept_legacy_result_envelopes(measurement, tmp_path):
+    case = measurement.case_catalog()[0]
+    tools = storage_tools(measurement, tmp_path / 'tools', case, 'legacy-results')
+    inputs = tmp_path / 'inputs'
+    storage_inputs(measurement, inputs)
+    output = tmp_path / 'observation'
+    output.mkdir()
+    with pytest.raises(measurement.MeasurementError, match='invalid result envelope'):
+        measurement.observe_storage(case, 'default', [], inputs, output, tools,
+                                    measurement.Journal(tmp_path / 'commands', 5))

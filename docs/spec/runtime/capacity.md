@@ -32,6 +32,18 @@ live/cumulative budgets all apply. For example, a 32-byte scalar vector reaches
 the 64 MiB decoding peak bound before 1,048,576 elements. The 16 MiB invocation
 JSON envelope also counts hexadecimal text and duplicated public/data rows.
 
+Entry function output conversion preserves owner validation for standalone
+native leaves, including leaves in source products. Constructing a native
+variant checks its complete active arm's element/group totals and retained
+construction peak. Opaque opening-state collections count handles, not elements
+of their backing tables; singular key/state handles add no backing-element
+collection count. Retained-byte and owner validation limits still apply.
+Before each native payload measurement, the Host charges its conservative
+retained-byte bound to the invocation-wide logical work allowance, including
+repeated uses of shared data. Immutable sequences and variants retain this
+bound, so computing their charge does not traverse their payloads. Standalone
+output leaves need no such scan.
+
 The selected policy reaches native data loading, backend kernels, setup import,
 service registry and runner budgets. Attempts cannot exceed these invocation
 ceilings. Signature-only deployment admission uses a dummy default backend;
@@ -109,6 +121,63 @@ For example, a prover that commits 65,536 extension-field rows once and opens
 64 rows from a repeated phase capturing the opening state retains the vector
 and the 6.29 MB state once; each opening allocates and reads only its row and
 path. This completes under the default record.
+
+## Shared invocation execution policy
+
+`ExecutionLedger::new(ValueBudget, WorkBudget)` adds optional policy across
+independent runners and Host scopes. Its cloneable handle shares atomic
+instruction, iteration, logical-byte and cumulative fresh-byte allowances. Each
+runner keeps its own limits and backend-local retention/validation ledger.
+Every participant of a joint invocation, every proof attempt and every numerical
+child must receive a clone of the same handle from the Host. Creating a child
+never replenishes shared capacity. Native sequence, external and ring work,
+wire/proof transport, loading and scratch retain their existing owners; Hosts
+must apply cumulative policy to those counters separately.
+
+Before loading inputs, each shared runner reserves its entire selected live-byte
+allowance. Simultaneously live parent and child runners therefore count together,
+even while the parent is suspended. This is conservative: separate runners count
+shared aliases independently, and unused capacity stays reserved. Within one
+instance, the existing backing identities still avoid duplicate shared-storage
+charges. This policy is neither actual allocator accounting nor peak RSS.
+`reserve_live(bytes)` gives Host-owned storage the same explicit live guard;
+`charge(work, fresh_bytes)` debits known Host work/storage before its effect.
+
+Instruction and iteration charges precede their steps. Operand logical work
+precedes backend application. An allocating kernel withholds shared fresh and
+logical output capacity before application and receives the clipped output
+allowance. Capacity withheld by an in-flight call is unavailable to concurrent
+calls and reported separately by `snapshot()`. Successful calls settle their
+provisional allowance to actual admitted output charges. Unused provisional
+capacity was never committed work. A failing call conservatively commits its
+entire withheld allowance because partial allocation cannot be observed. Service
+queries reserve their complete installed reply bound before their effect.
+Committed instructions, iterations, logical work and fresh allocation are never
+refunded on release or unwind.
+
+For shared execution, trusted Value adapters advertise constructor allocation
+bounds before scalar/variant construction. The scalar default is 512 bytes; the
+variant default covers its descriptor, conservative payload slots and full
+payload charges. Larger adapters must override these bounds. Insufficient
+capacity refuses before the constructor runs, even if the actual value might
+have been smaller. Induction temporaries have an additional conservative fresh
+charge before their later frame binding. Local frame inputs reserve their known
+transfer charge before backend entry. The per-value, structural, scratch and
+backend-specific preallocation contracts still apply independently.
+
+Cleanup refunds only live allowance, once all stopped scopes and outstanding
+handoffs have released their storage. Successful terminal values keep the
+runner's reservation. `into_retained_outputs()` transfers backend custody and an
+optional `RetainedOutputs` guard containing the successful values and that live
+reservation; an unfinished runner is cancelled. A Host retaining values across a
+child call must keep the guard, or separately reserve their storage. Dropping
+the guard releases live allowance after dropping its values and never refunds
+cumulative work. Borrowing or cloning a value grants no new live allowance.
+
+Shared accounting carries no `Retained` backend-validation evidence. Another
+backend must independently validate every incoming value, setup and capability;
+allocation identity cannot transfer authority. Ordinary constructors without a
+shared ledger retain their existing installation and resource behavior.
 
 ## Byte construction
 

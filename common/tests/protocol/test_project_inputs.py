@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from entry import project_invocation
+
 
 def source_options(toolchain, project):
     return [f'--compiler={toolchain.compiler}', f'--project={project / "zkc.toml"}']
@@ -15,35 +17,36 @@ def test_initialize_discover_inspect_fill_check_and_run(toolchain, journal, dire
     project = directory / 'project'
     initialized = journal.json([toolchain.runtime, '--json', 'new', project, f'--compiler={toolchain.compiler}'])
     assert initialized['status'] == 'initialized'
-    assert {p.name for p in project.iterdir()} == {'zkc.toml', 'protocol.zkc', 'main.zkc', 'inputs'}
-    sentinel = (project / 'protocol.zkc').read_bytes()
+    assert {p.name for p in project.iterdir()} == {'zkc.toml', 'main.zkc', 'inputs'}
+    sentinel = (project / 'main.zkc').read_bytes()
     journal.run([toolchain.runtime, '--json', 'new', project, f'--compiler={toolchain.compiler}'], refuses='source-project-exists')
-    assert (project / 'protocol.zkc').read_bytes() == sentinel
+    assert (project / 'main.zkc').read_bytes() == sentinel
     options = source_options(toolchain, project)
     inspected = journal.json([toolchain.runtime, '--json', 'inspect', *options])
     assert inspected['interface']['entry'] == 'example::Main'
-    assert inspected['interface']['input_groups'][0]['name'] == 'P'
+    assert inspected['interface']['kind'] == 'function'
+    assert inspected['interface']['signature']['parameters'][0]['name'] == 'value'
     assert 'package_sha256' not in inspected and 'execution' not in inspected
     generated = initialized
-    path = project / 'inputs/example.Main/P.json'
+    path = project / 'inputs/example.Main/arguments.json'
     assert str(path) in generated['files']
     assert json.loads(path.read_text()) == {'value': None}
     journal.run([toolchain.runtime, '--json', 'run', '--dry-run', *options,
-                 '--session=project', f'--input=P={path}'], refuses='entry-input-unfilled')
-    journal.run([toolchain.runtime, '--json', 'run', *options, '--session=project',
-                 '--input=p=missing'], refuses='entry-input-roles')
-    journal.run([toolchain.runtime, '--json', 'run', *options, '--session=project',
-                 '--input=P=missing'], refuses='entry-input-document')
+                 f'--input={path}'], refuses='entry-input-unfilled')
+    journal.run([toolchain.runtime, '--json', 'run', *options,
+                 '--session=forbidden'], refuses='cli-option')
+    journal.run([toolchain.runtime, '--json', 'run', *options,
+                 '--input=missing'], refuses='entry-input-document')
     path.write_text('{"value":"18446744073709551615"}')
     preserved = journal.json([toolchain.runtime, '--json', 'prepare', *options])
     assert preserved['files'] == [] and preserved['preserved'] == [str(path)]
-    arguments = [*options, '--session=project', f'--input=P={path}']
+    arguments = [*options, f'--input={path}']
     checked = journal.json([toolchain.runtime, '--json', 'run', '--dry-run', *arguments])
     assert checked['status'] == 'inputs-checked' and 'execution' not in checked
     output = directory / 'result.json'
     executed = journal.json([toolchain.runtime, '--json', 'run', *arguments, f'--results={output}'])
     assert checked['package_sha256'] == executed['package_sha256']
-    assert json.loads(output.read_text())['roles'] == {'P': {'result': '18446744073709551615'}}
+    assert json.loads(output.read_text())['value'] == '18446744073709551615'
     assert not list(project.rglob('*.zkpkg'))
     child = project / 'subdirectory'
     child.mkdir()
@@ -59,18 +62,29 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     ''')
     (project / 'main.zkc').write_text('''module example;
     use example_protocol::{Test};
-    run Interactive=Test;
+    entry fn Interactive(inputs: Test::Inputs) { return Test::run(inputs); }
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
+    with (project / 'zkc.toml').open('a') as manifest:
+        manifest.write('example_protocol = \"protocol.zkc\"\n')
     options = source_options(toolchain, project)
     journal.run([toolchain.runtime, '--json', 'inspect', *options], refuses='source-compilation')
-    for entry, group in [('Interactive', 'P'), ('Proof', 'witness')]:
+    for entry, group in [('Interactive', 'arguments'), ('Proof', 'witness')]:
         report = journal.json([toolchain.runtime, '--json', 'prepare', entry, *options])
         assert report['files'] == [str(project / f'inputs/example.{entry}/{group}.json')]
-        assert report['entries'][0]['requirements'] == {'allow_authored': entry == 'Proof', 'setups': []}
-        Path(report['files'][0]).write_text('{"b":true}')
-    p = project / 'inputs/example.Interactive/P.json'
-    run = journal.json([toolchain.runtime, '--json', 'run', *options, '--session=test', f'--input=P={p}'])
+        requirements = report['entries'][0]['requirements']
+        if entry == 'Proof':
+            assert requirements == {'allow_authored': True, 'setups': []}
+        else:
+            assert requirements['invocations'] == '--invocations=FILE'
+            assert requirements['allow_authored'] is None
+            assert requirements['unresolved'] == ['child_policies']
+            assert requirements['check_command'] == [*report['entries'][0]['commands'][0], '--dry-run']
+        Path(report['files'][0]).write_text(json.dumps(
+            {'b': True} if entry == 'Proof' else {'inputs': {'P': {'b': True}, 'V': {}}}))
+    p = project / 'inputs/example.Interactive/arguments.json'
+    invocation = project_invocation(toolchain, journal, directory, project=project / 'zkc.toml', entry='Interactive')
+    run = journal.json([toolchain.runtime, '--json', 'run', 'Interactive', *options, invocation, f'--input={p}'])
     assert run['entry'] == 'example::Interactive'
     witness = project / 'inputs/example.Proof/witness.json'
     proof = directory / 'proof.bin'
@@ -79,12 +93,12 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
 
     # Explicit short names must remain ambiguous across different execution kinds.
     (project / 'other.zkc').write_text('''module other;
-    use example_protocol::{Test};run Proof=Test;''')
+    use example_protocol::{Test};entry fn Proof(inputs: Test::Inputs) { return Test::run(inputs); }''')
     with (project / 'zkc.toml').open('a') as f:
         f.write('\nother = "other.zkc"\n')
-    for command, invocation in [('run', ['--session=test', f'--input=P={p}']),
+    for command, invocation_flags in [('run', [invocation, f'--input={p}']),
                                 ('prove', producing)]:
-        refused = journal.json([toolchain.runtime, '--json', command, 'Proof', *options, *invocation],
+        refused = journal.json([toolchain.runtime, '--json', command, 'Proof', *options, *invocation_flags],
                                refuses='source-compilation')
         assert 'source.entry' in refused['diagnostics'] and 'ambiguous' in refused['diagnostics']
     assert journal.json([toolchain.runtime, '--json', 'prove', 'example::Proof', *options, *producing])['status'] == 'produced'
@@ -94,8 +108,8 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     journal.run([toolchain.runtime, '--json', 'verify', *options, '--allow-authored', f'--proof={proof}', '--witness=missing'], refuses='cli-option')
     # Additional run Entries require selection; proof selection remains unique.
     with (project / 'main.zkc').open('a') as f:
-        f.write('\nrun Other=Test;\n')
-    journal.run([toolchain.runtime, '--json', 'run', *options, '--session=test', f'--input=P={p}'], refuses='source-compilation')
+        f.write('\nentry fn Other(inputs: Test::Inputs) { return Test::run(inputs); }\n')
+    journal.run([toolchain.runtime, '--json', 'run', *options, invocation, f'--input={p}'], refuses='source-compilation')
     assert journal.json([toolchain.runtime, '--json', 'prove', *options, *producing])['entry'] == 'example::Proof'
 
 
@@ -131,14 +145,14 @@ def test_references_are_pinned_confined_bounded_and_protected(toolchain, journal
         document.write_text(json.dumps({'value': {'file': file, 'sha256': digest}}))
     select()
     command = [toolchain.runtime, '--json', 'run', '--dry-run', *options,
-               '--session=reference', f'--input=P={document}']
+               f'--input={document}']
     assert journal.json(command)['status'] == 'inputs-checked'
     select(digest='00' * 32)
     journal.run(command, refuses='entry-input-reference-digest')
     for name in ['../data/value.zkcv', str(path), './value.zkcv', 'data//value', 'value.zkcv/']:
         select(name)
         report = journal.json(command, refuses='entry-input-reference')
-        assert report['input_path'] == 'P.value'
+        assert report['input_path'] == 'arguments.value'
     link = root / 'link'
     link.symlink_to(path)
     for name in ['link', 'absent']:
@@ -158,13 +172,20 @@ def test_references_are_pinned_confined_bounded_and_protected(toolchain, journal
     select('fifo')
     journal.run(command, refuses='entry-input-reference', timeout=10)
     select()
-    running = [toolchain.runtime, '--json', 'run', *options, '--session=reference', f'--input=P={document}']
+    running = [toolchain.runtime, '--json', 'run', *options, f'--input={document}']
     hardlink = root / 'hardlink'
     os.link(path, hardlink)
     for destination in [path, hardlink, document]:
         journal.run([*running, f'--results={destination}'], refuses='entry-output-path')
         assert path.read_bytes() == wire
     capacity = journal.write('capacity.json', ['zkc.native-capacity/0', '65536', '4096', '8', '67108864',
+        ['1000000', '100000', '4294967296'], ['67108864', '268435456']])
+    # Document parsing has a separate bound; this cap applies to referenced wire.
+    journal.run([*command, f'--capacity={capacity}'], refuses='entry-input-reference-byte-limit')
+    oversized = wire + bytes(1024)
+    path.write_bytes(oversized)
+    select(digest=hashlib.sha256(oversized).hexdigest())
+    capacity = journal.write('reference-capacity.json', ['zkc.native-capacity/0', '65536', '4096', '256', '67108864',
         ['1000000', '100000', '4294967296'], ['67108864', '268435456']])
     journal.run([*command, f'--capacity={capacity}'], refuses='entry-input-reference-byte-limit')
 
@@ -182,16 +203,16 @@ def test_modes_and_templates_never_guess_or_replace_inputs(toolchain, journal, d
     journal.run([toolchain.runtime, '--json', 'inspect', f'--package={package}'], refuses='cli-usage')
     journal.run([toolchain.runtime, '--json', 'prepare', *pinned], refuses='source-output-required')
     generated = journal.json([toolchain.runtime, '--json', 'prepare', *pinned, f'--output={directory / "templates"}'])
-    assert generated['files'] == [str(directory / 'templates/P.json')]
-    journal.run([toolchain.runtime, '--json', 'run', *pinned, '--session=missing'], refuses='entry-input-missing')
+    assert generated['files'] == [str(directory / 'templates/arguments.json')]
+    journal.run([toolchain.runtime, '--json', 'run', *pinned, '--input=missing.json'], refuses='entry-input-document')
     source = directory / 'unit.zkc'
-    source.write_text('module u;protocol Unit roles(P)(u:()@P)->(){return();}run Main=Unit;')
+    source.write_text('module u;entry fn Main(u:())->(){return u;}')
     explicit = [f'--compiler={toolchain.compiler}', f'--module=u={source}']
     generated = journal.json([toolchain.runtime, '--json', 'prepare', *explicit, f'--output={directory / "unit"}'])
     path = Path(generated['files'][0])
     assert json.loads(path.read_text()) == {'u': None}
-    journal.run([toolchain.runtime, '--json', 'run', *explicit, '--session=unit'], refuses='entry-input-missing')
-    assert journal.json([toolchain.runtime, '--json', 'run', *explicit, '--session=unit', f'--input=P={path}'])['status'] == 'executed'
+    journal.run([toolchain.runtime, '--json', 'run', *explicit], refuses='entry-input-missing')
+    assert journal.json([toolchain.runtime, '--json', 'run', *explicit, f'--input={path}'])['status'] == 'executed'
 
 
 def test_dry_run_ignores_proof_and_result_paths_without_publication(toolchain, journal, directory):
@@ -200,14 +221,14 @@ def test_dry_run_ignores_proof_and_result_paths_without_publication(toolchain, j
     protocol Test roles(P,V)(go:bool@P)->(accepted:bool@V){
       require go;let r=send P->V(go);return r;
     }
-    run Interactive=Test;
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     target = [f'--compiler={toolchain.compiler}', f'--module=test={source}']
     witness = journal.write('witness.json', {'go': False})
+    arguments = journal.write('arguments.json', {'inputs': {'P': {'go': False}, 'V': {}}})
     absent = directory / 'never-created'
     for operation, inputs in [
-        ('run', [f'--input=P={witness}', f'--results={absent}/run.json']),
+        ('run', [f'--input={arguments}', f'--results={absent}/run.json']),
         ('prove', ['--allow-authored', f'--witness={witness}',
                    f'--output={absent}/proof', f'--results={absent}/prove.json']),
         ('verify', ['--allow-authored', f'--proof={absent}/proof',
@@ -234,7 +255,7 @@ def test_prepare_output_override_selects_one_entry_and_preserves_inputs(toolchai
     project = directory / 'project'
     journal.json([toolchain.runtime, '--json', 'new', project, f'--compiler={toolchain.compiler}'])
     with (project / 'main.zkc').open('a') as source:
-        source.write('\nrun Other=Echo;\n')
+        source.write('\nentry fn Other(value:index)->index{return value;}\n')
     options = source_options(toolchain, project)
     output = directory / 'custom'
     journal.json([toolchain.runtime, '--json', 'prepare', *options, f'--output={output}'],
@@ -242,7 +263,7 @@ def test_prepare_output_override_selects_one_entry_and_preserves_inputs(toolchai
     assert not output.exists()
     prepared = journal.json([toolchain.runtime, '--json', 'prepare', 'Other', *options, f'--output={output}'])
     assert [entry['name'] for entry in prepared['entries']] == ['example::Other']
-    value = output / 'P.json'
+    value = output / 'arguments.json'
     value.write_text('{"value":"23"}')
     preserved = journal.json([toolchain.runtime, '--json', 'prepare', 'Other', *options, f'--output={output}'])
     assert preserved['files'] == [] and preserved['preserved'] == [str(value)]

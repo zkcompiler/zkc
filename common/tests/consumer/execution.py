@@ -73,14 +73,14 @@ def main():
             assert "binding_scope" not in refused
         package = work / "run.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
-        inputs = write("P.json", {"x": True})
+        inputs = write("arguments.json", {"inputs": {"P": {"x": True}}})
         outputs = work / "named-results.json"
-        running = ["run", f"--package={package}", f"--sha256={pin}", "--session=installed", f"--input=P={inputs}"]
+        running = ["run", f"--package={package}", f"--sha256={pin}", f"--input={inputs}"]
         result = run(*running, f"--results={outputs}")
         assert result["status"] == "executed"
-        assert json.loads(outputs.read_text())["roles"]["P"] == {"r": True}
+        assert json.loads(outputs.read_text())["value"]["P"] == {"r": True}
         run("run", f"--package={package}", "--sha256=" + "00" * 32,
-            "--session=installed", f"--input=P={inputs}", refusal="entry-package-identity")
+            f"--input={inputs}", refusal="entry-package-identity")
 
         package = work / "proof.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()

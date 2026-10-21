@@ -4,6 +4,7 @@ import hashlib
 import json
 
 from contracts import label
+from native_entry import native_run
 from snapshot import render
 from verify import read_json, render_client
 
@@ -49,8 +50,7 @@ def check_factor_forms(suite, root, execute):
         flags = ['--source-format=zkc',
                  '--module=factor_openings=lean/bridges/common/fixtures/factor-openings.zkc',
                  '--entry=factor_openings::' + form]
-        text = execute([suite.args.compiler, 'language-emit', *flags])
-        interface = json.loads(execute([suite.args.compiler, 'language-interface', *flags]))
+        text, interface = native_run(execute, suite.args.compiler, flags)
         assert interface['original'] == hashlib.sha256(text.encode()).hexdigest()
         symbol = interface['protocol']
         data = suite.exercise(text, symbol)

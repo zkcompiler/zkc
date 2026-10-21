@@ -4,6 +4,7 @@
 #include "../lib/Language/MathematicalFacts.h"
 #include "../lib/Language/ValueOrigins.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Project.h"
 #include <limits>
 using namespace llvm;
@@ -198,9 +199,9 @@ math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys){
  return total(indices(xs),0,fn(state,i)=>state+at(ys,i));
 }
 math fn same(xs:Vector<Fr>)->Fr{return work(xs,xs);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    auto closed = take(closeEntry(project, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
   });
@@ -325,9 +326,9 @@ math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(select(x
     auto project = take(check(collections + R"(
 math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(copy(xs),i);}
 math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(s,i)=>s+read(xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    auto closed = take(closeEntry(project, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
   });
@@ -341,9 +342,9 @@ math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){
  return subtotal+at(l,i);
 }
 math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(st,i)=>st+read(xs,xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    auto closed = take(closeEntry(project, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
   });
@@ -354,9 +355,9 @@ math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
  let p=Pair{left:copy(xs),right:copy(ys)};
  return total(indices(xs),0,fn(st,j)=>st+at(p.left,j));
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
-    auto closed = take(closeEntry(project, "m::Run"));
+    auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
   });

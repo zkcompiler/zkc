@@ -1,6 +1,8 @@
 use super::*;
 
-use crate::project::{Compiler, Preparation, Project, Template, input_path};
+use crate::project::{
+    CheckedInterface, Compiler, EntryKind, Preparation, Project, Template, input_path,
+};
 
 pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     let directory = std::path::absolute(args.positional.first().copied().unwrap_or("."))
@@ -80,7 +82,17 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
                 Target::Package { .. } => unreachable!(),
             },
         };
-        entry["commands"] = commands(&target, interface, &directory)?;
+        let commands = commands(&target, interface, &directory)?;
+        if interface.kind() == EntryKind::Function {
+            if let Target::Package { package, .. } = &target {
+                let deployments = crate::entry::FunctionInterface::deployment_interfaces(package)?;
+                entry["requirements"] = deployment_requirements(&deployments);
+            }
+            let mut check = commands[0].as_array().unwrap().clone();
+            check.push(json!("--dry-run"));
+            entry["requirements"]["check_command"] = json!(check);
+        }
+        entry["commands"] = commands;
     }
     create(&plan.templates, true, report, |outputs| {
         target.protect(outputs)
@@ -90,20 +102,49 @@ pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     Ok(())
 }
 
-fn describe_plan(interfaces: &[Interface], report: &mut Json) {
+fn describe_plan(interfaces: &[CheckedInterface], report: &mut Json) {
     report["entries"] = json!(interfaces.iter().map(|interface| json!({
         "name": interface.entry(),
+        "kind": interface.kind(),
         "input_groups": interface.input_groups().iter().map(|g| g.describe()).collect::<Vec<_>>(),
         "requirements": requirements(interface),
     })).collect::<Vec<_>>());
 }
-fn requirements(interface: &Interface) -> Json {
+fn requirements(interface: &CheckedInterface) -> Json {
+    match interface {
+        CheckedInterface::Proof(v) => json!({
+            "allow_authored": v.proof().is_some_and(|p| p.suite.is_none()),
+            "setups": v.setup_names().collect::<Vec<_>>(),
+        }),
+        // The logical function interface has no child policy inventory.
+        CheckedInterface::Function(_) => json!({
+            "invocations": "--invocations=FILE",
+            "allow_authored": null,
+            "unresolved": ["child_policies"],
+        }),
+    }
+}
+fn deployment_requirements(deployments: &[crate::entry::DeploymentInterface]) -> Json {
+    let authored = |child: &crate::entry::DeploymentInterface| {
+        child.interface().proof().is_some_and(|p| p.suite.is_none())
+    };
     json!({
-        "allow_authored": interface.proof().is_some_and(|p| p.suite.is_none()),
-        "setups": interface.setup_names().collect::<Vec<_>>(),
+        "invocations": "--invocations=FILE",
+        "allow_authored": deployments.iter().any(authored),
+        "deployments": deployments.iter().map(|child| json!({
+            "id": child.id(),
+            "entry": child.interface().entry(),
+            "operation": child.operation(),
+            "allow_authored": authored(child),
+            "setups": child.interface().setup_names().collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
     })
 }
-fn commands(target: &Target, interface: &Interface, directory: &std::path::Path) -> Result<Json> {
+fn commands(
+    target: &Target,
+    interface: &CheckedInterface,
+    directory: &std::path::Path,
+) -> Result<Json> {
     let project_defaults =
         matches!(target, Target::Project(source) if source.project.layout().is_some());
     let groups = interface.input_groups();
@@ -132,14 +173,14 @@ fn commands(target: &Target, interface: &Interface, directory: &std::path::Path)
         ))
     };
     let mut commands = Vec::new();
-    for command in if interface.is_proof() {
+    for command in if interface.kind() == EntryKind::Proof {
         vec!["prove", "verify"]
     } else {
         vec!["run"]
     } {
         let mut args = vec!["zkc".to_owned(), command.into()];
         args.extend(selection.clone());
-        if interface.is_proof() {
+        if interface.kind() == EntryKind::Proof {
             if !groups[0].is_empty() {
                 args.push(file("public")?);
             }
@@ -157,15 +198,10 @@ fn commands(target: &Target, interface: &Interface, directory: &std::path::Path)
                 );
             }
         } else {
-            for group in &groups {
-                if !group.is_empty() {
-                    args.push(format!(
-                        "--input={}={}",
-                        group.name(),
-                        input_path(directory, group.name())?.display()
-                    ));
-                }
-            }
+            args.push(format!(
+                "--input={}",
+                input_path(directory, "arguments")?.display()
+            ));
         }
         commands.push(args);
     }

@@ -4,6 +4,8 @@ The AIR fixture comes from direct upstream execution. Tests exercise the full
 proof path and adversarial obligations, without asserting a soundness bound.
 """
 
+from entry import joint_execution
+
 from source_modules import library_modules
 from input_files import input_files
 import json
@@ -313,7 +315,7 @@ protocol Sample roles(V)(values:Vector<Extension>@V, shift:Extension@V)
  let selected@V=choose(values,shift);
  return (selected=selected);
 }
-run Run=Sample;
+entry fn Run(inputs: Sample::Inputs) { return Sample::run(inputs); }
 '''
 
 
@@ -334,17 +336,17 @@ def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, 
             ('first', invalid + [first, second], True),
             ('retained', [first] + invalid + [second], True),
             ('exhausted', invalid, False), ('empty', [], False)]:
-        r = input_files(journal, name + '.json', session=name, roles={'V': {'inputs': {'values': extension_wire(candidates),
+        r = input_files(journal, name + '.json', session=name, package=package, arguments={'inputs': {'V': {'values': extension_wire(candidates),
                                       'shift': extension_wire([base(3)], True)}}})
         output = directory / f'{name}.output.json'
         report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={output}'],
-                              refuses=None if succeeds else 'entry-run-incomplete')
+                              refuses=None if succeeds else 'entry-host-run-failed')
         if succeeds:
-            actual = json.loads(output.read_text())['roles']['V']['selected']
+            actual = json.loads(output.read_text())['value']['V']['selected']
             assert actual == extension_wire([first], True)
         else:
             assert not output.exists()
-            (role,) = report['execution']['roles']
+            (role,) = joint_execution(report)['roles']
             assert role['after'][0] == 'stopped'
             cause = role['after'][1]['cause']
             assert cause[0] == 'explicit' and cause[1]['text'] == 'exhausted'
@@ -380,7 +382,7 @@ protocol Inspect roles(P)(trace:Vector<E>@P, configuration:Vector<E>@P,
  return (quotient=result.0,chunks=result.1,opened=result.2,
   quotient_opened=result.3,valid=result.4,reduced=result.5);
 }
-run Run=Inspect;
+entry fn Run(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -480,10 +482,10 @@ def test_air_quotient_openings_and_deep_word_match_independent_polynomials(
               'configuration': extension_wire(config), 'data': extension_wire(data), 'size': size}
     values.update({name: extension_wire([value], True) for name, value in
                    [('shift', base(3)), ('alpha', alpha), ('zeta', zeta), ('rho', rho), ('eta', eta)]})
-    r = input_files(journal, 'inspect.json', session='polynomial-reference', roles={'P': {'inputs': values}})
+    r = input_files(journal, 'inspect.json', session='polynomial-reference', package=package, arguments={'inputs': {'P': values}})
     result = directory / 'inspect.output.json'
     journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={result}'])
-    actual = json.loads(result.read_text())['roles']['P']
+    actual = json.loads(result.read_text())['value']['P']
     assert actual['valid'] is True
     for name, expected in [('quotient', quotient), ('chunks', chunk_values), ('opened', opened),
                            ('quotient_opened', quotient_opened), ('reduced', reduced)]:

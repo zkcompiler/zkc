@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -56,7 +57,8 @@ int main(int argc, char **argv) {
   std::vector<CheckedOriginal> originals;
   for (StringRef name : {"sample::Demo", "sample::LocalDemo"})
     cases.run(name, [&] {
-      auto original = take(prepareOriginal(take(closeEntry(checked, name))));
+      auto original = take(prepareOriginal(
+          take(zkc::test::closeProtocolDeployment(checked, name))));
       require(original.bytes().contains("poly.mle"),
               "formal original was erased");
       require(!original.interfaceJson().contains("formal("),
@@ -69,10 +71,11 @@ int main(int argc, char **argv) {
     auto text = (*bytes)->getBuffer().str() + R"(
       protocol Shared roles(P,V)(a:Fr@(P,V),b:Fr@(P,V),x:Fr@(P,V))
         ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@(P,V)){return(r=calculate(a,b,x));}
-      run SharedDemo=Shared;
+      entry fn SharedDemo(inputs: Shared::Inputs) { return Shared::run(inputs); }
     )";
-    auto original = take(prepareOriginal(
-        take(closeEntry(take(check(text)), "sample::SharedDemo"))));
+    auto original =
+        take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+            take(check(text)), "sample::SharedDemo"))));
     take(compileEntry(original));
   });
   cases.run("formal products and zero-arity math compile", [&] {
@@ -87,10 +90,11 @@ int main(int argc, char **argv) {
         let sum=intrinsic<F,0,0>("poly.sum_suffix",fixed);
         return intrinsic<F,0>("poly.evaluate",sum,[]);
       }
-      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}run Demo=Run;
+      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
-    auto original = take(
-        prepareOriginal(take(closeEntry(take(check(text)), "sample::Demo"))));
+    auto original =
+        take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+            take(check(text)), "sample::Demo"))));
     take(compileEntry(original));
   });
   auto refuses = [&](StringRef name, const Twine &body, StringRef code) {
@@ -204,9 +208,10 @@ int main(int argc, char **argv) {
       math fn p(x:F)->Poly<33>{return intrinsic<F,33>("poly.constant",x);}
       math fn value(x:F)->F{let discarded=p(x);return x;}
       protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}
-      run Demo=Run;
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )")));
-    auto closed = take(closeEntry(project, "sample::Demo"));
+    auto closed =
+        take(zkc::test::closeProtocolDeployment(project, "sample::Demo"));
     auto result = prepareOriginal(closed);
     require(!result, "oversized native arity admitted");
     auto message = toString(result.takeError());
@@ -272,9 +277,9 @@ int main(int argc, char **argv) {
         return x;
       }
       protocol Run<N:nat> roles(P)(x:F@P)->(r:F@P) where 1<=pow2(N){return(r=p<N>(x));}
-      run Demo=Run<21>;
+      entry fn Demo(inputs: Run<21>::Inputs) { return Run<21>::run(inputs); }
     )")));
-    auto closed = closeEntry(project, "sample::Demo");
+    auto closed = zkc::test::closeProtocolDeployment(project, "sample::Demo");
     require(!closed, "oversized closed intrinsic shape admitted");
     auto message = toString(closed.takeError());
     require(StringRef(message).contains("source.builtin"), message);
@@ -300,10 +305,11 @@ int main(int argc, char **argv) {
                 r=calculate(a,b,x);
               }
               return(r=r);
-            }run NestedDemo=Nested;
+            }entry fn NestedDemo(inputs: Nested::Inputs) { return Nested::run(inputs); }
           )";
         auto project = take(check(changed));
-        auto result = prepareOriginal(take(closeEntry(project, entry)));
+        auto result = prepareOriginal(
+            take(zkc::test::closeProtocolDeployment(project, entry)));
         require(!result, "under-width observation accepted");
         auto message = toString(result.takeError());
         require(StringRef(message).contains("fitting degree bound"), message);
@@ -323,14 +329,15 @@ int main(int argc, char **argv) {
           return x;
         }
         protocol Run roles(P)(x:F@P)->(r:F@P){return(r=x);}
-        run Demo=Run;
+        entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
       )");
           // Close the helper through an ordinary call, then remove that call
           // from the admitted original. The helper remains available only for
           // analysis.
           text = replaceText(text, "return(r=x);", "return(r=observe(x));");
-          auto original = take(prepareOriginal(
-              take(closeEntry(take(check(text)), "sample::Demo"))));
+          auto original =
+              take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+                  take(check(text)), "sample::Demo"))));
           auto module = mlir::parseSourceString<mlir::ModuleOp>(
               original.bytes(), &context);
           require(bool(module), "cannot parse observation original");

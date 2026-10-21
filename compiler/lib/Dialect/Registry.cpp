@@ -1,6 +1,7 @@
 #include "zkc/Dialect/Registry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "zkc/Dialect/BuiltinHeaders.h.inc"
 #include "zkc/Dialect/ContributionHeaders.h.inc"
 #include "zkc/Interfaces/Mathematical.h"
@@ -23,7 +24,7 @@ using ProtocolDialects = DialectSet<mlir::func::FuncDialect
 } // namespace
 void registerDialects(mlir::DialectRegistry &registry) {
   ProtocolDialects::registerIn(registry);
-  registry.insert<mlir::arith::ArithDialect>();
+  registry.insert<mlir::arith::ArithDialect, mlir::scf::SCFDialect>();
   registerMathematicalInterfaces(registry);
 }
 bool hasProtocolDialects(mlir::MLIRContext &context) {

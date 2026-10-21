@@ -17,4 +17,6 @@ pub(crate) mod setups;
 
 pub(crate) mod document;
 
+pub(crate) mod diagnostics;
 pub(crate) mod input_file;
+pub(crate) mod shared;

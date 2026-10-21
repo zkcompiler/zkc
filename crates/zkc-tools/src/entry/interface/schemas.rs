@@ -10,14 +10,14 @@ struct Leaf {
     needs_setup: bool,
     source_identity: Option<String>,
 }
-pub(super) struct Schemas<'a> {
+pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
     retained: usize,
     leaves: BTreeMap<&'a str, Leaf>,
     schemas: BTreeMap<&'a str, &'a Schema>,
 }
 impl<'a> Schemas<'a> {
-    pub(super) fn new() -> Self {
+    pub(in crate::entry) fn new() -> Self {
         Self {
             remaining: 1_000_000,
             retained: 0,
@@ -35,7 +35,7 @@ impl<'a> Schemas<'a> {
             .map(|leaf| (leaf.ty.kind(), leaf.needs_setup))
             .ok_or(E::Schema)
     }
-    pub(super) fn finish(self) -> BTreeMap<String, LogicalType> {
+    pub(in crate::entry) fn finish(self) -> BTreeMap<String, LogicalType> {
         self.leaves
             .into_iter()
             .map(|(s, l)| (s.to_owned(), l.ty))
@@ -78,7 +78,7 @@ impl<'a> Schemas<'a> {
         }
         Ok(&self.leaves[spelling])
     }
-    pub(super) fn check(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
+    pub(in crate::entry) fn check(&mut self, schema: &'a Schema, depth: usize) -> Result<()> {
         use Permission::*;
         require(depth <= 32, E::Limit)?;
         self.charge(1 + schema.display_type.len() + schema.identity.len())?;
@@ -106,7 +106,15 @@ impl<'a> Schemas<'a> {
             if schema.custody && index == 0 {
                 continue;
             }
-            require(!schema.constructible || leaf.constructible, E::Schema)?;
+            require(
+                !schema.constructible
+                    || matches!(
+                        schema.kind,
+                        Kind::Record | Kind::Tuple | Kind::Array | Kind::Variant
+                    )
+                    || leaf.constructible,
+                E::Schema,
+            )?;
             for permission in &schema.permissions {
                 require(
                     match permission {
@@ -163,14 +171,7 @@ impl<'a> Schemas<'a> {
                     .iter()
                     .map(LogicalType::spelling)
                     .collect();
-                self.fields(
-                    &actual.fields,
-                    &payload,
-                    0,
-                    depth,
-                    &schema.permissions,
-                    schema.constructible,
-                )?;
+                self.fields(&actual.fields, &payload, 0, depth, &schema.permissions)?;
             }
         } else if !schema.fields.is_empty() {
             self.fields(
@@ -179,7 +180,6 @@ impl<'a> Schemas<'a> {
                 start,
                 depth,
                 &schema.permissions,
-                schema.constructible,
             )?;
         } else {
             require(schema.leaves.len() <= start.max(1), E::Schema)?;
@@ -211,7 +211,6 @@ impl<'a> Schemas<'a> {
         start: usize,
         depth: usize,
         permissions: &[Permission],
-        constructible: bool,
     ) -> Result<()> {
         let mut next = start;
         let mut names = BTreeSet::new();
@@ -240,7 +239,6 @@ impl<'a> Schemas<'a> {
                 E::Schema,
             )?;
             self.check(&field.schema, depth + 1)?;
-            require(!constructible || field.schema.constructible, E::Schema)?;
             require(
                 permissions
                     .iter()

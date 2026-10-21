@@ -56,5 +56,5 @@ pub protocol Claims<E: Field> roles(P)(values: vec::Vector<E> @P,
   let result @P = claims(values, factor, offset, initial);
   return (square_claim = result.0, weighted_claim = result.1);
 }
-run Demo = Claims<Base>;
-run ExtensionDemo = Claims<Extension>;
+entry fn Demo(inputs: Claims<Base>::Inputs) { return Claims<Base>::run(inputs); }
+entry fn ExtensionDemo(inputs: Claims<Extension>::Inputs) { return Claims<Extension>::run(inputs); }

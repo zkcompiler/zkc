@@ -17,7 +17,7 @@ ALLOWED = {
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
-    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
+    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRSCFDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
 }
 HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
@@ -27,8 +27,8 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
-        "LanguagePackage", "LanguageInspection", "NativeProof", "Run", "Observation",
+        "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
+        "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
     "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
@@ -214,6 +214,7 @@ def main():
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
+        ROOT / "lib/Compiler/LanguagePackageReader.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",

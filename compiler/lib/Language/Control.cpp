@@ -142,6 +142,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     Arm arm;
     arm.body = std::make_shared<Body>();
     arm.body->mode = Body::Mode::Local;
+    arm.body->stage = body.stage;
     arm.checker = std::make_unique<BodyChecker>(checker, decl, syntax,
                                                 *arm.body, callDepth);
     auto &nested = *arm.checker;

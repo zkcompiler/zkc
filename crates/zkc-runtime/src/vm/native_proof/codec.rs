@@ -382,6 +382,7 @@ pub(super) struct CheckedCodec<'a> {
     data_functions: RefCell<BTreeSet<String>>,
 }
 impl<'a> CheckedCodec<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         admitted: &'a Program,
         codec: &'a RecordCodec,
@@ -389,7 +390,10 @@ impl<'a> CheckedCodec<'a> {
         helpers: &BTreeMap<String, Helper<'_>>,
         producer: &str,
         validator: &str,
+        selection: Option<NativeProofOperation>,
     ) -> Result<Self> {
+        let producing = selection != Some(NativeProofOperation::Verify);
+        let validating = selection != Some(NativeProofOperation::Prove);
         let function = |name: &str| {
             admitted
                 .program
@@ -398,6 +402,16 @@ impl<'a> CheckedCodec<'a> {
                 .map(Arc::as_ref)
                 .ok_or_else(|| refuse("native-proof-codec-function"))
         };
+        // Plans describe both transport directions. Only the selected direction
+        // requires its executable helpers; every retained declaration is checked.
+        let selected_function = |name: &str, required: bool| {
+            let found = admitted.program.functions.get(name).map(Arc::as_ref);
+            if required && found.is_none() {
+                Err(refuse("native-proof-codec-function"))
+            } else {
+                Ok(found)
+            }
+        };
         let initialize = function(&codec.initialize)?;
         if initialize.outputs != codec.record {
             return Err(refuse("native-proof-codec-signature"));
@@ -405,28 +419,30 @@ impl<'a> CheckedCodec<'a> {
         let mut data_functions = BTreeSet::new();
         let mut wire_functions = BTreeSet::new();
         for name in [&codec.initialize, &codec.write, &codec.finish] {
-            if data_functions.insert(name.clone()) {
-                data_function(function(name)?)?;
+            if let Some(function) = selected_function(name, false)?
+                && data_functions.insert(name.clone())
+            {
+                data_function(function)?;
             }
         }
-        signature(function(&codec.write)?, &codec.record, &[ty("bytes")])?;
+        if let Some(write) = selected_function(&codec.write, producing)? {
+            signature(write, &codec.record, &[ty("bytes")])?;
+        }
         let mut inputs = codec.record.clone();
         inputs.push(ty("bytes"));
-        signature(function(&codec.finish)?, &inputs, &[])?;
+        if let Some(finish) = selected_function(&codec.finish, validating)? {
+            signature(finish, &inputs, &[])?;
+        }
         if codec.conditional_write.is_empty() != codec.conditional_finish.is_empty() {
             return Err(refuse("native-proof-codec-finalizer"));
         }
         if !codec.conditional_write.is_empty() {
-            conditional(
-                function(&codec.conditional_write)?,
-                function(&codec.write)?,
-                true,
-            )?;
-            conditional(
-                function(&codec.conditional_finish)?,
-                function(&codec.finish)?,
-                false,
-            )?;
+            if let Some(write) = selected_function(&codec.conditional_write, producing)? {
+                conditional(write, function(&codec.write)?, true)?;
+            }
+            if let Some(finish) = selected_function(&codec.conditional_finish, validating)? {
+                conditional(finish, function(&codec.finish)?, false)?;
+            }
         }
         let mut messages = Vec::new();
         let mut seen = BTreeSet::new();
@@ -475,48 +491,65 @@ impl<'a> CheckedCodec<'a> {
             }) {
                 return Err(refuse("native-proof-wire-type"));
             }
-            let decode = function(&selection.decode)?;
-            let chunks = decode.inputs.len();
+            let encode = selected_function(&selection.encode, producing)?;
+            let decode = selected_function(&selection.decode, validating)?;
+            let chunks = if let Some(decode) = decode {
+                decode.inputs.len()
+            } else {
+                encode
+                    .ok_or_else(|| refuse("native-proof-codec-function"))?
+                    .outputs
+                    .len()
+                    .checked_sub(codec.record.len())
+                    .ok_or_else(|| refuse("native-proof-codec-signature"))?
+            };
             if chunks == 0 || chunks > 1024 {
                 return Err(refuse("native-proof-codec-signature"));
             }
             let chunk_types = vec![ty("bytes"); chunks];
-            signature(decode, &chunk_types, &payload)?;
+            if let Some(decode) = decode {
+                signature(decode, &chunk_types, &payload)?;
+            }
             let mut inputs = codec.record.clone();
             inputs.extend_from_slice(&payload);
             let mut outputs = codec.record.clone();
             outputs.extend_from_slice(&chunk_types);
-            signature(function(&selection.encode)?, &inputs, &outputs)?;
+            if let Some(encode) = encode {
+                signature(encode, &inputs, &outputs)?;
+            }
             inputs = codec.record.clone();
             inputs.push(ty("bytes"));
             outputs = codec.record.clone();
             outputs.extend(vec![ty("index"); 2 * chunks]);
-            signature(function(&selection.receive)?, &inputs, &outputs)?;
+            if let Some(receive) = selected_function(&selection.receive, validating)? {
+                signature(receive, &inputs, &outputs)?;
+            }
             inputs = vec![ty("bytes")];
             inputs.extend(vec![ty("index"); 2 * chunks]);
-            let slice = function(&selection.slice)?;
-            signature(slice, &inputs, &chunk_types)?;
-            let mut ops = no_releases(&slice.body);
-            let mut slices = Vec::new();
-            for i in 0..chunks {
-                let values = operation(
-                    ops.next()
-                        .ok_or_else(|| refuse("native-proof-codec-slice"))?,
-                    "bytes.slice",
-                    &[
-                        slice.inputs[0].0.clone(),
-                        slice.inputs[1 + 2 * i].0.clone(),
-                        slice.inputs[2 + 2 * i].0.clone(),
-                    ],
-                )
-                .filter(|v| v.len() == 1)
-                .ok_or_else(|| refuse("native-proof-codec-slice"))?;
-                slices.push(values[0].clone());
-            }
-            if !matches!(ops.next(),Some(LocalInstruction::Return(values)) if *values==slices)
-                || ops.next().is_some()
-            {
-                return Err(refuse("native-proof-codec-slice"));
+            if let Some(slice) = selected_function(&selection.slice, validating)? {
+                signature(slice, &inputs, &chunk_types)?;
+                let mut ops = no_releases(&slice.body);
+                let mut slices = Vec::new();
+                for i in 0..chunks {
+                    let values = operation(
+                        ops.next()
+                            .ok_or_else(|| refuse("native-proof-codec-slice"))?,
+                        "bytes.slice",
+                        &[
+                            slice.inputs[0].0.clone(),
+                            slice.inputs[1 + 2 * i].0.clone(),
+                            slice.inputs[2 + 2 * i].0.clone(),
+                        ],
+                    )
+                    .filter(|v| v.len() == 1)
+                    .ok_or_else(|| refuse("native-proof-codec-slice"))?;
+                    slices.push(values[0].clone());
+                }
+                if !matches!(ops.next(),Some(LocalInstruction::Return(values)) if *values==slices)
+                    || ops.next().is_some()
+                {
+                    return Err(refuse("native-proof-codec-slice"));
+                }
             }
             for name in [
                 &selection.encode,
@@ -524,8 +557,10 @@ impl<'a> CheckedCodec<'a> {
                 &selection.decode,
                 &selection.slice,
             ] {
-                if data_functions.insert(name.clone()) {
-                    data_function(function(name)?)?;
+                if let Some(function) = selected_function(name, false)?
+                    && data_functions.insert(name.clone())
+                {
+                    data_function(function)?;
                 }
                 reserved.insert(name.clone());
             }

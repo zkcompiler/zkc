@@ -318,7 +318,7 @@ store ceiling merely prevents another record. A successful fallback replaces
 that key's record with its latest policy/capacity context; no unbounded history
 or eviction of other parameter sets is retained. The generic Runner exposes the
 same mechanism to Hosts that can independently authorize public entry inputs;
-a run Entry does not infer such authorization from participant availability.
+a joint child does not infer such authorization from participant availability.
 
 ## File adapters and Rust bindings
 
@@ -332,10 +332,13 @@ pair `--package=FILE --sha256=EXPECTED`; this mode refuses source options and
 Entry positionals. A digest derived from candidate bytes never authorizes them.
 
 Omitted Entry names select the unique eligible Entry. Run commands filter to
-run Entries; prove/verify commands filter to proof Entries. Other commands
+Entry functions; prove/verify commands filter to proof Entries. Other commands
 consider both kinds. Explicit short names must be unique across kinds before
 checking eligibility. Qualified names resolve exactly. `--dry-run` retains the
 selected operation's eligibility and input rules.
+Concrete protocol defaults have kind `function` and are selected by the protocol
+name, through the same rules. They include imported concrete protocols; an
+authored Entry does not silently hide a default.
 
 `Interface` is the checked logical source view. `BoundInterface` additionally
 binds it to the package's artifact identity and compile options. `inspect` and `prepare`
@@ -373,19 +376,22 @@ requires the complete outcome, including acceptance when applicable.
 ### Project defaults
 
 `Project::layout()` owns manifest-relative paths. A canonical `a::B` Entry maps
-to `a.B`, retaining exact NFC source spelling for Unicode names. Reserved device
+to the stem `a.B`, retaining exact NFC source spelling for Unicode names. An
+explicit generic run uses the qualified protocol stem followed by `-` and the
+full lowercase SHA-256 of its reported UTF-8 selection name. Equivalent typed
+arguments with different public spellings can have different stems. Reserved device
 names, overlong filenames and ASCII case-folded collisions refuse. The same checks
 apply to input group filenames; explicit input paths bypass the filename convention. Explicit paths
 override each input group or artifact independently and are relative to the
 invocation's working directory. Package and explicit-module modes have no project
 defaults. No command searches alternative filenames or selects a newest file.
 
-- Required proof groups use `inputs/<qualified.name>/public.json` and
+- Required proof groups use `inputs/<entry-stem>/public.json` and
   `witness.json`. Only proving selects witness inputs.
-- Required run groups use `inputs/<qualified.name>/<Role>.json`.
-- Compilation uses `build/zkc/<qualified.name>.zkpkg`.
-- Proving writes and verification reads `build/zkc/<qualified.name>.zkproof`.
-- Runs publish values to `build/zkc/<qualified.name>.results.json`. Proof
+- Required function arguments use `inputs/<entry-stem>/arguments.json`.
+- Compilation uses `build/zkc/<entry-stem>.zkpkg`.
+- Proving writes and verification reads `build/zkc/<entry-stem>.zkproof`.
+- Runs publish values to `build/zkc/<entry-stem>.results.json`. Proof
   commands publish named values only with explicit `--results`.
 
 `run --no-results` disables result publication and conflicts with `--results`.
@@ -403,22 +409,34 @@ remains active. `--dry-run` and `--instrument` conflict and refuse with `cli-opt
 CLI path resolution and output preflight use the `invocation` report phase,
 after obtaining the selected interface and before native admission or execution.
 
-Every CLI run without `--session` draws 16 bytes from operating-system randomness
-and uses their lowercase hex spelling as its session. Failure to obtain randomness
-returns `entry-session-random`. The resolved session is reported and supplied to
-the Host once; explicit sessions remain unchanged. Typed `RunRequest` callers
-continue to supply sessions themselves.
+Each generated joint-run invocation receives a fresh 16-byte operating-system
+random session unless its explicit invocation context supplies a session. Entropy
+failure refuses before that child starts, retaining any earlier completed calls.
+Repeated calls of one static deployment draw independently. Standalone numerical
+Entries need no session.
+`RunContext::session` is optional; an explicit value is reused exactly. Typed
+native `RunRequest` callers supply their own sessions.
 
 ### Input documents
 
-Input files are exact port-name maps. Proof commands take `--public=FILE` and,
-for proving only, `--witness=FILE`. Public values initialize both participant
-operands; witness maps cannot repeat public names. Independent verifiers provide
-their own public map. Run commands optionally take `--session=LABEL` and repeat
-`--input=ROLE=FILE`; shared source ports remain separate role-local values.
-A group with no ports can omit its file. Unit and empty-product ports remain
-required even though they have no native leaves. Unknown fields, roles and
-repeated role files refuse. Verification rejects `--witness` before file access.
+`run --input=FILE` reads one exact parameter-name map for the selected Entry
+function. Its conventional path is `inputs/<entry-stem>/arguments.json`.
+Generated protocol `Inputs` records contain a separate field for each participant;
+shared source ports remain separate role-local values. Optional `--invocations`
+supplies child sessions, services and setup policies; these are execution context,
+separate from ordinary function arguments. Each binding may also contain `inputs`
+for the nonordinary key/setup ports listed by inspection. For Run, this is a
+source-role-to-named-input map; for Prove or Verify, it is the selected
+participant's named-input map. These values use the existing input codecs and
+confined file references relative to the invocation document. All selected
+material is authenticated during preparation, including dormant invocations.
+
+Proof commands take `--public=FILE` and, for proving only, `--witness=FILE`.
+Public values initialize both participant operands; witness maps cannot repeat
+public names. Independent verifiers provide their own public map. A group with
+no ports can omit its file. Unit and empty-product ports remain required even
+though they have no native leaves. Unknown fields refuse. Verification rejects
+`--witness` before file access.
 
 Booleans use JSON Boolean values; unit uses null; tuples and arrays use arrays;
 records use exact field-name objects. Variants contain exactly `case` and `fields`,
@@ -464,7 +482,7 @@ Document byte, node and depth exhaustion return `entry-request-limit`.
 Diagnostics name a logical input path when
 readable decoding or reference resolution fails, without printing input values.
 
-Whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
+For proof commands, whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
 Independent authority comes from `--setups=FILE`, containing exactly
 `format: "zkc.entry-setups/0"` and a `keys` map of expected setup identities.
 Service overrides use `--service=ROLE.NAME=COUNT`; context and transcript budget
@@ -479,8 +497,8 @@ establish acceptance.
 
 `new DIRECTORY` creates an absent directory. `init [DIRECTORY]` requires an
 existing directory and defaults to the current directory. Both require the
-companion compiler and create `zkc.toml`, `protocol.zkc`, `main.zkc` and input
-templates for a minimal index echo. Existing manifests and conflicting source
+companion compiler and create `zkc.toml`, `main.zkc` and an argument
+template for a minimal index Entry function. Existing manifests and conflicting source
 files refuse without overwriting them. Existing regular input files are preserved.
 
 `prepare [ENTRY]` uses the current manifest. With no selector or output override,
@@ -506,6 +524,23 @@ with `requirements`; `new` and `init` report requirements per Entry as well.
 `allow_authored` indicates explicit policy acknowledgement, and `setups` lists
 slots requiring independent `--setups` authority and `--key` material. Neither is
 synthesized.
+
+Source function preparation reports `allow_authored: null` and
+`unresolved: ["child_policies"]`: the logical function interface does not expose
+its children's proof binding or setup policies. This includes `new` and `init`.
+`prepare` supplies a `requirements.check_command` using `run --dry-run` with
+the same selection and arguments as the suggested run command. Fill the inputs
+and run that check before execution. An `entry-proof-binding-policy` refusal
+requires explicit `--allow-authored` acknowledgement; preparation does not add
+that flag. Other admission refusals retain their own requirements.
+
+Pinned-package function preparation reads the checked child deployment
+interfaces. It reports the aggregate `allow_authored` requirement and a
+`deployments` list with each child's ID, operation, Entry, acknowledgement and
+setup slots. Child setup authority belongs in `--invocations=FILE`; independent
+children can require different authority even when slot names agree. A suggested
+command is a starting point, not a claim that unresolved admission policies have
+been satisfied.
 
 [File admission and publication](publication.md) defines regular-file checks,
 protected output paths, result formats, staging and diagnostics. Opened input
@@ -550,3 +585,49 @@ example, an unknown input name fails at `Request`, a missing packaged arena
 fails at `Assets`, and an invalid native context or resource budget fails at
 `Preparation`. Native preparation can also reject malformed input values.
 Execution failures and cleanup remain in the report.
+
+## Function execution
+
+`FunctionEntry` admits an authenticated `zkc.host/0` package and its entire static
+function, calculation and deployment inventory. `FunctionInterface` supports
+logical inspection without native admission. `FunctionRequest` separates named
+ordinary arguments from `InvocationContext`; application setup authority is
+indexed by static child deployment. Nominal proof candidate bytes are data,
+while native result constructors and service/setup authority remain restricted.
+
+`PreparedFunction` executes only reached Host control and calls. Numerical work
+uses `LocalRunner`; native joint/proof work uses its existing Host. One shared
+`ExecutionLedger` charges work and conservative retained payload reservations
+before effects across the outer invocation and child VM instances. Parent values
+remain reserved while children run. Native wire/proof, sequence, Ring and external
+work retain their native owners and invocation-wide remaining allowances. This
+is payload/work policy, not a process RSS guarantee.
+
+The selected live-byte limit covers the whole Entry invocation. Before starting
+one native child, the Host subtracts live parent reservations and assigns half
+of the remainder to child runners, divided equally across a joint roster. The
+other half remains available for bounded native transport and result transfer.
+Each runner reserves its entire assigned allowance until its results and native
+report are released. Numerical results acquire a parent reservation before the
+child releases its own. This conservative policy can refuse a nested computation
+that fits a standalone runner under the same capacity record; element ceilings
+are not completion guarantees. A smaller result does not increase the child's
+working allowance. [Shared execution policy](capacity.md#shared-invocation-execution-policy)
+defines ownership and cumulative charges. Dynamic repartitioning is not performed.
+
+`FunctionOptions::service_draws` bounds the sum of child service allowances
+reserved before issuance. Its default is 64,000,000 (64 native default
+allowances), supporting multiple ordinary roots without resetting the global
+ceiling. An explicitly lower limit stays authoritative. Unused child allowance
+is not refunded; `service_allowances` and actual `service_draws` are separate
+reported quantities.
+
+A terminal report separates its successful typed source value from failure,
+cumulative usage and a bounded payload-free call journal. A child failure
+retains the reached call path and native stop/cleanup evidence. Successful
+intermediate values are not publication roots. No implicit retries, parallel
+calls or caching change source order. Semantic verification rejection returns
+Rejected without verifier outputs; framing, stop, input and cleanup failures
+remain failures. Native verification installation and input preparation use only
+the verifier closure; producer-only operations, witness inputs and producer
+entropy are not required for that execution.

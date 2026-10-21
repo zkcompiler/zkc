@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/ProtocolDeployment.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/R1CS.h"
@@ -17,7 +18,8 @@ Expected<CheckedProject> check(StringRef text,
   return analyze(*captured).checkedProject();
 }
 ClosedEntry close(StringRef text, std::vector<AssetBuffer> assets = {}) {
-  return take(closeEntry(take(check(text, std::move(assets))), "sample::Demo"));
+  return take(zkc::test::closeProtocolDeployment(
+      take(check(text, std::move(assets))), "sample::Demo"));
 }
 const Declaration &closedDeclaration(const ClosedEntry &entry, StringRef name) {
   for (const auto &decl : entry.declarations())
@@ -35,7 +37,7 @@ relation DLog<H:Group>(parameter base:H, statement point:H, witness scalar:H::Sc
 protocol Run<H:Group> roles(P,V)(g:H@V,h:H@V,x:H::Scalar@P)->(accepted:bool@V)
  spec {target knowledge=DLog<H>(in.g,in.h,in.x) accept out.accepted;}
  {let accepted@V=true;return(accepted=accepted);}
-run Demo=Run<G>;)zkc";
+entry fn Demo(inputs: Run<G>::Inputs) { return Run<G>::run(inputs); })zkc";
 std::string
 clauses(StringRef clauses,
         StringRef relation =
@@ -43,7 +45,9 @@ clauses(StringRef clauses,
   return ("module sample;" + relation +
           "protocol Run "
           "roles(P,V)(x:bool@P,s:bool@(P,V))->(y:bool@P,ok:bool@V) spec {" +
-          clauses + "}{let ok@V=true;return(y=x,ok=ok);} run Demo=Run;")
+          clauses +
+          "}{let ok@V=true;return(y=x,ok=ok);} entry fn Demo(inputs: "
+          "Run::Inputs) { return Run::run(inputs); }")
       .str();
 }
 } // namespace
@@ -174,7 +178,7 @@ int main() {
       relation Circuit(statement public:builtin("field_array",Fr,1),witness assignment:builtin("field_array",Fr,3))=r1cs(asset circuit);
       protocol Run roles(P,V)(public:builtin("field_array",Fr,1)@V,assignment:builtin("field_array",Fr,3)@P)->(ok:bool@V)
       spec {target proof=Circuit(in.public,in.assignment) accept out.ok;}
-      {let ok@V=true;return(ok=ok);}run Demo=Run;)";
+      {let ok@V=true;return(ok=ok);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })";
     auto entry = close(source, {asset});
     auto &closed = closedDeclaration(entry, "Circuit");
     require(closed.relation->asset &&
@@ -195,7 +199,7 @@ int main() {
       relation Trace(statement public:builtin("field_array",Fr,1),witness trace:builtin("matrix",Fr))=air(asset trace);
       protocol Run roles(P,V)(public:builtin("field_array",Fr,1)@V,trace:builtin("matrix",Fr)@P)->(ok:bool@V)
       spec {target proof=Trace(in.public,in.trace) accept out.ok;}
-      {let ok@V=true;return(ok=ok);}run Demo=Run;)",
+      {let ok@V=true;return(ok=ok);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
                        {asset});
     require(closedDeclaration(entry, "Trace").relation->kind ==
                     RelationDefinition::Kind::AIR &&
@@ -209,7 +213,7 @@ int main() {
       struct Pair{pub a:bool,pub b:bool}
       protocol Run<N:nat> roles(P)(x:[Pair;N]@P)->(ok:bool@P) where 1<=N
       spec {target proof=Same(in.x.0.b) accept out.ok;}
-      {return(ok=true);}run Demo=Run<2>;)";
+      {return(ok=true);}entry fn Demo(inputs: Run<2>::Inputs) { return Run<2>::run(inputs); })";
         auto entry = close(source);
         require(entry.protocol().specifications[0].subject.operands[0].path ==
                     std::vector<unsigned>{0, 1},
@@ -223,23 +227,24 @@ int main() {
         refuses(check(R"(module sample;struct A{pub x:bool}struct B{pub x:bool}
       relation R(statement x:A){return x.x;}
       protocol Run roles(P)(x:B@P)->(ok:bool@P)
-      spec {target proof=R(in.x) accept out.ok;}{return(ok=true);}run Demo=Run;)"),
+      spec {target proof=R(in.x) accept out.ok;}{return(ok=true);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })"),
                 "source.specification");
       });
   cases.run(
       "zero argument formulas are legal but empty formal layouts refuse", [] {
         close(R"(module sample;relation True(){return true;}
-      protocol Run roles(P)()->(ok:bool@P) spec {target proof=True() accept out.ok;}{return(ok=true);}run Demo=Run;)");
+      protocol Run roles(P)()->(ok:bool@P) spec {target proof=True() accept out.ok;}{return(ok=true);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
         auto project =
             take(check(R"(module sample;relation R(statement x:()){return true;}
-      protocol Run roles(P)(x:()@P)->(ok:bool@P) spec {target proof=R(in.x) accept out.ok;}{return(ok=true);}run Demo=Run;)"));
-        refuses(closeEntry(project, "sample::Demo"), "source.relation");
+      protocol Run roles(P)(x:()@P)->(ok:bool@P) spec {target proof=R(in.x) accept out.ok;}{return(ok=true);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })"));
+        refuses(zkc::test::closeProtocolDeployment(project, "sample::Demo"),
+                "source.relation");
       });
   cases.run("inline formulas infer only explicit bound port types", [] {
     auto entry = close(R"(module sample;domain Fr=field("bls12-381.fr");
       protocol Run<F:Field> roles(P,V)(x:F@P,y:F@V)->(ok:bool@V)
       spec {target equality=relation(statement expected=in.y,witness actual=in.x){return expected==actual;} accept out.ok;}
-      {let ok@V=true;return(ok=ok);}run Demo=Run<Fr>;)");
+      {let ok@V=true;return(ok=ok);}entry fn Demo(inputs: Run<Fr>::Inputs) { return Run<Fr>::run(inputs); })");
     const auto &clause = entry.protocol().specifications[0];
     const auto &definition =
         entry.declarations()[clause.subject.relation.index];
@@ -261,7 +266,8 @@ int main() {
     auto project = take(check(generic));
     Limits limits;
     limits.instances = 1;
-    refuses(closeEntry(project, "sample::Demo", limits), "source.limit");
+    refuses(zkc::test::closeProtocolDeployment(project, "sample::Demo", limits),
+            "source.limit");
   });
   cases.run("opaque identities have fixed exact logical signatures", [] {
     refuses(check(R"(module sample;
@@ -292,7 +298,7 @@ int main() {
     std::string text = R"(module sample;
       protocol Run roles(P)(x:bool@P)->(ok:bool@P)
       spec{target t=relation(statement a=in.x){return a;} accept out.ok;}
-      {return(ok=true);}run Demo=Run;)";
+      {return(ok=true);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })";
     for (StringRef visibility : {"", "pub "}) {
       auto captured =
           take(capture({{"sample", text, {}},
@@ -301,8 +307,8 @@ int main() {
                           "relation clause_0(statement a:bool){return true;}")
                              .str(),
                          {}}}));
-      auto entry = take(
-          closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));
+      auto entry = take(zkc::test::closeProtocolDeployment(
+          take(analyze(captured).checkedProject()), "sample::Demo"));
       auto relation = entry.protocol().specifications[0].subject.relation;
       const auto &definition = entry.declarations()[relation.index];
       require(definition.anonymous &&
@@ -338,7 +344,7 @@ int main() {
         "source.name");
     close(R"(module sample;relation Same(statement x:bool){return x;}
       protocol Run<N:nat> roles(P)(x:[bool;N]@P)->(ok:bool@P) where 2<=N
-      spec{target t=Same(in.x.0) accept out.ok;}{return(ok=true);}run Demo=Run<2>;)");
+      spec{target t=Same(in.x.0) accept out.ok;}{return(ok=true);}entry fn Demo(inputs: Run<2>::Inputs) { return Run<2>::run(inputs); })");
   });
   cases.run("captured asset paths use the same qualified names as capture", [] {
     auto relation =
@@ -348,7 +354,7 @@ int main() {
       relation Circuit(statement public:builtin("field_array",Fr,1),witness assignment:builtin("field_array",Fr,3))=r1cs(asset lib::circuit);
       protocol Run roles(P,V)(public:builtin("field_array",Fr,1)@V,assignment:builtin("field_array",Fr,3)@P)->(ok:bool@V)
       spec{target proof=Circuit(in.public,in.assignment) accept out.ok;}
-      {let ok@V=true;return(ok=ok);}run Demo=Run;)",
+      {let ok@V=true;return(ok=ok);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
         {{"lib::circuit", "r1cs-json", zkc::printJson(relation.encode()), {}}});
     require(entry.project().assets()[0].name() == "lib::circuit",
             "qualified asset was not retained");
@@ -359,7 +365,7 @@ int main() {
                  {"sample",
                   R"(module sample;relation R(statement x:bool){return x;}
        protocol Run roles(P)(x:lib::Pair@P)->(ok:bool@P)
-       spec{target t=R(in.x.b) accept out.ok;}{return(ok=true);}run Demo=Run;)",
+       spec{target t=R(in.x.b) accept out.ok;}{return(ok=true);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })",
                   {}}}));
     refuses(analyze(captured).checkedProject(), "source.private");
   });

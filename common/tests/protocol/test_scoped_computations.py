@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution
 from input_files import decimal_values, input_files
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -26,22 +26,19 @@ def test_component_nested_callbacks_and_checked_lookup(toolchain, journal, direc
         'example::Demo', f'--output={package}', *flags,
     ])
     for position, expected in [(0, 16), (1, None)]:
-        request = input_files(journal, f'position-{position}.json', session='scoped', roles={
-            'P': {'inputs': {'shared': '3', 'parameters': {'shift': '7', 'table': ['5']},
-                             'position': str(position)}},
-            'V': {'inputs': {'shared': '3'}},
-        })
+        request = input_files(journal, f'position-{position}.json', session='scoped', package=package, arguments={'inputs': {'P': {'shared': '3', 'parameters': {'shift': '7', 'table': ['5']},
+                             'position': str(position)}, 'V': {'shared': '3'}}})
         output = directory / f'position-{position}.outputs.json'
         result = journal.json([
             toolchain.runtime, '--json', 'run', f'--package={package}',
             f'--sha256={compiled["package_sha256"]}', *request, f'--results={output}',
-        ], refuses='entry-run-incomplete' if expected is None else None)
+        ], refuses='entry-host-run-failed' if expected is None else None)
         if expected is None:
-            assert result['execution']['roles'][0]['after'][1]['cause'] == [
+            assert joint_execution(result)['roles'][0]['after'][1]['cause'] == [
                 'backend', {'omitted_bytes': 0, 'text': 'refused:vector-index'}]
             assert not output.exists()
         else:
-            assert json.loads(output.read_text())['roles']['P']['result'] == str(expected)
+            assert json.loads(output.read_text())['value']['P']['result'] == str(expected)
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -57,7 +54,7 @@ fn work(x:F,p:Params)->(F,F,F,F){
  return(a,b,c,d);
 }
 protocol Run roles(P)(x:F@P,p:Params@P)->(result:(F,F,F,F)@P){return work(x,p);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('values', {'x': '3', 'p': {'a': '7', 'b': '2'}})['result'] == [
@@ -77,7 +74,7 @@ fn work(x:F)->(F,F,F,F){
  return(first,second,third,fourth);
 }
 protocol Run roles(P)(x:F@P)->(result:(F,F,F,F)@P){return work(x);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('snapshots', {'x': '3'})['result'] == ['2', '14', '15', '18']
@@ -90,12 +87,12 @@ fn fail(x:bool)->bool effects(stop){require x;return x;}
 protocol Run roles(P)(x:bool@P)->(result:bool@P){
  return apply(x,fn(y)=>y && fail(false));
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('skipped', {'x': False})['result'] is False
-    refused = entry.run('entered', {'x': True}, refuses='entry-run-incomplete')
-    assert refused['execution']['roles'][0]['after'][1]['cause'] == [
+    refused = entry.run('entered', {'x': True}, refuses='entry-host-run-failed')
+    assert joint_execution(refused)['roles'][0]['after'][1]['cause'] == [
         'explicit', {'omitted_bytes': 0, 'text': 'reject'}]
 
 
@@ -108,7 +105,7 @@ fn unit(body:fn(())->F effects())->F effects(){return body(());}
 fn shift(x:F,a:F)->F{return forward(x,fn(y)=>y+a);}
 fn work(x:F,a:F,b:F)->(F,F,F,F,F,F){return(two(x,a,fn(y,z,)=>y+z),pair((x,a),fn((y,z))=>y-z),shift(x,a),shift(x,b),zero(fn()=>x+a),unit(fn(())=>x+b));}
 protocol Run roles(P)(x:F@P,a:F@P,b:F@P)->(result:(F,F,F,F,F,F)@P){return work(x,a,b);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source)
     assert entry.run('tuple-and-code-reuse', {'x': '9', 'a': '7', 'b': '2'})['result'] == decimal_values([16, 2, 16, 11, 16, 11])
@@ -132,7 +129,7 @@ fn work(x:F,a:[F;2],m:Matrix<F>,go:bool)->(F,index,F){
  return(selected,count,total);
 }
 protocol Run roles(P)(x:F@P,a:[F;2]@P,m:Matrix<F>@P,go:bool@P)->(result:(F,index,F)@P){return work(x,a,m,go);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     inputs = {'x': '3', 'a': ['7', '2'],
@@ -149,7 +146,7 @@ fn work(n:index)->bool{
  let token=apply(Token{},fn(x)=>{let mut state=x;for _ in 0..n {let old=state;consume old;state=Token{};}state});
  consume token;return true;
 }
-protocol Run roles(P)(n:index@P)->(result:bool@P){return work(n);}run Demo=Run;
+protocol Run roles(P)(n:index@P)->(result:bool@P){return work(n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source)
     assert entry.run('state', {'n': str(count)})['result'] is True
@@ -167,7 +164,7 @@ fn iterate(x:F,n:index,rows:domain<F>,body:fn(F)->F effects(stop))->F effects(st
 fn outer(xs:Vector<F>,x:F,n:index)->F effects(stop){
  let rows=elements(xs);return iterate(x,n,rows,fn(y)=>ignore(rows,y+x));
 }
-protocol Run roles(P)(xs:Vector<F>@P,x:F@P,n:index@P)->(result:F@P){return outer(xs,x,n);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,x:F@P,n:index@P)->(result:F@P){return outer(xs,x,n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for count in (0, 3):
@@ -185,13 +182,13 @@ protocol Run roles(P,V)(xs:Vector<F>@P,x:F@P,n:index@(P,V))->(result:F@P){
    for _ in 0..n roles(P,V) max 4 {result=apply(result,fn(y)=>ignore(rows,y+x));}
  }
  return result;
-}run Demo=Run;
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for count in (0, 2):
         outputs = entry.run_roles(f'iterations-{count}', {
-            'P': {'inputs': {'xs': ['4', '9'], 'x': '7', 'n': str(count)}},
-            'V': {'inputs': {'n': str(count)}},
+            'P': {'xs': ['4', '9'], 'x': '7', 'n': str(count)},
+            'V': {'n': str(count)},
         })
         assert outputs['P']['result'] == str(7 * (count * count + 1))
         assert outputs['V'] == {}
@@ -214,7 +211,7 @@ fn outer(xs:Vector<F>,x:F,paired:bool)->F{
  let value=if paired{Choice::Pair(x,x)}else{Choice::Single(x)};
  return choose(value,rows,fn(y)=>y+x);
 }
-protocol Run roles(P)(xs:Vector<F>@P,x:F@P,paired:bool@P)->(result:F@P){return outer(xs,x,paired);}run Demo=Run;
+protocol Run roles(P)(xs:Vector<F>@P,x:F@P,paired:bool@P)->(result:F@P){return outer(xs,x,paired);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for paired, expected in [(False, '14'), (True, '21')]:

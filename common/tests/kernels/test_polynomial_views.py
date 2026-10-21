@@ -19,7 +19,7 @@ protocol Run roles(P)(roots:Vector<F>@P,data:Vector<F>@P,count:index@P,
   require y == kzg::evaluate(input,z);
   return (points=evaluation::points(unity),y=y,q=q);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -61,7 +61,7 @@ def test_checked_views_and_their_fields_share_control_captures(toolchain, journa
       let input=choose(evaluation::checked_roots(roots),flag);
       return (points=evaluation::points(input),total=count(input,rounds));
     }
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     '''
     if selection == 'match':
         text = text.replace('fn choose(', 'enum Choice{Original(),Readmitted()}\nfn choose(')
@@ -127,7 +127,7 @@ def test_kzg_quotient_derives_its_value_and_preserves_domain_order(toolchain, jo
 def test_invalid_domains_and_evaluation_extents_stop(toolchain, journal, directory, change):
     entry = Entry(toolchain, journal, directory, source(int(change.get('mode', '0'))), MODULES)
     values = {'roots': ['1'], 'data': ['2'], 'count': '1', 'generator': '1', 'mode': '0', 'z': '3'}
-    entry.run('invalid', values | change, refuses='entry-run-incomplete')
+    entry.run('invalid', values | change, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('view,construction', [
@@ -157,7 +157,7 @@ def test_checked_polynomial_views_require_owner_admission(toolchain, journal, di
                  'opening::QueryRow<F>': 'values', 'opening::ScalarAccumulator<F>': 'value'}[view]
         source += f'fn bypass(value:{view}){{return value.{field};}}'
     elif boundary == 'entry':
-        source += f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}}run Demo=Run;'
+        source += f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
     else:
         make = {'evaluation::EvaluationDomain<F>': 'evaluation::checked_roots(values)',
                 'evaluation::Evaluations<F>': 'evaluation::evaluations(evaluation::checked_roots(values),values)',
@@ -169,7 +169,7 @@ def test_checked_polynomial_views_require_owner_admission(toolchain, journal, di
                 'opening::QueryRow<F>': 'opening::query_row(coset::coset_domain<F>(3,4),1,0,values)',
                 'opening::ScalarAccumulator<F>': 'opening::scalar_accumulator(coset::coset_domain<F>(3,4),0,7,0,1)'}[view]
         source += f'''protocol Run roles(P,V)(values:Vector<F>@P)->(accepted:bool@V){{
-          let input @P={make};let received=send P->V(input);return true;}}run Demo=Run;'''
+          let input @P={make};let received=send P->V(input);return true;}}entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'''
     path = directory / 'private.zkc'
     path.write_text(source)
     report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
@@ -185,14 +185,14 @@ def test_opening_claims_preserve_repeated_order_and_validate_bounds(toolchain, j
       ->(columns:Indices@P,rotations:Indices@P,values:Vector<F>@P){
       let admitted=claims::within(claims::checked(selected,offsets,data),width,height);
       return(columns=claims::columns(admitted),rotations=claims::rotations(admitted),values=claims::values(admitted));
-    }run Demo=Run;'''
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }'''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     inputs = {'selected': ['1','0','1'], 'offsets': ['2','0','2'], 'data': ['7','11','13'], 'width':'2','height':'4'}
     result = entry.run('ordered-duplicates', inputs)
     assert result == {'columns': inputs['selected'], 'rotations': inputs['offsets'], 'values': inputs['data']}
     for number, change in enumerate([{'offsets':['2']}, {'data':[]}, {'width':'1'},
                                      {'height':'2'}, {'height':'0'}]):
-        entry.run(f'invalid-{number}', inputs | change, refuses='entry-run-incomplete')
+        entry.run(f'invalid-{number}', inputs | change, refuses='entry-host-run-failed')
 
 
 @pytest.mark.parametrize('operation', ['columns', 'row'])
@@ -209,7 +209,7 @@ def test_deep_openings_check_bounds_and_denominators(toolchain, journal, directo
       let input=opening::bind_openings(geometry,2,height,zeta,claims::checked(selected,offsets,data));
       let reduced=REDUCE;
       return(result=RESULT,weight=WEIGHT,points=coset::points<F>(3,size));
-    }run Demo=Run;'''
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }'''
     if operation == 'columns':
         source = source.replace('REDUCE', '''opening::deep_columns(coset::column_batch(geometry,2,columns),input,
           opening::vector_accumulator(geometry,7,vector::fill<F>(0,size),1))''').replace('RESULT', 'opening::vector_values(reduced)').replace('WEIGHT', 'opening::vector_weight(reduced)')
@@ -244,4 +244,4 @@ def test_deep_openings_check_bounds_and_denominators(toolchain, journal, directo
     else:
         changes += [{'row': ['11']}, {'position': '4'}, {'zeta': '3'}]
     for number, change in enumerate(changes):
-        entry.run(f'invalid-{number}', inputs | change, refuses='entry-run-incomplete')
+        entry.run(f'invalid-{number}', inputs | change, refuses='entry-host-run-failed')

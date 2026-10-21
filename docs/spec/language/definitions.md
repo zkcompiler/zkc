@@ -976,7 +976,7 @@ from its scalar field.
 
 Types, constructors, relation applications and Entries accept named static
 arguments with complete coverage, such as `Box<T = Fr>` or
-`run Demo = Run<N = 8, F = Fr>;`. These contexts do not infer missing arguments
+`Run<N = 8, F = Fr>::Inputs`. These contexts do not infer missing arguments
 or accept holes. Invalid static name binding uses `source.generic`. A bound
 module already supplies its inherited parameters; a member call cannot
 override them. Associated types inherit their module's arguments. A direct

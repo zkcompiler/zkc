@@ -3,9 +3,9 @@
 mod binding;
 mod ports;
 pub(in crate::entry) use ports::{InputPort, RolePorts};
-mod preflight;
+pub(in crate::entry) mod preflight;
 pub(in crate::entry) mod raw;
-mod schemas;
+pub(in crate::entry) mod schemas;
 mod setups;
 pub(in crate::entry) use setups::Setup;
 mod validate;
@@ -185,4 +185,4 @@ fn text(value: &str, limit: usize) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(in crate::entry) mod tests;

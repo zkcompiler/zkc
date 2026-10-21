@@ -1,3 +1,4 @@
+#include "support/ProtocolDeployment.h"
 // The closed source body, not the emitted text, decides which arena a kernel
 // evaluates: the digest written into the original MLIR must be the identity of
 // the captured asset the checked body closed over.
@@ -36,7 +37,7 @@ protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(r: Vector<F>@E) {
   let r @E = evaluate<F,A>(v);
   return (r=r);
 }
-run Demo = Run<Product>;
+entry fn Demo(inputs: Run<Product>::Inputs) { return Run<Product>::run(inputs); }
 )";
 } // namespace
 int main() {
@@ -49,7 +50,8 @@ int main() {
     auto captured =
         take(capture({{"sample", source, "sample.zkc"}}, {product()}, {}));
     auto project = take(analyze(captured).checkedProject());
-    return take(prepareOriginal(take(closeEntry(project, "sample::Demo"))));
+    return take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "sample::Demo"))));
   };
   cases.run(
       "a changed digest in the original MLIR is not the checked source", [&] {

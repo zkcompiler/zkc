@@ -42,3 +42,30 @@ proof Plonky3Proof = Fibonacci<Plonky3> {
   accept accepted;
   construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
+
+fn build_trace(initial_x: Base, initial_y: Base) -> Vector<Base> {
+  let mut x = initial_x;
+  let mut y = initial_y;
+  let mut trace = vec::empty<Base>();
+  for _ in 0..8 {
+    trace = vec::append(vec::append(trace, x), y);
+    let next = x + y;
+    x = y;
+    y = next;
+  }
+  return trace;
+}
+
+entry fn GenerateTrace(initial_x: Base, initial_y: Base) {
+  return build_trace(initial_x, initial_y);
+}
+
+entry fn ProveClean(public: CleanProof::Public) {
+  let trace = GenerateTrace(initial_x = public.initial_x, initial_y = public.initial_y);
+  let result = CleanProof::prove(public = public, witness = CleanProof::Witness { trace });
+  return result.proof;
+}
+
+entry fn ValidateClean(public: CleanProof::Public, candidate: CleanProof::Proof) {
+  return CleanProof::verify(public = public, proof = candidate);
+}

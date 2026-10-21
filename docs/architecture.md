@@ -1,29 +1,31 @@
 # Architecture
 
-zkc uses one compilation and execution model. The `.zkc` frontend emits Protocol
-IR (PIR), built on MLIR. PIR passes through `protocol`, `participant`, `exec` and `physical`
-profiles and is exported as `zkc.program/0`. Entry packages, proof deployments
-and joint bundles execute through the same VM contracts, Rust interpreter and
-installed kernels.
+The `.zkc` frontend checks application functions and participant protocols.
+Entry control uses standard MLIR functions and structured control, with an
+`entry` dialect for typed value assembly, numerical calls and deployments.
+Protocol IR (PIR) retains participant mathematics and interaction. Both numerical
+Entry helpers and participant computation use the existing Kernel, physical
+lowering and VM; the Host does not implement a second arithmetic interpreter.
 
 ## System map
 
 ```text
-explicit .zkc modules + Assets                    Protocol IR
-              │                                          │
-           frontend ─────────────────────────────────────┤
-                                                         ▼
-                  protocol → participant → exec → physical
-                                                         │
-                                                   zkc.program/0
-                                                         │
-                          authenticated Entry / proof / joint Host
-                                                         │
-                                          interpreter (control flow)
-                                                         │
-                                        VM instance (frames, custody, limits)
-                                                         │
-                                            installed backend operations
+explicit .zkc modules + Assets
+              │
+           frontend
+              ├── Entry functions → func/scf + entry operations → zkc.host/0
+              │                            │                         │
+              │                      numerical helpers              │
+              └── Protocol IR              │                  Entry Host
+                    protocol               │                   ordered calls
+                       ↓                   │                         │
+                    participant            │                  proof / joint Host
+                       ↓                   ↓                         │
+                    exec / Kernel → physical → zkc.program/0 ────────┘
+                                                    │
+                                       interpreter + VM instance
+                                                    │
+                                       installed backend operations
 
 Lean: independently formalized semantic models and proofs
       (native source/compiler/runtime correspondence remains open)
@@ -39,11 +41,12 @@ relation declarations, library-level multi-table bundles and external adapters.
 | Boundary | Responsibility |
 |---|---|
 | `.zkc` modules and Entry closure | Names, static parameters, types, permissions, capabilities, role availability and explicit application selection |
+| Entry control | Static application calls, ordinary data and ordered Host invocations; numerical islands remain separate |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
 | `exec` | Demand-driven Kernel units and ordered Local calls; checked numerical realization |
 | `physical` | Admitted representations, installed operations, conversions and storage handling |
-| `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
+| `zkc.program/0` | Closed participant or numerical function description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
 PIR is the umbrella for these profiles and their cooperating dialects;
@@ -63,7 +66,7 @@ judgment.
 | Language | `compiler/include/zkc/Language`: explicit modules/Assets, checked definitions, static application and Entry closure |
 | Relation | `compiler/include/zkc/Relation`: R1CS/AIR data, relation bundles, staged predicates, normalization and evaluation |
 | Program | `compiler/include/zkc/Program`: executable model, codec and structural admission |
-| IR | `compiler/include/zkc/Dialect`: mathematical dialects, interfaces and mandatory profile verification |
+| IR | `compiler/include/zkc/Dialect`: mathematical and Entry dialects, interfaces and mandatory verification |
 | Translation | `compiler/include/zkc/Translation`: Language emission/comparison, relation import and checked program export |
 | Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
 | Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
@@ -82,7 +85,7 @@ checks and installed consumers enforce this direction.
 
 ## Runtime and application authority
 
-An Entry package retains the source interface, original mathematical program,
+An Entry package retains the source interface, original checked IR,
 compilation choices and selected artifact. Local source commands trust the
 selected project and compiler and capture the returned package bytes. Deployed
 applications supply an independently authorized expected package digest.
@@ -92,8 +95,12 @@ It does not interpret the retained MLIR. Structural admission produces an immuta
 VM program without a backend. Each execution links its owned backend and uses a
 VM instance for frames, calls, resource custody and budgets. The interpreter
 walks structured instructions and manages value environments and continuations.
-The [VM contract](spec/runtime/vm.md) defines their boundary. This separation
-introduces no artifact format or alternative execution path.
+The [VM contract](spec/runtime/vm.md) defines their boundary. Entry control links those native numerical, proof and joint owners; it neither
+interprets retained MLIR nor installs its own mathematical kernels. Admission
+binds each target to its installed owner and result schema; deployment bindings
+also retain setup authority and the selected proof operation. Execution uses
+these bindings without reinterpreting the serialized carrier. Its shared ledger
+accounts for cumulative work and simultaneous parent/child value storage.
 
 [Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
 mathematical operations and standard functions. Ordered Local calls invoke them;

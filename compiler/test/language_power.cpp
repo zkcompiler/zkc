@@ -1,3 +1,4 @@
+#include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Language/Project.h"
 #include "llvm/Support/raw_ostream.h"
@@ -42,9 +43,10 @@ int main() {
     math fn bound<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return x[0];}
     math fn relay<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return bound<N>(x);}
     protocol Run roles(P)(x:[F;4]@P)->(r:[F;4]@P){let y=shifted<1>(x);return(r=y);}
-    run Demo=Run;
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
-  auto original = take(prepareOriginal(take(closeEntry(source, "m::Demo"))));
+  auto original = take(prepareOriginal(
+      take(zkc::test::closeProtocolDeployment(source, "m::Demo"))));
   take(compileEntry(original));
   refuse("type Bad=[F;pow2(F)];", "source.natural");
   refuse("type Bad=[F;pow2(64)];", "source.natural");
@@ -70,12 +72,12 @@ int main() {
     math fn inner<N:nat>(x:F)->F{return ignore<pow2(N)>(x);}
     math fn outer<M:nat>(x:F)->F{return inner<pow2(M)>(x);}
     protocol Run<M:nat> roles(P)(x:F@P)->(r:F@P){let y=outer<M>(x);return(r=y);}
-    run Good=Run<5>;
-    run Overflow=Run<6>;
+    entry fn Good(inputs: Run<5>::Inputs) { return Run<5>::run(inputs); }
+    entry fn Overflow(inputs: Run<6>::Inputs) { return Run<6>::run(inputs); }
   )"));
-  take(compileEntry(
-      take(prepareOriginal(take(closeEntry(bodyOnly, "m::Good"))))));
-  auto overflow = closeEntry(bodyOnly, "m::Overflow");
+  take(compileEntry(take(prepareOriginal(
+      take(zkc::test::closeProtocolDeployment(bodyOnly, "m::Good"))))));
+  auto overflow = zkc::test::closeProtocolDeployment(bodyOnly, "m::Overflow");
   if (overflow ||
       !StringRef(toString(overflow.takeError())).contains("source.natural")) {
     errs() << "body-only power overflow escaped closing\n";

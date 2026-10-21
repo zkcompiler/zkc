@@ -556,6 +556,9 @@ def check_bundle_commands(toolchain, journal, directory):
 
 def check_source_setup_commands(toolchain, journal, directory):
     import hashlib
+    import json
+
+    from input_files import argument_values, invocation_file
     package = directory / 'pcs-setup-Prove.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
     settings = [f'--setups={directory / "cli-authority.json"}',
@@ -573,9 +576,43 @@ def check_source_setup_commands(toolchain, journal, directory):
         assert 'execution' not in report and key.read_bytes() == unchanged
     package = directory / 'pcs-setup-Run.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
+    document = json.loads(package.read_text())
+    interface = json.loads(document['interface'])
+    signature, = (f for f in interface['functions']
+                  if f['symbol'] == interface['selection']['function'])
+    parameter, = signature['parameters']
+    assert parameter['name'] == 'inputs'
+    roles = {role['name']: {port['name'] for port in role['schema']['fields']}
+             for role in parameter['schema']['fields']}
+    assert roles.keys() == {'P', 'V'}
+    arguments, external = {}, {}
+    for role, ports in roles.items():
+        values = json.loads((directory / f'cli-{role}.json').read_text())
+        assert ports <= values.keys()
+        arguments[role] = {name: values[name] for name in ports}
+        external[role] = {name: value for name, value in values.items() if name not in ports}
+    # Key descriptors and setup-bearing ports belong to the external context.
+    assert {'pk0', 'pk1'} <= external['P'].keys()
+    assert all('file' in external['P'][name] for name in ('pk0', 'pk1'))
+    child, = json.loads(document['artifact'])['deployments']
+    assert child['operation'] == 'run'
+    context = invocation_file(
+        journal, directory / 'cli-run-invocations.json', package,
+        session='setup_files', bindings={child['id']: {
+            'authority': json.loads((directory / 'cli-authority.json').read_text()),
+            'setups': {p.stem.removeprefix('cli-vk-'): p.name
+                       for p in sorted(directory.glob('cli-vk-*.bin'))},
+            'inputs': external,
+        }})
+    inputs = journal.write(directory / 'cli-run-arguments.json',
+                           argument_values({'inputs': arguments}, package))
+    results = directory / 'separate-cli-pcs-run.json'
     command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
-               '--session=setup_files', f'--input=P={directory / "cli-P.json"}',
-               f'--input=V={directory / "cli-V.json"}', *settings]
-    journal.run(command)
+               f'--input={inputs}', context]
+    report = journal.json([*command, f'--results={results}'])
+    assert report['status'] == 'executed'
+    output = json.loads(results.read_text())
+    assert output.keys() == {'format', 'value'} and output['format'] == 'zkc.entry-outputs/0'
+    assert output['value']['V']['accepted'] is True
     report = journal.json([*command, f'--results={key}'], refuses='entry-output-path')
     assert 'execution' not in report and key.read_bytes() == unchanged

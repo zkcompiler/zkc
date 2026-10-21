@@ -21,4 +21,4 @@ protocol Outer roles(X,Y)(go: bool @Y, first: Random<Fr> @Y, second: Random<Fr> 
   let (x, y) = Run roles(X,Y)(go, first, second);
   return (x = x, y = y);
 }
-run Demo = Outer;
+entry fn Demo(inputs: Outer::Inputs) { return Outer::run(inputs); }

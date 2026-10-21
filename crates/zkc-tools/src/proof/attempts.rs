@@ -130,7 +130,7 @@ impl AttemptPolicy {
         {
             return Err("native-attempt-limits".into());
         }
-        let role = deployment.entry.producer();
+        let role = deployment.selected_role(true)?;
         let map = &deployment.maps[&role.role];
         let completion = map
             .outputs
@@ -206,6 +206,8 @@ struct State {
     records: Vec<AttemptRecord>,
     cleanup: Vec<String>,
     cancelled: bool,
+    retained: Vec<zkc_runtime::vm::LiveReservation>,
+    retained_outputs: Vec<zkc_runtime::vm::RetainedOutputs<Value>>,
 }
 fn accumulate(total: &mut Usage, used: Usage) {
     total.instructions += used.instructions;
@@ -232,6 +234,7 @@ struct Executed {
     result: Result<(bool, driver::Produced<Value>)>,
     cleanup: Vec<String>,
     cancelled: bool,
+    retained_outputs: Option<zkc_runtime::vm::RetainedOutputs<Value>>,
 }
 impl Session<'_> {
     /// Returning backend custody is part of the result type on every path.
@@ -240,12 +243,14 @@ impl Session<'_> {
         mut backend: NativeBackend,
         inputs: &mut [Value],
         used: Usage,
+        proof_bytes: usize,
         attempt: u64,
     ) -> Executed {
         let mut cleanup = Vec::new();
         let external_work_before = backend.external_work_spent();
         let ring_work_before = backend.ring_work_spent();
         let mut cancelled = false;
+        let mut retained_outputs = None;
         let mut invocation_inputs = inputs.to_vec();
         let mut transcript = None;
         let mut record = AttemptRecord {
@@ -285,6 +290,7 @@ impl Session<'_> {
                     .deployment
                     .entry
                     .producer()
+                    .expect("admitted producer attempt")
                     .services
                     .iter()
                     .zip(self.services)
@@ -328,15 +334,16 @@ impl Session<'_> {
                         .total_bytes
                         .saturating_sub(used.total_value_bytes),
                 };
-                match Runner::new_with_budgets(
+                match Runner::new_for_role_with_ledger(
                     self.deployment.entry.admitted(),
                     self.deployment.entry.entry(),
-                    &self.deployment.entry.producer().role,
+                    self.deployment.entry.producer_role(),
                     "native-proof",
                     backend,
                     invocation_inputs,
                     values,
                     work,
+                    self.deployment.shared_ledger.clone(),
                 ) {
                     Err(failed) => {
                         record.usage = failed.usage;
@@ -346,13 +353,21 @@ impl Session<'_> {
                     Ok(mut runner) => {
                         let produced = self.deployment.prepared_call(
                             &mut runner,
-                            self.deployment.entry.producer(),
+                            self.deployment
+                                .entry
+                                .producer()
+                                .expect("admitted producer attempt"),
                             |runner| {
-                                driver::produce_native(
+                                driver::produce_native_shared(
                                     runner,
                                     self.binding,
                                     self.deployment.transport(),
-                                    self.plan.policy.limits.proof_bytes,
+                                    self.plan.policy.limits.proof_bytes.min(
+                                        self.deployment
+                                            .proof_bytes_limit
+                                            .saturating_sub(proof_bytes),
+                                    ),
+                                    self.deployment.shared_ledger.clone(),
                                 )
                             },
                         );
@@ -367,7 +382,7 @@ impl Session<'_> {
                         record.messages = produced.messages;
                         record.bytes = produced.bytes;
                         cancelled |= produced.cancelled.is_some();
-                        backend = runner.into_backend();
+                        (backend, retained_outputs) = runner.into_retained_outputs();
                         produced
                             .outcome
                             .map_err(|e| driver::failure(&e))
@@ -439,6 +454,7 @@ impl Session<'_> {
             result,
             cleanup,
             cancelled,
+            retained_outputs,
         }
     }
 }
@@ -474,18 +490,23 @@ pub(super) fn execute(
         records: Vec::new(),
         cleanup: Vec::new(),
         cancelled: false,
+        retained: Vec::new(),
+        retained_outputs: Vec::new(),
     };
     let execution = Controller::<_, (), BTreeMap<usize, Value>>::new(state, plan.policy.limits)
         .advance(
             plan.policy.limits.attempts as usize + 1,
             |attempt, context| {
                 let state = context.state_mut();
+                state.retained_outputs.clear();
                 let executed = session.run(
                     state.backend.take().expect("attempt owns backend"),
                     &mut state.inputs,
                     state.usage,
+                    state.records.iter().map(|r| r.bytes).sum(),
                     attempt,
                 );
+                state.retained_outputs.extend(executed.retained_outputs);
                 state.backend = Some(executed.backend);
                 accumulate(&mut state.usage, executed.record.usage);
                 state.records.push(executed.record);
@@ -495,6 +516,24 @@ pub(super) fn execute(
                     Err(_) => Err(Stop::Abort),
                     Ok((false, _)) => Ok(Decision::Retry(())),
                     Ok((true, produced)) => {
+                        let retention = crate::host::shared::allocation(
+                            deployment.shared_ledger.as_ref(),
+                            produced.proof.len(),
+                        );
+                        let retention = match retention {
+                            Ok(r) => r,
+                            Err(error) => {
+                                context
+                                    .state_mut()
+                                    .records
+                                    .last_mut()
+                                    .expect("completed attempt")
+                                    .decision = Err(error);
+                                return Err(Stop::Abort);
+                            }
+                        };
+                        context.state_mut().retained.extend(retention);
+                        context.state_mut().retained.extend(produced.retained);
                         if let Err(reason) = context.append(&produced.proof) {
                             let state = context.state_mut();
                             let error = "native-attempt-buffer-limit".to_owned();
@@ -505,10 +544,15 @@ pub(super) fn execute(
                                 .decision = Err(error);
                             return Err(reason);
                         }
-                        Ok(Decision::Complete(deployment.original_outputs(
-                            deployment.entry.producer(),
-                            produced.outputs,
-                        )))
+                        Ok(Decision::Complete(
+                            deployment.original_outputs(
+                                deployment
+                                    .entry
+                                    .producer()
+                                    .expect("admitted producer attempt"),
+                                produced.outputs,
+                            ),
+                        ))
                     }
                 }
             },
@@ -535,6 +579,8 @@ pub(super) fn execute(
     for record in &state.records {
         report.execution_counts.merge(&record.execution_counts);
     }
+    report.retained.extend(state.retained);
+    report.retained_outputs.extend(state.retained_outputs);
     report.attempts = state.records;
     report.cleanup_errors = state.cleanup;
     report.cancelled = state.cancelled;

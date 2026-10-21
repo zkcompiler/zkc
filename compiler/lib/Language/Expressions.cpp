@@ -261,6 +261,13 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     if (!fs)
       return {};
     fields = std::move(*fs);
+    const auto *definition = checker.types.typeDeclaration(type);
+    if (definition && definition->generated &&
+        !definition->generated->constructible) {
+      fail("source.host-result", "native result records are projection-only",
+           expr.span);
+      return {};
+    }
     if ((restricted(type) ||
          llvm::any_of(fields, [](auto &f) { return !f.isPublic; })) &&
         !checker.types.constructorAllowed(decl, type)) {

@@ -2,7 +2,6 @@
 use super::{Asset, CheckOptions, Compiler, NotationOptions, Project, Selection};
 use crate::{
     cli::Arguments,
-    entry::BoundInterface,
     host::{inputs::hex, publication::Outputs},
 };
 use serde_json::{Value as Json, json};
@@ -73,10 +72,9 @@ impl Source {
             .value("--dump")
             .map(|s| s.split(',').map(str::to_owned).collect::<Vec<_>>())
             .unwrap_or_default();
-        if dumps
-            .iter()
-            .any(|s| !["protocol", "participant", "exec", "physical"].contains(&s.as_str()))
-        {
+        if dumps.iter().any(|s| {
+            !["entry", "protocol", "participant", "exec", "physical"].contains(&s.as_str())
+        }) {
             return Err("source-dump-phase".into());
         }
         if !dumps.is_empty() && !args.has("--report") {
@@ -197,7 +195,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 },
                 &mut report,
             )?;
-            let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
+            let view = super::CheckedInterface::read(&package)?;
             report["entry"] = json!(view.entry());
             report["toolchain"] = json!(view.toolchain());
             report["package_sha256"] = json!(hex(package.identity()));

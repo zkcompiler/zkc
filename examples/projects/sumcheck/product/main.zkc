@@ -32,8 +32,6 @@ protocol ExtensionSumcheck roles(P,V)
     (values, values, claim, rounds, challenges);
   return (accepted = accepted);
 }
-run BaseRun = BaseSumcheck;
-run ExtensionRun = ExtensionSumcheck;
 proof BaseProof = BaseSumcheck {
   prover P;
   verifier V;

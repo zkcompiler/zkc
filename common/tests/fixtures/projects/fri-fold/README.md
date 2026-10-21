@@ -16,7 +16,7 @@ With built tools on `PATH`, run from the repository root:
 zkc run --project=common/tests/fixtures/projects/fri-fold/zkc.toml fri_fold::Demo
 ```
 
-The supplied [participant inputs](inputs/fri_fold.Demo/P.json) describe
+The supplied [participant inputs](inputs/fri_fold.Demo/arguments.json) describe
 `f(X) = 3 + 2X + X^2 + 4X^3`, `beta = 5`, and the size-four domain with
 `omega = 2113994754` over `p = 2130706433`. Natural order pairs `x` and `-x`
 across the two contiguous halves. The folded polynomial is `13 + 21Y`;

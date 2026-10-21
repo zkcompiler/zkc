@@ -34,6 +34,15 @@ list for participants without services. Indices are canonical nonnegative
 decimal strings. Entry maps and instruction records retain their positional
 shapes.
 
+A function-only executable module has at least one Local function and empty
+participant and entry arrays. It uses these same function records and all the
+same eager structural checks, including bindings and dormant definitions. An
+entirely empty module remains invalid, and a module with participants still
+requires a nonempty entry map. A Host selects its numerical root through an
+admitted function symbol and exact physical signature; the carrier invents no
+participant, role or source protocol for that function. Native C++ and Rust
+admission must independently enforce this same root grammar.
+
 Only physical programs have an interchange encoding. A compiler may
 reconstruct a logical execution model internally to validate and select
 representations. That internal check is not public serialization admission:
@@ -127,8 +136,10 @@ and cleanup obey the local machine's existing stop and custody rules. Terminal
 values remain retained for stable repeated polling.
 
 `Backend::supports_boolean_literals` is a stable installation fact, false by
-default. Installation checks it when any retained local body contains a literal;
-runner initialization links its owned backend before installing entry frames. This
+default. Full-program installation checks it when any retained local body contains a
+literal; root-specific installation checks every local region of its selected
+closure. Runner initialization links its owned backend before installing root
+frames. This
 query must not execute work or construct a sample value. A backend advertising
 support must implement the constructor consistently. The runner still validates
 the constructed value; a dishonest or failing adapter causes a backend stop,

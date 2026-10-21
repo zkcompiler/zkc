@@ -46,6 +46,9 @@ bool Checker::inferUsage(Declaration &decl, Body::Mode mode, unsigned depth) {
   BodyPlan plan(types, decl);
   Body scratch;
   scratch.mode = mode;
+  scratch.stage = decl.kind == Declaration::Kind::EntryFunction
+                      ? Body::Stage::Host
+                      : Body::Stage::Computation;
   bodyPlans.emplace(decl.id.index, &plan);
   {
     auto outputs = decl.outputs;
@@ -55,6 +58,11 @@ bool Checker::inferUsage(Declaration &decl, Body::Mode mode, unsigned depth) {
     });
     if (!checkBody(decl, scratch, depth))
       return false;
+    if (decl.kind == Declaration::Kind::EntryFunction)
+      for (const auto *ports : {&decl.inputs, &decl.outputs})
+        for (const auto &port : *ports)
+          if (!types.hostData(port.type, port.span, &decl))
+            return false;
   }
   // Scratch witnesses belong to this plan. Callees completed during collection
   // keep their own published witnesses; no global vector is rolled back.

@@ -12,10 +12,21 @@ interactive run from the repository root, with built tools on `PATH`:
 zkc run --project=examples/projects/schnorr/zkc.toml
 ```
 
-The command selects the unique run Entry, reads its participant maps and writes
+The command selects the unique Entry function, reads its named arguments and writes
 `build/zkc/example.Interactive.results.json` beside the manifest. The returned
 `V.accepted` is the verifier's decision; a completed run can return false.
 The inputs use the public demonstration witness 3. Scalars are decimal strings; group values contain canonical element bytes.
+
+The generic protocol is also directly selectable without the named wrapper:
+
+```sh
+zkc inspect 'Schnorr<G>' --project=examples/projects/schnorr/zkc.toml
+zkc prepare 'Schnorr<G>' --project=examples/projects/schnorr/zkc.toml
+```
+
+Fill the reported `arguments.json`, then use the same selector with `zkc run`.
+The shell quotes protect the generic brackets. `Interactive` gives the fixed
+specialization a convenient project name and uses the same generated run.
 
 The relation and target retain the statement/witness association for analysis.
 They add no implicit guard or knowledge theorem. The executed verifier equation,
@@ -35,11 +46,12 @@ this block in a separate consumer tree using only declared package dependencies.
 ```sh zkc-example
 zkc check
 zkc run Interactive
+zkc run 'Schnorr<G>' --input=inputs/example.Interactive/arguments.json
 zkc prove Proof
 zkc verify Proof
 ```
 
-Inputs: inputs/example.Proof/{public,witness}.json and participant maps for Interactive.
+Inputs: inputs/example.Proof/{public,witness}.json and inputs/example.Interactive/arguments.json.
 
 Profile: BLS12-381 G1; the demonstration witness is public knowledge.
 

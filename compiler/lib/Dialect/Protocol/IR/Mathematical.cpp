@@ -582,9 +582,10 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unclassified declaration in the 'protocol' profile");
     }
   }
-  if (!programs)
+  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty() &&
+      module.getBody().front().getOps<local::FuncOp>().empty())
     return diagnostics::emit(module.emitOpError(), "mathematical-module",
-                             "expected a mathematical protocol definition");
+                             "expected a mathematical definition");
   if (failed(verifyApplications(module)))
     return failure();
   NativeTypePolicies types(module);

@@ -337,9 +337,23 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     return ArrayRef<OperatorBinding>(found->second);
   if (!types.charge(visibleOperators[decl.module.index].size() + 1, expr.span))
     return {};
-  for (auto site : visibleOperators[decl.module.index])
-    if (!include(moduleOperators.at(site)))
+  for (auto site : visibleOperators[decl.module.index]) {
+    auto found = moduleOperators.find(site);
+    if (found == moduleOperators.end()) {
+      // Reconstruct from lexical source even when a generated signature has
+      // required a body before the outer operator preparation pass. This
+      // remains independent of inference's candidate list.
+      const auto &written = sources[site.first]->operators[site.second];
+      if (!written.notation || written.notation->key() != descriptorKey)
+        continue;
+      auto binding = operatorBinding(output.declarations[site.first], written);
+      if (!binding)
+        return {};
+      found = moduleOperators.emplace(site, std::move(*binding)).first;
+    }
+    if (!include(found->second))
       return {};
+  }
   return retain(std::move(key));
 }
 
@@ -531,6 +545,10 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  if ((callee.kind == Declaration::Kind::EntryFunction ||
+       (callee.generated && callee.generated->operation)) &&
+      body.stage != Body::Stage::Host)
+    return refuse();
   if (binding.notation) {
     if (!binding.origin || binding.family.empty() ||
         binding.symbol != binding.notation->symbol)
@@ -578,6 +596,15 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
       types.substitute(callee.outputs.front().type, subst, operation.span);
   if (!result || *result != body.values[operation.results.front().index].type)
     return refuse();
+  if (callee.generated && callee.generated->operation) {
+    const auto *action = std::get_if<HostInvocation>(&operation.action);
+    return (body.stage == Body::Stage::Host && action &&
+            action->kind == *callee.generated->operation &&
+            action->target.index == callee.generated->target.index &&
+            action->arguments == binding.arguments &&
+            sameOperands(action->operands, binding.operands)) ||
+           refuse();
+  }
   const auto *primitive = callee.primitive ? &*callee.primitive : nullptr;
   const auto *math =
       primitive ? mathematicalIntrinsic(primitive->identity) : nullptr;

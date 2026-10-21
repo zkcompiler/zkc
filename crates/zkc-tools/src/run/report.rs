@@ -232,6 +232,8 @@ pub struct Report<B: Backend> {
     pub pending: Option<PendingMessage>,
     pub roles: Vec<RoleReport<B::Value>>,
     pub backends: Vec<(String, B)>,
+    pub(super) retained: Vec<zkc_runtime::vm::RetainedOutputs<B::Value>>,
+    pub(super) wire_live: Option<zkc_runtime::vm::LiveReservation>,
 }
 
 #[cfg(test)]

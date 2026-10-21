@@ -57,14 +57,18 @@ the selected compiler's installation, actual executable SHA-256 and capabilities
 alongside the calling Rust runtime's count-instrument capability.
 
 ```sh
-zkc compile Proof --report=build/explain --dump=protocol,participant,exec,physical
+zkc compile Proof --report=build/explain --dump=entry,protocol,participant,exec,physical
 zkc run Main --report=build/run-observation
 ```
 
 The report directory must be fresh. `command.json` retains the operation result;
 `compilation.json` contains phase operation counts, operation histograms, bounded
 location/binding/type metadata, inclusive pass times, and mathematical decisions.
-Requested phase dumps are separate `.mlir` files. `time-trace.json` is an LLVM
+Requested phase dumps are separate `.mlir` files with ordinal prefixes. The
+`entry` phase describes application control; nested calculations and child
+deployments retain their own phases. Each observation has a `unit` path from
+the root Entry to the calculation or deployment, so repeated phases remain
+distinct. Bounded journals report omitted records. `time-trace.json` is an LLVM
 scoped trace suitable for Chrome tracing or Perfetto. Compilation observations
 are explicit instrumentation and are unsuitable as uninstrumented compile-time
 baselines. Report publication errors are separate from the operation's status.
@@ -100,7 +104,7 @@ Reports expose VM/value/storage counters, operation totals and installed binding
 contexts without operand values. Equal bindings aggregate across call sites;
 these counts are not per-expression timing. Match the package identity to a
 compilation report for static context. Host stages distinguish admission, readable
-input decoding and validation, preparation, SDK execution, and diagnostic
+root and invocation input decoding and validation, preparation, SDK execution, and diagnostic
 materialization, and output encoding/publication when requested. Proof SDK
 execution includes preparation and is labelled that way. Times are inclusive wall
 times and must not be summed across nested scopes.
@@ -118,7 +122,7 @@ entry = "example::Main"
 [test.execute]
 entry = "example::Main"
 operation = "run"
-args = ["--input=P=inputs/example.Main/P.json", "--no-results"]
+args = ["--input=inputs/example.Main/arguments.json", "--no-results"]
 
 [test.missing]
 entry = "example::Absent"

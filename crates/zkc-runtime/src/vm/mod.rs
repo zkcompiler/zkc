@@ -7,9 +7,13 @@
 mod admit;
 pub(crate) mod backend;
 mod bindings;
+pub(crate) mod execution_ledger;
 mod field_array;
 mod fixed_vector;
 mod link;
+pub use execution_ledger::{
+    ExecutionLedger, ExecutionLedgerUsage, LiveReservation, RetainedOutputs,
+};
 mod operations;
 mod resource_unit;
 mod sequence;
@@ -31,7 +35,8 @@ pub(crate) mod preparation;
 mod program;
 pub(crate) mod retention;
 pub use native_proof::{
-    ConstructionPlan, NativeProofEntry, NativeProofError, NativeTranscriptEvent, ProofConstruction,
+    ConstructionPlan, NativeProofEntry, NativeProofError, NativeProofOperation,
+    NativeTranscriptEvent, ProofConstruction,
 };
 pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
@@ -40,7 +45,7 @@ pub(crate) mod counts;
 pub use counts::ExecutionCounts;
 mod observe;
 
-pub use admit::{EntryRole, Program};
+pub use admit::{EntryRole, LocalFunction, Program};
 pub use backend::{
     Backend, BackendError, CallContext, Frame, FrameExit, FrameId, FrameInputs, FrameKind,
     InstalledOperation, Invocation, ServiceInvocation, Value,

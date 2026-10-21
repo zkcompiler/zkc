@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from entry import Entry
+from entry import Entry, joint_execution, joint_package
 from input_files import decimal_values, input_files
 from octic_reference import ONE, P, ZERO, add, mul
 from test_total_callback_selection import operation_sites
@@ -55,7 +55,7 @@ fn work<E: Field>(a: Vector<E>, b: Vector<E>, ignored: Vector<E>, α: E)
 }
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,ignored:Vector<F>@P,α:F@P)
     -> (result:(F,F,F,F,F,F)@P) { return work(a,b,ignored,α); }
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE', FINITE)
 
 
@@ -90,7 +90,7 @@ def test_prime_reductions_values_empty_and_all_zip_guards(
                                ('ignored', [2, 3], [5, 7], [7]),
                                ('empty', [], [], [1])]:
         refused = entry.run(name, {'a': vector(a), 'b': vector(b), 'ignored': vector(ignored),
-                                   'α': scalar(1)}, refuses='entry-run-incomplete')
+                                   'α': scalar(1)}, refuses='entry-host-run-failed')
         assert 'rejected:require' in json.dumps(refused)
 
 
@@ -116,7 +116,7 @@ def test_extension_reductions_use_full_coefficients(toolchain, journal, director
         assert entry.run(f'rows-{n}', inputs)['result'] == [decimal_values(x) for x in expected]
     refused = entry.run('ignored-empty', {'a': decimal_values([]), 'b': decimal_values([]),
                         'ignored': decimal_values([ONE]), 'α': decimal_values(ONE)},
-                        refuses='entry-run-incomplete')
+                        refuses='entry-host-run-failed')
     assert 'rejected:require' in json.dumps(refused)
 
 
@@ -134,7 +134,7 @@ fn work(n:index)->(F,index){
   return(result,state);
 }
 protocol Run roles(P)(n:index@P)->(result:(F,index)@P){return work(n);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     for n in (0, 3):
@@ -153,14 +153,14 @@ domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domai
 fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->Vector<E> effects(stop)=finite("local.collect.vector");
 fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fn((x,y))=>x*y);return nonempty(terms);}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('nonempty', {'a': decimal_values([2, 3]),
                                  'b': decimal_values([5, 7])})['result'] == decimal_values(31)
     refused = entry.run('empty', {'a': decimal_values([]), 'b': decimal_values([])},
-                        refuses='entry-run-incomplete')
-    after = refused['execution']['roles'][0]['after']
+                        refuses='entry-host-run-failed')
+    after = joint_execution(refused)['roles'][0]['after']
     assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
 
 
@@ -171,20 +171,20 @@ def test_published_finite_reductions_project(toolchain, journal, directory, flag
                           f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml',
                           'example::Demo', f'--output={package}', *flags])
     request = input_files(journal, 'input.json', session='reductions',
-        roles={'P': {'inputs': {'left': decimal_values([2, 3]),
+        package=package, arguments={'inputs': {'P': {'left': decimal_values([2, 3]),
             'right': decimal_values([5, 7]), 'α': decimal_values(2)}}})
     outputs = directory / 'outputs.json'
     result = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
                            f'--sha256={built["package_sha256"]}', *request,
                            f'--results={outputs}'])
     assert result['status'] == 'executed'
-    assert json.loads(outputs.read_text())['roles']['P'] == {
+    assert json.loads(outputs.read_text())['value']['P'] == {
         'symbolic': decimal_values(31), 'named': decimal_values(31),
         'dot': decimal_values(31), 'product': decimal_values(20)}
     assert json.loads(package.read_text())['options']['fuse_vector_reductions'] == \
         ('--fuse-vector-reductions' in flags)
     assert built['options'] == json.loads(package.read_text())['options']
-    source = [f'--compiler={toolchain.compiler}',
+    source = ['example::Demo', f'--compiler={toolchain.compiler}',
               f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml', *flags]
     checked = journal.json([toolchain.runtime, '--json', 'run', '--dry-run', *source, *request])
     assert checked['status'] == 'inputs-checked'
@@ -209,13 +209,13 @@ fn work(a:Vector<F>,b:Vector<F>,unused:Vector<F>)->F{
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,unused:Vector<F>@P)->(result:F@P){
   return work(a,b,unused);
 }
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
 def run_report(entry, name, inputs, capacity=None, refuses=None):
     request = input_files(entry.journal, f'{name}.inputs.json', session='reduction_resources',
-                          roles={'P': {'inputs': inputs}})
+                          package=entry.package, arguments={'inputs': {'P': inputs}})
     output = entry.directory / f'{name}.outputs.json'
     command = [entry.tools.runtime, '--json', 'run', f'--package={entry.package}',
                f'--sha256={entry.pin}', *request,
@@ -246,7 +246,7 @@ def test_pointwise_sum_has_checked_bulk_and_ordered_resource_choices(
     usage = {}
     for name, entry in entries.items():
         report = run_report(entry, f'{name}-usage', inputs)
-        usage[name] = report['execution']['roles'][0]['usage']
+        usage[name] = joint_execution(report)['roles'][0]['usage']
         assert entry.run(f'{name}-value', inputs)['result'] == str(7*n)
     assert usage['bulk']['iterations'] == 0
     assert usage['ordered']['iterations'] == n
@@ -258,8 +258,8 @@ def test_pointwise_sum_has_checked_bulk_and_ordered_resource_choices(
         [str(ceiling), '100000', '4294967296'], ['67108864', '268435456']])
     assert run_report(entries['bulk'], 'limited-bulk', inputs, capacity)['status'] == 'executed'
     refused = run_report(entries['ordered'], 'limited-ordered', inputs, capacity,
-                         refuses='entry-run-incomplete')
-    assert refused['execution']['roles'][0]['after'][1]['cause'] == ['limit']
+                         refuses='entry-host-run-failed')
+    assert joint_execution(refused)['roles'][0]['after'][1]['cause'] == ['limit']
 
 
 @pytest.mark.parametrize('extra', [[], ['--no-simplify'], ['--release-storage']])
@@ -277,16 +277,17 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
     n = 1024
     inputs = {'a': decimal_values([2]*n), 'b': decimal_values([3]*n),
               'unused': decimal_values([7]*n)}
-    usage = {}
+    usage, outer_allocations = {}, {}
     for name, entry in entries.items():
         report = run_report(entry, f'{name}-usage', inputs)
         assert report['status'] == 'executed'
-        usage[name] = report['execution']['roles'][0]['usage']
+        usage[name] = joint_execution(report)['roles'][0]['usage']
+        outer_allocations[name] = report['execution']['usage']['fresh_bytes']
         assert entry.run(f'{name}-value', inputs)['result'] == decimal_values(6*n*repetitions)
         for case, changed in [('ignored', {'unused': decimal_values([7])}),
                                ('used', {'b': decimal_values([])})]:
             refused = entry.run(f'{name}-{case}', inputs | changed,
-                                refuses='entry-run-incomplete')
+                                refuses='entry-host-run-failed')
             assert 'rejected:require' in json.dumps(refused)
     baseline, fused = usage['baseline'], usage['fused']
     # Separate ledgers: fewer instructions and cumulative allocations in this
@@ -296,14 +297,17 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
     assert fused['total_value_bytes'] < baseline['total_value_bytes']
     assert all(isinstance(u['live_value_bytes'], int) for u in usage.values())
     journal.write('measured-resource-ledgers.json', usage)
-    ceiling = (fused['total_value_bytes'] + baseline['total_value_bytes']) // 2
+    # The selected capacity applies to the whole Entry invocation, including
+    # Host arguments, context, diagnostics and result products.
+    assert outer_allocations['fused'] < outer_allocations['baseline']
+    ceiling = (outer_allocations['fused'] + outer_allocations['baseline']) // 2
     capacity = journal.write('between-allocation-charges.json', [
         'zkc.native-capacity/0', '65536', '4096', '16777216', '67108864',
         ['1000000', '100000', '4294967296'], ['67108864', str(ceiling)]])
     assert run_report(entries['fused'], 'limited-fused', inputs, capacity)['status'] == 'executed'
     refused = run_report(entries['baseline'], 'limited-baseline', inputs, capacity,
-                         refuses='entry-run-incomplete')
-    after = refused['execution']['roles'][0]['after']
+                         refuses='entry-host-run-failed')
+    after = joint_execution(refused)['roles'][0]['after']
     assert after[0] == 'stopped'
     cause = after[1]['cause']
     assert cause == ['limit'] or (
@@ -330,7 +334,7 @@ protocol Check roles(P,V)(a:Vector<F>@(P,V),b:Vector<F>@(P,V),coins:Random<F>@V)
 }
 proof Demo=Check{prover P;verifier V;public{a,b};accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0",coins);}
-run Interactive=Check;
+entry fn Interactive(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
 
 
@@ -458,7 +462,7 @@ fn work(a:Vector<F>,x:F,α:F)->(F,F){
   return(total,x);
 }
 protocol Run roles(P)(a:Vector<F>@P,x:F@P,α:F@P)->(result:(F,F)@P){return work(a,x,α);}
-run Demo=Run;
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('shadowed', {'a': decimal_values([2, 3]), 'x': decimal_values(77),
@@ -470,9 +474,10 @@ def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, dir
     source = directory / 'source.zkc'
     source.write_text(MAP_SUM)
     original = directory / 'original.mlir'
-    original.write_text(journal.run([
-        toolchain.compiler, 'language-emit', '--source-format=zkc',
-        f'--module=sample={source}', '--entry=sample::Demo']))
+    package = journal.json([
+        toolchain.compiler, 'language-package', '--source-format=zkc',
+        f'--module=sample={source}', '--entry=sample::Demo'])
+    original.write_text(joint_package(package)['original'])
     for fuse in (False, True):
         choice = 'true' if fuse else 'false'
         projected = journal.run([

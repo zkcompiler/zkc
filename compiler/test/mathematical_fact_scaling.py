@@ -1,6 +1,7 @@
 """Simple available proofs remain usable at realistic declaration sizes."""
 from cases import case
 from commands import Commands
+from entry_artifacts import compile_run_package
 from tools import compiler, optimizer, records
 
 output = records()
@@ -41,11 +42,11 @@ math fn work(xs:Vector<Fr>)->Fr {{
  return total(indices(xs),0,fn(state,i)=>state+subject({actuals}));
 }}
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){{return work(xs);}}
-run Run=Demo;
+entry fn Run(inputs: Demo::Inputs) {{ return Demo::run(inputs); }}
 ''')
-    options = ['--source-format=zkc', f'--module=m={path}']
+    options = ['--source-format=zkc', '--entry=m::Run', f'--module=m={path}']
     commands.run([compiler, 'language-check', *options])
-    emitted = commands.run([compiler, 'language-emit', *options])
+    emitted = compile_run_package(commands, *options)['original']
     original = output / 'preconditions.mlir'
     original.write_text(emitted)
     commands.run([optimizer, original, '-o', output / 'checked.mlir'])

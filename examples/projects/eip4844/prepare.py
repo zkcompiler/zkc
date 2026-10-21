@@ -38,6 +38,9 @@ class Directory:
         points = b''.join(bytes.fromhex(word) for word in words[2:2 + 4096])
         return self.reference('setup.zkcv', frame(67, points, 4096))
 
+    def arguments(self, value):
+        self.write('arguments', {'inputs': {'P': value}})
+
     def write(self, name, value):
         (self.path / f'{name}.json').write_text(json.dumps(value, indent=1) + '\n')
 
@@ -61,15 +64,15 @@ def main():
     batch = case(corpus, 'verify_blob_kzg_proof_batch_case_4')
 
     d = Directory(args.output / 'example.BlobToCommitment')
-    d.write('P', {'blob': d.bytes('blob', blob['blob']), 'setup': d.setup()})
+    d.arguments({'blob': d.bytes('blob', blob['blob']), 'setup': d.setup()})
     d = Directory(args.output / 'example.ComputeKzgProof')
-    d.write('P', {'blob': d.bytes('blob', opened['blob']), 'z': list(opened['z']), 'setup': d.setup()})
+    d.arguments({'blob': d.bytes('blob', opened['blob']), 'z': list(opened['z']), 'setup': d.setup()})
     d = Directory(args.output / 'example.ComputeChallenge')
-    d.write('P', {'blob': d.bytes('blob', blob['blob']), 'commitment': list(blob['commitment'])})
+    d.arguments({'blob': d.bytes('blob', blob['blob']), 'commitment': list(blob['commitment'])})
     d = Directory(args.output / 'example.PointEvaluationPrecompile')
     versioned = b'\x01' + hashlib.sha256(point['commitment']).digest()[1:]
     data = versioned + point['z'] + point['y'] + point['commitment'] + point['proof']
-    d.write('P', {'input': list(data)})
+    d.arguments({'input': list(data)})
     d = Directory(args.output / 'example.KzgProof')
     d.write('public', {key: list(point[key]) for key in ('commitment', 'z', 'y')})
     # The point vectors with this commitment open the blob of the blob vector.

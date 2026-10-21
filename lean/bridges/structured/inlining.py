@@ -7,12 +7,12 @@ an exporter or optimizer correctness theorem.
 """
 
 import argparse
-import json
 import os
 from pathlib import Path
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
+from bridges.common.native_entry import native_run
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -50,9 +50,8 @@ def subject_cases(suite, stem, module, proof):
     source = FIXTURES / f"{stem}.zkc"
     suite.sources.append({"authored": str(source.relative_to(ROOT)), "sha256": digest(source)})
     flags = ["--source-format=zkc", f"--module={module}={source}", f"--entry={module}::Run"]
-    original_text = suite.command(f"{stem}:frontend", [suite.tools["compiler"], "language-emit", *flags])
-    interface = json.loads(suite.command(f"{stem}:interface",
-        [suite.tools["compiler"], "language-interface", *flags]))
+    original_text, interface = native_run(
+        lambda command: suite.command(f"{stem}:frontend", command), suite.tools["compiler"], flags)
     write_json(suite.directory / f"{stem}-interface.json", interface)
     symbol = interface["protocol"]
     original = retained_subject(suite, stem, proof, "Original", original_text, symbol)

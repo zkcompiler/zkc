@@ -3,7 +3,7 @@
 import pytest
 
 from coset_reference import CosetReference
-from entry import Entry
+from entry import Entry, joint_execution
 from source_modules import library_modules
 
 
@@ -24,7 +24,7 @@ protocol Work roles(P)(kind:Indices@P,column:Indices@P,rotation:Indices@P,
   let result=air::read_quotients(slots,batch,assignments,4,zeta,rho,initial,first);
   return(out=result.0,next=result.1);
 }}
-run Demo=Work;
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, library_modules('relations/air'))
     def dense(seed):
@@ -68,6 +68,6 @@ run Demo=Work;
              'refused:coset-opening-point'),
             ('empty-short-initial', {'kind': [0, 2, 2, 3, 0], 'initial': data['initial'][:-1]},
              'refused:coset-opening-shape')]:
-        report = entry.run(name, zero_weights | changes, refuses='entry-run-incomplete')
-        assert report['execution']['roles'][0]['after'][1]['cause'] == [
+        report = entry.run(name, zero_weights | changes, refuses='entry-host-run-failed')
+        assert joint_execution(report)['roles'][0]['after'][1]['cause'] == [
             'backend', {'omitted_bytes': 0, 'text': cause}]

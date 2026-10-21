@@ -55,7 +55,7 @@ protocol Run roles(P)(p: Vector<F> @P, q: Vector<F> @P, shift: F @P, n: index @P
   let result @P = work(p, q, shift, n, m, z);
   return (result = result);
 }}
-run Demo = Run;
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 
@@ -146,5 +146,5 @@ def test_map_ring_provider_and_formal_product_agree(toolchain, journal, director
     # Unequal row counts stop the map before any arithmetic, also for the
     # column the product never reads.
     inputs['m'] = 2 * inputs['n']
-    refused = entry.run('unread-column-shape', inputs, refuses='entry-run-incomplete')
+    refused = entry.run('unread-column-shape', inputs, refuses='entry-host-run-failed')
     assert 'rejected:require' in json.dumps(refused)

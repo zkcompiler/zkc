@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import time
 
+from native_entry import native_run
 from contracts import label
 from verify import verify, read_json
 
@@ -65,8 +66,7 @@ def main():
     flags = ['--source-format=zkc', f'--module=alternative={source}', '--entry=alternative::Horner']
     def execute(command):
         return subprocess.check_output(list(map(str, command)), cwd=ROOT, text=True, timeout=30)
-    mlir = execute([args.compiler, 'language-emit', *flags])
-    interface = json.loads(execute([args.compiler, 'language-interface', *flags]))
+    mlir, interface = native_run(execute, args.compiler, flags)
     assert interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()
     path = args.output / 'alternative.mlir'
     path.write_text(mlir)

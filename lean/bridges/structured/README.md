@@ -477,7 +477,7 @@ the pinned development environment, with the compiler built (`just build`) and
 Lean set up ([development guide](../../../docs/development/README.md)):
 
 1. Write the protocol and an Entry that runs it, for example
-   `run EqualityInteractive = ChaumPedersen<G>;` in a project module.
+   `entry fn EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) { return ChaumPedersen<G>::run(inputs); }` in a project module.
 2. Write the manifest: its sources (a project or a module map), the Entry under
    `[entries] interactive`, the structured profile, and under `[generated]` the
    retained export (`interactive_export`, `interactive_source`), the data module
@@ -573,8 +573,7 @@ python3 lean/bridges/structured/inlining.py \
   --report build/experiments/structured-inlining/report.json
 ```
 
-This focused sibling reuses the bridge driver. It runs `language-emit` and
-`language-interface`, then the actual
+This focused sibling reuses the bridge driver. It compiles the Entry package, selects its single native Run deployment, then runs the actual
 `--zkc-prepare-protocol="simplify=false optimize-finite=false"` command. It
 exports both sides with `protocol-structured`, independently admits them,
 compares exact retained MLIR/JSON/constructor bytes, and rechecks the proof

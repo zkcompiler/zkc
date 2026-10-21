@@ -94,7 +94,7 @@ pub(super) fn run(directory: &Path) {
             })
             .collect()
     };
-    let publication = package(directory, "Run");
+    let publication = package(directory, "native-Run");
     let host = RunEntry::admit(publication.clone(), HostLimits::default(), pins()).unwrap();
     let run_request = || RunRequest {
         session: "source_setups".into(),

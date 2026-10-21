@@ -1,7 +1,5 @@
-# Python in this repository is a driver, not a product: it runs the compiler,
-# the common runtime as separate processes and checks their behavior. Scripts
-# use the standard library alone, so what is pinned here are
-# the two tools that are not part of it — the test runner and the linter.
+# This root environment owns development drivers and checks. The Python SDK in
+# python/ is a separately installable standard-library adapter to the common Host.
 #
 # One interpreter runs everything: the one already on the machine. The compiler
 # build finds it through CMake and the checkers are invoked as `python3`, so uv
@@ -33,7 +31,7 @@ python-preference = "only-system"
 
 [tool.pytest.ini_options]
 testpaths = ["common/tests"]
-pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts"]
+pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts", "python/src"]
 addopts = "--strict-markers --strict-config"
 # A hung tool is a failure with a stack, not a suite that never returns.
 timeout = 900

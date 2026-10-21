@@ -12,6 +12,23 @@ Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
       types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {}
+Checker::Checker(CheckedStorage &output, Work &work,
+                 const NameEnvironment &names)
+    : Checker({}, output, work) {
+  modules = names.modules;
+  visible = names.visible;
+  signatureState.assign(output.declarations.size(), 2);
+  externalSelection = true;
+  for (const auto &decl : output.declarations)
+    if (decl.kind == Declaration::Kind::Module &&
+        (*output.sources)[decl.span.source.index].origin ==
+            SourceOrigin::Captured) {
+      if (!decl.parent)
+        externalNames[decl.qualifiedName].insert(decl.id.index);
+      for (const auto &[name, binding] : visible[decl.id.index])
+        externalNames[name].insert(binding.target.index);
+    }
+}
 Error Checker::run() {
   if (auto error = checkCapabilityInstallation())
     return error;
@@ -31,6 +48,7 @@ Error Checker::run() {
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
+         decl.kind == Declaration::Kind::EntryFunction ||
          decl.kind == Declaration::Kind::DomainFunction ||
          decl.kind == Declaration::Kind::Protocol ||
          decl.kind == Declaration::Kind::Construction))
@@ -82,6 +100,9 @@ Error Checker::run() {
     return true;
   };
   signatureState.resize(output.declarations.size());
+  bodyState.resize(output.declarations.size());
+  bodyHeights.resize(output.declarations.size());
+  entryStates.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!sources[i]->constructionHandler && !signature(DeclarationId{i}))
       return types.takeError();
@@ -136,11 +157,13 @@ Error Checker::run() {
     auto &decl = output.declarations[i];
     if ((decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
+         decl.kind == Declaration::Kind::EntryFunction ||
          decl.kind == Declaration::Kind::DomainFunction ||
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
-        !decl.abstract && !sources[i]->constructionHandler && !body(decl.id, 1))
+        !decl.abstract && !decl.generated && !sources[i]->constructionHandler &&
+        !body(decl.id, 1))
       return types.takeError();
   }
   if (!constructions() || !entries())
@@ -152,6 +175,8 @@ Error Checker::run() {
   types.recordAdmission = {};
   if (!retainAPI() || !retainNotations() || !retainScopedSources())
     return types.takeError();
+  output.names = std::make_shared<NameEnvironment>(
+      NameEnvironment{std::move(modules), std::move(visible)});
   return checkScopedSources(output, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
@@ -183,6 +208,65 @@ bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   return true;
 }
 bool Checker::collect() {
+  std::function<bool(SyntaxDeclaration &)> generated =
+      [&](SyntaxDeclaration &source) {
+        for (auto &child : source.members)
+          if (!generated(child))
+            return false;
+        using K = Declaration::Kind;
+        uint64_t extra =
+            source.kind == K::Protocol ? 3 + 2 * uint64_t(source.roles.size())
+            : source.kind == K::Entry && source.entryKind == EntryKind::Proof
+                ? 9
+                : 0;
+        if (extra > work.limits.declarations - work.declarations)
+          return types.fail("source.limit", "generated declaration count",
+                            source.span);
+        if (!types.charge(extra, source.span))
+          return false;
+        work.declarations += extra;
+        auto add = [&](StringRef name,
+                       Declaration::Kind kind) -> SyntaxDeclaration & {
+          SyntaxDeclaration child;
+          child.name = name.str();
+          child.kind = kind;
+          child.span = source.span;
+          child.isPublic = true;
+          child.generated = name.str();
+          if (kind == Declaration::Kind::Local ||
+              kind == Declaration::Kind::EntryFunction)
+            child.effects = Effects{true, false};
+          source.members.push_back(std::move(child));
+          return source.members.back();
+        };
+        if (source.kind == K::Protocol) {
+          for (auto member : {"Inputs", "RunResult"}) {
+            auto &product = add(member, K::Record);
+            for (const auto &role : source.roles) {
+              SyntaxDeclaration child;
+              child.kind = K::Record;
+              child.name = role;
+              child.span = source.span;
+              child.isPublic = true;
+              child.generated = std::string(member) + ":" + role;
+              product.members.push_back(std::move(child));
+            }
+          }
+          add("run", K::EntryFunction);
+        } else if (source.kind == K::Entry &&
+                   source.entryKind == EntryKind::Proof) {
+          for (auto member : {"Public", "Witness", "Proof", "ProverOutputs",
+                              "VerifierOutputs", "ProveResult"})
+            add(member, K::Record);
+          add("VerifyResult", K::Variant);
+          add("prove", K::Local);
+          add("verify", K::Local);
+        }
+        return types.charge(source.members.size() + 1, source.span);
+      };
+  for (auto &root : syntax)
+    if (!generated(root))
+      return false;
   std::map<std::string, SyntaxDeclaration *> files;
   std::set<std::string> linked;
   for (auto &root : syntax)
@@ -224,6 +308,18 @@ bool Checker::collect() {
     decl.id = {uint32_t(output.declarations.size())};
     decl.module = source.kind == Declaration::Kind::Module ? decl.id : module;
     decl.kind = source.kind;
+    if (source.generated) {
+      auto target = *parent;
+      if (output.declarations[target.index].generated)
+        target = output.declarations[target.index].generated->target;
+      decl.generated = Declaration::Generated{target, *source.generated};
+      std::string identity;
+      frame(identity, output.capture.identity());
+      frame(identity, output.installation);
+      frame(identity, output.declarations[target.index].qualifiedName);
+      frame(identity, *source.generated);
+      decl.generated->identity = digest(identity);
+    }
     decl.name = StringRef(path).rsplit("::").second.str();
     if (decl.name.empty())
       decl.name = path;
@@ -386,7 +482,7 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   const bool absolute = name.consume_front("::");
   auto [head, tail] = name.split("::");
   std::optional<DeclarationId> root;
-  if (!absolute) {
+  if (!absolute && !externalSelection) {
     auto scope = context.kind == Declaration::Kind::Module
                      ? std::optional(context.id)
                      : context.parent;
@@ -402,6 +498,20 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
           route->push_back({*scope, head.str()});
         break;
       }
+    }
+  }
+  if (!root && externalSelection && !absolute) {
+    auto found = externalNames.find(head.str());
+    if (found != externalNames.end()) {
+      if (found->second.size() != 1) {
+        types.fail("source.entry",
+                   "ambiguous selector name: " + head +
+                       "; specify a qualified source name",
+                   span);
+        return {};
+      }
+      root = DeclarationId{*found->second.begin()};
+      selectedProvider = output.declarations[root->index].module;
     }
   }
   if (!root) {
@@ -462,7 +572,8 @@ bool Checker::retainAPI() {
   for (unsigned id = 0; id < sources.size(); ++id) {
     const auto &source = *sources[id];
     records.writtenRequirements.push_back(source.explicitRequirements);
-    records.writtenEffects.push_back(source.effects.has_value());
+    records.writtenEffects.push_back(!source.generated &&
+                                     source.effects.has_value());
     for (const auto &[name, binding] : visible[id]) {
       if (!types.charge(name.size() + 1, binding.span))
         return false;

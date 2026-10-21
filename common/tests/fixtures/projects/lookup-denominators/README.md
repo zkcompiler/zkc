@@ -30,9 +30,9 @@ zkc run --project=common/tests/fixtures/projects/lookup-denominators/zkc.toml lo
 ```
 
 `Demo` uses KoalaBear; `ExtensionDemo` uses KoalaBear Ext8. The supplied
-[base-field inputs](inputs/lookup_denominators.Demo/P.json) return `product = 0`
+[base-field inputs](inputs/lookup_denominators.Demo/arguments.json) return `product = 0`
 and `other_product = 120`. Changing `gate` to zero returns `2` for both. The
-[extension inputs](inputs/lookup_denominators.ExtensionDemo/P.json) exercise
+[extension inputs](inputs/lookup_denominators.ExtensionDemo/arguments.json) exercise
 nonzero extension coordinates.
 
 The [integration tests](../../../protocol/test_indexed_callback_selection.py)
