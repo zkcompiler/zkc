@@ -39,7 +39,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,
     selected,points,claims,weights,initial);
   return(result=result,alias=xs,initial=initial);
 }}
-run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 

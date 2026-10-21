@@ -55,7 +55,7 @@ fn work<E: Field>(a: Vector<E>, b: Vector<E>, ignored: Vector<E>, α: E)
 }
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,ignored:Vector<F>@P,α:F@P)
     -> (result:(F,F,F,F,F,F)@P) { return work(a,b,ignored,α); }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE', FINITE)
 
 
@@ -134,7 +134,7 @@ fn work(n:index)->(F,index){
   return(result,state);
 }
 protocol Run roles(P)(n:index@P)->(result:(F,index)@P){return work(n);}
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     for n in (0, 3):
@@ -153,7 +153,7 @@ domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domai
 fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->Vector<E> effects(stop)=finite("local.collect.vector");
 fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fn((x,y))=>x*y);return nonempty(terms);}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('nonempty', {'a': decimal_values([2, 3]),
@@ -210,7 +210,7 @@ fn work(a:Vector<F>,b:Vector<F>,unused:Vector<F>)->F{
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,unused:Vector<F>@P)->(result:F@P){
   return work(a,b,unused);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -335,7 +335,7 @@ protocol Check roles(P,V)(a:Vector<F>@(P,V),b:Vector<F>@(P,V),coins:Random<F>@V)
 }
 proof Demo=Check{prover P;verifier V;public{a,b};accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0",coins);}
-run Interactive(inputs: Check::Inputs) { return Check::run(inputs); }
+entry fn Interactive(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
 
 
@@ -463,7 +463,7 @@ fn work(a:Vector<F>,x:F,α:F)->(F,F){
   return(total,x);
 }
 protocol Run roles(P)(a:Vector<F>@P,x:F@P,α:F@P)->(result:(F,F)@P){return work(a,x,α);}
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('shadowed', {'a': decimal_values([2, 3]), 'x': decimal_values(77),

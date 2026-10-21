@@ -37,7 +37,7 @@ protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(r: Vector<F>@E) {
   let r @E = evaluate<F,A>(v);
   return (r=r);
 }
-run Demo(inputs: Run<Product>::Inputs) { return Run<Product>::run(inputs); }
+entry fn Demo(inputs: Run<Product>::Inputs) { return Run<Product>::run(inputs); }
 )";
 } // namespace
 int main() {

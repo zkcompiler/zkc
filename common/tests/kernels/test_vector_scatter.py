@@ -32,7 +32,7 @@ protocol Run roles(P)(xs:Vector<F>@P) -> (result:Vector<F>@P) {{
   let result @P = scatter(xs);
   return (result=result);
 }}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(718)

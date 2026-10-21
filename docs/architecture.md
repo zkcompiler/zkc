@@ -13,7 +13,7 @@ lowering and VM; the Host does not implement a second arithmetic interpreter.
 explicit .zkc modules + Assets
               │
            frontend
-              ├── Run functions → func/scf + entry operations → zkc.host/0
+              ├── Entry functions → func/scf + entry operations → zkc.host/0
               │                            │                         │
               │                      numerical helpers              │
               └── Protocol IR              │                  Entry Host

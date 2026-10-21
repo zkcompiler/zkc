@@ -1,4 +1,4 @@
-"""Select the native protocol subject of a one-call source Run function.
+"""Select the native protocol subject of a one-call source Entry function.
 
 These bridges compare protocol execution, not the enclosing application. Compile
 its current package and retain the exact native Run child's source and interface.

@@ -14,4 +14,4 @@ protocol Run<H:Group> roles(P,V)(point:H@P, scalar:H::Scalar@P)->(result:H@V)
   let received = send P->V(result);
   return(result=received);
 }
-run Demo(inputs: Run<G>::Inputs) { return Run<G>::run(inputs); }
+entry fn Demo(inputs: Run<G>::Inputs) { return Run<G>::run(inputs); }

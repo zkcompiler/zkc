@@ -28,7 +28,7 @@ math fn collect<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->F where i
 math fn copy(xs:vec::Vector<F>)->vec::Vector<F>{return collect(vec::elements(xs),fn(x)=>x);}
 math fn term(xs:vec::Vector<F>,i:index)->F where in_bounds(i,xs){return vec::at(copy(xs),i);}
 math fn work(xs:vec::Vector<F>)->F{return total::sum(vec::indices(xs),fn(i)=>term(xs,i));}
-protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){return work(xs);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){return work(xs);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*MODULES, *flags))
     assert entry.run('nonempty', {'xs': ['2', '3', '5']})['value'] == '10'
@@ -41,7 +41,7 @@ def test_checked_static_conversion_precedes_total_consumer(toolchain, journal, d
 math fn last(values:arrays::Array<F,3>)->F{return symbolic::get<F,3,2>(values);}
 protocol Run roles(P)(xs:vec::Vector<F>@P)->(value:F@P){
  let fixed=arrays::from_vector<F,3>(xs);return last(fixed);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, (*MODULES, *flags))
     assert entry.run('valid', {'xs': ['2', '3', '5']})['value'] == '5'
@@ -58,7 +58,7 @@ def test_pack_callbacks_preserve_values_guards_and_bounded_work(toolchain, journ
     source = PRELUDE + f'math fn product(pair:(F,F))->F{{{body}}}' + '''
 protocol Run roles(P)(xs:vec::Vector<F>@P,ys:vec::Vector<F>@P)->(value:F@P){
  return finite::sum(domains::zip(xs,ys),fn(pair)=>product(pair));
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     counters = []
     for name, flags in [('default', ()), ('ordered', ('--no-finite-bulk',)),

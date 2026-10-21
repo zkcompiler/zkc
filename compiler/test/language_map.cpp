@@ -47,7 +47,7 @@ protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P,
   let repeated = repeat(a, s, n);
   return (folded = folded, combined = combined, repeated = repeated);
 }
-run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
 Expected<CheckedProject> check(StringRef body) {
   auto captured = capture({{"m", (prelude + body).str(), "map.zkc"}});
@@ -136,7 +136,7 @@ int main() {
         "    -> (r: Vector<Fr> @P, t: Vector<Fr> @P, q: Fr @P) {\n"
         "  return (r = rows(a, b, s), t = toward(a, y, s),"
         " q = single(y, y, s));\n}\n"
-        "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n"));
+        "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n"));
     auto bytes = checked.bytes();
     SmallVector<StringRef> lines;
     bytes.split(lines, '\n');
@@ -291,7 +291,7 @@ int main() {
         "protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P) -> "
         "(r: Vector<Fr> @P) {\n"
         "  let r = f(a, b);\n  return (r = r);\n}\n"
-        "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
+        "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
     auto found = located(original(body));
     require(namesIdentifier(found.message, "algebra-map-formula") &&
                 llvm::is_contained(found.codes, "target.admission"),
@@ -309,16 +309,17 @@ int main() {
       body += "math fn h" + std::to_string(i) + "<F: Field>(x: F) -> F { " +
               "return h" + std::to_string(i - 1) + "(h" +
               std::to_string(i - 1) + "(x)); }\n";
-    body += "fn f(a: Vector<Fr>, n: index) -> Vector<Fr> {\n"
-            "  let mut acc = a;\n"
-            "  for _ in 0..n {\n"
-            "    acc = map h10(each acc);\n"
-            "  }\n"
-            "  return acc;\n}\n"
-            "protocol Demo roles(P)(a: Vector<Fr> @P, n: index @P) -> "
-            "(r: Vector<Fr> @P) {\n"
-            "  let r = f(a, n);\n  return (r = r);\n}\n"
-            "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
+    body +=
+        "fn f(a: Vector<Fr>, n: index) -> Vector<Fr> {\n"
+        "  let mut acc = a;\n"
+        "  for _ in 0..n {\n"
+        "    acc = map h10(each acc);\n"
+        "  }\n"
+        "  return acc;\n}\n"
+        "protocol Demo roles(P)(a: Vector<Fr> @P, n: index @P) -> "
+        "(r: Vector<Fr> @P) {\n"
+        "  let r = f(a, n);\n  return (r = r);\n}\n"
+        "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
     auto found = located(original(body));
     require(llvm::is_contained(found.codes, "algebra-map-formula") &&
                 namesIdentifier(found.message, "ring-depth"),

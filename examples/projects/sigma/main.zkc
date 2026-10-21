@@ -10,7 +10,7 @@ proof AndProof = SchnorrAnd<G> {
   target knowledge;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run AndInteractive(inputs: SchnorrAnd<G>::Inputs) {
+entry fn AndInteractive(inputs: SchnorrAnd<G>::Inputs) {
   return SchnorrAnd<G>::run(inputs);
 }
 
@@ -22,6 +22,6 @@ proof EqualityProof = ChaumPedersen<G> {
   target knowledge;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-run EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) {
+entry fn EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) {
   return ChaumPedersen<G>::run(inputs);
 }

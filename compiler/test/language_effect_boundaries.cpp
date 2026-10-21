@@ -120,7 +120,7 @@ protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
  }
  return x;
 }
-run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )",
                                   limits));
         auto closed =
@@ -160,7 +160,7 @@ run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
           statements + "}protocol Demo roles(P)(go:" + flagType +
           "@P,n:index@P,x:Fr@P)->(r:Fr@P){"
           "return pick(go,n,x,fn(v)=>v,fn(v)=>{require v==1;v});}"
-          "run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }";
+          "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }";
       auto project = take(check(source));
       const auto &decl = named(project.declarations(), "pick");
       require(decl.body->effects.dependencies ==
@@ -340,7 +340,7 @@ fn branches(go:bool,x:Fr)->Fr effects(stop){
               else {require go; x};
 }
 protocol Demo roles(P)(go:bool@P,x:Fr@P)->(r:Fr@P){return branches(go,x);}
-run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
   const std::string protocolRegions = R"(
 protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
@@ -351,7 +351,7 @@ protocol Demo roles(P)(n:index@P,go:bool@P,x:Fr@P)->(r:Fr@P){
  }
  return x;
 }
-run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
   for (bool specialized : {false, true})
     for (bool protocol : {false, true}) {

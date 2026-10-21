@@ -1,38 +1,38 @@
-# Run functions and proofs
+# Entry functions and proofs
 
 A `protocol` describes participant computation and interaction. A `proof`
-declaration chooses a closed proof construction. A `run` is an application
+declaration chooses a closed proof construction. An `entry fn` is an application
 entry point: it prepares data, calls protocols or proofs, and returns a value.
 The [declaration contract](../spec/language/entries.md) defines the exact checks.
 
 ## Application control
 
-Run functions use ordinary typed arguments and Local expressions. They may
-call numerical helpers and other run functions. A result annotation is optional
+Entry functions use ordinary typed arguments and Local expressions. They may
+call numerical helpers and other Entry functions. A result annotation is optional
 when the compiler can infer it from the body.
 
 ```zkc
 fn increment(value: index) -> index { return value + 1; }
 
-run Next(value: index) {
+entry fn Next(value: index) {
   return increment(value);
 }
 
-run Twice(value: index) {
+entry fn Twice(value: index) {
   let next = Next(value);
   return Next(next);
 }
 ```
 
 `zkc run Twice` executes this function. Its argument file contains
-`{"value":"7"}`; its source result is `"9"`. A run function needs no protocol
+`{"value":"7"}`; its source result is `"9"`. An Entry function needs no protocol
 wrapper for an ordinary calculation. Its numerical work uses the same Kernel
 lowering and VM as participant computation.
 
 A protocol specialization exposes generated `Inputs`, `RunResult` and `run`:
 
 ```zkc
-run Interactive(inputs: Schnorr<G>::Inputs) {
+entry fn Interactive(inputs: Schnorr<G>::Inputs) {
   return Schnorr<G>::run(inputs);
 }
 ```
@@ -56,12 +56,12 @@ proof Core = Schnorr<G> {
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
 
-run Produce(public: Core::Public, witness: Core::Witness) {
+entry fn Produce(public: Core::Public, witness: Core::Witness) {
   let result = Core::prove(public = public, witness = witness);
   return result.proof;
 }
 
-run Validate(public: Core::Public, candidate: Core::Proof) {
+entry fn Validate(public: Core::Public, candidate: Core::Proof) {
   return Core::verify(public = public, proof = candidate);
 }
 ```

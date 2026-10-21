@@ -83,7 +83,7 @@ void mutation(const CheckedOriginal &source,
 }
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
 const std::string unit =
-    "protocol Run roles(P)()->(){return();}run Demo(inputs: Run::Inputs) "
+    "protocol Run roles(P)()->(){return();}entry fn Demo(inputs: Run::Inputs) "
     "{ return Run::run(inputs); }";
 
 const std::string sequence = R"(
@@ -105,7 +105,7 @@ enum Choice{Some(Fr),None()}
 protocol Run roles(P)(x:)" +
                          type + R"(@P)->(r:)" + type + R"(@P){
   let r @P =roundtrip(x);return(r=r);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   must(compileEntry(source));
 }
@@ -114,7 +114,7 @@ void mutations() {
 struct Pair{pub first:Fr,pub second:Fr}
 protocol Run roles(P)(x:Pair@P)->(r:Pair@P){
   let r @P =roundtrip(x);return(r=r);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
   require(source.bytes().contains("local.variant_inject") &&
               source.bytes().contains("local.match"),
@@ -215,11 +215,11 @@ void kernelProducts() {
     protocol Run roles(P,V)(x:Pair@P)->(r:Pair@V){
       let xs @P =singleton(x);let ys=send P->V(xs);
       let r @V =first(ys);return(r=r);
-    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   must(compileEntry(source));
   auto unitSource = original(prefix + sequence + R"(
-    protocol Run roles(P)()->(){let value @P =roundtrip(());return();}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    protocol Run roles(P)()->(){let value @P =roundtrip(());return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
   mutation(unitSource,
            [](auto module) { first(module, "local.match")->erase(); });
@@ -243,7 +243,7 @@ void authority() {
   auto selected = must(project(R"(
     fn work(x:bool)->bool{return lib::open(roundtrip(lib::make(x)));}
     protocol Run roles(P)(x:bool@P)->(r:bool@P){let r @P =work(x);return(r=r);}
-    run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
   must(compileEntry(must(prepareOriginal(
       must(zkc::test::closeProtocolDeployment(selected, "m::Demo"))))));
@@ -260,7 +260,7 @@ void authority() {
   auto alias = must(project(R"(
     fn work(x:lib::Public)->lib::Alias{return get<lib::Alias>(append(empty<lib::Public>(),x),0);}
     protocol Run roles(P)(x:lib::Public@P)->(r:lib::Alias@P){let r @P =work(x);return(r=r);}
-    run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
   must(compileEntry(must(prepareOriginal(
       must(zkc::test::closeProtocolDeployment(alias, "m::Demo"))))));
@@ -331,12 +331,12 @@ void refusals() {
   closureRefuses(prefix + sequence + R"(
 struct Secret{value:Fr}
 protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}
-run Demo(inputs: Relay<Sequence<Secret>>::Inputs) { return Relay<Sequence<Secret>>::run(inputs); }
+entry fn Demo(inputs: Relay<Sequence<Secret>>::Inputs) { return Relay<Sequence<Secret>>::run(inputs); }
 )",
                  "source.ingress");
   closureRefuses(prefix + sequence + R"(
 struct Secret{value:Fr}
-protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                  "source.ingress");
   refuses(prefix + sequence + R"(

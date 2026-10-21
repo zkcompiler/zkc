@@ -32,8 +32,8 @@ void rejects(Error e, StringRef code) {
 }
 constexpr StringLiteral source = R"(module sample;
   fn add(x:index,y:index)->index{return x+y;}
-  run Twice(x:index)->index{return add(x,x);}
-  run Demo(x:index)->index{return Twice(Twice(x));})";
+  entry fn Twice(x:index)->index{return add(x,x);}
+  entry fn Demo(x:index)->index{return Twice(Twice(x));})";
 CompiledEntry compiled() { return take(compileEntry(original(source))); }
 } // namespace
 int main() {
@@ -74,15 +74,15 @@ int main() {
   });
   cases.run("Host control uses actual func/scf and typed captures", [] {
     auto entry = take(compileEntry(original(R"(module sample;
-      run Identity(x:bool)->bool{return x;}
-      run Demo(x:bool)->bool{return if x {Identity(x)} else {false};})")));
+      entry fn Identity(x:bool)->bool{return x;}
+      entry fn Demo(x:bool)->bool{return if x {Identity(x)} else {false};})")));
     require(entry.original().bytes().contains("scf.if"), "if did not use scf");
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
       throw std::runtime_error(toString(std::move(e)));
   });
   cases.run("stopped branches retain valid structured continuations", [] {
     auto entry = take(compileEntry(original(R"(module sample;
-      run Demo(go:bool)->bool {
+      entry fn Demo(go:bool)->bool {
         return if go {stop "abort";} else {true};
       })")));
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
@@ -158,10 +158,10 @@ int main() {
     });
   cases.run("Host call depth includes cached callee suffixes", [] {
     auto entry = take(compileEntry(original(R"(module sample;
-      run A(x:bool)->bool{return x;}
-      run B(x:bool)->bool{return A(x);}
-      run C(x:bool)->bool{return B(x);}
-      run Demo(x:bool)->bool{let a=A(x);let b=B(a);return C(b);})")));
+      entry fn A(x:bool)->bool{return x;}
+      entry fn B(x:bool)->bool{return A(x);}
+      entry fn C(x:bool)->bool{return B(x);}
+      entry fn Demo(x:bool)->bool{let a=A(x);let b=B(a);return C(b);})")));
     Limits limits;
     limits.callDepth = 3;
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface(),
@@ -175,7 +175,7 @@ int main() {
   for (StringRef operation : {"require", "numeric", "invoke"})
     cases.run("original admission checks malformed " + operation, [=] {
       auto checked =
-          original("module sample; run Demo(x:index)->index{return x;}");
+          original("module sample; entry fn Demo(x:index)->index{return x;}");
       mlir::DialectRegistry registry;
       registerDialects(registry);
       mlir::MLIRContext context(registry);
@@ -217,7 +217,7 @@ int main() {
         domain F=field(")" +
                          field.str() + R"(");
         protocol Work<T:Field> roles(P)(x:bool@P)->(value:bool@P){return(value=x);}
-        run Demo(inputs:Work<F>::Inputs){return Work<F>::run(inputs);})";
+        entry fn Demo(inputs:Work<F>::Inputs){return Work<F>::run(inputs);})";
       return take(compileEntry(original(text)));
     };
     auto first = compile("koala-bear");
@@ -236,7 +236,7 @@ int main() {
   });
   cases.run("Host dropped values cannot be returned", [] {
     auto entry = take(compileEntry(
-        original("module sample; run Demo(x:bool)->bool{return x;}")));
+        original("module sample; entry fn Demo(x:bool)->bool{return x;}")));
     auto artifact = take(json::parse(entry.bytes()));
     auto &body = *artifact.getAsObject()
                       ->getArray("functions")
@@ -258,7 +258,7 @@ int main() {
       protocol Step roles(P)(x:bool@P)->(value:bool@P){return(value=x);}
       protocol Work roles(P,V)(x:bool@P)->(value:bool@P,ok:bool@V){
         let value=Step(x);let ok@V=true;return(value=value,ok=ok);}
-      run Demo(inputs:Work::Inputs){return Work::run(inputs);})")));
+      entry fn Demo(inputs:Work::Inputs){return Work::run(inputs);})")));
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
       throw std::runtime_error(toString(std::move(e)));
   });
@@ -291,7 +291,7 @@ int main() {
     auto entry = take(compileEntry(original(R"(module sample;
       protocol Work roles(P,V)(x:bool@(P,V))->(value:bool@P,ok:bool@V){
         let ok@V=x;return(value=x,ok=ok);}
-      run Demo(inputs:Work::Inputs){return Work::run(inputs);})")));
+      entry fn Demo(inputs:Work::Inputs){return Work::run(inputs);})")));
     auto artifact = take(json::parse(entry.bytes()));
     const auto &deployments = *artifact.getAsObject()->getArray("deployments");
     require(deployments.size() == 1, "joint deployment inventory");
@@ -313,9 +313,9 @@ int main() {
       auto signature = operation == "verify" ? "candidate:Family::Proof"
                                              : "witness:Family::Witness";
       auto argument = operation == "verify" ? "candidate" : "witness";
-      auto source = definition + "run Demo(public:Family::Public," + signature +
-                    "){return Family::" + operation.str() + "(public," +
-                    argument + ");}";
+      auto source = definition + "entry fn Demo(public:Family::Public," +
+                    signature + "){return Family::" + operation.str() +
+                    "(public," + argument + ");}";
       auto entry = take(compileEntry(original(source)));
       auto artifact = take(json::parse(entry.bytes()));
       const auto &deployments =
@@ -353,8 +353,8 @@ int main() {
     });
   cases.run("Host loops retain actual scf carried values", [] {
     auto entry = take(compileEntry(original(R"(module sample;
-      run Identity(x:index){return x;}
-      run Demo(n:index){let mut sum:index=0;for _ in 0..n{sum=Identity(sum)+1;}return sum;})")));
+      entry fn Identity(x:index){return x;}
+      entry fn Demo(n:index){let mut sum:index=0;for _ in 0..n{sum=Identity(sum)+1;}return sum;})")));
     require(entry.original().bytes().contains("scf.for"), "loop lost scf");
   });
   return cases.result();

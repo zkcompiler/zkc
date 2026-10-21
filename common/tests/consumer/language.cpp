@@ -45,7 +45,7 @@ int main() {
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       let r @P =swap(x);return(r=r);
     }
-    run Demo(inputs:Run::Inputs){return Run::run(inputs);})",
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);})",
         "consumer.zkc"}},
       {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
         "unused.json"}},

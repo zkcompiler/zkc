@@ -59,7 +59,7 @@ protocol Run roles(P)(a:K@P, b:K@P, c:E@P, d:E@P, xs:Vector<E>@P, m:Matrix<E>@P,
   let codecs @P = codec_work(c, raw);
   return (base=base, cubic=cubic, codecs=codecs);
 }}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 
@@ -134,7 +134,7 @@ protocol Run roles(P)(a:K@P, xs:Vector<K>@P) -> (result:{result}@P) {{
   let result @P = body(a, xs);
   return (result=result);
 }}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
 
 

@@ -48,7 +48,8 @@ pub proof Family=Work{prover P;verifier V;public{x};accept ok;construction autho
 int main() {
   zkc::test::Cases cases;
   cases.run("standalone calculation closes without a protocol", [] {
-    auto entry = take(close("module sample; run Demo(x:index){return x+1;}"));
+    auto entry =
+        take(close("module sample; entry fn Demo(x:index){return x+1;}"));
     require(!entry.protocolOrNull() && entry.invocations().empty(),
             "calculation acquired a protocol");
     require(entry.entry().entryKind() == EntryKind::Function &&
@@ -59,7 +60,7 @@ int main() {
   });
   cases.run("generated inputs complete bound module members lazily", [] {
     auto entry = take(close(R"(module sample;
-      run Demo(inputs: Work<Identity>::Inputs) {
+      entry fn Demo(inputs: Work<Identity>::Inputs) {
         return Work<Identity>::run(inputs);
       }
       interface Algebra { fn identity(value:index)->index effects(); }
@@ -75,8 +76,8 @@ int main() {
   });
   cases.run("ordinary static entry calls share closure and infer results", [] {
     auto entry = take(close(R"(module sample;
-      run Twice(x:index){return x+x;}
-      run Demo(x:index){return Twice(Twice(x));}
+      entry fn Twice(x:index){return x+x;}
+      entry fn Demo(x:index){return Twice(Twice(x));}
     )"));
     unsigned functions = 0;
     for (const auto &decl : entry.declarations())
@@ -85,24 +86,25 @@ int main() {
     require(functions == 2, "static closure duplicated or omitted functions");
   });
   cases.run("entry recursion is refused including dormant calls", [] {
-    refuses(check("module sample; run Demo(x:bool)->bool{return Demo(x);}"),
-            "source.cycle");
-    refuses(check("module sample; run A(x:bool)->bool{return B(x);} run "
-                  "B(x:bool)->bool{return A(x);}"),
+    refuses(
+        check("module sample; entry fn Demo(x:bool)->bool{return Demo(x);}"),
+        "source.cycle");
+    refuses(check("module sample; entry fn A(x:bool)->bool{return B(x);} entry "
+                  "fn B(x:bool)->bool{return A(x);}"),
             "source.cycle");
   });
-  cases.run("ordinary Local and Math cannot invoke run functions", [] {
-    refuses(check("module sample; run E(x:bool){return x;} fn "
+  cases.run("ordinary Local and Math cannot invoke entry functions", [] {
+    refuses(check("module sample; entry fn E(x:bool){return x;} fn "
                   "Bad(x:bool){return E(x);}"),
             "source.stage");
-    refuses(check("module sample; run E(x:bool){return x;} math fn "
+    refuses(check("module sample; entry fn E(x:bool){return x;} math fn "
                   "Bad(x:bool){return E(x);}"),
             "source.stage");
   });
   cases.run("independent call witnesses require the Host owner stage", [] {
     auto checked = take(check(R"(module sample;
-      run Echo(x:bool){return x;}
-      run Demo(x:bool){return Echo(x);}
+      entry fn Echo(x:bool){return x;}
+      entry fn Demo(x:bool){return Echo(x);}
     )"));
     std::vector<Declaration> declarations(checked.declarations().begin(),
                                           checked.declarations().end());
@@ -116,18 +118,18 @@ int main() {
                 types.diagnostic->code == "source.binding-witness",
             "call witness granted Host stage to a computation body");
   });
-  cases.run("participant code cannot invoke run functions", [] {
-    refuses(check(R"(module sample; run E(x:bool){return x;}
+  cases.run("participant code cannot invoke entry functions", [] {
+    refuses(check(R"(module sample; entry fn E(x:bool){return x;}
       protocol Bad roles(P)(x:bool@P)->(y:bool@P){let y@P=E(x);return(y=y);})"),
             "source.stage");
   });
   cases.run("Host stage propagates through structured control", [] {
-    take(close("module sample; run E(x:bool){return x;} run "
+    take(close("module sample; entry fn E(x:bool){return x;} entry fn "
                "Demo(x:bool){return if x {E(x)} else {false};}"));
   });
   cases.run("generic protocol API parses with natural member syntax", [] {
     auto entry = take(close((protocol + R"(
-      run Demo(inputs:Work<F>::Inputs)->Work<F>::RunResult{
+      entry fn Demo(inputs:Work<F>::Inputs)->Work<F>::RunResult{
         return Work<F>::run(inputs);
       })")
                                 .str()));
@@ -140,7 +142,8 @@ int main() {
             "joint deployment lost operation or closed arguments");
   });
   cases.run("generated inputs retain independent participant copies", [] {
-    auto checked = take(check((protocol + "run Demo(){return ();}").str()));
+    auto checked =
+        take(check((protocol + "entry fn Demo(){return ();}").str()));
     const auto &inputs = definition(checked, "sample::Work::Inputs");
     const auto &p = definition(checked, "sample::Work::Inputs::P");
     const auto &v = definition(checked, "sample::Work::Inputs::V");
@@ -155,7 +158,7 @@ int main() {
   cases.run(
       "generated role inputs can be constructed with generic owner syntax", [] {
         take(close((protocol + R"(
-      run Demo(x:F,y:F)->Work<F>::RunResult{
+      entry fn Demo(x:F,y:F)->Work<F>::RunResult{
         let p=Work<F>::Inputs::P{x:x,y:y};
         let v=Work<F>::Inputs::V{x:x};
         return Work<F>::run(Work<F>::Inputs{P:p,V:v});
@@ -172,20 +175,20 @@ int main() {
     refuses(close(R"(module sample;
       protocol Work roles(P,V)(x:()@P)->(ok:bool@V){
         let delivered=send P->V(x);let ok@V=true;return(ok=ok);}
-      run Demo(inputs:Work::Inputs){return Work::run(inputs);}
+      entry fn Demo(inputs:Work::Inputs){return Work::run(inputs);}
     )"),
             "source.wire");
   });
   cases.run("generated operations retain ordered failure effects", [] {
     refuses(check((protocol + R"(
-      run Demo(x:Work<F>::Inputs)->Work<F>::RunResult effects(){
+      entry fn Demo(x:Work<F>::Inputs)->Work<F>::RunResult effects(){
         return Work<F>::run(x);
       })")
                       .str()),
             "source.effect");
   });
   cases.run("native result records cannot be forged in their owner module", [] {
-    refuses(check((protocol + R"(run Demo(x:F){
+    refuses(check((protocol + R"(entry fn Demo(x:F){
       return Work<F>::RunResult::P{value:x};})")
                       .str()),
             "source.host-result");
@@ -194,14 +197,14 @@ int main() {
     refuses(check((protocol + R"(
       protocol Other<C:Field> roles(P,V)(x:C@(P,V),y:C@P)->(value:C@P,ok:bool@V){
         let ok@V=true;return(value=x,ok=ok);}
-      run Demo(x:Other<F>::Inputs){return Work<F>::run(x);})")
+      entry fn Demo(x:Other<F>::Inputs){return Work<F>::run(x);})")
                       .str()),
             "source.type");
   });
   cases.run(
       "candidate proof is data and verifier has no witness parameter", [] {
         auto entry = take(close((proof + R"(
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);
       })")
                                     .str()));
@@ -222,7 +225,7 @@ int main() {
       protocol Work roles(P,V)(x:bool@(P,V),secret:Secret@P)->(ok:bool@V){
         let ok@V=x;return(ok=ok);}
       proof Family=Work{prover P;verifier V;public{x};accept ok;construction authored;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);}
     )";
         auto entry = take(close(source));
@@ -238,7 +241,7 @@ int main() {
       protocol Work roles(P,V)(x:F@(P,V),y:F@P)->(ok:bool@V){
         let ok@V=x==x;return(ok=ok);}
       proof Family=Work{prover P;verifier V;public{x};accept ok;construction authored;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);}
     )"));
             });
@@ -275,7 +278,7 @@ int main() {
       }
       proof Family=Round<F>{prover P;verifier V;public{public};accept ok;
         construction Derived<F,Provider>;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);}
     )"));
         const auto &deployment = *entry.invocations().front().deployment;
@@ -294,7 +297,7 @@ int main() {
         spec{target claim=Equal<T>(in.x@V,in.y) accept out.ok;}
         {let ok@V=x==x;return(ok=ok);}
       relation Equal<T:Field>(statement x:T,witness y:T){return x==y;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);}
     )"));
         require(entry.invocations()
@@ -304,7 +307,7 @@ int main() {
                 "closed verifier lost its generic specification");
       });
   cases.run("verification rejection has no success outputs", [] {
-    auto checked = take(check((proof + "run Demo(){return ();}").str()));
+    auto checked = take(check((proof + "entry fn Demo(){return ();}").str()));
     auto &result = definition(checked, "sample::Family::VerifyResult");
     require(result.kind == Declaration::Kind::Variant &&
                 result.alternatives.size() == 2 &&
@@ -316,38 +319,40 @@ int main() {
   });
   cases.run(
       "verification results are inspectable through exhaustive match", [] {
-        take(close((proof +
-                    R"(run Demo(public:Family::Public,candidate:Family::Proof){
+        take(close(
+            (proof +
+             R"(entry fn Demo(public:Family::Public,candidate:Family::Proof){
       let result=Family::verify(public,candidate);
       return match result {Accepted(outputs)=>{true},Rejected()=>{false}};
     })")
-                       .str()));
+                .str()));
       });
   cases.run("native results can cross ordinary static entry calls in memory",
             [] {
               take(close((proof + R"(
-      run Retain(x:Family::VerifyResult){return x;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Retain(x:Family::VerifyResult){return x;}
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Retain(Family::verify(public,candidate));
       })")
                              .str()));
             });
   cases.run("candidate import does not grant native result construction", [] {
-    refuses(
-        check((proof + "run Demo(){return Family::VerifyResult::Rejected();}")
-                  .str()),
-        "source.host-result");
     refuses(check((proof +
-                   "run Demo(p:Family::Proof,o:Family::ProverOutputs){return "
-                   "Family::ProveResult{proof:p,outputs:o};}")
+                   "entry fn Demo(){return Family::VerifyResult::Rejected();}")
                       .str()),
             "source.host-result");
+    refuses(
+        check((proof +
+               "entry fn Demo(p:Family::Proof,o:Family::ProverOutputs){return "
+               "Family::ProveResult{proof:p,outputs:o};}")
+                  .str()),
+        "source.host-result");
   });
   cases.run("distinct proof declarations retain distinct nominal candidates",
             [] {
               refuses(check((proof + R"(
       proof Other=Work{prover P;verifier V;public{x};accept ok;construction authored;}
-      run Demo(public:Family::Public,p:Other::Proof){return Family::verify(public,p);})")
+      entry fn Demo(public:Family::Public,p:Other::Proof){return Family::verify(public,p);})")
                                 .str()),
                       "source.type");
             });
@@ -355,7 +360,7 @@ int main() {
       "source discovery exposes entry signatures and generated constructors",
       [] {
         auto checked =
-            take(check((proof + "pub run Demo(x:bool){return x;}").str()));
+            take(check((proof + "pub entry fn Demo(x:bool){return x;}").str()));
         auto entries = take(inspectEntries(checked));
         auto api = take(inspectPublicAPI(checked));
         auto graph = take(json::parse(api));
@@ -388,8 +393,8 @@ int main() {
             "discovery omitted callable signatures or constructor permissions");
       });
   cases.run("generated schemas are bound to the exact captured family", [] {
-    auto a = take(check((proof + "run Demo(){return ();}").str()));
-    auto b = take(check((proof + "run Demo(){return false;}").str()));
+    auto a = take(check((proof + "entry fn Demo(){return ();}").str()));
+    auto b = take(check((proof + "entry fn Demo(){return false;}").str()));
     auto type = [](const Declaration &decl) {
       return Type(Type::Kind::Record, decl.qualifiedName);
     };
@@ -404,13 +409,13 @@ int main() {
   cases.run("generated traversal is bounded by declared limits", [] {
     Limits limits;
     limits.declarations = 25;
-    refuses(check((protocol + "run Demo(){return ();}").str(), limits),
+    refuses(check((protocol + "entry fn Demo(){return ();}").str(), limits),
             "source.limit");
   });
   cases.run(
       "producer and verifier operations retain distinct child policies", [] {
         auto entry = take(close((proof + R"(
-      run Demo(public:Family::Public,witness:Family::Witness){
+      entry fn Demo(public:Family::Public,witness:Family::Witness){
         let produced=Family::prove(public,witness);
         return Family::verify(public,produced.proof);
       })")
@@ -429,7 +434,7 @@ int main() {
       protocol Work roles(P,V)(pk:PK@P,vk:VK@V,x:bool@P)->(ok:bool@V)
       setup pcs{pk,vk};
       {let ok@V=true;return(ok=ok);}
-      run Demo(inputs:Work::Inputs){return Work::run(inputs);}
+      entry fn Demo(inputs:Work::Inputs){return Work::run(inputs);}
     )";
         auto entry = take(close(source));
         auto &p = definition(entry.project(), "sample::Work::Inputs::P");
@@ -445,16 +450,17 @@ int main() {
       domain C=commitment("multilinear.kzg.bls12-381/0");
       type VK=builtin("verifier_key",C);
     )";
-    refuses(check(std::string(prefix) + "run Demo(x:VK){return x;}"),
+    refuses(check(std::string(prefix) + "entry fn Demo(x:VK){return x;}"),
             "source.host-data");
-    refuses(check(std::string(prefix) + "enum Candidate{Key(VK),Empty()} "
-                                        "run Demo(x:Candidate){return x;}"),
+    refuses(check(std::string(prefix) +
+                  "enum Candidate{Key(VK),Empty()} "
+                  "entry fn Demo(x:Candidate){return x;}"),
             "source.host-data");
   });
   cases.run("entry boundaries infer generic Copy and Drop requirements", [] {
     auto checked = take(check(R"(module sample;
-      run Identity<T:Type>(x:T){return x;}
-      run Demo(x:bool){return Identity(x);}
+      entry fn Identity<T:Type>(x:T){return x;}
+      entry fn Demo(x:bool){return Identity(x);}
     )"));
     require(!definition(checked, "sample::Identity").permissionBounds.empty(),
             "generic Host boundary did not retain inferred usage requirements");
@@ -464,8 +470,8 @@ int main() {
             [] {
               refuses(check(R"(module sample;
       fn apply(x:bool,f:fn(bool)->bool)->bool effects(f){return f(x);}
-      run E(x:bool){return x;}
-      run Demo(x:bool){return apply(x,fn(y)=>E(y));}
+      entry fn E(x:bool){return x;}
+      entry fn Demo(x:bool){return apply(x,fn(y)=>E(y));}
     )"),
                       "source.stage");
             });
@@ -474,40 +480,45 @@ int main() {
               Limits limits;
               limits.callDepth = 2;
               refuses(check(R"(module sample;
-      run A(x:bool){return x;}
-      run B(x:bool){return A(x);}
-      run C(x:bool){return B(x);}
-      run Demo(x:bool){return C(x);}
+      entry fn A(x:bool){return x;}
+      entry fn B(x:bool){return A(x);}
+      entry fn C(x:bool){return B(x);}
+      entry fn Demo(x:bool){return C(x);}
     )",
                             limits),
                       "source.limit");
               limits = {};
               limits.instances = 1;
-              refuses(close("module sample; run E(x:bool){return x;} "
-                            "run Demo(x:bool){return E(x);}",
+              refuses(close("module sample; entry fn E(x:bool){return x;} "
+                            "entry fn Demo(x:bool){return E(x);}",
                             "sample::Demo", limits),
                       "source.limit");
             });
-  cases.run("run functions have no generated member invocation spelling", [] {
+  cases.run("entry functions have no generated member invocation spelling", [] {
     refuses(check(R"(module sample;
-      run E(x:bool){return x;}
-      run Demo(x:bool){return E::run(x);}
+      entry fn E(x:bool){return x;}
+      entry fn Demo(x:bool){return E::run(x);}
     )"),
             "source.name");
   });
-  cases.run("run is the only application declaration spelling", [] {
-    refuses(check("module sample; entry fn Demo(){return ();}"),
-            "source.syntax");
-    refuses(check("module sample; run fn Demo(){return ();}"), "source.name");
-    refuses(check("module sample; interface Bad { run Demo()->(); }"),
-            "source.mode");
+  cases.run("old run declarations have no source compatibility branch", [] {
     refuses(check((protocol + "run Old=Work<F>;").str()), "source.syntax");
   });
-  cases.run("run remains contextual outside application declarations", [] {
+  cases.run("entry fn is the sole application declaration syntax", [] {
+    for (StringRef source :
+         {"run Demo(){return ();}", "run fn Demo(){return ();}",
+          "pub run Demo(){return ();}", "entry Demo(){return ();}"})
+      refuses(check(("module sample;" + source).str()), "source.syntax");
+    refuses(check("module sample; interface Bad { entry fn Demo()->(); }"),
+            "source.mode");
+  });
+  cases.run("entry and run remain contextual names", [] {
     take(close(R"(module sample;
-      fn run(value:index)->index{return value;}
-      run Demo(entry:index){return run(entry);}
+      fn run(entry:index)->index{return entry;}
+      entry fn Demo(entry:index){return run(entry);}
     )"));
+    take(close("module sample; entry fn run(entry:index){return entry;}",
+               "sample::run"));
   });
   cases.run("no host fn or workflow source forms are admitted", [] {
     refuses(check("module sample; host fn Demo(){return ();}"),

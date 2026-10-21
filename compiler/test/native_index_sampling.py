@@ -44,7 +44,7 @@ protocol Pick roles(P, V)(coins: Random<E> @V)
   let p = send V -> P(v);
   return (p = p, v = v);
 }
-run Demo(inputs: Pick::Inputs) { return Pick::run(inputs); }
+entry fn Demo(inputs: Pick::Inputs) { return Pick::run(inputs); }
 '''
 
 with case("a static power-of-two domain emits a constant bound and an index query"):
@@ -67,7 +67,7 @@ protocol Run roles(P, V)(coins: Random<E> @V) -> (v: index @V) {
   let v = Pick<E, SIZE>(coins);
   return (v = v);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 with case("explicit generic contracts retain the IndexRandomness requirement"):

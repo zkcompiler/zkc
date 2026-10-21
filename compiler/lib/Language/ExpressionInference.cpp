@@ -193,7 +193,7 @@ class ExpressionInference {
     if (callee.kind == Declaration::Kind::EntryFunction ||
         (callee.generated && callee.generated->operation)) {
       if (owner.body.stage != Body::Stage::Host || contexts.at(id).scopedDepth)
-        return fail("source.stage", "Host calls require a run function",
+        return fail("source.stage", "Host calls require an entry function",
                     syntax.expressions[id].span);
       if (callee.generated)
         return true;

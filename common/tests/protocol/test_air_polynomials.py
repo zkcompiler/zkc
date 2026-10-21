@@ -28,7 +28,7 @@ protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  let rows@P=transpose(extension,width,size);
  return (scope=scope,at=at,extension=extension,rows=rows);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -73,7 +73,7 @@ fn sample(height:index,begin:index,end:index,samples:Vector<E>) -> Vector<E> {
  }
  return results;
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

@@ -9,7 +9,7 @@ protocol Fri roles(P,V)(word: Vector<E> @P, shift: E @(P,V), round_count: index 
   let (accepted, _, _, _) = LowDegree<Rows,5,0,3,8>(word, shift, shift, round_count, query_count, coins);
   return (accepted = accepted);
 }
-run Run(inputs: Fri::Inputs) {
+entry fn Run(inputs: Fri::Inputs) {
   return Fri::run(inputs);
 }
 proof Proof = Fri {

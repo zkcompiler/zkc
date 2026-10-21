@@ -49,7 +49,7 @@ pub fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){
   return (r=f(xs,ys,a,b));
 }
-run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )";
 } // namespace
 int main() {
@@ -205,7 +205,7 @@ math fn identity(x:Fr)->Fr{return x;}
     for (unsigned i = 0; i != 64; ++i)
       source += "let r" + std::to_string(i) + "=∑ x in xs,(x+1);";
     source += "return r63;}protocol Demo "
-              "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return f(xs);}run "
+              "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return f(xs);}entry fn "
               "Run(inputs: Demo::Inputs) { return Demo::run(inputs); }";
     auto first = take(check(source)), second = take(check(source));
     const auto &bindings = declaration(first, "m::f").body->scopedBindings;

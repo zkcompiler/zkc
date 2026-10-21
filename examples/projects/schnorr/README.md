@@ -12,7 +12,7 @@ interactive run from the repository root, with built tools on `PATH`:
 zkc run --project=examples/projects/schnorr/zkc.toml
 ```
 
-The command selects the unique run function, reads its named arguments and writes
+The command selects the unique Entry function, reads its named arguments and writes
 `build/zkc/example.Interactive.results.json` beside the manifest. The returned
 `V.accepted` is the verifier's decision; a completed run can return false.
 The inputs use the public demonstration witness 3. Scalars are decimal strings; group values contain canonical element bytes.

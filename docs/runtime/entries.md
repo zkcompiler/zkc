@@ -1,6 +1,6 @@
 # Running source Entries
 
-A protocol defines participant computation and interaction. A `run` exposes
+A protocol defines participant computation and interaction. An `entry fn` exposes
 application control; a `proof` declaration configures proving and verification.
 Both execute through the common Host and native VM.
 
@@ -19,7 +19,7 @@ zkc prepare
 ```
 
 `new` creates a directory; `init` initializes an existing directory (the current
-directory by default). Both create a minimal Run function and its argument
+directory by default). Both create a minimal Entry function and its argument
 template. They refuse an existing project or conflicting source files and preserve
 existing regular input files.
 Fill `inputs/example.Main/arguments.json`
@@ -67,7 +67,7 @@ zkc prove example::Proof
 zkc verify example::Proof
 ```
 
-Omitted names require one eligible Entry: `run` considers Run functions;
+Omitted names require one eligible Entry: `run` considers Entry functions;
 `prove` and `verify` consider proof Entries. `inspect`, `compile`, `bindings`
 and `inputs init` consider both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
@@ -78,7 +78,7 @@ requires qualification. A unique Entry of the wrong kind is an error.
 |---|---|---|
 | Proof public inputs | `inputs/<qualified.name>/public.json` | `--public=FILE` |
 | Prover witness inputs | `inputs/<qualified.name>/witness.json` | `--witness=FILE` |
-| Run function arguments | `inputs/<qualified.name>/arguments.json` | `--input=FILE` |
+| Entry function arguments | `inputs/<qualified.name>/arguments.json` | `--input=FILE` |
 | Compiled package | `build/zkc/<qualified.name>.zkpkg` | `--output=FILE` |
 | Produced or verified proof | `build/zkc/<qualified.name>.zkproof` | `--output=FILE` / `--proof=FILE` |
 | Run output values | `build/zkc/<qualified.name>.results.json` | `--results=FILE` |
@@ -129,7 +129,7 @@ Applications cannot supply an alternative renaming table.
 
 Input files are plain maps with exact source port names. Proofs have one public
 map and a separate prover witness map. Verification accepts no witness file.
-Run functions use one `--input=FILE` map keyed by parameter names. Generated
+Entry functions use one `--input=FILE` map keyed by parameter names. Generated
 protocol Inputs records contain a nested record per role, for example
 `{"inputs":{"P":{"value":"7"},"V":{"value":"7"}}}`. A shared port remains
 a separate role-local input. Empty parameter lists need no input file. Project
@@ -176,7 +176,7 @@ Rehashing an unknown package does not authorize it. Authored proof jobs require
 
 Direct proof commands use `--service=ROLE.NAME=COUNT`,
 `--transcript-budget=COUNT` and `--context=HEX` for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
-sets [native limits](../spec/runtime/capacity.md); Run functions also accept
+sets [native limits](../spec/runtime/capacity.md); Entry functions also accept
 `--limits=FILE` for [work limits](../spec/runtime/joint.md).
 `prove` accepts services of the selected prover; `verify` accepts services of the
 selected verifier. Other roles refuse.
@@ -217,7 +217,7 @@ The public `project::{Project, Compiler, Selection}` API resolves source project
 and returns checked interfaces or packages. `Project::layout()` supplies standard
 paths. `Compiler::prepare()` returns a `Preparation` of checked interfaces and
 `Template` files; the CLI publishes it through the common Host.
-`entry::FunctionInterface` describes Run function signatures; `Interface` and
+`entry::FunctionInterface` describes Entry function signatures; `Interface` and
 `BoundInterface` describe native proof/deployment interfaces. `entry::inputs::Decoder`
 accepts readable maps, with an optional explicit file resolver. Typed applications
 can construct `RoleInputs`, `RunRequest` and `ProofRequest` directly and invoke

@@ -27,7 +27,7 @@ protocol Sample roles(P)(first:index@P,bound:index@P)->(value:index@P,count:inde
   let(value,count)=sample(first,bound);
   return(value=value,count=count);
 }
-run Demo(inputs: Sample::Inputs) { return Sample::run(inputs); }
+entry fn Demo(inputs: Sample::Inputs) { return Sample::run(inputs); }
 '''
 
 

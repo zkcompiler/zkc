@@ -21,7 +21,7 @@ protocol HelpersProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run Helpers(inputs: HelpersProtocol::Inputs) {
+entry fn Helpers(inputs: HelpersProtocol::Inputs) {
   return HelpersProtocol::run(inputs);
 }
 
@@ -37,7 +37,7 @@ protocol ReorderedProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run Reordered(inputs: ReorderedProtocol::Inputs) {
+entry fn Reordered(inputs: ReorderedProtocol::Inputs) {
   return ReorderedProtocol::run(inputs);
 }
 
@@ -53,6 +53,6 @@ protocol EarlyChallengeProtocol roles(P, V)
   return (accepted = accepted);
 }
 
-run EarlyChallenge(inputs: EarlyChallengeProtocol::Inputs) {
+entry fn EarlyChallenge(inputs: EarlyChallengeProtocol::Inputs) {
   return EarlyChallengeProtocol::run(inputs);
 }

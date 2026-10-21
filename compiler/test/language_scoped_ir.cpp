@@ -73,7 +73,7 @@ fn iterate(x:Fr,n:index,rows:domain<Fr>,body:fn(Fr)->Fr effects(stop))->Fr effec
 fn outer(xs:Vector<Fr>,x:Fr,n:index)->Fr effects(stop){
  let rows=elements(xs);return iterate(x,n,rows,fn(y)=>ignore(rows,y+x));
 }
-protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(xs,x,n);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(xs,x,n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                                        "domains.zkc"}}));
         auto entry = take(zkc::test::closeProtocolDeployment(
@@ -104,7 +104,7 @@ domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
                     " where item_from(item, rows))->S" + effects +
                     "=finite(\"" + (mathematical ? "math.fold" : "local.fold") +
                     R"(");
-protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),x,fn(state, item)=>state+item+offset);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),x,fn(state, item)=>state+item+offset);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                 "fold.zkc"}}));
           auto entry = take(zkc::test::closeProtocolDeployment(
@@ -125,7 +125,7 @@ type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
 struct Row {pub value:Fr,pub enabled:bool}
 domain fn elements<T:Type+Copy+Drop>(xs:Sequence<T>)->domain<T>=domain("elements");
 fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(item:I)->B effects(stop) where item_from(item, rows))->Sequence<B> effects(stop)=finite("local.collect.sequence");
-protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(elements(xs),fn(row)=>row);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(elements(xs),fn(row)=>row);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                                    "collect.zkc"}}));
     auto entry = take(zkc::test::closeProtocolDeployment(
@@ -160,7 +160,7 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_arra
                       (mathematical ? "math.fold" : "local.fold") + R"(");
 protocol Run roles(P)(xs:[Row;)" +
                       std::to_string(count) +
-                      R"(]@P,shift:Fr@P)->(r:Fr@P){return fold(array(xs),0,fn(state, row)=>state+row.a+row.b+shift);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+                      R"(]@P,shift:Fr@P)->(r:Fr@P){return fold(array(xs),0,fn(state, row)=>state+row.a+row.b+shift);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                   "array.zkc"}}));
             auto entry = take(zkc::test::closeProtocolDeployment(
@@ -263,7 +263,7 @@ type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
 domain fn indices(xs:Vector<Fr>)->domain<index>=domain("indices");
 math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Vector<Fr>>("container.at",xs,i);}
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item, rows))->S=finite("math.fold");
-)") + work + "run Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
+)") + work + "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
                                      "bounds.zkc"}}));
       auto entry = take(zkc::test::closeProtocolDeployment(
           take(analyze(captured).checkedProject()), "sample::Demo"));
@@ -295,7 +295,7 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_arra
 domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
 math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item, rows))->Array<Fr,N>=finite("math.collect.field_array");
 math fn work(xs:[Fr;2],ys:[Fr;2])->Array<Fr,2>{return collect(zip(array(xs),array(ys)),fn((x,y))=>x+y);}
-protocol Run roles(P)(xs:[Fr;2]@P,ys:[Fr;2]@P)->(r:Array<Fr,2>@P){return work(xs,ys);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:[Fr;2]@P,ys:[Fr;2]@P)->(r:Array<Fr,2>@P){return work(xs,ys);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                                    "fixed.zkc"}}));
     auto entry = take(zkc::test::closeProtocolDeployment(
@@ -314,7 +314,7 @@ math fn work(n:index)->(Fr,bool,index){
  let result:Fr=filtered(range(0,n),0,fn(i)=>intrinsic("index.less",i,threshold<2>()),fn(state, item)=>state+1);
  return(result,intrinsic("index.equal",n,2),18446744073709551615);
 }
-protocol Run roles(P)(n:index@P)->(r:(Fr,bool,index)@P){return work(n);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(n:index@P)->(r:(Fr,bool,index)@P){return work(n);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                                    "indices.zkc"}}));
     auto entry = take(zkc::test::closeProtocolDeployment(
@@ -347,7 +347,7 @@ type Vector<F:Field>=builtin("vector",F);
 domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
 domain fn choose<F:Field>(left:Vector<F>,right:Vector<F>)->domain<F>{let a=elements(left);let b=elements(right);return a;}
 fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
-protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){return fold(choose(xs,ys),0,fn(state, item)=>state*10+item+offset);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){return fold(choose(xs,ys),0,fn(state, item)=>state*10+item+offset);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )",
                                          "mutation.zkc"}}));
           auto entry = take(zkc::test::closeProtocolDeployment(

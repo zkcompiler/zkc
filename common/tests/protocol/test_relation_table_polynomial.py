@@ -62,7 +62,7 @@ protocol View roles(Evaluator)
   let b @Evaluator = point_of<Base,TABLE,Recurrence>(base);
   return (shape = s, input = i, scope = c, ood_values = e, base_values = b);
 }
-run Polynomial(inputs: View::Inputs) { return View::run(inputs); }
+entry fn Polynomial(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 
@@ -313,7 +313,7 @@ protocol Batch roles(Evaluator)
   let d @Evaluator = rows_of<Base,0,Recurrence>(witness, configuration, public_data, height);
   return (subgroup_values = s, ood_values = o, single_values = p, dense = d);
 }
-run Polynomial(inputs: Batch::Inputs) { return Batch::run(inputs); }
+entry fn Polynomial(inputs: Batch::Inputs) { return Batch::run(inputs); }
 '''
 
 # The recurrence fixture's honest data: one witness group of width 4, one

@@ -71,7 +71,7 @@ int main() {
       fn run(x:F){return f(Choice::Some(x));}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return run(x);
-      }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
   });
   cases.run(
@@ -130,7 +130,7 @@ int main() {
         let Token{value}=f(Token{value:b},b);return value;
       }
       protocol Run roles(P)(b:bool@P)->(r:bool@P){return run(b);}
-      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check(identity + R"(
       #[affine] struct Token {}
@@ -155,7 +155,7 @@ int main() {
       fn choose(x:F,go:bool){return if go{x}else{x+x};}
       protocol Run roles(P)(x:F@P,b:bool@P)->(r:F@P){
         return choose(x,b);
-      } run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      } entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check("fn f(x:bool){return g(x);}fn g(x:bool){return f(x);}"),
             "source.cycle");
@@ -227,7 +227,7 @@ int main() {
       fn root<T:Field>(n:index){return kernel<T>("poly.domain_root",n);}
       protocol Run<T:Field> roles(P)(n:index@P)->(r:T@P){
         return root<T>(n);
-      } run Demo(inputs: Run<F>::Inputs) { return Run<F>::run(inputs); }
+      } entry fn Demo(inputs: Run<F>::Inputs) { return Run<F>::run(inputs); }
     )");
   });
   cases.run("natural preconditions are inferred and checked at closure", [] {
@@ -274,7 +274,7 @@ int main() {
       require(decl.bounds.size() == 1 && decl.bounds[0].inferred,
               "caller missed a specification precondition");
       auto invalid =
-          take(check(source + "run Demo(inputs: Parent<0>::Inputs) { "
+          take(check(source + "entry fn Demo(inputs: Parent<0>::Inputs) { "
                               "return Parent<0>::run(inputs); }"));
       refuses(zkc::test::closeProtocolDeployment(invalid, "m::Demo"),
               "source.bound");
@@ -328,7 +328,7 @@ int main() {
       }
       protocol Run roles(P)(x:bool@P,coins:Random<F>@P)->(r:F@P){
         let alias=coins;let result=Draw(alias,x,coins);return result;
-      }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )";
         auto project = take(check(source));
         const auto &draw = declaration(project, "m::Draw");
@@ -391,7 +391,7 @@ int main() {
       math fn indirect<T:Field,C:Increment<T>>(x:T)->T{return C::add(x);}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return Plus::add<F,G>(x)+indirect<F,Plus<F,G>>(x);
-      }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
   });
   return cases.result();

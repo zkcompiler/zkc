@@ -142,7 +142,7 @@ Use inputs check to validate existing input contents; no protocol is executed.",
     },
     Command {
         name: "run",
-        summary: "Compile and execute a run function",
+        summary: "Compile and execute an Entry function",
         positional: "[ENTRY]",
         options: entry_options!(
             Opt::new("--input=FILE"),

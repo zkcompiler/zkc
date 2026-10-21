@@ -4,4 +4,4 @@ protocol Run roles(P)()->(result:index@P) {
   let result @P = count<2>();
   return(result=result);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

@@ -38,25 +38,25 @@ pub proof Family=Work{prover P;verifier V;public{x};accept ok;construction autho
 
 with case('standalone entry calculation uses ordinary inferred Local results'):
     result = check('''module sample;
-      run Twice(x:index){return x+x;}
-      pub run Demo(x:index){return Twice(x)+1;}
+      entry fn Twice(x:index){return x+x;}
+      pub entry fn Demo(x:index){return Twice(x)+1;}
     ''', entry='Demo', inspect_api=True)
     assert result['status'] == 'checked' and result['entry'] == 'sample::Demo'
     assert {'name': 'sample::Demo', 'kind': 'function'} in result['entries']
     declaration = next(d for d in result['declarations'] if d['name'] == 'sample::Demo')
-    assert declaration['kind'] == 'run' and len(declaration['outputs']) == 1
+    assert declaration['kind'] == 'entry' and len(declaration['outputs']) == 1
     public = next(d for d in result['api']['declarations'] if d['name'] == 'sample::Demo')
     assert public['stage'] == 'host' and len(public['outputs']) == 1
 
 with case('generic protocol members parse after owner specialization'):
-    check(PROTOCOL + '''run Demo(x:F,y:F){
+    check(PROTOCOL + '''entry fn Demo(x:F,y:F){
       let p=Work<F>::Inputs::P{x:x,y:y};
       let v=Work<F>::Inputs::V{x:x};
       return Work<F>::run(Work<F>::Inputs{P:p,V:v});
     }''', entry='Demo')
 
 with case('proof verifier signature exposes candidate data and explicit rejection'):
-    result = check(PROOF + '''pub run Demo(public:Family::Public,candidate:Family::Proof){
+    result = check(PROOF + '''pub entry fn Demo(public:Family::Public,candidate:Family::Proof){
       let result=Family::verify(public,candidate);
       return match result {Accepted(outputs)=>{true},Rejected()=>{false}};
     }''', entry='Demo', inspect_api=True)
@@ -71,7 +71,7 @@ with case('ordinary Local Math and protocol stages refuse Host calls'):
         'math fn Bad(x:bool){return E(x);}',
         'protocol Bad roles(P)(x:bool@P)->(y:bool@P){let y@P=E(x);return(y=y);}',
     ]:
-        check('module sample; run E(x:bool){return x;}' + declaration,
+        check('module sample; entry fn E(x:bool){return x;}' + declaration,
               refuses='source.stage')
     check(PROTOCOL + 'fn Bad(x:Work<F>::Inputs){return Work<F>::run(x);}',
           refuses='source.stage')
@@ -85,33 +85,35 @@ with case('proof specifications resolve generic relations before the outer signa
         spec{target claim=Equal<T>(in.x@V,in.y) accept out.ok;}
         {let ok@V=x==x;return(ok=ok);}
       relation Equal<T:Field>(statement x:T,witness y:T){return x==y;}
-      run Demo(public:Family::Public,candidate:Family::Proof){
+      entry fn Demo(public:Family::Public,candidate:Family::Proof){
         return Family::verify(public,candidate);}
     ''')
 
 with case('nominal candidates and native result construction remain distinct'):
-    check(PROOF + 'run Demo(){return Family::VerifyResult::Rejected();}',
+    check(PROOF + 'entry fn Demo(){return Family::VerifyResult::Rejected();}',
           refuses='source.host-result')
     check(PROOF + '''proof Other=Work{prover P;verifier V;public{x};accept ok;construction authored;}
-      run Demo(x:Family::Public,p:Other::Proof){return Family::verify(x,p);}
+      entry fn Demo(x:Family::Public,p:Other::Proof){return Family::verify(x,p);}
     ''', refuses='source.type')
 
 with case('entry cycles and unapproved source forms are refused'):
-    check('module sample; run Demo(x:bool)->bool{return Demo(x);}',
+    check('module sample; entry fn Demo(x:bool)->bool{return Demo(x);}',
           refuses='source.cycle')
     for declaration in ['host fn Demo(){return ();}', 'workflow Demo(){return ();}']:
         check('module sample;' + declaration, refuses='source.syntax')
     check(PROTOCOL + 'run Old=Work<F>;', refuses='source.syntax')
 
-with case('run is the only application declaration spelling'):
-    check('module sample; entry fn Demo(){return ();}', refuses='source.syntax')
-    check('module sample; run fn Demo(){return ();}', refuses='source.name')
-    check('module sample; interface Bad { run Demo()->(); }', refuses='source.mode')
+with case('entry fn is the only application declaration spelling'):
+    for declaration in ['run Demo(){return ();}', 'run fn Demo(){return ();}',
+                        'pub run Demo(){return ();}', 'entry Demo(){return ();}']:
+        check('module sample;' + declaration, refuses='source.syntax')
+    check('module sample; interface Bad { entry fn Demo()->(); }', refuses='source.mode')
 
-with case('run stays contextual outside declarations'):
+with case('entry and run remain contextual outside declarations'):
     check('''module sample;
-      fn run(value:index)->index{return value;}
-      run Demo(entry:index){return run(entry);}
+      fn run(entry:index)->index{return entry;}
+      entry fn Demo(entry:index){return run(entry);}
     ''', entry='Demo')
+    check('module sample; entry fn run(entry:index){return entry;}', entry='run')
 
 counted()

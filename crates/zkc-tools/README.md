@@ -1,6 +1,6 @@
 # Entry and native execution hosts
 
-`zkc` compiles `.zkc` Run functions into authenticated Host packages. Host
+`zkc` compiles `.zkc` Entry functions into authenticated Host packages. Host
 control invokes native protocol/proof deployments and numerical `zkc.program/0`
 functions through the generic runtime. The public library separates project compilation, execution owners and shared values:
 
@@ -75,7 +75,7 @@ their success is bounded execution evidence. Build the product with
 `cargo build -p zkc-tools --bin zkc`; test providers are disabled by default.
 Run Rust tests with `cargo test --workspace --all-features`.
 
-Run functions use `FunctionInterface`, `FunctionEntry`, `FunctionRequest` and
+Entry functions use `FunctionInterface`, `FunctionEntry`, `FunctionRequest` and
 `FunctionReport`. Their Host control invokes existing numerical, joint and proof
 owners; it does not interpret mathematical primitives. Generated `bindings::call`
 checks its package pin and returns the typed source result with the complete

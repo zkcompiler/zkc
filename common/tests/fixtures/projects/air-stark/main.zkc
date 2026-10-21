@@ -40,7 +40,7 @@ protocol RecurrenceProof roles(P,V)
   return (accepted = accepted);
 }
 
-run Run(inputs: RecurrenceProof::Inputs) { return RecurrenceProof::run(inputs); }
+entry fn Run(inputs: RecurrenceProof::Inputs) { return RecurrenceProof::run(inputs); }
 proof Proof = RecurrenceProof {
   prover P;
   verifier V;

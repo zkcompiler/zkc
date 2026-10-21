@@ -60,4 +60,4 @@ pub protocol Inspect roles(P)(low: Vector<F> @P, high: Vector<F> @P,
   let (folded, residuals) @P = inspect(batch);
   return (folded = folded, residuals = residuals);
 }
-run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }

@@ -560,7 +560,7 @@ fn function(package: &Package) -> Result<String> {
             .map(str::to_owned)
             .collect(),
     );
-    generator.add("// Generated from an authenticated zkc Run function package.\n// Mathematical leaves retain native Value ingress; all execution uses FunctionEntry.\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc_tools::entry::Value>>(value: ::zkc_tools::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
+    generator.add("// Generated from an authenticated zkc Entry function package.\n// Mathematical leaves retain native Value ingress; all execution uses FunctionEntry.\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc_tools::entry::Value>>(value: ::zkc_tools::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
     generator.add(format!(
         "pub const PACKAGE_SHA256:[::core::primitive::u8;32]={:?};\n",
         package.identity()

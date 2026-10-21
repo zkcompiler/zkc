@@ -111,7 +111,7 @@ int main() {
       protocol Run roles(P)(a:index@P,b:index@P)->(sum:index@P,same:bool@P){
         let sum@P=a+b;let same@P=a==b;return(sum,same);
       }
-      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
     const auto &body = *decl(project, "m::Run").body;
     require(body.effects.fixed.mayStop,
@@ -152,18 +152,18 @@ int main() {
     for (const auto &[source, depth] :
          std::vector<std::pair<std::string, unsigned>>{
              {"protocol Run roles(P)(a:index@P,b:index@P)->(r:index@P){return "
-              "a+b;}run Demo(inputs: Run::Inputs) { return "
+              "a+b;}entry fn Demo(inputs: Run::Inputs) { return "
               "Run::run(inputs); }",
               2},
              {"math fn both(a:bool,b:bool)->bool=primitive(\"bool.and\");fn "
               "f(a:bool,b:bool)->bool{return both(a,b);}protocol Run "
-              "roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return f(a,b);}run "
+              "roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return f(a,b);}entry fn "
               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
               3},
              {field +
                   "type V=builtin(\"vector\",F);fn f(a:V,b:V)->V{return map "
                   "zkc::prelude::field_add(each a,each b);}protocol Run "
-                  "roles(P)(a:V@P,b:V@P)->(r:V@P){return f(a,b);}run "
+                  "roles(P)(a:V@P,b:V@P)->(r:V@P){return f(a,b);}entry fn "
                   "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
               3}}) {
       Limits limits;
@@ -422,7 +422,7 @@ int main() {
         operator + = other;
         return sum<T=F,A=Ordinary<F>>(x,x);
       }
-      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )"));
     take(prepareOriginal(
         take(zkc::test::closeProtocolDeployment(project, "m::Demo"))));

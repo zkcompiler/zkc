@@ -163,8 +163,8 @@ construction Base<N:nat> for First<N>{base authored;}
                      : "closure cannot change a run into a proof",
         [&] {
           std::string source =
-              "module m;protocol R roles(P)()->(ok:bool@P){return true;}run "
-              "Run(inputs: R::Inputs) { return R::run(inputs); }";
+              "module m;protocol R roles(P)()->(ok:bool@P){return true;}entry "
+              "fn Run(inputs: R::Inputs) { return R::run(inputs); }";
           if (addSelection) {
             source = (program + deployment).str();
             auto at = source.find("construction Derived<F,Provider>;");

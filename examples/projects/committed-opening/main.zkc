@@ -38,7 +38,7 @@ protocol CommittedOpening<LogRows: nat, Width: nat> roles(P,V)
   return (accepted = accepted);
 }
 
-run Interactive(inputs: CommittedOpening<3, 3>::Inputs) {
+entry fn Interactive(inputs: CommittedOpening<3, 3>::Inputs) {
   return CommittedOpening<3, 3>::run(inputs);
 }
 proof Proof = CommittedOpening<3, 3> {

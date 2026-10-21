@@ -44,7 +44,7 @@ int main() {
                        : "{return intrinsic<T>(\"curve.identity\");}") +
             R"(
           protocol Run roles(P,V)()->(z:G@(P,V)){return(z=zero<G>());}
-          run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+          entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
         )";
         auto original = take(
             language::prepareOriginal(take(zkc::test::closeProtocolDeployment(
@@ -124,7 +124,7 @@ int main() {
       take(language::prepareOriginal(take(zkc::test::closeProtocolDeployment(
           take(check(R"(domain G=group("bn254.g1");
         math fn zero()->G{return intrinsic<G>("curve.identity");}
-        protocol Run roles(P)()->(z:G@P){return(z=zero());}run Demo(inputs: Run::Inputs) { return Run::run(inputs); })")),
+        protocol Run roles(P)()->(z:G@P){return(z=zero());}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })")),
           "sample::Demo"))));
   auto projected = parseSourceString<ModuleOp>(original.bytes(), &context);
   require(bool(projected), "mutation source");

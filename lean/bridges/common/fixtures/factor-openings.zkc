@@ -55,7 +55,7 @@ protocol ExpandedProtocol roles(P,V)
   return (accepted = rightValid && productValid);
 }
 
-run Expanded(inputs: ExpandedProtocol::Inputs) {
+entry fn Expanded(inputs: ExpandedProtocol::Inputs) {
   return ExpandedProtocol::run(inputs);
 }
 
@@ -106,7 +106,7 @@ protocol HornerProtocol roles(P,V)
   return (accepted = rightValid && productValid);
 }
 
-run Horner(inputs: HornerProtocol::Inputs) {
+entry fn Horner(inputs: HornerProtocol::Inputs) {
   return HornerProtocol::run(inputs);
 }
 
@@ -157,7 +157,7 @@ protocol WrongPointProtocol roles(P,V)
   return (accepted = rightValid && productValid);
 }
 
-run WrongPoint(inputs: WrongPointProtocol::Inputs) {
+entry fn WrongPoint(inputs: WrongPointProtocol::Inputs) {
   return WrongPointProtocol::run(inputs);
 }
 
@@ -208,6 +208,6 @@ protocol WrongResidualProtocol roles(P,V)
   return (accepted = rightValid && productValid);
 }
 
-run WrongResidual(inputs: WrongResidualProtocol::Inputs) {
+entry fn WrongResidual(inputs: WrongResidualProtocol::Inputs) {
   return WrongResidualProtocol::run(inputs);
 }

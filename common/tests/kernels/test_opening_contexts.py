@@ -33,7 +33,7 @@ protocol Run roles(P)(shift:F@P,bound_shift:F@P,state_shift:F@P,
    bound_width,height,zeta,descriptors);
  let next=CONTINUE;
  return(result=RESULT,weight=WEIGHT);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

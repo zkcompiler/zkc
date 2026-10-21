@@ -14,7 +14,7 @@ CompiledEntry compile(StringRef selected, const EntryOptions &options = {}) {
   auto capture = take(language::capture({{"sample",
                                           R"(module sample;
     protocol Check roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
-    run Session(inputs: Check::Inputs) { return Check::run(inputs); }
+    entry fn Session(inputs: Check::Inputs) { return Check::run(inputs); }
     proof Proof=Check{prover P;verifier V;public{ok};accept accepted;construction authored;}
     proof Alias=Proof;)",
                                           {}}}));

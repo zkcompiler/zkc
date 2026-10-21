@@ -42,7 +42,7 @@ math fn work(xs:Vector<Fr>)->Fr {{
  return total(indices(xs),0,fn(state,i)=>state+subject({actuals}));
 }}
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){{return work(xs);}}
-run Run(inputs: Demo::Inputs) {{ return Demo::run(inputs); }}
+entry fn Run(inputs: Demo::Inputs) {{ return Demo::run(inputs); }}
 ''')
     options = ['--source-format=zkc', f'--module=m={path}']
     commands.run([compiler, 'language-check', *options])

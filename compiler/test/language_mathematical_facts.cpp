@@ -199,7 +199,7 @@ math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys){
  return total(indices(xs),0,fn(state,i)=>state+at(ys,i));
 }
 math fn same(xs:Vector<Fr>)->Fr{return work(xs,xs);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
@@ -326,7 +326,7 @@ math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(select(x
     auto project = take(check(collections + R"(
 math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(copy(xs),i);}
 math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(s,i)=>s+read(xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
@@ -342,7 +342,7 @@ math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){
  return subtotal+at(l,i);
 }
 math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(st,i)=>st+read(xs,xs,i));}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
@@ -355,7 +355,7 @@ math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
  let p=Pair{left:copy(xs),right:copy(ys)};
  return total(indices(xs),0,fn(st,j)=>st+at(p.left,j));
 }
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 )"));
     auto closed = take(zkc::test::closeProtocolDeployment(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))

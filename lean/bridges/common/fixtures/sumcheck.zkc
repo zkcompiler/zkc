@@ -34,6 +34,6 @@ protocol Sumcheck roles(P, V)
   return (accepted = finalClaim == actual);
 }
 
-run Interactive(inputs: Sumcheck::Inputs) {
+entry fn Interactive(inputs: Sumcheck::Inputs) {
   return Sumcheck::run(inputs);
 }

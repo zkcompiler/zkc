@@ -41,7 +41,7 @@ pub fn fold<T:Field>(a:Vector<T>,b:Vector<T>,r:T) {
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,r:F@P)->(out:Vector<F>@P){
   return fold(a,b,r);
 }
-run Job(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'modules': {
         'main': source.name, 'formula': library.name,
@@ -90,7 +90,7 @@ def source_project(directory):
     source.write_text('''module main;
 math fn identity<T:Type+Copy+Drop>(value:T){return value;}
 protocol Run roles(P)(x:bool@P)->(out:bool@P){return identity(x);}
-run Job(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0',
                      'modules': {'main': 'main.zkc'}, 'assets': {}})
@@ -129,7 +129,7 @@ def test_check_requires_a_successful_compiler_report(toolchain, journal, directo
 
 def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal, directory):
     source, project = source_project(directory)
-    source.write_text(source.read_text().replace('run Job(', 'pub run Job('))
+    source.write_text(source.read_text().replace('entry fn Job(', 'pub entry fn Job('))
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                f'--project={project}', 'main::Job']
     baseline = journal.json(command)
@@ -404,13 +404,13 @@ def test_discovery_selection_and_default_output(toolchain, journal, directory):
     config['modules']['library'] = library.name
     project.write_text(project_text(config))
     assert journal.json(compile, cwd=child)['entry'] == 'main::Job'
-    source.write_text(source.read_text() + '\nrun Alias(inputs: Run::Inputs) { return Job(inputs); }')
+    source.write_text(source.read_text() + '\nentry fn Alias(inputs: Run::Inputs) { return Job(inputs); }')
     refused = journal.json(compile, cwd=child, refuses='source-compilation')
     assert 'source.entry' in refused['diagnostics']
     assert 'main::Alias (function)' in refused['diagnostics'] and 'main::Job (function)' in refused['diagnostics']
     assert journal.json([*compile, 'Job'], cwd=child)['entry'] == 'main::Job'
     # Another module's same short name is ambiguous, never preferred by location.
-    library.write_text('module library; protocol Run roles(P)()->(){return();}run Job(inputs: Run::Inputs) { return Run::run(inputs); }')
+    library.write_text('module library; protocol Run roles(P)()->(){return();}entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }')
     refused = journal.json([*command, 'Job'], cwd=child, refuses='source-compilation')
     assert 'library::Job (function)' in refused['diagnostics']
     assert journal.json([*command, 'main::Job'], cwd=child)['entry'] == 'main::Job'
@@ -453,7 +453,7 @@ def test_default_output_protection_and_name_collision(toolchain, journal, direct
         assert target.read_bytes() == before
         output.unlink()
     # Case-folded collisions refuse even on a case-sensitive filesystem.
-    source.write_text(source.read_text() + '\nrun job(inputs: Run::Inputs) { return Job(inputs); }')
+    source.write_text(source.read_text() + '\nentry fn job(inputs: Run::Inputs) { return Job(inputs); }')
     journal.run([*command, 'Job'], cwd=directory)
     original = output.read_bytes()
     journal.run([*command, 'job'], cwd=directory, refuses='source-output-collision')
@@ -481,7 +481,7 @@ def test_toml_comments_order_and_omitted_assets_preserve_capture(toolchain, jour
 def test_default_output_requires_a_portable_filename(toolchain, journal, directory, module, entry):
     source, project = source_project(directory)
     source.write_text(source.read_text().replace('module main;', f'module {module};')
-                      .replace('run Job(', f'run {entry}('))
+                      .replace('entry fn Job(', f'entry fn {entry}('))
     project.write_text(project_text({'format': 'zkc.project/0', 'modules': {module: source.name}}))
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}']
     journal.run(command, cwd=directory, refuses='source-output-name')

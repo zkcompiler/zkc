@@ -40,7 +40,7 @@ def test_group_identity(toolchain, journal, directory, group, flags):
       return true;
     }}
     protocol Run roles(P)()->(ok:bool@P){{let ok @P=check();return(ok=ok);}}
-    run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+    entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     '''
     libraries = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))
@@ -78,7 +78,7 @@ def test_curve_bulk_api(toolchain, journal, directory, group, flags):
       return true;
     }}
     protocol Run roles(P)(malformed:bool@P)->(ok:bool@P){{return check(malformed);}}
-    run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+    entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     '''
     libraries = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))

@@ -1,7 +1,7 @@
 # Compilation pipeline
 
 Protocol source and direct Protocol IR share the mathematical compilation
-pipeline and native VM. Application `run` control uses standard MLIR `func`/`scf`
+pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`scf`
 and typed `entry` operations, published as `zkc.host/0`. Its numerical helpers
 reuse Kernel realization and physical export; its protocol and proof calls invoke
 the existing participant pipelines. The [architecture map](../architecture.md)

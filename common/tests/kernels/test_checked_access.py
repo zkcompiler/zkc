@@ -29,7 +29,7 @@ fn access(m:Matrix<F>,row:index,column:index)->F {{
 protocol Run roles(P)(m:Matrix<F>@P,row:index@P,column:index@P)->(result:F@P) {{
   return access(m,row,column);
 }}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     degree = DEGREE.get(field, 1)
@@ -65,7 +65,7 @@ fn access(values:Vector<F>,position:index)->F {{
 protocol Run roles(P)(values:Vector<F>@P,position:index@P)->(result:F@P) {{
   return access(values,position);
 }}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     values = [str(3 * i + 7) for i in range(length)]
@@ -90,7 +90,7 @@ fn access(a:F,b:F,position:index)->(F,F) {
 protocol Run roles(P)(a:F@P,b:F@P,position:index@P)->(result:(F,F)@P) {
   return access(a,b,position);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     assert entry.run('valid', {'a': '7', 'b': '11', 'position': '0'})['result'] == ['7', '11']

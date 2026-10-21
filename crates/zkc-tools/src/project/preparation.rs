@@ -36,7 +36,7 @@ impl Template {
             ),
             (
                 "main.zkc",
-                "module example;\n\nrun Main(value: index) -> index {\n  return value;\n}\n",
+                "module example;\n\nentry fn Main(value: index) -> index {\n  return value;\n}\n",
             ),
         ]
         .into_iter()

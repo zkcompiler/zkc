@@ -114,7 +114,7 @@ CheckedOriginal compile(StringRef code) {
       take(zkc::test::closeProtocolDeployment(project, "sample::Demo"))));
 }
 // These native controls intentionally expose affine result custody. Their
-// protocol deployment is independent of an ordinary source Run function.
+// protocol deployment is independent of an ordinary source Entry function.
 CheckedOriginal compileNative(StringRef code) {
   auto project = take(
       analyze(take(capture({{"sample", code.str(), {}}}))).checkedProject());
@@ -334,7 +334,7 @@ int main() {
         text += ',';
       text += name;
     }
-    text += ")@P)->(){return ();}run Demo(inputs: Run::Inputs) { return "
+    text += ")@P)->(){return ();}entry fn Demo(inputs: Run::Inputs) { return "
             "Run::run(inputs); }";
     auto project = analyze(take(capture({{module, text, "long-type.zkc"}})))
                        .checkedProject();
@@ -509,7 +509,7 @@ protocol Run roles(P)(a:Box<bool>@P,b:Box<index>@P,c:[bool;0]@P,d:[index;0]@P)
   ->(x:Box<bool>@P,y:Box<index>@P,u:[bool;0]@P,v:[index;0]@P){
   return(x=a,y=b,u=c,v=d);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
     const auto &v = source.interface().selectedProtocol();
     require(v.inputs[0].schema->identity != v.inputs[1].schema->identity &&
                 v.inputs[2].schema->identity != v.inputs[3].schema->identity &&
@@ -700,7 +700,7 @@ run Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
         source += ",";
       source += "a" + std::to_string(i) + ":[();1024]@P";
     }
-    source += ")->(){return();}run Demo(inputs: Run::Inputs) { return "
+    source += ")->(){return();}entry fn Demo(inputs: Run::Inputs) { return "
               "Run::run(inputs); }";
     auto captured = take(capture({{"sample", source, {}}}));
     auto project = take(analyze(captured).checkedProject());
@@ -712,7 +712,7 @@ run Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
             [] {
               auto source = compile(R"zkc(module sample;
 protocol Run roles(P)(a:bool@P)->(b:bool@P) {return(b=a);}
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
               auto value = take(json::parse(source.interfaceJson()));
               input(value)["name"] = "renamed";
               take(readInterface(source.bytes(), zkc::printJson(value)));
@@ -809,7 +809,7 @@ protocol Run roles(P)()->(result:Wrapper@P) {let value @P =make(); return(result
   cases.run("zero-leaf shared ports still require source permissions", [] {
     auto source = compile(R"zkc(module sample;
 protocol Run roles(P,V)()->(empty:()@(V,P)) {return(empty=());}
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })zkc");
     auto view = take(readInterface(source.bytes(), source.interfaceJson()));
     require(view.selectedProtocol().outputs[0].native.empty() &&
                 view.selectedProtocol().outputs[0].roles.size() == 2,
@@ -877,7 +877,7 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
                   domain.identity +
                   "\");"
                   "protocol Run roles(P,V)(x:D@(V,P))->(result:D@(V,P)) "
-                  "{return(result=x);}run Demo(inputs: Run::Inputs) { "
+                  "{return(result=x);}entry fn Demo(inputs: Run::Inputs) { "
                   "return Run::run(inputs); }");
       auto view = take(readInterface(source.bytes(), source.interfaceJson()));
       require(view.selectedProtocol().inputs[0].schema->constructible &&
@@ -1009,7 +1009,7 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
         "!local.capability<\"transcript:merlin3.bls12-381.fr64be/0\">";
     auto source =
         compile("module sample;protocol Pass "
-                "roles(P)(x:bool@P)->(r:bool@P){return x;}run "
+                "roles(P)(x:bool@P)->(r:bool@P){return x;}entry fn "
                 "Demo(inputs: Pass::Inputs) { return Pass::run(inputs); }");
     auto native = source.bytes().str();
     for (size_t at = 0; (at = native.find("i1", at)) != std::string::npos;

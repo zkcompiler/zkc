@@ -48,7 +48,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P,
   let constant = broadcast(a, s);
   return (folded = folded, combined = combined, constant = constant);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # The mapped result is never used; its shape checks still execute.
@@ -67,7 +67,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P)
   let kept = dead(a, b, s);
   return (kept = kept);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # A map inside a loop executes, and checks shapes, once per iteration.
@@ -89,7 +89,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P, n: index @P)
   let repeated = repeat(a, b, s, n);
   return (repeated = repeated);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 # One helper realized for a scalar call and for two different row masks.
@@ -114,7 +114,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, x: Fr @P, y: Fr @P,
   let scalar = single(x, y, s);
   return (rows = rows, toward = toward, scalar = scalar);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 
@@ -332,7 +332,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P, s: F
   let combined = combine(a, b, c, s);
   return (combined = combined);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
 
 

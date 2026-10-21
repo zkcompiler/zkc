@@ -39,13 +39,13 @@ Default-ignorable and bidi-control characters outside comments are illegal code
 tokens and never whitespace. This is not a whole-buffer comment-content ban or
 a guarantee against visually confusable identifiers.
 
-Keywords remain reserved except in explicitly contextual positions. `run`,
+Keywords remain reserved except in explicitly contextual positions. `entry`,
 `proof`, `operator`, `as`, `primitive`, `notation`, `infixl`, `infixr`, `infix`,
 `prefix` and `postfix` have special meanings in their declaration or import
 grammar; elsewhere they remain available as ordinary names. `effects` introduces
 a callable's effect bound. `item_from` introduces a callback-local `where`
 condition; an outer `where` rejects it with a diagnostic. Both remain ordinary
-names elsewhere, as does `on`.
+names elsewhere, as do `on` and `run`.
 
 ## Mathematical tokens
 

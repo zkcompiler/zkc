@@ -10,4 +10,4 @@ protocol Run roles(P)(a:bool@P,b:bool@P)
   let e @P =local_formula(a,b);
   return(mathematical=m,executable=e);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

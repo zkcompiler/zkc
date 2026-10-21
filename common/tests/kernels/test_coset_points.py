@@ -36,7 +36,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,poi
     ->(result:(Vector<F>,Vector<F>,F,F)@P) {{
   return evaluate(xs,width,height,shift,point);
 }}
-run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
 
@@ -130,7 +130,7 @@ protocol Work roles(P)(xs:Vector<F>@P,width:index@P,height:index@P,shift:F@P,
   return(single=single,columns=columns,selected=selected,data=data,word_values=word_values,
     width=batch_width,height=batch_height,shift=batch_shift);
 }}
-run Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
+entry fn Demo(inputs: Work::Inputs) {{ return Work::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
                   [*library_modules('core/polynomial'), *flags])

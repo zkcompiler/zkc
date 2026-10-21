@@ -27,14 +27,14 @@ int main() {
               R"( f(a:bool,b:bool,c:bool){return !a || b && c == false;}
         protocol Run roles(P)(a:bool@P,b:bool@P,c:bool@P)->(r:bool@P){
           return f(c=c,b=b,a=a);
-        }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+        }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
       )");
     });
   cases.run("common protocol mathematics and relation formulas", [] {
     compile(R"(
       relation R(statement x:bool,witness w:bool){return x && !w;}
       protocol Run roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return a || b && !a;}
-      run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+      entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
     )");
     refuses(check("protocol Run "
                   "roles(P,V)(a:bool@P,b:bool@V)->(r:bool@P){return a&&b;}"),
@@ -50,8 +50,8 @@ int main() {
     cases.run("local conditional operands: " + expression, [&] {
       compile("fn f(a:bool){return " + expression.str() +
               ";}"
-              "protocol Run roles(P)(a:bool@P)->(r:bool@P){return f(a);}run "
-              "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+              "protocol Run roles(P)(a:bool@P)->(r:bool@P){return f(a);}entry "
+              "fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
     });
   cases.run("operand inference shares the enclosing expression", [] {
     take(check(R"(
@@ -126,8 +126,8 @@ int main() {
               "source.mode");
     // Negation has no skipped operand, so an ordered call remains ordered.
     compile("fn f(x:bool){require x;return x;}"
-            "protocol Run roles(P)(x:bool@P)->(r:bool@P){return !f(x);}run "
-            "Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
+            "protocol Run roles(P)(x:bool@P)->(r:bool@P){return !f(x);}entry "
+            "fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
     refuses(check("interface Bad{math fn f(x:bool)->bool effects(stop);}"),
             "source.effect");
   });

@@ -150,7 +150,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   bool host = callee.kind == Declaration::Kind::EntryFunction ||
               (callee.generated && callee.generated->operation);
   if (host && body.stage != Body::Stage::Host) {
-    fail("source.stage", "Host calls require a run function", expr.span);
+    fail("source.stage", "Host calls require an entry function", expr.span);
     return {};
   }
   bool ordered = callee.kind == Declaration::Kind::Local || host;

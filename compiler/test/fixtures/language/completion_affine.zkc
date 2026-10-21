@@ -11,4 +11,4 @@ protocol Run roles(P)(n: index @P, go: bool @P, x: Fr @P) -> (state: State @P) c
   return state;
 }
 
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

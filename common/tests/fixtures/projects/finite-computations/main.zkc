@@ -30,7 +30,7 @@ protocol Compute roles(P)(xs: Vector<F> @P, ys: Vector<F> @P,
   return (dot = dot, square_sum = energy(xs), selected_sum = selected(xs),
           matrix_total = matrix_sum(matrix));
 }
-run Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
+entry fn Demo(inputs: Compute::Inputs) { return Compute::run(inputs); }
 
 // A scalar demand contracts only the selected row. A collection demand can
 // contract all rows once; an empty row domain never enters its inner fold.
@@ -46,4 +46,4 @@ protocol MatrixProducts roles(P)(matrix: Matrix<F> @P, xs: Vector<F> @P,
   let row_result @P = zkc::matrix::row_dot(matrix, xs, row);
   return (selected = row_result, rows = all_rows(matrix, xs, seed));
 }
-run MatrixDemo(inputs: MatrixProducts::Inputs) { return MatrixProducts::run(inputs); }
+entry fn MatrixDemo(inputs: MatrixProducts::Inputs) { return MatrixProducts::run(inputs); }

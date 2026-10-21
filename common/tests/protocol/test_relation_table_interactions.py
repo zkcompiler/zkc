@@ -88,7 +88,7 @@ protocol View roles(Evaluator)
   return (policy = p, counts = c, descriptor = d, subgroup_records = s,
           subgroup_residuals = r, ood_records = o, facts = f);
 }
-run Interactions(inputs: View::Inputs) { return View::run(inputs); }
+entry fn Interactions(inputs: View::Inputs) { return View::run(inputs); }
 '''
 
 # Only the policy: no execution height is involved.
@@ -107,7 +107,7 @@ protocol Policy roles(Evaluator)(unused: index @Evaluator)
   let p @Evaluator = policy_of<FIELD,TABLE,Machine>();
   return (policy = p);
 }
-run Interactions(inputs: Policy::Inputs) { return Policy::run(inputs); }
+entry fn Interactions(inputs: Policy::Inputs) { return Policy::run(inputs); }
 '''
 
 

@@ -43,7 +43,7 @@ int main() {
     math fn bound<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return x[0];}
     math fn relay<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return bound<N>(x);}
     protocol Run roles(P)(x:[F;4]@P)->(r:[F;4]@P){let y=shifted<1>(x);return(r=y);}
-    run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )"));
   auto original = take(prepareOriginal(
       take(zkc::test::closeProtocolDeployment(source, "m::Demo"))));
@@ -72,8 +72,8 @@ int main() {
     math fn inner<N:nat>(x:F)->F{return ignore<pow2(N)>(x);}
     math fn outer<M:nat>(x:F)->F{return inner<pow2(M)>(x);}
     protocol Run<M:nat> roles(P)(x:F@P)->(r:F@P){let y=outer<M>(x);return(r=y);}
-    run Good(inputs: Run<5>::Inputs) { return Run<5>::run(inputs); }
-    run Overflow(inputs: Run<6>::Inputs) { return Run<6>::run(inputs); }
+    entry fn Good(inputs: Run<5>::Inputs) { return Run<5>::run(inputs); }
+    entry fn Overflow(inputs: Run<6>::Inputs) { return Run<6>::run(inputs); }
   )"));
   take(compileEntry(take(prepareOriginal(
       take(zkc::test::closeProtocolDeployment(bodyOnly, "m::Good"))))));

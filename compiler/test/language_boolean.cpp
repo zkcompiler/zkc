@@ -31,7 +31,7 @@ int main() {
     }
     protocol Run roles(P,V)(a:bool@(P,V),b:bool@(P,V))->(r:bool@(P,V)){
       return(r=formula(a,b));
-    }run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+    }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )";
   auto original = take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
       take(check(program)), "sample::Demo"))));
@@ -98,7 +98,7 @@ int main() {
         auto protocol = [&](StringRef roles) {
           return helper + "protocol Run roles(P,V)(a:bool@P,b:bool@" +
                  roles.str() + ")->(r:bool@P){return(r=" + callee +
-                 "(a,b));}run Demo(inputs: Run::Inputs) { return "
+                 "(a,b));}entry fn Demo(inputs: Run::Inputs) { return "
                  "Run::run(inputs); }";
         };
         take(prepareOriginal(take(zkc::test::closeProtocolDeployment(

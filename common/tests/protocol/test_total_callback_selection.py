@@ -29,7 +29,7 @@ FOLD = '''
 protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P)->(value:F@P) {
   return total::fold(vec::elements(values), initial, fn(p,x)=>CALLBACK);
 }
-run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
 
 
@@ -105,7 +105,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, factor:F@P, offset:F@P)
     ->(value:vec::Vector<F>@P) {
   return collect(vec::elements(values), fn(x)=>affine(x,factor,offset));
 }
-run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     if repeated_capture:
         source = source.replace('affine(x,factor,offset)', 'affine(x,factor,factor)')
@@ -134,7 +134,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P, enabled:bool@P)
     fn(x)=>enabled, fn(p,x)=>wrapped(p,x));
   return (square, filtered);
 }
-run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)
@@ -162,7 +162,7 @@ protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P, limit:index@P)
     ->(value:F@P) {
   return total::fold(vec::elements(values), initial, fn(p,x)=>nested(p,x,limit));
 }
-run Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)

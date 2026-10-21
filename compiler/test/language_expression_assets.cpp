@@ -112,7 +112,7 @@ source(StringRef body = "", StringRef entry = "Run<Product>",
   return (Twine(prelude) + body +
           "protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(ok: bool@E) " +
           protocolBound + " {\n  let ok @E = shape<F,A>(v);\n" +
-          "  return (ok=ok);\n}\nrun Demo(inputs: " + entry +
+          "  return (ok=ok);\n}\nentry fn Demo(inputs: " + entry +
           "::Inputs) { return " + entry + "::run(inputs); }\n")
       .str();
 }
@@ -226,7 +226,7 @@ int main() {
     auto twice = source("domain Again = ring(asset product);\n"
                         "protocol Other roles(E)(v: Vector<F>@E)->(ok: bool@E)"
                         " { let ok @E = shape<F,Again>(v);"
-                        " return (ok=ok); }\nrun Second(inputs: "
+                        " return (ok=ok); }\nentry fn Second(inputs: "
                         "Other::Inputs) { return Other::run(inputs); }\n");
     auto first = take(close(twice, {product()}));
     auto second = take(close(twice, {product()}, {}, "sample::Second"));
@@ -296,7 +296,7 @@ protocol Count<B: Bundle> roles(E)(v: Vector<F>@E)->(n: index@E)
   let n @E = forwarded<B>();
   return (n=n);
 }
-run Demo(inputs: Count<Recurrence>::Inputs) { return Count<Recurrence>::run(inputs); }
+entry fn Demo(inputs: Count<Recurrence>::Inputs) { return Count<Recurrence>::run(inputs); }
 )";
     // A generic term's facts reach the body as constants of the captured
     // bundle, through a renamed parameter, and bounds entail each other.
@@ -380,7 +380,7 @@ run Demo(inputs: Count<Recurrence>::Inputs) { return Count<Recurrence>::run(inpu
         "fn second(x: Row<Product>) -> bool { return x[1]; }\n"
         "protocol Rows roles(E)(x: Row<Product>@E)->(ok: bool@E)"
         " { let ok @E = second(x); return (ok=ok); }\n"
-        "run Alias(inputs: Rows::Inputs) { return Rows::run(inputs); }\n");
+        "entry fn Alias(inputs: Rows::Inputs) { return Rows::run(inputs); }\n");
     auto rows = take(close(aliased, {product()}, {}, "sample::Alias"));
     require(rows.protocol().inputs[0].type.kind == Type::Kind::Array &&
                 rows.protocol().inputs[0].type.dimension.closedValue() == 2,
@@ -395,14 +395,14 @@ run Demo(inputs: Count<Recurrence>::Inputs) { return Count<Recurrence>::run(inpu
                " return E::eval(v); }\n"
                "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
                " { let r @E = through<F, Fixed<F, Product>>(v);"
-               " return (r=r); }\nrun Selected(inputs: Dispatch::Inputs) "
+               " return (r=r); }\nentry fn Selected(inputs: Dispatch::Inputs) "
                "{ return Dispatch::run(inputs); }\n");
     auto dispatched = take(close(module, {product()}, {}, "sample::Selected"));
     require(ringReferences(dispatched).size() == 1 &&
                 dispatched.assets().size() == 1,
             "module member did not close its asset parameter");
     auto generic = source("domain Cube = ring(asset cube);\n"
-                          "run Other(inputs: Run<Cube>::Inputs) { return "
+                          "entry fn Other(inputs: Run<Cube>::Inputs) { return "
                           "Run<Cube>::run(inputs); }\n");
     auto first = take(close(generic, {product(), cubic("cube")}));
     auto other =

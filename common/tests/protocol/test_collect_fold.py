@@ -81,7 +81,7 @@ math fn work(xs:Vector<F>,first:F,second:F)->(F,F){
 }
 protocol Work roles(P)(xs:Vector<F>@P,first:F@P,second:F@P)->(result:(F,F)@P){
  return work(xs,first,second);
-}run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+}entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     field = 'koala-bear' + ('.ext8-binomial3' if extension else '')
     source = source.replace('FIELD', field).replace('DOMAIN', 'indices' if indexed else 'elements')
@@ -112,7 +112,7 @@ math fn work(xs:Vector<F>,seed:F)->F{
  return fold(elements(values),seed,fn(s,x)=>s*s+x);
 }
 protocol Work roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,seed);}
-run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)
@@ -136,7 +136,7 @@ fn work(xs:vec::Vector<F>,ys:vec::Vector<F>,seed:F)->F{
  return finite::fold(seq::elements(values),seed,fn(s,x)=>s*s+x);
 }
 protocol Work roles(P)(xs:vec::Vector<F>@P,ys:vec::Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,ys,seed);}
-run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry, sites = compile_entry(toolchain, journal, directory, source, flags)
     assert sites['sequence.append'], 'partial collect must retain materialization'
@@ -156,7 +156,7 @@ math fn work(xs:Vector<F>,seed:F)->(Vector<F>,F){
  return(ys,result);
 }
 protocol Work roles(P)(xs:Vector<F>@P,seed:F@P)->(result:(Vector<F>,F)@P){return work(xs,seed);}
-run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FIELD', 'koala-bear'), flags)
     assert entry.run('empty', {'xs': [], 'seed': 7}) == {'result': [[], '7']}
@@ -171,7 +171,7 @@ math fn work(xs:Vector<F>,limit:index,seed:F)->F{
  return fold(elements(values),seed,fn(s,x)=>s*s+x);
 }
 protocol Work roles(P)(xs:Vector<F>@P,limit:index@P,seed:F@P)->(result:F@P){return work(xs,limit,seed);}
-run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source.replace('FIELD', 'koala-bear'), flags)
     assert entry.run('inner-empty', {'xs': [2, 3], 'limit': 0, 'seed': 7}) == {'result': '2604'}
@@ -193,7 +193,7 @@ math fn work(xs:vec::Vector<F>,seed:F)->(F,bool){
  return total::fold(seq::elements(ys),initial,fn((s,b),x)=>(s+x,s==x));
 }
 protocol Work roles(P)(xs:vec::Vector<F>@P,seed:F@P)->(result:(F,bool)@P){return work(xs,seed);}
-run Demo(inputs: Work::Inputs) { return Work::run(inputs); }
+entry fn Demo(inputs: Work::Inputs) { return Work::run(inputs); }
 '''
     flags = ['--fuse-collect-fold'] if fused else []
     entry, sites = compile_entry(toolchain, journal, directory, source, flags)

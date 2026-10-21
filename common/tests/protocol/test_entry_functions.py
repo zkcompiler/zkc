@@ -1,4 +1,4 @@
-"""Source Run functions share native calculation, proof and cumulative policy."""
+"""Source Entry functions share native calculation, proof and cumulative policy."""
 import json
 
 import pytest
@@ -38,8 +38,8 @@ CALCULATION = '''module example;
 domain F=field("koala-bear");
 math fn square(x:F)->F{return x*x;}
 fn shifted(x:F)->F{return square(x)+1;}
-run Step(x:F)->F{return shifted(x);}
-run Main(x:F,count:index,enabled:bool)->F{
+entry fn Step(x:F)->F{return shifted(x);}
+entry fn Main(x:F,count:index,enabled:bool)->F{
   let mut result=x;
   if enabled {for _ in 0..count {result=Step(result);}}
   return result;
@@ -69,8 +69,8 @@ def test_standalone_calculation_static_calls_and_reached_control(toolchain, jour
 
 def test_false_is_data_and_require_retains_a_failed_call_prefix(toolchain, journal, directory):
     source = '''module example;
-run Checked(go:bool)->bool{require go;return go;}
-run Main(go:bool,check:bool)->bool{
+entry fn Checked(go:bool)->bool{require go;return go;}
+entry fn Main(go:bool,check:bool)->bool{
   return if check {Checked(go)} else {go};
 }
 '''
@@ -89,8 +89,8 @@ run Main(go:bool,check:bool)->bool{
 @pytest.mark.parametrize('numeric', [False, True])
 def test_cumulative_instruction_budget_does_not_reset_at_entry_calls(toolchain, journal, directory, numeric):
     source = '''module example;
-run Step(x:bool)->bool{return x;}
-run Main(x:bool,count:index)->bool{
+entry fn Step(x:bool)->bool{return x;}
+entry fn Main(x:bool,count:index)->bool{
   let mut result=x;
   for _ in 0..count {result=Step(result);}
   return result;
@@ -140,8 +140,8 @@ protocol Check roles(P,V)(expected:bool@(P,V),candidate:bool@P)->(value:bool@P,a
   return(value=candidate,accepted=accepted);
 }
 proof Family=Check{prover P;verifier V;public{expected};accept accepted;construction authored;}
-run Produce(public:Family::Public,witness:Family::Witness){return Family::prove(public,witness);}
-run Verify(public:Family::Public,candidate:Family::Proof){return Family::verify(public,candidate);}
+entry fn Produce(public:Family::Public,witness:Family::Witness){return Family::prove(public,witness);}
+entry fn Verify(public:Family::Public,candidate:Family::Proof){return Family::verify(public,candidate);}
 '''
 
 
@@ -184,7 +184,7 @@ def test_independent_generated_proof_operations_and_semantic_rejection(toolchain
     'if go {for _ in 0..2 {stop "abort";}} return true;',
 ])
 def test_nested_stops_preserve_structured_regions_and_withhold_results(toolchain, journal, directory, body):
-    source = f'module example; run Main(go:bool)->bool{{{body}}}'
+    source = f'module example; entry fn Main(go:bool)->bool{{{body}}}'
     package, pin = compile_function(toolchain, journal, directory, source)
     _, value = execute(toolchain, journal, directory, package, pin, 'continue', {'go': False})
     assert value is True
@@ -198,8 +198,8 @@ def test_nested_stops_preserve_structured_regions_and_withhold_results(toolchain
 @pytest.mark.parametrize('count', [0, 3])
 def test_loop_state_packing_preserves_multiple_successors_and_invariants(toolchain, journal, directory, count):
     source = '''module example;
-run Step(x:index)->index{return x+1;}
-run Main(seed:index,count:index)->(index,index){
+entry fn Step(x:index)->index{return x+1;}
+entry fn Main(seed:index,count:index)->(index,index){
   let mut a=seed;
   let mut b=seed;
   for i in 0..count {a=Step(a);b=b+i+seed;}
@@ -216,8 +216,8 @@ run Main(seed:index,count:index)->(index,index){
 @pytest.mark.parametrize('count', [0, 3])
 def test_loop_without_state_keeps_reached_effects(toolchain, journal, directory, count):
     source = '''module example;
-run Check(go:bool)->(){require go;return ();}
-run Main(go:bool,count:index)->bool{
+entry fn Check(go:bool)->(){require go;return ();}
+entry fn Main(go:bool,count:index)->bool{
   for _ in 0..count {Check(go);}
   return true;
 }
@@ -258,8 +258,8 @@ protocol Check roles(P,V)(payload:Bytes@P)->(accepted:bool@V){
 }
 construction Raw for Check{base authored;format RawBytes;}
 proof Family=Check{prover P;verifier V;public{};accept accepted;construction Raw;}
-run Produce(witness:Family::Witness){return Family::prove(Family::Public{},witness);}
-run Verify(candidate:Family::Proof){return Family::verify(Family::Public{},candidate);}
+entry fn Produce(witness:Family::Witness){return Family::prove(Family::Public{},witness);}
+entry fn Verify(candidate:Family::Proof){return Family::verify(Family::Public{},candidate);}
 '''
     producer, producer_pin = compile_function(toolchain, journal, directory, source, 'Produce')
     verifier, verifier_pin = compile_function(toolchain, journal, directory, source, 'Verify')
@@ -281,7 +281,7 @@ protocol Check roles(P)(x:bool@P)->(value:bool@P){return(value=x);}
         expression = 'Wrapped{result:result,ok:true}'
     else:
         expression = '(result,true)'
-    source += f'run Main(inputs:Check::Inputs){{let result=Check::run(inputs);return {expression};}}'
+    source += f'entry fn Main(inputs:Check::Inputs){{let result=Check::run(inputs);return {expression};}}'
     package, pin = compile_function(toolchain, journal, directory, source)
     _, value = execute(toolchain, journal, directory, package, pin, 'wrapped',
                         {'inputs': {'P': {'x': True}}})
@@ -299,7 +299,7 @@ protocol Check roles({roles})()->(accepted:bool@R19){{
   let accepted@R19=true;
   return(accepted=accepted);
 }}
-run Main(){{return Check::run(Check::Inputs{{{','.join(f'R{i:02}:Check::Inputs::R{i:02}{{}}' for i in range(20))}}});}}
+entry fn Main(){{return Check::run(Check::Inputs{{{','.join(f'R{i:02}:Check::Inputs::R{i:02}{{}}' for i in range(20))}}});}}
 """
     package, pin = compile_function(toolchain, journal, directory, source)
     report, _ = execute(toolchain, journal, directory, package, pin, 'late-stop', {},
@@ -325,10 +325,10 @@ protocol Sample roles(P,V)(complete:bool@P,coins:Random<F>@P)->(accepted:bool@V)
   return(accepted=accepted);
 }
 proof Core=Sample{prover P;verifier V;public{};accept accepted;construction authored;}
-run Joint(complete:bool){
+entry fn Joint(complete:bool){
   return Sample::run(Sample::Inputs{P:Sample::Inputs::P{complete:complete},V:Sample::Inputs::V{}});
 }
-run Produce(complete:bool){return Core::prove(Core::Public{},Core::Witness{complete:complete});}
+entry fn Produce(complete:bool){return Core::prove(Core::Public{},Core::Witness{complete:complete});}
 '''
     entry = 'Joint' if operation == 'run' else 'Produce'
     package, pin = compile_function(toolchain, journal, directory, source, entry)

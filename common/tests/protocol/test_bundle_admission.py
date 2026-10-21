@@ -170,8 +170,8 @@ protocol InspectAdmission<R: Reduction<Extension>> roles(P)
     public_width = public_width, inputs = inputs, assertions = assertions,
     records = records, auxiliary = auxiliary, claims = claims, chunks = chunks, scopes = scopes);
 }
-run AdmissionLogUp(inputs: InspectAdmission<LogUp<Extension>>::Inputs) { return InspectAdmission<LogUp<Extension>>::run(inputs); }
-run AdmissionProduct(inputs: InspectAdmission<GrandProduct<Extension>>::Inputs) { return InspectAdmission<GrandProduct<Extension>>::run(inputs); }
+entry fn AdmissionLogUp(inputs: InspectAdmission<LogUp<Extension>>::Inputs) { return InspectAdmission<LogUp<Extension>>::run(inputs); }
+entry fn AdmissionProduct(inputs: InspectAdmission<GrandProduct<Extension>>::Inputs) { return InspectAdmission<GrandProduct<Extension>>::run(inputs); }
 '''
 
 

@@ -38,7 +38,7 @@ protocol Run roles(P,V)(a:F@P,b:F@P,i:index@V)
  ->(xs:Sequence<Sequence<Entry<F>>>@V,r:(F,F,F,[F;2],(F,F),Choice,index)@V){
   let xs @P =produce(a,b);let ys=send P->V(xs);
   let r @V =inspect(ys,i);return(xs=ys,r=r);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     result = entry.run_roles('valid', {'P': {'a': '7', 'b': '19'},
@@ -55,7 +55,7 @@ protocol Run roles(P,V)(a:F@P,b:F@P,i:index@V)
 protocol Run roles(P)(xs:Sequence<Sequence<Entry<F>>>@P,i:index@P)
  ->(xs:Sequence<Sequence<Entry<F>>>@P,r:(F,F,F,[F;2],(F,F),Choice,index)@P){
   let r @P =inspect(xs,i);return(xs=xs,r=r);
-}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''
     replay_dir = directory / 'replay'
     replay_dir.mkdir()
@@ -81,7 +81,7 @@ fn collect(n:index)->Sequence<{element}>{{
     else:
         source += f'''
 protocol Run roles(P)(n:index@P)->(xs:Sequence<{element}>@P){{return collect(n);}}
-run Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
+entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source, MODULES)
     if record:

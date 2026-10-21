@@ -6,13 +6,13 @@ byte-compatible with c-kzg-4844 v2.1.8.
 
 | Entry | Kind | EIP-4844 function |
 |---|---|---|
-| `BlobToCommitment` | run | `blob_to_kzg_commitment` |
-| `ComputeKzgProof` | run | `compute_kzg_proof` |
-| `ComputeChallenge` | run | `compute_challenge` |
-| `PointEvaluationPrecompile` | run | point evaluation precompile `0x0A` |
-| `KzgProof` | proof | `verify_kzg_proof` (prover: the opening for a stated point and value) |
-| `BlobProof` | proof | `compute_blob_kzg_proof` and `verify_blob_kzg_proof` |
-| `BlobBatchProof` | proof | `verify_blob_kzg_proof_batch` (prover: every blob proof), at most 64 blobs |
+| `BlobToCommitment` | `entry fn` | `blob_to_kzg_commitment` |
+| `ComputeKzgProof` | `entry fn` | `compute_kzg_proof` |
+| `ComputeChallenge` | `entry fn` | `compute_challenge` |
+| `PointEvaluationPrecompile` | `entry fn` | point evaluation precompile `0x0A` |
+| `KzgProof` | `proof` | `verify_kzg_proof` (prover: the opening for a stated point and value) |
+| `BlobProof` | `proof` | `compute_blob_kzg_proof` and `verify_blob_kzg_proof` |
+| `BlobBatchProof` | `proof` | `verify_blob_kzg_proof_batch` (prover: every blob proof), at most 64 blobs |
 
 Blobs and the prover's setup are large, so the sample inputs reference native
 frame files beside each document. `prepare.py` writes them from the

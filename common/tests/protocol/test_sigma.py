@@ -77,7 +77,7 @@ def test_sigma_equations_against_independent_reference(toolchain, journal, direc
     protocol = 'SchnorrAnd' if kind == 'And' else 'ChaumPedersen'
     client.write_text(f'''module example;
 domain G=group("bls12-381.g1");
-run Demo(inputs: sigma::{protocol}<G>::Inputs) {{ return sigma::{protocol}<G>::run(inputs); }}
+entry fn Demo(inputs: sigma::{protocol}<G>::Inputs) {{ return sigma::{protocol}<G>::run(inputs); }}
 ''')
     package = directory / 'fixed.zkpkg'
     entry = kind + 'Interactive'

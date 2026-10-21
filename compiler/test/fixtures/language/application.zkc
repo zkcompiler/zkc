@@ -17,4 +17,4 @@ protocol Run roles(P, V)(x: Fr @(P,V), y: Fr @(P,V))
   let (a, b) = Segment(x, y);
   return (p = a, v = b);
 }
-run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

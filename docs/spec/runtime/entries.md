@@ -332,7 +332,7 @@ pair `--package=FILE --sha256=EXPECTED`; this mode refuses source options and
 Entry positionals. A digest derived from candidate bytes never authorizes them.
 
 Omitted Entry names select the unique eligible Entry. Run commands filter to
-Run functions; prove/verify commands filter to proof Entries. Other commands
+Entry functions; prove/verify commands filter to proof Entries. Other commands
 consider both kinds. Explicit short names must be unique across kinds before
 checking eligibility. Qualified names resolve exactly. `inputs check` requires
 `--operation=run|prove|verify` and uses that operation's eligibility and input rules.

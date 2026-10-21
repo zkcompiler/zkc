@@ -189,7 +189,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                                              : "body"},
       {"kind", domain                                          ? "domain"
                : !ordered                                      ? "math"
-               : decl.kind == Declaration::Kind::EntryFunction ? "run"
+               : decl.kind == Declaration::Kind::EntryFunction ? "entry"
                : decl.kind == Declaration::Kind::Local         ? "local"
                                                                : "protocol"},
       {"parameters", std::move(parameters)},

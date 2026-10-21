@@ -304,7 +304,7 @@ a security theorem.
 
 ## Host control artifact
 
-A run function publishes `zkc.host/0` in the existing package artifact member.
+An Entry function publishes `zkc.host/0` in the existing package artifact member.
 It has exactly `format`, `original`, `entry`, `functions`, `calculations` and
 `deployments`. `original` hashes the exact retained original; `entry` selects a
 function symbol. The interface uses `selection: {kind: "function", function}` and

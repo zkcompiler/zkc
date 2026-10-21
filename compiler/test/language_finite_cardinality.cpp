@@ -281,14 +281,14 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_arra
 math fn fixed<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item,rows))->Array<Fr,N>=finite("math.collect.field_array");
 math fn make(a:Fr)->Array<Fr,2>{return fixed(array([a,a]),fn(x)=>x);}
 fn work(xs:Array<Fr,2>)->Array<Fr,2> effects(stop){return collect(elements(xs),fn(x)=>x);}
-protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(make(a));}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(make(a));}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )"));
   });
   cases.run("Local source array mismatch refuses before IR admission", [] {
     refuses(close(prelude + R"(
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 fn work(a:Fr)->Array<Fr,2> effects(stop){return collect(array([a,a]),fn(x)=>x);}
-protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(a);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(a);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )"),
             "source.data-bound");
   });
@@ -297,7 +297,7 @@ protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(a);}r
               refuses(close(prelude + R"(
 domain fn range(lo:index,hi:index)->domain<index>=domain("range");
 fn work(a:Fr)->Array<Fr,2> effects(stop){return collect(range(0,2),fn(i)=>a);}
-protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(a);}run Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+protocol Run roles(P)(a:Fr@P)->(r:Array<Fr,2>@P) effects(stop){return work(a);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )"),
                       "source.data-bound");
             });
