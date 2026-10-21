@@ -61,12 +61,7 @@ impl FunctionInterface {
             crate::host::inputs::digest(&document.capture).is_ok()
                 && !document.toolchain.is_empty()
                 && document.toolchain.len() <= 256 * 1024
-                && document.entry.len() <= 4096
-                && document.entry.contains("::")
-                && document
-                    .entry
-                    .split("::")
-                    .all(crate::source_names::is_source_identifier),
+                && crate::project::selection::canonical_name(&document.entry),
             "entry-host-identity",
         )?;
         let mut schemas = crate::entry::interface::schemas::Schemas::new();

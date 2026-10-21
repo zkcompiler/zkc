@@ -42,6 +42,23 @@ protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
         assert outcome.value == {'P': {}, 'V': {'received': value}}
 
 
+def test_python_selects_closed_generic_protocols(toolchain, directory):
+    (directory / 'main.zkc').write_text('''module application;
+protocol Echo<T:Type> roles(P,V)(value:T@P)->(received:T@V){
+  let received=send P->V(value);return received;
+}
+''')
+    manifest = directory / 'zkc.toml'
+    manifest.write_text('format="zkc.project/0"\n[modules]\napplication="main.zkc"\n')
+    client = Client(manifest, executable=toolchain.runtime, compiler=toolchain.compiler)
+    for selector, value in [('Echo<bool>', False), ('Echo<index>', '17')]:
+        view = client.inspect(selector).require_success().value
+        assert view['entry'] == f'application::{selector}'
+        outcome = client.run({'inputs': {'P': {'value': value}, 'V': {}}},
+                             entry=selector).require_success()
+        assert outcome.value == {'P': {}, 'V': {'received': value}}
+
+
 def test_python_and_cli_return_the_same_source_value(toolchain, journal, directory):
     _, manifest = source(directory)
     client = Client(manifest, executable=toolchain.runtime, compiler=toolchain.compiler)
@@ -62,7 +79,10 @@ def test_python_and_cli_return_the_same_source_value(toolchain, journal, directo
 
 
 def test_generated_rust_calls_the_same_host_and_keeps_reports(toolchain, journal, directory):
-    _, manifest = source(directory)
+    path, manifest = source(directory)
+    path.write_text(path.read_text()+'''
+protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
+''')
     package = directory / "twice.zkpkg"
     compiled = journal.json([toolchain.runtime, "--json", "compile", "Twice",
                              f"--project={manifest}", f"--compiler={toolchain.compiler}",
@@ -70,6 +90,13 @@ def test_generated_rust_calls_the_same_host_and_keeps_reports(toolchain, journal
     bindings = directory / "bindings.rs"
     journal.json([toolchain.runtime, "--json", "bindings", f"--package={package}",
                   f"--sha256={compiled['package_sha256']}", f"--output={bindings}"])
+    generic = directory / "generic.zkpkg"
+    selected = journal.json([toolchain.runtime, "--json", "compile", "Echo<index>",
+                            f"--project={manifest}", f"--compiler={toolchain.compiler}",
+                            f"--output={generic}"])
+    journal.json([toolchain.runtime, "--json", "bindings", f"--package={generic}",
+                  f"--sha256={selected['package_sha256']}",
+                  f"--output={directory / 'generic.rs'}"])
     (directory / "Cargo.toml").write_text(f'''[package]
 name = "entry-function-consumer"
 version = "0.0.0"
@@ -80,7 +107,10 @@ zkc-tools = {{path = {str(ROOT / 'crates/zkc-tools')!r}}}
 ''')
     (directory / "src").mkdir()
     (directory / "src/main.rs").write_text('''mod bindings { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/bindings.rs")); }
+mod generic { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generic.rs")); }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+  use zkc_tools::entry::{FunctionInterface, InvocationBinding, InvocationContext,
+                         NamedValues, Package, RunContext, SetupAuthority, Value};
   let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/twice.zkpkg"));
   let host = bindings::admit(bytes, Default::default(), Default::default())?;
   let result = bindings::call(&host, bindings::Arguments { value: 7 }, Default::default())?;
@@ -88,6 +118,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   assert!(result.conversion_error.is_none());
   assert!(result.report.is_success());
   assert!(result.report.usage.execution.instructions > 0);
+  let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/generic.zkpkg"));
+  let package = Package::capture(bytes, &generic::PACKAGE_SHA256, Package::MAX_BYTES)?;
+  let deployments = FunctionInterface::deployment_interfaces(&package)?;
+  let authority = deployments.iter().map(|d| (d.id().into(), SetupAuthority::default())).collect();
+  let context = InvocationContext { deployments: deployments.iter().map(|d|
+      (d.id().into(), InvocationBinding::Run(RunContext::default()))).collect() };
+  let host = generic::admit(bytes, Default::default(), authority)?;
+  let inputs = Value::Record([("P".into(), Value::Record([("value".into(),
+      Value::from(17u64))].into()))].into());
+  let arguments: NamedValues = [("inputs".into(), inputs)].into();
+  let result = generic::call(&host, generic::Arguments::try_from(arguments)?, context)?;
+  assert!(result.report.is_success() && result.conversion_error.is_none());
+  let Value::Record(mut roles) = Value::from(result.value.unwrap()) else { panic!("role record"); };
+  let Value::Record(mut outputs) = roles.remove("P").unwrap() else { panic!("output record"); };
+  assert_eq!(u64::try_from(outputs.remove("out").unwrap())?, 17);
   Ok(())
 }
 ''')

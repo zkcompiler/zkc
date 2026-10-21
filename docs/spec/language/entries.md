@@ -13,9 +13,33 @@ generated function name is not a second selectable Entry name.
 
 The inventory includes these default Entries alongside authored Entry functions
 and proofs, including imported concrete protocols. Omitted selectors require one
-eligible candidate; defaults never shadow authored Entries. Static parameters are
-not inferred for external selection: a generic protocol requires a closed Entry
-function wrapper. No proof configuration or Host authority is inferred.
+eligible candidate; defaults never shadow authored Entries. An explicit protocol
+selector may apply static arguments, as in `Schnorr<G>`. It uses the source path
+and static-argument grammar, consumes the entire selector, and checks all sorts,
+requirements and closedness through the ordinary argument checker. Selectors are
+bounded to 4096 UTF-8 bytes, including the reported qualified spelling, and the
+existing token/type/work limits. Protocol
+ambiguity is checked before argument or execution-kind validation. Non-protocol
+Entries cannot receive static arguments through this interface.
+
+Static names use the frozen checked namespaces of captured modules, including
+resolved imports. An unqualified binding must have one declaration identity
+across those namespaces; repeated imports of one declaration are not ambiguous.
+Qualified paths and associated projections use the source resolver; an absolute
+path such as `::example::G` explicitly starts at a captured module root. No module's
+lexical context or enclosing static arguments are selected implicitly. All
+required protocol parameters, including inherited module parameters, must be
+supplied. No runtime-value inference, proof configuration or Host authority is
+inferred.
+
+The public selected name is the qualified protocol path followed by the supplied
+argument tokens with whitespace/comments removed; string tokens are unchanged.
+Its spelling is replayable, independent of caller scope. Equivalent argument
+spellings may name different external selections, while the closed computation
+retains the existing normalized type-argument identity. Only a requested generic
+specialization joins that check response's finite Entry inventory. Definition
+discovery, omitted selection and selector-free preparation enumerate no generic
+instances. The captured project and checked source declarations remain unchanged.
 
 `entry fn Name(parameters) -> Result { body }` declares an externally callable
 Host function. Visibility, named arguments, ordinary generic helpers and Local
@@ -287,8 +311,9 @@ correctness or protocol security.
 
 ### Selection
 
-The checked project exposes all Entry declaration IDs sorted by qualified name.
-`selectEntry` and `closeEntry` share these rules: an exact qualified name must
+The checked project exposes eligible concrete Entry declaration IDs sorted by
+qualified name. `resolveEntry`, `selectEntry` and `closeEntry` share these rules:
+an exact qualified name must
 name an Entry; a short name must match exactly one Entry's terminal identifier;
 an empty selector requires exactly one Entry across the capture. Complete
 aliases remain distinct candidates. Selectors use exact NFC names under the
@@ -296,11 +321,16 @@ aliases remain distinct candidates. Selectors use exact NFC names under the
 is performed. Missing or ambiguous selections refuse with
 `source.entry` and list canonical candidate names and kinds. Adding candidates
 cannot silently change a previously successful selection to another Entry.
+An explicit generic protocol selector follows the static argument rules above.
+`resolveEntry` returns the generated run declaration, checked arguments and public
+selection name; `selectEntry` returns only that declaration ID. `closeEntry`
+specializes through the same resolution, without changing the checked inventory.
 
 Definition checking without selection does not close every Entry. The compiler's
 `zkc.source-check/0` diagnostic report includes an `entries` array of objects with
-`name` (canonical qualified name) and `kind` (`function` or `proof`). A selected check
-reports its canonical `entry` and `original` identity, with `scope: "entry"`;
+`name` (qualified selection name) and `kind` (`function` or `proof`). A selected
+generic instance joins only that response's inventory. A selected check reports
+its qualified `entry` and `original` identity, with `scope: "entry"`;
 an unselected check has `scope: "definitions"` and no selected Entry. Detailed
 public callable inspection remains the optional `declarations` array.
 

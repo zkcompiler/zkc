@@ -399,28 +399,116 @@ std::vector<DeclarationId> CheckedProject::entries() const {
   });
   return result;
 }
-Expected<DeclarationId> selectEntry(const CheckedProject &project,
-                                    StringRef name, const Limits &limits,
-                                    std::optional<EntryKind> kind) {
+Expected<EntrySelection> resolveEntry(const CheckedProject &project,
+                                      StringRef name, const Limits &limits,
+                                      std::optional<EntryKind> kind) {
   if (auto error = checkLimits(limits))
     return std::move(error);
-  if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
-    return detail::failure("source.limit", "Entry name byte limit exceeded");
+  if (name.size() > 4096 ||
+      (!name.contains('<') &&
+       name.size() > limits.moduleBytes + limits.identifierBytes + 2))
+    return detail::failure("source.limit",
+                           "Entry selector byte limit exceeded");
   if (project.checkedWork() > limits.work ||
       project.checkedDeclarations() > limits.declarations ||
       project.checkedNotationDescriptors() > limits.notationDescriptors ||
       project.checkedNotationHoles() > limits.notationHoles)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
+  if (name.contains('<')) {
+    detail::Work work{limits};
+    auto syntax = detail::parseEntrySelector(name, work);
+    if (!syntax)
+      return syntax.takeError();
+    // Reuse completed source signatures and the actual import namespaces.
+    // Template bodies and source buffers remain shared and immutable.
+    detail::CheckedStorage scope(project.capture());
+    if (auto error = work.charge(project.declarations().size()))
+      return std::move(error);
+    scope.declarations.assign(project.declarations().begin(),
+                              project.declarations().end());
+    scope.assets.assign(project.assets().begin(), project.assets().end());
+    scope.sources = project.storage->sources;
+    const auto &names = *project.storage->names;
+    for (const auto &bindings : names.visible)
+      for (const auto &[name, binding] : bindings)
+        if (auto error = work.charge(name.size() + 1))
+          return std::move(error);
+    detail::Checker checker(scope, work, names);
+    Declaration context{};
+    context.kind = Declaration::Kind::EntryFunction;
+    StringRef requested = syntax->target.name;
+    requested.consume_front("::");
+    std::optional<DeclarationId> selected;
+    for (const auto &candidate : project.declarations()) {
+      if (candidate.kind != Declaration::Kind::Entry &&
+          candidate.kind != Declaration::Kind::EntryFunction)
+        continue;
+      auto entryName = candidate.entryName();
+      if (requested.contains("::") ? entryName != requested
+                                   : entryName.rsplit("::").second != requested)
+        continue;
+      if (selected)
+        return detail::failure("source.entry",
+                               "ambiguous Entry: " + requested +
+                                   "; specify a qualified protocol name");
+      selected = candidate.id;
+    }
+    if (!selected)
+      return detail::failure("source.entry", "unknown Entry: " + requested);
+    const auto &generated = scope.declarations[selected->index];
+    if (!generated.generated ||
+        generated.generated->operation != HostInvocation::Kind::Run)
+      return detail::failure("source.entry",
+                             "static Entry selection requires a protocol",
+                             generated.span);
+    const auto &protocol =
+        scope.declarations[generated.generated->target.index];
+    if (kind && *kind != EntryKind::Function)
+      return detail::failure("source.entry-kind",
+                             "selected Entry has the wrong execution kind",
+                             protocol.span);
+    // Selector text is an external argument, not a captured source buffer.
+    // Type diagnostics point to the selected protocol's declared contract.
+    context.id = generated.id;
+    context.module = generated.module;
+    context.span = protocol.span;
+    std::function<void(detail::SyntaxType &)> anchor = [&](auto &type) {
+      type.span = protocol.span;
+      for (auto &label : type.labels)
+        label.span = protocol.span;
+      for (auto &argument : type.arguments)
+        anchor(argument);
+    };
+    anchor(syntax->target);
+    auto arguments =
+        checker.arguments(context, protocol, syntax->target.arguments,
+                          protocol.span, syntax->target.labels);
+    if (!arguments)
+      return checker.types.takeError();
+    for (const auto &argument : *arguments)
+      if (checker.types.symbolic(argument))
+        return detail::failure(
+            "source.generic",
+            "Entry selection requires closed static arguments", protocol.span);
+    auto selectedName = protocol.qualifiedName + syntax->arguments;
+    if (selectedName.size() > 4096)
+      return detail::failure("source.limit",
+                             "qualified Entry selector byte limit exceeded",
+                             protocol.span);
+    return EntrySelection{*selected, std::move(*arguments),
+                          std::move(selectedName)};
+  }
   auto eligible = [&](DeclarationId id) {
     return !kind || project.declarations()[id.index].entryKind() == *kind;
   };
-  auto selected = [&](DeclarationId id) -> Expected<DeclarationId> {
+  auto selected = [&](DeclarationId id) -> Expected<EntrySelection> {
     if (!eligible(id))
       return detail::failure("source.entry-kind",
                              "selected Entry has the wrong execution kind",
                              project.declarations()[id.index].span);
-    return id;
+    return EntrySelection{
+        id, {}, project.declarations()[id.index].entryName().str()};
   };
   auto candidates = project.entries();
   std::vector<DeclarationId> matches;
@@ -462,6 +550,14 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
                ")";
   }
   return detail::failure("source.entry", message);
+}
+Expected<DeclarationId> selectEntry(const CheckedProject &project,
+                                    StringRef name, const Limits &limits,
+                                    std::optional<EntryKind> kind) {
+  auto selected = resolveEntry(project, name, limits, kind);
+  if (!selected)
+    return selected.takeError();
+  return selected->declaration;
 }
 namespace {
 Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
@@ -555,10 +651,10 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
            std::optional<HostInvocation::Kind> operation) {
   if (auto error = checkScopedElaboration(project, limits))
     return std::move(error);
-  auto selected = selectEntry(project, name, limits, kind);
+  auto selected = resolveEntry(project, name, limits, kind);
   if (!selected)
     return selected.takeError();
-  const auto &decl = project.declarations()[selected->index];
+  const auto &decl = project.declarations()[selected->declaration.index];
   if (operation &&
       (!decl.proof() || (*operation != HostInvocation::Kind::Prove &&
                          *operation != HostInvocation::Kind::Verify)))
@@ -573,6 +669,9 @@ closeEntry(const CheckedProject &project, StringRef name, const Limits &limits,
     return error;
   storage->declarations.assign(project.declarations().begin(),
                                project.declarations().end());
+  storage->name = selected->name;
+  if (decl.kind == Declaration::Kind::EntryFunction)
+    storage->declarations[decl.id.index].staticArguments = selected->arguments;
   if (auto error = detail::specialize(storage->declarations, project.assets(),
                                       work, decl.id, operation))
     return error;
@@ -678,6 +777,7 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
   owner.staticArguments = invocation.arguments;
   owner.setups = target.setups;
   auto selected = owner.id;
+  storage->name = owner.qualifiedName;
   storage->declarations.push_back(std::move(owner));
   if (auto e = detail::specialize(storage->declarations, project.assets(), work,
                                   selected))
@@ -699,6 +799,7 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
 const Declaration &ClosedEntry::entry() const {
   return storage->declarations[selected.index];
 }
+StringRef ClosedEntry::name() const { return storage->name; }
 const Declaration &ClosedEntry::root() const {
   return storage->declarations[storage->root.index];
 }

@@ -140,6 +140,18 @@ public:
     output.span.end = uint32_t(source.text.size());
     return output;
   }
+  Expected<SyntaxType> entrySelector() {
+    SyntaxType result;
+    result.span = current().span;
+    if (!path(result.name, true, true) ||
+        !staticArguments(result.arguments, result.labels, 1) || !atEnd()) {
+      if (!diagnostic)
+        fail("source.syntax", "expected a protocol path and static arguments");
+      return takeError();
+    }
+    result.span.end = previousEnd;
+    return result;
+  }
   bool moduleHeader(SyntaxDeclaration &output) {
     if (!parameters(output.parameters))
       return false;
@@ -2764,6 +2776,36 @@ private:
   }
 };
 } // namespace
+Expected<EntrySelector> parseEntrySelector(StringRef text, Work &work) {
+  SourceBuffer source{"", text.str(), {}};
+  std::vector<Token> tokens;
+  auto parse = [&]() -> Expected<EntrySelector> {
+    if (auto error = lex(source, SourceId{0}, work, tokens))
+      return std::move(error);
+    auto syntax = Parser(source, SourceId{0}, tokens, work).entrySelector();
+    if (!syntax)
+      return syntax.takeError();
+    EntrySelector result{std::move(*syntax), {}};
+    bool arguments = false;
+    for (const auto &token : tokens) {
+      if (token.kind == TokenKind::Whitespace ||
+          token.kind == TokenKind::Comment || token.kind == TokenKind::End)
+        continue;
+      auto spelling = text.slice(token.span.begin, token.span.end);
+      arguments |= spelling == "<";
+      if (arguments)
+        result.arguments += spelling.str();
+    }
+    return result;
+  };
+  auto result = parse();
+  if (!result) {
+    auto diagnostic = diagnose(result.takeError());
+    return failure(diagnostic->code,
+                   "in Entry selector: " + diagnostic->message);
+  }
+  return result;
+}
 Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId sourceId,
                                   ArrayRef<Token> tokens, Work &work) {
   if (auto error = work.charge(tokens.size(), Span{sourceId, 0, 0}))

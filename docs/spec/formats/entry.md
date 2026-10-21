@@ -357,6 +357,9 @@ current grammar and no legacy source-run reader.
 A protocol's default run uses its qualified protocol name in the public source
 interface and the existing `function` package kind. Its generated Host function
 calls the same joint child as an authored wrapper; it adds no package grammar.
+An explicitly selected generic run appends its supplied static argument tokens
+to the public name. This source selection label does not replace the canonical
+typed identity of the closed computation or its generated nominal family.
 
 A generated joint child uses `Protocol::run` as its internal Entry name. A closed
 static specialization appends `_` and the lowercase SHA-256 of its canonical

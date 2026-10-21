@@ -159,6 +159,35 @@ def test_cache_invalidations_corruption_quota_and_concurrency(toolchain, journal
     assert replaced['cache']['key'] != copied['cache']['key']
 
 
+def test_generic_protocol_cache_keeps_specializations_distinct(toolchain, journal, directory):
+    root = directory / 'project'
+    root.mkdir()
+    (root / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (root / 'main.zkc').write_text('''module example;
+protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
+''')
+    cache = directory / 'cache'
+
+    def build(name, selector):
+        output = directory / f'{name}.zkpkg'
+        result = journal.json(command(toolchain, 'compile', selector,
+            f'--cache={cache}', f'--output={output}'), cwd=root)
+        return result, output.read_bytes()
+
+    first, original = build('first', 'Echo<bool>')
+    hit, same = build('hit', 'Echo<bool>')
+    assert first['cache']['status'] == 'miss'
+    assert hit['cache']['status'] == 'hit' and same == original
+    other, other_package = build('other', 'Echo<index>')
+    assert other['cache']['status'] == 'miss'
+    assert other['cache']['key'] != hit['cache']['key']
+    # A valid package and matching digest cannot replace another specialization.
+    entry = cache / f'{hit["cache"]["key"]}.zkcache'
+    entry.write_bytes(hashlib.sha256(other_package).hexdigest().encode()+b'\n'+other_package)
+    repaired, same = build('repaired', 'Echo<bool>')
+    assert repaired['cache']['status'] == 'miss' and same == original
+
+
 def test_test_recipes_diagnostics_and_toolchain_outside_project(toolchain, journal, directory):
     capabilities = journal.json(command(toolchain, 'inspect', '--view=toolchain'), cwd=directory)
     assert len(capabilities['toolchain']['binary_sha256']) == 64

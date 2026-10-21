@@ -15,6 +15,17 @@ struct SyntaxDeclaration;
 struct ScopedSource;
 struct ScopedCallSource;
 struct ScopedInvocationSource;
+struct SourceBinding {
+  DeclarationId target;
+  Span span;
+  bool isPublic;
+  std::optional<DeclarationId> provider;
+};
+/// Frozen source namespaces, including resolved imports and facade bindings.
+struct NameEnvironment {
+  std::map<std::string, DeclarationId> modules;
+  std::vector<std::map<std::string, SourceBinding>> visible;
+};
 struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
@@ -28,6 +39,7 @@ struct CheckedStorage {
   uint64_t notationDescriptors = 0, notationHoles = 0;
   NotationRecords notations;
   APIRecords api;
+  std::shared_ptr<const NameEnvironment> names;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
   std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> signatureSources;
@@ -39,6 +51,7 @@ struct ClosedStorage {
   std::vector<Asset> assets;
   std::vector<Declaration> declarations;
   DeclarationId root;
+  std::string name;
   std::optional<DeclarationId> protocol;
   std::vector<ClosedInvocation> invocations;
   std::optional<HostInvocation::Kind> invocationKind;

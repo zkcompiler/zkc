@@ -68,16 +68,160 @@ int main() {
             "source.entry-kind");
     refuses(selectEntry(project, "sample::Echo::run"), "source.entry");
   });
-  cases.run("generic protocols require an explicit closed Entry", [] {
-    auto project = take(check(protocol));
-    require(project.entries().empty(),
-            "generic protocol acquired an implicit specialization");
-    refuses(selectEntry(project, "Work"), "source.entry");
-    take(close((protocol + R"(
+  cases.run("generic protocols expose only explicitly selected specializations",
+            [] {
+              auto project = take(check(protocol));
+              require(project.entries().empty(),
+                      "generic protocol acquired an implicit specialization");
+              refuses(selectEntry(project, "Work"), "source.entry");
+              for (StringRef name : {"Work<F>", "sample::Work<F>"}) {
+                auto entry = take(closeEntry(project, name));
+                require(entry.name() == "sample::Work<F>" &&
+                            entry.invocations().size() == 1 &&
+                            entry.root().body->stage == Body::Stage::Host,
+                        "generic run did not reuse its generated Host Entry");
+                require(entry.entry().staticArguments.size() == 1 &&
+                            entry.invocations().front().arguments ==
+                                entry.entry().staticArguments,
+                        "selection arguments were lost in Host closure");
+              }
+              require(project.entries().empty(), "selection mutated discovery");
+              refuses(closeEntry(project, "Work<index>"), "source.generic");
+              refuses(closeEntry(project, "Work<_>"), "source.inference");
+              refuses(closeEntry(project, "Work<Unknown>"), "source.name");
+              refuses(closeEntry(project, "Work<F>suffix"), "source.syntax");
+              refuses(closeEntry(project, "Work<F>", {}, EntryKind::Proof),
+                      "source.entry-kind");
+              take(close((protocol + R"(
       entry fn Demo(inputs:Work<F>::Inputs){return Work<F>::run(inputs);}
     )")
-                   .str()));
+                             .str()));
+            });
+  cases.run(
+      "selected static arguments reuse source types, modules and naturals", [] {
+        auto project = take(check(R"(module sample;
+      domain F=field("koala-bear");
+      interface Algebra { fn identity(value:index)->index effects(); }
+      module Identity:Algebra {
+        fn identity(value:index)->index{return value;}
+      }
+      protocol Work<M:Algebra,N:nat> roles(P)(values:[index;N]@P)->(out:index@P){
+        return M::identity(values[0]);
+      }
+    )"));
+        auto positional = take(closeEntry(project, "Work<Identity,1+2>"));
+        auto named =
+            take(closeEntry(project, " Work < N = 3, M = sample::Identity > "));
+        require(
+            positional.root().symbol == named.root().symbol &&
+                positional.entry().staticArguments ==
+                    named.entry().staticArguments,
+            "equivalent source arguments changed the closed specialization");
+        require(named.name() == "sample::Work<N=3,M=sample::Identity>",
+                "public selection lost replayable source spelling");
+        take(closeEntry(project, named.name()));
+        refuses(closeEntry(project, "Work<Identity>"), "source.generic");
+        refuses(closeEntry(project, "Work<Identity,0>"), "source.bound");
+        refuses(closeEntry(project, "Work<M=Identity,M=Identity>"),
+                "source.generic");
+        refuses(closeEntry(project, "Work<Identity,1>;entry fn Evil(){}"),
+                "source.syntax");
+        refuses(closeEntry(project, std::string(4097, 'a')), "source.limit");
+        auto limited = Limits{};
+        limited.tokens = 1;
+        refuses(closeEntry(project, "Work<Identity,3>", limited),
+                "source.limit");
+      });
+  cases.run("external static names are unique across captured namespaces", [] {
+    auto captured = take(
+        capture({{"library",
+                  R"(module library;
+        pub protocol Work<T:Type> roles(P)(x:T@P)->(out:T@P){return x;}
+      )",
+                  {}},
+                 {"a", "module a;use library::{Work};type Data=bool;", {}},
+                 {"b", "module b;use library::{Work};type Data=index;", {}}}));
+    auto project = take(analyze(captured).checkedProject());
+    refuses(closeEntry(project, "Work<Data>"), "source.entry");
+    take(closeEntry(project, "Work<a::Data>"));
+    take(closeEntry(project, "library::Work<b::Data>"));
+    require(project.entries().empty(),
+            "generic inventory enumerated instances");
   });
+  cases.run(
+      "protocol selection supplies inherited parameters and associated types",
+      [] {
+        auto project = take(check(R"(module sample<N:nat>;
+      module Provider {pub type Data:Copy+Drop=[bool;N];}
+      protocol Work<T:Type> roles(P)(value:bool@P)->(out:bool@P){return value;}
+    )"));
+        auto identity = project.capture().identity().str();
+        auto entry = take(closeEntry(project, "Work<3,Provider::Data<3>>"));
+        require(
+            entry.entry().staticArguments.size() == 2 &&
+                entry.entry().staticArguments.front().dimension.closedValue() ==
+                    3,
+            "inherited static argument was lost");
+        require(project.capture().identity() == identity &&
+                    project.entries().empty(),
+                "selection changed source identity or discovery");
+        refuses(closeEntry(project, "Work<Provider::Data<3>>"),
+                "source.generic");
+        refuses(closeEntry(project, "Work<3,Provider::Data>"),
+                "source.generic");
+      });
+  cases.run("captured roots cannot bypass selector ambiguity", [] {
+    auto captured =
+        take(capture({{"library",
+                       R"(module library;
+        pub interface I{}
+        pub protocol Work<M:I> roles(P)()->(out:bool@P){return true;}
+      )",
+                       {}},
+                      {"a", "module a;pub module Choice:library::I{}", {}},
+                      {"b", "module b;pub module Choice:library::I{}", {}},
+                      {"Choice", "module Choice:library::I;", {}}}));
+    auto project = take(analyze(captured).checkedProject());
+    refuses(closeEntry(project, "Work<Choice>"), "source.entry");
+    take(closeEntry(project, "Work<a::Choice>"));
+    take(closeEntry(project, "Work<::Choice>"));
+  });
+  cases.run("qualified selector length remains replayable", [] {
+    auto project = take(check(R"(module sample;
+      protocol Work<N:nat> roles(P)()->(out:bool@P){return true;}
+    )"));
+    auto argument =
+        std::string(4096 - StringRef("sample::Work<1>").size(), '0') + "1";
+    auto entry = take(closeEntry(project, "Work<" + argument + ">"));
+    require(entry.name().size() == 4096, "selector boundary was not exercised");
+    take(closeEntry(project, entry.name()));
+    refuses(closeEntry(project, "Work<0" + argument + ">"), "source.limit");
+  });
+  cases.run(
+      "fixed and externally selected arguments retain independent witnesses",
+      [] {
+        for (StringRef selector : {"Family", "Work<1>"}) {
+          auto project = take(check(R"(module sample;
+        protocol Work<N:nat> roles(P,V)(x:bool@(P,V))->(ok:bool@V){return x;}
+        proof Family=Work<1>{prover P;verifier V;public{x};accept ok;construction authored;}
+      )"));
+          auto entry = take(closeEntry(project, selector));
+          if (auto error = checkScopedSpecialization(entry))
+            throw std::runtime_error(toString(std::move(error)));
+          const_cast<Declaration &>(entry.entry())
+              .staticArguments.front()
+              .dimension = Natural::constant(2);
+          const_cast<Declaration &>(entry.root())
+              .staticArguments.front()
+              .dimension = Natural::constant(2);
+          auto error = checkScopedSpecialization(entry);
+          require(bool(error), "coordinated specialization mutation accepted");
+          require(
+              toString(std::move(error)).find("source.scoped-specialization") !=
+                  std::string::npos,
+              "wrong specialization refusal");
+        }
+      });
   cases.run("an unused protocol does not enter a calculation closure", [] {
     auto entry = take(close(R"(module sample;
       protocol Unused roles(P)(value:bool@P)->(out:bool@P){return value;}

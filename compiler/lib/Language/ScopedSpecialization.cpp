@@ -1146,8 +1146,23 @@ public:
       if (rootLayout.inputs[i] != i)
         return failure("source.scoped-specialization",
                        "entry asserts an input alias", authored.span);
+    auto arguments = authored.staticArguments;
+    if (authored.kind == Declaration::Kind::EntryFunction &&
+        !authored.parameters.empty()) {
+      auto selection = resolveEntry(entry.project(), entry.name(), work.limits,
+                                    EntryKind::Function);
+      if (!selection)
+        return selection.takeError();
+      if (selection->declaration.index != authored.id.index)
+        return failure("source.scoped-specialization",
+                       "selected protocol differs", authored.span);
+      arguments = std::move(selection->arguments);
+    }
+    if (entry.entry().staticArguments != arguments)
+      return failure("source.scoped-specialization",
+                     "entry static arguments differ", authored.span);
     if (!instance(entry.root().id, source[sourceRoot->index], nullptr,
-                  authored.staticArguments, {}, 1))
+                  arguments, {}, 1))
       return types.takeError();
     const auto *proof = authored.proof();
     const auto *closedProof = entry.entry().proof();

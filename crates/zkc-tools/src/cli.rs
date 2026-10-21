@@ -30,8 +30,12 @@ macro_rules! entry_options {
             Opt::new("--no-calculation-batching"), $($extra),*)
     };
 }
-const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
-build/zkc/<qualified.name>.zkproof; run results use .results.json. Explicit paths win.
+const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.
+Generic protocol runs take closed arguments, e.g. 'Schnorr<G>'. Proofs require a proof declaration.
+Pinned execution uses --package and --sha256 together and no source options.
+Project inputs default to inputs/<entry-stem>/. Proofs default to
+build/zkc/<entry-stem>.zkproof; run results use .results.json. Explicit paths win.
+Named Entry stems replace :: with dots; generic runs append a full selector digest.
 Outside a project, input and proof paths must be explicit unless the input group is empty.
 Function arguments use one parameter-named arguments.json map. Static child context
 uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.";
@@ -55,7 +59,8 @@ const COMMANDS: &[Command] = &[
         description:
             "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
-Select an Entry by unique short name or qualified module::Name. The report lists Entries.
+Select an Entry by unique short name or qualified module::Name, with closed arguments
+for generic runs, e.g. 'Schnorr<G>'. Discovery does not enumerate generic instances.
 Use inspect for API, placement and notation inventories.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
@@ -73,7 +78,11 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"),
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
+Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
+Project output defaults to build/zkc/<entry-stem>.zkpkg beside the manifest.
+Named Entry stems replace :: with dots; generic runs append a full selector digest.
+Explicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
         name: "new",
@@ -96,6 +105,7 @@ Existing projects and conflicting files refuse; use prepare for an existing proj
         positional: "[ENTRY]",
         options: entry_options!(@inspection Opt::new("--output=DIRECTORY")),
         description: "Prepare all project Entries, or one selected Entry. Explicit --output selects one Entry.
+Generic protocols require an explicit selector with closed arguments, e.g. 'Schnorr<G>'.
 Package and explicit-module modes require --output. Existing regular files are preserved.
 Values, dynamic lengths and variant cases must be filled by the user.
 Use run, prove or verify --dry-run to validate inputs without protocol execution.",
@@ -107,6 +117,7 @@ Use run, prove or verify --dry-run to validate inputs without protocol execution
         options: entry_options!(@inspection Opt::new("--view=entry|project|api|placement|notations|toolchain"), Opt::new("--profile=NAME"), Opt::new("--notation-private"), Opt::new("--notation-installation")),
         description: "Inspect the selected Entry by default; other views show project, API, completed callable
 placement, notation or toolchain metadata. Notation visibility options require --view=notations.
+Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
 Source inventories check definitions and optionally a selected Entry; they do not execute it.
 Pinned packages support only the Entry view.",
     },

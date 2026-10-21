@@ -773,9 +773,20 @@ Analysis analyze(const CapturedProject &, const Limits & = {});
 /// Select from checked declarations: exact qualified name, unique short name,
 /// or the sole eligible Entry when the selector is empty. An explicit name is
 /// resolved before checking its kind, so filtering cannot hide ambiguity.
+/// Generic protocol selectors return their generated run declaration; use
+/// resolveEntry to retain their checked static arguments.
 llvm::Expected<DeclarationId> selectEntry(const CheckedProject &,
                                           llvm::StringRef, const Limits & = {},
                                           std::optional<EntryKind> = {});
+struct EntrySelection {
+  DeclarationId declaration;
+  std::vector<Type> arguments;
+  std::string name;
+};
+llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
+                                            llvm::StringRef,
+                                            const Limits & = {},
+                                            std::optional<EntryKind> = {});
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {},
                                        std::optional<EntryKind> = {});
@@ -836,6 +847,10 @@ private:
                    const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
+  friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
+                                                     llvm::StringRef,
+                                                     const Limits &,
+                                                     std::optional<EntryKind>);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
@@ -857,6 +872,8 @@ class ClosedEntry {
 public:
   const CheckedProject &project() const { return checked; }
   const Declaration &entry() const;
+  /// Selected public name, including supplied static argument syntax.
+  llvm::StringRef name() const;
   const Declaration &root() const;
   const Declaration *protocolOrNull() const;
   const Declaration &protocol() const;

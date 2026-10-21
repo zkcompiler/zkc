@@ -12,6 +12,23 @@ Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
       types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {}
+Checker::Checker(CheckedStorage &output, Work &work,
+                 const NameEnvironment &names)
+    : Checker({}, output, work) {
+  modules = names.modules;
+  visible = names.visible;
+  signatureState.assign(output.declarations.size(), 2);
+  externalSelection = true;
+  for (const auto &decl : output.declarations)
+    if (decl.kind == Declaration::Kind::Module &&
+        (*output.sources)[decl.span.source.index].origin ==
+            SourceOrigin::Captured) {
+      if (!decl.parent)
+        externalNames[decl.qualifiedName].insert(decl.id.index);
+      for (const auto &[name, binding] : visible[decl.id.index])
+        externalNames[name].insert(binding.target.index);
+    }
+}
 Error Checker::run() {
   if (auto error = checkCapabilityInstallation())
     return error;
@@ -158,6 +175,8 @@ Error Checker::run() {
   types.recordAdmission = {};
   if (!retainAPI() || !retainNotations() || !retainScopedSources())
     return types.takeError();
+  output.names = std::make_shared<NameEnvironment>(
+      NameEnvironment{std::move(modules), std::move(visible)});
   return checkScopedSources(output, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
@@ -463,7 +482,7 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   const bool absolute = name.consume_front("::");
   auto [head, tail] = name.split("::");
   std::optional<DeclarationId> root;
-  if (!absolute) {
+  if (!absolute && !externalSelection) {
     auto scope = context.kind == Declaration::Kind::Module
                      ? std::optional(context.id)
                      : context.parent;
@@ -479,6 +498,20 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
           route->push_back({*scope, head.str()});
         break;
       }
+    }
+  }
+  if (!root && externalSelection && !absolute) {
+    auto found = externalNames.find(head.str());
+    if (found != externalNames.end()) {
+      if (found->second.size() != 1) {
+        types.fail("source.entry",
+                   "ambiguous selector name: " + head +
+                       "; specify a qualified source name",
+                   span);
+        return {};
+      }
+      root = DeclarationId{*found->second.begin()};
+      selectedProvider = output.declarations[root->index].module;
     }
   }
   if (!root) {

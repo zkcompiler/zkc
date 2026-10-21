@@ -5,8 +5,12 @@ application control; a `proof` declaration configures proving and verification.
 Both execute through the common Host and native VM.
 A concrete protocol is also directly runnable: `zkc run ProtocolName` uses its
 generated Entry with one `inputs` argument, keyed by participant. Inspect or
-prepare that name to obtain its schema and input template; an `entry fn` wrapper
-is needed only for specialization or application logic.
+prepare that name to obtain its schema and input template. A generic protocol is
+directly selectable with closed source arguments, for example
+`zkc run 'Schnorr<G>'`. Quotes protect the brackets from the shell. Qualify ambiguous
+static names, for example `Schnorr<example::G>`; the compiler does not choose a
+lexical module or infer static arguments from runtime inputs. Use an `entry fn`
+to give a configuration a stable short name or add application logic.
 
 ## Project workflow
 
@@ -81,14 +85,15 @@ requires qualification. A unique Entry of the wrong kind is an error.
 
 | Purpose | Default beside `zkc.toml` | Override |
 |---|---|---|
-| Proof public inputs | `inputs/<qualified.name>/public.json` | `--public=FILE` |
-| Prover witness inputs | `inputs/<qualified.name>/witness.json` | `--witness=FILE` |
-| Entry function arguments | `inputs/<qualified.name>/arguments.json` | `--input=FILE` |
-| Compiled package | `build/zkc/<qualified.name>.zkpkg` | `--output=FILE` |
-| Produced or verified proof | `build/zkc/<qualified.name>.zkproof` | `--output=FILE` / `--proof=FILE` |
-| Run output values | `build/zkc/<qualified.name>.results.json` | `--results=FILE` |
+| Proof public inputs | `inputs/<entry-stem>/public.json` | `--public=FILE` |
+| Prover witness inputs | `inputs/<entry-stem>/witness.json` | `--witness=FILE` |
+| Entry function arguments | `inputs/<entry-stem>/arguments.json` | `--input=FILE` |
+| Compiled package | `build/zkc/<entry-stem>.zkpkg` | `--output=FILE` |
+| Produced or verified proof | `build/zkc/<entry-stem>.zkproof` | `--output=FILE` / `--proof=FILE` |
+| Run output values | `build/zkc/<entry-stem>.results.json` | `--results=FILE` |
 
-For `example::Proof`, the qualified filename is `example.Proof`. Unicode source
+For `example::Proof`, the stem is `example.Proof`. Generic runs append a full
+selector digest to the qualified protocol stem, as described below. Unicode source
 names retain their exact spelling in default filenames. Explicit paths are
 relative to the working directory and override only that group or artifact.
 Missing or malformed selected files fail; there is no search for alternate files.
@@ -113,6 +118,15 @@ Each Entry in the report includes suggested `commands` and additional
 `requirements`: an authored proof needs explicit `--allow-authored`, and each
 setup slot needs independent `--setups` authority and `--key` material.
 Initialization never grants those permissions.
+
+Generic selections are prepared explicitly; `prepare` without a name does not
+enumerate possible static arguments. Their default directory and artifact stem
+is `<qualified.protocol>-<digest>`, where the full SHA-256 covers the reported
+selection name. `prepare` reports exact paths and replayable command argument
+arrays. Source argument spelling is preserved apart from whitespace/comments;
+using an alias or a different natural expression can produce a different default
+path even when the closed computation is identical. Use a named Entry function
+when that configuration should have one application-owned path.
 
 `inspect` describes the schema, choices and whether each input has an installed
 constructor. Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,

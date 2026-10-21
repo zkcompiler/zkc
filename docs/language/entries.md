@@ -25,8 +25,33 @@ The compiler uses the existing Entry function path to call `Echo::run(inputs)`.
 No wrapper is needed for a basic run. An omitted selector requires exactly one
 eligible Entry; multiple protocols or Entry functions require a name, qualified
 by module when necessary. Imported concrete protocols are also selectable.
-Protocols with static parameters require an explicit Entry function that chooses
-their specialization. Proofs always require an explicit `proof` declaration.
+For a generic protocol, supply all static arguments directly:
+
+```sh
+zkc inspect 'Schnorr<G>'
+zkc prepare 'Schnorr<G>'
+zkc run 'Schnorr<G>'
+```
+
+This uses the same static argument grammar and requirements as source calls,
+including named arguments, natural expressions and module arguments. The quotes
+protect `<` and `>` from the shell; they are not part of the selector. All static
+arguments must be closed. Runtime inputs still come from the prepared files.
+
+Protocol names follow the existing qualified/unique short-name selection rule.
+Static names resolve uniquely across captured module namespaces, including their
+imports; qualify an ambiguous name, for example `Schnorr<example::G>`. The selector
+does not inherit the selected protocol's lexical scope or guess its parameters.
+Discovery and selector-free preparation do not enumerate generic instances.
+The reported name qualifies the protocol and removes argument whitespace and
+comments while preserving string tokens. Argument aliases and equivalent natural
+expressions can have different public selection names; closed computations still
+use the existing canonical typed specialization identity. Generic input/build
+paths use the protocol path and a full SHA-256 digest of the reported name, so
+different selections never overwrite each other's default files.
+
+An `entry fn` remains useful to name a fixed configuration or prepare and compose
+calls. Proofs always require an explicit `proof` declaration.
 
 ## Application control
 

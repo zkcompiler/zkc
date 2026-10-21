@@ -357,7 +357,17 @@ int runLanguageCompiler(int argc, char **argv) {
   identities["source_locations_truncated"] =
       original->locations().size() > 4096;
   if (command == "language-check") {
-    checked["entry"] = selected->entry().entryName();
+    checked["entry"] = selected->name();
+    // Requested generic specializations are finite, on-demand candidates.
+    if (!selected->entry().parameters.empty()) {
+      auto *entries = checked.getArray("entries");
+      entries->push_back(
+          json::Object{{"name", selected->name()}, {"kind", "function"}});
+      llvm::sort(*entries, [](const auto &a, const auto &b) {
+        return *a.getAsObject()->getString("name") <
+               *b.getAsObject()->getString("name");
+      });
+    }
     checked["original"] = original->identity();
     return publishCheck();
   }

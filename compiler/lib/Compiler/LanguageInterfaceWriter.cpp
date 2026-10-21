@@ -26,7 +26,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         {"capture", entry.project().capture().identity().str()},
         {"original", original.str()},
         {"toolchain", toolchain.str()},
-        {"entry", entry.entry().entryName()},
+        {"entry", entry.name()},
         {"selection",
          json::Object{{"kind", "function"}, {"function", entry.root().symbol}}},
         {"functions", std::move(plan->signatures)},
@@ -221,7 +221,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);
-    out.attribute("entry", entry.entry().entryName());
+    out.attribute("entry", entry.name());
     out.attribute("protocol", entry.protocol().symbol);
     out.attributeArray("setups", [&] {
       for (const auto &slot : entry.entry().setups) {

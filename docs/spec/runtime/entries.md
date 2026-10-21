@@ -376,19 +376,22 @@ requires the complete outcome, including acceptance when applicable.
 ### Project defaults
 
 `Project::layout()` owns manifest-relative paths. A canonical `a::B` Entry maps
-to `a.B`, retaining exact NFC source spelling for Unicode names. Reserved device
+to the stem `a.B`, retaining exact NFC source spelling for Unicode names. An
+explicit generic run uses the qualified protocol stem followed by `-` and the
+full lowercase SHA-256 of its reported UTF-8 selection name. Equivalent typed
+arguments with different public spellings can have different stems. Reserved device
 names, overlong filenames and ASCII case-folded collisions refuse. The same checks
 apply to input group filenames; explicit input paths bypass the filename convention. Explicit paths
 override each input group or artifact independently and are relative to the
 invocation's working directory. Package and explicit-module modes have no project
 defaults. No command searches alternative filenames or selects a newest file.
 
-- Required proof groups use `inputs/<qualified.name>/public.json` and
+- Required proof groups use `inputs/<entry-stem>/public.json` and
   `witness.json`. Only proving selects witness inputs.
-- Required function arguments use `inputs/<qualified.name>/arguments.json`.
-- Compilation uses `build/zkc/<qualified.name>.zkpkg`.
-- Proving writes and verification reads `build/zkc/<qualified.name>.zkproof`.
-- Runs publish values to `build/zkc/<qualified.name>.results.json`. Proof
+- Required function arguments use `inputs/<entry-stem>/arguments.json`.
+- Compilation uses `build/zkc/<entry-stem>.zkpkg`.
+- Proving writes and verification reads `build/zkc/<entry-stem>.zkproof`.
+- Runs publish values to `build/zkc/<entry-stem>.results.json`. Proof
   commands publish named values only with explicit `--results`.
 
 `run --no-results` disables result publication and conflicts with `--results`.
@@ -417,7 +420,7 @@ native `RunRequest` callers supply their own sessions.
 ### Input documents
 
 `run --input=FILE` reads one exact parameter-name map for the selected Entry
-function. Its conventional path is `inputs/<qualified.name>/arguments.json`.
+function. Its conventional path is `inputs/<entry-stem>/arguments.json`.
 Generated protocol `Inputs` records contain a separate field for each participant;
 shared source ports remain separate role-local values. Optional `--invocations`
 supplies child sessions, services and setup policies; these are execution context,

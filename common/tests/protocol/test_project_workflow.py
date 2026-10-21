@@ -11,6 +11,63 @@ def command(toolchain, *arguments):
     return [toolchain.runtime, '--json', *arguments, f'--compiler={toolchain.compiler}']
 
 
+def test_generic_protocol_selection_uses_one_project_workflow(toolchain, journal, directory):
+    (directory / 'main.zkc').write_text('''module example;
+domain F=field("koala-bear");
+protocol Echo<T:Type> roles(P,V)(value:T@P)->(received:T@V){
+  let received=send P->V(value);return received;
+}
+''')
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    assert journal.json(command(toolchain, 'check'), cwd=directory)['entries'] == []
+    selectors = ['Echo<bool>', 'Echo<index>', 'Echo<example::F>']
+    for selector, value in zip(selectors, [True, '7', '9'], strict=True):
+        canonical = f'example::{selector}'
+        checked = journal.json(command(toolchain, 'check', selector), cwd=directory)
+        assert checked['entry'] == canonical
+        assert checked['entries'] == [{'name': canonical, 'kind': 'function'}]
+        inspected = journal.json(command(toolchain, 'inspect', selector), cwd=directory)
+        assert inspected['interface']['entry'] == canonical
+        prepared = journal.json(command(toolchain, 'prepare', selector), cwd=directory)
+        arguments = directory / f'inputs/example.Echo-{sha256(canonical.encode()).hexdigest()}/arguments.json'
+        assert prepared['files'] == [str(arguments)]
+        arguments.write_text(json.dumps({'inputs': {'P': {'value': value}, 'V': {}}}))
+        # Preparation publishes a replayable canonical selector as argv.
+        suggested = prepared['entries'][0]['commands'][0]
+        assert canonical in suggested
+        run = journal.json(command(toolchain, 'run', selector), cwd=directory)
+        assert json.loads(Path(run['results']).read_text())['value'] == {'P': {}, 'V': {'received': value}}
+        compiled = journal.json(command(toolchain, 'compile', selector), cwd=directory)
+        assert Path(compiled['output']).name == f'example.Echo-{sha256(canonical.encode()).hexdigest()}.zkpkg'
+        bindings = directory / f'bindings-{selectors.index(selector)}.rs'
+        journal.json(command(toolchain, 'bindings', selector, f'--output={bindings}'), cwd=directory)
+        assert 'pub fn call' in bindings.read_text()
+    assert len(list((directory / 'inputs').iterdir())) == 3
+    journal.json(command(toolchain, 'check', 'Echo<_>'), cwd=directory, refuses='source-compilation')
+    journal.json(command(toolchain, 'run', 'Echo'), cwd=directory, refuses='source-compilation')
+    journal.json(command(toolchain, 'prove', selectors[0]), cwd=directory, refuses='source-compilation')
+    journal.json(command(toolchain, 'verify', selectors[0]), cwd=directory, refuses='source-compilation')
+    # A project-wide prepare never invents a generic specialization.
+    prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
+    assert prepared['entries'] == [] and prepared['files'] == []
+
+
+def test_generic_selector_qualification_keeps_the_length_bound(toolchain, journal, directory):
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'main.zkc').write_text('''module example;
+protocol Count<N:nat> roles(P)()->(out:bool@P){return true;}
+''')
+    argument = '0' * (4096 - len('example::Count<1>')) + '1'
+    selector = f'Count<{argument}>'
+    selected = journal.json(command(toolchain, 'inspect', selector), cwd=directory)
+    reported = selected['interface']['entry']
+    assert len(reported) == 4096
+    replayed = journal.json(command(toolchain, 'inspect', reported), cwd=directory)
+    assert replayed['interface'] == selected['interface']
+    journal.json(command(toolchain, 'inspect', f'Count<0{argument}>'), cwd=directory,
+                 refuses='source-compilation')
+
+
 def test_protocol_default_entry_discovery_prepare_and_execution(toolchain, journal, directory):
     (directory / 'main.zkc').write_text('''module example;
 protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){

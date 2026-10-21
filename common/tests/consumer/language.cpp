@@ -45,6 +45,7 @@ int main() {
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       let r @P =swap(x);return(r=r);
     }
+    protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
     entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);})",
         "consumer.zkc"}},
       {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
@@ -102,12 +103,26 @@ int main() {
     llvm::errs() << llvm::toString(inventory.takeError());
     return 13;
   }
-  if (checked->entries().size() != 1 ||
+  if (checked->entries().size() != 2 ||
       checked->declarations()[selected->index].entryKind() !=
           zkc::language::EntryKind::Function ||
       inventory->find("m::Demo") == std::string::npos)
     return 14;
-  auto entry = zkc::language::closeEntry(*checked, "");
+  auto generic = zkc::language::resolveEntry(*checked, "Echo<index>");
+  if (!generic) {
+    llvm::errs() << llvm::toString(generic.takeError());
+    return 21;
+  }
+  auto specialized = zkc::language::closeEntry(*checked, generic->name);
+  if (!specialized) {
+    llvm::errs() << llvm::toString(specialized.takeError());
+    return 22;
+  }
+  if (generic->arguments.size() != 1 ||
+      specialized->name() != "m::Echo<index>" ||
+      specialized->invocations().size() != 1)
+    return 23;
+  auto entry = zkc::language::closeEntry(*checked, "Demo");
   if (!entry) {
     llvm::errs() << llvm::toString(entry.takeError());
     return 3;
