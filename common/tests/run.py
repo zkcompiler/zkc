@@ -64,6 +64,8 @@ def execute(scope, args):
     elif scope == "lean":
         for check in lean_checks():
             selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
+            if check.name == "check_migration_exporter.py":
+                selection = ["--package", ROOT / "lean", "--output", reports / "lean/migration-exporter"]
             run([sys.executable, check, *selection])
     elif scope == "lean-security":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "security"])
