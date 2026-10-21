@@ -647,7 +647,7 @@ def render_subjects(reports):
             verdict = item.get("status", item.get("outcome", report.get("status", report["outcome"])))
             note = f"{verdict}: {reason[0]}" if reason and verdict != "established" else verdict
             lines.append(f"| {report['subject']} | `{entry}` | {item.get('covered_endpoint', '')} | "
-                         f"{item.get('property', '')} | {item.get('statement', '')} | {identifiers} | {note} |")
+                         f"{item.get('property', '')} | {item.get('statement') or ''} | {identifiers} | {note} |")
     return "\n".join(lines) + "\n"
 
 
