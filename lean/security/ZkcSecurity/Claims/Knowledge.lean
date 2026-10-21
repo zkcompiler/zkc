@@ -156,14 +156,37 @@ structure KnowledgeRequest where
   model : Model
   fixed : model.form = .fixed
 
-/-- The protocol and transcript shape are existentially quantified by the
-meaning; their evidence is a witness of this fixed model class. -/
+/-- The protocol and transcript shape are existentially quantified before the
+statements, histories, provers and query counts in the guarantee. Evidence
+witnesses this fixed Sigma replay class, not an arbitrary extractor theory or a
+canonical family representation. The guarantee is a probability inequality;
+it does not state a running-time bound. -/
 def KnowledgeRequest.meaning {subject : Subject F G art endpoint} (request : KnowledgeRequest subject) : Prop :=
   ∃ replay : ReplayClass subject request.target, replay.guarantee request.model.queries
 
 theorem knowledgeEndpoint {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
     (replay : ReplayClass subject request.target) : request.meaning :=
   ⟨replay, replay.proveGuarantee request.model.queries⟩
+
+/-- Reuse a pinned endpoint package for a request about the same admitted subject
+and selected target. The method supplies evidence, never the request's meaning.
+The target selection transport is shared by all Sigma registrations. -/
+theorem knowledgeEndpointOfEvidence {subject : Subject F G art endpoint}
+    (request : KnowledgeRequest subject)
+    {Stmt Wit Commit PrvState Resp : Type} [DecidableEq Commit] [SampleableType Wit]
+    {holds : art.Statement F G → Wit → Prop}
+    (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
+    (hypotheses : HypothesesProved evidence.hypotheses)
+    (compiled : evidence.compiled = subject.compiled)
+    (target : HEq (SoundnessTarget.retained (F := F) (G := G) evidence.target) subject.target) :
+    request.meaning := by
+  apply knowledgeEndpoint request
+  apply ReplayClass.ofEvidence subject request.target evidence hypotheses compiled
+  cases subject with
+  | mk reference stageMatched subjectCompiled subjectTarget version registry registered sites unique nativeUnique lowering =>
+    dsimp only at compiled target request ⊢
+    cases compiled
+    exact heq_of_eq (SoundnessTarget.retained.inj ((eq_of_heq target).trans request.selected))
 
 end
 end ZkcSecurity.Claims

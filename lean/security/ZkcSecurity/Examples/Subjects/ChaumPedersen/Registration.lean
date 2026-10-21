@@ -41,12 +41,9 @@ noncomputable def propertyRegistry (endpoint : Semantics) (application : String)
 
 /-- One shared route for all pinned Sigma subjects and both supported stages. -/
 theorem proveKnowledge (request : KnowledgeRequest (subject (F := F) (G := G))) :
-    request.meaning := by
-  apply knowledgeEndpoint request
-  apply ReplayClass.ofEvidence subject request.target (knowledge .idealMeaning PUnit.unit) (by trivial) rfl
-  have same := request.selected
-  change SoundnessTarget.retained Contract.retained = .retained request.target at same
-  exact heq_of_eq (SoundnessTarget.retained.inj same)
+    request.meaning :=
+  knowledgeEndpointOfEvidence request (knowledge .idealMeaning PUnit.unit)
+    (by trivial) rfl HEq.rfl
 
 @[simp] theorem admittedField : artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field := rfl
 

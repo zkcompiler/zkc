@@ -110,6 +110,22 @@ def Holds (statement : Values (assignment F G) publics) (witness : target.Witnes
   ∃ arguments, target.arguments statement witness = some arguments ∧
     target.formula.invokeRelation arguments = .done (target.booleanOutput.symm ▸ .cons true .nil)
 
+/-- Once the exact ordered application read is proved, relation truth is the
+actual formula invocation. Reusing this implication does not discharge the
+public-input or witness-selection correspondence itself. -/
+theorem holds_iff_of_arguments
+    (statement : Values (assignment F G) publics) (witness : target.Witness F G)
+    (inputs : Values (assignment F G) target.application.relation.declaration.inputs)
+    (read : target.arguments statement witness = some inputs) :
+    target.Holds statement witness ↔
+      target.formula.invokeRelation inputs = .done (target.booleanOutput.symm ▸ .cons true .nil) := by
+  simp only [Holds, read, Option.some.injEq]
+  constructor
+  · rintro ⟨arguments, rfl, truth⟩
+    exact truth
+  · intro truth
+    exact ⟨inputs, rfl, truth⟩
+
 /-- Negation of existence of a target witness, over all shared logical witness
 assignments. It does not quantify an authored witness embedding or a parameter. -/
 def FalseStatement (statement : Values (assignment F G) publics) : Prop :=

@@ -91,14 +91,8 @@ theorem arguments_read (statement : artifacts.Statement F G) (witness : F) :
 
 /-- The existing mathematical predicate is exactly the retained application. -/
 theorem holds_pinned (statement : artifacts.Statement F G) (witness : F) :
-    holds statement witness ↔ retained.Holds statement (embed witness) := by
-  unfold RetainedTarget.Holds
-  rw [arguments_read]
-  constructor
-  · intro truth
-    exact ⟨_, rfl, truth⟩
-  · rintro ⟨arguments, read, truth⟩
-    cases read
-    exact truth
+    holds statement witness ↔ retained.Holds statement (embed witness) :=
+  (retained.holds_iff_of_arguments statement (embed witness) (arguments statement witness)
+    (arguments_read statement witness)).symm
 
 end ZkcSecurity.Examples.Subjects.Schnorr.Contract
