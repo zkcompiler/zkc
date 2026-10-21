@@ -117,10 +117,10 @@ private theorem sourceSoundness (endpoint : Semantics) (application : String) :
     (request (F := F) (G := G) endpoint application).meaning := by
   cases endpoint with
   | idealMeaning =>
-    exact adaptiveIdealEndpoint _ _ _ (evidence .idealMeaning application) rfl
+    exact adaptiveIdealEndpoint _ _ _ (evidence .idealMeaning application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl (implication .idealMeaning application)
   | executableBytes =>
-    exact adaptiveBytesEndpoint _ _ _ (evidence .executableBytes application) rfl
+    exact adaptiveBytesEndpoint _ _ _ (evidence .executableBytes application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl
       (fun _ _ _ _ _ _ => rfl) (implication .executableBytes application)
 

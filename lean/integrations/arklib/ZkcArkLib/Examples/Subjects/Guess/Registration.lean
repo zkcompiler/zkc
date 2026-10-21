@@ -81,7 +81,7 @@ noncomputable def implication (application : String) :
 
 theorem proveScalar (application : String) :
     (scalarRequest (F := F) (G := G) application).meaning := by
-  exact adaptiveIdealEndpoint _ _ _ (endpointEvidence application) rfl
+  exact adaptiveIdealEndpoint _ _ _ (endpointEvidence application) (by trivial) rfl
     (fun statement => Contract.falseStatement_pinned statement) rfl (implication application)
 
 /-- The occurrence is generated from full native source-site paths and checked
@@ -117,13 +117,13 @@ theorem proveCharged (application : String) :
     intro queries statement
     exact (implication application).cost queries statement
   constructor
-  · apply weightedAdaptiveIdealEndpoint (subjectIdeal (F := F) (G := G)) (requestedModel (F := F) application) requestedSchedule (endpointEvidence application) rfl
+  · apply weightedAdaptiveIdealEndpoint (subjectIdeal (F := F) (G := G)) (requestedModel (F := F) application) requestedSchedule (endpointEvidence application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl
     · intro queries history event
       rw [same]
     · exact cost
   · intro queries _
-    refine ⟨chargedExport _ _ queries _ (endpointEvidence application) rfl
+    refine ⟨chargedExport _ _ queries _ (endpointEvidence application) (by trivial) rfl
       (fun statement falseStatement => (Contract.falseStatement_pinned statement).mpr falseStatement)
       (fun history event => by rw [same]) ?_⟩
     exact requestedCost_of_equal_charge _ _ queries _ _ (same queries) (cost queries)

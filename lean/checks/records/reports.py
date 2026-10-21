@@ -807,6 +807,31 @@ def receipt_join(mapping, records, modules, evidence):
     return reasons
 
 
+def receipt_attribution(receipt):
+    """Optional method notes may be absent, malformed or unrecognizable."""
+    try:
+        provenance = receipt.get("provenance") or {}
+        closure = receipt.get("dependencies") or []
+        actual_names = {item.get("name") for item in receipt.get("proof_dependencies", closure)}
+        route = receipt.get("root_route")
+        declared_route = (provenance.get("root") or "").rsplit(".", 1)[-1]
+        discharger = receipt.get("discharger")
+        diagnostics = []
+        if route == "constructor" and declared_route == "theorem":
+            route = "theorem"
+        if route not in ROUTES or declared_route != route:
+            diagnostics.append("route attribution does not match the receipt constructor")
+        if not discharger or provenance.get("discharger") != discharger or discharger not in actual_names:
+            diagnostics.append("discharger attribution does not match the actual proof root")
+        if any(name not in actual_names for name in provenance.get("dependencies", [])):
+            diagnostics.append("dependency attribution is absent from the actual proof closure")
+        if receipt.get("provenance_error"):
+            diagnostics.append(receipt["provenance_error"])
+        return ("unattributed" if diagnostics else route), diagnostics
+    except (AttributeError, TypeError, ValueError) as error:
+        return "unattributed", [f"optional attribution could not be read: {error}"]
+
+
 def audit_receipt(record, request_record, request, registry, records, generated_modules=None):
     reasons, assumptions, discharged = [], [], []
     if not records.headers or any(header.get("axiom_provenance") != "resolved-constant-info/0" or
@@ -899,53 +924,16 @@ def audit_receipt(record, request_record, request, registry, records, generated_
         assumptions += found
         reasons += omitted
         reasons += declaration(records, current["name"], origin)[1]
-    provenance = receipt.get("provenance") or {}
-    route = receipt.get("root_route")
-    declared_route = (provenance.get("root") or "").rsplit(".", 1)[-1]
-    # A raw constructor provides no route authority. Its proof is a direct theorem
-    # only when provenance says so and its actual discharger is auditable.
-    if route == "constructor" and declared_route == "theorem":
-        route = "theorem"
-    if route not in ROUTES or declared_route != route:
-        reasons.append("forged route: provenance does not match the actual receipt constructor")
-    discharger = receipt.get("discharger")
+    # Optional provenance attributes a method; it cannot add assumptions or
+    # restrict which kernel-checked proof establishes the fixed meaning.
+    route, attribution = receipt_attribution(receipt)
     closure = receipt.get("dependencies") or []
-    actual_names = {item.get("name") for item in receipt.get("proof_dependencies", closure)}
-    if not discharger or provenance.get("discharger") != discharger:
-        reasons.append("forged discharger: provenance differs from the actual proof application")
-    if not discharger or discharger not in actual_names:
-        reasons.append("actual discharger is absent from the proof dependency closure")
-    for name in provenance.get("dependencies", []):
-        if name not in actual_names:
-            reasons.append(f"forged dependency: {name} is absent from actual closure")
-    for premise in provenance.get("premises", []):
-        identifier = (premise.get("identifier") or {}).get("name")
-        entry = registry.by_identifier.get(identifier)
-        if identifier == "source.correspondence":
-            continue
-        if entry is None:
-            reasons.append(f"unregistered receipt premise: {identifier}")
-        elif entry.get("schema") not in actual_names:
-            reasons.append(f"unsupported receipt premise: {identifier} has no actual dependency or telescope premise")
-        else:
-            assumptions.append(assumption(entry, "receipt provenance reconciled with actual closure"))
-    # Every dependency still receives its actual axiom audit. A generic
-    # Evidence function's unsupplied telescope is not the caller's telescope:
-    # inspect the emitter's actual applications and instantiated hypotheses.
+    # Actual axioms and provider identities remain authoritative. Unsupplied
+    # transitive function telescopes are not remaining caller premises.
     for item in closure:
         current = records.get(item.get("name"))
         if current:
             reasons += declaration(records, current["name"], "dependency")[1]
-    evidence_audit = receipt.get("evidence_audit") or {}
-    if evidence_audit.get("checked") is not True or evidence_audit.get("scope") != "instantiated-receipt":
-        reasons.append("actual instantiated Evidence applications were not audited")
-    for application in evidence_audit.get("applications") or []:
-        instantiated = {"name": application.get("name", "actual Evidence application"),
-                        "detail": {"hypotheses": application.get("hypotheses")}}
-        named, proved, omitted = hypotheses(instantiated, registry)
-        assumptions += named
-        discharged += proved
-        reasons += omitted
     # Independently reconstructed typed stage goals, never caller-selected
     # labels, determine the interpreted endpoint's required links.
     links = receipt.get("required_links") or []
@@ -953,7 +941,7 @@ def audit_receipt(record, request_record, request, registry, records, generated_
     if len(identifiers) != len(set(identifiers)):
         reasons.append("ambiguous registered obligation identifiers")
     for link in links:
-        if link.get("proved") is not True or link.get("conditional") is True:
+        if link.get("proved") is not True:
             reasons.append(f"unproved registered obligation: {link.get('identifier')}")
     required = STAGE_LINKS.get((request.get("subject") or {}).get("stage"))
     if required is None:
@@ -976,7 +964,7 @@ def audit_receipt(record, request_record, request, registry, records, generated_
         matches = expected[0].get("matches") or []
         matching = ([link for link in links if link.get("index") == matches[0].get("index") and
                      link.get("identifier") == identifier] if len(matches) == 1 else [])
-        if len(matching) != 1 or matching[0].get("proved") is not True or matching[0].get("conditional") is True:
+        if len(matching) != 1 or matching[0].get("proved") is not True:
             reasons.append(f"missing required interpreted-stage link: {identifier}")
         elif matches[0].get("goal_defeq") is not True or matches[0].get("subject_matches") is not True:
             reasons.append(f"wrong actual subject or goal for interpreted-stage link: {identifier}")
@@ -988,7 +976,7 @@ def audit_receipt(record, request_record, request, registry, records, generated_
     assumptions.append({"id": "source.correspondence", "category": "trusted-link",
                         "schema": None, "statement": "Source-to-IR correspondence remains unproved",
                         "instantiated": None, "discharge": "assumed", "source": "IR-relative milestone"})
-    return {**receipt, "root_route": route}, assumptions, discharged, reasons
+    return {**receipt, "root_route": route, "attribution_diagnostics": attribution}, assumptions, discharged, reasons
 
 
 def requested_claim(item, mappings, records, registry, modules, evidence, checks, connected_reasons,
@@ -1080,8 +1068,8 @@ def requested_claim(item, mappings, records, registry, modules, evidence, checks
             "typed_statement_digest": data_digest(link.get("goal")),
             "context_digest": data_digest(link.get("context")),
             "expected_responsibility_layer": link.get("expected_responsibility_layer"),
-            "root_route": "theorem" if link.get("proved") and not link.get("conditional") else "open",
-            "status": "certified" if link.get("proved") and not link.get("conditional") else "open"})
+            "root_route": "theorem" if link.get("proved") else "open",
+            "status": "certified" if link.get("proved") else "open"})
     resolution = mapping.get("resolution") or {}
     definitions = resolution.get("definitions")
     missing = (resolution.get("status") == "incomplete" and
@@ -1103,7 +1091,9 @@ def requested_claim(item, mappings, records, registry, modules, evidence, checks
             "validation": checks["outcome"], "resolution": resolution, "attempts": mapping.get("attempts") or [],
             "method_plan": item.get("method"), "receipt": receipt_record and receipt_record["name"],
             "root_route": receipt.get("root_route"), "discharger": receipt.get("discharger"),
-            "method_version": (receipt.get("provenance") or {}).get("method"),
+            "attribution_diagnostics": receipt.get("attribution_diagnostics") or [],
+            "method_version": ((receipt.get("provenance") or {}).get("method")
+                               if isinstance(receipt.get("provenance"), dict) else None),
             "exported_capabilities": receipt.get("exported_capabilities") or [],
             "application_coverage": receipt.get("application_coverage"),
             "actual_dependency_declarations": receipt.get("proof_dependencies") or [],

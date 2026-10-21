@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Soundness
+public import ZkcSecurity.Claims.EndpointHypotheses
 public import ZkcSecurity.Claims.ChargeMonotonicity
 
 @[expose] public section
@@ -42,6 +43,7 @@ private theorem proverBound {α : Type}
 
 theorem fixedIdealEndpoint (subject : Subject F G art .idealMeaning) (model : Model) (error : Nat → ENNReal)
     (evidence : SoundnessEvidence art .idealMeaning .fixed claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled)
     (covers : ∀ statement, subject.falseStatement statement → claim statement)
     (implication : BoundImplication evidence model error) : FixedIdeal subject model error := by
@@ -54,6 +56,7 @@ theorem fixedIdealEndpoint (subject : Subject F G art .idealMeaning) (model : Mo
 
 theorem adaptiveIdealEndpoint (subject : Subject F G art .idealMeaning) (model : Model) (error : Nat → ENNReal)
     (evidence : SoundnessEvidence art .idealMeaning .adaptive claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled)
     (falseSet : ∀ statement, claim statement ↔ subject.falseStatement statement)
     (application : evidence.bound.application = model.application)
@@ -69,6 +72,7 @@ theorem adaptiveIdealEndpoint (subject : Subject F G art .idealMeaning) (model :
 
 theorem fixedBytesEndpoint (subject : Subject F G art .executableBytes) (model : Model) (error : Nat → ENNReal)
     (evidence : SoundnessEvidence art .executableBytes .fixed claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (_compiled : evidence.compiled = subject.compiled)
     (covers : ∀ statement, subject.falseStatement statement → claim statement)
     (validation : ∀ codec budget binding statement initial bytes,
@@ -86,6 +90,7 @@ theorem fixedBytesEndpoint (subject : Subject F G art .executableBytes) (model :
 
 theorem adaptiveBytesEndpoint (subject : Subject F G art .executableBytes) (model : Model) (error : Nat → ENNReal)
     (evidence : SoundnessEvidence art .executableBytes .adaptive claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (_compiled : evidence.compiled = subject.compiled)
     (falseSet : ∀ statement, claim statement ↔ subject.falseStatement statement)
     (application : evidence.bound.application = model.application)
@@ -117,6 +122,7 @@ private theorem weightedProverBound {α : Type} (subject : Subject F G art endpo
 theorem weightedFixedIdealEndpoint (subject : Subject F G art .idealMeaning) (model : Model)
     (schedule : ChargeSchedule subject)
     (evidence : SoundnessEvidence art .idealMeaning .fixed claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled)
     (covers : ∀ statement, subject.falseStatement statement → claim statement)
     (charges : ∀ queries history event, evidence.family.charge history event ≤ schedule.charge queries history event)
@@ -131,6 +137,7 @@ theorem weightedFixedIdealEndpoint (subject : Subject F G art .idealMeaning) (mo
 theorem weightedAdaptiveIdealEndpoint (subject : Subject F G art .idealMeaning) (model : Model)
     (schedule : ChargeSchedule subject)
     (evidence : SoundnessEvidence art .idealMeaning .adaptive claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled)
     (falseSet : ∀ statement, claim statement ↔ subject.falseStatement statement)
     (application : evidence.bound.application = model.application)
@@ -147,6 +154,7 @@ theorem weightedAdaptiveIdealEndpoint (subject : Subject F G art .idealMeaning) 
 theorem weightedFixedBytesEndpoint (subject : Subject F G art .executableBytes) (model : Model)
     (schedule : ChargeSchedule subject)
     (evidence : SoundnessEvidence art .executableBytes .fixed claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (_compiled : evidence.compiled = subject.compiled)
     (covers : ∀ statement, subject.falseStatement statement → claim statement)
     (validation : ∀ codec budget binding statement initial bytes,
@@ -167,6 +175,7 @@ theorem weightedFixedBytesEndpoint (subject : Subject F G art .executableBytes) 
 theorem weightedAdaptiveBytesEndpoint (subject : Subject F G art .executableBytes) (model : Model)
     (schedule : ChargeSchedule subject)
     (evidence : SoundnessEvidence art .executableBytes .adaptive claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (_compiled : evidence.compiled = subject.compiled)
     (falseSet : ∀ statement, claim statement ↔ subject.falseStatement statement)
     (application : evidence.bound.application = model.application)
@@ -201,6 +210,7 @@ proved at the requested prices. This is the obligation monotonicity cannot fill.
 noncomputable def chargedExport (subject : Subject F G art endpoint) (schedule : ChargeSchedule subject)
     (queries : Nat) (cost : ENNReal)
     (evidence : SoundnessEvidence art endpoint form claim (Regime.exact F))
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled)
     (covers : ∀ statement, subject.falseStatement statement → claim statement)
     (charges : ∀ history event, evidence.family.charge history event ≤ schedule.charge queries history event)

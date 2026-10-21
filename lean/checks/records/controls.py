@@ -406,23 +406,27 @@ EMITTED_RECEIPTS = {
     "Tests.ClaimReporting.implicitFalse": "omitted premise",
     "Tests.ClaimReporting.inhabitedFalse": "hidden parameter",
     "Tests.ClaimReporting.liftedFalse": "hidden parameter",
-    "Tests.ClaimReporting.forgedDischarger": "forged discharger",
-    "Tests.ClaimReporting.forgedDependency": "forged dependency",
-    "Tests.ClaimReporting.forgedRoute": "forged route",
+    "Tests.ClaimReporting.forgedDischarger": None,
+    "Tests.ClaimReporting.forgedDependency": None,
+    "Tests.ClaimReporting.forgedRoute": None,
     "Tests.ClaimReporting.omittedLink": "unproved registered obligation",
     "Tests.ClaimReporting.provedLink": None,
     "Tests.ClaimReporting.wrongType": "proof type mismatch",
 }
 
 EMITTED_STAGE_RECEIPTS = {
-    "ProjectedCarrier.directReceipt": ("manualData", "unregistered.projected.carrier"),
-    "ProjectedCarrier.carrierReceipt": ("manualData", "unregistered.projected.carrier"),
-    "ProjectedCarrier.opaqueReceipt": ("manualData", "unregistered.projected.carrier"),
+    "ProjectedCarrier.directReceipt": ("manualData", None),
+    "ProjectedCarrier.carrierReceipt": ("manualData", None),
+    "ProjectedCarrier.opaqueReceipt": ("manualData", None),
     "ProjectedCarrier.positiveReceipt": ("manualData", None),
-    "ProjectedCarrier.blockedReceipt": ("manualData", "unresolved Evidence-bearing projected function"),
-    "HigherOrder.directReceipt": ("idealData", "unregistered.higherorder.control"),
-    "HigherOrder.wrappedReceipt": ("idealData", "unregistered.higherorder.control"),
+    "ProjectedCarrier.blockedReceipt": ("manualData", None),
+    "HigherOrder.directReceipt": ("idealData", None),
+    "HigherOrder.wrappedReceipt": ("idealData", None),
     "HigherOrder.positiveReceipt": ("idealData", None),
+    "HigherOrder.unprovedNoteReceipt": ("manualData", None),
+    "HigherOrder.unattributedReceipt": ("idealData", None),
+    "HigherOrder.extraPremiseReceipt": ("idealData", "omitted premise"),
+    "HigherOrder.symbolicProvenanceReceipt": ("idealData", None),
     "manualReceipt": ("manualData", None),
     "appliedEvidenceReceipt": ("idealData", None),
     "manualBareReceipt": ("manualData", "missing typed security model admission"),
@@ -451,7 +455,7 @@ EMITTED_STAGE_RECEIPTS = {
     "otherArtifactsReceipt": ("extensionIdealData", "wrong actual subject or goal"),
     "nativeSchemaReceipt": ("extensionIdealData", "wrong actual subject or goal"),
     "constructionOnlyReceipt": ("extensionBytesData", "missing required interpreted-stage link"),
-    "conditionalReceipt": ("idealData", "unproved registered obligation"),
+    "conditionalReceipt": ("idealData", "omitted premise"),
     "explicitFalse": ("idealData", "omitted premise"),
     "implicitFalse": ("idealData", "omitted premise"),
     "factFalse": ("idealData", "omitted premise"),
@@ -472,48 +476,16 @@ def run_emitted_stage_receipts(data):
         if not record or not wire:
             failures.append(f"interpreted receipt control {name}: missing fresh request/receipt extraction")
             continue
-        _, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
+        audited, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
         passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
         extracted = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
         if short in {"manualReceipt", "appliedEvidenceReceipt"}:
             admission = extracted.get("admission") or {}
             passed = passed and admission.get("association") == "typed-certificate" and admission.get("model_status") == "admitted" and admission.get("certificate_checked") is True
-        if short == "appliedEvidenceReceipt":
-            evidence = extracted.get("evidence_audit") or {}
-            passed = passed and evidence.get("checked") is True and bool(evidence.get("applications"))
-        if short.startswith("HigherOrder."):
-            evidence = extracted.get("evidence_audit") or {}
-            applications = evidence.get("applications") or []
-            passed = passed and evidence.get("checked") is True and bool(applications)
-            if diagnostic:
-                passed = passed and any(hypothesis.get("identifier") == diagnostic
-                    for application in applications for hypothesis in application.get("hypotheses") or [])
-            if short == "HigherOrder.wrappedReceipt":
-                names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
-                passed = passed and {"TestsSecurity.ClaimReporting.HigherOrder.invoke",
-                    "TestsSecurity.ClaimReporting.HigherOrder.labeledEvidence"} <= names
-        if short.startswith("ProjectedCarrier.") and short != "ProjectedCarrier.blockedReceipt":
-            admission = extracted.get("admission") or {}
-            evidence = extracted.get("evidence_audit") or {}
-            applications = evidence.get("applications") or []
-            passed = passed and admission.get("certificate_checked") is True and admission.get("model_status") == "admitted"
-            passed = passed and evidence.get("checked") is True and bool(applications)
-            if diagnostic:
-                passed = passed and any(hypothesis.get("identifier") == diagnostic
-                    for application in applications for hypothesis in application.get("hypotheses") or [])
-            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
-            namespace = "TestsSecurity.ClaimReporting.ProjectedCarrier."
-            expected = {namespace + ("validCallback" if diagnostic is None else "callback")}
-            if short != "ProjectedCarrier.directReceipt":
-                expected.add(namespace + "runner")
-            if short == "ProjectedCarrier.opaqueReceipt":
-                expected.add(namespace + "hiddenRunner")
-            if diagnostic:
-                expected.add("TestsSecurity.ClaimReporting.HigherOrder.labeledEvidence")
-            passed = passed and expected <= names
-        if short == "ProjectedCarrier.blockedReceipt":
-            claim_data = (record.get("detail") or {}).get("claim_data") or {}
-            passed = passed and "unresolved Evidence-bearing projected function" in claim_data.get("extraction_error", "")
+        if short in {"HigherOrder.unattributedReceipt", "HigherOrder.symbolicProvenanceReceipt"}:
+            passed = passed and audited.get("root_route") == "unattributed" and bool(audited.get("attribution_diagnostics"))
+        if short == "HigherOrder.symbolicProvenanceReceipt":
+            passed = passed and bool(extracted.get("provenance_error"))
         if short in {"wrongTargetReceipt", "wrongAcceptanceReceipt"}:
             passed = passed and (extracted.get("admission") or {}).get("subject_checked") is False
         if short == "chargedExtensionReceipt":

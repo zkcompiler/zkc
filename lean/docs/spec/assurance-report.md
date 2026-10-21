@@ -119,17 +119,18 @@ arguments; reporting never erases them to turn a different request into a match.
 | `capability_consumer` | Recognized checked consumer of capabilities, independent of argument shape |
 | `application_coverage` | Actual model context, interpreted application value and checked designated free binder, or concrete fixed scope |
 | `admission` | Actual Subject.check result and full resolveModel result, with the typed model association and explicit admitted/registered-undefined/refused outcome |
-| `evidence_audit` | Actual instantiated Evidence applications and named hypotheses, audited in the receipt context |
+| `evidence_attribution` | Best-effort referenced Evidence declarations; attribution only, never receipt obligations |
 | `subject` | Actual typed security subject's artifacts declaration, snapshot source/Entry and participant source/candidate identities |
 | `quantity_kind`, `exported_capabilities` | Argument quantity classification; capability exports require the checked canonical consumer and its actual charged meaning |
-| `root_route`, `discharger` | Actual route constructor and proof root; compiler-generated administrative proof wrappers are unwrapped |
+| `root_route`, `discharger` | Checked route attribution and actual proof root; missing or inconsistent attribution reports `unattributed` |
 | `proof_dependencies`, `dependencies` | Actual proof/index closure and complete receipt closure, each with declaration, module, ownership and statement identity |
-| `required_links` | Registry-owned typed obligations and actual `linkProofs`, including whether a proof depends on an outer assumption |
+| `required_links` | Registry-owned dependent goals and actual proof presence; remaining telescope conditions are audited separately |
 | `stage_links` | Independently reconstructed actual-subject stage obligations, with kernel goal comparisons and explicit subject-index comparisons against registered links |
-| `provenance` | Claimed route, discharger, method/version, dependencies and categorized premises, to reconcile with actual facts |
+| `provenance`, `provenance_error` | Optional route/method notes and extraction diagnostics; strings cannot introduce assumptions |
 
-An extraction failure is explicit and leaves the request open. A matching
-string alone cannot establish any of these facts. A request declaration alias
+A failure to extract authoritative semantic fields is explicit and leaves the
+request open. Optional attribution failures are diagnostic only. A matching
+string alone cannot establish semantic facts. A request declaration alias
 is allowed when its full emitted data equals the actual request index data.
 
 ## Audit
@@ -142,29 +143,30 @@ variables, or the explicit string application context. `Inhabited False`,
 are not ordinary model parameters. The emitted `model_instance = true` judgment
 is required; a class name alone is insufficient.
 
+Receipt authority is the exact request-fixed evaluated proposition and typed
+admission, its remaining request/receipt telescope, standard axioms, and a proof
+of every request-side required stage/property link. Any kernel-checked proof of
+the same meaning is evidence. Internal proof structure and method choice cannot
+change status. Generic functions applied to concrete arguments do not introduce
+free assumptions into their callers.
+
 The old endpoint theorem, evidence telescope, named-hypothesis/schema and axiom
-audits remain in use for the mathematical ledger and legacy endpoints. For a
-receipt, the extractor follows actual applied Evidence values and records their
-instantiated named hypotheses in the receipt's free context. Generic Evidence
-constructors applied to concrete endpoint, form, binding and lowering arguments
-do not introduce free parameters into their callers. Supplied arguments also
-carry Evidence relevance into generic higher-order wrappers:
-the extractor substitutes supplied callbacks and values before pruning such
-applications. Concrete projected owners are reduced before relevance pruning,
-including their stored owned opaque bodies, and reapplied to the actual
-arguments. This also follows callbacks carried inside constructor data. A
-blocked relevant callback consumer, including a blocked owned carrier, leaves
-extraction open. An abstract scalar relation whose scalar arguments have
-already been audited does not itself constitute an Evidence callback consumer.
-Concrete matchers are reduced with their actual arguments.
-Unapplied lambdas never gain
-invented arbitrary arguments. The caller's actual free
-telescope and all its proof/Type-wrapper premises remain audited. A proved named
-hypothesis using an outer assumption remains conditional. Proof bodies and types contribute
-to the dependency closure. Claimed dischargers and dependencies must reconcile
-with that closure. Root route and transitive family dependencies are reported
-separately: applying a general consumer to a family result does not establish
-that general automation alone proved the claim.
+audits remain strict for the mathematical ledger and legacy manifest endpoints.
+For receipts, internal Evidence searches are best-effort attribution only. The
+emitter records referenced Evidence declarations without interpreting arbitrary
+callback consumers. An absent attribution, optional provenance extraction error,
+or unrecognized proof route is legal; the report uses `root_route: unattributed`
+and optional attribution diagnostics. Provenance premise strings and Evidence
+notes never become actual assumptions. Actual dependency and axiom closures are
+still recorded and audited independently of route attribution.
+
+Claims endpoint adapters require `HypothesesProved evidence.hypotheses` by type.
+Each list element must contain `.proved` with a proof of its actual proposition;
+`.assumed` cannot satisfy this boundary. All six maintained subjects use an empty
+list. The legacy Evidence shape, including its hypotheses field, is retained so
+the existing manifest endpoint audit keeps its meaning. Proved note identifiers
+need no registry meaning in the receipt path. Genuine external conditions belong
+in the remaining statement telescope or registry-owned required links.
 
 Every security receipt must independently pass `Subject.check` and full actual
 `resolveModel` elaboration for its exact typed subject, request, field, original
@@ -245,7 +247,7 @@ must be kernel definitionally equal to the reconstructed goal, and its checked
 schema's subject argument must match the actual subject before goal reduction.
 The subject comparison matters even when closed checker equations normalize
 alike. A `True` goal with the same label, another subject's valid link, a
-polymorphic native-link schema, an absent proof or a conditional link proof
+polymorphic native-link schema or an absent proof
 cannot discharge it. An unrecognized compiled subject remains open. Property
 and model names alone cannot authorize stage evidence.
 
@@ -314,7 +316,7 @@ boundaries. The rendered subject table has one row per requested claim.
 
 `Tests.ClaimReporting` supplies actual Lean-emitted request/receipt controls for
 clean proofs, explicit/implicit false hypotheses, proof-carrying instances,
-Type-valued proof wrappers and forged provenance. The downstream report audit
+Type-valued proof wrappers and unverifiable optional provenance attribution. The downstream report audit
 must accept the clean control before its negative controls count as evidence.
 Existing endpoint and hidden-assumption controls remain maintained separately.
 `TestsSecurity.ClaimReporting` supplies fresh admitted compiled-ideal and
@@ -322,6 +324,12 @@ interpreted-byte positives, omitted/conditional stage proofs, wrong-goal and
 foreign-subject or foreign-artifact links, abstract native schemas, and hidden
 False/Fact/Inhabited/proof-wrapper refusals.
 Both interpreted endpoints must pass before their negative controls count.
+A generic-wrapper proof of the fixed meaning also passes with unattributed route;
+an additional unregistered premise binder refuses and a missing stage-link proof
+remains open. Internal proved or assumed Evidence notes, projected/opaque
+callbacks and choice functions do not change receipt status. Link proof presence
+is checked by its dependent type; conditionality comes from the remaining
+statement telescope, never from internal occurrence of a proof parameter.
 Focused Python controls cover request substitutions, stale definition bodies,
 required-link omission, registry ambiguity, incomplete requests, failed attempts
 and explicit no-claim reports.

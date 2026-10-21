@@ -43,7 +43,7 @@ noncomputable def propertyRegistry (endpoint : Semantics) (application : String)
 theorem proveKnowledge (request : KnowledgeRequest (subject (F := F) (G := G))) :
     request.meaning := by
   apply knowledgeEndpoint request
-  apply ReplayClass.ofEvidence subject request.target (knowledge .idealMeaning PUnit.unit) rfl
+  apply ReplayClass.ofEvidence subject request.target (knowledge .idealMeaning PUnit.unit) (by trivial) rfl
   have same := request.selected
   change SoundnessTarget.retained Contract.retained = .retained request.target at same
   exact heq_of_eq (SoundnessTarget.retained.inj same)

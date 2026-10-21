@@ -123,7 +123,7 @@ noncomputable def proveDerived
 theorem proveKnowledge {endpoint : Semantics} (request : KnowledgeRequest (subject (F := F) (G := G) endpoint)) :
     request.meaning := by
   apply knowledgeEndpoint request
-  apply ReplayClass.ofEvidence (subject endpoint) request.target (knowledge endpoint (match endpoint with | .idealMeaning => PUnit.unit | .executableBytes => lowering)) rfl
+  apply ReplayClass.ofEvidence (subject endpoint) request.target (knowledge endpoint (match endpoint with | .idealMeaning => PUnit.unit | .executableBytes => lowering)) (by trivial) rfl
   have same := request.selected
   change SoundnessTarget.retained Contract.retained = .retained request.target at same
   exact heq_of_eq (SoundnessTarget.retained.inj same)

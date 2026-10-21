@@ -3,6 +3,7 @@ import ZkcSecurity.Claims.Admission
 import ZkcSecurity.Claims.Arithmetic
 import ZkcSecurity.Claims.ChargeMonotonicity
 import ZkcSecurity.Claims.Endpoint
+import ZkcSecurity.Claims.EndpointHypotheses
 import ZkcSecurity.Claims.Knowledge
 import ZkcSecurity.Claims.Model
 import ZkcSecurity.Claims.ReceiptAdmission

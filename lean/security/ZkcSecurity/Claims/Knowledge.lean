@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Soundness
+public import ZkcSecurity.Claims.EndpointHypotheses
 public import ZkcSecurity.Endpoint.Knowledge
 
 @[expose] public section
@@ -53,6 +54,7 @@ def ReplayClass.ofEvidence
     {Stmt Wit Commit PrvState Resp : Type} [DecidableEq Commit] [SampleableType Wit]
     {holds : art.Statement F G → Wit → Prop}
     (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
+    (_hypotheses : HypothesesProved evidence.hypotheses)
     (compiled : evidence.compiled = subject.compiled) (selected : HEq evidence.target target) :
     ReplayClass subject target := by
   rcases subject with ⟨reference, stageMatched, subjectCompiled, subjectTarget, version, registry,

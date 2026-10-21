@@ -93,7 +93,7 @@ private theorem scalarSoundness : (SoundnessRequest.mk (model (F := F))
       SoundnessRequest (subject (F := F) (G := G))).meaning := by
   change FixedIdeal (subject (F := F) (G := G)) (model (F := F))
     (fun queries => queries * (rate (F := F) : ENNReal) + (rate (F := F) : ENNReal))
-  apply fixedIdealEndpoint (subject (F := F) (G := G)) (model (F := F)) _ (evidence (F := F) (G := G)) rfl
+  apply fixedIdealEndpoint (subject (F := F) (G := G)) (model (F := F)) _ (evidence (F := F) (G := G)) (by trivial) rfl
     (fun statement falseStatement => (Contract.falseStatement_pinned statement).mpr falseStatement)
   exact {
     rate := fun _ => error (F := F)
@@ -108,7 +108,7 @@ at precisely the requested prices; its cost proof is checked at those prices. -/
 private theorem chargedSoundness : (SoundnessRequest.mk (model (F := F)) (.charged (schedule (F := F) (G := G))) :
     SoundnessRequest (subject (F := F) (G := G))).meaning := by
   constructor
-  · apply weightedFixedIdealEndpoint (subject (F := F) (G := G)) (model (F := F)) (schedule (F := F) (G := G)) (evidence (F := F) (G := G)) rfl
+  · apply weightedFixedIdealEndpoint (subject (F := F) (G := G)) (model (F := F)) (schedule (F := F) (G := G)) (evidence (F := F) (G := G)) (by trivial) rfl
       (fun statement falseStatement => (Contract.falseStatement_pinned statement).mpr falseStatement)
     · intro queries history event
       rw [charge_eq]
@@ -117,7 +117,7 @@ private theorem chargedSoundness : (SoundnessRequest.mk (model (F := F)) (.charg
       simp only [model, Bound.value, evidence, rate_eq]
       exact le_rfl
   · intro queries _
-    refine ⟨chargedExport _ _ queries _ (evidence (F := F) (G := G)) rfl
+    refine ⟨chargedExport _ _ queries _ (evidence (F := F) (G := G)) (by trivial) rfl
       (fun statement falseStatement => (Contract.falseStatement_pinned statement).mpr falseStatement)
       (fun history event => by rw [charge_eq]; exact le_rfl) ?_⟩
     intro statement initial
@@ -223,7 +223,7 @@ private theorem sourceCharge (queries : Nat) (history : History F G) (event : Ev
 
 private theorem sourceScalar (application : String) :
     (sourceRequest (F := F) (G := G) application false).meaning := by
-  apply adaptiveIdealEndpoint _ _ _ (adaptiveEvidence application) rfl Contract.falseStatement_pinned rfl
+  apply adaptiveIdealEndpoint _ _ _ (adaptiveEvidence application) (by trivial) rfl Contract.falseStatement_pinned rfl
   refine BoundImplication.ofConstantRate _ _ _ (error (F := F)) (error (F := F))
     (fun _ _ => le_rfl) (fun _ => le_rfl) ?_ ?_
   · intro queries
@@ -234,14 +234,14 @@ private theorem sourceScalar (application : String) :
 private theorem sourceCharged (application : String) :
     (sourceRequest (F := F) (G := G) application true).meaning := by
   constructor
-  · apply weightedAdaptiveIdealEndpoint _ _ _ (adaptiveEvidence application) rfl Contract.falseStatement_pinned rfl
+  · apply weightedAdaptiveIdealEndpoint _ _ _ (adaptiveEvidence application) (by trivial) rfl Contract.falseStatement_pinned rfl
     · intro queries history event
       rw [sourceCharge]
       exact le_rfl
     · intro queries statement
       simp [adaptiveEvidence, ZkcSecurity.Examples.Subjects.Guess.soundness, sourceRequest, sourceModel, sourceError]
   · intro queries _
-    refine ⟨chargedExport _ _ queries _ (adaptiveEvidence application) rfl
+    refine ⟨chargedExport _ _ queries _ (adaptiveEvidence application) (by trivial) rfl
       (fun statement => (Contract.falseStatement_pinned statement).mpr)
       (fun history event => by rw [sourceCharge]; exact le_rfl) ?_⟩
     apply requestedCost_of_equal_charge

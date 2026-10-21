@@ -81,10 +81,10 @@ theorem proveScalar {endpoint : Semantics} (application : String) :
     (scalarRequest (F := F) (G := G) endpoint application).meaning := by
   cases endpoint with
   | idealMeaning =>
-    exact adaptiveIdealEndpoint _ _ _ (endpointEvidence .idealMeaning application) rfl
+    exact adaptiveIdealEndpoint _ _ _ (endpointEvidence .idealMeaning application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl (implication .idealMeaning application)
   | executableBytes =>
-    exact adaptiveBytesEndpoint _ _ _ (endpointEvidence .executableBytes application) rfl
+    exact adaptiveBytesEndpoint _ _ _ (endpointEvidence .executableBytes application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl
       (fun _ _ _ _ _ _ => rfl) (implication .executableBytes application)
 
@@ -121,13 +121,13 @@ theorem proveCharged (application : String) :
     intro queries statement
     exact (implication .idealMeaning application).cost queries statement
   constructor
-  · apply weightedAdaptiveIdealEndpoint (subjectIdeal (F := F) (G := G)) (requestedModel (F := F) application) requestedSchedule (endpointEvidence .idealMeaning application) rfl
+  · apply weightedAdaptiveIdealEndpoint (subjectIdeal (F := F) (G := G)) (requestedModel (F := F) application) requestedSchedule (endpointEvidence .idealMeaning application) (by trivial) rfl
       (fun statement => Contract.falseStatement_pinned statement) rfl
     · intro queries history event
       rw [same]
     · exact cost
   · intro queries _
-    refine ⟨chargedExport _ _ queries _ (endpointEvidence .idealMeaning application) rfl
+    refine ⟨chargedExport _ _ queries _ (endpointEvidence .idealMeaning application) (by trivial) rfl
       (fun statement falseStatement => (Contract.falseStatement_pinned statement).mpr falseStatement)
       (fun history event => by rw [same]) ?_⟩
     exact requestedCost_of_equal_charge _ _ queries _ _ (same queries) (cost queries)

@@ -27,7 +27,7 @@ def receipt_case(api):
                 claim_data={"wire_request": deepcopy(request)}))
     proof = {"wire_request": deepcopy(request), "request_head": data["name"], "indices_checked": True,
              "proof_type_matches": True, "root_route": "theorem", "discharger": "True.intro",
-             "evidence_audit": {"checked": True, "scope": "instantiated-receipt", "applications": []},
+             "evidence_attribution": {"scope": "referenced-evidence", "declarations": []},
              "proposition": "True", "dependencies": [{"name": "True.intro", "module": "Init.Prelude", "owned": False}],
              "required_links": [], "registered_property": {"name": "user.identity", "version": 0}, "provenance": {"root": "Zkc.Claims.Route.theorem", "discharger": "True.intro",
                 "dependencies": [], "premises": [], "method": {"name": "identity", "version": 0}}}
@@ -70,14 +70,12 @@ def test_stage_link_needs_actual_goal_and_same_subject(api, receipt_case, compar
     assert any("wrong actual subject or goal" in reason for reason in audit(api, receipt_case)[3])
 
 
-@pytest.mark.parametrize("change", ["omitted", "conditional", "unrecognized", "missing-lowering", "wrong-stage"])
+@pytest.mark.parametrize("change", ["omitted", "unrecognized", "missing-lowering", "wrong-stage"])
 def test_byte_interpretation_requires_both_checked_links(api, receipt_case, change):
     interpreted_stage(api, receipt_case, "executable-bytes")
     proof = receipt_case[3]
     if change == "omitted":
         proof["required_links"].pop()
-    elif change == "conditional":
-        proof["required_links"][1]["conditional"] = True
     elif change == "unrecognized":
         proof["stage_links"]["recognized_subject"] = False
     elif change == "missing-lowering":
@@ -124,17 +122,18 @@ def test_imported_language_request_is_compared_without_erasure(api, receipt_case
 @pytest.mark.parametrize("field,value,diagnostic", [
     ("proof_type_matches", False, "proof type mismatch"),
     ("indices_checked", False, "proof type mismatch"),
-    ("root_route", "endpoint", "forged route"),
-    ("discharger", "False.elim", "forged discharger"),
 ])
 def test_actual_receipt_facts_are_checked(api, receipt_case, field, value, diagnostic):
     receipt_case[3][field] = value
     assert any(diagnostic in reason for reason in audit(api, receipt_case)[3])
 
 
-def test_provenance_cannot_invent_dependencies(api, receipt_case):
+def test_unverifiable_provenance_is_unattributed(api, receipt_case):
     receipt_case[3]["provenance"]["dependencies"] = ["False.elim"]
-    assert any("forged dependency" in reason for reason in audit(api, receipt_case)[3])
+    result, assumptions, _, reasons = audit(api, receipt_case)
+    assert reasons == []
+    assert result["root_route"] == "unattributed"
+    assert [row["id"] for row in assumptions] == ["source.correspondence"]
 
 
 @pytest.mark.parametrize("binder", [
@@ -378,7 +377,7 @@ def test_generic_evidence_telescope_is_not_a_receipt_premise(api, receipt_case):
                 {"binder": "explicit", "type_head": "ZkcSecurity.Endpoint.Semantics", "premise": False}],
             "premise_telescope": [{"binder": "explicit", "premise": False}], "hypotheses": []}}
     receipt_case[3]["dependencies"].append({"name": generic["name"], "module": generic["module"], "owned": True})
-    receipt_case[3]["evidence_audit"]["applications"] = [
+    receipt_case[3]["evidence_attribution"]["applications"] = [
         {"name": generic["name"], "application": "genericEvidence idealMeaning", "hypotheses": []}]
     records = receipt_case[4]
     case = (*receipt_case[:4], declarations.Records(records.headers, [*records.declarations, generic]))
@@ -387,15 +386,17 @@ def test_generic_evidence_telescope_is_not_a_receipt_premise(api, receipt_case):
     assert any("hidden parameter" in reason for reason in audit(api, case)[3])
 
 
-def test_actual_instantiated_named_hypotheses_still_require_registration(api, receipt_case):
-    receipt_case[3]["evidence_audit"]["applications"] = [{"name": "Demo.actualEvidence", "hypotheses": [
+def test_internal_evidence_notes_are_not_receipt_assumptions(api, receipt_case):
+    receipt_case[3]["evidence_attribution"]["applications"] = [{"name": "Demo.actualEvidence", "hypotheses": [
         {"identifier": "unregistered.premise", "claim_head": "True", "status": {"kind": "assumed"}}]}]
-    assert any("not a registry identifier" in reason for reason in audit(api, receipt_case)[3])
+    _, assumptions, _, reasons = audit(api, receipt_case)
+    assert reasons == []
+    assert [row["id"] for row in assumptions] == ["source.correspondence"]
 
 
-def test_missing_instantiated_evidence_capture_remains_open(api, receipt_case):
-    receipt_case[3].pop("evidence_audit")
-    assert any("Evidence applications were not audited" in reason for reason in audit(api, receipt_case)[3])
+def test_optional_evidence_attribution_may_be_missing(api, receipt_case):
+    receipt_case[3].pop("evidence_attribution")
+    assert audit(api, receipt_case)[3] == []
 
 
 @pytest.mark.parametrize("field", ["axiom_provenance", "reference_provenance"])
@@ -499,3 +500,46 @@ def test_inconsistent_selected_entry_scope_cannot_certify(api, scoped_report, ch
     report = api.build(manifest, records)
     assert report["status"] == "open"
     assert any("scope" in reason or "selection" in reason for reason in report["reasons"])
+
+
+@pytest.mark.parametrize("metadata", [
+    {"root_route": "endpoint"},
+    {"discharger": "False.elim"},
+    {"provenance": None, "provenance_error": "unresolved optional string"},
+    {"provenance": "malformed optional attribution"},
+    {"provenance": {"dependencies": 17}},
+    {"evidence_attribution": {"diagnostic": "best-effort attribution failed"}},
+])
+def test_optional_attribution_never_refuses_fixed_meaning(api, receipt_case, metadata):
+    receipt_case[3].update(metadata)
+    assert audit(api, receipt_case)[3] == []
+
+
+def test_internal_link_proof_occurrence_is_not_a_condition(api, receipt_case):
+    interpreted_stage(api, receipt_case, "executable-bytes")
+    receipt_case[3]["required_links"][1]["conditional"] = True
+    assert audit(api, receipt_case)[3] == []
+
+
+def test_provenance_premise_strings_never_become_assumptions(api, receipt_case):
+    receipt_case[3]["provenance"]["premises"] = [
+        {"identifier": {"name": "unregistered.note", "version": 0}}]
+    _, assumptions, _, reasons = audit(api, receipt_case)
+    assert reasons == []
+    assert [row["id"] for row in assumptions] == ["source.correspondence"]
+
+
+
+def test_registered_provenance_note_does_not_invent_assumptions(api, receipt_case):
+    request, data, record, proof, records = receipt_case
+    entry = {"identifier": "model.note", "category": "model", "schema": "Demo.model", "statement": "note"}
+    proof["proof_dependencies"] = [{"name": "True.intro"}, {"name": "Demo.model"}]
+    proof["provenance"]["premises"] = [{"identifier": {"name": "model.note", "version": 0}}]
+    _, assumptions, _, reasons = api.audit_receipt(record, data, request, api.Registry([entry], []), records)
+    assert reasons == []
+    assert [row["id"] for row in assumptions] == ["source.correspondence"]
+
+
+def test_fixed_meaning_still_refuses_nonstandard_axioms(api, receipt_case):
+    receipt_case[2]["axioms"].append("Demo.unprovedAxiom")
+    assert any("Demo.unprovedAxiom" in reason for reason in audit(api, receipt_case)[3])

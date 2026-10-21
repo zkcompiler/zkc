@@ -40,7 +40,7 @@ private def replay (endpoint : Semantics) :
     ReplayClass (subject (F := F) (G := G) endpoint) ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained :=
   ReplayClass.ofEvidence _ _
     (ZkcSecurity.Examples.Subjects.Schnorr.knowledge endpoint (subject (F := F) (G := G) endpoint).lowering)
-    rfl HEq.rfl
+    (by trivial) rfl HEq.rfl
 
 example : (knowledge (F := F) (G := G) .idealMeaning).meaning :=
   knowledgeEndpoint _ (replay .idealMeaning)

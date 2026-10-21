@@ -254,7 +254,10 @@ route is chosen. Attachments and proposed methods do not determine the meaning.
 `Zkc.Claims.Resolved` records checked registry lookup, subject association and
 elaboration. `Evaluated` records that the registered meaning evaluates to its
 proposition. A `Receipt` proves exactly that proposition; endpoint, theorem and
-derivation routes share the same type. Charged soundness additionally requires
+derivation routes share the same type. Every kernel-checked proof of that fixed
+meaning is evidence. Receipt status depends on exact admission, remaining
+statement binders, standard axioms and every request-owned required link, rather
+than internal proof use. Charged soundness additionally requires
 the charged reduction at the requested prices. A successful scalar bound does
 not imply that capability. Registry-owned obligations determine required links;
 provenance cannot remove them.
@@ -292,9 +295,14 @@ extractor recomputes these admission operations. A blocked symbolic model
 computation can use the typed certificate's actual witness and a kernel-checked
 equation for the exact reconstructed call; concrete refusal and undefined
 results remain failures. A property elaborator that
-ignores the model cannot establish admission. Generic Evidence functions are
-audited at their actual applications, with the receipt's free context and
-instantiated named hypotheses. Declaration provenance and axiom closure use
+ignores the model cannot establish admission. Internal Evidence notes and method
+provenance are best-effort attribution only; missing or failed attribution can
+report `unattributed` without leaving a proved receipt open. Provenance strings
+cannot add assumptions. Claims endpoint adapters require every legacy Evidence
+hypothesis to carry `.proved` by type (`HypothesesProved`); an `.assumed` note
+cannot pass that boundary. The legacy manifest audit keeps its strict Evidence
+shape and hypothesis checks. Actual remaining binders and registry-owned links
+supply obligations. Declaration provenance and axiom closure use
 checked stored ConstantInfo bodies, including opaque proofs, rather than
 imported axiom caches. These checks do not add native correspondence premises.
 

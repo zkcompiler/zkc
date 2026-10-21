@@ -49,7 +49,7 @@ def replay (endpoint : Semantics) :
     ReplayClass (subject (F := F) (G := G) endpoint) ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained :=
   ReplayClass.ofEvidence _ _
     (ZkcSecurity.Examples.Subjects.Schnorr.knowledge endpoint (subject (F := F) (G := G) endpoint).lowering)
-    rfl HEq.rfl
+    (by trivial) rfl HEq.rfl
 
 example : (knowledge (F := F) (G := G) .idealMeaning).meaning :=
   knowledgeEndpoint _ (replay .idealMeaning)
@@ -514,11 +514,11 @@ noncomputable def labeledEvidence (label : String) :=
 theorem directProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
   knowledgeEndpoint (knowledge .idealMeaning)
     (ReplayClass.ofEvidence _ _
-      (labeledEvidence (F := F) (G := G) "unregistered.higherorder.control") rfl HEq.rfl)
+      (labeledEvidence (F := F) (G := G) "unregistered.higherorder.control") (by trivial) rfl HEq.rfl)
 
 theorem wrappedProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
   invoke (fun label : String => knowledgeEndpoint (knowledge .idealMeaning)
-    (ReplayClass.ofEvidence _ _ (labeledEvidence (F := F) (G := G) label) rfl HEq.rfl))
+    (ReplayClass.ofEvidence _ _ (labeledEvidence (F := F) (G := G) label) (by trivial) rfl HEq.rfl))
     "unregistered.higherorder.control"
 
 theorem positiveProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
@@ -538,6 +538,58 @@ noncomputable def positiveReceipt : Receipt (meaning (F := F) (G := G) .idealMea
   Receipt.ofTheorem (positiveProof (F := F) (G := G))
     { provenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.positiveProof", dependencies := [] }
     (subject .idealMeaning).stageLinkProofs
+
+/-- A generic proof wrapper establishes the exact same requested proposition.
+No claimed author method is needed for receipt certification. -/
+noncomputable def unattributedReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem
+    (invoke (fun _ : Unit => positiveProof (F := F) (G := G)) ())
+    { provenance with discharger := "unattributed", dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+
+noncomputable def extraPremiseReceipt (_unregistered : True) :
+    Receipt (meaning (F := F) (G := G) .idealMeaning) := unattributedReceipt
+
+/-- An unresolved optional provenance string is diagnostic only. -/
+noncomputable def symbolicProvenanceReceipt (application : String) :
+    Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (positiveProof (F := F) (G := G))
+    { provenance with discharger := application, dependencies := [] }
+    (subject .idealMeaning).stageLinkProofs
+
+/-- The adapter accepts proved notes regardless of spelling. A note with no
+proof cannot satisfy HypothesesProved, even when the legacy registry cites it. -/
+example : HypothesesProved (labeledEvidence (F := F) (G := G) "unregistered.note").hypotheses := by
+  trivial
+
+example (hypothesis : Hypothesis) (unproved : ¬ hypothesis.status.Discharged) :
+    ¬ HypothesesProved [hypothesis] := fun proved => unproved proved.1
+
+def assumedNote : Hypothesis :=
+  ⟨"binding.collision-bounded-identity", .binding .collisionBoundedIdentity, False,
+    ZkcSecurity.FiatShamir.ObligationStatus.cite "binding.collision-bounded-identity" _ rfl rfl⟩
+
+example : ¬ HypothesesProved [assumedNote] := fun proved => proved.1
+
+noncomputable def notedEvidence :=
+  { ZkcSecurity.Examples.Subjects.Schnorr.knowledge (F := F) (G := G) .idealMeaning
+      (subject (F := F) (G := G) .idealMeaning).lowering with
+    hypotheses := [assumedNote] }
+
+include F G
+
+/-- Reading a legacy note is not assuming its False claim. The actual theorem
+still has a kernel proof and no extra premise in its remaining telescope. -/
+theorem notedProof : True :=
+  Nat.rec True.intro (fun _ proof => proof) (notedEvidence (F := F) (G := G)).handle
+
+noncomputable def unprovedNoteReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (manualMeaning (F := F) (G := G) (manualData (F := F) (G := G)) rfl rfl) where
+  receipt := Receipt.ofTheorem (notedProof (F := F) (G := G))
+    { trivialProvenance with discharger := "TestsSecurity.ClaimReporting.HigherOrder.notedProof" }
+    (subject .idealMeaning).stageLinkProofs
+  checked := rfl
+  modelAdmitted := ⟨model, rfl⟩
 
 end HigherOrder
 
