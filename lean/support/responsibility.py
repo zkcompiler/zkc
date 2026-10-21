@@ -74,7 +74,8 @@ def classify(value, policy=POLICY):
             "tests": ("support-infrastructure", ("X",), "test infrastructure is not theorem evidence"),
             "tools": ("support-infrastructure", ("X",), "generation and audit infrastructure"),
         }
-        if module == "ZkcSecurity.Endpoint" or module.startswith("ZkcSecurity.Endpoint."):
+        if any(module == prefix or module.startswith(prefix + ".")
+               for prefix in ("ZkcSecurity.Endpoint", "ZkcSecurity.Claims")):
             result = ("language-and-compiler", ("X",), "fixed claim interpretation and endpoint infrastructure")
         else:
             result = rules.get(owner, (None, (), "Lean module has no reviewed responsibility rule"))
