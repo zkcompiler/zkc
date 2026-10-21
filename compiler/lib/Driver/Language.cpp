@@ -3,6 +3,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -22,6 +23,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::optional<EntryKind> entryKind;
   bool declarations = false;
   bool api = false;
+  bool sourceClaims = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -116,6 +118,12 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--source-claims") {
+      if (sourceClaims || command != "language-check")
+        return refuse(
+            error("source.options",
+                  "--source-claims is a check option and may appear once"));
+      sourceClaims = true;
     } else if (arg == "--api") {
       if (api || command != "language-check")
         return refuse(error("source.options",
@@ -166,6 +174,9 @@ int runLanguageCompiler(int argc, char **argv) {
                         "notation visibility options require --notations"));
   if (format.empty())
     return refuse(error("source.options", "--source-format=zkc is required"));
+  if (sourceClaims && entry.empty())
+    return refuse(
+        error("source.options", "--source-claims requires --entry=NAME"));
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
@@ -235,6 +246,12 @@ int runLanguageCompiler(int argc, char **argv) {
   if (command == "language-check") {
     checked["entry"] = selected->entry().qualifiedName;
     checked["original"] = original->identity();
+    if (sourceClaims) {
+      auto report = exportSourceClaims(*original, limits);
+      if (!report)
+        return refuse(report.takeError());
+      checked["source_claims"] = cantFail(json::parse(*report));
+    }
     return publishCheck();
   }
   if (command == "language-emit") {

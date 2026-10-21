@@ -10,3 +10,26 @@ proof Proof = Sumcheck<Fr, 2> {
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
 run Interactive = Sumcheck<Fr, 2>;
+
+spec ProofClaims for Proof {
+  sound: soundness@0(target.public_sum,
+    model=models.fiat_shamir@0(level=levels.bytes,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=2/cardinality(Fr),application=application),
+    accept=out.accepted,stage=executable_bytes,error=(Q+2)/cardinality(Fr));
+  ideal_sound: soundness@0(target.public_sum,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=2/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,error=(Q+2)/cardinality(Fr));
+  charged: soundness@0(target.public_sum,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=2/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,
+    charge=per_site(sites.reduce.challenge,1/cardinality(Fr)));
+}
+verify ProofClaims.sound=fs.keyed_soundness@0();
+verify ProofClaims.ideal_sound=fs.keyed_soundness@0();
+
+verify ProofClaims.charged=fs.keyed_charged@0();

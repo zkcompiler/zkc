@@ -52,6 +52,7 @@ int zkc::runCompiler(int argc, char **argv,
            "    Its --declarations option reports completed public "
            "contracts.\n"
            "    --api reports public exports, types and source references.\n"
+           "    --source-claims exports wire claims for an explicit --entry.\n"
            "    --notations reports diagnostic syntax metadata, with optional\n"
            "    --notation-private and --notation-installation (check only).\n"
            "    Syntax metadata is not a native interface; named-call views\n"

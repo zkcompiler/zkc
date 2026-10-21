@@ -21,3 +21,23 @@ proof EqualityProof = ChaumPedersen<G> {
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
 run EqualityInteractive = ChaumPedersen<G>;
+
+spec AndClaims for AndProof {
+  knowledge: knowledge@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,
+    guarantee=guarantees.forking@0(challenges=cardinality(G.Scalar),
+      cost=prover_runs(2)));
+}
+verify AndClaims.knowledge=fs.forking@0();
+
+spec EqualityClaims for EqualityProof {
+  knowledge: knowledge@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,
+    guarantee=guarantees.forking@0(challenges=cardinality(G.Scalar),
+      cost=prover_runs(2)));
+}
+verify EqualityClaims.knowledge=fs.forking@0();

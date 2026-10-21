@@ -207,10 +207,22 @@ class Comparison {
     remaining = limits.work;
     using Start = std::pair<unsigned, unsigned>;
     std::map<Start, const Declaration *> blocks;
+    std::map<Start, const SourceClaimBlock *> claimBlocks;
     std::set<unsigned> anonymous;
     for (const auto &decl : entry.project().declarations()) {
       if (!charge(1))
         return false;
+      for (const auto &block : decl.sourceClaims) {
+        auto span = block.span;
+        if (!charge(1) ||
+            (decl.kind != Declaration::Kind::Module &&
+             decl.kind != Declaration::Kind::Entry) ||
+            span.source.index != decl.span.source.index ||
+            span.begin < decl.span.begin || span.end > decl.span.end ||
+            !claimBlocks.emplace(Start{span.source.index, span.begin}, &block)
+                 .second)
+          return fail("source claim block inventory differs");
+      }
       if (decl.specificationBlock) {
         auto span = *decl.specificationBlock;
         if (decl.kind != Declaration::Kind::Protocol ||
@@ -257,6 +269,46 @@ class Comparison {
       for (unsigned i = 0; i < tokens.size(); ++i) {
         if (tokens[i]->kind != TokenKind::Word || spelling(i) != "spec")
           continue;
+        // Claims are a separate, non-executable construct. Consume only a
+        // retained claim block at this exact source address; do not relax the
+        // independent inventory of protocol relation specifications below.
+        auto claimBlock = claimBlocks.find({module, tokens[i]->span.begin});
+        if (claimBlock != claimBlocks.end()) {
+          const auto &block = *claimBlock->second;
+          unsigned cursor = i + 1;
+          while (cursor < tokens.size() && spelling(cursor) != "{") {
+            if (!charge(1))
+              return false;
+            ++cursor;
+          }
+          if (cursor >= tokens.size())
+            return fail("source claim block has no opening brace");
+          ++cursor;
+          for (const auto &claim : block.claims) {
+            if (cursor >= tokens.size() || !charge(1) ||
+                claim.span.source.index != module ||
+                claim.span.begin != tokens[cursor]->span.begin ||
+                spelling(cursor) != claim.label || spelling(cursor + 1) != ":")
+              return fail(
+                  "source claim inventory differs from captured tokens");
+            while (cursor < tokens.size() &&
+                   tokens[cursor]->span.end < claim.span.end) {
+              if (!charge(1))
+                return false;
+              ++cursor;
+            }
+            if (cursor >= tokens.size() || spelling(cursor) != ";" ||
+                tokens[cursor]->span.end != claim.span.end)
+              return fail("source claim span does not cover its tokens");
+            ++cursor;
+          }
+          if (cursor >= tokens.size() || spelling(cursor) != "}" ||
+              tokens[cursor]->span.end != block.span.end)
+            return fail("source omitted claims or changed its block span");
+          claimBlocks.erase(claimBlock);
+          i = cursor;
+          continue;
+        }
         auto found = blocks.find({module, tokens[i]->span.begin});
         if (found == blocks.end() || spelling(i + 1) != "{")
           return fail("source omitted a specification block");
@@ -288,7 +340,8 @@ class Comparison {
         i = cursor;
       }
     }
-    return blocks.empty() || fail("source invented a specification block");
+    return (blocks.empty() && claimBlocks.empty()) ||
+           fail("source invented a specification or claim block");
   }
   bool protocol(const Declaration &decl, const InterfaceProtocol &actual) {
     if (decl.roles != actual.roles)

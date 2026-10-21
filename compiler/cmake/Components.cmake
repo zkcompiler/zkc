@@ -84,6 +84,7 @@ add_zkc_component(Language
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
+  lib/Language/SourceClaims.cpp
   lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
   lib/Language/Constructions.cpp
@@ -302,6 +303,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInterfaceWriter.cpp
   lib/Compiler/LanguageInterfaceComparison.cpp
   lib/Compiler/LanguageInspection.cpp
+  lib/Compiler/SourceClaims.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
   lib/Compiler/StructuredSource.cpp

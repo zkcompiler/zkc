@@ -78,6 +78,10 @@ Core `()`, `[]`, `{}`, `<>`, commas and statement punctuation remain reserved.
 One opener has one active closer and hole count. A legal token without visible
 notation is a visibility error, distinct from an illegal Unicode token.
 
+ASCII `/` and `^` are also tokenized for the expression trees in
+[source claims](claims.md). Their interpretation belongs to the selected Lean
+registry; this does not add executable arithmetic operators.
+
 ## Pinned data and normalization
 
 The [source-name manifest](../../../common/unicode/manifest.json) owns the

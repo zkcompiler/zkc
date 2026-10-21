@@ -1,0 +1,31 @@
+module claims;
+domain Fr = field("bls12-381.fr");
+
+/// The prover sends a guess, the verifier draws a challenge and accepts when
+/// the guess plus the public offset is the challenge. Every statement is false:
+/// an honest prover cannot predict the challenge.
+protocol Guess<F: Field> roles(P, V)
+    (offset: F @(P,V), guess: F @P, challenges: Random<F> @V)
+    -> (accepted: bool @V) {
+  #[site(guess)] let received = send P -> V(guess);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let delivered = send V -> P(challenge);
+  let accepted = received + offset == challenge;
+  return (accepted = accepted);
+}
+
+proof Demo = Guess<Fr> {
+  prover P;
+  verifier V;
+  public { offset };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+
+spec GuessClaims for Demo {
+  sound: soundness@0(imported_language(languages.guess@0()),
+    model=models.fiat_shamir@0(level=levels.bytes,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q),
+    accept=out.accepted,stage=executable_bytes,
+    charge=per_site(sites.challenge,1/cardinality(Fr)));
+}

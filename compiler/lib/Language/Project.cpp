@@ -488,6 +488,8 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
   ClosedEntry entry(project, decl.id, std::move(storage));
   if (auto error = checkScopedSpecialization(entry, limits))
     return error;
+  if (auto error = detail::checkClosedSourceClaims(entry, work))
+    return error;
   Layouts layouts(entry, limits);
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;

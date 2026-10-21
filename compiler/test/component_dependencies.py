@@ -28,7 +28,7 @@ HEADER_ROOTS = {
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
         "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
-        "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
+        "LanguagePackage", "LanguageInspection", "SourceClaims", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
     "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
