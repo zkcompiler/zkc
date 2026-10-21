@@ -108,6 +108,16 @@ run_cmd do
         identical = capture('imported-identical', ['ImportedIdentical'])
         check('identical stored imported proofs remain supported after full field comparison',
               next(iter(identical.declarations.values()))['axioms'] == [])
+        build('VisibilityExplicit', 'import Lean\ntheorem Shared.visible (_n : Nat) : True := True.intro\n')
+        build('VisibilityImplicit', 'import Lean\ntheorem Shared.visible {_n : Nat} : True := True.intro\n')
+        build('VisibilityClient', 'import VisibilityExplicit\nimport VisibilityImplicit\ntheorem Client.check : True := @Shared.visible 0\n')
+        visibility = output / 'binder-conflict-must-not-exist.jsonl'
+        try:
+            capture_records(package, ['VisibilityClient'], visibility)
+        except subprocess.CalledProcessError:
+            check('provider equality preserves binder annotations ignored by derived BEq', not visibility.exists())
+        else:
+            raise AssertionError('conflicting explicit/implicit stored providers accepted')
         build('CyclicClosure', '''import Lean
 axiom Cycle.bound : Nat
 mutual

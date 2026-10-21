@@ -110,7 +110,7 @@ private def record (info : ConstantInfo) (owner : Name) (axioms : Array Name)
 /-- Compare complete stored values, including theorem proofs. Only identical
 versions may share a provider class; definitional equality/proof irrelevance
 must not collapse different proofs or their axiom dependencies. -/
-private def sameStored : ConstantInfo → ConstantInfo → Bool
+private def sameStoredFields : ConstantInfo → ConstantInfo → Bool
   | .axiomInfo a, .axiomInfo b => a == b
   | .defnInfo a, .defnInfo b => a == b
   | .thmInfo a, .thmInfo b => a == b
@@ -127,6 +127,20 @@ private def sameStored : ConstantInfo → ConstantInfo → Bool
       | .type, .type | .ctor, .ctor | .lift, .lift | .ind, .ind => true
       | _, _ => false)
   | _, _ => false
+
+/-- Derived ConstantInfo equality uses Expr.eqv, which ignores binder
+annotations. Exact provider equivalence also checks the complete expression
+structure, including binder names and visibility, in types, bodies and rules. -/
+private def sameStored (left right : ConstantInfo) : Bool :=
+  sameStoredFields left right && left.type.equal right.type &&
+    (match left.value? true, right.value? true with
+      | none, none => true
+      | some a, some b => a.equal b
+      | _, _ => false) &&
+    (match left, right with
+      | .recInfo a, .recInfo b => a.rules.length == b.rules.length &&
+          (a.rules.zip b.rules).all (fun (x, y) => x.rhs.equal y.rhs)
+      | _, _ => true)
 
 private abbrev Providers := Std.HashMap Name (Option (Name × ConstantInfo))
 
