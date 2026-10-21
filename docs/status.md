@@ -22,8 +22,8 @@ defines when versions change.
 | Native proof | [Policy, descriptor, deployment, construction map and invocation binding](spec/formats/proof.md), with `zkc.native-origin/0` occurrences |
 | Installed declarations | [`zkc.contract-declarations/0`](compiler/operation-contracts.md), declaration inventory; the language catalog contributes an opaque compiler fingerprint |
 
-Use `zkc run`, `prove` and `verify` for named Entries, and `run-bundle`,
-`prove-bundle` and `verify-bundle` for lower-level artifacts. In the C++ SDK,
+Use `zkc run`, `prove` and `verify` for named Entries, and `bundle run`,
+`bundle prove` and `bundle verify` for lower-level artifacts. In the C++ SDK,
 `Zkc::Compiler` owns compilation and packaging;
 `Zkc::Driver` separately owns CLI parsing. Request `Tools` for installed commands.
 See the [SDK reference](../compiler/README.md#components-and-ownership).
@@ -75,7 +75,7 @@ the existing Kernel pipeline and VM.
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
 Explicit local workspace catalogs select leaf packages alongside path
 dependencies, preserve capture identity, and report selected-edge provenance in
-`check --api`. The installed package includes the catalog and library sources.
+`inspect --view=api`. The installed package includes the catalog and library sources.
 Batch coset extension is installed on BN254 Fr, KoalaBear and its quartic/octic
 extensions. It constructs one private column-major output and retains non-base
 shifts; shrinking checks each column's actual normalized degree. Compiler,
@@ -101,7 +101,8 @@ names by function/proof kind; inspection and compilation require a single Entry.
 `new` and `init` create an Entry function with an argument template;
 `prepare` creates missing maps while preserving existing values. Manifest-relative
 paths supply omitted inputs, proof files and run results. Joint children obtain fresh
-sessions unless explicitly configured in the application context. `inputs check` shares native preparation without
+sessions unless explicitly configured in the application context. `run --dry-run`,
+`prove --dry-run` and `verify --dry-run` share native input validation without
 execution. Source execution compiles in memory; pinned package mode is explicit.
 The public Rust `project` API owns project/compiler access, path layout and
 preparation plans. Commands print human summaries; automation uses `--json`.
@@ -235,7 +236,7 @@ and [SDK dependencies](../compiler/README.md#installed-package-discovery) own th
 encoding and pinned Unicode/NFC boundary.
 
 Checked public API inspection is available through `inspectPublicAPI` and
-`zkc check --api`. Its compact export graph covers aliases, types and notation
+`zkc inspect --view=api`. Its compact export graph covers aliases, types and notation
 routes; captured source references retain the selected provider and canonical
 target. Private field names and associated representations are omitted from
 public type contracts. The bounded diagnostic view supplies no linking authority
@@ -244,7 +245,7 @@ and changes no source or executable identity. The
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
-`includeInstallation`, and `zkc check --notations` with `--notation-private` and
+`includeInstallation`, and `zkc inspect --view=notations` with `--notation-private` and
 `--notation-installation`. The version-0 diagnostic view covers descriptors,
 bindings, scopes and occurrences, with private/local data hidden by default and
 installation data opt-in. [Notation limits](spec/language/notation.md#bounds)
@@ -585,3 +586,12 @@ ordinary STARK libraries. LogUp admits signed field balance as well as Boolean
 multisets; grand product remains restricted to the latter. Native controls and
 complete proof runs cover this path; the existing Lean flat-fragment theorem
 does not cover the native adapter. Full Clean ensembles remain outside it.
+
+## Compiler tooling
+
+Root build profiles, shared CLI/SDK requests, structured diagnostics, optional
+phase/pass/decision reports, LLVM time traces, feature-gated runtime counts,
+manifest consumer tests and bounded captured-input compilation reuse are
+implemented. The optional MLIR LSP uses the upstream server with installed zkc
+dialects. Source editing, persistent query caching and automatic policy search
+remain separate work. See [tooling](compiler/tooling.md) for supported boundaries.

@@ -22,9 +22,9 @@ def test_repository_catalog_names_each_library_leaf_once():
 @pytest.mark.parametrize('manifest', MANIFESTS + EXAMPLES,
                          ids=lambda path: str(path.relative_to(ROOT)))
 def test_manifest_closure_obeys_library_boundaries(toolchain, journal, manifest):
-    report = journal.json([toolchain.runtime, '--json', 'check', '--api',
+    report = journal.json([toolchain.runtime, '--json', 'inspect', '--view=api',
                            f'--compiler={toolchain.compiler}', f'--project={manifest}'])
-    assert violations(report['project_graph'], report['api'], LIBRARIES) == []
+    assert violations(report['project_graph'], report['checked']['api'], LIBRARIES) == []
 
 
 def test_library_sources_have_exactly_one_manifest_owner():
@@ -87,16 +87,16 @@ def test_facade_interface_calls_follow_the_authored_binder(toolchain, journal, d
       [dependencies]
       facade="../../core/algebra"
     ''')
-    command = [toolchain.runtime, '--json', 'check', '--api',
+    command = [toolchain.runtime, '--json', 'inspect', '--view=api',
                f'--compiler={toolchain.compiler}', f'--project={manifest}']
     report = journal.json(command)
-    calls = [item for item in report['api']['references']
+    calls = [item for item in report['checked']['api']['references']
              if item.get('abstract_module') and item['source']['module'] == 'client']
     assert len(calls) == 3
     assert all(item['provider'] == 'facade' and item['target_module'] == 'lower'
                for item in calls)
-    assert violations(report['project_graph'], report['api'], root) == []
+    assert violations(report['project_graph'], report['checked']['api'], root) == []
     source.write_text(source.read_text().replace('C:api::Contract', 'C:lower::Contract'))
     report = journal.json(command)
-    errors = violations(report['project_graph'], report['api'], root)
+    errors = violations(report['project_graph'], report['checked']['api'], root)
     assert errors == [f'library-dependency: client -> lower at {manifest}']

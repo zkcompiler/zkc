@@ -7,6 +7,7 @@ from pathlib import Path
 from .io import Journal, digest, require, write_json
 from .runner import CONTROL, Job, execute_job, refuse
 from .projects import project_inputs
+from .configuration import validate_published
 
 
 def compile_program(args, output, capture, manifest, case, program):
@@ -38,13 +39,19 @@ def compile_program(args, output, capture, manifest, case, program):
     flags = [f'--module={name}={copied[path]}' for name, path in sorted(modules.items())]
     flags += [f'--asset={name}={kind}={copied[path]}' for name, (kind, path) in sorted(assets.items())]
     package = directory/'entry.zkpkg'
+    observation = directory/'compilation.json'
     record = Journal(directory/'compile', args.timeout).command(
         [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}',
-         *args.compiler_option, *flags],
+         *args.compiler_option, *flags, f'--observations={observation}'],
         cwd=root, stdout=package)
+    validate_published(json.loads(package.read_text())["options"], getattr(args, "configuration", None))
     capture.add(package)
+    capture.add(observation)
+    require(json.loads(observation.read_text()).get('completed') is True, 'compiler observation is incomplete')
     manifest.setdefault('compilation', {})[case.identifier] = [{'wall_seconds': record['wall_seconds'],
-                                                               'sha256': digest(package), 'bytes': package.stat().st_size}]
+                                                               'sha256': digest(package), 'bytes': package.stat().st_size,
+                                                               'published_options': json.loads(package.read_text())['options'],
+                                                               'observation': str(observation), 'observation_instrumented': True}]
     return directory, package
 
 
@@ -88,7 +95,7 @@ def prepare_case(args, output, capture, manifest, case):
         'requested_preparation_entries': args.preparation_entries if program.proof else None,
         'requested_preparation_bytes': args.preparation_bytes if program.proof else None,
         'notes': [case.limitation, 'SDK timing includes result checking in the source; excludes readable decoding, preowned input setup, per-call request construction, final diagnostics and proof-file writes.',
-                  'Generated-project compilation is a single compiler-process observation, excluding source generation.'],
+                  'Generated-project compilation is a single instrumented compiler-process observation, excluding source generation; it is not an uninstrumented compile-time baseline.'],
         'boundaries': {},
     }
     boundary = 'admitted_entry_call' if program.proof else 'admitted_function_call'

@@ -246,6 +246,7 @@ add_zkc_component(Transforms
   lib/Transforms/Algorithms.cpp
   lib/Transforms/AlgorithmVerification.cpp
   lib/Transforms/Mathematical.cpp
+  lib/Transforms/MathematicalTrace.cpp
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
@@ -305,6 +306,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInterfaceWriter.cpp
   lib/Compiler/LanguageInterfaceComparison.cpp
   lib/Compiler/LanguageInspection.cpp
+  lib/Compiler/Observation.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
   lib/Compiler/StructuredSource.cpp

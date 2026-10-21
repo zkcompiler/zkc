@@ -39,10 +39,10 @@ library="library.zkc"
             (project / 'child.zkc').write_text('module library::Box<N:nat>;' + child)
             manifest += '"library::Box"="child.zkc"\n'
         (project / 'zkc.toml').write_text(manifest)
-        command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                   '--declarations']
+        command = [toolchain.runtime, '--json', 'inspect', f'--compiler={toolchain.compiler}',
+                   '--view=placement']
         report = journal.json(command, cwd=project)
-        modules = {d['name']: d for d in report['declarations'] if d['kind'] == 'module'}
+        modules = {d['name']: d for d in report['checked']['declarations'] if d['kind'] == 'module'}
         assert modules['library::Box']['owner']['name'] == 'library'
         assert [p['inherited'] for p in modules['library::Box']['parameters']] == [True, False]
         package = project / 'module.zkpkg'

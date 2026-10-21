@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Run reproducible protocol comparisons using explicit prebuilt executables."""
 import argparse
+import copy
 import json
 from pathlib import Path
 import sys
 
-from bench.io import MeasurementBusy, MeasurementError, ROOT, executable, positive_integer
+from bench.io import Journal, MeasurementBusy, MeasurementError, ROOT, executable, positive_integer, require
 from bench.results import compare, publish, validate_manifest
 from bench.runner import run
 from bench.suites import catalog, prepare
+from bench.configuration import flags
 
 
 def nonnegative(value):
@@ -54,8 +56,10 @@ def main(argv=None):
     run_parser.add_argument('--execution-counts', action='store_true', help='require an instrumented source worker; report execution counts without timing comparisons')
     run_parser.add_argument('--compiler-option', action='append', default=[],
                             choices=['--no-simplify', '--no-finite-bulk', '--release-storage',
-                                     '--fuse-vector-reductions', '--fuse-collect-fold'],
+                                     '--fuse-vector-reductions', '--fuse-collect-fold', '--no-calculation-batching'],
                             help='explicit compilation policy, for example --compiler-option=--fuse-collect-fold; repeat to combine')
+    run_parser.add_argument('--profile', action='append', default=[], help='compare named root build profiles; repeat for a bounded candidate panel')
+    run_parser.add_argument('--profile-project', type=Path, help='manifest owning the candidate profiles')
     run_parser.add_argument('--exclusive', action='store_true',
                             help='acquire the shared measurement lock; fail with exit 75 if busy')
     run_parser.add_argument('--label', default='current')
@@ -73,6 +77,37 @@ def main(argv=None):
             args.output.mkdir(parents=True, exist_ok=False)
             publish(args.output, document)
             return 0
+        if args.profile:
+            require(args.profile_project is not None and not args.compiler_option,
+                    'profiles require --profile-project and cannot combine with --compiler-option')
+            require(len(args.profile) <= 16 and len(set(args.profile)) == len(args.profile), 'candidate names must be distinct (at most 16)')
+            require(all(name and len(name) <= 128 and all(c.isalnum() or c in '-_' for c in name) for name in args.profile), 'unsafe candidate name')
+            args.output.mkdir(parents=True, exist_ok=False)
+            requests = []
+            candidates = []
+            for name in args.profile:
+                directory = args.output/'requests'/name
+                journal = Journal(directory, args.timeout)
+                report, _ = journal.report([args.runtime, '--json', 'inspect', '--view=project',
+                    f'--project={args.profile_project.resolve()}', f'--compiler={args.compiler}', f'--profile={name}'],
+                    cwd=args.source.resolve(), status='inspected')
+                candidate = copy.copy(args)
+                candidate.output = args.output/'candidates'/name
+                candidate.label = name
+                candidate.configuration = report['settings']
+                candidate.compiler_option = flags(report['settings']['values'])
+                requests.append({'profile':name,'settings':report['settings'],
+                    'request_report':str(directory),'result':str(candidate.output/'manifest.json')})
+                candidates.append(candidate)
+            # Resolve the entire bounded panel before launching measurements.
+            # Request journals and candidate outputs have disjoint namespaces.
+            (args.output/'candidates.json').write_text(json.dumps({'format':'zkc.benchmark-candidates/0',
+                'candidates':requests}, indent=2)+'\n')
+            for candidate in candidates:
+                status = run(candidate, prepare)
+                if status: return status
+            return 0
+        require(args.profile_project is None, '--profile-project requires --profile')
         return run(args, prepare)
     except MeasurementBusy as error:
         print(str(error), file=sys.stderr)

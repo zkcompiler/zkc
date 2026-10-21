@@ -234,18 +234,18 @@ fn pinned_inspection_templates_and_false_return_use_one_argument_map() {
     assert!(inspected.get("execution").is_none());
     let templates = dir.path().join("templates");
     let initialized = run(
-        "inputs init",
+        "prepare",
         &options,
         &[format!("--output={}", templates.display())],
     );
-    assert_eq!(initialized["status"], "initialized", "{initialized}");
+    assert_eq!(initialized["status"], "prepared", "{initialized}");
     let arguments = templates.join("arguments.json");
     assert_eq!(
         std::fs::read_to_string(&arguments).unwrap(),
         "{\n  \"flag\": null\n}\n"
     );
     assert_eq!(
-        initialized["commands"][0][4],
+        initialized["entries"][0]["commands"][0][4],
         format!("--input={}", arguments.display())
     );
     std::fs::write(&arguments, r#"{"flag":false}"#).unwrap();
@@ -319,11 +319,11 @@ fn checked_metadata_inspection_precedes_native_calculation_admission() {
     assert_eq!(inspected["status"], "inspected", "{inspected}");
     let templates = dir.path().join("inputs");
     let initialized = run(
-        "inputs init",
+        "prepare",
         &options,
         &[format!("--output={}", templates.display())],
     );
-    assert_eq!(initialized["status"], "initialized", "{initialized}");
+    assert_eq!(initialized["status"], "prepared", "{initialized}");
     std::fs::write(templates.join("arguments.json"), r#"{"flag":true}"#).unwrap();
     let refused = run(
         "run",
@@ -345,11 +345,7 @@ fn checks_prepare_without_executing_and_failure_preserves_output() {
     let arguments = dir.path().join("arguments.json");
     std::fs::write(&arguments, r#"{"flag":false}"#).unwrap();
     let input = format!("--input={}", arguments.display());
-    let checked = run(
-        "inputs check",
-        &options,
-        &["--operation=run".into(), input.clone()],
-    );
+    let checked = run("run", &options, &["--dry-run".into(), input.clone()]);
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     assert!(checked.get("execution").is_none());
     let results = dir.path().join("result.json");
@@ -389,11 +385,7 @@ fn exact_names_shape_pins_and_output_identity_are_enforced() {
         ),
     ] {
         std::fs::write(&arguments, contents).unwrap();
-        let report = run(
-            "inputs check",
-            &options,
-            &["--operation=run".into(), input.clone()],
-        );
+        let report = run("run", &options, &["--dry-run".into(), input.clone()]);
         assert_eq!(report["code"], code, "{report}");
         assert_eq!(report["input_path"], path);
     }
@@ -432,13 +424,9 @@ fn invocation_context_is_explicit_strict_and_protected_from_publication() {
     let empty = json!({"format":"zkc.entry-invocations/0","deployments":{}});
     std::fs::write(&context, empty.to_string()).unwrap();
     let checked = run(
-        "inputs check",
+        "run",
         &options,
-        &[
-            "--operation=run".into(),
-            input.clone(),
-            invocation_file.clone(),
-        ],
+        &["--dry-run".into(), input.clone(), invocation_file.clone()],
     );
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     let protected = run(
@@ -462,13 +450,9 @@ fn invocation_context_is_explicit_strict_and_protected_from_publication() {
     ] {
         std::fs::write(&context, contents).unwrap();
         let report = run(
-            "inputs check",
+            "run",
             &options,
-            &[
-                "--operation=run".into(),
-                input.clone(),
-                invocation_file.clone(),
-            ],
+            &["--dry-run".into(), input.clone(), invocation_file.clone()],
         );
         assert_eq!(report["code"], "entry-invocation-format", "{report}");
         assert!(report.get("execution").is_none());
@@ -505,11 +489,11 @@ fn joint_children_use_native_defaults_and_exact_context_overrides() {
     }});
     std::fs::write(&context, document.to_string()).unwrap();
     let checks = [
-        "--operation=run".into(),
+        "--dry-run".into(),
         arguments[0].clone(),
         format!("--invocations={}", context.display()),
     ];
-    let checked = run("inputs check", &options, &checks);
+    let checked = run("run", &options, &checks);
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     assert!(checked.get("execution").is_none());
     for (services, code) in [
@@ -518,14 +502,14 @@ fn joint_children_use_native_defaults_and_exact_context_overrides() {
     ] {
         document["deployments"]["child.Pair"]["services"] = services;
         std::fs::write(&context, document.to_string()).unwrap();
-        let refused = run("inputs check", &options, &checks);
+        let refused = run("run", &options, &checks);
         assert_eq!(refused["code"], code, "{refused}");
         assert!(refused.get("execution").is_none());
     }
     document["deployments"]["child.Pair"] = json!({"operation":"verify",
         "authority":{"format":"zkc.entry-setups/0","keys":{}},"context":"","services":{},"setups":{}});
     std::fs::write(&context, document.to_string()).unwrap();
-    let refused = run("inputs check", &options, &checks);
+    let refused = run("run", &options, &checks);
     assert_eq!(refused["code"], "entry-invocation-deployments", "{refused}");
 }
 
@@ -564,9 +548,9 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
         format!("--invocations={}", context.display()),
     ];
     let checked = run(
-        "inputs check",
+        "run",
         &options,
-        &[vec!["--operation=run".into()], args.to_vec()].concat(),
+        &[vec!["--dry-run".into()], args.to_vec()].concat(),
     );
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     assert!(checked.get("execution").is_none());
@@ -576,9 +560,9 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
     forged["deployments"]["child.Pair"]["inputs"]["P"]["pk"]["fingerprint"] = json!("0".repeat(64));
     std::fs::write(&context, forged.to_string()).unwrap();
     let refused = run(
-        "inputs check",
+        "run",
         &options,
-        &[vec!["--operation=run".into()], args.to_vec()].concat(),
+        &[vec!["--dry-run".into()], args.to_vec()].concat(),
     );
     assert_eq!(refused["code"], "key-mismatch", "{refused}");
     assert!(refused.get("execution").is_none());
@@ -647,11 +631,7 @@ fn function_file_references_reuse_confinement_and_inode_protection() {
         json!({"flag":{"file":"boolean.zkcv","sha256":pin}}).to_string(),
     )
     .unwrap();
-    let checked = run(
-        "inputs check",
-        &options,
-        &["--operation=run".into(), input.clone()],
-    );
+    let checked = run("run", &options, &["--dry-run".into(), input.clone()]);
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     let protected = run(
         "run",
@@ -666,11 +646,7 @@ fn function_file_references_reuse_confinement_and_inode_protection() {
             json!({"flag":{"file":relative,"sha256":pin}}).to_string(),
         )
         .unwrap();
-        let checked = run(
-            "inputs check",
-            &options,
-            &["--operation=run".into(), input.clone()],
-        );
+        let checked = run("run", &options, &["--dry-run".into(), input.clone()]);
         assert_eq!(checked["code"], "entry-input-reference", "{checked}");
         assert_eq!(checked["input_path"], "arguments.flag");
     }
@@ -700,11 +676,11 @@ fn zero_parameter_unit_return_is_explicit_and_needs_no_input_file() {
     assert_eq!(result, json!({"format":"zkc.entry-outputs/0","value":null}));
     let templates = dir.path().join("templates");
     let report = run(
-        "inputs init",
+        "prepare",
         &options,
         &[format!("--output={}", templates.display())],
     );
-    assert_eq!(report["status"], "initialized", "{report}");
+    assert_eq!(report["status"], "prepared", "{report}");
     assert_eq!(
         std::fs::read_to_string(templates.join("arguments.json")).unwrap(),
         "{}\n"
@@ -822,7 +798,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     std::fs::write(&arguments, r#"{"flag":false}"#).unwrap();
     let again = run("prepare", &options, &[]);
     assert_eq!(again["preserved"], json!([arguments, public, witness]));
-    let checked = run("inputs check", &options, &["--operation=run".into()]);
+    let checked = run("run", &options, &["--dry-run".into()]);
     assert_eq!(checked["status"], "inputs-checked", "{checked}");
     let executed = run("run", &options, &[]);
     assert_eq!(executed["status"], "executed", "{executed}");

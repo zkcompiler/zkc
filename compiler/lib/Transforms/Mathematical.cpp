@@ -1265,8 +1265,9 @@ OwningOpRef<ModuleOp> prepareProtocol(ModuleOp source, bool simplify,
 }
 
 std::optional<PreparedProtocol>
-PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy) {
-  auto candidate = prepareSource(source, false, policy);
+PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
+                          RealizationTrace *trace) {
+  auto candidate = prepareSource(source, false, policy, {}, trace);
   if (!candidate)
     return std::nullopt;
   return PreparedProtocol(std::move(candidate));

@@ -334,11 +334,11 @@ Entry positionals. A digest derived from candidate bytes never authorizes them.
 Omitted Entry names select the unique eligible Entry. Run commands filter to
 Entry functions; prove/verify commands filter to proof Entries. Other commands
 consider both kinds. Explicit short names must be unique across kinds before
-checking eligibility. Qualified names resolve exactly. `inputs check` requires
-`--operation=run|prove|verify` and uses that operation's eligibility and input rules.
+checking eligibility. Qualified names resolve exactly. `--dry-run` retains the
+selected operation's eligibility and input rules.
 
 `Interface` is the checked logical source view. `BoundInterface` additionally
-binds it to the package's artifact identity and compile options. `inspect` and `inputs init`
+binds it to the package's artifact identity and compile options. `inspect` and `prepare`
 can obtain the logical view directly from `language-interface`, before executable
 lowering. Package inspection validates the captured package view. Neither path
 performs native admission, key import, resource issuance or execution.
@@ -346,9 +346,9 @@ performs native admission, key import, resource issuance or execution.
 Source compilation accepts `--no-simplify`, `--release-storage`,
 `--no-finite-bulk`, `--fuse-vector-reductions`, `--fuse-collect-fold` and
 `--no-calculation-batching` for
-`compile`, `run`, `prove`, `verify`, `bindings` and `inputs check`.
+`compile`, `run`, `prove`, `verify` and `bindings`, including dry runs.
 The resulting package records all six choices. These
-options are refused by `check`, `inspect`, `inputs init` and pinned-package
+options are refused by `check`, `inspect`, `prepare` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
 Collect–fold fusion defaults to false and follows the
@@ -396,7 +396,10 @@ Default output directories are created as needed. Explicit output parents must
 exist. All resolved inputs, proofs, sources, reference descriptors and policy
 files participate in the same output-alias checks, whether selected explicitly
 or by convention. Missing or malformed selected files refuse without fallback.
-`inputs check` selects the same input groups but no proof input or output paths.
+`--dry-run` selects the same input groups but no proof input or output paths.
+Explicit `--proof`, `--output` and `--results` paths are ignored in this mode.
+No proof/result output directory is created; optional compilation report publication
+remains active. `--dry-run` and `--instrument` conflict and refuse with `cli-option`.
 CLI path resolution and output preflight use the `invocation` report phase,
 after obtaining the selected interface and before native admission or execution.
 
@@ -473,45 +476,48 @@ Document byte, node and depth exhaustion return `entry-request-limit`.
 Diagnostics name a logical input path when
 readable decoding or reference resolution fails, without printing input values.
 
-Whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
+For proof commands, whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
 Independent authority comes from `--setups=FILE`, containing exactly
 `format: "zkc.entry-setups/0"` and a `keys` map of expected setup identities.
 Service overrides use `--service=ROLE.NAME=COUNT`; context and transcript budget
 use `--context=HEX` and `--transcript-budget=COUNT`. Options unsupported by an
-operation refuse before input access. `inputs check` shares native input
-preparation, including key authority and bounds, with execution. It executes no
-protocol, issues no resources and parses no proof. It does not check satisfaction
-of a protocol's predicate or establish acceptance.
+operation refuse before input access. `run --dry-run`, `prove --dry-run` and
+`verify --dry-run` share native input validation, including key authority and
+bounds, with execution. A dry run executes no protocol, issues no resources and
+parses no proof. It does not check satisfaction of a protocol's predicate or
+establish acceptance.
 
 ### Initialization and publication
 
 `new DIRECTORY` creates an absent directory. `init [DIRECTORY]` requires an
 existing directory and defaults to the current directory. Both require the
-companion compiler and create `zkc.toml`, `protocol.zkc`, `main.zkc` and input
-templates for a minimal index echo. Existing manifests and conflicting source
+companion compiler and create `zkc.toml`, `main.zkc` and an argument
+template for a minimal index Entry function. Existing manifests and conflicting source
 files refuse without overwriting them. Existing regular input files are preserved.
 
-`prepare [ENTRY]` uses the current manifest. With no selector it plans all declared
-Entries; a library with none succeeds without publication. `Compiler::prepare`
-returns checked interfaces and template contents before any files are published.
-Planning uses the logical Interface and does not require executable lowering.
-Existing regular input files are preserved byte for byte, regardless of contents;
-symlinks, directories and other nonregular destinations refuse. Preparation
-neither migrates obsolete maps nor removes inputs of deleted Entries. `check`
-remains source-only; `inputs check` admits actual input values.
+`prepare [ENTRY]` uses the current manifest. With no selector or output override,
+it plans all declared Entries; a library with none succeeds without publication.
+`Compiler::prepare` returns checked interfaces and template contents before any
+files are published. Planning uses the logical Interface without executable lowering.
+`--output=DIRECTORY` instead prepares one Entry there, requiring a unique Entry
+when its name is omitted. Explicit-module and pinned-package modes require this
+override and never borrow nearby project defaults. Existing regular input files
+are preserved byte for byte, regardless of contents; symlinks, directories and
+other nonregular destinations refuse. Preparation neither migrates obsolete maps
+nor removes inputs of deleted Entries. `check` remains source-only; dry runs
+admit actual input values.
 
-`inputs init` selects one Entry and creates only its nonempty input groups under
-`inputs/<qualified.name>/` beside the manifest. Explicit-module and package modes
-require `--output=DIRECTORY`. Static products retain their schema shape; unknown
-leaves are null placeholders; prover keys show `file` and `fingerprint` placeholders.
-Non-unit null inputs return `entry-input-unfilled`. Dynamic sizes and variant alternatives are never
-guessed. Verification never selects witness files. Template publication never
-replaces an existing file, including a file created after preflight. Multi-file
-publication reports exactly which files succeeded if a later publication fails.
-The `inputs init` report pairs generated `commands` with `requirements`;
-`prepare`, `new` and `init` report requirements per Entry. `allow_authored`
-indicates explicit policy acknowledgement, and `setups` lists slots requiring
-independent `--setups` authority and `--key` material. Neither is synthesized.
+Only nonempty groups receive files. Static products retain their schema shape;
+unknown leaves are null placeholders; prover keys show `file` and `fingerprint`
+placeholders. Non-unit null inputs return `entry-input-unfilled`. Dynamic sizes and
+variant alternatives are never guessed. Verification never selects witness files.
+Template publication never replaces an existing file, including a file created
+after preflight. Multi-file publication reports exactly which files succeeded if
+a later publication fails. Each `prepare` report Entry pairs suggested `commands`
+with `requirements`; `new` and `init` report requirements per Entry as well.
+`allow_authored` indicates explicit policy acknowledgement, and `setups` lists
+slots requiring independent `--setups` authority and `--key` material. Neither is
+synthesized.
 
 [File admission and publication](publication.md) defines regular-file checks,
 protected output paths, result formats, staging and diagnostics. Opened input

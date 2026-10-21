@@ -6,12 +6,14 @@
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <array>
 
 int main(int argc, char **argv) {
   auto captured = zkc::language::capture({{"m", R"(module m;
@@ -67,6 +69,34 @@ int main(int argc, char **argv) {
   }
   if (package->bytes().empty() || package->identity().size() != 64)
     return 43;
+  zkc::CompilationObservation observation({"physical"});
+  options.observations = &observation;
+  auto observed = zkc::language::compileEntry(*admitted, options);
+  if (!observed) {
+    llvm::errs() << llvm::toString(observed.takeError());
+    return 50;
+  }
+  if (observed->options().observations != nullptr)
+    return 51;
+  auto observedPackage = zkc::language::packageEntry(*observed);
+  if (!observedPackage) {
+    llvm::errs() << llvm::toString(observedPackage.takeError());
+    return 52;
+  }
+  auto observations = observation.json();
+  auto *phases = observations.getAsObject()->getArray("phases");
+  const std::array<llvm::StringRef, 5> expectedPhases = {
+      "entry", "protocol", "participant", "exec", "physical"};
+  if (observedPackage->bytes() != package->bytes() || !phases ||
+      phases->size() != expectedPhases.size())
+    return 53;
+  for (size_t i = 0; i < expectedPhases.size(); ++i) {
+    const auto *phase = (*phases)[i].getAsObject();
+    const auto *unit = phase ? phase->getArray("unit") : nullptr;
+    if (!phase || phase->getString("phase") != expectedPhases[i] || !unit ||
+        unit->empty() || (*unit)[0].getAsString() != "m::Demo")
+      return 54;
+  }
   if (auto error =
           zkc::language::checkInterface(*original, original->interfaceJson())) {
     llvm::errs() << llvm::toString(std::move(error));

@@ -19,8 +19,8 @@ outputs are `231`, and the pointwise output is `[10, 21]` in BLS12-381 Fr.
 
 ```sh
 cd common/tests/fixtures/projects/mathematical-notation
-zkc check --notations
-zkc inputs check --operation=run
+zkc inspect --view=notations
+zkc run --dry-run
 zkc run
 ```
 

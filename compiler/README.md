@@ -21,7 +21,18 @@ The same source supports static and shared libraries. Install into a fresh prefi
 with `cmake --install BUILD --prefix PREFIX` and build `common/tests/consumer` against
 that prefix to check every component and installed public header.
 
+Optional `-DZKC_ENABLE_MLIR_LSP=ON` builds the standard `zkc-lsp` MLIR language
+server with zkc dialects. Source editor support is separate.
+
 ## Public commands
+
+`zkc-compile --capabilities` reports the compiled installation and supported
+settings. Language commands accept `--observations=FILE` and optional
+`--dump=protocol,participant,exec,physical`; `--diagnostics=FILE` collects only
+structured diagnostics. `--time-trace=FILE` enables standard LLVM scoped tracing.
+The invocation-owned `CompilationObservation` can also be supplied to the C++
+Compiler APIs. Observers do not bypass checking or change native Origin bytes.
+See [tooling](../docs/compiler/tooling.md) for bounds and interpretation.
 
 `zkc-compile --help` lists the supported commands. The primary Language commands
 are `language-check`, `language-emit`, `language-interface`, `language-bundle`,

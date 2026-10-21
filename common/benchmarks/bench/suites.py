@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 
 from .io import Journal, ROOT, digest, require, write_json
+from .configuration import validate_published
 from .runner import CONTROL, Job, execute_job, refuse
 from .projects import freeze_project
 from .workloads import Protocol, catalog as protocol_catalog
@@ -119,6 +120,7 @@ def compile_projects(args, output, capture, manifest, suites, journal):
             report = json.loads(Path(record['stdout']).read_text())
             require(report.get('status') == 'compiled', 'compilation did not publish a package')
             require(digest(target) == report['package_sha256'], 'published package identity mismatch')
+            validate_published(json.loads(target.read_text())['options'], getattr(args, 'configuration', None))
             records.append({'wall_seconds': record['wall_seconds'], 'sha256': digest(target),
                             'bytes': target.stat().st_size, 'report': report})
             if i == 0: shutil.copyfile(target, package)

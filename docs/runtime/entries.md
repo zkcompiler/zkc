@@ -26,7 +26,7 @@ Fill `inputs/example.Main/arguments.json`
 with `{"value":"7"}`, then run:
 
 ```sh
-zkc inputs check --operation=run
+zkc run --dry-run
 zkc run
 ```
 
@@ -56,7 +56,7 @@ interfaces and creates missing templates for all Entries, or one named Entry.
 It preserves existing regular files byte for byte, including stale or unfilled
 ones. It does not validate or migrate their contents. After changing a port,
 update its input map or remove that file and run `prepare` again. Use `inspect`
-for the current schema and `inputs check` to validate actual values.
+for the current schema and add `--dry-run` to `run`, `prove` or `verify` to validate values.
 
 With several Entries, supply a unique short name or `module::Name`:
 
@@ -69,7 +69,8 @@ zkc verify example::Proof
 
 Omitted names require one eligible Entry: `run` considers Entry functions;
 `prove` and `verify` consider proof Entries. `inspect`, `compile`, `bindings`
-and `inputs init` consider both kinds. An explicitly ambiguous short name
+consider both kinds. `prepare` without an output override prepares all project Entries;
+with `--output` it selects one Entry across both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
 
 ### Paths and sessions
@@ -99,18 +100,24 @@ fresh sessions by default. Explicit child sessions and policies belong in
 
 ### Input templates
 
-`inputs init` is the lower-level, single-Entry template command. It accepts an
-explicit output directory and refuses existing files. `prepare` is the usual
-project command. Both create only required groups. Null leaves are unfilled
-placeholders, except for actual unit values. Neither command invents dynamic
-lengths or chooses variant cases. `inputs init` reports suggested command arguments.
-All initialization commands report additional `requirements`: an authored proof
-needs explicit `--allow-authored`, and each setup slot needs independent
-`--setups` authority and `--key` material. Initialization never grants those permissions.
+`prepare` creates only required groups and preserves existing regular files. With
+`--output=DIRECTORY`, it prepares one selected Entry in that directory; an omitted
+name requires a unique Entry. Package and explicit-module modes require this
+output override. Null leaves are unfilled placeholders, except for actual unit
+values. Preparation never invents dynamic lengths or chooses variant cases.
+Each Entry in the report includes suggested `commands` and additional
+`requirements`: an authored proof needs explicit `--allow-authored`, and each
+setup slot needs independent `--setups` authority and `--key` material.
+Initialization never grants those permissions.
+
 `inspect` describes the schema, choices and whether each input has an installed
-constructor. `inputs check --operation=...`
-uses the same native preparation as execution, including setup and capacity
-checks, but runs no protocol and issues no resources. Successful preparation
+constructor. Add `--dry-run` to `run`, `prove` or `verify` to check actual inputs,
+setup authority and bounds through the same native input validation as execution.
+It runs no protocol, issues no resources, reads no proof bytes and publishes no
+proof or result values. Verification does not read witness files. Output paths
+need not exist; `--output`, `--proof` and `--results` have no effect in this mode.
+Compilation reports requested with `--report` are still written. Execution count
+instrumentation cannot be combined with `--dry-run`. Successful input validation
 is not proof acceptance or a protocol security judgment.
 
 ## Source names and native labels

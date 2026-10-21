@@ -120,13 +120,13 @@ pub operator infixl(60) ⊕=合成;
 pub fn 公開(α:index,β:index)->index{return α⊕β;}
 fn 内部(α:index,β:index)->index{return α⊕β;}
 ''', encoding='utf-8')
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-               f'--module=数学={source}', '--notations']
-    public = journal.json(command)['notations']
+    command = [toolchain.runtime, '--json', 'inspect', f'--compiler={toolchain.compiler}',
+               f'--module=数学={source}', '--view=notations']
+    public = journal.json(command)['checked']['notations']
     assert public['format'] == 'zkc.notations/0'
     assert any(value['owner'] == '数学::公開' for value in public['occurrences'])
     assert not any(value['owner'] == '数学::内部' for value in public['occurrences'])
-    full = journal.json([*command, '--notation-private', '--notation-installation'])['notations']
+    full = journal.json([*command, '--notation-private', '--notation-installation'])['checked']['notations']
     assert full['include_private'] and full['include_installation']
     assert any(value['owner'] == '数学::内部' for value in full['occurrences'])
 
@@ -146,9 +146,9 @@ def test_notation_example_runs_with_its_supplied_inputs(toolchain, journal, dire
     shutil.copytree(root / 'libraries', directory / 'libraries')
     runtime = [toolchain.runtime, '--json']
     compiler = f'--compiler={toolchain.compiler}'
-    checked = journal.json([*runtime, 'check', '--notations', compiler], cwd=project)
-    assert checked['notations']['format'] == 'zkc.notations/0'
-    journal.json([*runtime, 'inputs', 'check', '--operation=run', compiler], cwd=project)
+    checked = journal.json([*runtime, 'inspect', '--view=notations', compiler], cwd=project)
+    assert checked['checked']['notations']['format'] == 'zkc.notations/0'
+    journal.json([*runtime, 'run', '--dry-run', compiler], cwd=project)
     journal.json([*runtime, 'run', compiler], cwd=project)
     results = json.loads((project / 'build/zkc/example.Run.results.json').read_text())
     assert results['value']['P'] == {

@@ -75,7 +75,7 @@ select transcript transitions and wire encodings explicitly.
 Every package under `libraries/` must belong to a classified layer; an unknown
 location refuses rather than inheriting the application policy.
 
-`zkc check --api --project=...` reports the compact public export graph, completed
+`zkc inspect --view=api --project=...` reports the compact public export graph, completed
 contracts and checked provider references, alongside manifest ownership. These
 are diagnostic views; they do not alter capture or artifact identities. Public
 authored functions freeze requirements with `where` and local effects with

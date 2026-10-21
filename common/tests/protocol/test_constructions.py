@@ -163,7 +163,7 @@ def reject_deployment(toolchain, journal, directory, deployment, name, reason):
     path = directory / (name + '.deployment')
     path.write_bytes(encoded)
     inputs = journal.write(name + '.inputs.json', [])
-    result = journal.json([toolchain.runtime, '--json', 'prove-bundle', path,
+    result = journal.json([toolchain.runtime, '--json', 'bundle', 'prove', path,
                            hashlib.sha256(encoded).hexdigest(), inputs,
                            directory / (name + '.bin'), '--allow-authored'], refuses=reason)
     assert result['phase'] == 'admission'

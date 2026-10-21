@@ -23,7 +23,7 @@ def main():
             return path
 
         def run(*command, refusal=None):
-            result = subprocess.run([args.runtime, '--json', *command], capture_output=True,
+            result = subprocess.run([args.runtime, '--json', *command[0].split(), *command[1:]], capture_output=True,
                                     text=True, timeout=60)
             assert result.returncode == (1 if refusal else 0), result.stdout + result.stderr
             record = json.loads(result.stdout)
@@ -40,10 +40,10 @@ def main():
         pin = hashlib.sha256(bundle.read_bytes()).hexdigest()
         inputs = write("bundle.json", ["zkc.bundle-inputs/0", "installed", [
             ["Solo", [["0", "bool@native.bool/0", ["wire", "5a4b4356000501"]]], []]], []])
-        result = run("run-bundle", bundle, pin, inputs)
+        result = run("bundle run", bundle, pin, inputs)
         assert result["outcome"] == ["completed"] and result["acceptance"] is None
         assert result["roles"][0]["outputs"] == [["wire", "bool@native.bool/0", "5a4b4356000501"]]
-        run("run-bundle", bundle, "00" * 32, inputs, refusal="run-Identity")
+        run("bundle run", bundle, "00" * 32, inputs, refusal="run-Identity")
 
         deployment = work / "proof.deployment"
         pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
@@ -52,23 +52,23 @@ def main():
         validator = write("validator.json", ["zkc.native-proof-inputs/0", [], [], "", [], "0"])
         proof = work / "proof.bin"
         proof.write_bytes(b"previous proof")
-        for command, request in [("prove-bundle", producer), ("verify-bundle", validator)]:
+        for command, request in [("bundle prove", producer), ("bundle verify", validator)]:
             refused = run(command, deployment, pin, request, proof,
                           refusal="native-proof-binding-policy")
             assert refused["binding_scope"] == "header" and refused["phase"] == "admission"
             assert proof.read_bytes() == b"previous proof"
-        result = run("prove-bundle", deployment, pin, producer, proof, "--allow-authored")
+        result = run("bundle prove", deployment, pin, producer, proof, "--allow-authored")
         assert result["status"] == "produced" and result["binding_scope"] == "header"
-        result = run("verify-bundle", deployment, pin, validator, proof, "--allow-authored")
+        result = run("bundle verify", deployment, pin, validator, proof, "--allow-authored")
         assert result["status"] == "accepted" and result["binding_scope"] == "header"
         for data, code in [(proof.read_bytes()[:-1], "proof-truncated"),
                            (proof.read_bytes() + b"x", "proof-trailing")]:
             malformed = work / "malformed.bin"
             malformed.write_bytes(data)
-            run("verify-bundle", deployment, pin, validator, malformed,
+            run("bundle verify", deployment, pin, validator, malformed,
                 "--allow-authored", refusal=code)
         for options in [[], ["--allow-authored"]]:
-            refused = run("verify-bundle", deployment, "00" * 32, validator, proof,
+            refused = run("bundle verify", deployment, "00" * 32, validator, proof,
                           *options, refusal="native-proof-deployment-binding")
             assert "binding_scope" not in refused
         package = work / "run.zkpkg"

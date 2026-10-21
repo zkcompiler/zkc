@@ -8,6 +8,7 @@
 #include <optional>
 #include <variant>
 namespace zkc {
+class CompilationObservation;
 /// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
@@ -75,6 +76,7 @@ struct NativeProofOptions {
   MathematicalSelectionPolicy mathematicalSelection = {};
   /// Absent preserves the existing complete declarative deployment API.
   std::optional<NativeProofOperation> operation = std::nullopt;
+  CompilationObservation *observations = nullptr;
 };
 struct CompiledNativeProof {
   Compilation compilation;

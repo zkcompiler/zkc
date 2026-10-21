@@ -5,7 +5,9 @@
 #include "Run.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Parser/Parser.h"
+#include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -18,11 +20,13 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <map>
 #include <set>
 using namespace llvm;
@@ -30,10 +34,21 @@ namespace zkc::language {
 namespace {
 Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
                                 const EntryOptions &options) {
-  auto prepared = mathematical::prepareProtocol(original, options.simplify,
-                                                options.mathematicalSelection);
+  TimeTraceScope timing("zkc.lower-entry-calculation");
+  auto *observations = options.observations;
+  if (observations)
+    observations->phase("protocol", original);
+  mathematical::RealizationTrace trace;
+  trace.eventLimit = 4096;
+  auto prepared = mathematical::prepareProtocol(
+      original, options.simplify, options.mathematicalSelection, {},
+      observations ? &trace : nullptr);
+  if (observations)
+    observations->decisions(original, trace);
   if (!prepared)
     return error("entry.numeric", "numerical helper preparation failed");
+  if (observations)
+    observations->phase("participant", *prepared);
   auto owner = *prepared->getOps<protocol_ir::ProtocolModuleOp>().begin();
   auto source = mlir::OwningOpRef<mlir::ModuleOp>(
       mlir::cast<mlir::ModuleOp>(prepared->getOperation()->clone()));
@@ -62,11 +77,24 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
         !mapHelpers.contains(&op))
       op.erase();
   owner.setProfile(protocol_ir::Profile::Exec);
-  if (mlir::failed(
-          kernel::lowerKernels(*prepared, options.mathematicalSelection)) ||
-      mlir::failed(protocol::lowerPhysical(*prepared, {}, false, nullptr,
-                                           options.releaseStorage)))
+  if (observations)
+    observations->phase("exec", *prepared);
+  mlir::PassManager pipeline(prepared->getContext());
+  if (observations)
+    observations->instrument(pipeline);
+  mathematical::RealizationTrace loweringTrace;
+  loweringTrace.eventLimit = 4096;
+  pipeline.addPass(kernel::createLowerKernelsPass(
+      options.mathematicalSelection, observations ? &loweringTrace : nullptr));
+  pipeline.addPass(
+      protocol::createSelectPhysicalPass({}, false, options.releaseStorage));
+  auto outcome = pipeline.run(*prepared);
+  if (observations)
+    observations->decisions(*prepared, loweringTrace);
+  if (mlir::failed(outcome))
     return error("entry.numeric", "numerical physical lowering failed");
+  if (observations)
+    observations->phase("physical", *prepared);
   auto result = protocol::exportModule(*prepared);
   if (!result)
     return result.takeError();
@@ -137,6 +165,7 @@ Error references(
 } // namespace
 Expected<CompiledHost> compileHost(const CheckedOriginal &original,
                                    const EntryOptions &options) {
+  TimeTraceScope timing("zkc.compile-entry-host");
   const auto &entry = original.entry();
   const auto &limits = original.admissionLimits();
   mlir::DialectRegistry registry;
@@ -147,6 +176,8 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
       mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
   if (!module)
     return error("entry.original", "admitted Host original no longer parses");
+  if (options.observations)
+    options.observations->phase("entry", *module);
   auto analysis = analyzeHostOriginal(entry, *module, limits);
   if (!analysis)
     return analysis.takeError();
@@ -164,6 +195,9 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
     auto copy = mlir::OwningOpRef<mlir::ModuleOp>(
         mlir::cast<mlir::ModuleOp>(nested->clone()));
     copy->getOperation()->removeAttr("entry.calculation");
+    auto calculationScope = options.observations
+                                ? options.observations->scope(fragment.id)
+                                : CompilationObservation::Scope{};
     auto program = numerical(*copy, fragment.id, options);
     if (!program)
       return program.takeError();
@@ -198,6 +232,9 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
     auto source = prepareOriginal(*invocation.deployment, limits);
     if (!source)
       return source.takeError();
+    auto deploymentScope = options.observations
+                               ? options.observations->scope(id)
+                               : CompilationObservation::Scope{};
     auto compiled = compileEntry(*source, options);
     if (!compiled)
       return compiled.takeError();

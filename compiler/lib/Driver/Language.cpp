@@ -3,18 +3,23 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/raw_ostream.h"
+#include <chrono>
 
 using namespace llvm;
 namespace zkc {
 int runLanguageCompiler(int argc, char **argv) {
   using namespace language;
   std::vector<SourceBuffer> sources;
+  TimeTraceScope timing("zkc.language-command");
   std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
   ArrayRef<SourceBuffer> diagnosticSources;
@@ -25,7 +30,83 @@ int runLanguageCompiler(int argc, char **argv) {
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
+  std::string observationPath;
+  bool collectObservations = false;
+  std::vector<std::string> dumps;
+  std::unique_ptr<CompilationObservation> observation;
+  json::Array structuredDiagnostics;
+  json::Object identities;
+  auto started = std::chrono::steady_clock::now();
+  auto publishObservation = [&](bool completed) {
+    if (observationPath.empty())
+      return true;
+    json::Value record =
+        observation ? observation->json() : json::Value(json::Object{});
+    auto &object = *record.getAsObject();
+    object["format"] = "zkc.compilation-observation/0";
+    object["completed"] = completed;
+    object["inclusive_microseconds"] =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started)
+            .count();
+    object["diagnostics"] = std::move(structuredDiagnostics);
+    object["identities"] = std::move(identities);
+    if (captured) {
+      object["capture"] = captured->identity();
+      json::Array sources;
+      for (const auto &source : diagnosticSources)
+        sources.push_back(
+            json::Object{{"module", source.module},
+                         {"path", source.diagnosticPath},
+                         {"origin", source.origin == SourceOrigin::Captured
+                                        ? "captured"
+                                        : "installation"}});
+      object["sources"] = std::move(sources);
+    }
+    std::error_code ec;
+    raw_fd_ostream out(observationPath, ec, sys::fs::CD_CreateNew,
+                       sys::fs::FA_Write, sys::fs::OF_Text);
+    if (ec) {
+      errs() << "source.observation-io: " << ec.message() << '\n';
+      return false;
+    }
+    std::string encoded;
+    BoundedStream bounded(encoded, 24 * 1024 * 1024);
+    bounded << record;
+    if (bounded.overflow()) {
+      out << json::Value(
+                 json::Object{{"format", "zkc.compilation-observation/0"},
+                              {"completed", completed},
+                              {"truncated", true}})
+          << '\n';
+    } else
+      out << encoded << '\n';
+    out.flush();
+    if (out.has_error()) {
+      errs() << "source.observation-io: " << out.error().message() << '\n';
+      out.clear_error();
+      return false;
+    }
+    return true;
+  };
   Limits limits;
+  auto diagnosticRecord = [](const Diagnostic &message) {
+    json::Object record{{"code", message.code}, {"message", message.message}};
+    if (message.primary) {
+      record["source"] = message.primary->source.index;
+      record["begin"] = message.primary->begin;
+      record["end"] = message.primary->end;
+    }
+    json::Array related;
+    for (const auto &span : ArrayRef(message.related).take_front(64))
+      related.push_back(json::Object{{"source", span.source.index},
+                                     {"begin", span.begin},
+                                     {"end", span.end}});
+    record["related"] = std::move(related);
+    if (message.related.size() > 64)
+      record["related_truncated"] = true;
+    return json::Value(std::move(record));
+  };
   auto refuse = [&](Error failure) {
     std::vector<Diagnostic> messages;
     auto append = [&](StringRef code, StringRef message) {
@@ -56,6 +137,10 @@ int runLanguageCompiler(int argc, char **argv) {
                            std::to_string(location.column));
         },
         [&](const ErrorInfoBase &error) { appendLines(error.message()); });
+    for (const auto &message : messages) {
+      structuredDiagnostics.push_back(diagnosticRecord(message));
+    }
+    publishObservation(false);
     errs() << formatDiagnostics(messages, diagnosticSources);
     return 1;
   };
@@ -69,7 +154,23 @@ int runLanguageCompiler(int argc, char **argv) {
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
     StringRef arg(argv[i]);
-    if (arg.consume_front("--source-format=")) {
+    if (arg.starts_with("--observations=") ||
+        arg.starts_with("--diagnostics=")) {
+      collectObservations = arg.starts_with("--observations=");
+      arg = arg.split('=').second;
+      if (!observationPath.empty() || arg.empty() || arg == "-")
+        return refuse(error("source.options", "expected one observation file"));
+      observationPath = arg.str();
+    } else if (arg.consume_front("--dump=")) {
+      SmallVector<StringRef> names;
+      arg.split(names, ',');
+      for (auto name : names) {
+        if (name != "entry" && name != "protocol" && name != "participant" &&
+            name != "exec" && name != "physical")
+          return refuse(error("source.options", "unknown dump phase"));
+        dumps.push_back(name.str());
+      }
+    } else if (arg.consume_front("--source-format=")) {
       if (arg.empty() || !format.empty())
         return refuse(error("source.options",
                             "source format must be nonempty and unique"));
@@ -166,6 +267,12 @@ int runLanguageCompiler(int argc, char **argv) {
                         "notation visibility options require --notations"));
   if (format.empty())
     return refuse(error("source.options", "--source-format=zkc is required"));
+  if (!dumps.empty() && !collectObservations)
+    return refuse(error("source.options", "dumps require --observations"));
+  if (collectObservations) {
+    observation = std::make_unique<CompilationObservation>(dumps);
+    options.observations = observation.get();
+  }
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
@@ -175,6 +282,9 @@ int runLanguageCompiler(int argc, char **argv) {
   auto analysis = analyze(*captured);
   diagnosticSources = analysis.sources();
   if (!analysis.diagnostics().empty()) {
+    for (const auto &d : analysis.diagnostics())
+      structuredDiagnostics.push_back(diagnosticRecord(d));
+    publishObservation(false);
     errs() << formatDiagnostics(analysis.diagnostics(), analysis.sources());
     return 1;
   }
@@ -220,6 +330,8 @@ int runLanguageCompiler(int argc, char **argv) {
     if (out.overflow())
       return refuse(
           error("source.limit", "source check report byte limit exceeded"));
+    if (!publishObservation(true))
+      return 1;
     outs() << bytes;
     return 0;
   };
@@ -232,16 +344,32 @@ int runLanguageCompiler(int argc, char **argv) {
   auto original = prepareOriginal(*selected);
   if (!original)
     return refuse(original.takeError());
+  identities["original"] = original->identity();
+  identities["installation"] = project->installationIdentity();
+  json::Array locations;
+  for (const auto &location : original->locations().take_front(4096))
+    locations.push_back(json::Object{{"line", location.line},
+                                     {"column", location.column},
+                                     {"source", location.source.source.index},
+                                     {"begin", location.source.begin},
+                                     {"end", location.source.end}});
+  identities["source_locations"] = std::move(locations);
+  identities["source_locations_truncated"] =
+      original->locations().size() > 4096;
   if (command == "language-check") {
     checked["entry"] = selected->entry().qualifiedName;
     checked["original"] = original->identity();
     return publishCheck();
   }
   if (command == "language-emit") {
+    if (!publishObservation(true))
+      return 1;
     outs() << original->bytes();
     return 0;
   }
   if (command == "language-interface") {
+    if (!publishObservation(true))
+      return 1;
     outs() << original->interfaceJson() << '\n';
     return 0;
   }
@@ -252,9 +380,13 @@ int runLanguageCompiler(int argc, char **argv) {
     auto package = packageEntry(*compiled);
     if (!package)
       return refuse(package.takeError());
+    if (!publishObservation(true))
+      return 1;
     outs() << package->bytes();
     return 0;
   }
+  if (!publishObservation(true))
+    return 1;
   outs() << compiled->bytes() << '\n';
   return 0;
 }

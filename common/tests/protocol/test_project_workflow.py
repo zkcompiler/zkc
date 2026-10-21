@@ -55,11 +55,14 @@ def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, director
         assert output.returncode == 0 and not output.stderr
         assert not output.stdout.startswith('{')
     assert 'Results:' in output.stdout and str(result) in output.stdout
+    human_prepare = journal.attempt([toolchain.runtime, 'prepare', f'--compiler={toolchain.compiler}'], cwd=child)
+    assert human_prepare.returncode == 0
+    assert 'Command arguments:' in human_prepare.stdout and str(value) in human_prepare.stdout
     failed = journal.attempt([toolchain.runtime, 'run', '--input=absent.json',
                               f'--compiler={toolchain.compiler}'], cwd=child)
     assert failed.returncode == 1 and not failed.stdout
     assert 'entry-input-document' in failed.stderr and 'absent.json' in failed.stderr
-    checked = journal.json(command(toolchain, 'inputs', 'check', '--operation=run'), cwd=child)
+    checked = journal.json(command(toolchain, 'run', '--dry-run'), cwd=child)
     assert checked['status'] == 'inputs-checked' and 'execution' not in checked
     assert 'results' not in checked
 
@@ -155,7 +158,7 @@ def test_prepare_all_entries_preserves_data_and_checks_current_shapes(toolchain,
     assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
     journal.json(command(toolchain, 'prepare'), cwd=directory)
     assert other.read_text() == '{"value":"9"}'
-    failure = journal.json(command(toolchain, 'inputs', 'check', 'Other', '--operation=run'),
+    failure = journal.json(command(toolchain, 'run', 'Other', '--dry-run'),
                            cwd=directory, refuses='entry-input-names')
     assert failure['status'] == 'refused' and 'execution' not in failure
     other.unlink()
@@ -280,7 +283,7 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
     assert produced['output'] == str(proof)
     original = proof.read_bytes()
     assert produced['proof_sha256'] == sha256(original).hexdigest()
-    checked = journal.json(command(toolchain, 'inputs', 'check', '--operation=prove', *options), cwd=directory)
+    checked = journal.json(command(toolchain, 'prove', '--dry-run', *options), cwd=directory)
     assert checked['entry'] == 'example::Proof' and 'execution' not in checked
     run_inputs = directory / 'inputs/example.Interactive'
     (run_inputs / 'arguments.json').write_text(
@@ -422,11 +425,11 @@ def test_generated_commands_use_defaults_and_empty_roles_need_no_file(toolchain,
       proof Proof=Exchange{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
     for name in ('Interactive', 'Proof'):
-        templates = journal.json(command(toolchain, 'inputs', 'init', name), cwd=directory)
+        templates = journal.json(command(toolchain, 'prepare', name), cwd=directory)
         group = 'arguments' if name == 'Interactive' else 'witness'
         values = {'inputs': {'P': {'accept': True}, 'V': {}}} if name == 'Interactive' else {'accept': True}
         (directory / f'inputs/example.{name}/{group}.json').write_text(json.dumps(values))
-        for argv in templates['commands']:
+        for argv in templates['entries'][0]['commands']:
             assert not any(arg.startswith('--session=') for arg in argv)
             assert not any(arg.startswith(('--proof=', '--output=')) for arg in argv)
             flags = ['--allow-authored'] if name == 'Proof' else []

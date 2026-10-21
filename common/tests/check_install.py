@@ -31,9 +31,9 @@ def check(binary, compiler, output):
 
     invoke("help", "--help")
     invoke("version", "--version")
-    checked = json.loads(invoke("check", "check", "--project=zkc.toml", "--declarations"))
-    assert checked["status"] == "checked" and checked["scope"] == "definitions"
-    assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
+    checked = json.loads(invoke("check", "inspect", "--project=zkc.toml", "--view=placement"))
+    assert checked["status"] == "inspected" and 'entry' not in checked["checked"]
+    assert any(d["name"] == "schnorr::Schnorr" for d in checked["checked"]["declarations"])
     # The source catalog is part of the installed package, consumed explicitly
     # from this external directory without the checkout's manifests or sources.
     installed = binary.parent.parent / "share/zkc/zkc.workspace.toml"
@@ -42,8 +42,8 @@ def check(binary, compiler, output):
         'format="zkc.project/0"\n[modules]\ninstalled="installed.zkc"\n'
         f'[workspace]\npath={json.dumps(str(installed))}\n'
         '[dependencies]\nschnorr={workspace="protocols.sigma.schnorr"}\n')
-    external = json.loads(invoke("installed-catalog", "check", "--project=installed.toml", "--api"))
-    assert any(d["name"] == "schnorr::Schnorr" for d in external["api"]["declarations"])
+    external = json.loads(invoke("installed-catalog", "inspect", "--project=installed.toml", "--view=api"))
+    assert any(d["name"] == "schnorr::Schnorr" for d in external["checked"]["api"]["declarations"])
     arguments = ["compile", "example::Proof", "--project=zkc.toml", "--output=proof.zkpkg"]
     built = json.loads(invoke("compile", *arguments))
     assert Path(built["compiler"]).resolve() == compiler.resolve()
@@ -71,10 +71,10 @@ def check(binary, compiler, output):
     mathematics = output / "mathematics"
     mathematics.mkdir()
     copy_project(ROOT / "common/tests/fixtures/projects/mathematics/zkc.toml", mathematics)
-    checked = json.loads(invoke("math-check", "check", "--project=mathematics/zkc.toml",
-                                "example::Run", "--declarations"))
-    assert checked["scope"] == "entry"
-    assert any(d["name"] == "zkc::multilinear::fix_first" for d in checked["declarations"])
+    checked = json.loads(invoke("math-check", "inspect", "--project=mathematics/zkc.toml",
+                                "example::Run", "--view=placement"))
+    assert checked["checked"]["entry"] == "example::Run"
+    assert any(d["name"] == "zkc::multilinear::fix_first" for d in checked["checked"]["declarations"])
     compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics/zkc.toml",
                                  "example::Run", "--output=mathematics.zkpkg"))
 

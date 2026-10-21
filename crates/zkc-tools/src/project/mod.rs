@@ -3,7 +3,8 @@ mod manifest;
 pub use manifest::{Asset, CatalogDependency, Project, ProjectGraph, ProjectPackage};
 mod compiler;
 pub use compiler::{
-    CheckOptions, Checked, Compiler, Entry, EntryKind, Error, NotationOptions, Selection,
+    CheckOptions, Checked, CompilationRequest, CompilationResult, Compiler, Entry, EntryKind,
+    Error, NotationOptions, ObservationRequest, Selection,
 };
 pub(crate) mod cli;
 mod layout;
@@ -13,3 +14,11 @@ pub use preparation::{Preparation, Template};
 mod inspection;
 mod selection;
 pub use inspection::CheckedInterface;
+
+mod settings;
+pub use settings::{BuildSettings, ResolvedSettings};
+mod cache;
+pub(crate) mod observation;
+pub use cache::CompilationCache;
+pub(crate) mod testing;
+pub use testing::TestRecipe;

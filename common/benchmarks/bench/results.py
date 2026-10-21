@@ -8,6 +8,7 @@ import statistics
 
 from .io import require, write_json
 from .observations import validate_counts, summarize_counts
+from .configuration import flags, SETTINGS
 
 FORMAT = 'zkc.benchmark/0'
 INGRESS = ('json', 'wire', 'native', 'prepared')
@@ -214,7 +215,7 @@ def validate_manifest(manifest):
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
     require(not (set(manifest) - {'format', 'status', 'phase', 'results', 'contracts', 'plan', 'processes',
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
-                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation', 'compiler_options', 'ingress'}), 'unknown manifest fields')
+                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation', 'compiler_options', 'ingress', 'configuration'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
     require(isinstance(manifest.get('error', ''), str), 'invalid failure description')
     matrix, results = manifest.get('matrix', []), manifest.get('results')
@@ -231,8 +232,16 @@ def validate_manifest(manifest):
     options = manifest.get('compiler_options')
     require(isinstance(options, list) and all(isinstance(value, str) and value in (
         '--no-simplify', '--no-finite-bulk', '--release-storage',
-        '--fuse-vector-reductions', '--fuse-collect-fold') for value in options),
+        '--fuse-vector-reductions', '--fuse-collect-fold', '--no-calculation-batching') for value in options),
         'invalid compiler options')
+    configuration = manifest.get('configuration')
+    if configuration is not None:
+        keys = SETTINGS.keys()
+        require(isinstance(configuration, dict) and set(configuration) == {'profile','values','origins'}, 'invalid build configuration')
+        require(isinstance(configuration['profile'], str) and configuration['profile'], 'invalid configuration profile')
+        require(flags(configuration['values']) == options, 'compiler options differ from configuration')
+        require(isinstance(configuration['origins'], dict) and set(configuration['origins']) == keys
+                and all(isinstance(v, str) and v for v in configuration['origins'].values()), 'invalid configuration origins')
     for job in matrix:
         validate_backend(job.get('backend'), manifest['ingress'], job.get('boundary'))
     successful = manifest['status'] == 'passed'

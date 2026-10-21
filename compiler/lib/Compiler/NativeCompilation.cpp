@@ -6,6 +6,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
@@ -23,6 +24,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -58,8 +60,14 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            MathematicalSelectionPolicy mathematicalSelection,
                            LinearContractionStats &statistics,
                            json::Array *stages = nullptr,
-                           StringRef selectedRole = {}) {
+                           StringRef selectedRole = {},
+                           CompilationObservation *observations = nullptr) {
+  TimeTraceScope timing("zkc.lower-participants");
   PassManager pipeline(module.getContext());
+  mathematical::RealizationTrace trace;
+  trace.eventLimit = 4096;
+  if (observations)
+    observations->instrument(pipeline);
   auto add = [&](std::unique_ptr<Pass> pass) {
     if (stages)
       stages->push_back(pass->getArgument().str());
@@ -69,8 +77,12 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
     add(protocol::createSimplifyParticipantPass());
   if (fixPolynomials)
     add(protocol::createFixPolynomialFactorsPass());
-  add(protocol::createLowerMathPass(mathematicalSelection));
-  if (failed(pipeline.run(module)))
+  add(protocol::createLowerMathPass(mathematicalSelection,
+                                    observations ? &trace : nullptr));
+  auto outcome = pipeline.run(module);
+  if (observations)
+    observations->decisions(module, trace);
+  if (failed(outcome))
     return failure();
   if (!selectedRole.empty()) {
     auto owner = *module.getOps<protocol_ir::ProtocolModuleOp>().begin();
@@ -116,12 +128,17 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
     }
   }
   PassManager physical(module.getContext());
+  if (observations)
+    observations->instrument(physical);
   auto selection = protocol::createSelectPhysicalPass({}, false, releaseStorage,
                                                       &statistics);
   if (stages)
     stages->push_back(selection->getArgument().str());
   physical.addPass(std::move(selection));
-  return physical.run(module);
+  auto physicalOutcome = physical.run(module);
+  if (observations && succeeded(physicalOutcome))
+    observations->phase("physical", module);
+  return physicalOutcome;
 }
 } // namespace
 Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
@@ -137,6 +154,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (!parsed)
     return parsed.takeError();
   result->module = std::move(*parsed);
+  if (options.observations)
+    options.observations->phase("protocol", *result->module);
   std::optional<json::Value> publicCoin;
   if (options.publicCoinRequirement) {
     auto checked =
@@ -154,8 +173,16 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   OwningOpRef<ModuleOp> original;
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
-  auto preparation = mathematical::PreparedProtocol::prepare(
-      *result->module, options.mathematicalSelection);
+  mathematical::RealizationTrace preparationTrace;
+  preparationTrace.eventLimit = 4096;
+  auto preparation = [&] {
+    TimeTraceScope timing("zkc.prepare-protocol");
+    return mathematical::PreparedProtocol::prepare(
+        *result->module, options.mathematicalSelection,
+        options.observations ? &preparationTrace : nullptr);
+  }();
+  if (options.observations)
+    options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
   auto prepared = preparation->snapshot();
@@ -182,11 +209,13 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       return diagnostics.failure(error("polynomial-correspondence-entry"));
     correspondence = std::move(*checked);
   }
+  if (options.observations)
+    options.observations->phase("participant", *result->module);
   json::Array loweringStages;
   if (failed(lowerProgram(*result->module, options.simplify,
                           options.fixPolynomialFactors, options.releaseStorage,
                           options.mathematicalSelection, result->statistics,
-                          &loweringStages)) ||
+                          &loweringStages, {}, options.observations)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto bundle =
@@ -294,6 +323,8 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!parsed)
     return parsed.takeError();
   auto original = std::move(*parsed);
+  if (options.observations)
+    options.observations->phase("protocol", *original);
   if (!policy) {
     auto selected = selectNativeProofDraws(
         *original, std::get<NativeProofSelection>(options.policy).policy,
@@ -307,6 +338,8 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
   result->module = std::move(constructed->module);
+  if (options.observations)
+    options.observations->phase("participant", *result->module);
   auto constructedRoot =
       *result->module->getOps<protocol_ir::ProtocolModuleOp>().begin();
   auto retainedProjection = *constructedRoot.getBody()
@@ -321,7 +354,8 @@ compileNativeProof(StringRef text, StringRef filename,
                        : policy->producer;
   if (failed(lowerProgram(*result->module, options.simplify, false,
                           options.releaseStorage, options.mathematicalSelection,
-                          result->statistics, nullptr, selectedRole)) ||
+                          result->statistics, nullptr, selectedRole,
+                          options.observations)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);

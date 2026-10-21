@@ -13,6 +13,31 @@ FIXTURES = Path(__file__).parent / 'fixtures/language'
 modules = [f'--module={name}={FIXTURES / (name + ".zkc")}' for name in ('transfer', 'algebra')]
 options = ['--source-format=zkc', '--entry=transfer::Demo', *modules]
 
+with case('observation files cannot replace source or prior evidence'):
+    source = OUT / 'observed-source.zkc'
+    body = (FIXTURES / 'transfer.zkc').read_bytes()
+    source.write_bytes(body)
+    inputs = ['--source-format=zkc', f'--module=transfer={source}', modules[1]]
+    for option in ('observations', 'diagnostics', 'time-trace'):
+        attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}={source}'])
+        assert attempted.returncode > 0 and not attempted.stdout
+        assert f'source.{"time-trace" if option == "time-trace" else "observation"}-io' in attempted.stderr
+        assert source.read_bytes() == body
+        alias = OUT / f'{option}-alias'
+        alias.symlink_to(source)
+        attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}={alias}'])
+        assert attempted.returncode > 0 and source.read_bytes() == body
+        attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}=-'])
+        assert attempted.returncode > 0 and not attempted.stdout
+
+with case('diagnostic source indices include the checked installation source'):
+    observation = OUT / 'source-indices.json'
+    commands.run([compiler, 'language-check', *options, f'--diagnostics={observation}'])
+    sources = json.loads(observation.read_text())['sources']
+    assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude']
+    assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation']
+    assert sources[-1]['path'] == '<installation>/zkc/prelude.zkc'
+
 with case('definition checking never treats empty Entry selection as omission'):
     for args in [
         ['--source-format=zkc', '--entry=', *modules],

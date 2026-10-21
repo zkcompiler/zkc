@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Host.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
@@ -339,6 +340,10 @@ StringRef CompiledEntry::bytes() const {
 }
 Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                                      const EntryOptions &options) {
+  auto scope =
+      options.observations
+          ? options.observations->scope(original.entry().root().qualifiedName)
+          : CompilationObservation::Scope{};
   auto located = [&](Error error) -> Error {
     return handleErrors(
         std::move(error),
@@ -392,6 +397,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     for (auto index : proof.publicInputs)
       append_range(selection.publicInputs, protocol.inputs[index].native);
     NativeProofOptions native;
+    native.observations = options.observations;
     native.policy = NativeProofSelection{selection};
     if (auto operation = original.entry().invocationKind())
       native.operation = *operation == HostInvocation::Kind::Verify
@@ -427,6 +433,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                          options);
   }
   RunOptions run;
+  run.observations = options.observations;
   run.entry = protocol.symbol;
   run.simplify = options.simplify;
   run.releaseStorage = options.releaseStorage;

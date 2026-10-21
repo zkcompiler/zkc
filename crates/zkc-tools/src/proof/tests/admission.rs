@@ -468,17 +468,17 @@ fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_pat
     };
     for path in [&bundle, &input, &authority] {
         let previous = std::fs::read(path).unwrap();
-        let report = crate::cli::run("prove-bundle", &args(path));
+        let report = crate::cli::run("bundle prove", &args(path));
         assert_eq!(report["code"], "artifact-output-path", "{report}");
         assert_eq!(std::fs::read(path).unwrap(), previous);
     }
     std::fs::hard_link(&input, &proof).unwrap();
     assert_eq!(
-        crate::cli::run("prove-bundle", &args(&proof))["code"],
+        crate::cli::run("bundle prove", &args(&proof))["code"],
         "artifact-output-path"
     );
     std::fs::remove_file(&proof).unwrap();
-    let report = crate::cli::run("prove-bundle", &args(&proof));
+    let report = crate::cli::run("bundle prove", &args(&proof));
     assert!(crate::cli::succeeded(&report), "{report}");
     assert_eq!(report["proof_published"], true);
     assert_eq!(report["publication"]["published"], json!(["proof"]));
@@ -495,7 +495,7 @@ fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_pat
         );
         let prior = std::fs::read(&proof).unwrap();
         assert_eq!(
-            crate::cli::run("prove-bundle", &args(&proof))["code"],
+            crate::cli::run("bundle prove", &args(&proof))["code"],
             "artifact-io"
         );
         assert_eq!(std::fs::read(&proof).unwrap(), prior);
@@ -512,7 +512,7 @@ fn proof_cli_rejects_malformed_pins_before_typed_admission() {
     // Malformed lexical pins must be diagnosed by the CLI before either step.
     std::fs::write(&bundle, b"[").unwrap();
     std::fs::write(&proof, b"previous proof").unwrap();
-    for command in ["prove-bundle", "verify-bundle"] {
+    for command in ["bundle prove", "bundle verify"] {
         for allow_authored in [false, true] {
             let mut args = vec![
                 bundle.display().to_string(),
@@ -594,8 +594,8 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
     }
     std::fs::write(&proof, b"previous proof").unwrap();
     for (command, input, status) in [
-        ("prove-bundle", &producer, "produced"),
-        ("verify-bundle", &verifier, "accepted"),
+        ("bundle prove", &producer, "produced"),
+        ("bundle verify", &verifier, "accepted"),
     ] {
         let args = vec![
             bundle.display().to_string(),
@@ -650,7 +650,7 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
         assert!(crate::cli::succeeded(&accepted), "{accepted}");
         assert_eq!(accepted["status"], status);
         assert_eq!(accepted["binding_scope"], "header");
-        if command == "verify-bundle" {
+        if command == "bundle verify" {
             assert_eq!(std::fs::read(&proof).unwrap(), previous);
         }
     }

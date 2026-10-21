@@ -561,3 +561,31 @@ python3 common/tests/check_docs.py --all
 Unit checks cover oracles, catalog dimensions, locks, lifecycle evidence, process
 failure, incorrect acceptance, input identity and complete-run summaries. Real
 benchmark matrices are opt-in and require the selected built tools.
+
+## Compare build profiles
+
+Use the existing scheduler with named root profiles:
+
+```sh
+python3 common/benchmarks/run.py run --preset=execution \
+  --case=finite-kb-collect-17 --processes=2 --samples=3 --warmups=1 \
+  --compiler=build/compiler/zkc-compile --runtime=target/release/zkc \
+  --worker=target/release/zkc-benchmarks --profile-project=zkc.toml \
+  --profile=default --profile=vector --output=build/profile-comparison
+```
+
+The manifest must define `profile.vector`; `default` selects root `[build]`.
+At most 16 distinct candidates are accepted. Profile candidates cannot combine
+with `--compiler-option`. Each candidate gets its own ordinary run manifest,
+correctness/refusal controls and samples; `candidates.json` links requests and
+results under separate `requests/NAME` and `candidates/NAME` directories. All
+candidate settings resolve before measurement starts. Effective values and
+origins are retained as `configuration`. There is no weighted aggregate or
+automatic selection. Existing ingress, process, input,
+preparation and coordination options apply unchanged.
+
+Generated source controls retain a separate compiler observation and published
+package policy. Compilation is outside runtime samples; its observation-enabled
+wall time is labelled and must not be compared with uninstrumented compilation
+as if the measurement boundaries were equal. Runtime counts remain a separate
+observation mode, with the existing restrictions on timing comparisons.

@@ -23,32 +23,6 @@ impl Operation {
         }
     }
     pub fn validate(self, args: &Arguments<'_>, checking: bool) -> Result<()> {
-        let forbidden: &[&str] = match self {
-            Self::Run => &[
-                "--public",
-                "--witness",
-                "--session",
-                "--service",
-                "--key",
-                "--setups",
-                "--context",
-                "--transcript-budget",
-                "--external-work",
-                "--attempts",
-            ],
-            Self::Prove => &["--session", "--input", "--limits", "--invocations"],
-            Self::Verify => &[
-                "--session",
-                "--input",
-                "--limits",
-                "--witness",
-                "--attempts",
-                "--invocations",
-            ],
-        };
-        if forbidden.iter().any(|f| args.has(f)) {
-            return Err("cli-option".into());
-        }
         if args.has("--no-results") && args.has("--results") {
             return Err("cli-option".into());
         }

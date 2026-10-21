@@ -40,7 +40,12 @@ pub(super) fn execute(
     report["invocations"] = requirements;
     bindings.complete(&deployments)?;
     let mut documents = files::Documents::new(capacity)?;
-    bindings.decode_inputs(&deployments, &mut documents, report)?;
+    measured(
+        args,
+        report,
+        "invocation_input_decoding_and_validation",
+        |report| bindings.decode_inputs(&deployments, &mut documents, report),
+    )?;
     report["deployments"] = json!(
         bindings
             .authority
@@ -55,15 +60,17 @@ pub(super) fn execute(
             .collect::<std::collections::BTreeMap<_, _>>()
     );
     report["phase"] = json!("admission");
-    let host = FunctionEntry::admit(
-        package,
-        FunctionOptions {
-            limits: options.run,
-            binding: options.proof.binding,
-            ..Default::default()
-        },
-        std::mem::take(&mut bindings.authority),
-    )?;
+    let host = measured(args, report, "admission", |_| {
+        FunctionEntry::admit(
+            package,
+            FunctionOptions {
+                limits: options.run,
+                binding: options.proof.binding,
+                ..Default::default()
+            },
+            std::mem::take(&mut bindings.authority),
+        )
+    })?;
     bindings.check_operations(host.deployments())?;
     if invocation.results.is_some() {
         let types = interface
@@ -81,15 +88,17 @@ pub(super) fn execute(
     }
     report["phase"] = json!("inputs");
     let path = invocation.inputs.get("arguments");
-    let arguments = documents
-        .load(&interface.input_group(), path.map(|p| p.as_path()))
-        .map_err(|e| {
-            report["input_path"] = json!(e.path);
-            if let Some(path) = path {
-                report["input_file"] = json!(path);
-            }
-            e.code
-        })?;
+    let arguments = measured(args, report, "input_decoding_and_validation", |report| {
+        documents
+            .load(&interface.input_group(), path.map(|p| p.as_path()))
+            .map_err(|e| {
+                report["input_path"] = json!(e.path);
+                if let Some(path) = path {
+                    report["input_file"] = json!(path);
+                }
+                e.code
+            })
+    })?;
     documents.protect(&mut destinations)?;
     let request = FunctionRequest {
         arguments,
@@ -99,20 +108,28 @@ pub(super) fn execute(
         host.check_inputs(request)?;
         report["status"] = json!("inputs-checked");
     } else {
-        let prepared = host.prepare(request)?;
+        let prepared = measured(args, report, "preparation", |_| host.prepare(request))?;
         report["phase"] = json!("execution");
-        let result = prepared.execute();
-        report["execution"] = result.diagnostics();
+        let result = measured(args, report, "sdk_execution", |_| prepared.execute());
+        if args.has("--instrument") {
+            report["execution_counts"] = json!(result.execution_counts.json());
+            report["binding_contexts"] = json!(result.execution_counts.binding_contexts());
+        }
+        report["execution"] = measured(args, report, "diagnostic_materialization", |_| {
+            result.diagnostics()
+        });
         if let Some(failure) = &result.failure {
             return Err(failure.code.clone());
         }
         let value = result.value.ok_or("entry-function-incomplete")?;
         if invocation.results.is_some() {
-            report["phase"] = json!("results");
-            let encoded =
-                files::function_output(&value.into_value(), capacity, bindings.output_setups)?;
-            report["phase"] = json!("publication");
-            destinations.publish(&[("results", &encoded)], report)?;
+            measured(args, report, "output_encoding_and_publication", |report| {
+                report["phase"] = json!("results");
+                let encoded =
+                    files::function_output(&value.into_value(), capacity, bindings.output_setups)?;
+                report["phase"] = json!("publication");
+                destinations.publish(&[("results", &encoded)], report)
+            })?;
         }
         report["status"] = json!("executed");
     }

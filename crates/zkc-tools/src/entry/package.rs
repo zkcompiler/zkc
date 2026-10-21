@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ pub(super) const ASSET_COUNT: usize = 256;
 const ASSET_BYTES: usize = zkc_runtime::ring::BYTE_LIMIT;
 const ASSETS_BYTES: usize = zkc_backends::ring::REGISTRY_BYTE_LIMIT;
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, remote = "Self")]
 pub struct CompileOptions {
     pub simplify: bool,
@@ -22,6 +22,13 @@ pub struct CompileOptions {
     pub fuse_vector_reductions: bool,
     pub fuse_collect_fold: bool,
     pub calculation_batching: bool,
+}
+impl Serialize for CompileOptions {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serde's remote derive supplies this inherent method. Keep the same
+        // fields as the object-only decoder used by authenticated packages.
+        Self::serialize(self, serializer)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

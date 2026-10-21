@@ -1,7 +1,8 @@
 use super::*;
-use std::path::PathBuf;
 
-use crate::project::{CheckedInterface, Compiler, EntryKind, Project, Template, input_path};
+use crate::project::{
+    CheckedInterface, Compiler, EntryKind, Preparation, Project, Template, input_path,
+};
 
 pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
     let directory = std::path::absolute(args.positional.first().copied().unwrap_or("."))
@@ -37,7 +38,7 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
     let project = Project::load(&manifest)?;
     report["phase"] = json!("preparation");
     let plan = compiler
-        .prepare(&project, None)
+        .prepare(&project, None, None)
         .map_err(|e| crate::project::cli::compiler_error(report, e))?;
     create(&plan.templates, true, report, |outputs| {
         outputs.protect(project.paths())
@@ -49,17 +50,43 @@ pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) ->
 }
 
 pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
-    let source = crate::project::cli::Source::load(args)?;
-    source.describe(report);
+    let target = Target::load(args, report)?;
+    let output = args.value("--output").map(std::path::Path::new);
     report["phase"] = json!("preparation");
-    let plan = source
-        .compiler
-        .prepare(&source.project, args.positional.first().copied())
-        .map_err(|e| crate::project::cli::compiler_error(report, e))?;
-    create(&plan.templates, true, report, |outputs| {
-        source.protect(outputs)
-    })?;
+    let plan = match &target {
+        Target::Project(source) => source
+            .compiler
+            .prepare(&source.project, args.positional.first().copied(), output)
+            .map_err(|e| crate::project::cli::compiler_error(report, e))?,
+        Target::Package { .. } => {
+            let directory = output.ok_or("source-output-required")?;
+            let interface = target.inspect(None, report)?;
+            Preparation {
+                templates: Template::inputs(directory, &interface)?,
+                entries: vec![interface],
+            }
+        }
+    };
     describe_plan(&plan.entries, report);
+    for (interface, entry) in plan
+        .entries
+        .iter()
+        .zip(report["entries"].as_array_mut().unwrap())
+    {
+        let directory = match output {
+            Some(directory) => directory.to_path_buf(),
+            None => match &target {
+                Target::Project(source) => {
+                    source.project.layout().unwrap().inputs(interface.entry())?
+                }
+                Target::Package { .. } => unreachable!(),
+            },
+        };
+        entry["commands"] = commands(&target, interface, &directory)?;
+    }
+    create(&plan.templates, true, report, |outputs| {
+        target.protect(outputs)
+    })?;
     report["status"] = json!("prepared");
     report["phase"] = json!("complete");
     Ok(())
@@ -82,33 +109,14 @@ fn requirements(interface: &CheckedInterface) -> Json {
         CheckedInterface::Function(_) => json!({"invocations":"--invocations=FILE"}),
     }
 }
-pub(super) fn inputs(
+fn commands(
     target: &Target,
     interface: &CheckedInterface,
-    args: &Arguments<'_>,
-    report: &mut Json,
-) -> Result<()> {
-    let directory = match args.value("--output") {
-        Some(path) => PathBuf::from(path),
-        None => match target {
-            Target::Project(source) => source
-                .project
-                .layout()
-                .ok_or("source-output-required")?
-                .inputs(interface.entry())?,
-            Target::Package { .. } => return Err("source-output-required".into()),
-        },
-    };
+    directory: &std::path::Path,
+) -> Result<Json> {
     let project_defaults =
         matches!(target, Target::Project(source) if source.project.layout().is_some());
     let groups = interface.input_groups();
-    create(
-        &Template::inputs(&directory, interface)?,
-        false,
-        report,
-        |outputs| target.protect(outputs),
-    )?;
-    report["input_groups"] = json!(groups.iter().map(|g| g.describe()).collect::<Vec<_>>());
     let selection: Vec<String> = match target {
         Target::Project(source) => {
             let mut v = vec![
@@ -130,7 +138,7 @@ pub(super) fn inputs(
         Ok(format!(
             "--{}={}",
             name,
-            input_path(&directory, name)?.display()
+            input_path(directory, name)?.display()
         ))
     };
     let mut commands = Vec::new();
@@ -161,17 +169,14 @@ pub(super) fn inputs(
         } else {
             args.push(format!(
                 "--input={}",
-                input_path(&directory, "arguments")?.display()
+                input_path(directory, "arguments")?.display()
             ));
         }
         commands.push(args);
     }
-    report["commands"] = json!(commands);
-    report["requirements"] = requirements(interface);
-    report["status"] = json!("initialized");
-    report["phase"] = json!("complete");
-    Ok(())
+    Ok(json!(commands))
 }
+
 fn create(
     templates: &[Template],
     preserve: bool,

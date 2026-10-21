@@ -358,7 +358,7 @@ class Suite:
         path = snapshot.parent / (label + ".native-inputs.json")
         write_json(path, request)
         report = json.loads(self.command(label + ":runtime",
-                            [self.tools["runtime"], "--json", "run-bundle", bundle, digest(bundle), path],
+                            [self.tools["runtime"], "--json", "bundle", "run", bundle, digest(bundle), path],
                             success=expected[0] == "returned"))
         assert report.get("format") == "zkc.bundle-result/0", report
         endpoint = report["roles"][0]
