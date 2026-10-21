@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from support import evidence  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
 from check_library import permitted  # noqa: E402
+from support.dependencies import POLICY, audit_graph, exceptions  # noqa: E402
 
 
 def main():
@@ -29,6 +30,17 @@ def main():
                 rows.append('malformed-header-refused')
             else:
                 raise AssertionError('invalid header was accepted')
+        # Parse a real new violating import with Lean's header parser, then run
+        # the same graph audit used for maintained source packages.
+        graph = {'Zkc.Source.NewClient': headers.imports(
+            'module\npublic import Zkc.Probability.UniformTape\n')}
+        try:
+            audit_graph(graph, ['Zkc.Source'])
+        except ValueError as error:
+            assert 'forbidden dependency (core-to-probability)' in str(error), error
+            rows.append('new-violating-import-refused')
+        else:
+            raise AssertionError('new violating import was accepted')
     rows.append('header-comments-and-modifiers')
     # Compile temporary modules independently. The ordinary Lean kernel accepts
     # axioms and sorry, so rejection must come from the maintained audit itself.
@@ -179,6 +191,14 @@ def main():
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
+            ('core-probability-body', 'Zkc.Source.GuardFixture',
+             'Zkc.Probability.GuardFixture', 'body', False),
+            ('security-example-type', 'ZkcSecurity.HashChain.GuardFixture',
+             'ZkcSecurity.Examples.GuardFixture', 'type', False),
+            ('clean-example-test-body', 'CleanExamples.GuardFixture',
+             'TestsClean.GuardFixture', 'body', False),
+            ('legacy-family-probability', 'Zkc.Protocols.Sumcheck.Verifier',
+             'Zkc.Probability.UniformTape', 'body', True),
             ('execution-protocol-body', 'ZkcSecurity.VCVio.Execution',
              'Zkc.Protocols.GuardFixture', 'body', False),
             ('execution-source-type', 'ZkcSecurity.VCVio.Execution',
@@ -225,6 +245,28 @@ def main():
                 assert result.returncode > 0 and f'forbidden {kind} dependency' in result.stdout, (name, result)
                 assert 'OWNER-GUARD-PASS' not in result.stdout
             rows.append(name)
+        # The data has one owner, but its two interpreters must also agree.
+        # Cover every layer pair, exact guards, and every retained exception.
+        representatives = [prefix + '.GuardFixture' for prefix, _ in POLICY['layers']]
+        representatives += [owner for guard in POLICY['guards'] for owner in guard['owners']]
+        representatives += ['Client']
+        pairs = sorted({(owner, dependency) for owner in representatives
+                        for dependency in representatives} | set(exceptions(POLICY)))
+        literals = ',\n'.join(f'({json.dumps(owner)}, {json.dumps(dependency)})'
+                              for owner, dependency in pairs)
+        (directory / 'Parity.lean').write_text(
+            'import ZkcTools.DeclarationAudit\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Source.GuardFixture '
+            '`Zkc.Probability.GuardFixture = false := by decide +kernel\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocols.Sumcheck.Verifier '
+            '`Zkc.Probability.UniformTape = true := by decide +kernel\n'
+            f'def pairs : List (String × String) := [{literals}]\n'
+            '#eval IO.println (Lean.toJson (pairs.map fun (owner, dependency) => '
+            'ZkcTools.DeclarationAudit.permitted owner.toName dependency.toName)).compress\n')
+        result = compile_module('Parity')
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert json.loads(result.stdout) == [permitted(*pair) for pair in pairs]
+        rows.append(f'shared-policy-interpreter-parity-{len(pairs)}')
         executable = ROOT / '.lake/build/bin/common-source'
 
         def invoke(name, arguments, expected):

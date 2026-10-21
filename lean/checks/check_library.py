@@ -12,38 +12,10 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from support.lean_headers import HeaderParser
+from support.dependencies import audit_graph, permitted  # noqa: F401 -- enforcement controls
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATIONS = {'arklib': ('ZkcSecurity', 'TestsSecurity'), 'clean': ('ZkcClean', 'TestsClean')}
-
-
-def below(name, root):
-    return name == root or name.startswith(root + '.')
-
-
-def permitted(owner, dependency):
-    if owner == 'ZkcSecurity.VCVio.Execution' and any(below(dependency, root) for root in (
-            'ZkcSecurity.ArkLib', 'ArkLib', 'ZkcSecurity.Examples', 'Zkc.Protocols', 'Zkc.Source')):
-        return False
-    if below(owner, 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal') and any(
-            below(dependency, root) for root in ('ZkcSecurity.Examples', 'Zkc.Source')):
-        return False
-    if below(owner, 'Zkc'):
-        if any(below(dependency, root) for root in (
-                'Tests', 'TestsSecurity', 'TestsClean', 'ZkcExamples', 'ZkcTools',
-                'ZkcSecurity', 'ZkcClean', 'ArkLib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly')):
-            return False
-        if not below(owner, 'Zkc.Protocols') and below(dependency, 'Zkc.Protocols'):
-            return False
-    if below(owner, 'ZkcSecurity') and not below(owner, 'ZkcSecurity.Examples'):
-        if any(below(dependency, root) for root in ('ZkcExamples', 'Tests', 'TestsSecurity',
-                'TestsClean', 'ZkcTools', 'ZkcClean', 'Clean')):
-            return False
-    if below(owner, 'ZkcClean'):
-        if any(below(dependency, root) for root in ('Tests', 'TestsSecurity', 'TestsClean',
-                'ZkcTools', 'ZkcExamples', 'ZkcSecurity', 'ArkLib', 'VCVio', 'PolyFun')):
-            return False
-    return True
+INTEGRATIONS = {'arklib': ('ZkcSecurity', 'TestsSecurity'), 'clean': ('ZkcClean', 'TestsClean', 'CleanExamples', 'CleanExamplesAudit')}
 
 
 def check(selected, lake):
@@ -81,17 +53,9 @@ def check(selected, lake):
                 source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
                 if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.')):
                     assert source.startswith('module\n'), f'{path}: expected module-system source'
-    for owner, dependencies in graph.items():
-        pending, seen = list(dependencies), set()
-        while pending:
-            dependency = pending.pop()
-            if dependency in seen:
-                continue
-            seen.add(dependency)
-            assert permitted(owner, dependency), f'forbidden dependency: {owner} reaches {dependency}'
-            pending.extend(graph.get(dependency, []))
+    dependencies = audit_graph(graph, [family for _, families in packages for family in families])
     return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
-            'modules': len(graph), 'pins': pins, 'source_sha256': source_hashes}
+            'modules': len(graph), 'dependencies': dependencies, 'pins': pins, 'source_sha256': source_hashes}
 
 
 def main():

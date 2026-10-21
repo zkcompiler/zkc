@@ -70,6 +70,53 @@ subtree instantiates those consumers. `ZkcClean` remains a separate relation
 adapter. Module-header checks and declaration dependency audits enforce these
 boundaries, including proof bodies and generated/private declarations.
 
+## Dependency policy and retained exceptions
+
+The allowed-edge table in `ZkcTools/DeclarationAudit.lean` is shared data for
+`checks/check_library.py` and the Lean declaration audit. The source audit
+uses Lean's header parser and checks transitive imports; the declaration audit
+checks actual type and proof-body references, including private and generated
+declarations. During elaboration, the shared JSON literal becomes ordinary Lean
+data with typed module names; the policy remains reducible by the kernel. Both cover `CleanExamples` as well as the three packages' library
+and test modules. Prefixes classify responsibilities during migration; they do
+not rename modules or imply that a package has already been separated.
+
+| Owner layer | Allowed repository layers |
+|---|---|
+| Core language/compiler | Core |
+| Probability foundation | Core, probability |
+| Deterministic families | Core, deterministic families |
+| General security | Core, probability, general security |
+| Security families | Core, probability, deterministic families, general security, security families |
+| External security adapters | The preceding layers and other adapters |
+| Clean adapter | Core, deterministic families, Clean |
+| Subject evidence/examples | Their upstream libraries and other subjects |
+| Tests/tooling | Any repository layer |
+
+Mathlib/Lean foundations are available throughout; external security ecosystems
+belong to the security package, Clean to the Clean package, and CompPoly is
+available to both optional packages. More specific guards preserve generic
+execution's independence from protocols/ArkLib, causal Sumcheck's independence
+from source syntax, source's independence from compiler code, and probability's
+independence from source/compiler code.
+
+Legacy violations are exact module pairs grouped by the rule they break, with
+a reason for each group. A reachable-pair exception does not authorize a new
+direct import: the table also records which pairs were direct. A new violation,
+a new direct edge, a removed owner, or an exception whose edge no longer exists
+fails the source audit. Remove obsolete entries when the corresponding module
+moves or dependency disappears. An optional package not selected for a run is
+not declared stale. The Lean audit accepts the same exact pairs but does not
+check list freshness, because a client audit may select only one module.
+
+The retained exceptions identify work still needed: probabilistic Sumcheck
+remains in `Zkc.Protocols`, generic security depends on modules currently owned
+by `VCVio`, `HashChain.JointOpening` uses a reusable example bridge, and
+`CleanExamples` uses a test-owned client. These exceptions neither prove that
+core is probability-free nor justify moving generic VCVio infrastructure
+without examining its mathematical responsibility. They bound the existing
+debt while the libraries are restructured.
+
 ## Structured proof construction
 
 Retained declaration contracts and explicit formula links belong to original

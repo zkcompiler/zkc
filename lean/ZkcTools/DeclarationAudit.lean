@@ -174,33 +174,319 @@ def moduleOf (env : Environment) (name : Name) : Option Name := do
 
 def below (base name : Name) : Bool := base.isPrefixOf name
 
-/-- Implementation dependencies of the generic library cannot enter protocol
-applications or downstream clients. Probability also excludes source/compiler
-syntax. External theorem ecosystems belong only to their optional packages,
-and neither optional library may depend on tests or on the other package. -/
+/-- Shared architecture policy. Python reads this exact JSON literal; Lean
+compiles it with this module, so changing the policy invalidates audit builds.
+Exceptions name exact reachable module pairs and remember whether each edge
+was direct. Only the source graph audit checks freshness of the complete list;
+a declaration audit may intentionally select just one client module. -/
+-- BEGIN DEPENDENCY POLICY
+private def dependencyPolicyJson : String := r##"{
+  "layers": [
+    ["TestsSecurity", "tests"],
+    ["TestsClean", "tests"],
+    ["Tests", "tests"],
+    ["CleanExamplesAudit", "tests"],
+    ["CleanExamples", "clean-subjects"],
+    ["ZkcSecurity.Examples", "subjects"],
+    ["ZkcExamples", "subjects"],
+    ["ZkcTools", "tools"],
+    ["Zkc.Probability", "probability"],
+    ["Zkc.Protocols", "families"],
+    ["ZkcSecurity.ArkLib", "adapters"],
+    ["ZkcSecurity.VCVio", "adapters"],
+    ["ZkcSecurity.Families", "security-families"],
+    ["ZkcClean", "clean"],
+    ["ZkcSecurity", "security"],
+    ["Zkc", "core"],
+    ["ArkLib", "security-upstream"],
+    ["VCVio", "security-upstream"],
+    ["PolyFun", "security-upstream"],
+    ["Clean", "clean-upstream"],
+    ["CompPoly", "algebra-upstream"]
+  ],
+  "allowed": [
+    ["core", ["core", "upstream"]],
+    ["probability", ["core", "probability", "upstream"]],
+    ["families", ["core", "families", "upstream"]],
+    ["security", ["core", "probability", "security", "security-upstream", "upstream", "algebra-upstream"]],
+    ["security-families", ["core", "probability", "families", "security", "security-families", "security-upstream", "upstream", "algebra-upstream"]],
+    ["adapters", ["core", "probability", "families", "security", "security-families", "adapters", "security-upstream", "upstream", "algebra-upstream"]],
+    ["clean", ["core", "families", "clean", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["subjects", ["core", "probability", "families", "security", "security-families", "adapters", "subjects", "security-upstream", "upstream", "algebra-upstream"]],
+    ["clean-subjects", ["core", "families", "clean", "clean-subjects", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["tools", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["tests", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["security-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["clean-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["algebra-upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]],
+    ["upstream", ["core", "probability", "families", "security", "security-families", "adapters", "clean", "subjects", "clean-subjects", "tools", "tests", "security-upstream", "clean-upstream", "algebra-upstream", "upstream"]]
+  ],
+  "guards": [
+    {
+      "name": "generic-execution",
+      "owners": [
+        "ZkcSecurity.VCVio.Execution"
+      ],
+      "exact": true,
+      "dependencies": [
+        "ZkcSecurity.ArkLib",
+        "ArkLib",
+        "ZkcSecurity.Examples",
+        "Zkc.Protocols",
+        "Zkc.Source"
+      ]
+    },
+    {
+      "name": "causal-source-independence",
+      "owners": [
+        "ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal"
+      ],
+      "exact": false,
+      "dependencies": [
+        "ZkcSecurity.Examples",
+        "Zkc.Source"
+      ]
+    },
+    {
+      "name": "source-before-compiler",
+      "owners": [
+        "Zkc.Modules",
+        "Zkc.Source"
+      ],
+      "exact": false,
+      "dependencies": [
+        "Zkc.Compiler"
+      ]
+    },
+    {
+      "name": "probability-without-source",
+      "owners": [
+        "Zkc.Probability"
+      ],
+      "exact": false,
+      "dependencies": [
+        "Zkc.Source",
+        "Zkc.Compiler"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "name": "clean-subjects-to-tests",
+      "reason": "Move reusable native Clean clients out of the test library.",
+      "edges": [
+        ["CleanExamples", "TestsClean.NativeClients", true]
+      ]
+    },
+    {
+      "name": "families-to-probability",
+      "reason": "Move probabilistic Sumcheck clients with the probability foundation; retain deterministic family mathematics in core.",
+      "edges": [
+        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Acceptance", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Connection", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Contract", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Execution", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Committed.Security", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Common", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Common.Program", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Common.Residual", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Execution", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Program", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.FactorOpening.Security", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Security", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Source", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Transcript", "Zkc.Probability.UniformTape", false],
+        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.AdaptiveTape", false],
+        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.Observation", false],
+        ["Zkc.Protocols.Sumcheck.Verifier", "Zkc.Probability.UniformTape", true]
+      ]
+    },
+    {
+      "name": "security-families-to-adapters",
+      "reason": "Separate the reusable Sigma extraction interface from the VCVio instantiation.",
+      "edges": [
+        ["ZkcSecurity.Families.Schnorr", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.SigmaAnd", false],
+        ["ZkcSecurity.Families.SchnorrVariants", "ZkcSecurity.VCVio.SigmaAndSchnorr", true]
+      ]
+    },
+    {
+      "name": "security-to-adapters",
+      "reason": "Separate generic VCVio probability/execution infrastructure from concrete external adapters before enforcing adapter leaves.",
+      "edges": [
+        ["ZkcSecurity.Commitment.HistoryKeys", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.Commitment.Repeats", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.Commitment.Repeats", "ZkcSecurity.VCVio.Memo", true],
+        ["ZkcSecurity.Endpoint.Evidence", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.Endpoint.Knowledge", "ZkcSecurity.VCVio.Pruning", true],
+        ["ZkcSecurity.Endpoint.Sigma", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.Endpoint.Soundness", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Composition", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Decoding", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Laws", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Lifting", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Realization", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Reduction", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.FiatShamir.Soundness", "ZkcSecurity.VCVio.Pruning", true],
+        ["ZkcSecurity.FiatShamir.Upstream", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.Bound", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Bridge", "ZkcSecurity.VCVio.Deferral", true],
+        ["ZkcSecurity.HashChain.Bridge", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.Bytes", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.Instance", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Memo", false],
+        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.Joint", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Memo", true],
+        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointBridge", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointBytes", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointCoupling", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Memo", false],
+        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointReading", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.HashChain.JointSimulator", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Provider", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Reduction", "ZkcSecurity.VCVio.UntilBad", false],
+        ["ZkcSecurity.HashChain.Steps", "ZkcSecurity.VCVio.UntilBad", true],
+        ["ZkcSecurity.Oracle.Keys", "ZkcSecurity.VCVio.Deferral", true],
+        ["ZkcSecurity.Stage.Commitment", "ZkcSecurity.VCVio.Pruning", false],
+        ["ZkcSecurity.Stage.FiatShamir", "ZkcSecurity.VCVio.Pruning", true],
+        ["ZkcSecurity.Stage.Joint", "ZkcSecurity.VCVio.Deferral", false],
+        ["ZkcSecurity.Stage.Joint", "ZkcSecurity.VCVio.Pruning", false]
+      ]
+    },
+    {
+      "name": "security-to-subjects",
+      "reason": "Move the reusable committed-opening bridge out of examples.",
+      "edges": [
+        ["ZkcSecurity.HashChain.JointOpening", "ZkcSecurity.Examples.CommittedOpeningBridge", true]
+      ]
+    }
+  ]
+}"##
+-- END DEPENDENCY POLICY
+
+private structure DependencyGuard where
+  name : String
+  owners : List Name
+  exact : Bool
+  dependencies : List Name
+  deriving FromJson
+
+private structure DependencyEdge where
+  owner : Name
+  dependency : Name
+  direct : Bool
+
+private instance : FromJson DependencyEdge where
+  fromJson? json := do
+    let fields ← json.getArr?
+    unless fields.size == 3 do throw "dependency edge must have three fields"
+    let owner ← fromJson? fields[0]!
+    let dependency ← fromJson? fields[1]!
+    let direct ← fromJson? fields[2]!
+    return { owner, dependency, direct }
+
+private structure DependencyException where
+  name : String
+  reason : String
+  edges : List DependencyEdge
+  deriving FromJson
+
+private structure DependencyPolicy where
+  layers : List (Name × String)
+  allowed : List (String × List String)
+  guards : List DependencyGuard
+  exceptions : List DependencyException
+  deriving FromJson
+
+-- Materialize ordinary data at elaboration time. JSON parsing is partial and
+-- cannot appear in a policy that existing clients evaluate in the kernel.
+-- Lists also retain the axiom-free computation used by the existing policy tests.
+-- The same literal is still the sole source of the table in both audits.
+private def dependencyPolicy : DependencyPolicy := by
+  run_tac
+    let .ok policy := Json.parse dependencyPolicyJson >>= (fromJson? (α := DependencyPolicy))
+      | throwError "invalid dependency policy"
+    let guards := policy.guards.map fun guard =>
+      mkAppN (mkConst ``DependencyGuard.mk) #[toExpr guard.name, toExpr guard.owners,
+        toExpr guard.exact, toExpr guard.dependencies]
+    let exceptions ← policy.exceptions.mapM fun exception => do
+      let edges := exception.edges.map fun edge =>
+        mkAppN (mkConst ``DependencyEdge.mk) #[toExpr edge.owner, toExpr edge.dependency,
+          toExpr edge.direct]
+      let edges ← Lean.Meta.mkListLit (mkConst ``DependencyEdge) edges
+      return mkAppN (mkConst ``DependencyException.mk) #[toExpr exception.name,
+        toExpr exception.reason, edges]
+    let guards ← Lean.Meta.mkListLit (mkConst ``DependencyGuard) guards
+    let exceptions ← Lean.Meta.mkListLit (mkConst ``DependencyException) exceptions
+    let value := mkAppN (mkConst ``DependencyPolicy.mk) #[toExpr policy.layers,
+      toExpr policy.allowed, guards, exceptions]
+    (← Lean.Elab.Tactic.getMainGoal).assign value
+    Lean.Elab.Tactic.replaceMainGoal []
+
+private def within (name root : Name) : Bool := root.isPrefixOf name
+
+private def layer (policy : DependencyPolicy) (name : Name) : String :=
+  ((policy.layers.find? fun entry => within name entry.1).map (·.2)).getD "upstream"
+
+/-- Exact legacy reachability exceptions are shared with the source audit.
+They never override the more specific generic-execution/source boundaries. -/
 def permitted (owner dependency : Name) : Bool := Id.run do
-  -- Only the exact generic execution module is restricted here;
-  -- `ZkcSecurity.VCVio.Schnorr` may still use the Schnorr protocol.
-  if owner == `ZkcSecurity.VCVio.Execution &&
-      [ `ZkcSecurity.ArkLib, `ArkLib, `ZkcSecurity.Examples, `Zkc.Protocols,
-        `Zkc.Source ].any (below · dependency) then return false
-  if below `ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal owner &&
-      [ `ZkcSecurity.Examples, `Zkc.Source ].any (below · dependency) then return false
-  if below `Zkc owner then
-    if [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ZkcClean,
-         `ArkLib, `VCVio, `PolyFun, `Clean ].any (below · dependency) then return false
-    if !below `Zkc.Protocols owner && below `Zkc.Protocols dependency then return false
-    if [ `Zkc.Modules, `Zkc.Source ].any (below · owner) &&
-        below `Zkc.Compiler dependency then return false
-    if below `Zkc.Probability owner &&
-        [ `Zkc.Source, `Zkc.Compiler ].any (below · dependency) then return false
-  if below `ZkcSecurity owner && !below `ZkcSecurity.Examples owner &&
-      [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcClean, `Clean ].any
-        (below · dependency) then return false
-  if below `ZkcClean owner &&
-      [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ArkLib, `VCVio,
-        `PolyFun ].any (below · dependency) then return false
-  return true
+  let policy := dependencyPolicy
+  if policy.guards.any (fun guard =>
+      guard.owners.any (fun root => if guard.exact then owner == root else within owner root) &&
+      guard.dependencies.any (within dependency)) then return false
+  let targets := (policy.allowed.find? fun entry => entry.1 == layer policy owner).map (·.2)
+  if targets.any (·.contains (layer policy dependency)) then return true
+  return policy.exceptions.any fun exception =>
+    exception.edges.any fun edge => edge.owner == owner && edge.dependency == dependency
 
 abbrev Graph := Std.HashMap Name (Array Name)
 
