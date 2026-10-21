@@ -2,191 +2,224 @@ module
 
 public import ZkcSecurity.Claims.Soundness
 public import ZkcSecurity.Claims.EndpointHypotheses
-public import ZkcSecurity.Endpoint.Knowledge
 
 @[expose] public section
 
-/-! K3 fixes an existential replay-extractor class. Its quantified witnesses
-are a special-sound Sigma protocol, transcript shape and actual compiled
-correspondence. The extractor is always VCVio's replay extractor on injectively
-routed proofs; neither an arbitrary extractor nor an arbitrary relation can be
-supplied by evidence. -/
+/-! Knowledge meaning is the concrete registered extraction experiment against
+the actual verifier and public-input adversary interface. Sigma families and
+special soundness justify that meaning only in the endpoint proof method. -/
 
 set_option autoImplicit false
+set_option smartUnfolding false
+set_option backward.isDefEq.respectTransparency false
 namespace ZkcSecurity.Claims
 open OracleComp OracleSpec
-open Zkc.Claims Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcSecurity.Endpoint
+open Zkc.Claims Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcSecurity.Endpoint
 
 section
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
   [SampleableType F] [Fintype F] [Inhabited F] {art : Artifacts} {endpoint : Semantics}
-  (subject : Subject F G art endpoint)
 
-/-- The existential data and checked correspondence of the registered class.
-The relation of the eventual experiment is always the selected retained
-formula, applied to its actual published values and logical witnesses. -/
-structure ReplayClass (target : RetainedTarget subject.compiled.imported art.participant.policy art.publics) where
+/-- Resolve semantic data only from the admitted subject's registry. The small
+request stores a proof of availability, never a second copy of that data. -/
+def Subject.extractionProfile (subject : Subject F G art endpoint) :
+    Option { profile : ExtractionProfile subject.compiled F G // subject.target = .retained profile.target } := do
+  let entry ← (subject.extractors.lookup responseDifference).toOption
+  if entry.identifier = responseDifference ∧ entry.schema = "zkc.extractor.response-difference/0" then
+    entry.definition
+  else none
+
+structure KnowledgeRequest (subject : Subject F G art endpoint) where
+  registered : subject.extractionProfile.isSome = true
+  model : Model
+  fixed : model.form = .fixed
+
+namespace KnowledgeRequest
+variable {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
+
+abbrev profile : ExtractionProfile subject.compiled F G :=
+  (subject.extractionProfile.get request.registered).val
+
+omit [SampleableType F] [Fintype F] [Inhabited F] in
+theorem selected : subject.target = .retained request.profile.target :=
+  (subject.extractionProfile.get request.registered).property
+
+omit [SampleableType F] [Fintype F] [Inhabited F] in
+/-- A singleton standard registration fixes the whole interface, not just the
+name of its recovery arithmetic. -/
+theorem profile_eq (profile : ExtractionProfile subject.compiled F G)
+    (selected : subject.target = .retained profile.target)
+    (registered : subject.extractors = profile.registry subject.target selected) : request.profile = profile := by
+  have lookup : subject.extractionProfile = some ⟨profile, selected⟩ := by
+    unfold Subject.extractionProfile
+    rw [registered]
+    rfl
+  unfold KnowledgeRequest.profile
+  simp only [lookup, Option.get_some]
+
+/-- Public-input prover followed by the actual compiled verifier, in one cache. -/
+def typedRun (_request : KnowledgeRequest subject) (statement : art.Statement F G) (initial : History F G)
+    (prover : TypedProver F G (art.Statement F G)) :
+    OracleComp (_root_.FiatShamir.Fork.wrappedSpec F) Bool :=
+  StateT.run' (simulateQ (Sigma.forwardUniform (F := F) (G := G) + Sigma.historyOracle (F := F) (G := G)) (do
+    let proof ← prover statement initial
+    verdict <$> subject.compiled.verifier Sigma.historyChallenge statement initial proof)) (∅ : Sigma.Cache F G)
+
+local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) := fun _ => ⊤
+local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) := fun _ => inferInstance
+noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
+  IsUniformMeasureSpec.ofFiniteNonempty _
+
+noncomputable def typedAcceptance (request : KnowledgeRequest subject) (statement : art.Statement F G) (initial : History F G)
+    (prover : TypedProver F G (art.Statement F G)) : ENNReal :=
+  Pr{let accepted ← request.typedRun statement initial prover}[accepted = true]
+
+def bytesRun {subject : Subject F G art .executableBytes} (_request : KnowledgeRequest subject)
+    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G))
+    (budget : Nat) (binding : List UInt8) (statement : art.Statement F G) (initial : History F G)
+    (prover : BytesProver F G (art.Statement F G)) :
+    OracleComp (_root_.FiatShamir.Fork.wrappedSpec F) Bool :=
+  StateT.run' (simulateQ (Sigma.forwardUniform (F := F) (G := G) + Sigma.historyOracle (F := F) (G := G)) (do
+    let bytes ← prover statement initial
+    subject.lowering.validate Sigma.historyChallenge codec budget binding statement initial bytes)) (∅ : Sigma.Cache F G)
+
+noncomputable def bytesAcceptance {subject : Subject F G art .executableBytes} (request : KnowledgeRequest subject)
+    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G))
+    (budget : Nat) (binding : List UInt8) (statement : art.Statement F G) (initial : History F G)
+    (prover : BytesProver F G (art.Statement F G)) : ENNReal :=
+  Pr{let accepted ← request.bytesRun codec budget binding statement initial prover}[accepted = true]
+
+def IdealGuarantee {subject : Subject F G art .idealMeaning} (request : KnowledgeRequest subject) : Prop :=
+  ∀ (statement : art.Statement F G) (initial : History F G)
+    (prover : TypedProver F G (art.Statement F G)) (queries : Nat),
+    request.model.queries.allows queries →
+    IsQueryBoundP (prover statement initial) (· matches .inr _) queries →
+    let accepting := request.typedAcceptance statement initial prover
+    accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
+      Pr{let extracted ← request.profile.extract statement initial prover queries}[
+        request.profile.target.Holds statement (request.profile.embed extracted)]
+
+def BytesGuarantee {subject : Subject F G art .executableBytes} (request : KnowledgeRequest subject) : Prop :=
+  ∀ codec budget binding (statement : art.Statement F G) (initial : History F G)
+    (prover : BytesProver F G (art.Statement F G)) (queries : Nat),
+    request.model.queries.allows queries →
+    IsQueryBoundP (prover statement initial) (· matches .inr _) queries →
+    let accepting := request.bytesAcceptance codec budget binding statement initial prover
+    accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
+      Pr{let extracted ← request.profile.extract statement initial
+          (fun published history => subject.lowering.decoded codec published <$> prover published history) queries}[
+        request.profile.target.Holds statement (request.profile.embed extracted)]
+
+/-- No existential family, extractor, prover key, or witness map occurs here. -/
+def meaning : Prop :=
+  match endpoint with
+  | .idealMeaning => request.IdealGuarantee
+  | .executableBytes => request.BytesGuarantee
+
+end KnowledgeRequest
+
+/-- Method data only. Its recovery equality rules out substituting witness
+search for the request's registered response-difference function. -/
+structure SigmaJustification (subject : Subject F G art endpoint)
+    (profile : ExtractionProfile subject.compiled F G) where
   Stmt : Type
-  Wit : Type
-  Commit : Type
   PrvState : Type
-  Resp : Type
-  decidableCommit : DecidableEq Commit
-  sampleableWitness : SampleableType Wit
   handle : Nat
   family : SigmaFamily (F := F) (G := G) subject.compiled.context (art.Statement F G)
-    Stmt Wit Commit PrvState Resp
-  witness : Wit → target.Witness F G
+    Stmt profile.Witness profile.Commit PrvState profile.Witness
   model : ∀ statement, subject.compiled.original statement handle = family.validator statement
-  relation : ∀ statement extracted,
-    target.Holds statement (witness extracted) ↔ family.rel statement (family.key statement) extracted = true
+  relation : ∀ statement witness,
+    profile.target.Holds statement (profile.embed witness) ↔ family.rel statement (family.key statement) witness = true
+  shape : family.shape = profile.shape
+  recovery : ∀ statement first left second right,
+    (family.sigma statement).extract first left second right =
+      pure (profile.layout.recover first left second right)
 
-attribute [instance] ReplayClass.decidableCommit ReplayClass.sampleableWitness
+namespace SigmaJustification
+variable {subject : Subject F G art endpoint} {profile : ExtractionProfile subject.compiled F G}
+  (justification : SigmaJustification subject profile)
 
-/-- Reuse any existing pinned endpoint package. Compiled equality and the
-dependent target equality are checked before its family can witness the fixed
-request class. No relation, extractor or guarantee is selected by this adapter.
-`HEq` compares the retained targets across the two compiled indices; after
-`compiled` it is ordinary equality. -/
-def ReplayClass.ofEvidence
-    (target : RetainedTarget subject.compiled.imported art.participant.policy art.publics)
-    {Stmt Wit Commit PrvState Resp : Type} [DecidableEq Commit] [SampleableType Wit]
-    {holds : art.Statement F G → Wit → Prop}
-    (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
-    (_hypotheses : HypothesesProved evidence.hypotheses)
-    (compiled : evidence.compiled = subject.compiled) (selected : HEq evidence.target target) :
-    ReplayClass subject target := by
-  rcases subject with ⟨reference, stageMatched, subjectCompiled, subjectTarget, version, registry,
-    registered, sites, unique, nativeUnique, lowering⟩
-  dsimp only at compiled selected target ⊢
-  cases compiled
-  cases eq_of_heq selected
-  exact {
-    Stmt := Stmt, Wit := Wit, Commit := Commit, PrvState := PrvState, Resp := Resp
-    decidableCommit := inferInstance
-    sampleableWitness := inferInstance
-    handle := evidence.handle
-    family := evidence.family
-    witness := evidence.witness
-    model := evidence.model
-    relation := fun statement extracted =>
-      (evidence.relationPinned statement extracted).symm.trans (evidence.relation statement extracted) }
-
-namespace ReplayClass
-variable {subject}
-  {target : RetainedTarget subject.compiled.imported art.participant.policy art.publics}
-
-/-- An internal application of the preserved endpoint API. This function does
-not accept a predicate: `holds` is definitionally the selected retained formula. -/
-def evidence (replay : ReplayClass subject target) :
-    KnowledgeEvidence art endpoint replay.Stmt replay.Wit replay.Commit replay.PrvState replay.Resp
-      (fun statement extracted => target.Holds statement (replay.witness extracted)) where
+def evidence : KnowledgeEvidence art endpoint justification.Stmt profile.Witness profile.Commit
+    justification.PrvState profile.Witness (fun statement witness => profile.target.Holds statement (profile.embed witness)) where
   compiled := subject.compiled
-  target := target
-  witness := replay.witness
+  target := profile.target
+  witness := profile.embed
   relationPinned _ _ := Iff.rfl
-  handle := replay.handle
-  family := replay.family
-  model := replay.model
-  relation := replay.relation
+  handle := justification.handle
+  family := justification.family
+  model := justification.model
+  relation := justification.relation
   lowering := subject.lowering
   hypotheses := []
 
 omit [SampleableType F] [Fintype F] [Inhabited F] in
-/-- Explicit class laws: verifier correspondence and globally injective
-routing, using the existing Sigma model. -/
-theorem corresponds (replay : ReplayClass subject target) (statement : art.Statement F G) (initial : History F G) :
-    Sigma.Corresponds replay.family.shape (replay.family.sigma statement) (replay.family.key statement)
-      initial (replay.evidence.verify statement initial) := replay.evidence.corresponds statement initial
+/-- The actual cached verifier has the family's verification result at the
+registered challenge. No constant challenge is supplied at unrelated sites. -/
+theorem verify_eq (statement : art.Statement F G) (initial : History F G)
+    (cache : (Sigma.Key F G profile.Commit →ₒ F).QueryCache)
+    (commitment : profile.Commit) (response : profile.Witness) :
+    profile.verify statement initial cache commitment response =
+      match cache (.inl initial, commitment) with
+      | some challenge => (justification.family.sigma statement).verify
+          (justification.family.key statement) commitment challenge response
+      | none => false := by
+  unfold ExtractionProfile.verify
+  rw [← justification.shape, Compiled.transform_eq _ _ statement justification.handle, justification.model,
+    justification.family.transform_shape, justification.shape, profile.shape.route_append]
+  cases cache (.inl initial, commitment) <;> rfl
 
-omit [SampleableType F] [Fintype F] [Inhabited F] in
-theorem routing_injective (replay : ReplayClass subject target) :
-    Function.Injective replay.family.shape.route := replay.family.shape.route_injective
+omit [Fintype F] [Inhabited F] in
+/-- The registered experiment equals the existing endpoint's replay algorithm
+only after checking shape and recovery correspondence. -/
+theorem extract_eq (statement : art.Statement F G) (initial : History F G)
+    (prover : TypedProver F G (art.Statement F G)) (queries : Nat) :
+    profile.extract statement initial prover queries =
+      _root_.FiatShamir.knowledgeExtractor (justification.family.sigma statement)
+        (justification.family.generable statement) (History F G ⊕ History F G)
+        (justification.family.shape.reduce
+          (justification.evidence.readProver (fun _ history => prover statement history)))
+        (.inl initial) queries (justification.family.key statement) := by
+  unfold ExtractionProfile.extract
+  have verifies := funext fun cache => funext fun commitment => funext fun response =>
+    justification.verify_eq statement initial cache commitment response
+  rw [verifies]
+  have recovery := funext fun first => funext fun left => funext fun second => funext fun right =>
+    justification.recovery statement first left second right
+  rw [← recovery]
+  rw [← Extraction.replay_eq (justification.family.sigma statement)
+    (justification.family.generable statement)
+    (justification.family.shape.reduce (justification.evidence.readProver (fun _ history => prover statement history)))
+    (justification.family.key statement) (.inl initial) queries]
+  congr 1
+  funext message
+  change simulateQ profile.shape.routeQueries (profile.shape.read <$> prover statement (message.elim id id)) =
+    simulateQ justification.family.shape.routeQueries
+      (justification.family.shape.read <$> prover statement (message.elim id id))
+  rw [justification.shape]
 
-/-- The exact registered forking form. The model's natural query symbol stays
-universally quantified. In particular the endpoint's general Q is retained. -/
-def IdealGuarantee {subject : Subject F G art .idealMeaning}
-    {target : RetainedTarget subject.compiled.imported art.participant.policy art.publics}
-    (replay : ReplayClass subject target) (limit : QueryLimit) : Prop :=
-  ∀ (statement : art.Statement F G) (initial : History F G)
-    (prover : TypedProver F G replay.Stmt) (queries : Nat),
-    limit.allows queries → IsQueryBoundP (prover (replay.family.key statement) initial) (· matches .inr _) queries →
-    let accepting := replay.evidence.typedAcceptance prover statement initial
-    accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
-      Pr{let extracted ← _root_.FiatShamir.knowledgeExtractor (replay.family.sigma statement)
-          (replay.family.generable statement) (History F G ⊕ History F G)
-          (replay.family.shape.reduce (replay.evidence.readProver prover)) (.inl initial) queries
-          (replay.family.key statement)}[target.Holds statement (replay.witness extracted)]
+end SigmaJustification
 
-def BytesGuarantee {subject : Subject F G art .executableBytes}
-    {target : RetainedTarget subject.compiled.imported art.participant.policy art.publics}
-    (replay : ReplayClass subject target) (limit : QueryLimit) : Prop :=
-  ∀ codec budget binding (statement : art.Statement F G) (initial : History F G)
-    (prover : BytesProver F G replay.Stmt) (queries : Nat),
-    limit.allows queries → IsQueryBoundP (prover (replay.family.key statement) initial) (· matches .inr _) queries →
-    let accepting := replay.evidence.bytesAcceptance codec budget binding prover statement initial
-    accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
-      Pr{let extracted ← _root_.FiatShamir.knowledgeExtractor (replay.family.sigma statement)
-          (replay.family.generable statement) (History F G ⊕ History F G)
-          (replay.family.shape.reduce (replay.evidence.decodedProver codec statement prover)) (.inl initial) queries
-          (replay.family.key statement)}[target.Holds statement (replay.witness extracted)]
-
-def guarantee (replay : ReplayClass subject target) (limit : QueryLimit) : Prop :=
-  match endpoint with
-  | .idealMeaning => replay.IdealGuarantee limit
-  | .executableBytes => replay.BytesGuarantee limit
-
-/-- The checked endpoint implication, preserving the actual compiled verifier,
-special soundness, model equation, exact replay algorithm and forking formula. -/
-theorem proveGuarantee (replay : ReplayClass subject target) (limit : QueryLimit) : replay.guarantee limit := by
+/-- The endpoint is a proof method for the independently fixed request. -/
+theorem knowledgeEndpoint {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
+    (justification : SigmaJustification subject request.profile) : request.meaning := by
   cases endpoint with
   | idealMeaning =>
     intro statement initial prover queries _ bounded
-    exact knowledge_soundness replay.evidence statement initial prover queries bounded
+    rw [justification.extract_eq]
+    exact knowledge_soundness justification.evidence statement initial
+      (fun _ history => prover statement history) queries bounded
   | executableBytes =>
     intro codec budget binding statement initial prover queries _ bounded
-    exact knowledge_soundness_bytes replay.evidence codec budget binding statement initial prover queries bounded
-
-end ReplayClass
-
-structure KnowledgeRequest where
-  target : RetainedTarget subject.compiled.imported art.participant.policy art.publics
-  selected : subject.target = .retained target
-  model : Model
-  fixed : model.form = .fixed
-
-/-- The protocol and transcript shape are existentially quantified before the
-statements, histories, provers and query counts in the guarantee. Evidence
-witnesses this fixed Sigma replay class, not an arbitrary extractor theory or a
-canonical family representation. The guarantee is a probability inequality;
-it does not state a running-time bound. -/
-def KnowledgeRequest.meaning {subject : Subject F G art endpoint} (request : KnowledgeRequest subject) : Prop :=
-  ∃ replay : ReplayClass subject request.target, replay.guarantee request.model.queries
-
-theorem knowledgeEndpoint {subject : Subject F G art endpoint} (request : KnowledgeRequest subject)
-    (replay : ReplayClass subject request.target) : request.meaning :=
-  ⟨replay, replay.proveGuarantee request.model.queries⟩
-
-/-- Reuse a pinned endpoint package for a request about the same admitted subject
-and selected target. The method supplies evidence, never the request's meaning.
-The target selection transport is shared by all Sigma registrations. -/
-theorem knowledgeEndpointOfEvidence {subject : Subject F G art endpoint}
-    (request : KnowledgeRequest subject)
-    {Stmt Wit Commit PrvState Resp : Type} [DecidableEq Commit] [SampleableType Wit]
-    {holds : art.Statement F G → Wit → Prop}
-    (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
-    (hypotheses : HypothesesProved evidence.hypotheses)
-    (compiled : evidence.compiled = subject.compiled)
-    (target : HEq (SoundnessTarget.retained (F := F) (G := G) evidence.target) subject.target) :
-    request.meaning := by
-  apply knowledgeEndpoint request
-  apply ReplayClass.ofEvidence subject request.target evidence hypotheses compiled
-  cases subject with
-  | mk reference stageMatched subjectCompiled subjectTarget version registry registered sites unique nativeUnique lowering =>
-    dsimp only at compiled target request ⊢
-    cases compiled
-    exact heq_of_eq (SoundnessTarget.retained.inj ((eq_of_heq target).trans request.selected))
+    rw [justification.extract_eq]
+    have decoded : justification.evidence.decodedProver codec statement (fun _ history => prover statement history) =
+        justification.evidence.readProver (fun _ history => subject.lowering.decoded codec statement <$> prover statement history) := by
+      funext key history
+      change (fun bytes => justification.family.shape.read (subject.lowering.decoded codec statement bytes)) <$>
+          prover statement history = justification.family.shape.read <$> (subject.lowering.decoded codec statement <$> prover statement history)
+      rw [Functor.map_map]
+    rw [← decoded]
+    exact knowledge_soundness_bytes justification.evidence codec budget binding statement initial
+      (fun _ history => prover statement history) queries bounded
 
 end
 end ZkcSecurity.Claims

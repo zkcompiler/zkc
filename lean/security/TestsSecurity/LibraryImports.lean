@@ -4,6 +4,7 @@ import ZkcSecurity.Claims.Arithmetic
 import ZkcSecurity.Claims.ChargeMonotonicity
 import ZkcSecurity.Claims.Endpoint
 import ZkcSecurity.Claims.EndpointHypotheses
+import ZkcSecurity.Claims.Extractor
 import ZkcSecurity.Claims.Knowledge
 import ZkcSecurity.Claims.Model
 import ZkcSecurity.Claims.ReceiptAdmission
@@ -30,6 +31,7 @@ import ZkcSecurity.Endpoint.Binding
 import ZkcSecurity.Endpoint.Compiled
 import ZkcSecurity.Endpoint.Contract
 import ZkcSecurity.Endpoint.Evidence
+import ZkcSecurity.Endpoint.Extraction
 import ZkcSecurity.Endpoint.Knowledge
 import ZkcSecurity.Endpoint.Sigma
 import ZkcSecurity.Endpoint.Soundness
@@ -160,6 +162,7 @@ import TestsSecurity.Counterexamples.Openings
 import TestsSecurity.Counterexamples.Operands
 import TestsSecurity.Counterexamples.Support
 import TestsSecurity.ExecutableSchnorrFiatShamir
+import TestsSecurity.ExtractionCounterexample
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.HashChainJointFrame
 import TestsSecurity.HeterogeneousRequests
@@ -170,6 +173,7 @@ import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
 import TestsSecurity.ProviderSimulation
+import TestsSecurity.RegisteredExtraction
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.StageComposition

@@ -146,7 +146,13 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
     | .guarantee form => pure form
     | _ => throw (.schema "knowledge requires a guarantee")
   if guarantee.identifier != forking then throw (.unknownIdentifier guarantee.identifier)
-  checkArguments ["challenges", "cost"] guarantee.arguments
+  checkArguments ["challenges", "cost", "extractor"] guarantee.arguments
+  let extractor := named guarantee.arguments "extractor" |>.getD
+    (.application responseDifference.name (some responseDifference.version) [])
+  match extractor with
+  | .application name (some version) [] =>
+      if ⟨name, version⟩ != responseDifference then throw (.unknownIdentifier ⟨name, version⟩)
+  | _ => throw (.schema "expected a versioned registered extractor without arguments")
   let expectedCost := named guarantee.arguments "cost" |>.getD
     (.application "prover_runs" none [(none, .natural 2)])
   match expectedCost with
@@ -165,8 +171,26 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
   | .error missing => return .error missing
   | .ok model =>
     if fixed : model.form = .fixed then
-      match selected : subject.target with
-      | .retained target => return .ok ⟨target, selected, model, fixed⟩
+      match subject.target with
+      | .retained _ =>
+        match registered : subject.extractors.lookup responseDifference with
+        | .error error => throw error
+        | .ok entry =>
+          match defined : entry.definition with
+          | none => return .error ⟨["extractor definition: " ++ responseDifference.name]⟩
+          | some _profile =>
+            if name : entry.identifier = responseDifference then
+              if schema : entry.schema = "zkc.extractor.response-difference/0" then
+                return .ok ⟨by
+                  unfold Subject.extractionProfile
+                  rw [registered]
+                  change (if entry.identifier = responseDifference ∧ entry.schema = "zkc.extractor.response-difference/0"
+                    then entry.definition else none).isSome = true
+                  rw [ite_eq_left ⟨name, schema⟩, defined]
+                  rfl,
+                  model, fixed⟩
+              else throw (.schema "extractor registration schema mismatch")
+            else throw (.schema "extractor registration identifier mismatch")
       | .importedLanguage _ => return .error ⟨["retained relation for replay knowledge"]⟩
     else return .error ⟨["adaptive replay knowledge model"]⟩
 

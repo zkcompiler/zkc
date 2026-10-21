@@ -219,7 +219,7 @@ noncomputable def chargedExport (subject : Subject F G art endpoint) (schedule :
       (evidence.compiled.original statement evidence.handle) initial cost) :
     ChargedExport subject schedule queries cost := by
   rcases subject with ⟨reference, stageMatched, subjectCompiled, target, version, registry,
-    registered, sites, unique, nativeUnique, lowering⟩
+    registered, sites, unique, nativeUnique, lowering, extractors⟩
   dsimp only at compiled
   cases compiled
   exact {

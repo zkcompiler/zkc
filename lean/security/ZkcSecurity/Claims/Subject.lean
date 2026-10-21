@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Claims.Registry
-public import ZkcSecurity.Endpoint.Soundness
+public import ZkcSecurity.Claims.Extractor
 
 @[expose] public section
 
@@ -49,6 +49,8 @@ structure Subject (F G : Type) [Field F] [DecidableEq F] [AddCommGroup G] [Modul
   sitesUnique : (sites.map Site.label).Nodup
   sitesNativeUnique : (sites.map Site.native).Nodup
   lowering : LoweringRequirement art compiled F G endpoint
+  /-- Registered extraction semantics are fixed before proof-method selection. -/
+  extractors : Registry { profile : ExtractionProfile compiled F G // target = .retained profile.target } := ⟨[]⟩
 
 namespace Subject
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]

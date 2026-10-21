@@ -18,7 +18,8 @@ Serialized declaration closure records are audit data, not proof substitutes. -/
 #print axioms ZkcSecurity.Claims.weightedAdaptiveBytesEndpoint
 #print axioms ZkcSecurity.Claims.chargedExport
 #print axioms ZkcSecurity.Claims.knowledgeEndpoint
-#print axioms ZkcSecurity.Claims.ReplayClass.ofEvidence
+#print axioms ZkcSecurity.Claims.SigmaJustification.extract_eq
+#print axioms ZkcSecurity.Endpoint.Extraction.replay_eq
 #print axioms ZkcSecurity.Claims.Subject.stageLinkProofs
 #print axioms ZkcSecurity.Claims.chargedCostBound_mono_bound
 #print axioms ZkcSecurity.Claims.requestedCost_of_equal_charge

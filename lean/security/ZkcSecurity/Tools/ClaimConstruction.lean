@@ -140,7 +140,7 @@ def modelResolution {F G : Type} [Field F] [Fintype F] [DecidableEq F]
 
 private meta def normalizationNames : List Name :=
   [``soundnessProperty, ``knowledgeProperty, ``soundnessArguments,
-    ``knowledgeArguments, ``resolveModel, ``modelResolution, ``modelSchema, ``checkCapabilities,
+    ``knowledgeArguments, ``responseDifference, ``ExtractionProfile.registry, ``Subject.extractionProfile, ``resolveModel, ``modelResolution, ``modelSchema, ``checkCapabilities,
     ``checkArguments, ``named, ``reference, ``Subject.check,
     ``Subject.targetReference, ``Subject.acceptance, ``Numeric.natural, ``Numeric.cardinality,
     ``models, ``Registry.lookup, ``Wire.TargetRef.matches, ``exactUniform,

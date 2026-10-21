@@ -105,8 +105,8 @@ theorem holds_iff (firstBase firstPoint secondBase secondPoint : G) (witness : F
 
 /-- Only private producer coordinates are used by the generic reader. -/
 def embed (witness : F) : retained.Witness F G :=
-  fun type _selector => match type with
-    | .field _ => some witness
+  fun type selector => match type with
+    | .field _ => if selector.port.index = 4 then some witness else none
     | _ => none
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

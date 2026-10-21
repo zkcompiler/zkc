@@ -1,6 +1,6 @@
 import ZkcSecurity.Claims.ReceiptAdmission
 import ZkcSecurity.Claims.Endpoint
-import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
+import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract
 import ZkcSecurity.Registry
 import Zkc.Claims.Receipt
@@ -36,20 +36,27 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   lowering := match endpoint with
     | .idealMeaning => PUnit.unit
     | .executableBytes => ZkcSecurity.Examples.Subjects.Schnorr.lowering
+  extractors := ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile.registry
+    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained) rfl
 
 def model : Model := ⟨.fixed, .symbolic "Q", "Q", "", .constant 0, none⟩
 
 def knowledge (endpoint : Semantics) : KnowledgeRequest (subject (F := F) (G := G) endpoint) where
-  target := ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
-  selected := rfl
+  registered := rfl
   model := model
   fixed := rfl
 
 def replay (endpoint : Semantics) :
-    ReplayClass (subject (F := F) (G := G) endpoint) ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained :=
-  ReplayClass.ofEvidence _ _
-    (ZkcSecurity.Examples.Subjects.Schnorr.knowledge endpoint (subject (F := F) (G := G) endpoint).lowering)
-    (by trivial) rfl HEq.rfl
+    SigmaJustification (subject (F := F) (G := G) endpoint)
+      (ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile (F := F) (G := G)) where
+  Stmt := G
+  PrvState := F
+  handle := 0
+  family := ZkcSecurity.Examples.Subjects.Schnorr.family
+  model := ZkcSecurity.Examples.Subjects.Schnorr.model
+  relation := (ZkcSecurity.Examples.Subjects.Schnorr.Registration.justification endpoint).relation
+  shape := rfl
+  recovery := (ZkcSecurity.Examples.Subjects.Schnorr.Registration.justification endpoint).recovery
 
 example : (knowledge (F := F) (G := G) .idealMeaning).meaning :=
   knowledgeEndpoint _ (replay .idealMeaning)
@@ -87,10 +94,10 @@ noncomputable def resolved (endpoint : Semantics) : Resolved (registry (F := F) 
   elaborated := by
     cases endpoint <;>
       simp [knowledgeProperty, knowledgeArguments, wire, subject, artifacts, modelRegistry, resolveModel,
-        models, modelSchema, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+        models, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
         Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
         Wire.TargetRef.matches, model, knowledge, checkCapabilities,
-        show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl]
+        show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl] <;> rfl
 
 def meaning (endpoint : Semantics) : Evaluated (resolved (F := F) (G := G) endpoint) :=
   ⟨(knowledge endpoint).meaning, rfl⟩
@@ -385,10 +392,11 @@ noncomputable def replacedModelResolved : Resolved (replacedModelRegistry (F := 
   arguments := .ok (knowledge .idealMeaning)
   elaborated := by
     simp [knowledgeProperty, knowledgeArguments, idealData, wire, subject, artifacts, resolveModel,
-      replacedModels, modelSchema, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+      replacedModels, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
       Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
       Wire.TargetRef.matches, model, knowledge, checkCapabilities,
       show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl]
+    rfl
 noncomputable def replacedModelMeaning : Evaluated (replacedModelResolved (F := F) (G := G)) :=
   ⟨(knowledge .idealMeaning).meaning, rfl⟩
 noncomputable def replacedModelReceipt : Receipt (replacedModelMeaning (F := F) (G := G)) :=
@@ -511,14 +519,17 @@ noncomputable def labeledEvidence (label : String) :=
       (subject (F := F) (G := G) .idealMeaning).lowering with
     hypotheses := [⟨label, .model, True, .proved True.intro⟩] }
 
+noncomputable def labeledMethod (label : String) : SigmaJustification (subject (F := F) (G := G) .idealMeaning)
+    (ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile (F := F) (G := G)) :=
+  { replay .idealMeaning with
+    family := (labeledEvidence (F := F) (G := G) label).family
+    model := (labeledEvidence (F := F) (G := G) label).model }
+
 theorem directProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
-  knowledgeEndpoint (knowledge .idealMeaning)
-    (ReplayClass.ofEvidence _ _
-      (labeledEvidence (F := F) (G := G) "unregistered.higherorder.control") (by trivial) rfl HEq.rfl)
+  knowledgeEndpoint (knowledge .idealMeaning) (labeledMethod "unregistered.higherorder.control")
 
 theorem wrappedProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=
-  invoke (fun label : String => knowledgeEndpoint (knowledge .idealMeaning)
-    (ReplayClass.ofEvidence _ _ (labeledEvidence (F := F) (G := G) label) (by trivial) rfl HEq.rfl))
+  invoke (fun label : String => knowledgeEndpoint (knowledge .idealMeaning) (labeledMethod label))
     "unregistered.higherorder.control"
 
 theorem positiveProof : (meaning (F := F) (G := G) .idealMeaning).proposition :=

@@ -8,17 +8,35 @@ public import ZkcExamples.Structured.SchnorrBinding
 
 /-! Typed author-library registration. The retained target and admitted artifacts
 are fixed before source requests are resolved. Existing evidence only witnesses
-the generic replay class; it never supplies a request's meaning. -/
+the registered extraction experiment; it never supplies a request's meaning. -/
 
 namespace ZkcSecurity.Examples.Subjects.Schnorr.Registration
 open Zkc.Claims ZkcSecurity.Claims ZkcSecurity.Endpoint
 open ZkcSecurity.Tools.ClaimConstruction
 
 set_option smartUnfolding false
+set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedSectionVars false
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
   [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]
+
+/-- Registered transcript and scalar-coordinate interpretation, fixed independently of evidence. -/
+def extractionProfile : ExtractionProfile compiled F G where
+  target := Contract.retained
+  layout := .scalar 2
+  domain := "bls12-381.fr"
+  coordinates := by decide +kernel
+  Commit := G
+  decidableCommit := inferInstance
+  shape := ZkcSecurity.Families.Schnorr.shape compiled.context ZkcExamples.Construction.SchnorrProof.wiring
+  native := ZkcExamples.Construction.SchnorrProof.wiring.challengeSite
+  delivery := "label_64656c6976657279_0"
+  selected := by decide +kernel
+  request := .draw ZkcExamples.Construction.SchnorrProof.wiring.fieldDomain
+  requestSelected := rfl
+  scalarChallenge := rfl
+  challenge := rfl
 
 def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   reference := sourceReference (stage endpoint)
@@ -32,6 +50,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   lowering := match endpoint with
     | .idealMeaning => PUnit.unit
     | .executableBytes => lowering
+  extractors := extractionProfile.registry (.retained Contract.retained) rfl
 
 def subjectIdeal := subject (F := F) (G := G) .idealMeaning
 
@@ -119,11 +138,29 @@ noncomputable def proveDerived
     ⟨.derivation, "ZkcSecurity.Examples.Subjects.Schnorr.Registration.viewOfReturn",
       ⟨"user.view_derivation", 0⟩, [], []⟩ links
 
-/-- One shared route for all pinned Sigma subjects and both supported stages. -/
-theorem proveKnowledge {endpoint : Semantics} (request : KnowledgeRequest (subject (F := F) (G := G) endpoint)) :
-    request.meaning :=
-  knowledgeEndpointOfEvidence request (knowledge endpoint (match endpoint with | .idealMeaning => PUnit.unit | .executableBytes => lowering))
-    (by trivial) rfl HEq.rfl
+/-- The Sigma method must match the registered recovery function. -/
+def justification (endpoint : Semantics) : SigmaJustification (subject (F := F) (G := G) endpoint) (extractionProfile (F := F) (G := G)) where
+  Stmt := G
+  PrvState := F
+  handle := 0
+  family := family
+  model := model
+  relation statement witness := by
+    have pinned := (Contract.holds_pinned statement witness).symm.trans (relation statement witness)
+    exact pinned
+  shape := rfl
+  recovery := by
+    intro statement first response₁ second response₂
+    simp only [family, ZkcSecurity.Families.Schnorr.family, _root_.Schnorr.sigma, extractionProfile,
+      Extraction.Layout.recover_scalar, div_eq_mul_inv]
+
+/-- A proof of the request-fixed experiment; the method cannot replace its profile. -/
+theorem proveKnowledge {endpoint : Semantics}
+    (request : KnowledgeRequest (subject (F := F) (G := G) endpoint)) : request.meaning := by
+  have same := request.profile_eq (extractionProfile (F := F) (G := G)) rfl rfl
+  apply knowledgeEndpoint request
+  rw [same]
+  exact justification endpoint
 
 /-- The independent interactive Entry retains the actual target and selector. -/
 def interactiveSubject : InteractiveSubject where

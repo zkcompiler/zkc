@@ -1,6 +1,6 @@
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Endpoint
-import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
+import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import Zkc.Claims.Receipt
 
 /-! Real compiled Schnorr artifacts instantiate the request-fixed replay model.
@@ -27,20 +27,27 @@ private def subject (endpoint : Semantics) : Subject F G ZkcSecurity.Examples.Su
   lowering := match endpoint with
     | .idealMeaning => PUnit.unit
     | .executableBytes => ZkcSecurity.Examples.Subjects.Schnorr.lowering
+  extractors := ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile.registry
+    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained) rfl
 
 private def model : Model := ⟨.fixed, .symbolic "Q", "Q", "", .constant 0, none⟩
 
 private def knowledge (endpoint : Semantics) : KnowledgeRequest (subject (F := F) (G := G) endpoint) where
-  target := ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
-  selected := rfl
+  registered := rfl
   model := model
   fixed := rfl
 
 private def replay (endpoint : Semantics) :
-    ReplayClass (subject (F := F) (G := G) endpoint) ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained :=
-  ReplayClass.ofEvidence _ _
-    (ZkcSecurity.Examples.Subjects.Schnorr.knowledge endpoint (subject (F := F) (G := G) endpoint).lowering)
-    (by trivial) rfl HEq.rfl
+    SigmaJustification (subject (F := F) (G := G) endpoint)
+      (ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile (F := F) (G := G)) where
+  Stmt := G
+  PrvState := F
+  handle := 0
+  family := ZkcSecurity.Examples.Subjects.Schnorr.family
+  model := ZkcSecurity.Examples.Subjects.Schnorr.model
+  relation := (ZkcSecurity.Examples.Subjects.Schnorr.Registration.justification endpoint).relation
+  shape := rfl
+  recovery := (ZkcSecurity.Examples.Subjects.Schnorr.Registration.justification endpoint).recovery
 
 example : (knowledge (F := F) (G := G) .idealMeaning).meaning :=
   knowledgeEndpoint _ (replay .idealMeaning)
@@ -78,10 +85,10 @@ private noncomputable def resolved (endpoint : Semantics) : Resolved (registry (
   elaborated := by
     cases endpoint <;>
       simp [knowledgeProperty, knowledgeArguments, wire, subject, modelRegistry, resolveModel,
-        models, modelSchema, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+        models, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
         Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
         Wire.TargetRef.matches, model, knowledge, checkCapabilities,
-        show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl]
+        show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl] <;> rfl
 
 private def meaning (endpoint : Semantics) : Evaluated (resolved (F := F) (G := G) endpoint) :=
   ⟨(knowledge endpoint).meaning, rfl⟩
