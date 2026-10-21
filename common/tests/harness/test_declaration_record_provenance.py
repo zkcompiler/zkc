@@ -39,7 +39,7 @@ def capture(tmp_path):
         result = subprocess.run(["lean", "--run", str(EMITTER), str(output), name + ".lean"],
                                 cwd=tmp_path, env=env, capture_output=True, text=True)
         if not success:
-            assert result.returncode != 0, result.stdout
+            assert result.returncode > 0, result.stdout + result.stderr
             assert not output.exists()
             assert "ambiguous stored providers" in result.stderr
             return None
