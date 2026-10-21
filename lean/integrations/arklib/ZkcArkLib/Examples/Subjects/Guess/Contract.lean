@@ -44,7 +44,7 @@ theorem falseStatement_all {F G : Type} (statement : Values (assignment F G) [.f
 /-- Explicit imported-language declaration; unavailable to retained-contract
 subjects. Its meaning is the exact language of the imported soundness theorem. -/
 def importedLanguage {F G : Type} : ZkcSecurity.Endpoint.ImportedLanguage compiled F G where
-  identifier := "arklib.guess.empty-language"
+  identifier := "languages.guess"
   noClauses := rfl
   Model := F
   read := offset

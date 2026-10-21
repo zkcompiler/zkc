@@ -62,6 +62,8 @@ import TestsArkLib.CausalSumcheck.Handlers
 import TestsArkLib.CausalSumcheck.Iteration
 import TestsArkLib.CausalSumcheck.Phases
 import TestsArkLib.CausalSumcheck.SourceVerifier
+import TestsArkLib.ClaimAdmission
+import TestsArkLib.ClaimSoundness
 import TestsArkLib.CommitmentBridge
 import TestsArkLib.Compatibility
 import TestsArkLib.CompiledSumcheckFiatShamir

@@ -1,4 +1,14 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
+import ZkcSecurity.Claims.Admission
+import ZkcSecurity.Claims.Arithmetic
+import ZkcSecurity.Claims.ChargeMonotonicity
+import ZkcSecurity.Claims.Endpoint
+import ZkcSecurity.Claims.Knowledge
+import ZkcSecurity.Claims.Model
+import ZkcSecurity.Claims.Resolution
+import ZkcSecurity.Claims.Soundness
+import ZkcSecurity.Claims.StageLinks
+import ZkcSecurity.Claims.Subject
 import ZkcSecurity.Commitment.Charges
 import ZkcSecurity.Commitment.Cost
 import ZkcSecurity.Commitment.Escape
@@ -123,6 +133,10 @@ import TestsSecurity.CallComposition
 import TestsSecurity.CausalSumcheck.Execution
 import TestsSecurity.CausalSumcheck.UniformService
 import TestsSecurity.ChargedCommitment
+import TestsSecurity.ClaimAdmission
+import TestsSecurity.ClaimAxioms
+import TestsSecurity.ClaimChargeControls
+import TestsSecurity.Claims
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.Counterexamples.Couplings
 import TestsSecurity.Counterexamples.Encodings

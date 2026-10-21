@@ -2,6 +2,12 @@
 import Zkc
 import Zkc.Algebra.RingExpression.Basic
 import Zkc.Algebra.RingExpression
+import Zkc.Claims.Capability
+import Zkc.Claims.Expressions
+import Zkc.Claims.Interactive
+import Zkc.Claims.Receipt
+import Zkc.Claims.Registry
+import Zkc.Claims.Wire
 import Zkc.Construction.Binding
 import Zkc.Construction.Compiled
 import Zkc.Construction.Encoding
@@ -213,6 +219,8 @@ import Zkc.Specification
 import Zkc.Transcript.Budget
 import Zkc.Transcript.Interface
 import Zkc.Transcript.Replay
+import Tests.Claims
+import Tests.ClaimsInteractive
 import Tests.CommonRegion
 import Tests.Component
 import Tests.ConstructionControls
