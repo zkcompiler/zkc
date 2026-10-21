@@ -18,10 +18,12 @@ import ZkcArkLib.Examples.FriFiatShamir
 import ZkcArkLib.Examples.GkrFiatShamir
 import ZkcArkLib.Examples.Subjects.Guess.Artifacts
 import ZkcArkLib.Examples.Subjects.Guess.Claims
+import ZkcArkLib.Examples.Subjects.Guess.Endpoints
 import ZkcArkLib.Examples.Subjects.Guess.Contract
 import ZkcArkLib.Examples.Subjects.Guess.Evidence
 import ZkcArkLib.Examples.Subjects.Sumcheck.Artifacts
 import ZkcArkLib.Examples.Subjects.Sumcheck.Claims
+import ZkcArkLib.Examples.Subjects.Sumcheck.Endpoints
 import ZkcArkLib.Examples.Subjects.Sumcheck.Contract
 import ZkcArkLib.Examples.Subjects.Sumcheck.Evidence
 import ZkcArkLib.Examples.Sumcheck

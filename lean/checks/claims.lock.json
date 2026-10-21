@@ -453,19 +453,19 @@
     },
     "ZkcSecurity.Examples.Subjects.ChaumPedersen.knowledge_soundness": {
       "package": "security",
-      "module": "ZkcSecurity.Examples.Subjects.ChaumPedersen.Claims",
+      "module": "ZkcSecurity.Examples.Subjects.ChaumPedersen.Endpoints",
       "structural": "7b6e8e00e8cf61a8",
       "explicit": "3b0f618693e216e3"
     },
     "ZkcSecurity.Examples.Subjects.Okamoto.knowledge_soundness": {
       "package": "security",
-      "module": "ZkcSecurity.Examples.Subjects.Okamoto.Claims",
+      "module": "ZkcSecurity.Examples.Subjects.Okamoto.Endpoints",
       "structural": "ceb690933087408f",
       "explicit": "9745660a78f63d02"
     },
     "ZkcSecurity.Examples.Subjects.SchnorrAnd.knowledge_soundness": {
       "package": "security",
-      "module": "ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims",
+      "module": "ZkcSecurity.Examples.Subjects.SchnorrAnd.Endpoints",
       "structural": "3081e0732ee5bbd4",
       "explicit": "05cbb5a71b799395"
     },
