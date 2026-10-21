@@ -25,18 +25,6 @@ claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.l
 [normal_forms]
 request = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
 
-[family]
-module = "ZkcSecurity.Examples.SumcheckFiatShamir"
-construction = "soundness"
-kind = "certificate"
-
-[claims]
-namespace = "ZkcSecurity.Examples.Subjects.Sumcheck"
-endpoint = "executable-bytes"
-properties = ["soundness"]
-statement = "adaptive"
-regime = "exact-uniform challenges"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
              "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
@@ -69,7 +57,7 @@ inputs = "values"
 
 [receipt]
 theorem = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness"
-security_module = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir"
+security_module = "ZkcArkLib.Examples.ExecutableSumcheckFiatShamir"
 chain = [
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness",
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.reduced_soundness",
@@ -119,3 +107,7 @@ used = [
   "ZkcSecurity.VCVio.Pruning.Prunes.prEvent_le",
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.initial_determined",
 ]
+
+[lean]
+namespace = "ZkcSecurity.Examples.Subjects.Sumcheck"
+imports = ["ZkcArkLib.Examples.Subjects.Sumcheck.Registration"]

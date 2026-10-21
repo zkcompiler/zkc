@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.Claims.Subject
 public import ZkcExamples.Construction.SchnorrAndProof
 
 @[expose] public section
@@ -33,5 +33,23 @@ def compiled : Compiled artifacts where
   selected := ZkcExamples.Construction.SchnorrAndProof.selected
   checked := ZkcExamples.Construction.SchnorrAndProof.selection_checked
   publics := by decide +kernel
+
+/-- Fresh physical attribution, checked against pipeline bytes by reporting.
+Digest attribution is distinct from the kernel checked compiled facts above. -/
+def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:38886e48c95e08ed0368765f6c4e3b6b8a8927007ad5a3781ecf11d436abf420", "example::AndProof", stage,
+    match stage with
+    | .interactive => []
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:c357922a3b0180891fe68a86398f065f243ec5a9247f0fef075b3a0dcaaeb548"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:c357922a3b0180891fe68a86398f065f243ec5a9247f0fef075b3a0dcaaeb548"⟩]⟩
+
+/-- Independently bound bytes for the separately admitted interactive Entry. -/
+def interactiveReference : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:4e27a0515ffb7205b4e9c2a96114c00b1f4c9328a61707a7462e5a2beb78545e",
+    "example::AndInteractive", .interactive, []⟩
+
+/-- Actual full construction occurrences selected by native source paths. -/
+def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
+  []
 
 end ZkcSecurity.Examples.Subjects.SchnorrAnd

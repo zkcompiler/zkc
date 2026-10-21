@@ -28,18 +28,6 @@ interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
 artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
 claims = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
 
-[family]
-module = "ZkcSecurity.Families.Schnorr"
-construction = "knowledge"
-kind = "sigma"
-
-[claims]
-namespace = "ZkcSecurity.Examples.Subjects.Schnorr"
-endpoint = "executable-bytes"
-properties = ["knowledge-soundness"]
-statement = "fixed"
-regime = "exact-uniform challenges"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
              "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
@@ -137,3 +125,7 @@ premises = ["public key = secret scalar times base", "uniform prover nonce and s
 module = "ZkcSecurity.VCVio.Schnorr"
 context = "[SampleableType F] "
 consumer = "ZkcSecurity.VCVio.Schnorr.honest_verifier_zero_knowledge"
+
+[lean]
+namespace = "ZkcSecurity.Examples.Subjects.Schnorr"
+imports = ["ZkcSecurity.Examples.Subjects.Schnorr.Registration"]

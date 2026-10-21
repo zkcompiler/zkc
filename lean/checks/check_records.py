@@ -8,8 +8,8 @@
    (`claims.lock.json`): stale theorem names, changed statement hashes and
    theorems with forbidden axioms fail. Qualified Lean names cited in
    `docs/status.md` and the formal documents must still exist.
-3. Render the "What is proved" table and, from subject manifests, one
-   `zkc.assurance-report/0` per subject and the subject rows; compare each
+3. Render the "What is proved" table and, from bound source requests and typed
+   receipts, one `zkc.assurance-report/0` per configured subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
    one. A report is established only with the pipeline's evidence, so the
    subject rows are compared only by a run given `--evidence`.
@@ -87,10 +87,9 @@ def main():
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
     details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "arklib" in packages else []
     for path in subject_manifests + samples:
-        names = reports.claim_names(reports.load_manifest(path))
-        for name in (names["instance"], names["application"]):
-            if name:
-                details.append(name)
+        manifest = reports.load_manifest(path)
+        evidence = reports.load_evidence(args.evidence, manifest["name"])
+        details.extend(reports.claim_details(evidence))
     failures, notes = [], []
 
     paths = {}
@@ -164,6 +163,9 @@ def main():
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
     control_rows = controls.run()
+    receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
+    control_rows += receipt_rows
+    failures += receipt_failures
     if "arklib" in packages:
         emitted_rows, emitted_failures = controls.run_emitted(records)
         control_rows += emitted_rows

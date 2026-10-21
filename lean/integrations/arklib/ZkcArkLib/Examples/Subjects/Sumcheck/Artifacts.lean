@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.Claims.Subject
 public import ZkcExamples.Construction.SumcheckProof
 public import ZkcExamples.Executable.SumcheckProof
 
@@ -49,5 +49,20 @@ def lowering : LoweringEvidence artifacts compiled F G where
   admits statement := by
     match statement with
     | .cons value0 (.cons value1 (.cons value2 .nil)) => exact ZkcExamples.Executable.SumcheckProof.admitted value0 value1 value2
+
+/-- Fresh physical attribution, checked against pipeline bytes by reporting.
+Digest attribution is distinct from the kernel checked compiled facts above. -/
+def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:e3ae53d4706b17e7f5a468996a1dbf8cc57a06576986392388b288fffe1a99af", "example::Proof", stage,
+    match stage with
+    | .interactive => []
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:ea0efdd843435f477577106f7c7bcb9df6b2a19067491b95530c5cc154875bcd"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:ea0efdd843435f477577106f7c7bcb9df6b2a19067491b95530c5cc154875bcd"⟩, ⟨"verifier-program", "sha256:9c11f210ff0771b8a692e9b1af11dd52bf4d8932928058a0339475c8b57039c0"⟩]⟩
+
+/-- Actual full construction occurrences selected by native source paths. -/
+def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
+  [{ label := "reduce.challenge", native := "apply_18_label_726564756365_label_6368616c6c656e6765",
+      delivery := "apply_18_label_726564756365_label_64656c6976657279_0", selected := by decide +kernel,
+      request := compiled.context.request.getD (.draw ""), requestSelected := by decide +kernel }]
 
 end ZkcSecurity.Examples.Subjects.Sumcheck

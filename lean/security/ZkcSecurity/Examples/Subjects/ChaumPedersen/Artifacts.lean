@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.Claims.Subject
 public import ZkcExamples.Construction.ChaumPedersenProof
 
 @[expose] public section
@@ -33,5 +33,23 @@ def compiled : Compiled artifacts where
   selected := ZkcExamples.Construction.ChaumPedersenProof.selected
   checked := ZkcExamples.Construction.ChaumPedersenProof.selection_checked
   publics := by decide +kernel
+
+/-- Fresh physical attribution, checked against pipeline bytes by reporting.
+Digest attribution is distinct from the kernel checked compiled facts above. -/
+def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:ef66cde675242086d335705bc59d7a70c4ae41771627cc6e4575a7134651aa6a", "example::EqualityProof", stage,
+    match stage with
+    | .interactive => []
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:7c1df18bce4910202863fd815d03737a2e1b3e289d637564882d5b19399a2f10"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:7c1df18bce4910202863fd815d03737a2e1b3e289d637564882d5b19399a2f10"⟩]⟩
+
+/-- Independently bound bytes for the separately admitted interactive Entry. -/
+def interactiveReference : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:f5d3a2647306748758c9bf9a9cf75fe5e77cba97188707886b781c66b78a827d",
+    "example::EqualityInteractive", .interactive, []⟩
+
+/-- Actual full construction occurrences selected by native source paths. -/
+def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
+  []
 
 end ZkcSecurity.Examples.Subjects.ChaumPedersen

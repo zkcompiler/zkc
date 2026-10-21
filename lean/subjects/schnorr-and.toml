@@ -25,18 +25,6 @@ interactive_views = "lean/ZkcExamples/Structured/SchnorrAndViews.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-and.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-and.mlir"
 
-[family]
-module = "ZkcSecurity.Families.SchnorrVariants"
-construction = "knowledge"
-kind = "sigma"
-
-[claims]
-namespace = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
-endpoint = "ideal-meaning"
-properties = ["knowledge-soundness"]
-statement = "fixed"
-regime = "exact-uniform challenges"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
              "transport.canonical-decoding"]
@@ -55,3 +43,7 @@ model_imports = ["ZkcExamples.Construction.SchnorrAndProofModel"]
 [bodies]
 entry = "proof"
 interactive_entry = "interactive"
+
+[lean]
+namespace = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
+imports = ["ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration"]

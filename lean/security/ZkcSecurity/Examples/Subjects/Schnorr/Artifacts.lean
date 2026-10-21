@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.Claims.Subject
 public import ZkcExamples.Construction.SchnorrProof
 public import ZkcExamples.Executable.SchnorrProof
 
@@ -49,5 +49,23 @@ def lowering : LoweringEvidence artifacts compiled F G where
   admits statement := by
     match statement with
     | .cons value0 (.cons value1 .nil) => exact ZkcExamples.Executable.SchnorrProof.admitted value0 value1
+
+/-- Fresh physical attribution, checked against pipeline bytes by reporting.
+Digest attribution is distinct from the kernel checked compiled facts above. -/
+def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", stage,
+    match stage with
+    | .interactive => []
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩, ⟨"verifier-program", "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"⟩]⟩
+
+/-- Independently bound bytes for the separately admitted interactive Entry. -/
+def interactiveReference : Zkc.Claims.SubjectRef :=
+  ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc",
+    "example::Interactive", .interactive, []⟩
+
+/-- Actual full construction occurrences selected by native source paths. -/
+def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
+  []
 
 end ZkcSecurity.Examples.Subjects.Schnorr

@@ -243,6 +243,66 @@ inputs as explicit arguments, and completeness is an equation for the run of the
 actual roots for every tape that supplies the rounds; the
 [support matrix](../support.md#honest-sumcheck-prover) lists its premises.
 
+## Source claim requests
+
+A source claim explicitly selects a property/version, model and arguments,
+retained target or registered imported language, typed acceptance selector,
+stage, quantity and capability requirements. The frontend exports constructor
+data; the Lean property/model registry fixes its interpretation before a proof
+route is chosen. Attachments and proposed methods do not determine the meaning.
+
+`Zkc.Claims.Resolved` records checked registry lookup, subject association and
+elaboration. `Evaluated` records that the registered meaning evaluates to its
+proposition. A `Receipt` proves exactly that proposition; endpoint, theorem and
+derivation routes share the same type. Charged soundness additionally requires
+the charged reduction at the requested prices. A successful scalar bound does
+not imply that capability. Registry-owned obligations determine required links;
+provenance cannot remove them.
+
+The [assurance report](assurance-report.md) compares actual emitted typed indices
+and wire data against each bound source request and the pipeline's artifact
+bytes. Only structured registered-but-undefined interpretations are incomplete;
+resolution refusal and normalization/resource failure remain open regardless of
+diagnostic text. The selected canonical property and model elaborator are
+compared after lookup, allowing unrelated appended exports. Capabilities require
+a recognized checked consumer; a matching argument type is insufficient.
+Parameter application coverage requires the actual interpreted application to
+equal the designated free request binder. Fixed models retain concrete scope.
+Missing proofs or required
+stage links are open, and only checked requested claims can be
+certified. Failed attempts remain separate. All source claims are reported,
+including unsupported interactive models. Reports remain IR-relative with an
+explicit `source.correspondence` premise; interpreted executable-byte claims
+never establish native executable conformance by themselves.
+
+For compiled ideal, the actual subject's construction check, selection and
+public schema discharge `construction.checked`. Interpreted bytes also require
+`lowering.interpreted_bytes`, pinning that subject's actual program, checked
+lowering, helper interpretation and public admission. Reporting reconstructs
+these goals from the typed subject and compares them with each registered
+obligation and its proof. Direct lower-stage proofs can certify that interpreted
+endpoint while native closure stays open; native realization is a separate
+claim. A matching label or a different subject's link cannot supply these proofs.
+
+Security receipt reporting also checks the exact subject's target/acceptance
+and actual full model elaboration. `ZkcSecurity.Claims.AdmittedReceipt` (module `Claims.ReceiptAdmission`)
+provides a typed association between a selected model registry and the exact
+request/subject/evaluated receipt, including manually authored extensions. The
+extractor recomputes these admission operations. A blocked symbolic model
+computation can use the typed certificate's actual witness and a kernel-checked
+equation for the exact reconstructed call; concrete refusal and undefined
+results remain failures. A property elaborator that
+ignores the model cannot establish admission. Generic Evidence functions are
+audited at their actual applications, with the receipt's free context and
+instantiated named hypotheses. Declaration provenance and axiom closure use
+checked stored ConstantInfo bodies, including opaque proofs, rather than
+imported axiom caches. These checks do not add native correspondence premises.
+
+Public reports retain the selected whole-Entry scope and separately audit other
+compiled Entry trials. Undefined interactive meanings remain visible as
+incomplete trials; missing trial records remain unaudited/open. Neither changes
+the outcome of the explicitly selected Entry scope.
+
 ## Bounded scalar requests
 
 A native DSL `spec` clause records intended relations and port/role selectors.

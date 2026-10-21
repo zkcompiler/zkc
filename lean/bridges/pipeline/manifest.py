@@ -2,8 +2,8 @@
 
 A manifest names everything the subject pipeline needs about one subject: its
 sources, its Entries, which profiles apply, which files the pipeline generates
-for it, and the data that later stages consume (normal-form request, family,
-claims, requested assumptions, mutation kinds). The schema is
+for it, and physical generation/import configuration. Source spec/verify and
+typed Lean exports alone select claim meanings and proof methods. The schema is
 `zkc.subject/0`; `lean/subjects/README.md` documents it. Unknown tables and
 fields are refused, so a misspelt field never silently changes what is checked.
 
@@ -57,9 +57,7 @@ FIELDS = {
                   "interactive_export": STRING, "interactive_source": STRING,
                   "original_export": STRING, "artifacts": STRING, "claims": STRING},
     "normal_forms": {"request": STRING},
-    "family": {"module": STRING, "kind": STRING, "construction": STRING},
-    "claims": {"endpoint": STRING, "properties": STRINGS, "statement": STRING, "regime": STRING,
-               "namespace": STRING},
+    "lean": {"namespace": STRING, "imports": STRINGS},
     "assumptions": {"requested": STRINGS},
     "mutations": {"kinds": STRINGS},
     "executable": {"threshold": {STRING, INTEGER}, "public": STRING, "witness": STRING, "variants": TABLE,
@@ -79,9 +77,6 @@ FIELDS = {
 }
 REQUIRED = {"": ("schema", "name")}
 CHOICES = {
-    ("family", "kind"): ("sigma", "certificate", "upstream"),
-    ("claims", "endpoint"): ("ideal-meaning", "executable-bytes"),
-    ("claims", "statement"): ("fixed", "adaptive"),
     ("construction", "admission"): ("views", "external"),
     ("construction", "inputs"): ("values", "payloads"),
     ("construction", "rule"): ("compiled", "construction"),
@@ -196,10 +191,18 @@ def load(path):
         require(not Path(value).is_absolute() and ".." not in Path(value).parts,
                 f"{path}: generated.{key} must be a repository path")
     for key in ("glue", "data", "participant", "program", "facts", "bodies", "interactive_data",
-                "interactive_bodies", "interactive_views"):
+                "interactive_bodies", "interactive_views", "artifacts", "claims"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
+    namespace = subject.get("lean", "namespace")
+    require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
+            f"{path}: lean.namespace must be a Lean namespace")
+    for module in subject.get("lean", "imports", []):
+        require(__import__("re").fullmatch(NAMESPACE, module) is not None,
+                f"{path}: lean.imports must contain Lean module names")
+    require(not subject.generated("claims") or (namespace and subject.generated("artifacts")),
+            f"{path}: generated.claims requires lean.namespace and generated.artifacts")
     if subject.profile("construction"):
         require(subject.get("entries", "proof") and subject.generated("participant") and subject.generated("data"),
                 f"{path}: the construction profile needs entries.proof, generated.data and generated.participant")

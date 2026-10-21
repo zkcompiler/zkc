@@ -1,259 +1,322 @@
 # Assurance reports
 
-An assurance report states, for one subject, what a security claim about its
-compiled verifier rests on. It records a checked application of a registered
-endpoint to artifact-indexed evidence. Completeness of the reported premises is
-audited against the elaborated endpoint and its evidence context; correspondence
-to native execution is either explicit evidence or an explicitly reported
-assumption. The format is `zkc.assurance-report/0`. `lean/checks/check_records.py`
-generates one report per subject manifest; the generator is fail-closed, so
-anything it cannot classify or connect makes a claim `unresolved`, with the
-reason.
+`zkc.assurance-report/0` records every bound source request and the evidence
+actually checked for it. `lean/checks/check_records.py` generates one report per
+subject. A successful source compilation does not establish a requested claim.
+The manifest supplies input/output configuration and generated file ownership;
+it does not choose properties, models, target relations or proof routes.
 
-A report is assembled from four inputs, each with its own format:
+The source request fixes the meaning before evidence is selected. A report
+compares that request with emitted `Zkc.Claims.Wire.Request` data and the actual
+indices of `Resolved`, `Evaluated` and `Receipt`. The kernel checks registration,
+elaboration, evaluated meaning and proof typing. The frontend associates those
+values with captured source nodes and pipeline artifact bytes. These are
+separate boundaries, and the report names both.
 
-| Input | Format | Producer |
+## Inputs
+
+| Input | Format and role |
+|---|---|
+| Subject manifest | `zkc.subject/0`: subject name, Entry selection and generated file paths |
+| Pipeline evidence | `zkc.subject-evidence/0`: artifacts, regenerated module digests, check outcomes, bound source requests and receipt associations |
+| Bound source requests | `zkc.bound-source-claims/0` in `source_claims`: every request, digest, attachment, proposed method and source site bindings |
+| Declaration records | `zkc.declarations/0`: actual elaborated declarations, premise telescopes, axiom closures and typed receipt extraction |
+| Mathematical ledger | `lean/checks/claims.toml` and `claims.lock.json`: maintained mathematical results, audited independently of source requests |
+
+The security and optional integration packages contribute compatible registry
+and endpoint tables. Conflicting identifiers, schemas and endpoint registrations
+are errors. A name or provenance string never constructs a proposition.
+
+## Pipeline association
+
+Each `claim_receipts` entry names one exact `attachment.node` in the bound
+source export:
+
+```json
+{
+  "node": {"kind":"source-claim","owner":"demo::Claims","block":0,"claim":0},
+  "request_digest": "sha256:<canonical request digest>",
+  "request_declaration": "Demo.request0Data",
+  "receipt_declaration": "Demo.request0Receipt",
+  "resolution": {"status":"open"},
+  "attempts": []
+}
+```
+
+A missing receipt is represented by a null or absent `receipt_declaration`.
+Missing interpretations may be diagnosed with
+`resolution: {status: "incomplete", kind: "registered-undefined", definitions: [...]}`,
+where the nonempty string list comes from the typed resolver's incomplete
+constructor. The kind annotation is optional for the existing typed producer;
+if present it must be `registered-undefined`. Only structured status `incomplete`
+with a nonempty string list is incomplete. Unknown versions use
+`status: "refused", kind: "resolution-refusal"`; normalization/resource failures
+use `status: "open", kind: "normalization-failure"`. They remain open even if a
+legacy producer places diagnostic text in `definitions`. Such diagnostics are
+never positive proof evidence. A missing definition and a failed proof attempt
+are different facts. Every bound request receives a report row, including
+interactive claims and requests without an association. Duplicate nodes,
+ambiguous associations, stale digests and associations to absent nodes are
+errors.
+
+`source_claims.entries` lists every admitted proof or interactive Entry. Each
+request must name an Entry in that list; older exports fall back to
+`[source_claims.entry]`. Its unit digest still matches the stage's original or
+interactive export independently.
+
+`source_claim_scope` retains the exact whole-Entry selection: `entries` and
+`selection` (`proof-entry` or `explicit`). It must agree with the bound Entries
+and all selected requests; the default selects the manifest's proof Entry.
+`source_claim_trials` exposes other compiled Entries separately, including their
+bound claims, declaration associations, structured resolutions and attempts.
+Each trial uses the same receipt audit and has its own claims, status, outcome,
+reasons and `audit_status`. Missing declaration records leave a trial
+`unaudited` and `open`. A trial does not change the selected Entry aggregate.
+
+The canonical request digest hashes sorted, compact ASCII JSON with finite
+numbers. Attachments and method plans are outside that digest. Renaming a label
+or selecting another method changes neither request meaning nor its identity.
+Changing a target, quantity, registry version, stage or artifact does.
+
+A checked receipt additionally requires this pipeline check:
+
+```json
+{
+  "name":"claim-receipt", "outcome":"accepted",
+  "module":"ZkcArkLib.Examples.Subjects.Demo.Claims",
+  "request":"Demo.request0Data", "receipt":"Demo.request0Receipt"
+}
+```
+
+Both declarations must belong to this subject's freshly regenerated modules.
+Module paths use actual package providers, independently of declaration
+namespaces: a `ZkcSecurity.*` declaration may live in a `ZkcArkLib.*` module.
+A generated module must match the pipeline's recorded bytes, and every artifact
+digest attached to that module must be among the pipeline's outputs.
+
+## Declaration extraction
+
+Each ordinary record retains `name`, `module`, `kind`, structural and explicit
+statement hashes, transitive `axioms`, documentation and tags. The premise
+telescope includes explicit, implicit and instance binders. Detailed records
+also retain pretty-printed statements, actual dependency identities and the
+existing endpoint evidence's named hypotheses. Requests, receipts and endpoint
+evidence are detailed automatically; `--detail` selects other declarations.
+
+`detail.claim_data.wire_request` serializes the actual typed request by reducing
+data constructors. It does not parse pretty-printed Lean. Imported-language
+requests preserve the protocol and complete versioned language application,
+including arguments. The maintained security resolver currently refuses language
+arguments; reporting never erases them to turn a different request into a match.
+
+`detail.claim_data.receipt` contains:
+
+| Field | Meaning |
+|---|---|
+| `wire_request`, `request_head`, `resolved_head`, `evaluated_head` | Actual typed indices, including the complete request data |
+| `indices_checked`, `proof_type_matches`, `proposition` | Extracted typed resolution/evaluation and the proof's checked type |
+| `registered_property`, `registered_schema`, `canonical_registry`, `registry_checks` | Actual selected export, checked lookup and kernel comparisons of selected property, export and model elaborator with canonical definitions |
+| `capability_consumer` | Recognized checked consumer of capabilities, independent of argument shape |
+| `application_coverage` | Actual model context, interpreted application value and checked designated free binder, or concrete fixed scope |
+| `admission` | Actual Subject.check result and full resolveModel result, with the typed model association and explicit admitted/registered-undefined/refused outcome |
+| `evidence_audit` | Actual instantiated Evidence applications and named hypotheses, audited in the receipt context |
+| `subject` | Actual typed security subject's artifacts declaration, snapshot source/Entry and participant source/candidate identities |
+| `quantity_kind`, `exported_capabilities` | Argument quantity classification; capability exports require the checked canonical consumer and its actual charged meaning |
+| `root_route`, `discharger` | Actual route constructor and proof root; compiler-generated administrative proof wrappers are unwrapped |
+| `proof_dependencies`, `dependencies` | Actual proof/index closure and complete receipt closure, each with declaration, module, ownership and statement identity |
+| `required_links` | Registry-owned typed obligations and actual `linkProofs`, including whether a proof depends on an outer assumption |
+| `stage_links` | Independently reconstructed actual-subject stage obligations, with kernel goal comparisons and explicit subject-index comparisons against registered links |
+| `provenance` | Claimed route, discharger, method/version, dependencies and categorized premises, to reconcile with actual facts |
+
+An extraction failure is explicit and leaves the request open. A matching
+string alone cannot establish any of these facts. A request declaration alias
+is allowed when its full emitted data equals the actual request index data.
+
+## Audit
+
+Every leading premise of the request and receipt is classified by its registered
+schema, including implicit hypotheses and proof instances. Other parameters must
+be type carriers, supported model instances on free non-propositional carrier
+variables, or the explicit string application context. `Inhabited False`,
+`Inhabited P`, `Inhabited (PLift P)` and unsupported Type-valued proof wrappers
+are not ordinary model parameters. The emitted `model_instance = true` judgment
+is required; a class name alone is insufficient.
+
+The old endpoint theorem, evidence telescope, named-hypothesis/schema and axiom
+audits remain in use for the mathematical ledger and legacy endpoints. For a
+receipt, the extractor follows actual applied Evidence values and records their
+instantiated named hypotheses in the receipt's free context. Generic Evidence
+constructors applied to concrete endpoint, form, binding and lowering arguments
+do not introduce free parameters into their callers. The caller's actual free
+telescope and all its proof/Type-wrapper premises remain audited. A proved named
+hypothesis using an outer assumption remains conditional. Proof bodies and types contribute
+to the dependency closure. Claimed dischargers and dependencies must reconcile
+with that closure. Root route and transitive family dependencies are reported
+separately: applying a general consumer to a family result does not establish
+that general automation alone proved the claim.
+
+Every security receipt must independently pass `Subject.check` and full actual
+`resolveModel` elaboration for its exact typed subject, request, field, original
+snapshot and endpoint. The extractor checks the resulting success expressions
+by kernel definitional equality. When symbolic model computation is blocked,
+an exact typed certificate may supply the actual existential witness and an
+equation proof whose type is compared with that same reconstructed full call.
+This cannot override an actual refusal or registered-undefined result. The
+emitted admission `success_authority` distinguishes `definitional-evaluation`
+and `kernel-equation`. Looking up a model identifier is insufficient.
+`ZkcSecurity.Claims.AdmittedReceipt` in `Claims.ReceiptAdmission` associates a
+model registry with the exact `Evaluated` indices and enclosed core receipt,
+requiring checked subject and model admission equations. Manual extensions can
+construct this certificate directly. Bare canonical built-ins remain supported
+when their selected checked property supplies the actual model registry;
+extension core receipts without a typed association remain open. An extension
+whose elaborator returns `True` cannot bypass target, acceptance or model
+admission. Registered undefined is distinct from outer resolution refusal.
+No generated admission theorem name is privileged.
+
+For built-in security requests, the selected property/export and actual model
+elaborator must equal the canonical definitions by kernel definitional equality
+after checked lookup. Unrelated exports appended to either registry are allowed;
+duplicate keys and replacement definitions fail. The whole registry's name or
+container expression is not semantic authority.
+The actual exported property/version, quantity, requested capabilities, typed
+subject, retained/imported target, acceptance, stage and artifacts must match.
+A charged receipt proves both its ordinary property and its charged export;
+a scalar receipt does not acquire that export by a provenance label. An arbitrary
+extension using `SoundnessRequest` arguments and interpreting them as `True`
+cannot export the capability. Until general typed capability consumers exist,
+nonempty capabilities require the recognized checked built-in consumer.
+
+For adaptive application models, parameter coverage requires the interpreted
+application value to equal the receipt's free String binder designated by the
+actual request's application reference. The emitter checks the unique binder's
+name, position and definitional identity, as well as agreement between the
+selected model context and interpreted model. Constants, prefix transforms and
+unrelated String binders do not establish parameter coverage. Fixed application
+models report their concrete value and cannot silently narrow a designated free
+application binder. Fixed statement models report `fixed-statement` coverage.
+This check introduces no general coverage transport framework.
+
+The only allowed axioms are `propext`, `Classical.choice` and `Quot.sound`.
+Every selected declaration's axiom closure is computed from actual ConstantInfo
+types, bodies, opaque proofs and inductive/recursor dependencies. Imported
+`collectAxioms` caches are not used. Before registry evaluation or expression
+inspection, capture checks every reachable stored provider against the resolved
+declaration. Identical duplicate reexports are accepted only after complete
+stored-field and exact expression equality, including proof bodies and binder
+annotations. Conflicting stored providers, missing providers and ambiguous name
+renderings refuse capture. Completed closures alone are cached. Headers declare
+`axiom_provenance=resolved-constant-info/0` and
+`reference_provenance=checked-stored-module/0`. Requested-receipt auditing refuses
+older captures without both provenance attestations. An additional axiom, `sorryAx`,
+omitted premise or hidden parameter leaves the request open.
+
+### Required interpreted-stage links
+
+The selected claim covers its interpreted endpoint. Extraction applies
+`Subject.stageLinks` to the actual typed subject index, independently of the
+registry's chosen list. The report validates these emitted obligations:
+
+| Requested stage | Required checked links | Covered interpreted endpoint |
 |---|---|---|
-| Subject manifest `lean/subjects/<name>.toml` | `zkc.subject/0` | the author |
-| Declaration records, one JSON line per owned declaration | `zkc.declarations/0` | `lean/checks/DeclarationRecords.lean` |
-| Registry and registered endpoints | Lean tables in `ZkcSecurity.Registry` | the security package, checked by its audit |
-| Pipeline evidence `<name>.json` | `zkc.subject-evidence/0` | the subject pipeline's run for the subject |
+| `compiled-ideal` | `construction.checked` | `ideal-meaning` |
+| `executable-bytes` | `construction.checked`, `lowering.interpreted_bytes` | `interpreted-executable-bytes` |
 
-## Declaration records
+`Subject.ConstructionChecked` pins the actual `checkCompiled`, selection,
+selection check and public schema. `Subject.LoweringChecked` additionally pins
+the actual program and `checkLowering` result, helper preparation and sorting,
+and public admission of the interpreted validator. Admission supplies their
+dependent proofs through `Subject.stageLinkProofs`, independently of the family
+method that proves the requested property.
 
-The header line names the format, the Lean version, the selected module
-families, the module and declaration counts, and, for the security package, the
-registry and the registered endpoints. Every following line is one declaration
-written in the source of the selected families, sorted by name and module:
+Each expected obligation must match exactly one registered obligation. Its goal
+must be kernel definitionally equal to the reconstructed goal, and its checked
+schema's subject argument must match the actual subject before goal reduction.
+The subject comparison matters even when closed checker equations normalize
+alike. A `True` goal with the same label, another subject's valid link, a
+polymorphic native-link schema, an absent proof or a conditional link proof
+cannot discharge it. An unrecognized compiled subject remains open. Property
+and model names alone cannot authorize stage evidence.
 
-| Field | Content |
+When the subject comparison fails, `goal_defeq: null` records that normalization
+of the unrelated goal was skipped. Only explicit successful subject and goal
+comparisons can discharge a link.
+
+The registry-owned `Resolved.requiredLinks` and indexed `Receipt.linkProofs`
+keep every extra registered obligation auditable. Extraction's independent list
+also detects omitted construction or lowering obligations. Missing required
+links remain open; they are never renamed model or hardness assumptions.
+
+The legacy endpoint audit retains its native implementation-link metadata.
+Those native links are not prerequisites of a direct theorem about the selected
+interpreted endpoint. Such a theorem cannot certify another stage or native
+execution. The report records its `covered_endpoint` explicitly, and lists
+successfully checked stage links in `checked_correspondences`.
+
+Model and hardness premises can remain explicitly conditional. Until source
+correspondence has its own checked bridge, reports retain
+`source.correspondence` as a trusted link and `scope: "ir-relative"`.
+Interpreted-byte semantics is distinct from native executable conformance.
+`native_closure` remains `open` and the certification product is at most
+`certified_verifier`, never `certified_authored_pair`.
+
+### Semantic dependency identity
+
+Each request records `semantic_dependencies`: byte hashes of every owned module
+in the actual closure, emitted declaration identities, toolchains, manifests,
+verified dependency revisions and compatibility records. Dependency verification
+is read-only: it checks actual Git HEAD, undeclared changes, patch digests and
+the recorded patched file contents. Reporting never applies a patch or fetches
+a dependency. Missing or unverified dependencies leave the request open.
+
+Changing a referenced definition body changes the dependency digest even if the
+theorem's structural statement hash stays identical. An optional
+`claim_receipts[].semantic_dependency_digest` supplies a prior cache identity;
+a mismatch leaves the request open. Digests are audit/cache
+identities, not preservation proofs; the kernel check of the actual proof type
+is authority. Saved records supplied with `--records` remain unconnected to the
+current source build and cannot certify a request.
+
+## Status and report fields
+
+| Per-request `status` | Meaning |
 |---|---|
-| `name`, `module`, `kind` | The declaration (a private name without its module prefix), its module, and theorem, definition, opaque, axiom, inductive, constructor or quotient |
-| `statement` | `structural` and `explicit` hashes of the elaborated type. The structural hash ignores binder names and metadata and unfolds nothing; the explicit hash also omits implicit and instance arguments of applied constants. Equal hashes are regression evidence, not semantic preservation |
-| `axioms` | The transitive axiom closure, opaque proof bodies included |
-| `doc`, `tags` | The docstring, and `private`, `class`, `structure`, `instance` or `proposition-valued` |
-| `premises` | For a theorem, its leading binders in order, implicit and instance binders included: binder information, whether the binder is a premise (a proof of a proposition), and the premise's head constant after its own leading binders |
-| `detail` | For requested declarations and registered endpoints: the pretty-printed statement and premises, the premise telescope whatever the declaration's kind, and the registered constants reached through the types and bodies of repository declarations |
+| `incomplete` | A required interpretation is reported missing; no checked receipt proves it |
+| `open` | A proof, required link, artifact association or audit check is missing or invalid |
+| `certified` | The exact requested meaning and capabilities have checked receipts, with all required stage links and audits |
 
-The records are deterministic for fixed sources and toolchain; the emitter's
-`--check` mode compares fresh records with an earlier output and names every
-added, removed or changed declaration.
+Proof attempts retain their method, result and diagnostics separately;
+`unsupported`, `timeout` and `refused` are attempt results, not semantic states.
+The top-level `outcome: established` projects only a nonempty set of certified
+requested claims. Otherwise it is `unresolved`. An explicit empty source export
+has `status: no-claim`, never fabricated success.
 
-## Registry
+The report retains its subject/manifest identity, attached and connected
+artifacts, checker environment, claims, allowed axioms and independently audited
+ledger context. Each claim retains the full request/digest, attachment,
+resolution, attempts, method plan/version, actual root/discharger/dependencies,
+semantic dependency identity, assumptions, discharged links, bound, status and
+reasons. `matching.kernel` and `matching.frontend` identify the distinct matching
+boundaries. The rendered subject table has one row per requested claim.
 
-Every assumption a report names is a registry identifier. A registry entry has a
-stable identifier, a category, a one-line statement and a schema: a constant
-that, applied to the claim's own data, is the proposition actually assumed. A
-model entry's schema is the definition that embodies the idealization.
+## Maintained controls and mathematical ledger
 
-| Category | Meaning |
-|---|---|
-| `library-hypothesis` | An open mathematical statement, owned by a named library or by this package |
-| `model` | A cryptographic model or idealization: the random oracle on typed histories, exactly uniform challenges, commitments read in the clear |
-| `law` | The realized law of a challenge decoder relative to the ideal sampler |
-| `trusted-link` | An implementation correspondence outside Lean, stated over the uninterpreted native component |
-| `binding/<obligation>` | Statement determination, the serialization of the typed representation, its native absorption, collision-bounded identity, authenticated configuration, verification-key correctness |
-| `budget` | A bound on adversary resources |
-| `family-property` | An obligation a protocol family proves: a certificate step, a doomed set, a property of a Sigma protocol |
-| `event` | A condition on a claim's statement or outcome |
-| `well-formedness` | A structural condition or invariant of a lemma's data |
+`Tests.ClaimReporting` supplies actual Lean-emitted request/receipt controls for
+clean proofs, explicit/implicit false hypotheses, proof-carrying instances,
+Type-valued proof wrappers and forged provenance. The downstream report audit
+must accept the clean control before its negative controls count as evidence.
+Existing endpoint and hidden-assumption controls remain maintained separately.
+`TestsSecurity.ClaimReporting` supplies fresh admitted compiled-ideal and
+interpreted-byte positives, omitted/conditional stage proofs, wrong-goal and
+foreign-subject or foreign-artifact links, abstract native schemas, and hidden
+False/Fact/Inhabited/proof-wrapper refusals.
+Both interpreted endpoints must pass before their negative controls count.
+Focused Python controls cover request substitutions, stale definition bodies,
+required-link omission, registry ambiguity, incomplete requests, failed attempts
+and explicit no-claim reports.
 
-The declaration audit checks the registry: identifiers are distinct, every
-schema constant exists, a proposition schema is proposition-valued, and every
-proposition-valued declaration of the security package that heads a premise of
-one of its theorems, at any binder, is registered.
-
-A registered endpoint maps a covered semantic endpoint, a property and a
-statement form to the endpoint theorem that states the property for
-artifact-indexed evidence.
-
-## Subject manifest
-
-The generator reads, and otherwise ignores, these manifest fields: `name`;
-`entries.proof`; `generated`, the generated Lean modules the subject owns;
-`claims.endpoint` (`ideal-meaning` or `executable-bytes`), `claims.properties`,
-`claims.statement` (`fixed` or `adaptive`) and `claims.regime`;
-`claims.namespace`, the namespace of the subject's generated claims, from which
-the claim's declarations are named; and `assumptions.requested`, the registry
-identifiers the author expects. In a claims namespace `N`, the artifacts are
-`N.artifacts`, the contract is `N.Contract.falseStatement` for ordinary
-soundness and `N.Contract.holds` for knowledge soundness, the evidence instance
-is `N.evidence` and the application is `N.<endpoint theorem>`. These names
-derive from `N` alone: a manifest field that names one of them otherwise
-(`claims.artifacts`, `claims.contract`, `claims.application`,
-`family.instance`) is a conflicting override, and the pipeline's manifest
-schema rejects those fields.
-
-## Pipeline evidence
-
-The subject pipeline writes one JSON document per subject, `<name>.json` or
-`<name>/evidence.json` in the evidence directory given to the generator:
-
-| Field | Content |
-|---|---|
-| `format` | `zkc.subject-evidence/0` |
-| `subject` | The manifest's name |
-| `manifest_sha256` | SHA-256 of the manifest the run read |
-| `artifacts` | Each artifact the run produced from the source, by role, as `sha256:<hex>` (source, original export, constructed export, program, deployment, package) |
-| `generated` | For each generated module path, `{"sha256": <hex>}`: the digest of the module the run regenerated from those artifacts and compared with the committed one |
-| `checks` | The kernel and native checks of the run, each `{"name", "outcome"}` with outcome `accepted`, `refused` or `unsupported`, and the refused obligation when there is one |
-
-Other fields are kept as provenance and do not affect the outcome.
-
-## Report
-
-| Field | Content |
-|---|---|
-| `format`, `subject` | `zkc.assurance-report/0` and the manifest's name |
-| `outcome`, `reasons` | The report's outcome and any report-level reasons |
-| `manifest` | Path, SHA-256, schema and entries of the manifest |
-| `artifacts.attached` | For each generated module: path, SHA-256, and the digests the module records about the bytes it was rendered from |
-| `artifacts.connected` | Whether pipeline evidence connects the generated data to the artifacts: `connected`, `mismatched` or `unresolved`, with the evidence path, its digest and the artifact digests |
-| `checker` | Lean version, Lake manifest digests, dependency pins, and every declared compatibility patch with its upstream revision and patch digest |
-| `claims[]` | One claim per property, with the fields below |
-| `context` | The theorems the claims ledger cites for this subject, with their statement hashes, axiom closures and classified premises. Context never establishes a claim |
-| `allowed_axioms` | `propext`, `Classical.choice`, `Quot.sound` |
-
-Each claim keeps its outcome fields separate, so a single status word cannot
-erase its conditions:
-
-| Field | Content |
-|---|---|
-| `property`, `covered_endpoint`, `statement` | The claimed property, the semantic endpoint it covers and the statement form |
-| `validation` | The pipeline's validation outcome as the checks emitted it: `accepted`, `refused`, `unsupported` or `unresolved` |
-| `endpoint` | The registered endpoint theorem: name, module, statement hashes, axiom closure and statement |
-| `application` | The application declaration, with the same facts |
-| `evidence` | The evidence instance, with the same facts |
-| `contract`, `artifacts_declaration` | The contract and artifacts declarations the claim must be stated at |
-| `assumptions[]` | Every remaining assumption: registry identifier, category, schema, statement, the instantiated statement when the assumption is a premise, its discharge (`assumed`, or a proof) and where it comes from; a named hypothesis also lists its recorded arguments |
-| `discharged[]` | The named hypotheses the evidence proves, with their arguments |
-| `requested_assumptions` | The identifiers the manifest requested |
-| `models[]` | The registered model definitions the endpoint and the evidence reach |
-| `regime` | The expected parameter regime and the regime the evidence states |
-| `bound` | The application declaration, its statement and the property's instantiated statement: the bound the claim states |
-| `outcome`, `reasons` | The claim's outcome and every reason it is not established |
-
-## Generation
-
-1. **Endpoint.** The manifest's covered endpoint, property and statement form
-   select a registered endpoint. A covered endpoint outside `ideal-meaning` and
-   `executable-bytes`, an unknown statement form, or a combination with no
-   registered endpoint is an unsupported endpoint claim.
-2. **Application.** The claim is established only through its application
-   declaration, which the subject driver generates: its type must be the
-   registered endpoint's property, its value the registered endpoint applied to
-   the manifest's evidence instance, and its type must name the subject's
-   artifacts, contract and, for ordinary soundness, the manifest's regime. A
-   declaration that applies the endpoint to other evidence, states the claim at
-   other artifacts or at another relation, or applies another theorem leaves
-   the claim unresolved (wrong evidence, mismatched artifact, substituted
-   relation, wrong endpoint). A missing application, instance or endpoint
-   theorem leaves the claim unresolved.
-3. **Evidence.** The evidence instance must be the property's evidence
-   structure indexed by the subject's artifacts and contract.
-4. **Join.** The claim's declarations must belong to this subject's validated
-   artifacts: the manifest's generated `artifacts` and `claims` modules are the
-   `Artifacts` and `Claims` modules of its claims namespace, both among the
-   modules the pipeline regenerated and compared for this subject (see
-   *Connection*); the application and the evidence instance are declared in that
-   `Claims` module; and the pipeline's evidence records an accepted
-   `claim-application` check that built that module with that application. A
-   manifest without a claims namespace, a conflicting override, a claims
-   namespace whose generated modules are not this subject's, a declaration in
-   another module, or evidence without that check leaves the claim unresolved.
-   Without the join, a mutually consistent application, evidence, artifacts and
-   contract of one subject could be reported for another whose own generated
-   modules are connected.
-5. **Telescope audit.** Every premise of the application declaration itself,
-   of its property and of the evidence instance, read from their fully
-   elaborated telescopes with implicit and instance binders, is classified by
-   the registry through its head constant. A generated application has no
-   premise of its own, so one it states is an assumption like any other. A premise that is not a registered assumption is an omitted
-   premise. Every other binder must be a type, an allowed instance or the
-   application context; any other parameter, such as a structure bundling
-   assumptions, is a hidden parameter. Classified premises become assumptions
-   with their instantiated statements.
-6. **Named hypotheses.** Each hypothesis the evidence lists cites a registry
-   identifier; its proposition must be an instance of that entry's schema (a
-   proposition of the same category under another schema is a wrong schema),
-   and its status is a proof, a premise of the evidence, or an assumption
-   citing the same entry. A premise of the evidence that no hypothesis names is
-   an omitted assumption.
-7. **Required links.** The trusted links every claim about the covered endpoint
-   rests on are listed as assumptions unless a premise already carries them:
-
-   | Covered endpoint | Required trusted links |
-   |---|---|
-   | `ideal-meaning` | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` |
-   | `executable-bytes` | `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` |
-
-8. **Models.** The registered model definitions the endpoint, the application
-   and the evidence reach are recorded.
-9. **Artifacts.** A digest attached to generated data is not evidence that the
-   data came from the source, export and program bytes. The connection holds
-   when the pipeline evidence is for this subject and this manifest, every
-   generated module equals the module the run regenerated, and every digest a
-   module records is one the run produced. Anything else is a mismatched
-   artifact, or unresolved without evidence.
-10. **Axioms.** An endpoint theorem, application or evidence instance whose
-   closure leaves the allowed set, for example one that depends on `sorryAx`,
-   leaves the claim unresolved. Dependency and axiom audits are secondary
-   checks; the telescope audit decides premise completeness.
-11. **Outcome.** A refused or unsupported validation is reported as such.
-    Otherwise the claim is `established` only when validation accepted and no
-    reason remains; it is `unresolved` otherwise. A report is `established`
-    when every claim is.
-
-Two rules decide which equations and bindings a report may count:
-
-- An Entry equation about a compiled meaning is allowed when it is derived from
-  checked stage evidence, generated and kernel-checked; a hand-written trusted
-  correspondence about a compiled meaning is refused.
-- A typed public-value binding discharges statement determination only. Native
-  absorption of the public values remains the trusted link
-  `binding.native-absorption` until a theorem about native transcript bytes
-  discharges it.
-
-## Outcomes
-
-| Outcome | Meaning |
-|---|---|
-| `established` | Validation accepted; the application declaration applies the registered endpoint to the subject's evidence at its artifacts, contract and regime; every premise is a registered assumption and every named hypothesis an instance of its schema; the artifacts are connected; closures are clean |
-| `refused` | A check refused, with a named obligation |
-| `unsupported` | A check emitted an outside-fragment refusal |
-| `unresolved` | Checking itself could not conclude: an unsupported endpoint claim, an omitted premise, a mismatched or unconnected artifact, a missing endpoint or instance, a forbidden axiom |
-
-Whether a refusal detects a real divergence is an evaluation label, not an
-outcome.
-
-The generator's controls require these reactions: an omitted premise, a
-mismatched artifact, an unsupported endpoint claim, an unregistered endpoint, a
-dependency on `sorryAx`, absent pipeline evidence, valid evidence of another
-subject, an application at other artifacts or at a substituted relation, an
-application of another theorem, a hypothesis under the wrong schema of its
-category, an assumption bundled into the evidence's parameters and a premise
-no hypothesis names each make a report `unresolved`, and a refused check makes
-it `refused`. An established control report lists its assumptions and models
-and renders the instantiated bound. Records reused from a saved directory (`--records`) carry
-declaration hashes but no identity of the sources they were emitted from, so a
-report built from them is `unresolved`. The application audit also runs on
-declarations Lean emitted (`TestsSecurity.ReportControls`): an application with
-no premise of its own passes, and an explicit `False`, an implicit `False` and a
-`Fact False` instance premise are each reported as omitted.
-
-## Claims ledger and generated tables
-
-`lean/checks/claims.toml` holds the rows of the "What is proved" table of the
-[formal guide](../../README.md#what-is-proved), each with the theorems that
-carry it; `lean/checks/claims.lock.json` records their packages, modules and
-statement hashes. The check fails when a cited theorem is missing, when its
-statement hashes differ from the lock, or when it depends on an axiom outside
-the allowed set; a reviewed row is accepted by rewriting the lock. The table,
-and one row per subject manifest summarizing its report, are rendered between
-`<!-- BEGIN GENERATED ... -->` and `<!-- END GENERATED ... -->` markers; the
-check fails when a document's region differs from the rendering, and `--write`
-rewrites it. Prose stays hand-written elsewhere: every qualified Lean name
-that `docs/status.md`, the formal guide, these documents or an integration guide
-cites must still be a declaration, a namespace of declarations or a module.
-Theorem-name and statement-hash checks catch renames and changed statements, not
-semantic drift of the definitions a statement mentions.
+The mathematical ledger retains all maintained theorem rows and their statement
+locks. Missing theorem names, changed statements and forbidden axioms fail its
+check. Rendering and document-name auditing continue independently of source
+request certification. `--write` updates generated regions and locks; it is not
+a proof or approval of a new semantic claim.
