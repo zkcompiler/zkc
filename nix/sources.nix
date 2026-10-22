@@ -126,6 +126,7 @@ let
       "lean/Tests"
       "lean/ZkcExamples"
       "lean/ZkcTools"
+      "lean/checks/DeclarationRecords.lean"
     ];
     security.paths = [
       "lean/security"
