@@ -39,6 +39,7 @@ premises. A law alone does not prove that a C++ checker or Rust kernel realizes 
 | Relations and authentication | [Constraints](domains/constraints.md), [relation bundles](domains/relation-bundles.md), [oracles](domains/oracles.md), [relation terminals](relations.md): imported assets, multi-table relations, binding and explicit terminal checks |
 | Representation | [Complete results](realization/representations.md), [codecs](realization/codecs.md), [artifacts](realization/artifacts.md): source comparison, wire admission and retained authority |
 | External constructions | [Hash-chain and duplex transitions](realization/external-constructions.md): explicit native primitive calls |
+| External quotient compilation | [HEIR arithmetic profile](realization/heir-arithmetic.md): supported ring expressions and independent transform comparison |
 | Validation | [Refinement](verification/refinement.md), [analysis](verification/analysis.md), [judgments](verification/judgments.md): the obligations of source-relative checking |
 
 The mathematical chapters specify parameterized obligations over signatures,

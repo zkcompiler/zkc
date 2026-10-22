@@ -39,10 +39,10 @@ Retain compound ring and module operations until transform placement and
 realization selection finish. The checked coefficient source contract remains
 the observable boundary; existing field-polynomial types retain their meanings.
 
-First establish a pinned arithmetic dependency and a supported toolchain, an
-explicit full-NTT profile, consistent folding and execution, and transform
-coordinate checks. Then connect source region formation and independent
-candidate readers to managed execution. The first complete integration includes
+Build on the optional [pinned arithmetic package](../compiler/external/heir/README.md)
+and its [full-NTT comparison profile](spec/realization/heir-arithmetic.md).
+Connect source region formation and independent candidate readers to managed
+execution, extending reader coverage at each lowering boundary. The first complete integration includes
 Falcon batch arithmetic and an ML-DSA-style module matrix-vector computation,
 with shared transforms, charged preparation and scratch, unchanged ordered
 admission, and a coefficient fallback. Dialect registration or a standalone
