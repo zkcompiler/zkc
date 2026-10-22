@@ -79,14 +79,50 @@ impl PhysicalType {
         representation: Representation,
         children: Vec<Self>,
     ) -> Result<Self> {
-        let expected =
-            Self::logical_children(&logical)?.ok_or_else(|| invalid("aggregate-logical-type"))?;
-        if expected.len() != children.len()
-            || expected
+        Self::check_aggregate_children(&logical, representation, &children)?;
+        Ok(Self {
+            logical,
+            representation,
+            children: Some(children.into()),
+        })
+    }
+    /// Validate borrowed descriptors without constructing a second layout.
+    /// Catalog ownership is checked separately, including every inactive child.
+    pub(super) fn check_aggregate_children(
+        logical: &LogicalType,
+        representation: Representation,
+        children: &[Self],
+    ) -> Result<()> {
+        let matches = match logical.kind() {
+            Type::Sequence => {
+                let element = logical
+                    .sequence_element()
+                    .ok_or_else(|| invalid("sequence-element"))?;
+                matches!(children, [child] if child.logical == *element)
+            }
+            Type::FieldArray => {
+                let (field, _) = logical
+                    .field_array_parts()
+                    .ok_or_else(|| invalid("field-array-element"))?;
+                let element = LogicalType::new(Type::Field, field)?;
+                matches!(children, [child] if child.logical == element)
+            }
+            Type::FixedVector => {
+                let (element, _) = logical
+                    .fixed_vector_parts()
+                    .ok_or_else(|| invalid("fixed-vector-element"))?;
+                matches!(children, [child] if child.logical == *element)
+            }
+            Type::Variant => logical
+                .variant_descriptor()
+                .ok_or_else(|| invalid("variant-descriptor"))?
+                .alternatives()
                 .iter()
-                .zip(&children)
-                .any(|(l, p)| *l != p.logical())
-        {
+                .flat_map(|a| a.payload())
+                .eq(children.iter().map(|child| &child.logical)),
+            _ => return Err(invalid("aggregate-logical-type")),
+        };
+        if !matches {
             return Err(invalid("aggregate-physical-children"));
         }
         if matches!(
@@ -118,11 +154,7 @@ impl PhysicalType {
             (_, Representation::Extension(_)) => {} // The contributing storage owner checks its rule.
             _ => return Err(invalid("aggregate-storage-children")),
         }
-        Ok(Self {
-            logical,
-            representation,
-            children: Some(children.into()),
-        })
+        Ok(())
     }
     fn check_layout_bounds(&self, depth: usize, remaining: &mut usize) -> Result<()> {
         if depth > TYPE_DEPTH_LIMIT || *remaining == 0 {

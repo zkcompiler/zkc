@@ -691,6 +691,8 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
     assert!(std::mem::size_of::<Datum>() <= 512);
     for ty in [&d.sequence, &d.variant, &d.backend.fixed] {
         assert_eq!(d.contracts.physical_type(&ty.spelling()).unwrap(), *ty);
+        d.contracts.validate_type(ty).unwrap();
+        assert!(foreign.contracts.validate_type(ty).is_err());
         assert!(PhysicalType::parse(&ty.spelling()).is_err());
     }
     let logical = d.variant.logical();
@@ -1132,6 +1134,8 @@ fn wire_checks_all_children_and_preserves_local_only_fixed_vectors() {
         )
         .unwrap();
     let contracts = b.finish(ExecutionPolicy::general_purpose());
+    contracts.validate_type(&variant).unwrap();
+    assert!(contracts.validate_type(&d.variant).is_err());
     assert!(contracts.permits_wire(&sequence, WireCodec::Native));
     assert!(
         !contracts.permits_wire(&variant, WireCodec::Native),

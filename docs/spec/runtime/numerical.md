@@ -61,6 +61,12 @@ concrete values. The scope reserves:
 
 Scope reservations precede managed allocation and use checked arithmetic.
 Staging and final storage are both counted while freezing can overlap them.
+An explicit `output_owned` reservation instead counts one buffer when its
+trusted constructor adopts the supplied Vec without growth, reallocation or
+a second element buffer, including on error and unwind. Its output and memory
+charge is the maximum of the typed payload and the caller's complete retained
+bound. This contract is audited at each adapter; it is not inferred from an
+arbitrary Rust type. Conversion to `Arc<[T]>` retains ordinary overlap accounting.
 Finished results remain charged until the scope ends. Scratch and abandoned
 destinations release their reservations when dropped. Scratch exposes only
 borrowed slices and cannot be frozen through the result API. Accepted work
@@ -85,6 +91,7 @@ bit-operation complexity or a constant-time guarantee.
 The scoped path covers dense vector addition, subtraction, multiplication,
 scaling, filling, geometric sequences, sums, products, dot products, matrix-vector
 products and splitting over all eight installed field families. It also covers
+ordinary and fixed-vector dot products (including resident scalar storage),
 `poly.fold` for BLS LSB/MSB tables and
 `poly.opening_quotient` for KoalaBear and its degree-four/eight extensions.
 The quotient uses scoped denominator scratch and its unpublished output for
@@ -100,17 +107,25 @@ numerical work or mandatory memory floor. Both paths retain affine-base scalar
 multiplication and private complete-output publication. Dalek scaling keeps its
 existing constant-time provider calls and does not use this scratch.
 
-Explicit `blst` alternatives for BLS12-381 G1/G2 scaling and MSM, and
-`pairing.check`, use the existing Arkworks physical ports. Canonical bridges,
-subgroup validation and arithmetic occur inside one call; foreign values do
-not escape into the VM. Shape and fresh-output checks precede mandatory work
-and workspace admission. G1 and G2 curve calls charge 8,192 and 16,384 work
-units per point; pairing checks charge `32,768 * (pairs + 1)`. These weights
-are conservative admission scores. Caller-owned conversion arrays and
-conservative provider scratch are reserved through output freezing. Input
-aliases remain immutable and any refusal publishes no result. Provider-internal
-allocation failure can still abort the process. Selection does not establish
-a constant-time guarantee; MSM is variable-time. Arkworks remains the default.
+Explicit `blst/resident/*` alternatives operate on selected BLS12-381 scalar,
+G1 and G2 storage. Canonical bridges and subgroup checks occur in reached
+`representation.convert` calls. Linking checks the conversion endpoints;
+arithmetic reuses those admitted signatures without parsing them again.
+Imports adopt their provider buffers; bulk exports to Arkworks keep staging
+and final storage reserved together. There are no implicit operand imports.
+
+Resident field/vector arithmetic uses the shared dense adapter. Resident curve
+arithmetic uses the shared curve adapter; it does not inherit the admission
+weights of the earlier bridge-per-operation implementation. MSM admits
+`256 * points + 1` work units and explicit provider workspace; pairing checks
+admit `8,192 * (pairs + 1)` units and their workspace. Conversion admits
+`4,096 * max(elements, 1) + 1` units. These are conservative admission scores,
+not runtime predictions. Input aliases remain immutable and any refusal
+publishes no result. Provider-internal allocation failure can still abort the
+process. Every invocation checks current implementation permission before
+charging work, including a retained prepared handle after idle policy changes.
+Selection does not establish a constant-time guarantee; MSM is variable-time.
+Arkworks remains the default.
 
 `poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
 quartic/octic extensions. Shape and domain checks precede numerical admission;

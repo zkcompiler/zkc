@@ -309,8 +309,9 @@ pub(crate) fn convert(
     let [value] = args else {
         return Err(refused("kernel-operands"));
     };
-    let signature = conversion_signature(invocation.binding.declaration())
-        .ok_or_else(|| refused("representation-conversion"))?;
+    // Linking independently checks Native's installed conversion signature.
+    // Reuse those admitted endpoints; parsing their spellings is admission work.
+    let signature = invocation.binding.signature();
     use zkc_runtime::vm::Value as _;
     if !value.has_type(&signature.inputs[0]) {
         return Err(refused("kernel-operands"));
@@ -319,7 +320,9 @@ pub(crate) fn convert(
         Value::Vector(v) => (v.len(), 32),
         Value::BlstVector(v) => (v.len(), 32),
         Value::Groups(v) => (v.len(), std::mem::size_of::<kernel::G1>()),
-        Value::BlstG1Vector(v) => (v.len(), std::mem::size_of::<crate::G1>()),
+        // Native's conservative Arkworks G1-vector retention is 128 bytes per
+        // point, even when the concrete affine wrapper is smaller.
+        Value::BlstG1Vector(v) => (v.len(), 128),
         Value::Bls12381G2Vector(v) => (v.len(), std::mem::size_of::<kernel::G2>()),
         Value::BlstG2Vector(v) => (v.len(), std::mem::size_of::<crate::Bls12381G2>()),
         _ => (0, 0),
@@ -334,10 +337,13 @@ pub(crate) fn convert(
     let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
     call.work_items(len.max(1), 4096, 1)?;
     let output = call.scalar(retained)?;
-    // Vec-to-Arc freezing retains both destination buffers briefly. No source
-    // imports occur in any resident arithmetic handler.
-    let _workspace =
-        call.reserve_workspace::<u8>(if width == 0 { 256 } else { size(len, width)? })?;
+    // Resident imports adopt the constructed Vec. Exporting a bulk value to
+    // Arc<[T]> overlaps its staging Vec with final storage until freezing ends.
+    let staging = match value {
+        Value::BlstVector(_) | Value::BlstG1Vector(_) | Value::BlstG2Vector(_) => retained,
+        _ => 0,
+    };
+    let _workspace = call.reserve_workspace::<u8>(staging)?;
     let value = output.finish(|| {
         Ok(match value {
             Value::Field(s) => Value::BlstField(bridge::import_scalar(*s).map_err(failure)?),

@@ -242,7 +242,10 @@ pub fn one<B: Backend<Value = Value>>(
     attrs: &[&str],
     args: Vec<Value>,
 ) -> (Result<Vec<Value>, String>, B) {
-    let sig = binding.signature().unwrap();
+    let resolved = zkc_native::native_contracts()
+        .resolve(binding.clone())
+        .unwrap();
+    let sig = resolved.signature();
     let outputs = (0..sig.outputs.len())
         .map(|j| format!("o{j}"))
         .collect::<Vec<_>>();

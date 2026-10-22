@@ -75,6 +75,14 @@ exact input/output occurrence is selected in the physical-plan options. Captures
 branch yields and loop state retain checked physical equations, including the
 zero-iteration path. Operation results retain their selected representation until
 a use needs conversion. Incompatible participant and local signatures refuse.
+Aggregate proposal solves structural layout equalities before choosing defaults.
+Selected ports are fixed constraints; constructor leaf layouts are preferences
+with any required change performed by an admitted reached direct conversion.
+Competing leaf preferences use deterministic source order. Scalar control joins
+retain a unanimous live-yield layout and otherwise select the default. Each
+variant payload has its own layout variable, so constraining one alternative
+does not fix its siblings. Inactive alternatives remain part of the final
+independently checked type.
 The candidate catalog supplies preferences for installed implementations and
 direct adapters. It cannot create a conversion law or install a new contract.
 

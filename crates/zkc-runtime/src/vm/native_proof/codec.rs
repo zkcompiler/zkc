@@ -497,7 +497,9 @@ impl<'a> CheckedCodec<'a> {
             }
             if payload.iter().any(|ty| {
                 !ty.logical().is_native_message_data()
-                    || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty)
+                    || !admitted
+                        .contracts()
+                        .permits_wire(ty, crate::vm::WireCodec::Native)
             }) {
                 return Err(refuse("native-proof-wire-type"));
             }

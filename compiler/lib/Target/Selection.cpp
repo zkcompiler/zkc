@@ -27,7 +27,7 @@ selectImplementation(protocol::BindingApplication application,
   if (descriptor &&
       descriptor->family != protocol::ImplementationDescriptor::Family::Exact &&
       application.physicalArguments.empty()) {
-    auto logical = protocol::resolveLogicalBinding(application);
+    auto logical = protocol::resolveBinding(application, false);
     if (!logical)
       return logical.takeError();
   } else {

@@ -524,6 +524,282 @@ fn event(query: bool) -> NativeTranscriptEvent {
     }
 }
 
+fn selected_payload_fixture(codec: bool, payload: &PhysicalType) -> Fixture {
+    let mut f = if codec {
+        Fixture::codec()
+    } else {
+        Fixture::custom()
+    };
+    let spelling = payload.spelling();
+    f.events[0].payload = Some(payload.logical());
+    f.program[3][0][4][1][1] = json!(spelling);
+    let observer = f.program[2]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|f| f[1] == "observe")
+        .unwrap();
+    observer[2][1][1] = json!(spelling);
+    if codec {
+        if payload.kind() != Type::Variant {
+            f.program[1].as_array_mut().unwrap().push(json!([
+                "constant",
+                "field.constant",
+                ["bls12-381.fr"],
+                "test/field.constant",
+                []
+            ]));
+        }
+        let functions = f.program[2].as_array_mut().unwrap();
+        let encode = functions.iter_mut().find(|f| f[1] == "encode").unwrap();
+        encode[2][1][1] = json!(spelling);
+        let decode = functions.iter_mut().find(|f| f[1] == "decode").unwrap();
+        decode[3] = json!([spelling]);
+        decode[4] = if payload.kind() == Type::Variant {
+            json!([
+                ["variant", "decoded", spelling, "empty", [], "value"],
+                ["return", ["value"]]
+            ])
+        } else {
+            json!([
+                ["op", "decoded", "constant", ["1"], [], ["value"]],
+                ["return", ["value"]]
+            ])
+        };
+    } else {
+        f.program[3][1][6][2][5] = json!(spelling);
+    }
+    *f.program[3][1][6]
+        .as_array_mut()
+        .unwrap()
+        .last_mut()
+        .unwrap() = json!(["return", ["public", "next"]]);
+    f
+}
+fn selected_payload_context(
+    permission: bool,
+) -> (crate::vm::Contracts, PhysicalType, PhysicalType) {
+    use crate::vm::*;
+    let mut builder = ContractsBuilder::standard();
+    let field = builder
+        .add_representation(
+            "test/proof-scalar",
+            LogicalType::parse("field:bls12-381.fr").unwrap(),
+        )
+        .unwrap();
+    if permission {
+        builder
+            .add_wire_permission(field.clone(), WireCodec::Native)
+            .unwrap();
+    }
+    builder
+        .add_implementation(
+            OperationBinding {
+                contract: "field.constant".into(),
+                arguments: vec!["bls12-381.fr".into()],
+                implementation: "test/field.constant".into(),
+                physical_arguments: vec![],
+            },
+            BoundSignature {
+                inputs: vec![],
+                outputs: vec![field.clone()],
+                attributes: AttributeRule::FieldDecimal,
+            },
+            ImplementationRequirements {
+                timing: TimingRequirement::OperandIndependent,
+                timing_operands: &[],
+            },
+        )
+        .unwrap();
+    let logical = LogicalType::parse(&zkc_test_support::variants::logical(
+        "SelectedProof",
+        json!([["empty", []], ["value", ["field:bls12-381.fr"]]]),
+    ))
+    .unwrap();
+    let variant = builder
+        .aggregate_type(logical, Representation::Variant, vec![field.clone()])
+        .unwrap();
+    (
+        builder.finish(ExecutionPolicy::general_purpose()),
+        field,
+        variant,
+    )
+}
+fn admit_selected_payload(
+    f: &Fixture,
+    contracts: &crate::vm::Contracts,
+    operation: Option<NativeProofOperation>,
+) -> Result<NativeProofEntry> {
+    let program = Program::decode(f.program.to_string().as_bytes(), contracts).unwrap();
+    let maps = f.maps();
+    let construction = ProofConstruction {
+        suite: f.suite,
+        events: &f.events,
+        plan: f.plan.as_ref(),
+        source_inputs: &maps,
+    };
+    match operation {
+        None => NativeProofEntry::new(program, "main", "P", "V", 0, construction),
+        Some(operation) => NativeProofEntry::new_for_operation(
+            program,
+            "main",
+            "P",
+            "V",
+            0,
+            construction,
+            operation,
+            &[0],
+        ),
+    }
+}
+#[test]
+fn custom_constructions_and_record_codecs_preserve_selected_payloads() {
+    let (contracts, field, variant) = selected_payload_context(true);
+    for payload in [field, variant] {
+        for codec in [false, true] {
+            let f = selected_payload_fixture(codec, &payload);
+            admit_selected_payload(&f, &contracts, None).unwrap();
+            for operation in [NativeProofOperation::Prove, NativeProofOperation::Verify] {
+                let selected = selected_payload_fixture(codec, &payload).selected(operation);
+                admit_selected_payload(&selected, &contracts, Some(operation)).unwrap();
+            }
+            let mut wrong = selected_payload_fixture(codec, &payload);
+            wrong.events[0].payload = Some(crate::vm::LogicalType::parse("index").unwrap());
+            assert_eq!(
+                admit_selected_payload(&wrong, &contracts, None)
+                    .unwrap_err()
+                    .0,
+                "native-proof-helper-signature"
+            );
+        }
+    }
+}
+#[test]
+fn custom_child_starts_and_queries_retain_selected_ports() {
+    let (contracts, field, _) = selected_payload_context(true);
+    let spelling = field.spelling();
+    let carrier = json!([
+        "zkc.program/0",
+        [[
+            "constant",
+            "field.constant",
+            ["bls12-381.fr"],
+            "test/field.constant",
+            []
+        ]],
+        [
+            [
+                "function",
+                "selected_query",
+                [["t", BOOL]],
+                [spelling, BOOL],
+                [
+                    ["op", "query", "constant", ["1"], [], ["c"]],
+                    ["return", ["c", "t"]]
+                ],
+                ["query", []]
+            ],
+            [
+                "function",
+                "selected_start",
+                [["t", BOOL], ["shared", spelling]],
+                [BOOL],
+                [["return", ["t"]]],
+                ["start", []]
+            ]
+        ],
+        [],
+        []
+    ]);
+    let program = Program::decode(carrier.to_string().as_bytes(), &contracts).unwrap();
+    let query = &program.program.functions["selected_query"];
+    let state = [PhysicalType::parse(BOOL).unwrap()];
+    custom_helper(query, &state, &[event(true)], "main", "V").unwrap();
+    let mut wrong_query = event(true);
+    let origin = crate::logical::encode_tree(&json!([
+        "zkc.native-origin-template/0",
+        "main",
+        [],
+        [],
+        [
+            "query",
+            "Round",
+            "draw",
+            "input_2",
+            "random.koala-bear/0",
+            "draw",
+            "V"
+        ]
+    ]))
+    .unwrap();
+    wrong_query.origin = origin.iter().map(|b| format!("{b:02x}")).collect();
+    assert!(custom_helper(query, &state, &[wrong_query], "main", "V").is_err());
+    let origin = crate::logical::encode_tree(&json!([
+        "zkc.native-origin-template/0",
+        "main",
+        [],
+        [],
+        ["start", "Round", "child"]
+    ]))
+    .unwrap();
+    let mut start = NativeTranscriptEvent {
+        contract: "construction.start".into(),
+        origin: origin.iter().map(|b| format!("{b:02x}")).collect(),
+        payload: None,
+        bound: None,
+        start_inputs: Some(vec![field.logical()]),
+    };
+    let function = &program.program.functions["selected_start"];
+    custom_helper(function, &state, std::slice::from_ref(&start), "main", "V").unwrap();
+    start.start_inputs = Some(vec![crate::vm::LogicalType::parse("index").unwrap()]);
+    assert!(custom_helper(function, &state, &[start], "main", "V").is_err());
+}
+
+#[test]
+fn selected_record_codec_requires_permission_for_inactive_payload_children() {
+    let (contracts, field, variant) = selected_payload_context(false);
+    for payload in [field, variant] {
+        let f = selected_payload_fixture(true, &payload);
+        assert_eq!(
+            admit_selected_payload(&f, &contracts, None).unwrap_err().0,
+            "native-proof-verifier-resource"
+        );
+    }
+}
+
+#[test]
+fn record_codec_checks_wire_permission_at_its_own_boundary() {
+    for permission in [false, true] {
+        let (contracts, _, variant) = selected_payload_context(permission);
+        let f = selected_payload_fixture(true, &variant);
+        let program = Program::decode(f.program.to_string().as_bytes(), &contracts).unwrap();
+        let plan = f.plan.as_ref().unwrap();
+        let helper = custom_helper(
+            &program.program.functions["observe"],
+            &plan.state,
+            &f.events,
+            "main",
+            "V",
+        )
+        .unwrap();
+        let helpers = BTreeMap::from([("observe".into(), helper)]);
+        let checked = codec::CheckedCodec::new(
+            &program,
+            plan.codec.as_ref().unwrap(),
+            &plan.state,
+            &helpers,
+            "P",
+            "V",
+            None,
+        );
+        if permission {
+            assert!(checked.is_ok());
+        } else {
+            assert_eq!(checked.err().unwrap().0, "native-proof-wire-type");
+        }
+    }
+}
+
 #[test]
 fn combined_and_selected_admission_share_authored_native_and_custom_rules() {
     for fixture in [

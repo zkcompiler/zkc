@@ -205,8 +205,16 @@ impl Registry {
         }
         Ok(logical)
     }
-    pub(super) fn clear_implementations(&mut self) {
-        self.physical.clear();
+    pub(super) fn logical_only() -> Self {
+        // The mathematical inventory is fixed. An empty deployment must not
+        // construct every standard physical owner just to discard it.
+        Self {
+            logical: installed()
+                .expect("valid standard operation contribution")
+                .logical
+                .clone(),
+            physical: BTreeMap::new(),
+        }
     }
     pub(super) fn add_exact(&mut self, row: super::contracts::ExactImplementation) -> Result<()> {
         // Standard names remain reserved even when their deployment contribution

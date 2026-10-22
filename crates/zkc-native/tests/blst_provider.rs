@@ -612,6 +612,54 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
         .unwrap()
         .remove(0);
         assert_eq!(output.physical_type(), target);
+        for (declaration, input, importing) in [
+            (convert(&source, &target), value.clone(), true),
+            (convert(&target, &source), output.clone(), false),
+        ] {
+            let payload = match &input {
+                Value::Vector(v) => Some(v.len() * 32),
+                Value::BlstVector(v) => Some(v.len() * 32),
+                Value::Groups(v) => Some(v.len() * std::mem::size_of::<kernel::G1>()),
+                Value::BlstG1Vector(v) => Some(v.len() * 128),
+                Value::Bls12381G2Vector(v) => Some(v.len() * std::mem::size_of::<kernel::G2>()),
+                Value::BlstG2Vector(v) => Some(v.len() * std::mem::size_of::<Bls12381G2>()),
+                _ => None,
+            };
+            let retained = payload.map_or(512, |bytes| bytes + 256);
+            let memory = if !importing && payload.is_some() {
+                2 * retained
+            } else {
+                retained
+            };
+            for (limit, available, error) in [
+                (memory, retained, None),
+                (memory - 1, retained, Some("exhausted:numerical-bytes")),
+                (0, retained - 1, Some("exhausted:output-bytes")),
+            ] {
+                let native = backend(
+                    Policy {
+                        max_numerical_bytes: limit,
+                        ..Policy::default()
+                    },
+                    native_contracts(),
+                );
+                let carrier = program(&native, &declaration, &[], 1);
+                let mut driver = support::Controlled::new(native);
+                driver.output_limit = Some(available);
+                let (result, driver) = support::run_program(driver, &carrier, vec![input.clone()]);
+                if let Some(error) = error {
+                    assert_eq!(result.unwrap_err(), error);
+                    assert!(driver.outputs.is_empty());
+                } else {
+                    let result = result.unwrap();
+                    assert_eq!(
+                        b.encode_native_value(&result[0]).unwrap(),
+                        b.encode_native_value(&value).unwrap()
+                    );
+                }
+                assert_eq!(driver.inner.active_frames(), 0);
+            }
+        }
         let recovered = run(
             backend(Policy::default(), native_contracts()),
             &convert(&target, &source),
@@ -810,12 +858,8 @@ fn resident_output_work_and_memory_refusals_preserve_input_aliases() {
             .map(|v| encoder.encode_native_value(v).unwrap())
             .collect();
         let op = binding(name, domain, true);
-        // Destination families retain staging and final charges concurrently.
-        let memory = if name == "vector.scale" {
-            256 + bytes * 2
-        } else {
-            256 + bytes
-        };
+        // Resident constructors adopt their destination without a second buffer.
+        let memory = 256 + bytes;
         let retained = 256 + bytes;
         for (policy, available, expected) in [
             (
@@ -998,4 +1042,128 @@ fn granting_g1_msm_does_not_grant_g2_or_weaken_operand_premises() {
     assert!(
         matches!(result.unwrap().as_slice(), [Value::BlstG1(point)] if *point == kernel::G1::identity())
     );
+}
+
+#[test]
+fn retained_handles_recheck_revoked_policy_and_exact_grants_before_work() {
+    use zkc_native::{NativeCall, NativeOperation};
+    use zkc_runtime::vm::{
+        BackendError, Frame, FrameExit, ImplementationRequirements, Invocation, TimingRequirement,
+    };
+    struct Revoked {
+        inner: Option<NativeBackend>,
+        revoke: bool,
+        prepared: bool,
+    }
+    impl Backend for Revoked {
+        type Value = Value;
+        type Operation = NativeOperation;
+        type Call = NativeCall;
+        type Checkpoint = ();
+        fn prepare_binding(&self, binding: &OperationBinding) -> Option<NativeOperation> {
+            self.inner.as_ref().unwrap().prepare_binding(binding)
+        }
+        fn validate_value(&self, value: &Value) -> Result<(), BackendError> {
+            self.inner.as_ref().unwrap().validate_value(value)
+        }
+        fn enter_frame(&mut self, frame: &Frame, args: &[Value]) -> Result<(), BackendError> {
+            if self.revoke {
+                self.inner = Some(
+                    self.inner
+                        .take()
+                        .unwrap()
+                        .with_contracts(native_contracts().clone())?,
+                );
+                self.revoke = false;
+            }
+            self.inner.as_mut().unwrap().enter_frame(frame, args)
+        }
+        fn leave_frame(
+            &mut self,
+            frame: &Frame,
+            exit: FrameExit,
+            outputs: &[Value],
+        ) -> Result<(), BackendError> {
+            self.inner
+                .as_mut()
+                .unwrap()
+                .leave_frame(frame, exit, outputs)
+        }
+        fn apply(
+            &mut self,
+            operation: &NativeOperation,
+            i: &Invocation<'_>,
+            args: &[Value],
+        ) -> Result<Vec<Value>, BackendError> {
+            let inner = self.inner.as_mut().unwrap();
+            assert!(inner.prepare_binding(i.binding.declaration()).is_none());
+            inner.apply(operation, i, args)
+        }
+        fn apply_prepared(
+            &mut self,
+            operation: &NativeOperation,
+            call: &mut Option<NativeCall>,
+            i: &Invocation<'_>,
+            args: &[Value],
+        ) -> Result<Vec<Value>, BackendError> {
+            if !self.prepared {
+                return self.apply(operation, i, args);
+            }
+            let inner = self.inner.as_mut().unwrap();
+            assert!(inner.prepare_binding(i.binding.declaration()).is_none());
+            inner.apply_prepared(operation, call, i, args)
+        }
+    }
+    let binding = binding("curve.msm", "bls12-381.g1", true);
+    let grant = native_contracts()
+        .with_timing_grant(
+            binding.clone(),
+            ImplementationRequirements {
+                timing: TimingRequirement::VariableTime,
+                timing_operands: &[0, 1],
+            },
+        )
+        .unwrap();
+    for contracts in [
+        native_contracts_with_policy(ExecutionPolicy::general_purpose()),
+        grant,
+    ] {
+        for prepared in [false, true] {
+            let native = backend(
+                Policy {
+                    max_numerical_work: 0,
+                    ..Policy::default()
+                },
+                &contracts,
+            );
+            let carrier = program(&native, &binding, &[], 1);
+            let admitted = Program::decode(&carrier, &contracts).unwrap();
+            let caller = Revoked {
+                inner: Some(native),
+                revoke: true,
+                prepared,
+            };
+            let args = vec![
+                Value::BlstVector(Arc::new(kernel::ScalarVector::from_elements(vec![]))),
+                Value::BlstG1Vector(Arc::new(kernel::G1Vector::from_elements(vec![]))),
+            ];
+            let mut runner = Runner::new(&admitted, "main", "P", "session", caller, args)
+                .unwrap_or_else(|e| panic!("{}", e.error));
+            loop {
+                match runner.poll() {
+                    Action::Local(action) => {
+                        runner.execute_local(&action.cut).unwrap();
+                    }
+                    Action::Stopped(stop) => {
+                        assert!(
+                            matches!(stop.kind, StopKind::Backend(ref error) if error.code == "refused:implementation-permission")
+                        );
+                        break;
+                    }
+                    other => panic!("unexpected action: {other:?}"),
+                }
+            }
+            assert_eq!(runner.backend().inner.as_ref().unwrap().active_frames(), 0);
+        }
+    }
 }

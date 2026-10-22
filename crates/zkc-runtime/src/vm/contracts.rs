@@ -225,10 +225,11 @@ impl ContractsBuilder {
         Self::new(true)
     }
     fn new(standard: bool) -> Self {
-        let mut registry = operations::standard_registry();
-        if !standard {
-            registry.clear_implementations();
-        }
+        let registry = if standard {
+            operations::standard_registry()
+        } else {
+            operations::Registry::logical_only()
+        };
         Self {
             catalog: CatalogId::fresh(),
             registry,
@@ -746,24 +747,25 @@ impl Contracts {
                     && grant.requirements == requirements
             })
     }
-    pub fn permits_wire(&self, ty: &PhysicalType, codec: WireCodec) -> bool {
-        if check_type(
+    /// Check complete layout ownership in this immutable catalog, including
+    /// inactive alternatives. This does not grant a wire codec or execution policy.
+    pub fn validate_type(&self, ty: &PhysicalType) -> Result<()> {
+        check_type(
             self.context.standard,
             &self.context.representations,
             &self.context.aggregates,
             ty,
         )
-        .is_err()
-        {
-            return false;
-        }
-        permits_wire(
-            self.context.standard,
-            &self.context.aggregates,
-            &self.context.wire_permissions,
-            ty,
-            codec,
-        )
+    }
+    pub fn permits_wire(&self, ty: &PhysicalType, codec: WireCodec) -> bool {
+        self.validate_type(ty).is_ok()
+            && permits_wire(
+                self.context.standard,
+                &self.context.aggregates,
+                &self.context.wire_permissions,
+                ty,
+                codec,
+            )
     }
 
     pub fn physical_type(&self, spelling: &str) -> Result<PhysicalType> {
@@ -887,11 +889,25 @@ fn parse_type(
                 None => PhysicalType::new(logical, representation)?,
             }
         };
-        check_type(standard, representations, aggregates, &ty)?;
+        // Each parsed child has already passed this same node check. Borrowed
+        // descriptors supplied by callers use the complete recursive validator.
+        check_type_node(standard, representations, aggregates, &ty)?;
         Ok(ty)
     })
 }
 fn check_type(
+    standard: bool,
+    representations: &BTreeMap<&'static str, BTreeMap<LogicalType, PhysicalType>>,
+    aggregates: &BTreeMap<&'static str, AggregateRepresentation>,
+    ty: &PhysicalType,
+) -> Result<()> {
+    check_type_node(standard, representations, aggregates, ty)?;
+    for child in ty.children().unwrap_or_default() {
+        check_type(standard, representations, aggregates, child)?;
+    }
+    Ok(())
+}
+fn check_type_node(
     standard: bool,
     representations: &BTreeMap<&'static str, BTreeMap<LogicalType, PhysicalType>>,
     aggregates: &BTreeMap<&'static str, AggregateRepresentation>,
@@ -918,12 +934,12 @@ fn check_type(
                 );
             allowed
                 && match ty.children() {
-                    Some(children) => PhysicalType::formed_aggregate(
-                        ty.logical(),
+                    Some(children) => PhysicalType::check_aggregate_children(
+                        &ty.logical,
                         representation,
-                        children.to_vec(),
+                        children,
                     )
-                    .is_ok_and(|expected| expected == *ty),
+                    .is_ok(),
                     None => PhysicalType::new(ty.logical(), representation)
                         .is_ok_and(|expected| expected == *ty),
                 }
@@ -934,9 +950,6 @@ fn check_type(
             ErrorCode::Representation,
             "foreign-or-uninstalled-physical-type",
         ));
-    }
-    for child in ty.children().unwrap_or_default() {
-        check_type(standard, representations, aggregates, child)?;
     }
     Ok(())
 }

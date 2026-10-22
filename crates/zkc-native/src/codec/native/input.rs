@@ -7,9 +7,7 @@ use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 type Result<T> = std::result::Result<T, Error>;
 
 fn admitted_type(ty: &PhysicalType) -> bool {
-    crate::native_contracts()
-        .physical_type(&ty.spelling())
-        .is_ok_and(|admitted| admitted == *ty)
+    crate::native_contracts().validate_type(ty).is_ok()
 }
 
 /// Opaque physical-profile measurements, not authority to construct a value.

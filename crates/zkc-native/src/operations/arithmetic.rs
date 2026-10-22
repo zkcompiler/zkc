@@ -65,6 +65,14 @@ pub(crate) fn split_len(n: usize) -> Result<usize> {
         Ok(n / 2)
     }
 }
+/// Both ordinary and fixed vectors use the provider's checked reduction path.
+/// Callers validate operands and output allowance before numerical admission.
+pub(crate) fn dot<S: Family>(a: &[S], b: &[S], call: &crate::numerical::Call) -> Result<Value> {
+    equal_len(a.len(), b.len())?;
+    call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
+    call.scalar(512)?
+        .finish(|| Ok(S::field_value(S::dot(a, b)?)))
+}
 pub(crate) fn natural(attrs: &[String], i: usize) -> Result<usize> {
     attrs
         .get(i)
@@ -289,6 +297,13 @@ pub(super) fn dense<S: Family>(
     let boolean = |b| Ok(vec![Value::Bool(b)]);
     let width = std::mem::size_of::<S>();
     let call = crate::numerical::Call::new(p, i.max_output_bytes);
+    let output = |n, initial, bytes| {
+        if S::RESIDENT_STORAGE {
+            call.output_owned(n, initial, bytes)
+        } else {
+            call.output(n, initial, bytes)
+        }
+    };
     // At most two outputs occur in this family. Plain resident construction
     // retains its reservation until publication; dense destinations below use
     // their existing Output reservations instead.
@@ -313,7 +328,7 @@ pub(super) fn dense<S: Family>(
         let bytes = size(n, width)?;
         p.output(bytes, i.max_output_bytes)?;
         call.work_items(n, per_element, 1)?;
-        call.output(n, initial, bytes)
+        output(n, initial, bytes)
     };
     preflight_scalar_output(i, p)?;
     match name {
@@ -369,11 +384,7 @@ pub(super) fn dense<S: Family>(
         }
         "vector.dot" => {
             let (a, b) = (v(0)?, v(1)?);
-            equal_len(a.len(), b.len())?;
-            // Two loads, multiply/add, and any provider accumulator-lane reduction.
-            call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
-            let result = call.scalar(512)?;
-            Ok(vec![result.finish(|| Ok(S::field_value(S::dot(a, b)?)))?])
+            Ok(vec![dot(a, b, &call)?])
         }
         "field.from_index" => {
             let Value::Index(mut n) = *arg(0)? else {
@@ -549,8 +560,8 @@ pub(super) fn dense<S: Family>(
                     .checked_mul(2)
                     .ok_or_else(|| exhausted("numerical-work"))?,
             )?;
-            let mut left = call.output(half, S::zero(), bytes)?;
-            let mut right = call.output(half, S::zero(), bytes)?;
+            let mut left = output(half, S::zero(), bytes)?;
+            let mut right = output(half, S::zero(), bytes)?;
             left.as_mut_slice().copy_from_slice(&a[..half]);
             right.as_mut_slice().copy_from_slice(&a[half..]);
             Ok(vec![
@@ -668,7 +679,7 @@ pub(super) fn dense<S: Family>(
                 .and_then(|n| n.checked_add(outer as u64))
                 .ok_or_else(|| exhausted("numerical-work"))?;
             call.work(work)?;
-            let mut out = call.output(outer, S::zero(), bytes)?;
+            let mut out = output(outer, S::zero(), bytes)?;
             for (j, destination) in out.as_mut_slice().iter_mut().enumerate() {
                 let mut sum = S::zero();
                 if transpose == 0 {

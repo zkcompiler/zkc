@@ -614,6 +614,11 @@ impl LogicalType {
         depth: usize,
         budget: &mut super::structural::ParseBudget,
     ) -> Result<Self> {
+        // Only compound types own descriptors worth sharing. Flat types still
+        // consume their ordinary node budget, without allocating a cache key.
+        if !spelling.starts_with("variant:") && !spelling.contains('<') {
+            return Self::parse_uncached(spelling, depth, budget);
+        }
         if let Some(ty) = budget.cached(spelling, depth, true)? {
             return Ok(ty);
         }
@@ -672,7 +677,14 @@ impl LogicalType {
         // identity for one payload, because a variant descriptor keeps the text
         // it was given. Readers do not silently normalize a different identity
         // to an admitted spelling: docs/spec/ir/variants.md.
-        if parsed.spelling() != spelling {
+        let canonical = if let Some(domain) = parsed.resource_domain() {
+            spelling.split_once(':') == Some((parsed.kind.name(), domain.name()))
+        } else if parsed.identity == Identity::None {
+            spelling == parsed.kind.name()
+        } else {
+            spelling.split_once(':') == Some((parsed.kind.name(), parsed.identity.name()))
+        };
+        if !canonical {
             return Err(error("noncanonical nominal spelling"));
         }
         Ok(parsed)
@@ -767,190 +779,110 @@ pub enum Representation {
     MerkleDigests,
     MerkleTrees,
 }
+// One canonical name table defines both directions without constructing an
+// array of the larger, catalog-capable enum on every lookup.
+macro_rules! representation_names {
+    ($($variant:ident => $name:literal),* $(,)?) => {
+        pub fn name(self) -> &'static str {
+            match self {
+                Self::Extension(id) => id.name(),
+                $(Self::$variant => $name,)*
+            }
+        }
+        pub(super) fn parse(name: &str) -> Result<Self> {
+            if name.is_empty() || name.contains('@') {
+                return Err(error("uninstalled representation"));
+            }
+            match name {
+                $($name => Ok(Self::$variant),)*
+                _ => Err(representation_error("uninstalled representation")),
+            }
+        }
+    };
+}
 impl Representation {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Extension(id) => id.name(),
-            Self::Sequence => "logical.sequence/0",
-            Self::FieldArray => "arkworks.field-array/0",
-            Self::FixedVector => "plonky3.fixed-vector/0",
-            Self::Variant => "logical.variant/0",
-            Self::Bn254Fr => "arkworks.bn254-fr/0",
-            Self::Bn254FrVector => "arkworks.bn254-fr-vector/0",
-            Self::Bn254Polynomial => "arkworks.bn254-fr-polynomial/0",
-            Self::Bn254Round => "arkworks.bn254-fr-round/0",
-            Self::Bn254SparseCoo => "arkworks.bn254-fr-sparse-coo/0",
-            Self::Bn254G1 => "arkworks.bn254-g1/0",
-            Self::Bn254G1Vector => "arkworks.bn254-g1-vector/0",
-            Self::Bn254G2 => "arkworks.bn254-g2/0",
-            Self::Bn254Gt => "arkworks.bn254-gt/0",
-            Self::Bn254G2Vector => "arkworks.bn254-g2-vector/0",
-            Self::FrSparseCoo => "arkworks.fr-sparse-coo/0",
-            Self::DalekSparseCoo => "dalek.scalar-sparse-coo/0",
-            Self::KoalaBearSparseCoo => "plonky3.koala-bear-sparse-coo/0",
-            Self::KoalaBearExt8 => "plonky3.koala-bear.ext8-binomial3/0",
-            Self::KoalaBearExt8Vector => "plonky3.koala-bear.ext8-binomial3-vector/0",
-            Self::KoalaBearExt8Polynomial => "plonky3.koala-bear.ext8-binomial3-polynomial/0",
-            Self::KoalaBearExt8Round => "plonky3.koala-bear.ext8-binomial3-quadratic/0",
-            Self::KoalaBearExt8SparseCoo => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0",
-            Self::KoalaBearExt4 => "plonky3.koala-bear.ext4-binomial3/0",
-            Self::KoalaBearExt4Vector => "plonky3.koala-bear.ext4-binomial3-vector/0",
-            Self::KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
-            Self::KoalaBearExt4Round => "plonky3.koala-bear.ext4-binomial3-quadratic/0",
-            Self::KoalaBearExt4SparseCoo => "plonky3.koala-bear.ext4-binomial3-sparse-coo/0",
-            Self::Binary64 => "plonky3.gf2-64.pentanomial-4-3-1/0",
-            Self::Binary64Vector => "plonky3.gf2-64.pentanomial-4-3-1-vector/0",
-            Self::Binary64Polynomial => "plonky3.gf2-64.pentanomial-4-3-1-polynomial/0",
-            Self::Binary64Round => "plonky3.gf2-64.pentanomial-4-3-1-quadratic/0",
-            Self::Binary64SparseCoo => "plonky3.gf2-64.pentanomial-4-3-1-sparse-coo/0",
-            Self::Binary64Ext3 => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
-            Self::Binary64Ext3Vector => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-vector/0",
-            Self::Binary64Ext3Polynomial => {
-                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-polynomial/0"
-            }
-            Self::Binary64Ext3Round => {
-                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-quadratic/0"
-            }
-            Self::Binary64Ext3SparseCoo => {
-                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-sparse-coo/0"
-            }
-            Self::KoalaBear => "plonky3.koala-bear/0",
-            Self::KoalaBearVector => "plonky3.koala-bear-vector/0",
-            Self::KoalaBearPolynomial => "plonky3.koala-bear-polynomial/0",
-            Self::KoalaBearRound => "plonky3.koala-bear-quadratic/0",
-            Self::FrVector => "arkworks.fr-vector/0",
-            Self::Polynomial => "arkworks.polynomial/0",
-            Self::DalekScalar => "dalek.scalar/0",
-            Self::DalekVector => "dalek.scalar-vector/0",
-            Self::DalekPolynomial => "dalek.polynomial/0",
-            Self::DalekRound => "dalek.quadratic/0",
-            Self::Ristretto => "dalek.ristretto/0",
-            Self::RistrettoVector => "dalek.ristretto-vector/0",
-            Self::EdwardsPrime => "dalek.edwards-prime/0",
-            Self::EdwardsPrimeVector => "dalek.edwards-prime-vector/0",
-            Self::FrDiagonal => "arkworks.fr-diagonal/0",
-            Self::RistrettoDiagonal => "dalek.ristretto-diagonal/0",
-
-            Self::Bool => "native.bool/0",
-            Self::Index => "native.index/0",
-            Self::Indices => "native.indices/0",
-            Self::Bytes => "native.bytes/0",
-            Self::Shake128State => "native.shake128/0",
-            Self::Fr => "arkworks.fr/0",
-            Self::TableLsb => "arkworks.mle-lsb/0",
-            Self::TableMsb => "arkworks.mle-msb/0",
-            Self::Point => "arkworks.point/0",
-            Self::Round => "arkworks.quadratic/0",
-            Self::G1 => "arkworks.g1/0",
-            Self::Groups => "arkworks.g1-vector/0",
-            Self::ResourceUnit => "logical.resource_unit/0",
-            Self::Resource => "host.resource/0",
-            Self::Pcs => "arkworks.multilinear-pcs/0",
-            Self::MerkleRoot => "plonky3.merkle-root/0",
-            Self::MerklePath => "plonky3.merkle-path/0",
-            Self::MerkleState => "plonky3.merkle-state/0",
-            Self::MerkleRoots => "plonky3.merkle-roots/0",
-            Self::MerkleStates => "plonky3.merkle-states/0",
-            Self::Bls12381G2 => "arkworks.bls12-381-g2/0",
-            Self::Bls12381G2Vector => "arkworks.bls12-381-g2-vector/0",
-            Self::Bls12381Gt => "arkworks.bls12-381-gt/0",
-            Self::MerkleDigest => "plonky3.merkle-digest/0",
-            Self::MerkleProof => "plonky3.merkle-proof/0",
-            Self::MerkleTree => "plonky3.merkle-tree/0",
-            Self::MerkleDigests => "plonky3.merkle-digests/0",
-            Self::MerkleTrees => "plonky3.merkle-trees/0",
-        }
-    }
-    pub(super) fn parse(name: &str) -> Result<Self> {
-        if name.is_empty() || name.contains('@') {
-            return Err(error("uninstalled representation"));
-        }
-        [
-            Self::FieldArray,
-            Self::FixedVector,
-            Self::Sequence,
-            Self::Variant,
-            Self::Bn254Fr,
-            Self::Bn254FrVector,
-            Self::Bn254Polynomial,
-            Self::Bn254Round,
-            Self::Bn254SparseCoo,
-            Self::Bn254G1,
-            Self::Bn254G1Vector,
-            Self::Bn254G2,
-            Self::Bn254Gt,
-            Self::Bn254G2Vector,
-            Self::FrSparseCoo,
-            Self::DalekSparseCoo,
-            Self::KoalaBearExt8SparseCoo,
-            Self::KoalaBearExt8Vector,
-            Self::KoalaBearExt8Polynomial,
-            Self::KoalaBearExt8Round,
-            Self::KoalaBearExt4SparseCoo,
-            Self::KoalaBearExt4Vector,
-            Self::KoalaBearExt4Polynomial,
-            Self::KoalaBearExt4Round,
-            Self::KoalaBearExt4,
-            Self::Binary64,
-            Self::Binary64Vector,
-            Self::Binary64Polynomial,
-            Self::Binary64Round,
-            Self::Binary64SparseCoo,
-            Self::Binary64Ext3,
-            Self::Binary64Ext3Vector,
-            Self::Binary64Ext3Polynomial,
-            Self::Binary64Ext3Round,
-            Self::Binary64Ext3SparseCoo,
-            Self::KoalaBearSparseCoo,
-            Self::KoalaBear,
-            Self::KoalaBearExt8,
-            Self::KoalaBearVector,
-            Self::KoalaBearPolynomial,
-            Self::KoalaBearRound,
-            Self::FrVector,
-            Self::Polynomial,
-            Self::DalekScalar,
-            Self::DalekVector,
-            Self::DalekPolynomial,
-            Self::DalekRound,
-            Self::Ristretto,
-            Self::RistrettoVector,
-            Self::EdwardsPrime,
-            Self::EdwardsPrimeVector,
-            Self::FrDiagonal,
-            Self::RistrettoDiagonal,
-            Self::Bool,
-            Self::Index,
-            Self::Indices,
-            Self::Bytes,
-            Self::Shake128State,
-            Self::Fr,
-            Self::TableLsb,
-            Self::TableMsb,
-            Self::Point,
-            Self::Round,
-            Self::G1,
-            Self::Groups,
-            Self::ResourceUnit,
-            Self::Resource,
-            Self::Pcs,
-            Self::MerkleRoot,
-            Self::MerklePath,
-            Self::MerkleState,
-            Self::MerkleRoots,
-            Self::MerkleStates,
-            Self::Bls12381G2,
-            Self::Bls12381G2Vector,
-            Self::Bls12381Gt,
-            Self::MerkleDigest,
-            Self::MerkleProof,
-            Self::MerkleTree,
-            Self::MerkleDigests,
-            Self::MerkleTrees,
-        ]
-        .into_iter()
-        .find(|r| r.name() == name)
-        .ok_or_else(|| representation_error("uninstalled representation"))
+    representation_names! {
+        Sequence => "logical.sequence/0",
+        FieldArray => "arkworks.field-array/0",
+        FixedVector => "plonky3.fixed-vector/0",
+        Variant => "logical.variant/0",
+        Bn254Fr => "arkworks.bn254-fr/0",
+        Bn254FrVector => "arkworks.bn254-fr-vector/0",
+        Bn254Polynomial => "arkworks.bn254-fr-polynomial/0",
+        Bn254Round => "arkworks.bn254-fr-round/0",
+        Bn254SparseCoo => "arkworks.bn254-fr-sparse-coo/0",
+        Bn254G1 => "arkworks.bn254-g1/0",
+        Bn254G1Vector => "arkworks.bn254-g1-vector/0",
+        Bn254G2 => "arkworks.bn254-g2/0",
+        Bn254Gt => "arkworks.bn254-gt/0",
+        Bn254G2Vector => "arkworks.bn254-g2-vector/0",
+        FrSparseCoo => "arkworks.fr-sparse-coo/0",
+        DalekSparseCoo => "dalek.scalar-sparse-coo/0",
+        KoalaBearSparseCoo => "plonky3.koala-bear-sparse-coo/0",
+        KoalaBearExt8 => "plonky3.koala-bear.ext8-binomial3/0",
+        KoalaBearExt8Vector => "plonky3.koala-bear.ext8-binomial3-vector/0",
+        KoalaBearExt8Polynomial => "plonky3.koala-bear.ext8-binomial3-polynomial/0",
+        KoalaBearExt8Round => "plonky3.koala-bear.ext8-binomial3-quadratic/0",
+        KoalaBearExt8SparseCoo => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0",
+        KoalaBearExt4 => "plonky3.koala-bear.ext4-binomial3/0",
+        KoalaBearExt4Vector => "plonky3.koala-bear.ext4-binomial3-vector/0",
+        KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
+        KoalaBearExt4Round => "plonky3.koala-bear.ext4-binomial3-quadratic/0",
+        KoalaBearExt4SparseCoo => "plonky3.koala-bear.ext4-binomial3-sparse-coo/0",
+        Binary64 => "plonky3.gf2-64.pentanomial-4-3-1/0",
+        Binary64Vector => "plonky3.gf2-64.pentanomial-4-3-1-vector/0",
+        Binary64Polynomial => "plonky3.gf2-64.pentanomial-4-3-1-polynomial/0",
+        Binary64Round => "plonky3.gf2-64.pentanomial-4-3-1-quadratic/0",
+        Binary64SparseCoo => "plonky3.gf2-64.pentanomial-4-3-1-sparse-coo/0",
+        Binary64Ext3 => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+        Binary64Ext3Vector => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-vector/0",
+        Binary64Ext3Polynomial => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-polynomial/0",
+        Binary64Ext3Round => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-quadratic/0",
+        Binary64Ext3SparseCoo => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-sparse-coo/0",
+        KoalaBear => "plonky3.koala-bear/0",
+        KoalaBearVector => "plonky3.koala-bear-vector/0",
+        KoalaBearPolynomial => "plonky3.koala-bear-polynomial/0",
+        KoalaBearRound => "plonky3.koala-bear-quadratic/0",
+        FrVector => "arkworks.fr-vector/0",
+        Polynomial => "arkworks.polynomial/0",
+        DalekScalar => "dalek.scalar/0",
+        DalekVector => "dalek.scalar-vector/0",
+        DalekPolynomial => "dalek.polynomial/0",
+        DalekRound => "dalek.quadratic/0",
+        Ristretto => "dalek.ristretto/0",
+        RistrettoVector => "dalek.ristretto-vector/0",
+        EdwardsPrime => "dalek.edwards-prime/0",
+        EdwardsPrimeVector => "dalek.edwards-prime-vector/0",
+        FrDiagonal => "arkworks.fr-diagonal/0",
+        RistrettoDiagonal => "dalek.ristretto-diagonal/0",
+        Bool => "native.bool/0",
+        Index => "native.index/0",
+        Indices => "native.indices/0",
+        Bytes => "native.bytes/0",
+        Shake128State => "native.shake128/0",
+        Fr => "arkworks.fr/0",
+        TableLsb => "arkworks.mle-lsb/0",
+        TableMsb => "arkworks.mle-msb/0",
+        Point => "arkworks.point/0",
+        Round => "arkworks.quadratic/0",
+        G1 => "arkworks.g1/0",
+        Groups => "arkworks.g1-vector/0",
+        ResourceUnit => "logical.resource_unit/0",
+        Resource => "host.resource/0",
+        Pcs => "arkworks.multilinear-pcs/0",
+        MerkleRoot => "plonky3.merkle-root/0",
+        MerklePath => "plonky3.merkle-path/0",
+        MerkleState => "plonky3.merkle-state/0",
+        MerkleRoots => "plonky3.merkle-roots/0",
+        MerkleStates => "plonky3.merkle-states/0",
+        Bls12381G2 => "arkworks.bls12-381-g2/0",
+        Bls12381G2Vector => "arkworks.bls12-381-g2-vector/0",
+        Bls12381Gt => "arkworks.bls12-381-gt/0",
+        MerkleDigest => "plonky3.merkle-digest/0",
+        MerkleProof => "plonky3.merkle-proof/0",
+        MerkleTree => "plonky3.merkle-tree/0",
+        MerkleDigests => "plonky3.merkle-digests/0",
+        MerkleTrees => "plonky3.merkle-trees/0",
     }
 }
 

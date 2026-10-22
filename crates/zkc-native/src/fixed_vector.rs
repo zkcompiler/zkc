@@ -241,12 +241,13 @@ pub(crate) fn apply(
                 return Err(refused("fixed-vector-type"));
             }
             policy.output(512, invocation.max_output_bytes)?;
+            let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
             match (&a.storage, &b.storage) {
-                (Storage::KoalaBear(a), Storage::KoalaBear(b)) => Value::KoalaBearField(
-                    zkc_kernels::plonky3::dot(a, b).map_err(crate::field_error)?,
-                ),
+                (Storage::KoalaBear(a), Storage::KoalaBear(b)) => {
+                    crate::operations::arithmetic::dot(a, b, &call)?
+                }
                 (Storage::Blst(a), Storage::Blst(b)) => {
-                    Value::BlstField(a.dot(b).map_err(crate::field_error)?)
+                    crate::operations::arithmetic::dot(a.as_elements(), b.as_elements(), &call)?
                 }
                 _ => return Err(refused("fixed-vector-type")),
             }

@@ -79,6 +79,15 @@ impl NativeBackend {
         if operation.binding.declaration != *i.binding.declaration() {
             return Err(crate::refused("kernel-binding"));
         }
+        // Handles can survive an idle backend's policy change. Recheck exact
+        // authorization at use before charging work or reaching the handler.
+        if !self.contracts.permits_implementation(
+            &operation.binding.declaration,
+            operation.implementation_id,
+            operation.requirements,
+        ) {
+            return Err(crate::refused("implementation-permission"));
+        }
         if operation.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }

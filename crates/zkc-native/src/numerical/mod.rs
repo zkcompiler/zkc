@@ -7,7 +7,7 @@ use crate::{Policy, Result, exhausted};
 use zkc_kernels::numerical::{self, Scratch};
 
 /// The native adapter selects the numerical limits; no backend authority enters
-/// the scope. Value constructors run while staging and result charges overlap.
+/// the scope. Constructors retain the storage required by their freeze contract.
 pub(crate) struct Call {
     scope: numerical::Call,
 }
@@ -46,6 +46,18 @@ impl Call {
     }
     pub(crate) fn scratch<T: Clone>(&self, len: usize, initial: T) -> Result<Scratch<'_, T>> {
         self.scope.scratch(len, initial).map_err(failure)
+    }
+    /// The final constructor adopts this Vec without allocating another buffer.
+    pub(crate) fn output_owned<T: Clone>(
+        &self,
+        len: usize,
+        initial: T,
+        retained_bytes: usize,
+    ) -> Result<Output<'_, T>> {
+        self.scope
+            .output_owned(len, initial, retained_bytes)
+            .map(Output)
+            .map_err(failure)
     }
     pub(crate) fn reserve_workspace<T>(&self, elements: usize) -> Result<impl Drop + '_> {
         self.scope.reserve_workspace::<T>(elements).map_err(failure)

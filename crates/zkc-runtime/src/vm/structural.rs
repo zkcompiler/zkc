@@ -392,6 +392,42 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn nominal_types_preserve_exact_spelling_and_charge_each_occurrence() {
+        for spelling in [
+            "bool",
+            "index",
+            "indices",
+            "bytes",
+            "shake128_state",
+            "field:koala-bear",
+            "field:bls12-381.fr",
+            "group:bls12-381.g1",
+            "group:bn254.g2",
+            "rng:bls12-381.fr",
+            "transcript:merlin3.bls12-381.fr64be/0",
+            "resource_unit:Slot.A",
+        ] {
+            let mut budget = ParseBudget {
+                remaining: 2,
+                ..ParseBudget::new()
+            };
+            for remaining in [1, 0] {
+                let ty = LogicalType::parse_nested(spelling, 0, &mut budget).unwrap();
+                assert_eq!(ty.spelling(), spelling);
+                assert_eq!(budget.remaining(), remaining);
+            }
+            let error = LogicalType::parse_nested(spelling, 0, &mut budget).unwrap_err();
+            assert_eq!(error.detail, "logical-type-limit");
+            for invalid in [format!("{spelling}:"), format!("{spelling} ")] {
+                assert!(LogicalType::parse(&invalid).is_err(), "{invalid}");
+            }
+        }
+        for spelling in ["bool:", "index:", "bytes:", "Bool", "field:KoalaBear"] {
+            assert!(LogicalType::parse(spelling).is_err(), "{spelling}");
+        }
+    }
+
+    #[test]
     fn native_protocol_ports_exclude_affine_variants_but_allow_resources() {
         let variant = zkc_test_support::variants::logical(
             "Local",

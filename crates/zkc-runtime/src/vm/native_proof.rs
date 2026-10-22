@@ -294,6 +294,17 @@ fn helper<'a>(
     }))
 }
 
+// Construction descriptors specify logical events. Their executable helpers
+// retain the exact admitted layouts; ports never imply an implicit conversion.
+fn selected_port(
+    port: Option<&PhysicalType>,
+    logical: &super::LogicalType,
+) -> Result<PhysicalType> {
+    port.filter(|ty| ty.logical() == *logical)
+        .cloned()
+        .ok_or_else(|| refuse("native-proof-helper-signature"))
+}
+
 fn custom_helper<'a>(
     function: &'a Function,
     state: &[PhysicalType],
@@ -386,16 +397,16 @@ fn custom_helper<'a>(
                 return Err(refuse("native-proof-helper-signature"));
             }
             for input in inputs {
-                expected_inputs.push(
-                    PhysicalType::default_for(input.clone())
-                        .map_err(|_| refuse("native-proof-helper-signature"))?,
-                );
+                expected_inputs.push(selected_port(
+                    function.inputs.get(expected_inputs.len()).map(|(_, ty)| ty),
+                    input,
+                )?);
             }
         } else if let Some(payload) = &event.payload {
-            expected_inputs.push(
-                PhysicalType::default_for(payload.clone())
-                    .map_err(|_| refuse("native-proof-helper-signature"))?,
-            );
+            expected_inputs.push(selected_port(
+                function.inputs.get(expected_inputs.len()).map(|(_, ty)| ty),
+                payload,
+            )?);
         } else {
             if origin[4][6].as_str() != Some(validator)
                 || origin[4][5].as_str()
@@ -407,7 +418,10 @@ fn custom_helper<'a>(
             {
                 return Err(refuse("native-proof-query-origin"));
             }
-            expected_outputs.push(query_result(&origin, event.bound.is_some())?);
+            expected_outputs.push(selected_port(
+                function.outputs.get(expected_outputs.len()),
+                &query_result(&origin, event.bound.is_some())?.logical(),
+            )?);
         }
     }
     expected_inputs.extend(std::iter::repeat_n(
