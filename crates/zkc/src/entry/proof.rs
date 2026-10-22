@@ -525,7 +525,7 @@ impl ProofEntry {
 }
 
 /// One file call retains setup imports from output preflight through execution.
-/// Candidate proof bytes are supplied only after this preparation succeeds.
+/// Candidate proof bytes are supplied only after this preflight succeeds.
 pub struct ProofFileCall<'a> {
     host: &'a ProofEntry,
     operation: ProofOperation,
@@ -550,8 +550,9 @@ impl ProofEntry {
     }
     /// Check selected result codecs and authenticate setup material before
     /// reading candidate proof bytes.
+    /// Request validation and execution preparation take place in `execute`.
     /// This does not issue resources or execute a proof.
-    pub fn prepare_file_call(
+    pub fn preflight_file_call(
         &self,
         operation: ProofOperation,
         request: ProofRequest,

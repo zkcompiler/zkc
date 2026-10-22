@@ -191,8 +191,9 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     let width = width(value, policy)?;
     policy.wire(width).map_err(|_| Error::Limit)?;
     peak(policy, value.retained_bytes(), width)?;
-    // Reuse the type-owned canonical payload encoders.
-    let mut bytes = crate::matrix::encode(value, policy)
+    // Type-owned encoders produce complete canonical frames. Validate their
+    // framing against the expected physical type without rewriting it.
+    let bytes = crate::matrix::encode(value, policy)
         .or_else(|| crate::oracle::encode(value, policy))
         .or_else(|| crate::merkle::encode(value, policy))
         .or_else(|| super::bn254::encode(value, policy))
@@ -217,7 +218,6 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     if bytes.len() != width {
         return Err(unsupported());
     }
-    bytes[5] = format(&value.physical_type()).ok_or_else(unsupported)?.0;
     let (retained, _, _) = scan(&value.physical_type(), &bytes, policy)?;
     peak(policy, retained, width)?;
     Ok(bytes)

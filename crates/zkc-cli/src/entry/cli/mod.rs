@@ -182,7 +182,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             )?;
             report["status"] = json!("inputs-checked");
         } else {
-            let call = host.prepare_file_call(
+            let call = host.preflight_file_call(
                 if operation == Operation::Prove {
                     ProofOperation::Prove
                 } else {

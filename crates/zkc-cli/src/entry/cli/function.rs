@@ -1,4 +1,4 @@
-//! Function execution delegates admission, preparation and control to EntryHost.
+//! Function commands delegate admission, preparation and control to FunctionEntry.
 use super::*;
 use crate::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
 use crate::project::CheckedInterface;
@@ -57,7 +57,7 @@ pub(super) fn execute(
     )?;
     report["deployments"] = json!(
         bindings
-            .authority
+            .authority()
             .iter()
             .map(|(id, a)| (
                 id,
@@ -68,6 +68,7 @@ pub(super) fn execute(
             ))
             .collect::<std::collections::BTreeMap<_, _>>()
     );
+    let (authority, context, result_encoder) = bindings.into_parts();
     report["phase"] = json!("admission");
     let host = measured(args, report, "admission", |_| {
         FunctionEntry::admit(
@@ -77,10 +78,9 @@ pub(super) fn execute(
                 binding: options.proof.binding,
                 ..Default::default()
             },
-            std::mem::take(&mut bindings.authority),
+            authority,
         )
     })?;
-    bindings.check_operations(host.deployments())?;
     if invocation.results.is_some() {
         interface.check_result_encoding()?;
     }
@@ -98,10 +98,7 @@ pub(super) fn execute(
             })
     })?;
     documents.protect(&mut destinations)?;
-    let request = FunctionRequest {
-        arguments,
-        context: std::mem::take(&mut bindings.context),
-    };
+    let request = FunctionRequest { arguments, context };
     if checking {
         host.check_inputs(request)?;
         report["status"] = json!("inputs-checked");
@@ -123,7 +120,7 @@ pub(super) fn execute(
         if invocation.results.is_some() {
             measured(args, report, "output_encoding_and_publication", |report| {
                 report["phase"] = json!("results");
-                let encoded = bindings.encode_result(&value.into_value(), capacity)?;
+                let encoded = result_encoder.encode(&value.into_value())?;
                 report["phase"] = json!("publication");
                 crate::files::publication(
                     destinations.publish(&[("results", &encoded)]),

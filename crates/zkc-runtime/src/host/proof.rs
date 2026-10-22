@@ -107,6 +107,31 @@ impl Transport {
     }
 }
 
+fn write_message<B: ProofBackend>(
+    writer: &mut ProofWriter,
+    backend: &B,
+    value: &B::Value,
+    format: ProofFormat,
+    ledger: Option<&crate::vm::ExecutionLedger>,
+) -> Result<(), ArtifactFailure> {
+    let bound = if format == ProofFormat::RawBytes {
+        value.retained_bytes()
+    } else {
+        backend
+            .encoding_bound(value)
+            .map_err(ArtifactFailure::Wire)?
+    };
+    // Keep the temporary allowance through encoding and the writer's copy,
+    // then release it before the next message. Raw payloads remain borrowed.
+    let _live = crate::host::wire::reserve_allocation(ledger, bound)
+        .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
+    let bytes = format
+        .encode(backend, value)
+        .map_err(ArtifactFailure::Wire)?;
+    writer.message(&bytes)?;
+    Ok(())
+}
+
 /// Execute a fresh producer after application admission. The Host owns binding,
 /// transport and capacity selection. No deployment authority is derived here.
 pub fn produce<B: ProofBackend>(
@@ -116,42 +141,6 @@ pub fn produce<B: ProofBackend>(
     limit: usize,
     ledger: Option<crate::vm::ExecutionLedger>,
 ) -> ArtifactReport<Produced<B::Value>> {
-    let encoding_retained = std::cell::RefCell::new(None);
-    produce_admitted_with_limit(
-        runner,
-        expected_binding,
-        transport,
-        limit,
-        ledger.clone(),
-        |backend, value| {
-            let bound = if transport.format() == ProofFormat::RawBytes {
-                value.retained_bytes()
-            } else {
-                backend
-                    .encoding_bound(value)
-                    .map_err(ArtifactFailure::Wire)?
-            };
-            // The allocation allowance includes retention/framing slack. The
-            // writer checks actual frame bytes before any proof append.
-            let live = crate::host::wire::reserve_allocation(ledger.as_ref(), bound)
-                .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
-            encoding_retained.replace(live);
-            transport
-                .format()
-                .encode(backend, value)
-                .map_err(ArtifactFailure::Wire)
-        },
-    )
-}
-
-fn produce_admitted_with_limit<B: Backend>(
-    runner: &mut Runner<B>,
-    expected_binding: &[u8; 32],
-    transport: Transport,
-    limit: usize,
-    ledger: Option<crate::vm::ExecutionLedger>,
-    encode: impl for<'a> Fn(&B, &'a B::Value) -> Result<std::borrow::Cow<'a, [u8]>, ArtifactFailure>,
-) -> ArtifactReport<Produced<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;
     }
@@ -159,7 +148,7 @@ fn produce_admitted_with_limit<B: Backend>(
         transport.format(),
         expected_binding,
         limit,
-        ledger,
+        ledger.clone(),
     ) {
         Ok(writer) => writer,
         Err(error) => {
@@ -182,7 +171,13 @@ fn produce_admitted_with_limit<B: Backend>(
                     .cut()
                     .ok_or(ArtifactFailure::UnexpectedCommunication)?;
                 let packet = runner.take_send(&cut)?;
-                writer.message(&encode(runner.backend(), &packet.payload)?)?;
+                write_message(
+                    &mut writer,
+                    runner.backend(),
+                    &packet.payload,
+                    transport.format(),
+                    ledger.as_ref(),
+                )?;
             }
             Action::Send(_) | Action::Receive(_) => {
                 return Err(ArtifactFailure::UnexpectedCommunication);
@@ -193,7 +188,13 @@ fn produce_admitted_with_limit<B: Backend>(
                     let proof = outputs
                         .last()
                         .ok_or(ArtifactFailure::UnexpectedCommunication)?;
-                    writer.message(&encode(runner.backend(), proof)?)?;
+                    write_message(
+                        &mut writer,
+                        runner.backend(),
+                        proof,
+                        transport.format(),
+                        ledger.as_ref(),
+                    )?;
                 }
                 return Ok(outputs);
             }

@@ -44,4 +44,4 @@ mod resolver;
 pub use resolver::Documents;
 
 mod invocations;
-pub use invocations::{InvocationInputError, Invocations};
+pub use invocations::{FunctionResultEncoder, InvocationInputError, Invocations};

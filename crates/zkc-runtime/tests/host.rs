@@ -197,6 +197,223 @@ fn independent_values_complete_joint_and_proof_and_preserve_wire() {
 }
 
 #[test]
+fn independent_measurement_and_decode_complete_receives_without_shared_ledger() {
+    let report = run(
+        &bundle(),
+        "session",
+        inputs(Host::default(), Host::default()),
+        run_limits(),
+        &mut NoHooks,
+    )
+    .unwrap();
+    assert_eq!(report.outcome, Outcome::Completed);
+    assert_eq!(report.roles[1].outputs, [TestValue::Bool(true)]);
+    assert_eq!(report.wire.receives, 1);
+    assert_eq!(report.backends[1].1.measurements.get(), 1);
+    assert_eq!(report.backends[1].1.decodes.get(), 1);
+
+    let mut validator = runner("V", Host::default(), None);
+    let report = proof::validate(&mut validator, &proof_bytes(), &[7; 32], format(), 0, None);
+    assert_eq!(report.outcome.unwrap(), [TestValue::Bool(true)]);
+    assert_eq!((report.messages, report.bytes), (1, 55));
+    assert_eq!(validator.backend().measurements.get(), 1);
+    assert_eq!(validator.backend().decodes.get(), 1);
+}
+
+struct ConservativeEncoding {
+    host: Host,
+    ledger: ExecutionLedger,
+    encodings: std::cell::RefCell<Vec<ExecutionLedgerUsage>>,
+}
+impl Backend for ConservativeEncoding {
+    type Value = TestValue;
+    type Operation = BoundSignature;
+    type Call = ();
+    type Checkpoint = ();
+    fn supports_boolean_literals(&self) -> bool {
+        self.host.supports_boolean_literals()
+    }
+    fn validate_value(&self, value: &TestValue) -> Result<(), BackendError> {
+        self.host.validate_value(value)
+    }
+    fn enter_frame(&mut self, frame: &Frame, values: &[TestValue]) -> Result<(), BackendError> {
+        self.host.enter_frame(frame, values)
+    }
+    fn leave_frame(
+        &mut self,
+        frame: &Frame,
+        exit: FrameExit,
+        values: &[TestValue],
+    ) -> Result<(), BackendError> {
+        self.host.leave_frame(frame, exit, values)
+    }
+    fn apply(
+        &mut self,
+        operation: &BoundSignature,
+        invocation: &Invocation<'_>,
+        values: &[TestValue],
+    ) -> Result<Vec<TestValue>, BackendError> {
+        self.host.apply(operation, invocation, values)
+    }
+}
+impl WireBackend for ConservativeEncoding {
+    fn supports_wire(&self, ty: &PhysicalType) -> bool {
+        self.host.supports_wire(ty)
+    }
+    fn fixed_wire_size(&self, ty: &PhysicalType) -> Option<usize> {
+        self.host.fixed_wire_size(ty)
+    }
+    fn encoding_bound(&self, _: &TestValue) -> Result<usize, WireError> {
+        Ok(5124)
+    }
+    fn decoding_bound(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<usize, WireError> {
+        self.host.decoding_bound(ty, bytes)
+    }
+    fn encode_wire(&self, value: &TestValue) -> Result<Vec<u8>, WireError> {
+        self.encodings.borrow_mut().push(self.ledger.snapshot());
+        self.host.encode_wire(value)
+    }
+    fn decode_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<TestValue, WireError> {
+        self.host.decode_wire(ty, bytes)
+    }
+}
+impl ProofBackend for ConservativeEncoding {
+    fn acceptance(&self, value: &TestValue) -> Option<bool> {
+        self.host.acceptance(value)
+    }
+}
+
+#[test]
+fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
+    let program = Program::decode(
+        &serde_json::to_vec(&json!([
+            "zkc.program/0",
+            [],
+            [],
+            [
+                [
+                    "participant",
+                    "p",
+                    "root",
+                    "P",
+                    [["x", BOOL]],
+                    [],
+                    [
+                        ["send", "first", "s", "V", "x"],
+                        ["send", "second", "s", "V", "x"],
+                        ["return", []]
+                    ],
+                    []
+                ],
+                [
+                    "participant",
+                    "v",
+                    "root",
+                    "V",
+                    [],
+                    [BOOL],
+                    [
+                        ["receive", "first", "s", "P", "x", BOOL],
+                        ["receive", "second", "s", "P", "y", BOOL],
+                        ["return", ["y"]]
+                    ],
+                    []
+                ]
+            ],
+            [["entry", "main", [["P", "p"], ["V", "v"]]]]
+        ]))
+        .unwrap(),
+    )
+    .unwrap();
+    // The smaller capacity admits encoding, but cannot also admit its append.
+    // At 7000 bytes either message fits, while two encoding allowances cannot.
+    for live_bytes in [1024 + 40 + 5124 + 14, 7000] {
+        let ledger = ExecutionLedger::new(
+            ValueBudget {
+                live_bytes,
+                total_bytes: 65536,
+            },
+            WorkBudget::default(),
+        );
+        let mut producer = Runner::new_for_role_with_ledger(
+            &program,
+            "main",
+            "P",
+            "session",
+            ConservativeEncoding {
+                host: Host::default(),
+                ledger: ledger.clone(),
+                encodings: Default::default(),
+            },
+            vec![TestValue::Bool(true)],
+            ValueBudget {
+                live_bytes: 1024,
+                total_bytes: 65536,
+            },
+            WorkBudget::default(),
+            Some(ledger.clone()),
+        )
+        .unwrap_or_else(|_| panic!("producer"));
+        let loaded = ledger.snapshot();
+        assert_eq!(loaded.live_reserved_bytes, 1024);
+        let report = proof::produce(
+            &mut producer,
+            &[7; 32],
+            format(),
+            MAX_PROOF_BYTES,
+            Some(ledger.clone()),
+        );
+        let encodings = producer.backend().encodings.borrow().clone();
+        assert_eq!(encodings[0].live_reserved_bytes, 1024 + 40 + 5124);
+        if live_bytes == 7000 {
+            assert_eq!((report.messages, report.bytes), (2, 70));
+            assert!(report.cancelled.is_none());
+            let produced = report.outcome.unwrap();
+            let mut expected = proof_bytes();
+            expected.extend_from_within(40..55);
+            assert_eq!(produced.proof, expected);
+            assert_eq!(encodings.len(), 2);
+            assert_eq!(encodings[1].live_reserved_bytes, 1024 + 55 + 5124);
+            let used = ledger.snapshot();
+            assert_eq!(used.live_reserved_bytes, 1024 + 70);
+            assert_eq!(
+                used.total_value_bytes,
+                loaded.total_value_bytes + 70 + 2 * 5124
+            );
+            drop(producer);
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 70);
+            let (bytes, outputs, retained) = produced.into_parts();
+            assert_eq!(bytes, expected);
+            assert!(outputs.is_empty());
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 70);
+            drop(bytes);
+            drop(outputs);
+            drop(retained);
+            assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+            assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
+        } else {
+            assert!(matches!(
+                report.outcome,
+                Err(ArtifactFailure::Format(FormatError::Limit))
+            ));
+            assert_eq!((report.messages, report.bytes), (0, 40));
+            assert!(report.cancelled.is_some());
+            assert_eq!(encodings.len(), 1);
+            assert_eq!(producer.backend().host.encodes.get(), 1);
+            assert_eq!(producer.usage().instructions, 1);
+            let used = ledger.snapshot();
+            assert_eq!(used.live_reserved_bytes, 0);
+            assert_eq!(
+                used.total_value_bytes,
+                loaded.total_value_bytes + 40 + 5124 + 15
+            );
+            drop(producer);
+            assert_eq!(ledger.snapshot(), used);
+        }
+    }
+}
+
+#[test]
 fn actual_role_wire_profiles_refuse_before_entering_any_runner() {
     let bundle = bundle();
     for restricted in [0, 1] {
@@ -237,6 +454,258 @@ impl Hooks<Host> for Change {
         Ok(Some(self.0.to_vec()))
     }
 }
+
+struct ReplaceStorage {
+    replacement: Option<Vec<u8>>,
+    ledger: ExecutionLedger,
+    before: Option<ExecutionLedgerUsage>,
+    before_cancellation: Option<ExecutionLedgerUsage>,
+}
+impl Hooks<Host> for ReplaceStorage {
+    fn transfer(
+        &mut self,
+        _: Exchange<'_>,
+        bytes: &[u8],
+        _: usize,
+    ) -> Result<Option<Vec<u8>>, String> {
+        assert_eq!(bytes, b"ZKCV\0\x05\x01");
+        self.before = Some(self.ledger.snapshot());
+        assert_eq!(self.before.unwrap().live_reserved_bytes, 2 * 64 + 7);
+        Ok(self.replacement.take())
+    }
+    fn observe(&mut self, _: &str, _: &Host, phase: Phase) -> Result<Option<String>, String> {
+        if phase == Phase::BeforeCancellation {
+            self.before_cancellation = Some(self.ledger.snapshot());
+        }
+        Ok(None)
+    }
+}
+
+#[test]
+fn joint_replacement_charges_capacity_and_releases_storage_after_receive() {
+    let mut replacement = Vec::with_capacity(64);
+    replacement.extend_from_slice(b"ZKCV\0\x05\x00");
+    let capacity = replacement.capacity();
+    let ledger = ExecutionLedger::new(
+        ValueBudget {
+            // Both runner allowances, replacement capacity and decode storage.
+            live_bytes: 2 * 64 + capacity + 8,
+            total_bytes: 65536,
+        },
+        WorkBudget::default(),
+    );
+    let mut hooks = ReplaceStorage {
+        replacement: Some(replacement),
+        ledger: ledger.clone(),
+        before: None,
+        before_cancellation: None,
+    };
+    let report = run_with_ledger(
+        &bundle(),
+        "session",
+        inputs(Host::default(), Host::default()),
+        run_limits(),
+        &mut hooks,
+        Some(ledger.clone()),
+    )
+    .unwrap();
+    assert_eq!(report.outcome, Outcome::Completed);
+    assert_eq!(report.roles[1].outputs, [TestValue::Bool(false)]);
+    assert!(report.pending.is_none());
+    assert_eq!(
+        report.wire,
+        WireUsage {
+            sends: 1,
+            receives: 1,
+            sent_bytes: 7,
+            replacement_bytes: 7,
+        }
+    );
+    assert_eq!(report.reached[1].replacement_bytes, Some(7));
+    assert_eq!(report.backends[1].1.measurements.get(), 1);
+    assert_eq!(report.backends[1].1.decodes.get(), 1);
+    let used = ledger.snapshot();
+    assert_eq!(used.live_reserved_bytes, 2 * 64);
+    // Decoder allowance, the received inline value and its retained root result
+    // each charge eight bytes under the existing VM contract.
+    assert_eq!(
+        used.total_value_bytes,
+        hooks.before.unwrap().total_value_bytes + capacity + 3 * 8
+    );
+    assert_eq!(
+        hooks.before_cancellation.unwrap().live_reserved_bytes,
+        2 * 64
+    );
+    drop(report);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
+}
+
+#[test]
+fn joint_replacement_refusal_preserves_original_pending_storage_and_wire_counters() {
+    // Wire oversize, overlapping live storage, then cumulative allocation refusal.
+    for (length, live_bytes, total_bytes, charged) in [
+        (4097usize, 16384, 65536, false),
+        (7, 2 * 64 + 64, 65536, true),
+        (7, 1024, 8 + 7 + 63, false),
+    ] {
+        let mut replacement = Vec::with_capacity(length.max(64));
+        replacement.resize(length, 0);
+        let capacity = replacement.capacity();
+        let ledger = ExecutionLedger::new(
+            ValueBudget {
+                live_bytes,
+                total_bytes,
+            },
+            WorkBudget::default(),
+        );
+        let mut hooks = ReplaceStorage {
+            replacement: Some(replacement),
+            ledger: ledger.clone(),
+            before: None,
+            before_cancellation: None,
+        };
+        let report = run_with_ledger(
+            &bundle(),
+            "session",
+            inputs(Host::default(), Host::default()),
+            run_limits(),
+            &mut hooks,
+            Some(ledger.clone()),
+        )
+        .unwrap();
+        assert!(matches!(
+            report.outcome,
+            Outcome::DriverFailed(Failure {
+                kind: FailureKind::Limit,
+                ..
+            })
+        ));
+        assert_eq!(
+            report.wire,
+            WireUsage {
+                sends: 1,
+                receives: 0,
+                sent_bytes: 7,
+                replacement_bytes: 0,
+            }
+        );
+        let pending = report.pending.as_ref().unwrap();
+        assert_eq!(pending.bytes, b"ZKCV\0\x05\x01");
+        assert_eq!(pending.original_bytes, 7);
+        assert_eq!(report.reached[1].replacement_bytes, None);
+        assert_eq!(report.reached[1].receive_completion, None);
+        assert_eq!(report.backends[1].1.measurements.get(), 0);
+        assert_eq!(report.backends[1].1.decodes.get(), 0);
+        assert!(matches!(
+            report.roles[1].before,
+            State::Unpolled {
+                kind: Some(CutKind::Receive),
+                ..
+            }
+        ));
+        let used = ledger.snapshot();
+        let before = hooks.before.unwrap();
+        assert_eq!(
+            hooks.before_cancellation.unwrap().live_reserved_bytes,
+            2 * 64 + 7
+        );
+        assert_eq!(used.live_reserved_bytes, 7);
+        assert_eq!(
+            used.total_value_bytes,
+            before.total_value_bytes + if charged { capacity } else { 0 }
+        );
+        assert_eq!(
+            used.logical_bytes,
+            before.logical_bytes + if charged { capacity as u64 } else { 0 }
+        );
+        drop(report);
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
+    }
+}
+
+#[test]
+fn joint_larger_replacement_keeps_its_reservation_after_measurement_refusal() {
+    let mut replacement = Vec::with_capacity(8192);
+    replacement.resize(4096, 0);
+    let capacity = replacement.capacity();
+    let ledger = ExecutionLedger::new(
+        ValueBudget {
+            live_bytes: 2 * 64 + 7 + capacity,
+            total_bytes: 65536,
+        },
+        WorkBudget::default(),
+    );
+    let mut hooks = ReplaceStorage {
+        replacement: Some(replacement),
+        ledger: ledger.clone(),
+        before: None,
+        before_cancellation: None,
+    };
+    let report = run_with_ledger(
+        &bundle(),
+        "session",
+        inputs(
+            Host::default(),
+            Host {
+                fault: Fault::MeasureLimit,
+                ..Host::default()
+            },
+        ),
+        run_limits(),
+        &mut hooks,
+        Some(ledger.clone()),
+    )
+    .unwrap();
+    assert!(matches!(
+        report.outcome,
+        Outcome::DriverFailed(Failure {
+            kind: FailureKind::Limit,
+            ..
+        })
+    ));
+    assert_eq!(
+        report.wire,
+        WireUsage {
+            sends: 1,
+            receives: 0,
+            sent_bytes: 7,
+            replacement_bytes: 4096,
+        }
+    );
+    let pending = report.pending.as_ref().unwrap();
+    assert_eq!(pending.bytes, vec![0; 4096]);
+    assert_eq!(pending.bytes.capacity(), capacity);
+    assert_eq!(pending.original_bytes, 7);
+    assert_eq!(report.reached[1].replacement_bytes, Some(4096));
+    assert_eq!(report.reached[1].receive_completion, None);
+    assert!(matches!(
+        report.roles[1].before,
+        State::Pending {
+            kind: CutKind::Receive,
+            ..
+        }
+    ));
+    assert_eq!(report.backends[1].1.measurements.get(), 1);
+    assert_eq!(report.backends[1].1.decodes.get(), 0);
+    let used = ledger.snapshot();
+    let before = hooks.before.unwrap();
+    assert_eq!(
+        hooks.before_cancellation.unwrap().live_reserved_bytes,
+        2 * 64 + capacity
+    );
+    assert_eq!(used.live_reserved_bytes, capacity);
+    assert_eq!(used.total_value_bytes, before.total_value_bytes + capacity);
+    assert_eq!(
+        used.logical_bytes,
+        before.logical_bytes + capacity as u64 + 4096
+    );
+    drop(report);
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+    assert_eq!(ledger.snapshot().total_value_bytes, used.total_value_bytes);
+}
+
 #[test]
 fn invalid_measurement_and_decode_are_accepted_stops_while_host_failures_preserve_handoff() {
     for shared in [false, true] {

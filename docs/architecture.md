@@ -103,7 +103,8 @@ interpreter, without native or kernel dependencies. `host::wire::WireBackend`
 supplies installed complete-type support, fixed widths, encoding/decoding bounds
 and value codecs. `ProofBackend` adds borrowed raw bytes and Boolean acceptance
 projection. `zkc-native` implements these contracts with its closed native profile.
-Artifacts cannot register codecs or select implementations.
+Artifacts cannot register codecs; the independently installed physical type
+determines its admitted codec.
 
 Host-owned `WireError` distinguishes invalid received data, capacity exhaustion
 and trusted adapter failures. Invalid data is an accepted Decode stop; capacity

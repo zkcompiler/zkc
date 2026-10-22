@@ -142,8 +142,8 @@ impl Deployment {
         }
     }
 }
-/// A checked Host program. Only FunctionEntry admission can construct one.
-pub struct EntryHost {
+/// Checked execution state owned by the authenticated FunctionEntry.
+struct EntryHost {
     entry: String,
     functions: Vec<carrier::Function>,
     interface: FunctionInterface,
@@ -176,7 +176,8 @@ impl FunctionEntry {
     pub fn package(&self) -> &Package {
         &self.package
     }
-    pub fn host(&self) -> &EntryHost {
+    #[cfg(test)]
+    fn host(&self) -> &EntryHost {
         &self.host
     }
     pub fn assets(&self) -> &super::EntryAssets {

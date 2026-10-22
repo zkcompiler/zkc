@@ -116,8 +116,5 @@ pub fn dot(a: &[KoalaBear], b: &[KoalaBear]) -> Result<KoalaBear> {
 /// Equal-length component product into caller-owned storage. Validate every
 /// shape before writing; handles the scalar suffix when length is not packed.
 pub fn mul_into(a: &[KoalaBear], b: &[KoalaBear], out: &mut [KoalaBear]) -> Result<()> {
-    crate::vector::equal_len(a.len(), b.len())?;
-    crate::vector::equal_len(a.len(), out.len())?;
-    crate::vector::mul::<KoalaBear>(a, b, out)?;
-    Ok(())
+    crate::vector::mul::<KoalaBear>(a, b, out)
 }

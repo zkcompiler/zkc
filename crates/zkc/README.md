@@ -160,8 +160,12 @@ The SDK does not resolve data paths implicitly. `entry::files::Documents` opts
 into bounded regular JSON documents and directory-confined value references,
 sharing aggregate decode limits. `entry::files::Invocations` imports child
 policies and setup material under their independent authorities.
-`ProofEntry::prepare_file_call` retains the selected operation, input imports and
-result codecs through execution and encoding; its errors remain typed.
+Its `into_parts` transfers admission pins, decoded invocation context and a result
+encoder that retains the original capacity and authenticated setup material.
+`ProofEntry::preflight_file_call` retains the selected operation, input imports and
+result codecs through execution and encoding. It checks file codecs and setup
+imports before reading candidate proof bytes; request validation and execution
+preparation occur during `execute`. Errors retain their phase and code.
 
 `files::Outputs` protects input identities and selected paths. `create` never
 clobbers; `publish` stages all buffers before per-file atomic replacement. Keep

@@ -976,7 +976,7 @@ fn proof_file_preparation_checks_selected_codecs_before_setup_material() {
     // The selected verifier result has no file codec. Refuse before attempting
     // to import deliberately missing setup material or executing any role.
     assert_eq!(
-        host.prepare_file_call(ProofOperation::Verify, Default::default(), None, true)
+        host.preflight_file_call(ProofOperation::Verify, Default::default(), None, true)
             .err()
             .unwrap()
             .to_string(),
@@ -998,7 +998,7 @@ fn proof_file_calls_retain_operation_errors_and_results() {
     )
     .unwrap();
     let call = |operation, request| {
-        host.prepare_file_call(operation, request, None, true)
+        host.preflight_file_call(operation, request, None, true)
             .unwrap()
     };
     let produced = call(ProofOperation::Prove, proof_request(host.interface(), true))
@@ -1046,7 +1046,7 @@ fn proof_file_calls_retain_operation_errors_and_results() {
         assert_eq!(error.code(), "entry-proof-operation");
     }
     let error = host
-        .prepare_file_call(
+        .preflight_file_call(
             ProofOperation::Verify,
             Default::default(),
             Some(Default::default()),

@@ -468,7 +468,7 @@ pub(crate) fn wire_digests(value: &Value) -> Option<(Scheme, &[u8])> {
 }
 
 /// The ZKCV frame of a root (`tag, digest`) or proof (`tag, count:u32,
-/// digests`); the bulk codec checks limits and stamps the final tag.
+/// digests`); the bulk codec checks limits and validates the complete frame.
 pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (scheme, bytes) = wire_digests(value)?;
     let root = matches!(value, Value::MerkleDigest(..));

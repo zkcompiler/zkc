@@ -20,10 +20,10 @@ mod value;
 pub use value::Value;
 mod function;
 pub use function::{
-    Alternative, CallReceipt, DeploymentInterface, EntryHost, Field, FunctionEntry,
-    FunctionFailure, FunctionInterface, FunctionOptions, FunctionParameter, FunctionReport,
-    FunctionRequest, FunctionSignature, FunctionUsage, InvocationBinding, InvocationContext,
-    Permission, PreparedFunction, ProofContext, RunContext, Schema, SchemaKind, TypedValue,
+    Alternative, CallReceipt, DeploymentInterface, Field, FunctionEntry, FunctionFailure,
+    FunctionInterface, FunctionOptions, FunctionParameter, FunctionReport, FunctionRequest,
+    FunctionSignature, FunctionUsage, InvocationBinding, InvocationContext, Permission,
+    PreparedFunction, ProofContext, RunContext, Schema, SchemaKind, TypedValue,
 };
 mod run;
 pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};

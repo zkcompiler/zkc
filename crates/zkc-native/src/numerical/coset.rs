@@ -51,22 +51,6 @@ impl CosetBatchShape {
         Ok(retained)
     }
 
-    /// Discard only representation zeros, never reduce modulo a domain polynomial.
-    pub(crate) fn check_coefficient_tails<T: PartialEq>(
-        self,
-        coefficients: &[T],
-        zero: T,
-    ) -> Result<()> {
-        if self.height > self.output_height
-            && coefficients
-                .chunks_exact(self.height)
-                .any(|column| column[self.output_height..].iter().any(|c| c != &zero))
-        {
-            return Err(refused("coset-coefficient-count"));
-        }
-        Ok(())
-    }
-
     /// One forward DFT per coefficient column, including shared shift powers,
     /// tail checks, initialization/copies and conservative domain/provider setup.
     /// Unlike extension_work, coefficient height may be zero or non-two-adic.

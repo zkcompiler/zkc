@@ -53,6 +53,175 @@ fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
 }
 
 #[test]
+fn standalone_table_measurement_uses_table_decoder_limits() {
+    let value = Value::table(&[Scalar::from(7)], &Policy::default()).unwrap();
+    let ty = value.physical_type();
+    let bytes = ark_backend(None).encode_native_value(&value).unwrap();
+    assert_eq!(bytes.len(), 42);
+    assert_eq!(value.retained_bytes(), 288);
+    let policy = Policy {
+        max_arity: 0,
+        max_table_elements: 1,
+        max_groups: 0,
+        max_wire_bytes: bytes.len(),
+        max_value_bytes: 600,
+        ..Policy::default()
+    };
+    for max_value_bytes in [554, 600] {
+        let backend = NativeBackend::new(
+            Policy {
+                max_value_bytes,
+                ..policy
+            },
+            common::entry(None),
+            Default::default(),
+        )
+        .unwrap();
+        assert_eq!(backend.encode_native_value(&value).unwrap(), bytes);
+        let decoded = backend.decode_native_value(&ty, &bytes).unwrap();
+        backend.validate_native_input(&decoded).unwrap();
+        assert_eq!(
+            backend
+                .measure_native_wire(&ty, &bytes)
+                .unwrap()
+                .retained_bytes(),
+            value.retained_bytes()
+        );
+        assert!(backend.decoding_bound(&ty, &bytes).is_ok());
+        // Measurement grants no scalar validity: decoding remains independent.
+        let mut noncanonical = bytes.clone();
+        noncanonical[10..].fill(255);
+        assert!(backend.measure_native_wire(&ty, &noncanonical).is_ok());
+        assert_eq!(
+            backend.decode_native_value(&ty, &noncanonical).unwrap_err(),
+            NativeWireError::Invalid(DecodeReason::Scalar)
+        );
+    }
+    for policy in [
+        Policy {
+            max_value_bytes: 553,
+            ..policy
+        },
+        Policy {
+            max_table_elements: 0,
+            ..policy
+        },
+        Policy {
+            max_wire_bytes: bytes.len() - 1,
+            ..policy
+        },
+    ] {
+        let backend = NativeBackend::new(policy, common::entry(None), Default::default()).unwrap();
+        assert_eq!(
+            backend.measure_native_wire(&ty, &bytes).unwrap_err(),
+            NativeWireError::Limit
+        );
+        assert_eq!(
+            backend.decode_native_value(&ty, &bytes).unwrap_err(),
+            NativeWireError::Limit
+        );
+    }
+}
+
+#[test]
+fn standalone_group_collection_measurement_ignores_numeric_element_ceiling() {
+    let value = Value::Groups(vec![GroupPoint::generator()].into());
+    let ty = value.physical_type();
+    let bytes = ark_backend(None).encode_native_value(&value).unwrap();
+    let policy = Policy {
+        max_table_elements: 0,
+        max_groups: 1,
+        max_wire_bytes: bytes.len(),
+        max_value_bytes: 768,
+        ..Policy::default()
+    };
+    let backend = NativeBackend::new(policy, common::entry(None), Default::default()).unwrap();
+    assert_eq!(backend.encode_native_value(&value).unwrap(), bytes);
+    let decoded = backend.decode_native_value(&ty, &bytes).unwrap();
+    backend.validate_native_input(&decoded).unwrap();
+    assert_eq!(
+        backend
+            .measure_native_wire(&ty, &bytes)
+            .unwrap()
+            .retained_bytes(),
+        384
+    );
+    assert!(backend.decoding_bound(&ty, &bytes).is_ok());
+    let mut noncanonical = bytes.clone();
+    noncanonical[10..].fill(255);
+    assert!(backend.measure_native_wire(&ty, &noncanonical).is_ok());
+    assert_eq!(
+        backend.decode_native_value(&ty, &noncanonical).unwrap_err(),
+        NativeWireError::Invalid(DecodeReason::Group)
+    );
+    for policy in [
+        Policy {
+            max_groups: 0,
+            ..policy
+        },
+        Policy {
+            max_value_bytes: 767,
+            ..policy
+        },
+        Policy {
+            max_wire_bytes: bytes.len() - 1,
+            ..policy
+        },
+    ] {
+        let backend = NativeBackend::new(policy, common::entry(None), Default::default()).unwrap();
+        assert_eq!(
+            backend.measure_native_wire(&ty, &bytes).unwrap_err(),
+            NativeWireError::Limit
+        );
+        assert_eq!(
+            backend.decode_native_value(&ty, &bytes).unwrap_err(),
+            NativeWireError::Limit
+        );
+    }
+}
+
+#[test]
+fn standalone_collection_counts_survive_later_variant_assembly() {
+    for value in [
+        Value::table(&[Scalar::from(1), Scalar::from(2)], &Policy::default()).unwrap(),
+        Value::Groups(vec![GroupPoint::generator(); 2].into()),
+    ] {
+        let ty = value.physical_type();
+        let bytes = ark_backend(None).encode_native_value(&value).unwrap();
+        let logical = zkc_test_support::variants::logical(
+            "CollectionPair",
+            serde_json::json!([["pair", [ty.logical().spelling(), ty.logical().spelling()]]]),
+        );
+        let variant =
+            PhysicalType::default_for(zkc_runtime::vm::LogicalType::parse(&logical).unwrap())
+                .unwrap();
+        for ceiling in [3, 4] {
+            let backend = NativeBackend::new(
+                Policy {
+                    max_table_elements: ceiling,
+                    max_groups: ceiling,
+                    ..Policy::default()
+                },
+                common::entry(None),
+                Default::default(),
+            )
+            .unwrap();
+            let children = [
+                backend.measure_native_wire(&ty, &bytes).unwrap(),
+                backend.measure_native_wire(&ty, &bytes).unwrap(),
+            ];
+            let measured = backend.measure_native_variant(&variant, 0, &children);
+            if ceiling == 3 {
+                // Three nodes fit; the four retained collection elements do not.
+                assert_eq!(measured.unwrap_err(), NativeWireError::Limit);
+            } else {
+                assert!(measured.is_ok());
+            }
+        }
+    }
+}
+
+#[test]
 fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
     let backend = ark_backend(None);
     for (value, width) in [

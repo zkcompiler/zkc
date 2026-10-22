@@ -49,13 +49,25 @@ enum Binding {
     },
 }
 pub struct Invocations {
-    pub authority: BTreeMap<String, SetupAuthority>,
-    pub context: InvocationContext,
+    authority: BTreeMap<String, SetupAuthority>,
+    context: InvocationContext,
     output_setups: zkc_native::SetupRegistry,
     operations: BTreeMap<String, &'static str>,
     paths: Vec<PathBuf>,
     inputs: BTreeMap<String, BTreeMap<String, Json>>,
     document: Option<PathBuf>,
+    capacity: crate::execution::Capacity,
+}
+/// Result encoding retains the imported setup material and its original limits.
+/// It grants no execution authority.
+pub struct FunctionResultEncoder {
+    setups: zkc_native::SetupRegistry,
+    capacity: crate::execution::Capacity,
+}
+impl FunctionResultEncoder {
+    pub fn encode(&self, value: &crate::entry::Value) -> Result<Vec<u8>> {
+        files::function_output(value, self.capacity, self.setups.clone())
+    }
 }
 /// Input refusal with the checked document and logical input location, if known.
 #[derive(Debug)]
@@ -89,14 +101,27 @@ impl std::fmt::Display for InvocationInputError {
 }
 impl std::error::Error for InvocationInputError {}
 impl Invocations {
-    /// Encode a successful function result using independently authenticated
-    /// material retained by this invocation. This grants no execution authority.
-    pub fn encode_result(
-        &self,
-        value: &crate::entry::Value,
-        capacity: crate::execution::Capacity,
-    ) -> Result<Vec<u8>> {
-        files::function_output(value, capacity, self.output_setups.clone())
+    pub fn authority(&self) -> &BTreeMap<String, SetupAuthority> {
+        &self.authority
+    }
+
+    /// Transfer the loaded pins and invocation values to admission and execution.
+    /// Complete the deployment inventory and decode inputs before consuming it.
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<String, SetupAuthority>,
+        InvocationContext,
+        FunctionResultEncoder,
+    ) {
+        (
+            self.authority,
+            self.context,
+            FunctionResultEncoder {
+                setups: self.output_setups,
+                capacity: self.capacity,
+            },
+        )
     }
 
     pub fn decode_inputs(
@@ -213,7 +238,7 @@ impl Invocations {
     }
     /// Fill native invocation policy only for children that need no setup pins.
     /// Explicit deployment bindings retain their complete independent policy.
-    pub fn defaults<'a>(
+    fn defaults<'a>(
         &mut self,
         deployments: impl Iterator<Item = (&'a str, &'a str, bool)>,
     ) -> Result<()> {
@@ -259,6 +284,7 @@ impl Invocations {
             paths: Vec::new(),
             inputs: BTreeMap::new(),
             document: None,
+            capacity,
         };
         let Some(path) = path else {
             return Ok(result);
@@ -409,7 +435,7 @@ impl Invocations {
         }
         Ok(())
     }
-    pub fn check_operations<'a>(
+    fn check_operations<'a>(
         &self,
         deployments: impl Iterator<Item = (&'a str, &'a str)>,
     ) -> Result<()> {
@@ -503,6 +529,25 @@ mod tests {
         );
     }
     #[test]
+    fn consumed_invocations_retain_the_result_encoding_capacity() {
+        let value = crate::entry::Value::from(zkc_native::Value::Bool(true));
+        let (_, context, encoder) = Invocations::load(None, Default::default(), false)
+            .unwrap()
+            .into_parts();
+        assert!(context.deployments.is_empty());
+        let encoded: Json = serde_json::from_slice(&encoder.encode(&value).unwrap()).unwrap();
+        assert_eq!(encoded["format"], "zkc.entry-outputs/0");
+
+        let capacity = crate::execution::Capacity {
+            wire_bytes: 6,
+            ..Default::default()
+        };
+        let (_, _, encoder) = Invocations::load(None, capacity, false)
+            .unwrap()
+            .into_parts();
+        assert_eq!(encoder.encode(&value).unwrap_err(), "entry-output-encoding");
+    }
+    #[test]
     fn deployment_context_is_exact_and_operation_qualified() {
         let dir = tempfile::tempdir().unwrap();
         let value = json!({"format":"zkc.entry-invocations/0","deployments":{
@@ -543,8 +588,18 @@ mod tests {
         let bounds = crate::execution::Capacity::default().backend().ark_bounds();
         let mut document = json!({"format":"zkc.entry-invocations/0","deployments":{}});
         let mut materials = Vec::new();
+        let mut commitments = Vec::new();
         for (arity, id) in [(1, "first"), (2, "second")] {
             let keys = zkc_kernels::Keys::setup_for_development(arity, &bounds).unwrap();
+            let table = zkc_kernels::Table::from_logical_vec(
+                vec![zkc_native::Scalar::from(1); 1 << arity],
+                &bounds,
+            )
+            .unwrap();
+            let committed = keys.prover_key().commit(&table).unwrap();
+            commitments.push(crate::entry::Value::from(zkc_native::Value::Commitment(
+                std::sync::Arc::new(committed.commitment().clone()),
+            )));
             let key = keys.verifier_key();
             let bytes = key.to_bytes(&bounds).unwrap();
             let filename = format!("{id}.zkvk");
@@ -573,6 +628,17 @@ mod tests {
         document["deployments"]["first"]["authority"] =
             document["deployments"]["second"]["authority"].clone();
         assert!(load(dir.path(), &document).is_err());
+
+        let (authority, context, encoder) = bindings.into_parts();
+        assert_eq!(authority.len(), 2);
+        assert_eq!(context.deployments.len(), 2);
+        let value = crate::entry::Value::Array(commitments);
+        let encoded: Json = serde_json::from_slice(&encoder.encode(&value).unwrap()).unwrap();
+        assert_eq!(encoded["value"].as_array().unwrap().len(), 2);
+        let (_, _, empty) = Invocations::load(None, Default::default(), false)
+            .unwrap()
+            .into_parts();
+        assert_eq!(empty.encode(&value).unwrap_err(), "entry-output-encoding");
     }
     #[test]
     fn malformed_contexts_and_unbacked_authority_refuse() {

@@ -9,12 +9,22 @@ use crate::{
 };
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::EvaluationDomain;
-use zkc_kernels::bn254::polynomial::{Domain, coset_evaluate_at_into, serial_batch_inverse_into};
+use zkc_kernels::bn254::polynomial::{
+    BatchError, CoefficientBatch, Domain, coset_evaluate_at_into, coset_extend_into,
+    serial_batch_inverse_into,
+};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]
 #[path = "bn254_coefficient_batch_tests.rs"]
 mod coefficient_batch_tests;
+fn batch_failure(error: BatchError) -> zkc_runtime::vm::BackendError {
+    match error {
+        BatchError::BatchShape => refused("coset-batch-shape"),
+        BatchError::CoefficientCount => refused("coset-coefficient-count"),
+        BatchError::SizeOverflow => exhausted("size-overflow"),
+    }
+}
 fn domain(n: usize, shift: F, p: &Policy) -> Result<Domain> {
     validate_domain(n, shift, p)?;
     Domain::new(n, shift).ok_or_else(|| refused("coset-size"))
@@ -135,7 +145,9 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
                 validate_domain(shape.output_height, shift, p)?;
             }
             let retained = shape.admit(p, 32, available)?;
-            shape.check_coefficient_tails(coefficients, F::zero())?;
+            let batch =
+                CoefficientBatch::new(coefficients, shape.width, shape.height, shape.output_height)
+                    .map_err(batch_failure)?;
             let call = Call::new(p, available);
             call.work(shape.coefficient_evaluation_work(1)?)?;
             let workspace = if shape.width == 0 {
@@ -146,23 +158,12 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             let _workspace = call.reserve_workspace::<F>(workspace)?;
             let mut output = call.output(shape.output_len, F::zero(), retained)?;
             if shape.width != 0 {
-                let domain = domain(shape.output_height, shift, p)?;
+                let domain =
+                    Domain::new(shape.output_height, shift).ok_or_else(|| refused("coset-size"))?;
                 let mut scratch = reserve(workspace)?;
-                // Keep the allocation at output height across every column,
-                // including empty blocks and shrinking representation padding.
-                scratch.resize(workspace, F::zero());
-                for (column, destination) in output
-                    .as_mut_slice()
-                    .chunks_exact_mut(shape.output_height)
-                    .enumerate()
-                {
-                    scratch.fill(F::zero());
-                    let count = shape.height.min(shape.output_height);
-                    let begin = column * shape.height;
-                    scratch[..count].copy_from_slice(&coefficients[begin..begin + count]);
-                    domain.fft_in_place(&mut scratch);
-                    destination.copy_from_slice(&scratch);
-                }
+                batch
+                    .write_into(domain, &mut scratch, output.as_mut_slice())
+                    .map_err(batch_failure)?;
             }
             output.finish(|values| Ok(Value::Bn254Vector(values.into())))?
         }
@@ -221,23 +222,15 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             let mut output = call.output(shape.output_len, F::zero(), retained)?;
             if let Some((input_domain, output_domain)) = domains {
                 let mut scratch = reserve(workspace)?;
-                for (column, destination) in values
-                    .chunks_exact(shape.height)
-                    .zip(output.as_mut_slice().chunks_exact_mut(shape.output_height))
-                {
-                    scratch.clear();
-                    scratch.extend_from_slice(column);
-                    input_domain.ifft_in_place(&mut scratch);
-                    if scratch
-                        .get(shape.output_height..)
-                        .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
-                    {
-                        return Err(refused("coset-coefficient-count"));
-                    }
-                    scratch.resize(shape.output_height, F::zero());
-                    output_domain.fft_in_place(&mut scratch);
-                    destination.copy_from_slice(&scratch);
-                }
+                coset_extend_into(
+                    values,
+                    shape.width,
+                    input_domain,
+                    output_domain,
+                    &mut scratch,
+                    output.as_mut_slice(),
+                )
+                .map_err(batch_failure)?;
             }
             output.finish(|values| Ok(Value::Bn254Vector(values.into())))?
         }

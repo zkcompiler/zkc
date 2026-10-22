@@ -64,7 +64,11 @@ impl NativeBackend {
         if super::frame(ty).is_some() {
             super::fixed_header(ty, bytes)?;
         } else if super::table_type(ty) {
-            super::table_header(self.policy(), bytes)?;
+            let (_, width) = super::table_header(self.policy(), bytes)?;
+            // Match the table decoder's allocation allowance after framing.
+            self.policy()
+                .output(width.checked_add(512).ok_or(Error::Limit)?, usize::MAX)
+                .map_err(|_| Error::Limit)?;
         } else if let Some(tag) = super::pcs::tag(ty) {
             super::pcs::preflight(self.setups(), tag, bytes)?;
         }
@@ -95,14 +99,12 @@ impl NativeBackend {
         } else {
             let retained = structured::scan(ty, bytes, self.policy(), self.setups(), &mut counts)?;
             structured::peak(self.policy(), retained, bytes.len())?;
+            counts.admit(self.policy())?;
             retained
         };
-        // Standalone fixed leaves follow their decoder's own bounds, rather
-        // than collection ceilings. Retain their counts so a later aggregate
-        // constructor still accounts for every nested child.
-        if !fixed_leaf {
-            counts.admit(self.policy())?;
-        }
+        // Standalone leaves, tables and bulk collections follow their own
+        // decoder limits. Keep their counts for later aggregate construction,
+        // without imposing recursive node or unrelated collection ceilings here.
         Ok(NativeInputSize {
             ty: ty.clone(),
             retained,

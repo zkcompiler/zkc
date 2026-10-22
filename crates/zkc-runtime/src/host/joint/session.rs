@@ -590,9 +590,17 @@ impl<B: WireBackend> Execution<B> {
                 {
                     return Err(limit());
                 }
+                // Both allocations coexist until the replacement is accepted.
+                // Retained storage includes spare Vec capacity, not just wire bytes.
+                let replacement_live = crate::host::wire::reserve_allocation(
+                    self.shared_ledger.as_ref(),
+                    bytes.capacity(),
+                )
+                .map_err(|_| limit())?;
                 self.report.wire.replacement_bytes = total;
                 self.report.reached.last_mut().unwrap().replacement_bytes = Some(bytes.len());
                 pending.bytes = bytes;
+                self.wire_live = replacement_live;
             }
             self.report.reached.last_mut().unwrap().sent_bytes = Some(pending.original_bytes);
         }

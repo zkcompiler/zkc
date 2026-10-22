@@ -148,7 +148,7 @@ opening, and only `Ok(true)` is acceptance. Error codes are available via `code(
 
 ## Identity and setup trust
 
-Fingerprints use the actual SHA-256 implementation in `sha2 = 0.10.9`.
+Fingerprints use SHA-256 from `sha2`, pinned in the workspace manifest.
 The preimage is `LE64(len(domain)) || domain || LE64(len(PROFILE)) || PROFILE ||
 LE64(len(context)) || context || canonical_compressed(object)`.
 
