@@ -215,11 +215,12 @@ def nested_cases(suite, subject):
     ]:
         observe(suite, subject, "nested-" + label, p, inputs, [], stopped(reason, site))
     # A complete authored same-name change, before frontend emission.
-    original = ROOT / SUBJECTS[1][3]
+    _, _, selected_subject, source = SUBJECTS[1]
+    original = ROOT / source
     changed = suite.directory / "changed-repeat-nested.zkc"
     text = original.read_text(encoding="utf-8"); assert "result = result + x" in text
     changed.write_text(text.replace("result = result + x", "result = result * x"), encoding="utf-8")
-    variant = suite.authored("nested-same-name-source", "sample::Demo", {"sample": changed})
+    variant = suite.authored("nested-same-name-source", selected_subject, {"sample": changed})
     assert variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]
     observe(suite, variant, "nested-same-name-source-result", p, ["2", "2", "3"], [], returned(["243"]))
 
