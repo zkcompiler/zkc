@@ -115,8 +115,10 @@ features; portable builds remain supported.
 
 `curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
 results for BLS12-381 and BN254 G1/G2 while retaining affine-base `mul_bigint`.
-Public length and the numerical scratch allowance bound chunks to at most 256;
-insufficient scratch or failed scratch reservation selects the scalar loop.
+Native admits the kernel's workspace bound from public length and the numerical
+scratch allowance. The typed kernel plan prepares bounded scratch and freezes
+the algorithm before arithmetic; its reservation outlives the plan.
+Insufficient scratch or failed scratch preparation selects direct scaling.
 Existing output preflight and charges remain in place, with no added numerical
 work charge. Dalek multiplication paths and their timing properties are unchanged;
 Arkworks remains variable-time.

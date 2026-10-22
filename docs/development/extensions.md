@@ -137,13 +137,23 @@ or unresolved concerns justify it, and report the scope actually run.
 ## Rust kernel and backend ownership
 
 Add typed arithmetic to `zkc-kernels` when it can run without VM values or
-resource authority. Keep provider details in that crate and test mathematical
-shapes and canonical encodings there. Numerical scratch and destinations use
+resource authority. Put provider-specific types under `arkworks`, `plonky3` or
+`dalek`; shared mathematical modules contain no concrete provider implementations.
+Keep exact pinned external constructions under `interop`. Test mathematical
+shapes and canonical encodings with the provider. Numerical scratch and destinations use
 explicit caller limits; provider-private storage remains documented separately.
 When validation scans mathematical inputs, retain an immutable checked borrow
 before admitting workspace, as with `CoefficientBatch` and `OpeningQuotient`.
 Execution then checks the supplied destination extent without repeating the
 input scan. Native adapters retain policy checks and their refusal order.
+
+For another algorithm over the same typed representation, extend the owning
+kernel's plan, as with scalar/packed vectors or direct/batched curve scaling.
+Select from public shape and admitted resources before arithmetic. A fixed
+choice refuses when unavailable; automatic fallback occurs during preparation.
+Prepared plans retain their choice and any scratch, whose reservation must
+outlive the plan. Selection grants no timing permission. Pass random generators
+explicitly; native owns advancing OS-seeded sources.
 
 Add installed operations, concrete representations, codec adaptation and
 services to `zkc-native`. Its adapters select policy, borrow typed operands,
@@ -151,3 +161,7 @@ invoke kernels and publish complete results. Keep independent installed
 signatures and VM admission checks. A new external mathematics library usually
 extends kernels; a new backend requires a complete VM backend implementation,
 not a crate named for each upstream library.
+An alternative with different physical ports, encoding, failure or timing
+requirements needs an exact installed implementation identity and independently
+checked signature. Reuse the compiler's checked physical plan and the VM's
+binding preparation rather than adding a kernel registry or hidden conversion.

@@ -103,7 +103,11 @@ mod test_tape;
 pub use test_tape::TestTape;
 
 pub(crate) fn field_error(error: zkc_kernels::field::Error) -> BackendError {
-    refused(error.code())
+    if error == zkc_kernels::field::Error::CapacityOverflow {
+        exhausted(error.code())
+    } else {
+        refused(error.code())
+    }
 }
 
 mod host;

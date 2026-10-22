@@ -10,9 +10,6 @@ pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         Self::dot_product(a, b).map_err(crate::field_error)
     }
-    fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
-        zkc_kernels::vector::mul::<Self>(a, b, out).map_err(crate::field_error)
-    }
     fn field(v: &Value) -> Result<Self>;
     fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;
     fn vector(v: &Value) -> Result<&Arc<[Self]>>;
@@ -218,32 +215,4 @@ pub(crate) fn publish_literal(
     // These are inline scalars: every result retains its ordinary fresh charge.
     policy.output(512, i.max_output_bytes)?;
     Ok(vec![value.clone()])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn destination_shapes<S: Family>() -> Result<()> {
-        let input = [S::one(); 3];
-        for (left, right, len) in [(&input[..2], &input[..], 3), (&input[..], &input[..], 2)] {
-            let mut output = vec![S::zero(); len];
-            assert_eq!(
-                S::product(left, right, &mut output).unwrap_err().code,
-                "refused:length-mismatch"
-            );
-            assert!(output.iter().all(|value| *value == S::zero()));
-        }
-        let mut output = [S::zero(); 3];
-        S::product(&input, &input, &mut output)?;
-        assert!(output.iter().all(|value| *value == S::one()));
-        Ok(())
-    }
-
-    #[test]
-    fn shared_product_adapter_checks_every_shape_before_writing() {
-        for domain in crate::domains::INSTALLED {
-            with_field!(domain.field, |S| destination_shapes::<S>()).unwrap();
-        }
-    }
 }

@@ -18,14 +18,14 @@ trait Group: Copy + PartialEq {
     fn add(self, other: Self) -> Self;
     fn neg(self) -> Self;
     fn scale(self, scalar: Self::Scalar) -> Self;
-    fn scaling_workspace_bytes(_chunk_len: usize) -> Option<usize> {
-        None
+    fn scaling_workspace_bound(_len: usize, _max_workspace: usize) -> usize {
+        0
     }
     fn scale_many(
         points: &[Self],
         scalar: Self::Scalar,
         output: &mut Vec<Self>,
-        _chunk_len: usize,
+        _workspace_bytes: usize,
     ) -> Result<()> {
         output.extend(points.iter().map(|point| point.scale(scalar)));
         Ok(())
@@ -34,7 +34,7 @@ trait Group: Copy + PartialEq {
         scalars: &[Self::Scalar],
         points: &[Self],
         output: &mut Vec<Self>,
-        _chunk_len: usize,
+        _workspace_bytes: usize,
     ) -> Result<()> {
         output.extend(
             points
@@ -58,20 +58,19 @@ trait Group: Copy + PartialEq {
 // and exact reservation. Only arkworks needs an initialized affine destination.
 macro_rules! ark_scaling {
     () => {
-        fn scaling_workspace_bytes(chunk_len: usize) -> Option<usize> {
-            Self::scaling_workspace_bytes(chunk_len)
+        fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
+            Self::scaling_workspace_bound(len, max_workspace)
         }
         fn scale_many(
             points: &[Self],
             scalar: Self::Scalar,
             output: &mut Vec<Self>,
-            chunk_len: usize,
+            workspace_bytes: usize,
         ) -> Result<()> {
-            let bytes = Self::scaling_workspace_bytes(chunk_len).unwrap_or(0);
             let mut plan = Self::scaling_plan(
                 points.len(),
                 zkc_kernels::arkworks::scaling::Selection::Automatic {
-                    max_workspace: bytes,
+                    max_workspace: workspace_bytes,
                 },
             )
             .map_err(crate::ark)?;
@@ -82,13 +81,12 @@ macro_rules! ark_scaling {
             scalars: &[Self::Scalar],
             points: &[Self],
             output: &mut Vec<Self>,
-            chunk_len: usize,
+            workspace_bytes: usize,
         ) -> Result<()> {
-            let bytes = Self::scaling_workspace_bytes(chunk_len).unwrap_or(0);
             let mut plan = Self::scaling_plan(
                 points.len(),
                 zkc_kernels::arkworks::scaling::Selection::Automatic {
-                    max_workspace: bytes,
+                    max_workspace: workspace_bytes,
                 },
             )
             .map_err(crate::ark)?;
@@ -108,39 +106,31 @@ fn with_scaling_workspace<G: Group>(
     // Call accounts only for optional, scoped projective/Z/prefix payload. These
     // operations historically have no numerical work charge; do not add one.
     let call = crate::numerical::Call::new(policy, available);
-    let chunk_len = G::scaling_workspace_bytes(1)
-        .filter(|bytes| *bytes != 0)
-        .map(|bytes| {
-            len.min(zkc_kernels::arkworks::scaling::CHUNK_CAP)
-                .min(policy.max_numerical_bytes / bytes)
-        })
-        .unwrap_or(0);
-    let workspace = if chunk_len >= 2 {
-        G::scaling_workspace_bytes(chunk_len)
-            .and_then(|bytes| call.reserve_workspace::<u8>(bytes).ok())
+    let bytes = G::scaling_workspace_bound(len, policy.max_numerical_bytes);
+    let workspace = if bytes > 0 {
+        call.reserve_workspace::<u8>(bytes).ok()
     } else {
         None
     };
     // The guard outlives every adapter vector, including on error or unwind.
-    scale(if workspace.is_some() { chunk_len } else { 0 })
+    scale(if workspace.is_some() { bytes } else { 0 })
 }
 
 #[cfg(test)]
 mod scaling_workspace_tests {
     use super::*;
 
-    fn check<G: Group>() {
-        let unit = G::scaling_workspace_bytes(1).unwrap();
+    fn check<G: Group>(unit: usize) {
         for (len, bytes, expected) in [
             (0, usize::MAX, 0),
             (1, usize::MAX, 0),
             (257, 0, 0),
             (257, 2 * unit - 1, 0),
-            (257, 2 * unit, 2),
-            (257, 17 * unit, 17),
-            (257, 256 * unit - 1, 255),
-            (257, 256 * unit, 256),
-            (3, usize::MAX, 3),
+            (257, 2 * unit, 2 * unit),
+            (257, 17 * unit, 17 * unit),
+            (257, 256 * unit - 1, 255 * unit),
+            (257, 256 * unit, 256 * unit),
+            (3, usize::MAX, 3 * unit),
         ] {
             let policy = Policy {
                 max_numerical_bytes: bytes,
@@ -148,8 +138,8 @@ mod scaling_workspace_tests {
                 ..Policy::default()
             };
             // No output or work floor is attached to this optional scope.
-            with_scaling_workspace::<G>(len, &policy, 0, |chunk_len| {
-                assert_eq!(chunk_len, expected);
+            with_scaling_workspace::<G>(len, &policy, 0, |workspace_bytes| {
+                assert_eq!(workspace_bytes, expected);
                 Ok(())
             })
             .unwrap();
@@ -157,11 +147,11 @@ mod scaling_workspace_tests {
     }
 
     #[test]
-    fn public_length_group_and_scratch_allowance_select_bounded_chunks() {
-        check::<G1>();
-        check::<crate::Bls12381G2>();
-        check::<crate::Bn254G1>();
-        check::<crate::Bn254G2>();
+    fn public_length_group_and_scratch_allowance_admit_kernel_bounds() {
+        check::<G1>(G1::scaling_workspace_bytes(1).unwrap());
+        check::<crate::Bls12381G2>(crate::Bls12381G2::scaling_workspace_bytes(1).unwrap());
+        check::<crate::Bn254G1>(crate::Bn254G1::scaling_workspace_bytes(1).unwrap());
+        check::<crate::Bn254G2>(crate::Bn254G2::scaling_workspace_bytes(1).unwrap());
     }
 
     #[test]
@@ -646,8 +636,8 @@ fn dense<G: Group>(
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |chunk_len| {
-                G::scale_each(s, b, &mut out, chunk_len)
+            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
+                G::scale_each(s, b, &mut out, workspace_bytes)
             })?;
             G::values(out.into())
         }
@@ -667,8 +657,8 @@ fn dense<G: Group>(
             let b = points(0)?;
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |chunk_len| {
-                G::scale_many(b, x, &mut out, chunk_len)
+            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
+                G::scale_many(b, x, &mut out, workspace_bytes)
             })?;
             G::values(out.into())
         }
