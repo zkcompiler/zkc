@@ -228,3 +228,7 @@ quotient.add 0
 quotient.subtract 0
 quotient.multiply 0
 quotient.norm_within 0
+quotient.project 0
+quotient.ntt 0
+quotient.intt 0
+quotient.pointwise 0
