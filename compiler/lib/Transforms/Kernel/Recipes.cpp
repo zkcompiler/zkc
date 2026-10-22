@@ -3,6 +3,9 @@
 #include "../MathematicalSupport.h"
 #include "../RealizationTrace.h"
 #include "Schedule.h"
+#ifdef ZKC_ENABLE_HEIR
+#include "Quotient.h"
+#endif
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -601,6 +604,27 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
   // infallible-after-mutation recipe contract.
   RealizationWork standalone;
   auto &realizationWork = work ? *work : standalone;
+#ifdef ZKC_ENABLE_HEIR
+  auto proposed = proposeQuotientExecution(entry, realizationWork);
+  if (failed(proposed))
+    return diagnostics::emit(entry.emitError(),
+                             "mathematical-lowering-preservation",
+                             "HEIR quotient correspondence differs");
+  if (*proposed) {
+    auto function = *(*proposed)->getOps<func::FuncOp>().begin();
+    SymbolTable bindings(**proposed);
+    OpBuilder builder(entry.getContext());
+    for (auto &op : function.front().without_terminator()) {
+      auto old = bindings.lookup<local::OperationBindingOp>(
+          op.getAttrOfType<FlatSymbolRefAttr>("binding").getValue());
+      auto binding =
+          symbols.get({old.getContract().str(), {}, {}}, op.getLoc(), builder);
+      op.setAttr("binding", binding);
+    }
+    entry.getBody().takeBody(function.getBody());
+    return success();
+  }
+#endif
   auto &finiteWork = realizationWork.finiteExpressions;
   llvm::DenseMap<Operation *, RealizationSubject> sourceSubjects;
   if (selection)

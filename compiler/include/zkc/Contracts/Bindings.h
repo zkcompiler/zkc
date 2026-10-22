@@ -7,18 +7,8 @@
 
 namespace zkc::protocol {
 
-struct TypeArgument;
+struct BoundType;
 class ImplementationCatalog;
-/// Closed nominal type. Atomic constructors retain the compact identity slot;
-/// an applied constructor instead owns kinded arguments and has no atomic
-/// identity. Representation belongs only to the outer physical value.
-struct BoundType {
-  std::string kind, identity, representation;
-  std::vector<TypeArgument> arguments = {};
-  bool operator==(const BoundType &other) const;
-  std::string spelling() const;
-};
-
 struct TypeArgument {
   enum class Kind { Domain, Type, Nat };
   Kind kind;
@@ -29,6 +19,16 @@ struct TypeArgument {
   static TypeArgument typeArgument(BoundType type);
   static TypeArgument naturalArgument(uint64_t value);
   bool operator==(const TypeArgument &other) const;
+  std::string spelling() const;
+};
+
+/// Closed nominal type. Atomic constructors retain the compact identity slot;
+/// an applied constructor instead owns kinded arguments and has no atomic
+/// identity. Representation belongs only to the outer physical value.
+struct BoundType {
+  std::string kind, identity, representation;
+  std::vector<TypeArgument> arguments = {};
+  bool operator==(const BoundType &other) const;
   std::string spelling() const;
 };
 

@@ -104,8 +104,9 @@ own manifests and toolchains. LLZK remains separate from the main compiler proce
 
 The optional [HEIR arithmetic library](../../compiler/external/heir/README.md)
 uses the main LLVM/MLIR version with pinned arithmetic sources and independent
-transform comparison. It has a separate build and execution regression suite;
-source-region and managed-runtime integration remain roadmap work.
+transform comparison. Its relocatable CMake package supports optional whole
+quotient calculations in the compiler and managed native execution. The package
+guide provides installation, compiler selection and regression commands.
 
 ## Contributor references
 

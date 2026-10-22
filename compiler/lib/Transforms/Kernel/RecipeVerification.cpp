@@ -4,6 +4,9 @@
 #include "../MathematicalSupport.h"
 #include "../RealizationSubject.h"
 #include "Support.h"
+#ifdef ZKC_ENABLE_HEIR
+#include "Quotient.h"
+#endif
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
@@ -528,6 +531,26 @@ public:
     };
     if (arguments.size() != entry.getNumArguments())
       return finish(false);
+#ifdef ZKC_ENABLE_HEIR
+    auto firstSite =
+        cursor ? cursor->getAttrOfType<StringAttr>("site") : StringAttr();
+    if (firstSite && firstSite.getValue().ends_with("_recipe_quotient_begin")) {
+      auto root = protocol::algorithmSite({{callSite.str(), "kernel"}}, "0",
+                                          remainingBytes);
+      if (!root) {
+        consumeError(root.takeError());
+        return finish(false);
+      }
+      bool exhausted = false;
+      auto result =
+          readQuotientExecution(entry, symbols.getOp(), *root, arguments,
+                                cursor, remaining, &exhausted, &remainingBytes);
+      if (failed(result) && exhausted)
+        finiteOutcome = {finite::VerificationStatus::RequiredCapacity,
+                         "quotient execution checking capacity"};
+      return succeeded(result) ? finish(true, *result) : finish(false);
+    }
+#endif
     llvm::DenseMap<Value, Value> values;
     for (auto [source, actual] : zip(entry.getArguments(), arguments)) {
       if (source.getType() != actual.getType())

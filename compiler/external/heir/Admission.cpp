@@ -20,8 +20,6 @@ namespace {
 // Expressions are polynomials in the ordered input ring elements. These are
 // sufficient ring identities; failure to normalize is never a proof of
 // inequivalence. No assumption that quotient elements form a field is used.
-using Monomial = std::vector<unsigned>;
-using Expression = std::map<Monomial, uint64_t>;
 enum class Form { Raw, Modular, Coefficient, Evaluation, Lifted };
 struct ValueMeaning {
   Expression expression;
@@ -64,7 +62,8 @@ bool prime(uint64_t q) {
 
 class Reader {
 public:
-  explicit Reader(ModuleOp module) : module(module) {}
+  Reader(ModuleOp module, uint64_t &remaining, bool &exhausted)
+      : module(module), remaining(remaining), exhausted(exhausted) {}
   FailureOr<Subject> read() {
     if (failed(verify(module)) || !module->getAttrs().empty() ||
         !llvm::hasSingleElement(module.getBody()->getOperations()))
@@ -99,6 +98,8 @@ public:
           auto found = values.find(operand);
           if (found == values.end() || found->second.form != Form::Lifted)
             return bad(&op, "outputs must observe standard coefficient lifts");
+          if (!spendCopy(found->second.expression))
+            return bad(&op, "arithmetic output inspection limit");
           subject.outputs.push_back(found->second.expression);
         }
       } else if (failed(readOperation(&op))) {
@@ -114,15 +115,25 @@ private:
   ModuleOp module;
   Subject subject;
   llvm::DenseMap<Value, ValueMeaning> values;
-  uint64_t remaining = 1000000;
+  uint64_t &remaining;
+  bool &exhausted;
   FailureOr<Subject> bad(Operation *op, StringRef reason) {
     (void)refuse(op, reason);
     return failure();
   }
   bool spend(uint64_t cost) {
-    if (cost > remaining)
+    if (cost > remaining) {
+      remaining = 0;
+      exhausted = true;
       return false;
+    }
     remaining -= cost;
+    return true;
+  }
+  bool spendCopy(const Expression &expression) {
+    for (const auto &[term, coefficient] : expression)
+      if (!spend(1 + term.size()))
+        return false;
     return true;
   }
   bool degree(uint64_t n) {
@@ -189,15 +200,6 @@ private:
       return std::nullopt;
     return r;
   }
-  bool accumulate(Expression &result, Monomial term, uint64_t coefficient) {
-    if (!spend(1 + term.size()) || term.size() > 64)
-      return false;
-    auto &previous = result[term];
-    previous = (previous + coefficient) % subject.modulus;
-    if (!previous)
-      result.erase(term);
-    return true;
-  }
   LogicalResult readOperation(Operation *op) {
     if (op->getNumResults() != 1 || op->getNumOperands() > 2 ||
         !op->getNumOperands())
@@ -206,7 +208,7 @@ private:
       if (!values.contains(value))
         return refuse(op, "operand has no admitted interpretation");
     const auto &left = values.find(op->getOperand(0))->second;
-    if (!spend(left.expression.size()))
+    if (!spendCopy(left.expression))
       return refuse(op, "arithmetic inspection limit");
     ValueMeaning result = left;
     Type output = op->getResult(0).getType();
@@ -252,29 +254,17 @@ private:
         return refuse(
             op,
             "ring operands must share coefficient or evaluation coordinates");
-      result.expression.clear();
-      if (isa<poly::MulOp>(op)) {
-        for (const auto &[a, x] : left.expression)
-          for (const auto &[b, y] : right.expression) {
-            if (a.size() + b.size() > 64)
-              return refuse(op, "arithmetic monomial limit");
-            Monomial term;
-            std::merge(a.begin(), a.end(), b.begin(), b.end(),
-                       std::back_inserter(term));
-            if (!accumulate(result.expression, std::move(term),
-                            x * y % subject.modulus))
-              return refuse(op, "arithmetic inspection limit");
-          }
-      } else {
-        for (const auto &[term, coefficient] : left.expression)
-          if (!accumulate(result.expression, term, coefficient))
-            return refuse(op, "arithmetic inspection limit");
-        for (const auto &[term, coefficient] : right.expression)
-          if (!accumulate(result.expression, term,
-                          isa<poly::SubOp>(op) ? subject.modulus - coefficient
-                                               : coefficient))
-            return refuse(op, "arithmetic inspection limit");
-      }
+      bool limited = false;
+      auto expression =
+          combine(isa<poly::MulOp>(op)   ? ArithmeticOperation::Multiply
+                  : isa<poly::SubOp>(op) ? ArithmeticOperation::Subtract
+                                         : ArithmeticOperation::Add,
+                  left.expression, right.expression, subject.modulus, remaining,
+                  &limited);
+      exhausted |= limited;
+      if (failed(expression))
+        return refuse(op, "arithmetic inspection limit");
+      result.expression = std::move(*expression);
     } else {
       return refuse(op, "operation has no admitted arithmetic meaning");
     }
@@ -284,11 +274,106 @@ private:
 };
 } // namespace
 
-LogicalResult compareArithmetic(ModuleOp source, ModuleOp candidate) {
-  auto original = Reader(source).read();
+bool qualifiedProfile(uint64_t q, uint64_t n) {
+  return q < (uint64_t{1} << 31) && n >= 2 && n <= 65536 && !(n & (n - 1)) &&
+         q >= 3 && (q - 1) % (2 * n) == 0 && prime(q);
+}
+uint64_t modularPower(uint64_t value, uint64_t exponent, uint64_t modulus) {
+  return power(value, exponent, modulus);
+}
+FailureOr<Expression> combine(ArithmeticOperation operation,
+                              const Expression &left, const Expression &right,
+                              uint64_t q, uint64_t &remaining,
+                              bool *exhausted) {
+  if (exhausted)
+    *exhausted = false;
+  Expression result;
+  auto accumulate = [&](Monomial term, uint64_t coefficient) {
+    uint64_t cost = 1 + term.size();
+    if (term.size() > 64 || cost > remaining) {
+      remaining = 0;
+      if (exhausted)
+        *exhausted = true;
+      return false;
+    }
+    remaining -= cost;
+    auto &previous = result[term];
+    previous = (previous + coefficient) % q;
+    if (!previous)
+      result.erase(term);
+    return true;
+  };
+  if (q < 2 || q >= (uint64_t{1} << 31))
+    return failure();
+  for (const auto *expression : {&left, &right})
+    for (const auto &[term, coefficient] : *expression) {
+      const auto cost = 1 + term.size();
+      if (cost > remaining) {
+        remaining = 0;
+        if (exhausted)
+          *exhausted = true;
+        return failure();
+      }
+      remaining -= cost;
+      if (!coefficient || coefficient >= q || term.size() > 64 ||
+          !std::is_sorted(term.begin(), term.end()))
+        return failure();
+    }
+  if (operation == ArithmeticOperation::Multiply) {
+    for (const auto &[a, x] : left)
+      for (const auto &[b, y] : right) {
+        if (a.size() + b.size() > 64) {
+          remaining = 0;
+          if (exhausted)
+            *exhausted = true;
+          return failure();
+        }
+        Monomial term;
+        std::merge(a.begin(), a.end(), b.begin(), b.end(),
+                   std::back_inserter(term));
+        if (!accumulate(std::move(term), x * y % q))
+          return failure();
+      }
+  } else {
+    for (const auto &[term, coefficient] : left)
+      if (!accumulate(term, coefficient))
+        return failure();
+    for (const auto &[term, coefficient] : right)
+      if (!accumulate(term, operation == ArithmeticOperation::Subtract
+                                ? q - coefficient
+                                : coefficient))
+        return failure();
+  }
+  return result;
+}
+FailureOr<ArithmeticMeaning>
+readArithmetic(ModuleOp module, uint64_t &remaining, bool *exhausted) {
+  bool limited = false;
+  auto subject = Reader(module, remaining, limited).read();
+  if (exhausted)
+    *exhausted = limited;
+  if (failed(subject))
+    return failure();
+  return ArithmeticMeaning{subject->modulus, subject->degree,
+                           subject->function.getNumArguments(),
+                           std::move(subject->outputs)};
+}
+
+LogicalResult compareArithmetic(ModuleOp source, ModuleOp candidate,
+                                uint64_t *allowance, bool *exhausted) {
+  uint64_t standalone = 1000000;
+  auto &remaining = allowance ? *allowance : standalone;
+  bool limited = false;
+  if (exhausted)
+    *exhausted = false;
+  auto original = Reader(source, remaining, limited).read();
+  if (exhausted)
+    *exhausted = limited;
   if (failed(original))
     return failure();
-  auto proposed = Reader(candidate).read();
+  auto proposed = Reader(candidate, remaining, limited).read();
+  if (exhausted)
+    *exhausted = limited;
   if (failed(proposed))
     return failure();
   if (original->function->getAttrDictionary() !=

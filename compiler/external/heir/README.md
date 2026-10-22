@@ -4,8 +4,9 @@ This optional library reuses HEIR Polynomial, ModArith and RNS sources with the
 same LLVM/MLIR release as zkc. The admitted transformation boundary currently
 covers scalar-modulus negacyclic ring expressions and full NTT placement.
 [The arithmetic profile](../../../docs/spec/realization/heir-arithmetic.md)
-defines the inputs, comparison and limits. This package is not yet called by
-the `.zkc` compiler or the managed native runtime.
+defines the inputs, comparison and limits. With `ZKC_ENABLE_HEIR=ON`, the
+`.zkc` compiler uses the installed package for admitted whole quotient
+calculations and emits checked operations for the managed native runtime.
 
 `ZkcHeirArithmetic` contains selected upstream dialects and passes.
 `ZkcHeirAdmission` independently interprets source and candidate SSA values,
@@ -44,6 +45,7 @@ python3 compiler/external/heir/build.py \
   --mlir-tblgen /path/to/mlir-tblgen \
   --cc /path/to/clang --cxx /path/to/clang++ --jobs 2
 ctest --test-dir build/heir-arithmetic/build --output-on-failure
+cmake --install build/heir-arithmetic/build --prefix /path/to/heir-sdk
 ```
 
 CMake finds `mlir-opt`, `mlir-runner` and `mlir_c_runner_utils` under the selected
@@ -51,7 +53,29 @@ MLIR installation for execution tests. They can be selected explicitly using
 `ZKC_HEIR_MLIR_OPT`, `ZKC_HEIR_MLIR_RUNNER` and `ZKC_HEIR_RUNNER_UTILS` when
 configuring CMake. Build outputs and downloaded sources remain outside source
 control. The main compiler does not acquire a dependency by building this
-optional package.
+optional package. To enable it in an existing compiler configuration:
+
+```sh
+cmake -S compiler -B build/compiler -DZKC_ENABLE_HEIR=ON \
+  -DZkcHeirArithmetic_DIR=/path/to/heir-sdk/lib/cmake/ZkcHeirArithmetic \
+  -Dortools_DIR=/path/to/ortools/lib/cmake/ortools
+cmake --build build/compiler --parallel 2
+ctest --test-dir build/compiler --output-on-failure
+```
+
+The installed `ZkcHeir::Arithmetic` and `ZkcHeir::Admission` targets discover the
+exact LLVM/MLIR and OR-Tools dependencies. The main compiler checks the selected
+HEIR revision and patch digest against its manifest. Installed zkc SDK consumers
+requesting Transforms or its dependents also need this package; lower components
+do not. HEIR requires C++20 in its private compiler dependency. The public zkc
+headers remain usable from C++17.
+
+The SDK contains the transitive public dialect header closure, generated
+headers, library archives, license and pin manifest. Packaging rewrites only
+upstream repository-relative LLVM/MLIR include spellings to installed spellings.
+It exports no experimental checkout paths or include symlinks. The installed
+consumer test relocates the SDK before compiling, linking and executing an
+actual placement call.
 
 `ZKC_HEIR_ENABLE_SANITIZERS=ON` instruments the zkc readers and checking drivers
 with AddressSanitizer and UndefinedBehaviorSanitizer. The externally supplied
@@ -90,5 +114,16 @@ arithmetic workloads, not full signature verification.
 Mutations cover changed arithmetic and inputs, mismatched roots, centered lifts,
 cyclic rings, composite or unsupported moduli, storage width and extra
 attributes. Transform folding is compared with execution for both inverse-root
-and noninverse-root pairs. The native allocation, failure-order and artifact
-admission contracts are not covered by these standalone executions.
+and noninverse-root pairs. These standalone executions do not cover native allocation or artifact
+admission. The main compiler's `heir-quotients` checks exercise the separate
+managed recipe reader, input/output aliases, source preservation, transform
+sharing, optional capacity fallback and altered native candidates. The common
+formal quotient suite exercises `.zkc` compilation and managed execution for
+the large ring workloads. A coefficient-only compiler can be built with
+`ZKC_ENABLE_HEIR=OFF` for the same source programs.
+
+Checked placement selects roots with a bounded, charged search over the admitted
+prime/power-of-two profile. It then uses the upstream placement and cleanup
+passes. The development optimizer continues to expose upstream root attachment
+for standalone qualification; main compiler admission does not invoke an
+unbounded generator search.

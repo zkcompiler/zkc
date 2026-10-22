@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
-project(ZkcHeirArithmetic LANGUAGES C CXX)
+project(ZkcHeirArithmetic VERSION 0.0.0 LANGUAGES C CXX)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(LLVM 23.1.3 EXACT REQUIRED CONFIG)
 find_package(MLIR 23.1.3 EXACT REQUIRED CONFIG)
 if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "23.1.3")
@@ -126,14 +127,20 @@ list(TRANSFORM sources PREPEND "${ZKC_HEIR_SOURCE_DIR}/")
 add_library(ZkcHeirArithmetic STATIC ${sources} ${dialect_sources})
 add_dependencies(ZkcHeirArithmetic ZkcHeirTableGen)
 target_compile_features(ZkcHeirArithmetic PUBLIC cxx_std_20)
-target_include_directories(ZkcHeirArithmetic SYSTEM PUBLIC "${ZKC_HEIR_SOURCE_DIR}"
-  "${CMAKE_CURRENT_BINARY_DIR}/generated" "${CMAKE_CURRENT_BINARY_DIR}/include-shims")
-target_include_directories(ZkcHeirArithmetic SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
+target_include_directories(ZkcHeirArithmetic SYSTEM PUBLIC
+  "$<BUILD_INTERFACE:${ZKC_HEIR_SOURCE_DIR}>"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include-shims>"
+  "$<INSTALL_INTERFACE:include/zkc-heir>")
+foreach(directory IN LISTS LLVM_INCLUDE_DIRS MLIR_INCLUDE_DIRS)
+  target_include_directories(ZkcHeirArithmetic SYSTEM PUBLIC "$<BUILD_INTERFACE:${directory}>")
+endforeach()
 target_link_libraries(ZkcHeirArithmetic PUBLIC MLIR LLVM absl::int128 ortools::ortools)
 add_executable(zkc-heir-opt main.cpp)
 target_link_libraries(zkc-heir-opt PRIVATE ZkcHeirArithmetic)
 add_library(ZkcHeirAdmission STATIC Admission.cpp Placement.cpp)
-target_include_directories(ZkcHeirAdmission PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(ZkcHeirAdmission PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include>")
 target_link_libraries(ZkcHeirAdmission PUBLIC ZkcHeirArithmetic)
 target_compile_options(ZkcHeirAdmission PRIVATE -Wall -Wextra -Werror)
 add_executable(zkc-heir-check check.cpp)
@@ -142,6 +149,8 @@ add_executable(zkc-heir-place place.cpp)
 target_link_libraries(zkc-heir-place PRIVATE ZkcHeirAdmission)
 option(ZKC_HEIR_ENABLE_SANITIZERS "Instrument zkc arithmetic readers and drivers" OFF)
 if(ZKC_HEIR_ENABLE_SANITIZERS)
+  # Static library consumers must link the instrumentation runtimes too.
+  target_link_options(ZkcHeirAdmission INTERFACE -fsanitize=address,undefined)
   foreach(target ZkcHeirAdmission zkc-heir-check zkc-heir-place)
     target_compile_options(${target} PRIVATE -fsanitize=address,undefined
       -fno-omit-frame-pointer -fno-sanitize-recover=all)
@@ -154,6 +163,11 @@ if(BUILD_TESTING)
   find_program(ZKC_HEIR_MLIR_OPT mlir-opt HINTS "${MLIR_INSTALL_PREFIX}/bin" REQUIRED)
   find_program(ZKC_HEIR_MLIR_RUNNER mlir-runner HINTS "${MLIR_INSTALL_PREFIX}/bin" REQUIRED)
   find_library(ZKC_HEIR_RUNNER_UTILS mlir_c_runner_utils HINTS "${MLIR_INSTALL_PREFIX}/lib" REQUIRED)
+  add_test(NAME heir-installed-consumer COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/sdk.py"
+    --build "${CMAKE_CURRENT_BINARY_DIR}" --work "${CMAKE_CURRENT_BINARY_DIR}/sdk-tests"
+    --llvm-dir "${LLVM_DIR}" --mlir-dir "${MLIR_DIR}" --ortools-dir "${ortools_DIR}"
+    --cc "${CMAKE_C_COMPILER}" --cxx "${CMAKE_CXX_COMPILER}")
   add_test(NAME heir-arithmetic COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/arithmetic.py"
     --optimizer $<TARGET_FILE:zkc-heir-opt> --checker $<TARGET_FILE:zkc-heir-check>
@@ -162,3 +176,32 @@ if(BUILD_TESTING)
     --runner-utils "${ZKC_HEIR_RUNNER_UTILS}"
     --work "${CMAKE_CURRENT_BINARY_DIR}/test-output")
 endif()
+
+include(CMakePackageConfigHelpers)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pins.json" pins)
+string(JSON HEIR_REVISION GET "${pins}" heir revision)
+string(JSON HEIR_PATCH_SHA256 GET "${pins}" patches 0 sha256)
+set_target_properties(ZkcHeirArithmetic PROPERTIES EXPORT_NAME Arithmetic)
+set_target_properties(ZkcHeirAdmission PROPERTIES EXPORT_NAME Admission)
+install(TARGETS ZkcHeirArithmetic ZkcHeirAdmission EXPORT ZkcHeirArithmeticTargets
+  ARCHIVE DESTINATION lib)
+install(EXPORT ZkcHeirArithmeticTargets NAMESPACE ZkcHeir::
+  DESTINATION lib/cmake/ZkcHeirArithmetic)
+configure_package_config_file(ZkcHeirArithmeticConfig.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/ZkcHeirArithmeticConfig.cmake"
+  INSTALL_DESTINATION lib/cmake/ZkcHeirArithmetic)
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/ZkcHeirArithmeticConfigVersion.cmake"
+  COMPATIBILITY ExactVersion)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ZkcHeirArithmeticConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/ZkcHeirArithmeticConfigVersion.cmake"
+  DESTINATION lib/cmake/ZkcHeirArithmetic)
+install(FILES Admission.h Arithmetic.h DESTINATION include/zkc/heir)
+install(FILES pins.json DESTINATION share/zkc-heir)
+install(FILES "${ZKC_HEIR_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/zkc-heir)
+install(CODE "
+  execute_process(COMMAND \"${Python3_EXECUTABLE}\"
+    \"${CMAKE_CURRENT_SOURCE_DIR}/install_headers.py\"
+    --source \"${ZKC_HEIR_SOURCE_DIR}\"
+    --generated \"${CMAKE_CURRENT_BINARY_DIR}/generated\"
+    --output \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/include/zkc-heir\"
+    COMMAND_ERROR_IS_FATAL ANY)")

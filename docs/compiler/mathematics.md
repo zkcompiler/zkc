@@ -44,9 +44,10 @@ compound expressions without assigning a transform basis to the source value.
 
 The current fallback emits managed coefficient operations and independently
 checks their actual constants, operands and returned values. This path supports
-composite and full-word moduli. The selected HEIR integration will operate on
-qualified arithmetic regions; its standalone placement checker does not yet
-establish this source-to-native edge. See the
+composite and full-word moduli. The optional HEIR integration operates on
+complete qualified calculations. Separate readers check the actual HEIR
+arithmetic and managed execution against the retained source; placement can
+share transforms across the entire expression. See the
 [contract](../spec/domains/quotient-rings.md#formal-calculations) and
 [adoption rationale](../rationale/quotient-rings.md).
 

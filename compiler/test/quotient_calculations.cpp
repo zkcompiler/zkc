@@ -73,6 +73,7 @@ int main() {
   auto snapshot =
       OwningOpRef<kernel::ModuleOp>(cast<kernel::ModuleOp>(unit->clone()));
   mathematical::RealizationWork work;
+  work.quotientPlacements = 0;
   auto candidate = zkc::test::realizeKernelEntry(*unit, "quotient", {}, work);
   cases.run("managed coefficient realization and immutable source", [&] {
     require(bool(candidate), "quotient recipe failed");
