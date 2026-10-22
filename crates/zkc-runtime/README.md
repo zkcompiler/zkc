@@ -36,7 +36,7 @@ raw byte access and Boolean projection. Missing measurement refuses before
 decoding. Invalid receives complete with Decode; capacity and adapter failures
 remain Host failures. Native implements the closed native profile in its own
 crate. Runtime depends on neither native nor kernels. Application Hosts in
-`zkc-tools` retain package/deployment identity, setup and public-input authority,
+`zkc` retain package/deployment identity, setup and public-input authority,
 acceptance selectors, prepared computation policy and publication.
 
 Shared-ledger reports retain live storage guards. `Produced::into_parts()`

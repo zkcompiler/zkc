@@ -18,7 +18,13 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compilerTests}/libraries/protocols/polynomial/sumcheck/zkc.toml
   test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
-  test -f ${sources.rust}/crates/zkc-tools/Cargo.toml
+  test -f ${sources.rust}/crates/zkc-cli/Cargo.toml
+  test -f ${sources.rustConsumer}/common/tests/check_rust_sdk.py
+  test -f ${sources.rustConsumer}/common/tests/consumer/rust/main.rs
+  test -f ${sources.rustConsumer}/common/unicode/manifest.json
+  test ! -e ${sources.rustConsumer}/compiler
+  test ! -e ${sources.rustConsumer}/crates/zkc-tools
+  test -f ${sources.rust}/crates/zkc/Cargo.toml
   test -f ${sources.rust}/crates/zkc-benchmarks/Cargo.toml
   test -f ${sources.format}/common/benchmarks/monero.cpp
   test ! -e ${sources.rust}/scripts

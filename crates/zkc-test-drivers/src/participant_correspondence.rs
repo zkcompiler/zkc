@@ -196,12 +196,12 @@ fn value(ty: &Json, v: &Json) -> Result<Value> {
     }
     if *ty == json!(["field", "bls12-381.fr"]) {
         return Ok(Value::Field(
-            zkc_native::parse_decimal(string(v)?).map_err(harness)?,
+            zkc_kernels::parse_decimal(string(v)?).map_err(harness)?,
         ));
     }
     if *ty == json!(["group", "bls12-381.g1"]) {
         return Ok(Value::Curve(
-            GroupPoint::generator().scale(zkc_native::parse_decimal(string(v)?).map_err(harness)?),
+            GroupPoint::generator().scale(zkc_kernels::parse_decimal(string(v)?).map_err(harness)?),
         ));
     }
     Err(unsupported(
@@ -567,7 +567,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         let tape = p
             .tape
             .iter()
-            .map(|v| zkc_native::parse_decimal(v).map_err(harness))
+            .map(|v| zkc_kernels::parse_decimal(v).map_err(harness))
             .collect::<Result<Vec<_>>>()?;
         references.insert(
             p.handle.clone(),
@@ -860,7 +860,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
                             }
                             "modulus" | "complete-modulus" => {
                                 let n = num_bigint::BigUint::parse_bytes(
-                                    zkc_native::SCALAR_MODULUS_DECIMAL.as_bytes(),
+                                    zkc_kernels::SCALAR_MODULUS_DECIMAL.as_bytes(),
                                     10,
                                 )
                                 .unwrap();

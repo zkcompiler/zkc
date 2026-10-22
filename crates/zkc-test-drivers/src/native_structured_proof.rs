@@ -4,11 +4,11 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
+use zkc::proof::NativeDeployment;
 use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant};
 use zkc_runtime::vm::{LogicalType, Value as RuntimeValue};
 use zkc_test_support::hex;
 use zkc_test_support::variants::logical;
-use zkc_tools::proof::NativeDeployment;
 fn digest(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
@@ -102,7 +102,7 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
         envelope[2][3].as_array().unwrap().len().to_string()
     ])
 }
-fn clean(report: &zkc_tools::proof::NativeProofReport) {
+fn clean(report: &zkc::proof::NativeProofReport) {
     assert!(!report.outcome.as_ref().err().is_some_and(
         |e| e.starts_with("native-proof-cleanup") || e == "native-proof-active-frames"
     ));
@@ -194,7 +194,7 @@ fn run(directory: &Path) {
             let produced = zkc_test_drivers::execute_test(
                 &deployment,
                 &p,
-                zkc_tools::proof::Invocation::one_shot(None),
+                zkc::proof::Invocation::one_shot(None),
                 BTreeMap::from([(3, vec![Scalar::from(5)])]),
             )
             .unwrap();
@@ -206,7 +206,7 @@ fn run(directory: &Path) {
             let validated = zkc_test_drivers::execute(
                 &deployment,
                 &v,
-                zkc_tools::proof::Invocation::one_shot(Some(&proof)),
+                zkc::proof::Invocation::one_shot(Some(&proof)),
             )
             .unwrap();
             clean(&validated);
@@ -215,7 +215,7 @@ fn run(directory: &Path) {
                 let r = zkc_test_drivers::execute(
                     &deployment,
                     &v,
-                    zkc_tools::proof::Invocation::one_shot(Some(&proof[..length])),
+                    zkc::proof::Invocation::one_shot(Some(&proof[..length])),
                 )
                 .unwrap();
                 clean(&r);
@@ -227,7 +227,7 @@ fn run(directory: &Path) {
                 zkc_test_drivers::execute(
                     &deployment,
                     &v,
-                    zkc_tools::proof::Invocation::one_shot(Some(&extra))
+                    zkc::proof::Invocation::one_shot(Some(&extra))
                 )
                 .unwrap()
                 .outcome
@@ -251,7 +251,7 @@ fn run(directory: &Path) {
                 let wrong = zkc_test_drivers::execute_test(
                     &deployment,
                     &dishonest,
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                     BTreeMap::from([(3, vec![Scalar::from(5)])]),
                 )
                 .unwrap();
@@ -260,7 +260,7 @@ fn run(directory: &Path) {
                 let rejected = zkc_test_drivers::execute(
                     &deployment,
                     &v,
-                    zkc_tools::proof::Invocation::one_shot(Some(&wrong)),
+                    zkc::proof::Invocation::one_shot(Some(&wrong)),
                 )
                 .unwrap();
                 clean(&rejected);
@@ -437,18 +437,14 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     };
     let p = input("Alice");
     let v = input("Bob");
-    let produced = zkc_test_drivers::execute(
-        &deployment,
-        &p,
-        zkc_tools::proof::Invocation::one_shot(None),
-    )
-    .unwrap();
+    let produced =
+        zkc_test_drivers::execute(&deployment, &p, zkc::proof::Invocation::one_shot(None)).unwrap();
     clean(&produced);
     let proof = produced.outcome.unwrap();
     let validated = zkc_test_drivers::execute(
         &deployment,
         &v,
-        zkc_tools::proof::Invocation::one_shot(Some(&proof)),
+        zkc::proof::Invocation::one_shot(Some(&proof)),
     )
     .unwrap();
     clean(&validated);

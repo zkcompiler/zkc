@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Prepare packages separately; build staged Rust SDK sources and execute tool-free."""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[2]
+CRATES = ('zkc', 'zkc-runtime', 'zkc-native', 'zkc-kernels', 'zkc-test-support')
+SOURCE = '''module application;
+entry fn Twice(値:index) { return 値 + 2; }
+protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
+  let received=send P->V(value); return received;
+}
+protocol Equality roles(P,V)(expected:bool@(P,V),candidate:bool@P)->(accepted:bool@V){
+  let received=send P->V(candidate); let accepted@V=received==expected; return accepted;
+}
+proof Core = Equality {
+  prover P; verifier V; public{expected}; accept accepted; construction authored;
+}
+'''
+
+
+def run(command, *, cwd, env=None):
+    result = subprocess.run([str(s) for s in command], cwd=cwd, env=env,
+                            text=True, capture_output=True, check=False)
+    if result.returncode:
+        raise RuntimeError(f'{command}\n{result.stdout}\n{result.stderr}')
+    return result.stdout
+
+
+def prepare(output, cli, compiler):
+    output.mkdir(parents=True)
+    source = output / '数学.zkc'
+    source.write_text(SOURCE)
+    for name, entry in [('numerical', 'Twice'), ('joint', 'Echo'), ('proof', 'Core')]:
+        package = output / f'{name}.zkpkg'
+        result = json.loads(run([cli, '--json', 'compile', f'application::{entry}',
+                                 f'--module=application={source}', f'--compiler={compiler}',
+                                 f'--output={package}'], cwd=output))
+        assert result['status'] == 'compiled', result
+        result = json.loads(run([cli, '--json', 'bindings', f'--package={package}',
+                                 f'--sha256={result["package_sha256"]}',
+                                 f'--output={output / (name + ".rs")}'], cwd=output))
+        assert result['status'] == 'generated', result
+
+
+def stage(output, sdk_source, prepared):
+    output.mkdir(parents=True)
+    shutil.copyfile(sdk_source / 'rust-toolchain.toml', output / 'rust-toolchain.toml')
+    if (sdk_source / '.cargo/config.toml').is_file():
+        (output / '.cargo').mkdir()
+        shutil.copyfile(sdk_source / '.cargo/config.toml', output / '.cargo/config.toml')
+    staged = output / 'sdk'
+    staged.mkdir()
+    for name in CRATES:
+        shutil.copytree(sdk_source / 'crates' / name, staged / 'crates' / name)
+    shutil.copytree(sdk_source / 'common/unicode', staged / 'common/unicode')
+    for name in ('Cargo.lock', 'rust-toolchain.toml'):
+        shutil.copyfile(sdk_source / name, staged / name)
+    # Preserve owning manifests and exact pins; select only the installed SDK closure.
+    manifest = (sdk_source / 'Cargo.toml').read_text()
+    start = manifest.index('members = [')
+    end = manifest.index('resolver =', start)
+    manifest = (manifest[:start] + 'members = ' + json.dumps([f'crates/{n}' for n in CRATES])
+                + '\ndefault-members = ["crates/zkc"]\n' + manifest[end:])
+    (staged / 'Cargo.toml').write_text(manifest)
+    consumer = output / 'consumer'
+    consumer.mkdir()
+    for path in prepared.iterdir():
+        if path.suffix in ('.rs', '.zkpkg'):
+            shutil.copyfile(path, consumer / path.name)
+    shutil.copyfile(sdk_source / 'common/tests/consumer/rust/main.rs', consumer / 'main.rs')
+    shutil.copyfile(sdk_source / 'Cargo.lock', consumer / 'Cargo.lock')
+    (consumer / 'Cargo.toml').write_text('''[package]
+name = "installed-rust-consumer"
+version = "0.0.0"
+edition = "2024"
+[workspace]
+[dependencies]
+zkc = { path = "../sdk/crates/zkc", default-features = false }
+[[bin]]
+name = "installed-rust-consumer"
+path = "main.rs"
+''')
+    return consumer
+
+
+def check(output, sdk_source, prepared):
+    consumer = stage(output, sdk_source, prepared)
+    target = output / 'consumer-target'
+    env = dict(os.environ, CARGO_BUILD_JOBS='4', CARGO_INCREMENTAL='0',
+               CARGO_PROFILE_DEV_DEBUG='0', CARGO_PROFILE_TEST_DEBUG='0')
+    cargo = ['cargo', '--offline']
+    # Metadata resolves this independent graph; normal features must remain isolated.
+    metadata = json.loads(run([*cargo, 'metadata', '--format-version=1'], cwd=consumer, env=env))
+    names = {p['id']: p['name'] for p in metadata['packages']}
+    for node in metadata['resolve']['nodes']:
+        if names[node['id']] in ('zkc', 'zkc-native', 'zkc-runtime', 'zkc-kernels'):
+            assert not {'test-utils', 'execution-counts'} & set(node['features']), node
+    run([*cargo, 'build', '--target-dir', target], cwd=consumer, env=env)
+    execution = output / 'execution'
+    execution.mkdir()
+    binary = execution / 'installed-rust-consumer'
+    shutil.copyfile(target / 'debug/installed-rust-consumer', binary)
+    binary.chmod(0o700)
+    runtime_env = dict(os.environ, PATH='', ZKC_COMPILER_BIN='/unavailable',
+                       ZKC_NATIVE_BIN='/unavailable', ZKC_COMPILER='/unavailable')
+    result = run([binary], cwd=execution, env=runtime_env)
+    (output / 'result.txt').write_text(result)
+    print(result, end='')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    phases = parser.add_subparsers(dest='phase', required=True)
+    prep = phases.add_parser('prepare')
+    prep.add_argument('--cli', type=Path, required=True)
+    prep.add_argument('--compiler', type=Path, required=True)
+    prep.add_argument('--output', type=Path, required=True)
+    verify = phases.add_parser('check')
+    verify.add_argument('--sdk-source', type=Path, default=ROOT)
+    verify.add_argument('--prepared', type=Path, required=True)
+    verify.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    if args.phase == 'prepare':
+        prepare(args.output.resolve(), args.cli.resolve(), args.compiler.resolve())
+    else:
+        check(args.output.resolve(), args.sdk_source.resolve(), args.prepared.resolve())
+
+
+if __name__ == '__main__':
+    main()

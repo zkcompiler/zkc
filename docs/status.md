@@ -46,7 +46,7 @@ Hosts use that interpreter for Entry, proof and joint execution.
 without native or kernel dependencies. Runtime-only controls use a separate
 backend and Value through joint and proof paths; native integration implements
 the closed wire profile. Application identity, setup, public inputs and prepared
-computation authority remain in `zkc-tools`. The
+computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
 Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their

@@ -31,7 +31,7 @@ zkc-kernels = { workspace = true, features = ["test-utils"] }
 zkc-native = { workspace = true, features = ["test-utils"] }
 zkc-runtime.workspace = true
 zkc-test-support.workspace = true
-zkc-tools = { workspace = true, features = ["test-utils"] }
+zkc = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

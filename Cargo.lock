@@ -2483,6 +2483,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "zkc"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "rand 0.10.3",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "toml",
+ "unicode-normalization",
+ "zkc-kernels",
+ "zkc-native",
+ "zkc-runtime",
+ "zkc-test-support",
+]
+
+[[package]]
 name = "zkc-benchmarks"
 version = "0.0.0"
 dependencies = [
@@ -2494,9 +2513,23 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "spongefish 0.7.4",
+ "zkc",
  "zkc-native",
  "zkc-runtime",
- "zkc-tools",
+]
+
+[[package]]
+name = "zkc-cli"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "zkc",
+ "zkc-kernels",
+ "zkc-native",
+ "zkc-runtime",
+ "zkc-test-support",
 ]
 
 [[package]]
@@ -2593,11 +2626,11 @@ dependencies = [
  "sha3 0.12.0",
  "spongefish 0.7.4",
  "spongefish 0.8.0",
+ "zkc",
  "zkc-kernels",
  "zkc-native",
  "zkc-runtime",
  "zkc-test-support",
- "zkc-tools",
 ]
 
 [[package]]
@@ -2605,25 +2638,6 @@ name = "zkc-test-support"
 version = "0.0.0"
 dependencies = [
  "serde_json",
-]
-
-[[package]]
-name = "zkc-tools"
-version = "0.0.0"
-dependencies = [
- "libc",
- "rand 0.10.3",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
- "toml",
- "unicode-normalization",
- "zkc-kernels",
- "zkc-native",
- "zkc-runtime",
- "zkc-test-support",
 ]
 
 [[package]]

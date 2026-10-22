@@ -212,14 +212,14 @@ impl<S: crate::ring::Carrier + BasedVectorSpace<KoalaBear>> Algebra for Arithmet
         }
         let values = coordinates
             .iter()
-            .map(|s| crate::parse_koala_bear_decimal(s).map_err(|_| Error("bundle-value")))
+            .map(|s| zkc_kernels::plonky3::parse_decimal(s).map_err(|_| Error("bundle-value")))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(S::from_basis_coefficients_fn(|i| {
             values.get(i).copied().unwrap_or(KoalaBear::ZERO)
         }))
     }
     fn constant(&self, _: Identity, literal: &str) -> std::result::Result<S, Error> {
-        let n = crate::parse_koala_bear_decimal(literal).map_err(|_| Error("bundle-value"))?;
+        let n = zkc_kernels::plonky3::parse_decimal(literal).map_err(|_| Error("bundle-value"))?;
         Ok(S::from_u32(n.as_canonical_u32()))
     }
     fn add(&self, _: Identity, a: &S, b: &S) -> S {

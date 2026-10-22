@@ -7,7 +7,7 @@ use crate::{
     observation::{Call, InputSetup, Lifecycle},
 };
 use std::{collections::BTreeMap, path::Path, time::Instant};
-use zkc_tools::{
+use zkc::{
     entry::{
         FunctionEntry, FunctionInterface, FunctionOptions, FunctionRequest, InvocationBinding,
         InvocationContext, NamedValues, RunContext, Value, inputs::Decoder,

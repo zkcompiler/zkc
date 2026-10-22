@@ -250,7 +250,7 @@ fn cases() -> Vec<FieldCase> {
             field: "bls12-381.fr",
             maximum: "52435875175126190479447740508185965837690552500527637822603658699938581184512",
             value: Value::Field(-crate::Scalar::from(1)),
-            overflow: crate::SCALAR_MODULUS_DECIMAL,
+            overflow: zkc_kernels::SCALAR_MODULUS_DECIMAL,
             error: "refused:invalid-encoding",
         },
         FieldCase {
@@ -264,7 +264,7 @@ fn cases() -> Vec<FieldCase> {
             field: "ristretto255.scalar",
             maximum: "7237005577332262213973186563042994240857116359379907606001950938285454250988",
             value: Value::RistrettoField(-crate::RistrettoScalar::ONE),
-            overflow: crate::RISTRETTO_SCALAR_MODULUS_DECIMAL,
+            overflow: zkc_kernels::RISTRETTO_SCALAR_MODULUS_DECIMAL,
             error: "refused:noncanonical-scalar",
         },
         FieldCase {

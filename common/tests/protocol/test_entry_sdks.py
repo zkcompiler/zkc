@@ -103,13 +103,13 @@ version = "0.0.0"
 edition = "2024"
 [workspace]
 [dependencies]
-zkc-tools = {{path = {str(ROOT / 'crates/zkc-tools')!r}}}
+zkc = {{path = {str(ROOT / 'crates/zkc')!r}}}
 ''')
     (directory / "src").mkdir()
     (directory / "src/main.rs").write_text('''mod bindings { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/bindings.rs")); }
 mod generic { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generic.rs")); }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  use zkc_tools::entry::{FunctionInterface, InvocationBinding, InvocationContext,
+  use zkc::entry::{FunctionInterface, InvocationBinding, InvocationContext,
                          NamedValues, Package, RunContext, SetupAuthority, Value};
   let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/twice.zkpkg"));
   let host = bindings::admit(bytes, Default::default(), Default::default())?;
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ''')
     journal.run(["cargo", "run", "--offline", "--quiet", "--jobs=2", "--manifest-path",
-                 directory / "Cargo.toml", "--target-dir", ROOT / "target"])
+                 directory / "Cargo.toml", "--target-dir", directory / "consumer-target"])
 
 
 def test_python_calls_generated_proof_apis_with_independent_public_inputs(toolchain, directory):

@@ -3,13 +3,13 @@ use super::interface::alter;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::{Scalar, Value as Native};
-use zkc_runtime::host::joint::Outcome;
-use zkc_tools::{
+use zkc::{
     entry::{Package, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value},
     execution::InputValue,
     run::HostLimits,
 };
+use zkc_native::{Scalar, Value as Native};
+use zkc_runtime::host::joint::Outcome;
 fn package(directory: &Path, name: &str) -> Package {
     let bytes = std::fs::read(directory.join(name)).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()
@@ -259,7 +259,7 @@ pub(super) fn run(directory: &Path) {
 }
 
 fn deep_schema(directory: &Path) {
-    use zkc_tools::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
+    use zkc::entry::{FunctionEntry, FunctionOptions, FunctionRequest};
     let entry = FunctionEntry::admit(
         package(directory, "deep-schema.zkpkg"),
         FunctionOptions::default(),

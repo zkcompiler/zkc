@@ -14,7 +14,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 spongefish-074 = { workspace = true, features = ["sha3", "ark-ec", "std"] }
-zkc-tools.workspace = true
+zkc.workspace = true
 zkc-runtime.workspace = true
 zkc-native.workspace = true
 

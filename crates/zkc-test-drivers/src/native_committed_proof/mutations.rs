@@ -3,11 +3,7 @@
 use super::*;
 use zkc_runtime::vm::Value as RuntimeValue;
 fn error(deployment: &NativeDeployment, input: &Json, proof: Option<&[u8]>) -> String {
-    match zkc_test_drivers::execute(
-        deployment,
-        input,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    ) {
+    match zkc_test_drivers::execute(deployment, input, zkc::proof::Invocation::one_shot(proof)) {
         Err(e) => e,
         Ok(report) => {
             let error = report.outcome.expect_err("mutation accepted");

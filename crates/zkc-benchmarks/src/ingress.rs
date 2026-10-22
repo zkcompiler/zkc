@@ -2,12 +2,12 @@
 use crate::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
-use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
-use zkc_tools::{
+use zkc::{
     entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
     execution::{Capacity, InputValue, PreparedData},
 };
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
+use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -357,14 +357,14 @@ mod tests {
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::sync::Arc;
-    use zkc_tools::entry::{BoundInterface, Package, inputs::Decoder};
+    use zkc::entry::{BoundInterface, Package, inputs::Decoder};
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     fn schema(kind: &str, name: &str, leaves: Json) -> Json {
-        // Same checked metadata shape as zkc-tools' interface fixtures.
+        // Same checked metadata shape as zkc' interface fixtures.
         json!({"kind":kind,"identity":hex(&Sha256::digest(name.as_bytes())),"type":name,
             "custody":false,"constructible":true,"permissions":["Copy","Drop"],
             "fields":[],"alternatives":[],"leaves":leaves})
@@ -397,7 +397,7 @@ mod tests {
     }
 
     fn package(document: &Json, artifact: &str) -> Package {
-        // Authenticate the hand-built fixture, as in zkc-tools' asset tests.
+        // Authenticate the hand-built fixture, as in zkc' asset tests.
         let frame = json!({"format":"zkc.entry/0","original":"original",
             "interface":document.to_string(),"artifact":artifact,"assets":[],
             "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
@@ -430,7 +430,7 @@ mod tests {
             "zkc.variant/0",
             [
                 "zkc.language",
-                zkc_tools::source_names::encode_nominal_identity("sample::Choice"),
+                zkc::source_names::encode_nominal_identity("sample::Choice"),
                 ["0", "1"],
                 "case00000000",
                 [],
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn decoder_key_initializers_remain_descriptors_without_data_conversion() {
-        use zkc_tools::{entry::inputs::Resolver, execution::InputFile};
+        use zkc::{entry::inputs::Resolver, execution::InputFile};
         struct KeyFile;
         impl Resolver for KeyFile {
             fn resolve(&mut self, relative: &str) -> std::result::Result<InputFile, String> {
@@ -780,8 +780,8 @@ mod tests {
 
     #[test]
     fn entry_preflight_checks_aggregate_loading_for_every_representation() {
-        use zkc_tools::entry::{EntryPhase, RoleInputs, RunEntry, RunRequest, SetupAuthority};
-        use zkc_tools::run::HostLimits;
+        use zkc::entry::{EntryPhase, RoleInputs, RunEntry, RunRequest, SetupAuthority};
+        use zkc::run::HostLimits;
         let boolean = schema("boolean", "bool", json!(["bool"]));
         for pair in [false, true] {
             let statement = if pair {

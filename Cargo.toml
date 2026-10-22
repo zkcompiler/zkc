@@ -1,14 +1,15 @@
 [workspace]
 members = [
   "crates/zkc-runtime",
-  "crates/zkc-tools",
+  "crates/zkc",
+  "crates/zkc-cli",
   "crates/zkc-kernels",
   "crates/zkc-native",
   "crates/zkc-test-support",
   "crates/zkc-test-drivers",
   "crates/zkc-benchmarks",
 ]
-default-members = ["crates/zkc-tools"]
+default-members = ["crates/zkc-cli"]
 resolver = "3"
 
 [workspace.package]
@@ -63,7 +64,7 @@ p3-field-043 = { package = "p3-field", version = "=0.4.3" }
 p3-symmetric-043 = { package = "p3-symmetric", version = "=0.4.3" }
 p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 
-zkc-tools = { path = "crates/zkc-tools" }
+zkc = { path = "crates/zkc" }
 zkc-runtime = { path = "crates/zkc-runtime" }
 zkc-native = { path = "crates/zkc-native" }
 zkc-kernels = { path = "crates/zkc-kernels" }

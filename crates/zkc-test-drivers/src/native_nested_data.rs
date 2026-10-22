@@ -5,14 +5,14 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
+use zkc::proof::NativeDeployment;
 use zkc_kernels::Keys;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 
-fn authority(keys: &Keys) -> zkc_tools::proof::SetupAuthority {
-    zkc_tools::proof::SetupAuthority {
+fn authority(keys: &Keys) -> zkc::proof::SetupAuthority {
+    zkc::proof::SetupAuthority {
         keys: std::collections::BTreeMap::from([(2, keys.verifier_key().metadata().key_id())]),
         inputs: std::collections::BTreeMap::from([(1, 2), (3, 2)]),
     }
@@ -182,12 +182,9 @@ fn checked(
     deployment: &NativeDeployment,
     inputs: &Json,
     proof: Option<&[u8]>,
-) -> Result<zkc_tools::proof::NativeProofReport, String> {
-    let report = zkc_test_drivers::execute(
-        deployment,
-        inputs,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    )?;
+) -> Result<zkc::proof::NativeProofReport, String> {
+    let report =
+        zkc_test_drivers::execute(deployment, inputs, zkc::proof::Invocation::one_shot(proof))?;
     if report.outcome.is_ok() {
         assert!(!report.cancelled);
     }

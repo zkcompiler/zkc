@@ -50,7 +50,7 @@ def execute(args):
             run([sys.executable, ROOT / "lean/support/compatibility.py", directory])
         run(["lake", "build"], cwd=directory)
     elif args.operation == "rust":
-        run(["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"])
+        run(["cargo", "build", "--release", "--locked", "-p", "zkc-cli", "--bin", "zkc"])
     elif args.operation == "test-drivers":
         run(["cargo", "build", "--release", "--locked", "-p", "zkc-test-drivers", "--bins"])
     elif args.operation == "clean-reports":

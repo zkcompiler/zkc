@@ -216,6 +216,11 @@ in
       python3 = python;
       source = sources.repository;
     };
+    rust-consumer = pkgs.callPackage ./checks/rust-consumer.nix {
+      inherit tools compiler;
+      source = sources.rustConsumer;
+      python3 = python;
+    };
     compiler-consumer = pkgs.callPackage ./checks/compiler-consumer.nix {
       inherit compiler llvm;
       source = sources.consumer;

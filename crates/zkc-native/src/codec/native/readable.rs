@@ -146,12 +146,12 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
         return Ok(());
     }
     let (modulus, width) = match identity {
-        Bls12381Fr => (crate::SCALAR_MODULUS_DECIMAL, 32),
+        Bls12381Fr => (zkc_kernels::SCALAR_MODULUS_DECIMAL, 32),
         Bn254Fr => (
             "21888242871839275222246405745257275088548364400416034343698204186575808495617",
             32,
         ),
-        Ristretto255Scalar => (crate::RISTRETTO_SCALAR_MODULUS_DECIMAL, 32),
+        Ristretto255Scalar => (zkc_kernels::RISTRETTO_SCALAR_MODULUS_DECIMAL, 32),
         KoalaBear => ("2130706433", 4),
         _ => return Err("entry-input-codec"),
     };
@@ -547,10 +547,12 @@ mod tests {
         let values = vec![
             Value::Bool(true),
             Value::Index(u64::MAX),
-            Value::Field(crate::parse_decimal("12345678901234567890").unwrap()),
-            Value::Bn254Field(crate::parse_bn254_decimal("2345678901234567890").unwrap()),
-            Value::RistrettoField(crate::parse_ristretto_decimal("345678901234567890").unwrap()),
-            Value::KoalaBearField(crate::parse_koala_bear_decimal("2130706432").unwrap()),
+            Value::Field(zkc_kernels::parse_decimal("12345678901234567890").unwrap()),
+            Value::Bn254Field(zkc_kernels::bn254::parse_decimal("2345678901234567890").unwrap()),
+            Value::RistrettoField(
+                zkc_kernels::fields::parse_ristretto_decimal("345678901234567890").unwrap(),
+            ),
+            Value::KoalaBearField(zkc_kernels::plonky3::parse_decimal("2130706432").unwrap()),
             Value::KoalaBearExt8Field(
                 zkc_kernels::plonky3::decode_extension(&[
                     1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0,
@@ -625,7 +627,7 @@ mod tests {
             json!("-1"),
             json!("+1"),
             json!("1e2"),
-            json!(crate::SCALAR_MODULUS_DECIMAL),
+            json!(zkc_kernels::SCALAR_MODULUS_DECIMAL),
             json!("9".repeat(10000)),
         ] {
             assert!(readable_wire(&ty, &bad, 38).is_err(), "{bad}");

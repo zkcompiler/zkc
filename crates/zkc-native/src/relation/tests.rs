@@ -252,7 +252,7 @@ fn actual_table_view_agrees_with_whole_bundle_evaluation_after_each_authority_ch
         let data = view.slice(&c, &i, &w).unwrap();
         let parse = |s: &Columns| {
             s.iter()
-                .map(|v| crate::parse_koala_bear_decimal(v).unwrap())
+                .map(|v| zkc_kernels::plonky3::parse_decimal(v).unwrap())
                 .collect::<Vec<_>>()
         };
         let dense = view
@@ -268,7 +268,7 @@ fn actual_table_view_agrees_with_whole_bundle_evaluation_after_each_authority_ch
         let mut expected = vec![KoalaBear::ZERO; 72];
         for residual in reference.residuals {
             expected[residual.row as usize * 9 + residual.assertion] =
-                crate::parse_koala_bear_decimal(&residual.value[0]).unwrap();
+                zkc_kernels::plonky3::parse_decimal(&residual.value[0]).unwrap();
         }
         assert_eq!(dense, expected);
         assert_eq!(dense.iter().all(|v| *v == KoalaBear::ZERO), mutation == 0);

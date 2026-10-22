@@ -4,6 +4,7 @@ use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
+use zkc_kernels::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::{Backend, ErrorCode};
 fn real() -> NativeBackend {

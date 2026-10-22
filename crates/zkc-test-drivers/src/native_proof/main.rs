@@ -7,9 +7,9 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
+use zkc::proof::{NativeDeployment, NativeProofReport};
 use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
-use zkc_tools::proof::{NativeDeployment, NativeProofReport};
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
@@ -139,7 +139,7 @@ fn rejected(deployment: &NativeDeployment, input: &Json, proof: &[u8]) {
     let report = zkc_test_drivers::execute(
         deployment,
         input,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap();
     cleaned(&report);
@@ -149,7 +149,7 @@ fn rejects_with(deployment: &NativeDeployment, input: &Json, proof: &[u8], expec
     let report = zkc_test_drivers::execute(
         deployment,
         input,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap();
     cleaned(&report);
@@ -220,7 +220,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     let validated = zkc_test_drivers::execute(
         &separate,
         input,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap();
     cleaned(&validated);
@@ -443,7 +443,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
         zkc_test_drivers::execute(
             deployment,
             &changed,
-            zkc_tools::proof::Invocation::one_shot(Some(&rebound)),
+            zkc::proof::Invocation::one_shot(Some(&rebound)),
         )
         .unwrap()
         .outcome
@@ -453,23 +453,17 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
     }
     let mut input = p.clone();
     input[4][0][1] = json!("0");
-    let report = zkc_test_drivers::execute(
-        deployment,
-        &input,
-        zkc_tools::proof::Invocation::one_shot(None),
-    )
-    .unwrap();
+    let report =
+        zkc_test_drivers::execute(deployment, &input, zkc::proof::Invocation::one_shot(None))
+            .unwrap();
     cleaned(&report);
     assert!(report.outcome.is_err());
     if envelope[2][1][5] != "" {
         let mut input = p.clone();
         input[5] = json!("0");
-        let report = zkc_test_drivers::execute(
-            deployment,
-            &input,
-            zkc_tools::proof::Invocation::one_shot(None),
-        )
-        .unwrap();
+        let report =
+            zkc_test_drivers::execute(deployment, &input, zkc::proof::Invocation::one_shot(None))
+                .unwrap();
         cleaned(&report);
         assert!(report.outcome.is_err());
     }
@@ -484,7 +478,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
     let invalid = zkc_test_drivers::execute(
         deployment,
         &wrong_witness,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
     )
     .unwrap()
     .outcome
@@ -496,7 +490,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
         zkc_test_drivers::execute(
             deployment,
             &inconsistent,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .err()
         .unwrap(),
@@ -505,13 +499,9 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
     let mut changed = p.clone();
     changed[1][0][2] = changed[1][1][2].clone();
     assert_eq!(
-        zkc_test_drivers::execute(
-            deployment,
-            &changed,
-            zkc_tools::proof::Invocation::one_shot(None)
-        )
-        .err()
-        .unwrap(),
+        zkc_test_drivers::execute(deployment, &changed, zkc::proof::Invocation::one_shot(None))
+            .err()
+            .unwrap(),
         "native-proof-shared-public-input"
     );
     let mut changed = v.clone();
@@ -520,7 +510,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
         zkc_test_drivers::execute(
             deployment,
             &changed,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .err()
         .unwrap(),
@@ -532,7 +522,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
         zkc_test_drivers::execute(
             deployment,
             &changed,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .err()
         .unwrap(),
@@ -544,7 +534,7 @@ fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, p
         zkc_test_drivers::execute(
             deployment,
             &changed,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .err()
         .unwrap(),
@@ -572,12 +562,9 @@ fn run(directory: &Path) {
         if name == "schnorr_0" || name == "affine_0" {
             input_admission::private_input_admission_boundary(&deployment, &envelope, &p, None);
         }
-        let report = zkc_test_drivers::execute(
-            &deployment,
-            &p,
-            zkc_tools::proof::Invocation::one_shot(None),
-        )
-        .unwrap();
+        let report =
+            zkc_test_drivers::execute(&deployment, &p, zkc::proof::Invocation::one_shot(None))
+                .unwrap();
         cleaned(&report);
         let binding = report.binding.clone();
         successful_resources(&report, &envelope, case, true);
@@ -585,7 +572,7 @@ fn run(directory: &Path) {
         let report = zkc_test_drivers::execute(
             &deployment,
             &v,
-            zkc_tools::proof::Invocation::one_shot(Some(&proof)),
+            zkc::proof::Invocation::one_shot(Some(&proof)),
         )
         .unwrap();
         cleaned(&report);
@@ -603,7 +590,7 @@ fn run(directory: &Path) {
             let result = zkc_test_drivers::execute_test(
                 &deployment,
                 &p,
-                zkc_tools::proof::Invocation::one_shot(None),
+                zkc::proof::Invocation::one_shot(None),
                 tapes,
             )
             .unwrap();
@@ -613,7 +600,7 @@ fn run(directory: &Path) {
             zkc_test_drivers::execute(
                 &deployment,
                 &v,
-                zkc_tools::proof::Invocation::one_shot(Some(&fixed)),
+                zkc::proof::Invocation::one_shot(Some(&fixed)),
             )
             .unwrap()
             .outcome
@@ -625,7 +612,7 @@ fn run(directory: &Path) {
                 let failed = zkc_test_drivers::execute_test(
                     &deployment,
                     &p,
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                     BTreeMap::from([(3, vec![])]),
                 )
                 .unwrap();
@@ -645,7 +632,7 @@ fn run(directory: &Path) {
             zkc_test_drivers::execute(
                 &deployment,
                 &v,
-                zkc_tools::proof::Invocation::one_shot(Some(&prior)),
+                zkc::proof::Invocation::one_shot(Some(&prior)),
             )
             .unwrap()
             .outcome
@@ -681,7 +668,7 @@ fn run(directory: &Path) {
             let report = zkc_test_drivers::execute(
                 &deployment,
                 &v,
-                zkc_tools::proof::Invocation::one_shot(Some(&malformed)),
+                zkc::proof::Invocation::one_shot(Some(&malformed)),
             )
             .unwrap();
             cleaned(&report);
@@ -697,7 +684,7 @@ fn run(directory: &Path) {
                 zkc_test_drivers::execute_test(
                     &deployment,
                     &malformed,
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                     BTreeMap::new()
                 )
                 .err()
@@ -709,7 +696,7 @@ fn run(directory: &Path) {
             let failed = zkc_test_drivers::execute_test(
                 &deployment,
                 &p,
-                zkc_tools::proof::Invocation::one_shot(None),
+                zkc::proof::Invocation::one_shot(None),
                 BTreeMap::from([(3, vec![Scalar::from(5)])]),
             )
             .unwrap();

@@ -11,7 +11,7 @@ license = "Apache-2.0"
 
 [workspace.dependencies]
 # Plonky3 0.8.0 is upstream commit a21e3ed42905040ad49c519e402f018381c12d0c.
-# It is the family the native KoalaBear provider pins in crates/zkc-native.
+# It is the family the native KoalaBear provider pins in crates/zkc-kernels.
 p3-air = "=0.8.0"
 p3-commit = "=0.8.0"
 p3-field = "=0.8.0"

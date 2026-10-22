@@ -200,7 +200,7 @@ impl NativeCall {
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
             AttributeRule::Bn254Decimals => {
                 for literal in attributes {
-                    crate::parse_bn254_decimal(literal).map_err(ark)?;
+                    zkc_kernels::bn254::parse_decimal(literal).map_err(ark)?;
                 }
             }
             AttributeRule::FieldDecimals => {
@@ -210,7 +210,8 @@ impl NativeCall {
             }
             AttributeRule::RistrettoDecimals => {
                 for literal in attributes {
-                    crate::parse_ristretto_decimal(literal)?;
+                    zkc_kernels::fields::parse_ristretto_decimal(literal)
+                        .map_err(crate::field_error)?;
                 }
             }
             AttributeRule::KoalaBearDecimals => {

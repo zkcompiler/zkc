@@ -48,7 +48,7 @@ def check_output(output, expected):
     ("zkc.workspace.toml", False, True),
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
-    ("crates/zkc-tools/build.rs", False, True),
+    ("crates/zkc/build.rs", False, True),
     ("python/src/zkc/client.py", False, True),
     ("python/src/zkc/client.py", True, True),
     ("python/pyproject.toml", False, True),

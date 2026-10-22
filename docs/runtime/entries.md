@@ -252,7 +252,7 @@ checks are shared with the CLI. Both provide `check_inputs` without execution.
 Applications making repeated calls can retain immutable input data explicitly:
 
 ```rust,ignore
-use zkc_tools::execution::{Capacity, InputValue, PreparedData};
+use zkc::execution::{Capacity, InputValue, PreparedData};
 
 let public = PreparedData::from_value(native_value, Capacity::default())?;
 // Reuse this handle when constructing each call's named input map.
@@ -281,7 +281,7 @@ Generated Rust identifiers use `__zkc_` plus full UTF-8 byte hex for Unicode,
 Rust keywords and source names beginning with that reserved prefix; an allocator
 also resolves generated-name collisions. Serialized keys and role constants keep
 original source names. The bindings contain no protocol arithmetic or custom interpreter. Regenerate
-them when the authorized package changes. The [tools crate](../../crates/zkc-tools/README.md)
+them when the authorized package changes. The [SDK crate](../../crates/zkc/README.md)
 owns the API inventory.
 
 ## Entry Host and SDKs

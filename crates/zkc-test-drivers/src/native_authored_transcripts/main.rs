@@ -2,13 +2,13 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
 };
 use zkc_test_support::hex;
-use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
 
 mod controls;
 mod reference;
@@ -153,7 +153,7 @@ fn main() {
             let produced = zkc_test_drivers::execute(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::one_shot(None),
+                zkc::proof::Invocation::one_shot(None),
             )
             .unwrap();
             clean(&produced);
@@ -167,7 +167,7 @@ fn main() {
             let verified = zkc_test_drivers::execute(
                 &deployment,
                 &validator,
-                zkc_tools::proof::Invocation::one_shot(Some(proof)),
+                zkc::proof::Invocation::one_shot(Some(proof)),
             )
             .unwrap();
             clean(&verified);
@@ -197,7 +197,7 @@ fn main() {
                 let short = zkc_test_drivers::execute(
                     &deployment,
                     &producer,
-                    zkc_tools::proof::Invocation::Attempts(&bounded),
+                    zkc::proof::Invocation::Attempts(&bounded),
                 )
                 .unwrap();
                 assert_eq!(short.outcome.unwrap(), *proof);
@@ -206,7 +206,7 @@ fn main() {
             let attempted = zkc_test_drivers::execute(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::Attempts(&policy()),
+                zkc::proof::Invocation::Attempts(&policy()),
             )
             .unwrap();
             clean(&attempted);
@@ -228,7 +228,7 @@ fn main() {
                 zkc_test_drivers::execute(
                     &deployment,
                     &validator,
-                    zkc_tools::proof::Invocation::one_shot(Some(&changed))
+                    zkc::proof::Invocation::one_shot(Some(&changed))
                 )
                 .unwrap()
                 .outcome
@@ -241,7 +241,7 @@ fn main() {
                 zkc_test_drivers::execute(
                     &deployment,
                     &validator,
-                    zkc_tools::proof::Invocation::one_shot(Some(&trailing))
+                    zkc::proof::Invocation::one_shot(Some(&trailing))
                 )
                 .unwrap()
                 .outcome
@@ -265,7 +265,7 @@ fn main() {
                     let report = zkc_test_drivers::execute(
                         &deployment,
                         &inputs(&envelope, &retry, true),
-                        zkc_tools::proof::Invocation::Attempts(&policy()),
+                        zkc::proof::Invocation::Attempts(&policy()),
                     )
                     .unwrap();
                     clean(&report);
@@ -285,7 +285,7 @@ fn main() {
                     let stopped = zkc_test_drivers::execute(
                         &limited,
                         &inputs(&envelope, &retry, true),
-                        zkc_tools::proof::Invocation::Attempts(&policy()),
+                        zkc::proof::Invocation::Attempts(&policy()),
                     )
                     .unwrap();
                     clean(&stopped);

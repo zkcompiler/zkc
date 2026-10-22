@@ -4,12 +4,12 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
+use zkc::proof::{NativeDeployment, NativeProofReport};
 use zkc_native::{
     Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, Scalar, Value,
 };
 use zkc_runtime::vm::{Identity, LogicalType};
 use zkc_test_support::hex;
-use zkc_tools::proof::{NativeDeployment, NativeProofReport};
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
@@ -144,7 +144,7 @@ fn execute(
     let report = zkc_test_drivers::execute_test(
         deployment,
         input,
-        zkc_tools::proof::Invocation::one_shot(proof),
+        zkc::proof::Invocation::one_shot(proof),
         tapes,
     )
     .unwrap();

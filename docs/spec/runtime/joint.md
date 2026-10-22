@@ -122,7 +122,7 @@ contracts do not allow artifacts to install codecs.
 
 `zkc-native` implements this boundary for its closed native profile. Application
 `RunHost` admission, independently supplied pins, setup and invocation authority,
-input preparation and publication remain in `zkc-tools`. The driver consumes
+input preparation and publication remain in `zkc`. The driver consumes
 existing Runner cuts and control methods. Reports retain pending bytes and live
 output reservations through their existing ownership lifetimes.
 

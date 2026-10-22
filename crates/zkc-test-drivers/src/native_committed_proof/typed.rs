@@ -1,8 +1,8 @@
 //! Ordering controls use malformed setup material and absent key files so later
 //! import/I/O would produce a different failure from declaration/policy admission.
 use super::*;
-use zkc_tools::execution::InputValue;
-use zkc_tools::proof::{AttemptPolicy, ProofInputs};
+use zkc::execution::InputValue;
+use zkc::proof::{AttemptPolicy, ProofInputs};
 
 fn request(input: &Json) -> ProofInputs {
     let bytes = |v: &Json| zkc_test_support::unhex(v.as_str().unwrap());
@@ -44,7 +44,7 @@ pub(super) fn preflight(deployment: &NativeDeployment, envelope: &Json, input: &
     bad.inputs[0] = Value::Bool(true).into();
     assert_eq!(
         deployment
-            .execute(&bad, zkc_tools::proof::Invocation::one_shot(None))
+            .execute(&bad, zkc::proof::Invocation::one_shot(None))
             .err()
             .unwrap(),
         "native-input-type"
@@ -56,7 +56,7 @@ pub(super) fn preflight(deployment: &NativeDeployment, envelope: &Json, input: &
     let limited = deployment.clone().with_capacity(capacity).unwrap();
     assert_eq!(
         limited
-            .execute(&bad, zkc_tools::proof::Invocation::one_shot(None))
+            .execute(&bad, zkc::proof::Invocation::one_shot(None))
             .err()
             .unwrap(),
         "native-capacity-wire"
@@ -81,7 +81,7 @@ pub(super) fn policy_before_file(
         zkc_test_drivers::execute(
             deployment,
             &input,
-            zkc_tools::proof::Invocation::Attempts(&policy)
+            zkc::proof::Invocation::Attempts(&policy)
         )
         .err()
         .unwrap(),
@@ -89,10 +89,7 @@ pub(super) fn policy_before_file(
     );
     assert_eq!(
         deployment
-            .execute(
-                &request(&input),
-                zkc_tools::proof::Invocation::Attempts(&policy)
-            )
+            .execute(&request(&input), zkc::proof::Invocation::Attempts(&policy))
             .err()
             .unwrap(),
         "native-attempt-completion"
@@ -100,7 +97,7 @@ pub(super) fn policy_before_file(
 }
 
 pub(super) fn material_request(input: &Json, keys: &Keys) -> ProofInputs {
-    use zkc_tools::execution::{Capacity, ProverMaterial};
+    use zkc::execution::{Capacity, ProverMaterial};
     let capacity = Capacity::default();
     let material = ProverMaterial::from_bytes(
         &keys
@@ -132,7 +129,7 @@ pub(super) fn material_parity(
     let wrong = material_request(input, &other);
     assert_eq!(
         deployment
-            .execute(&wrong, zkc_tools::proof::Invocation::one_shot(None))
+            .execute(&wrong, zkc::proof::Invocation::one_shot(None))
             .err()
             .unwrap(),
         "native-proof-input-setup"
@@ -156,7 +153,7 @@ pub(super) fn material_parity(
         deployment
             .execute(
                 &bad_validator,
-                zkc_tools::proof::Invocation::one_shot(Some(expected))
+                zkc::proof::Invocation::one_shot(Some(expected))
             )
             .err()
             .unwrap(),
@@ -167,7 +164,7 @@ pub(super) fn material_parity(
             .map(|_| {
                 scope.spawn(|| {
                     deployment
-                        .execute(&typed, zkc_tools::proof::Invocation::one_shot(None))
+                        .execute(&typed, zkc::proof::Invocation::one_shot(None))
                         .unwrap()
                 })
             })

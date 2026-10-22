@@ -22,9 +22,7 @@ mod value;
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
 pub use zkc_kernels::plonky3::binary::{Binary64, Binary64Ext3};
-pub use zkc_kernels::plonky3::{
-    KoalaBear, KoalaBearExt4, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal,
-};
+pub use zkc_kernels::plonky3::{KoalaBear, KoalaBearExt4, KoalaBearExt8};
 
 pub use backend::{
     ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeOperation, PortConstraint,
@@ -36,10 +34,8 @@ pub use codec::{
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
-pub use zkc_kernels::{GroupPoint, Keys, Scalar, parse_decimal};
+pub use zkc_kernels::{GroupPoint, Scalar};
 use zkc_runtime::vm::BackendError;
-
-pub use zkc_kernels::SCALAR_MODULUS_DECIMAL;
 
 pub(crate) type Result<T> = std::result::Result<T, BackendError>;
 pub(crate) fn refused(reason: &str) -> BackendError {
@@ -77,18 +73,11 @@ pub fn classify_error(error: &BackendError) -> ErrorClass {
 pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use diagonal::Diagonal;
 pub use zkc_kernels::edwards::EdwardsPrime;
-pub fn parse_ristretto_decimal(s: &str) -> Result<RistrettoScalar> {
-    zkc_kernels::fields::parse_ristretto_decimal(s).map_err(field_error)
-}
-
-pub use zkc_kernels::RISTRETTO_SCALAR_MODULUS_DECIMAL;
 
 pub use zkc_kernels::bls12_381::{G2 as Bls12381G2, Gt as Bls12381Gt};
 /// BN254 scalar field and checked subgroup points.
 pub use zkc_kernels::bn254::Gt as Bn254Gt;
-pub use zkc_kernels::bn254::{
-    G1 as Bn254G1, G2 as Bn254G2, Scalar as Bn254Scalar, parse_decimal as parse_bn254_decimal,
-};
+pub use zkc_kernels::bn254::{G1 as Bn254G1, G2 as Bn254G2, Scalar as Bn254Scalar};
 
 mod variant;
 pub use variant::Variant;

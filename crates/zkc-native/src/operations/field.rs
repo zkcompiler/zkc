@@ -82,7 +82,7 @@ family!(
     Bn254Matrix,
     Bn254Polynomial,
     Bn254Round,
-    |s| crate::parse_bn254_decimal(s).map_err(crate::ark)
+    |s| zkc_kernels::bn254::parse_decimal(s).map_err(crate::ark)
 );
 family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
     zkc_kernels::parse_decimal(s).map_err(crate::ark)

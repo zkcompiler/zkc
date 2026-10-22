@@ -1,14 +1,14 @@
 //! Named Entry decisions delegate retry, provider retention and quotas to the native Host.
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::Value as Native;
-use zkc_tools::{
+use zkc::{
     entry::{
         AttemptOptions, BindingPolicy, DEFAULT_DRAW_BUDGET, NamedValues, Package, ProofEntry,
         ProofOptions, ProofRequest, RoleInputs, RunEntry, RunRequest,
     },
     run::HostLimits,
 };
+use zkc_native::Value as Native;
 fn package(directory: &Path, entry: &str, suite: usize) -> Package {
     let bytes = std::fs::read(directory.join(format!("attempt-{entry}-{suite}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()

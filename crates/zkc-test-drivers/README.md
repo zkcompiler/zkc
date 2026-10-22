@@ -8,7 +8,7 @@ Build with `just build-test-drivers` or
 `cargo build --release -p zkc-test-drivers --bins`. Drivers are installed directly
 in the selected native binary directory, alongside the separately built `zkc`.
 Their manifests explicitly enable deterministic test providers. The product build
-selects only `zkc-tools` with default features; Nix packages each build separately.
+selects only `zkc` with default features; Nix packages each build separately.
 
 The small library adapts positional test records to the typed proof SDK. Drivers
 remain test clients and do not provide a second execution implementation.

@@ -135,7 +135,7 @@ def test_product_and_driver_builds_are_separate(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["develop.py", "test-drivers"])
     developer.main()
     assert calls == [
-        ["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"],
+        ["cargo", "build", "--release", "--locked", "-p", "zkc-cli", "--bin", "zkc"],
         ["cargo", "build", "--release", "--locked", "-p", "zkc-test-drivers", "--bins"],
     ]
 

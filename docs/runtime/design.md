@@ -13,7 +13,7 @@ representation contracts. Whole protocols remain visible in the program.
 | Proof | Authenticated native deployment, explicit public context, independent producer and validator execution |
 | Joint | Authenticated `zkc.run/0` bundle, role layouts and checked dispatch of actual messages |
 
-In `zkc-tools`, `entry` delegates to the public `proof` and `run` modules;
+In `zkc`, `entry` delegates to the public `proof` and `run` modules;
 `host` owns shared input preparation, capacity, setup and I/O support. Entry
 execution uses the same Runner through those Hosts. Compiler publication binds the original/interface to the
 artifact; Rust authenticates that publication and independently admits the

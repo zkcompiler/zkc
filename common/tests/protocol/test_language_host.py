@@ -183,7 +183,14 @@ def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, direct
 
 def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal, directory):
     run_package, run_pin = compile_entry(toolchain, journal, directory, 'Demo', FIXTURES / 'host_values.zkc')
-    proof_package, proof_pin = compile_entry(toolchain, journal, directory, 'Derived')
+    proof_source = directory / 'statement.zkc'
+    proof_text = (FIXTURES / 'attempts.zkc').read_text()
+    proof_text = proof_text.replace('(done:bool@P, coins:', '(expected:bool@(P,V), done:bool@P, coins:', 1)
+    proof_text = proof_text.replace('accepted=ok);', 'accepted=ok && expected);', 1)
+    proof_text = proof_text.replace('prover P;verifier V;public{};accept accepted;complete result.ready;',
+                                    'prover P;verifier V;public{expected};accept accepted;complete result.ready;', 1)
+    proof_source.write_text(proof_text)
+    proof_package, proof_pin = compile_entry(toolchain, journal, directory, 'Derived', proof_source)
     shapes_dir = directory / 'shapes'
     shapes_dir.mkdir()
     collision = shapes_dir / 'p.zkc'
@@ -202,14 +209,14 @@ def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal,
     journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={run_package}'], refuses='entry-output-path')
     journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={directory / 'unused.rs'}', '--setups=missing'], refuses='cli-option')
     assert run_package.read_bytes() == original
-    # This is a consumer crate, not a module compiled under zkc-tools internals.
+    # This is a consumer crate, not a module compiled under zkc internals.
     (directory / 'Cargo.toml').write_text(f'''[package]
 name = "entry-bindings-consumer"
 version = "0.0.0"
 edition = "2018"
 [workspace]
 [dependencies]
-zkc-tools = {{ path = {json.dumps(str(ROOT / 'crates/zkc-tools'))} }}
+zkc = {{ path = {json.dumps(str(ROOT / 'crates/zkc'))} }}
 [[bin]]
 name = "entry-bindings-consumer"
 path = "main.rs"
@@ -228,7 +235,7 @@ path = "main.rs"
     #[allow(unused_macros)] macro_rules! vec { ($($items:tt)*) => { compile_error!("shadowed vec") }; }
     include!("shapes.rs");
 }
-use zkc_tools::entry::{RoleInputs,ProofRequest,FunctionEntry,FunctionInterface,
+use zkc::entry::{RoleInputs,ProofRequest,FunctionEntry,FunctionInterface,
     InvocationContext,InvocationBinding,RunContext,Package,SetupAuthority};
 fn authority(bytes:&[u8],pin:&[u8;32])->std::collections::BTreeMap<String,SetupAuthority> {
     let package=Package::capture(bytes,pin,Package::MAX_BYTES).unwrap();
@@ -248,26 +255,26 @@ fn context(host:&FunctionEntry,session:&str)->InvocationContext {
 use std::convert::{TryFrom,TryInto};
 fn main() {
     let args:Vec<_>=std::env::args().collect();
-    let scalar = |n:u8| -> zkc_tools::entry::Value {
+    let scalar = |n:u8| -> zkc::entry::Value {
         let mut frame=b"ZKCV\x00\x01".to_vec();
         let mut bytes=[0u8;32]; bytes[0]=n; frame.extend_from_slice(&bytes);
-        zkc_tools::execution::InputValue::Wire(frame.into()).into()
+        zkc::execution::InputValue::Wire(frame.into()).into()
     };
-    // Public API construction, independent of private zkc-tools modules. The
+    // Public API construction, independent of private zkc modules. The
     // actual setup-bearing calls are separately exercised across CLI processes.
-    let key=||zkc_tools::entry::Value::from(zkc_tools::execution::InputValue::ProverKeyFile {
+    let key=||zkc::entry::Value::from(zkc::execution::InputValue::ProverKeyFile {
         path:"prover.key".into(), fingerprint:[0;32],
     });
     let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
-    let input:zkc_tools::entry::NamedValues=input.into();
-    assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::execution::InputValue::ProverKeyFile{..})));
+    let input:zkc::entry::NamedValues=input.into();
+    assert!(matches!(input.get("pk0").unwrap(),zkc::entry::Value::Leaf(zkc::execution::InputValue::ProverKeyFile{..})));
     let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
     let _verifier=pcs::VInputs{};
     assert_eq!(pcs::setups::first,"first");
-    let malformed=zkc_tools::entry::Value::Array(vec![zkc_tools::entry::Value::Record([("extra".into(),true.into())].into())]);
+    let malformed=zkc::entry::Value::Array(vec![zkc::entry::Value::Record([("extra".into(),true.into())].into())]);
     assert_eq!(<[shapes::SampleEmpty;1]>::try_from(malformed).err().unwrap(),"entry-binding-fields");
-    let named:zkc_tools::entry::Value=shapes::SampleCases::a__b{}.into();
-    let zkc_tools::entry::Value::Variant{alternative,..}=named else{panic!()};
+    let named:zkc::entry::Value=shapes::SampleCases::a__b{}.into();
+    let zkc::entry::Value::Variant{alternative,..}=named else{panic!()};
     assert_eq!(alternative,"a__b");
     assert_eq!(pcs::PROVER,"P"); assert_eq!(pcs::VERIFIER,"V");
     assert_eq!(proof::services::coins,"coins");
@@ -278,15 +285,15 @@ fn main() {
         names:shapes::SampleNames{__zkc_6173796e63:true,__zkc_73656c66:false,Foo:true,foo:false,__zkc_5f:true},
         zero:[], collision:shapes::POutputs{flag:true},
     };
-    let zkc_tools::entry::Value::Record(mut named)=input.into() else {panic!()};
-    let zkc_tools::entry::Value::Record(fields)=named.get("names").unwrap() else {panic!()};
+    let zkc::entry::Value::Record(mut named)=input.into() else {panic!()};
+    let zkc::entry::Value::Record(fields)=named.get("names").unwrap() else {panic!()};
     assert!(fields.contains_key("Foo") && fields.contains_key("foo") && fields.contains_key("_"));
-    let zkc_tools::entry::Value::Record(mut fields)=named.remove("names").unwrap() else {panic!()};
+    let zkc::entry::Value::Record(mut fields)=named.remove("names").unwrap() else {panic!()};
     assert!(bool::try_from(fields.remove("Foo").unwrap()).unwrap());
     assert!(!bool::try_from(fields.remove("foo").unwrap()).unwrap());
     fields.insert("Foo".into(),true.into()); fields.insert("foo".into(),false.into());
-    named.insert("names".into(),zkc_tools::entry::Value::Record(fields));
-    let restored:shapes::SampleShapesInputsP=zkc_tools::entry::Value::Record(std::mem::take(&mut named)).try_into().unwrap();
+    named.insert("names".into(),zkc::entry::Value::Record(fields));
+    let restored:shapes::SampleShapesInputsP=zkc::entry::Value::Record(std::mem::take(&mut named)).try_into().unwrap();
     assert!(restored.names.Foo && !restored.names.foo);
     let result=shapes::call(&host,shapes::Arguments{
         inputs:shapes::SampleShapesInputs{P:restored},
@@ -296,9 +303,9 @@ fn main() {
     let output=result.value.unwrap().P;
     assert!(output.wrapped.value);
     assert!(matches!(output.choice,shapes::SampleCases::__zkc_53656c66{}));
-    let zkc_tools::entry::Value::Record(mut invalid)=output.into() else {panic!()};
+    let zkc::entry::Value::Record(mut invalid)=output.into() else {panic!()};
     invalid.insert("extra".into(),true.into());
-    assert_eq!(shapes::SampleShapesRunResultP::try_from(zkc_tools::entry::Value::Record(invalid)).err().unwrap(),"entry-binding-fields");
+    assert_eq!(shapes::SampleShapesRunResultP::try_from(zkc::entry::Value::Record(invalid)).err().unwrap(),"entry-binding-fields");
 
     let bytes=std::fs::read(&args[1]).unwrap();
     let host=run::admit(&bytes,Default::default(),authority(&bytes,&run::PACKAGE_SHA256)).unwrap();
@@ -318,8 +325,8 @@ fn main() {
     let received=result.value.unwrap().V;
     assert!(received.received.marker);
     assert!(matches!(received.received.choice,run::SampleChoice::Data{..}));
-    let zkc_tools::entry::Value::Record(values)=received.into() else {panic!()};
-    let output=zkc_tools::entry::files::proof_outputs(&values,Default::default(),Default::default()).unwrap();
+    let zkc::entry::Value::Record(values)=received.into() else {panic!()};
+    let output=zkc::entry::files::proof_outputs(&values,Default::default(),Default::default()).unwrap();
     assert!(std::str::from_utf8(&output).unwrap().contains(r#""7""#));
     let mut tampered=bytes;tampered.push(b' ');
     assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");
@@ -327,20 +334,26 @@ fn main() {
     let bytes=std::fs::read(&args[2]).unwrap();
     let prover=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
     let verifier=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
-    let produced=prover.prove(ProofRequest{public:proof::PublicInputs{}.into(),
+    let produced=prover.prove(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
         private:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
     assert!(produced.is_success());
     let returned:proof::POutputs=produced.outputs.unwrap().try_into().unwrap();
     assert!(returned.result.ready);
-    let checked=verifier.verify(ProofRequest{public:proof::PublicInputs{}.into(),
+    let checked=verifier.verify(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
         private:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
     assert!(checked.is_success());
     let checked:proof::VOutputs=checked.outputs.unwrap().try_into().unwrap();
     assert!(checked.accepted);
+    let produced=prover.prove(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
+        private:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
+    let changed=verifier.verify(ProofRequest{public:proof::PublicInputs{expected:false}.into(),
+        private:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
+    assert!(!changed.is_success());
+    assert_eq!(changed.native.outcome.as_ref().err().map(String::as_str),Some("proof-header"));
 }
 ''')
     journal.run(['cargo', 'run', '--offline', '--quiet', '--manifest-path', directory / 'Cargo.toml',
-                 '--target-dir', ROOT / 'target', '--', run_package, proof_package, shapes_package], timeout=600)
+                 '--target-dir', directory / 'consumer-target', '--', run_package, proof_package, shapes_package], timeout=600)
 
 
 def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):

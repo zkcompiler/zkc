@@ -2,11 +2,11 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io;
+use zkc::entry::Package;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::vm::{
     AdmissionError, LogicalType, OperationBinding, OperationSignature, PhysicalType,
 };
-use zkc_tools::entry::Package;
 
 type LogicalResolver =
     fn(&OperationBinding) -> Result<OperationSignature<LogicalType>, AdmissionError>;
@@ -99,7 +99,7 @@ fn entry_interface(text: &str) -> Value {
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)
         .expect("well-formed authenticated test package");
-    observed(zkc_tools::entry::BoundInterface::read(&package).map(|_| ()))
+    observed(zkc::entry::BoundInterface::read(&package).map(|_| ()))
 }
 
 fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Option<Value> {

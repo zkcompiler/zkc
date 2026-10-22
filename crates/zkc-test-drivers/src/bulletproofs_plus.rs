@@ -2,9 +2,9 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
+use zkc::proof::{Invocation, NativeDeployment, ProofInputs};
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Value};
 use zkc_test_support::{hex, unhex};
-use zkc_tools::proof::{Invocation, NativeDeployment, ProofInputs};
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
@@ -34,7 +34,7 @@ fn main() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| zkc_native::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
+        .map(|v| zkc_kernels::fields::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
         .collect();
     let commitments = unhex(case["commitments"].as_str().unwrap());
     let rounds = 6 + amounts.len().next_power_of_two().trailing_zeros() as u64;
@@ -79,7 +79,7 @@ fn main() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| zkc_native::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
+        .map(|v| zkc_kernels::fields::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
         .collect();
     let expected_draws = coins.len();
     let port = role[4][0][0].as_str().unwrap().parse().unwrap();

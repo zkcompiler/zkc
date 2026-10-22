@@ -1,6 +1,7 @@
 //! Small runnable host input boundary; not a complete protocol CLI.
 use std::sync::Arc;
-use zkc_native::{Domain, EntryPolicy, Keys, NativeBackend, Policy, Value};
+use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Action;
 use zkc_runtime::vm::Identity;

@@ -5,12 +5,12 @@ use p3_field::PrimeCharacteristicRing;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use zkc::proof::NativeDeployment;
 use zkc_native::{
     Bn254G1, Bn254G2, Bn254Scalar, Domain, EntryPolicy, KoalaBear, KoalaBearExt8, NativeBackend,
     Policy, RistrettoScalar, Value,
 };
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 
 fn codec() -> NativeBackend {
     NativeBackend::new(
@@ -65,11 +65,8 @@ fn run(
     inputs: &Json,
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
-    let report = zkc_test_drivers::execute(
-        deployment,
-        inputs,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    )?;
+    let report =
+        zkc_test_drivers::execute(deployment, inputs, zkc::proof::Invocation::one_shot(proof))?;
     assert!(report.cleanup_errors.is_empty());
     if report.outcome.is_ok() {
         assert!(!report.cancelled);
@@ -216,12 +213,12 @@ fn main() {
                 );
             }
             if case["retries"] == true && size == 7 {
+                use zkc::proof::AttemptPolicy;
                 use zkc_runtime::vm::{ValueBudget, WorkBudget};
-                use zkc_tools::proof::AttemptPolicy;
                 let report = zkc_test_drivers::execute(
                     &deployment,
                     &producer,
-                    zkc_tools::proof::Invocation::Attempts(&AttemptPolicy {
+                    zkc::proof::Invocation::Attempts(&AttemptPolicy {
                         completion: 1,
                         rng: vec![],
                         limits: zkc_runtime::attempt::Limits {

@@ -2,6 +2,7 @@ use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
+use zkc_kernels::Keys;
 use zkc_native::Value;
 use zkc_native::*;
 use zkc_runtime::vm::Identity;

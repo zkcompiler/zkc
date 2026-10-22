@@ -5,14 +5,14 @@ mod input_admission;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
+use zkc::execution::{Capacity, InputValue};
+use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
 };
 use zkc_test_support::hex;
-use zkc_tools::execution::{Capacity, InputValue};
-use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 
 fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
     let policy = &envelope[2][1];
@@ -136,12 +136,9 @@ fn run(directory: &Path, case: &Json) {
     if case["production"] == true {
         let mut p = p;
         p.limits.attempts = 3;
-        let report = zkc_test_drivers::execute(
-            &deployment,
-            &producer,
-            zkc_tools::proof::Invocation::Attempts(&p),
-        )
-        .unwrap();
+        let report =
+            zkc_test_drivers::execute(&deployment, &producer, zkc::proof::Invocation::Attempts(&p))
+                .unwrap();
         assert_eq!(report.outcome.as_ref().unwrap_err(), "native-attempt-limit");
         assert_eq!(report.attempts.len(), 3);
         assert!(report.outputs.is_none());
@@ -192,7 +189,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute_test(
             &deployment,
             input,
-            zkc_tools::proof::Invocation::Attempts(p),
+            zkc::proof::Invocation::Attempts(p),
             tapes(tape),
         )
         .unwrap()
@@ -280,11 +277,7 @@ fn run(directory: &Path, case: &Json) {
         transcript_budget: 64,
     };
     let in_process = deployment
-        .execute_test(
-            &typed,
-            zkc_tools::proof::Invocation::Attempts(&p),
-            tapes(&[0, 3]),
-        )
+        .execute_test(&typed, zkc::proof::Invocation::Attempts(&p), tapes(&[0, 3]))
         .unwrap();
     assert_eq!(in_process.outcome, result.outcome);
     assert_eq!(in_process.binding, result.binding);
@@ -300,7 +293,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .unwrap()
         .outcome
@@ -312,7 +305,7 @@ fn run(directory: &Path, case: &Json) {
     let reference = zkc_test_drivers::execute_test(
         &deployment,
         &producer,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
         tapes(&[3]),
     )
     .unwrap();
@@ -364,7 +357,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute(
             &deployment,
             &changed_context,
-            zkc_tools::proof::Invocation::one_shot(Some(proof))
+            zkc::proof::Invocation::one_shot(Some(proof))
         )
         .unwrap()
         .outcome
@@ -385,7 +378,7 @@ fn run(directory: &Path, case: &Json) {
             zkc_test_drivers::execute(
                 &other,
                 &validator,
-                zkc_tools::proof::Invocation::one_shot(Some(proof))
+                zkc::proof::Invocation::one_shot(Some(proof))
             )
             .unwrap()
             .outcome
@@ -464,7 +457,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute_test(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&too_many),
+            zkc::proof::Invocation::Attempts(&too_many),
             tapes(&[3])
         )
         .is_err()
@@ -475,7 +468,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute_test(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&too_large),
+            zkc::proof::Invocation::Attempts(&too_large),
             tapes(&[3])
         )
         .is_err()
@@ -486,7 +479,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute_test(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&bad),
+            zkc::proof::Invocation::Attempts(&bad),
             tapes(&[3])
         )
         .is_err()
@@ -498,7 +491,7 @@ fn run(directory: &Path, case: &Json) {
             zkc_test_drivers::execute_test(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::Attempts(&bad),
+                zkc::proof::Invocation::Attempts(&bad),
                 tapes(&[3])
             )
             .err()
@@ -511,7 +504,7 @@ fn run(directory: &Path, case: &Json) {
             zkc_test_drivers::execute_test(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::Attempts(&bad),
+                zkc::proof::Invocation::Attempts(&bad),
                 tapes(&[3])
             )
             .is_err()
@@ -523,7 +516,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&changed))
+            zkc::proof::Invocation::one_shot(Some(&changed))
         )
         .unwrap()
         .outcome
@@ -537,7 +530,7 @@ fn run(directory: &Path, case: &Json) {
         zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&changed))
+            zkc::proof::Invocation::one_shot(Some(&changed))
         )
         .unwrap()
         .outcome
@@ -553,7 +546,7 @@ fn run(directory: &Path, case: &Json) {
         let error = zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&changed)),
+            zkc::proof::Invocation::one_shot(Some(&changed)),
         )
         .unwrap()
         .outcome
@@ -571,7 +564,7 @@ fn run(directory: &Path, case: &Json) {
         let error = zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&changed)),
+            zkc::proof::Invocation::one_shot(Some(&changed)),
         )
         .unwrap()
         .outcome
@@ -608,7 +601,7 @@ fn variable_proofs(directory: &Path) {
         let produced = zkc_test_drivers::execute_test(
             &deployment,
             &input,
-            zkc_tools::proof::Invocation::Attempts(&p),
+            zkc::proof::Invocation::Attempts(&p),
             tapes(&[0, 0, 0, 3]),
         )
         .unwrap();
@@ -621,7 +614,7 @@ fn variable_proofs(directory: &Path) {
             zkc_test_drivers::execute(
                 &deployment,
                 &inputs(&envelope, false, true),
-                zkc_tools::proof::Invocation::one_shot(Some(proof))
+                zkc::proof::Invocation::one_shot(Some(proof))
             )
             .unwrap()
             .outcome
@@ -630,7 +623,7 @@ fn variable_proofs(directory: &Path) {
         let reference = zkc_test_drivers::execute_test(
             &deployment,
             &input,
-            zkc_tools::proof::Invocation::one_shot(None),
+            zkc::proof::Invocation::one_shot(None),
             tapes(&[3]),
         )
         .unwrap();
@@ -657,7 +650,7 @@ fn custody_controls(directory: &Path) {
         let refused = zkc_test_drivers::execute_test(
             &deployment,
             &input,
-            zkc_tools::proof::Invocation::Attempts(&wrong),
+            zkc::proof::Invocation::Attempts(&wrong),
             tapes(tape),
         )
         .unwrap();
@@ -675,7 +668,7 @@ fn custody_controls(directory: &Path) {
     let produced = zkc_test_drivers::execute_test(
         &deployment,
         &input,
-        zkc_tools::proof::Invocation::Attempts(&correct),
+        zkc::proof::Invocation::Attempts(&correct),
         tapes(&[0, 3]),
     )
     .unwrap();
@@ -684,7 +677,7 @@ fn custody_controls(directory: &Path) {
         zkc_test_drivers::execute(
             &deployment,
             &inputs(&envelope, false, true),
-            zkc_tools::proof::Invocation::one_shot(Some(&produced.outcome.unwrap()))
+            zkc::proof::Invocation::one_shot(Some(&produced.outcome.unwrap()))
         )
         .unwrap()
         .outcome
@@ -698,7 +691,7 @@ fn custody_controls(directory: &Path) {
         zkc_test_drivers::execute_test(
             &deployment,
             &Json::Null,
-            zkc_tools::proof::Invocation::Attempts(&policy(false)),
+            zkc::proof::Invocation::Attempts(&policy(false)),
             BTreeMap::new()
         )
         .err()
@@ -740,7 +733,7 @@ fn empty_attempts(directory: &Path) {
     let complete = zkc_test_drivers::execute(
         &deployment,
         &input(true),
-        zkc_tools::proof::Invocation::Attempts(&policy),
+        zkc::proof::Invocation::Attempts(&policy),
     )
     .unwrap();
     assert_eq!(complete.attempts.len(), 1);
@@ -757,7 +750,7 @@ fn empty_attempts(directory: &Path) {
         zkc_test_drivers::execute(
             &deployment,
             &validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&proof))
+            zkc::proof::Invocation::one_shot(Some(&proof))
         )
         .unwrap()
         .outcome
@@ -768,7 +761,7 @@ fn empty_attempts(directory: &Path) {
     let exhausted = zkc_test_drivers::execute(
         &deployment,
         &input(false),
-        zkc_tools::proof::Invocation::Attempts(&policy),
+        zkc::proof::Invocation::Attempts(&policy),
     )
     .unwrap();
     assert_eq!(
@@ -812,7 +805,7 @@ fn mixed_custody(directory: &Path) {
         let complete = zkc_test_drivers::execute_test(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&policy(true)),
+            zkc::proof::Invocation::Attempts(&policy(true)),
             tapes(),
         )
         .unwrap();
@@ -828,7 +821,7 @@ fn mixed_custody(directory: &Path) {
             zkc_test_drivers::execute(
                 &deployment,
                 &inputs(&envelope, false, true),
-                zkc_tools::proof::Invocation::one_shot(Some(&complete.outcome.unwrap()))
+                zkc::proof::Invocation::one_shot(Some(&complete.outcome.unwrap()))
             )
             .unwrap()
             .outcome
@@ -839,7 +832,7 @@ fn mixed_custody(directory: &Path) {
         let failed = zkc_test_drivers::execute_test(
             &deployment,
             &exhausted_input,
-            zkc_tools::proof::Invocation::Attempts(&policy(true)),
+            zkc::proof::Invocation::Attempts(&policy(true)),
             tapes(),
         )
         .unwrap();
@@ -863,7 +856,7 @@ fn mixed_custody(directory: &Path) {
         let failed = zkc_test_drivers::execute_test(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&policy(true)),
+            zkc::proof::Invocation::Attempts(&policy(true)),
             missing_service,
         )
         .unwrap();
@@ -911,7 +904,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     let result = zkc_test_drivers::execute_test(
         &deployment,
         &p,
-        zkc_tools::proof::Invocation::Attempts(&policy(true)),
+        zkc::proof::Invocation::Attempts(&policy(true)),
         tape(if silent { &[0, 3] } else { &[0, 3, 7, 9] }),
     )
     .unwrap();
@@ -942,7 +935,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
         zkc_test_drivers::execute_test(
             &bounded,
             &p,
-            zkc_tools::proof::Invocation::Attempts(&policy(true)),
+            zkc::proof::Invocation::Attempts(&policy(true)),
             tape(&[0, 3])
         )
         .err()
@@ -954,7 +947,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     let exhausted = zkc_test_drivers::execute_test(
         &bounded,
         &p,
-        zkc_tools::proof::Invocation::Attempts(&within),
+        zkc::proof::Invocation::Attempts(&within),
         tape(&[0, 3]),
     )
     .unwrap();
@@ -970,7 +963,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     zkc_test_drivers::execute(
         &deployment,
         &v,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap()
     .outcome
@@ -978,7 +971,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     let reference = zkc_test_drivers::execute_test(
         &deployment,
         &p,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
         tape(if silent { &[3] } else { &[3, 7, 9] }),
     )
     .unwrap();
@@ -987,7 +980,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     let truncated = zkc_test_drivers::execute_test(
         &deployment,
         &p,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
         tape(&[0]),
     )
     .unwrap();
@@ -999,7 +992,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
         zkc_test_drivers::execute(
             &deployment,
             &v,
-            zkc_tools::proof::Invocation::one_shot(Some(&truncated))
+            zkc::proof::Invocation::one_shot(Some(&truncated))
         )
         .unwrap()
         .outcome

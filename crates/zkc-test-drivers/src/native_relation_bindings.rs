@@ -2,10 +2,10 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use zkc::proof::NativeDeployment;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value, Variant};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
@@ -229,11 +229,8 @@ fn execute(
     input: &Json,
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
-    let report = zkc_test_drivers::execute(
-        deployment,
-        input,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    )?;
+    let report =
+        zkc_test_drivers::execute(deployment, input, zkc::proof::Invocation::one_shot(proof))?;
     assert!(!report.outcome.as_ref().err().is_some_and(
         |e| e.starts_with("native-proof-cleanup") || e == "native-proof-active-frames"
     ));

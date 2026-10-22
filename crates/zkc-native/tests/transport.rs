@@ -3,6 +3,7 @@ mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
+use zkc_kernels::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::{Action, Packet};
 

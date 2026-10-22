@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 use std::{collections::BTreeMap, sync::Arc};
+use zkc_kernels::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::{Backend, PhysicalType, Value as RuntimeValue};
 

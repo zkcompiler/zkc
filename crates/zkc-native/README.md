@@ -14,7 +14,7 @@ encoding bounds, decode measurements, native codecs, borrowed raw bytes and
 Boolean projection remain concrete native responsibilities. `NativeWireError`
 is translated to runtime-owned `WireError` at this boundary; generic drivers and
 reports have no native value or error dependency. Native application Hosts retain
-deployment, setup and public-input authority in `zkc-tools`.
+deployment, setup and public-input authority in `zkc`.
 
 ## Construction and authority
 

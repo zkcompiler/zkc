@@ -3,10 +3,10 @@ use super::reference::hash_word;
 use super::{clean, codec, inputs, messages, policy, replace, unhex, words};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
+use zkc::proof::NativeDeployment;
 use zkc_kernels::external::openvm;
 use zkc_native::{NativeBackend, Scalar, Value};
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 pub(super) fn prefix_controls(
     directory: &Path,
     name: &str,
@@ -22,7 +22,7 @@ pub(super) fn prefix_controls(
     let report = zkc_test_drivers::execute_test(
         deployment,
         &producer,
-        zkc_tools::proof::Invocation::Attempts(&policy),
+        zkc::proof::Invocation::Attempts(&policy),
         tapes(&[0, 0, 3, 7]),
     )
     .unwrap();
@@ -31,7 +31,7 @@ pub(super) fn prefix_controls(
     zkc_test_drivers::execute(
         deployment,
         &validator,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap()
     .outcome
@@ -72,7 +72,7 @@ pub(super) fn prefix_controls(
     let direct = zkc_test_drivers::execute_test(
         deployment,
         &producer,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
         tapes(&[3, 7]),
     )
     .unwrap();
@@ -90,7 +90,7 @@ pub(super) fn prefix_controls(
     let failed = zkc_test_drivers::execute_test(
         &limit,
         &producer,
-        zkc_tools::proof::Invocation::Attempts(&policy),
+        zkc::proof::Invocation::Attempts(&policy),
         tapes(&[0, 3, 7]),
     )
     .unwrap();
@@ -159,12 +159,9 @@ pub(super) fn controls(
         .unwrap();
     let limited = deployment.clone().with_external_work_limit(0).unwrap();
     for (input, proof) in [(producer, None), (validator, Some(proof))] {
-        let report = zkc_test_drivers::execute(
-            &limited,
-            input,
-            zkc_tools::proof::Invocation::one_shot(proof),
-        )
-        .unwrap();
+        let report =
+            zkc_test_drivers::execute(&limited, input, zkc::proof::Invocation::one_shot(proof))
+                .unwrap();
         clean(&report);
         assert_eq!(report.outcome.unwrap_err(), "exhausted:external-work-limit");
         assert_eq!(report.external_work, 0);
@@ -175,7 +172,7 @@ pub(super) fn controls(
     let report = zkc_test_drivers::execute(
         deployment,
         &changed,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
+        zkc::proof::Invocation::one_shot(Some(proof)),
     )
     .unwrap();
     assert_eq!(report.outcome.unwrap_err(), "proof-header");
@@ -186,7 +183,7 @@ pub(super) fn controls(
     let alternate = zkc_test_drivers::execute(
         deployment,
         &changed_producer,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
     )
     .unwrap()
     .outcome
@@ -197,7 +194,7 @@ pub(super) fn controls(
     zkc_test_drivers::execute(
         deployment,
         &changed,
-        zkc_tools::proof::Invocation::one_shot(Some(&rewrapped)),
+        zkc::proof::Invocation::one_shot(Some(&rewrapped)),
     )
     .unwrap()
     .outcome
@@ -224,7 +221,7 @@ pub(super) fn controls(
     let new_header = zkc_test_drivers::execute(
         deployment,
         &new_producer,
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
     )
     .unwrap()
     .binding;
@@ -234,7 +231,7 @@ pub(super) fn controls(
     let error = zkc_test_drivers::execute(
         deployment,
         &new_validator,
-        zkc_tools::proof::Invocation::one_shot(Some(&rewrapped)),
+        zkc::proof::Invocation::one_shot(Some(&rewrapped)),
     )
     .unwrap()
     .outcome
@@ -281,7 +278,7 @@ pub(super) fn controls(
         let report = zkc_test_drivers::execute(
             deployment,
             validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&altered)),
+            zkc::proof::Invocation::one_shot(Some(&altered)),
         )
         .unwrap();
         clean(&report);
@@ -317,7 +314,7 @@ pub(super) fn controls(
         let report = zkc_test_drivers::execute(
             deployment,
             validator,
-            zkc_tools::proof::Invocation::one_shot(Some(&replace(proof, 0, &payload))),
+            zkc::proof::Invocation::one_shot(Some(&replace(proof, 0, &payload))),
         )
         .unwrap();
         clean(&report);
@@ -362,7 +359,7 @@ pub(super) fn controls(
         let report = zkc_test_drivers::execute(
             deployment,
             &inputs(envelope, &altered, true),
-            zkc_tools::proof::Invocation::one_shot(None),
+            zkc::proof::Invocation::one_shot(None),
         )
         .unwrap();
         clean(&report);
@@ -378,7 +375,7 @@ pub(super) fn controls(
         zkc_test_drivers::execute(
             deployment,
             &mismatch,
-            zkc_tools::proof::Invocation::one_shot(None)
+            zkc::proof::Invocation::one_shot(None)
         )
         .err()
         .unwrap(),

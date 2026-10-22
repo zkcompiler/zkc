@@ -4,13 +4,13 @@
   source,
 }:
 rustPlatform.buildRustPackage {
-  pname = "zkc-tools";
+  pname = "zkc";
   version = "0.0.0";
   src = source;
-  cargoHash = "sha256-7PC4dLSDItUVVnIE2vZ+RdVI9TctBgVCzv6o0iL1WrA=";
+  cargoHash = "sha256-w3ybf2qKenkaxjE6u0ySaQ/0S40eYeCdFpbBNYSIDCc=";
   cargoBuildFlags = [
     "-p"
-    "zkc-tools"
+    "zkc-cli"
     "--bin"
     "zkc"
   ];
