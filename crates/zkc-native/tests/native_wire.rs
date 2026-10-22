@@ -8,6 +8,51 @@ use zkc_runtime::host::wire::{WireBackend, WireError};
 use zkc_runtime::vm::{DecodeReason, PhysicalType, Value as RuntimeValue};
 
 #[test]
+fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
+    let backend = NativeBackend::new(
+        Policy {
+            max_groups: 0,
+            ..Policy::default()
+        },
+        common::entry(None),
+        Default::default(),
+    )
+    .unwrap();
+    let ordinary = ark_backend(None);
+    let point = Value::Curve(GroupPoint::generator());
+    let ty = point.physical_type();
+    let bytes = ordinary.encode_native_value(&point).unwrap();
+    assert!(backend.decode_native_value(&ty, &bytes).is_ok());
+    let measured = backend.measure_native_wire(&ty, &bytes).unwrap();
+    assert!(backend.decoding_bound(&ty, &bytes).is_ok());
+    // A root leaf is allowed, but its count must survive when it becomes a
+    // child of a complete nested message.
+    let sequence = Value::Sequence(
+        zkc_native::Sequence::new(ty.logical(), vec![point], &Policy::default()).unwrap(),
+    );
+    let nested = ordinary.encode_native_value(&sequence).unwrap();
+    assert_eq!(
+        backend
+            .measure_native_wire(&sequence.physical_type(), &nested)
+            .unwrap_err(),
+        NativeWireError::Limit
+    );
+    assert!(measured.retained_bytes() > 0);
+    let logical = zkc_test_support::variants::logical(
+        "PointMessage",
+        serde_json::json!([["point", [ty.logical().spelling()]]]),
+    );
+    let variant =
+        PhysicalType::default_for(zkc_runtime::vm::LogicalType::parse(&logical).unwrap()).unwrap();
+    assert_eq!(
+        backend
+            .measure_native_variant(&variant, 0, &[measured])
+            .unwrap_err(),
+        NativeWireError::Limit
+    );
+}
+
+#[test]
 fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
     let backend = ark_backend(None);
     for (value, width) in [

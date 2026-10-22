@@ -647,6 +647,67 @@ fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity(
 }
 
 #[test]
+fn native_standalone_group_messages_do_not_consume_collection_capacity() {
+    let backend = |role| {
+        NativeBackend::new(
+            Policy {
+                max_groups: 0,
+                ..Policy::default()
+            },
+            EntryPolicy::new(Domain::new(role, "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap()
+    };
+    let point = Value::Curve(zkc_native::GroupPoint::generator());
+    let bundle = Bundle::admit(
+        message_bundle(&point.physical_type().spelling())
+            .to_string()
+            .as_bytes(),
+        &backend("Alice"),
+        BundleLimits::default(),
+    )
+    .unwrap();
+    for shared in [false, true] {
+        let ledger = shared
+            .then(|| zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default()));
+        let report = run_with_ledger(
+            &bundle,
+            "session",
+            vec![
+                RoleInput {
+                    role: "Alice".into(),
+                    backend: backend("Alice"),
+                    values: vec![point.clone()],
+                },
+                RoleInput {
+                    role: "Bob".into(),
+                    backend: backend("Bob"),
+                    values: vec![],
+                },
+            ],
+            RunLimits {
+                values: ValueBudget {
+                    live_bytes: 4096,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            &mut NoHooks,
+            ledger,
+        )
+        .unwrap();
+        assert_eq!(
+            report.outcome,
+            Outcome::Completed,
+            "shared ledger: {shared}"
+        );
+        assert_eq!(report.wire.sends, 1);
+        assert_eq!(report.wire.receives, 1);
+    }
+}
+
+#[test]
 fn fixed_frame_length_and_header_precede_native_capacity_in_joint_receive() {
     for shared in [false, true] {
         for (bytes, reason) in [

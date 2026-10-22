@@ -69,9 +69,8 @@ impl NativeBackend {
             super::pcs::preflight(self.setups(), tag, bytes)?;
         }
         let mut counts = structured::Counts::default();
-        let retained = if super::table_type(ty)
-            || super::frame(ty).is_some() && !ty.has_native_array_frame()
-        {
+        let fixed_leaf = super::frame(ty).is_some() && !ty.has_native_array_frame();
+        let retained = if super::table_type(ty) || fixed_leaf {
             // Match the ordinary leaf decoder's retention contract. Recursive
             // framing may need a more conservative estimate for nested leaves.
             counts.nodes = 1;
@@ -98,7 +97,12 @@ impl NativeBackend {
             structured::peak(self.policy(), retained, bytes.len())?;
             retained
         };
-        counts.admit(self.policy())?;
+        // Standalone fixed leaves follow their decoder's own bounds, rather
+        // than collection ceilings. Retain their counts so a later aggregate
+        // constructor still accounts for every nested child.
+        if !fixed_leaf {
+            counts.admit(self.policy())?;
+        }
         Ok(NativeInputSize {
             ty: ty.clone(),
             retained,
