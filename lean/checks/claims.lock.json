@@ -88,13 +88,13 @@
     "Zkc.Source.Structured.NormalForm.callback_sound_uniform": {
       "package": "main",
       "module": "Zkc.Source.Structured.NormalForm.Presentation",
-      "structural": "529f33256f8066c2",
-      "explicit": "4b7842612aab4d7e"
+      "structural": "95f9f153f22936cd",
+      "explicit": "0b30e1b3340c3628"
     },
     "Zkc.Source.Structured.NormalForm.normalize_sound": {
       "package": "main",
       "module": "Zkc.Source.Structured.NormalForm.Soundness",
-      "structural": "8a9ac1dcc3a12d8a",
+      "structural": "82b2cba9b04ce96b",
       "explicit": "42b48f65106f5623"
     },
     "Zkc.Source.Structured.check_ok_inversion": {
@@ -196,38 +196,38 @@
     "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.ChaumPedersenNormalForms",
-      "structural": "e98dac14395bb3d1",
+      "structural": "51a9c78e8c696ac7",
       "explicit": "71819b6f6657fbc1"
     },
     "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke": {
       "package": "main",
       "module": "ZkcExamples.Structured.GkrRoundsNormalForms",
-      "structural": "4f783f52e73012e0",
-      "explicit": "f1d64ddbd2ec670d"
+      "structural": "4f585f3f6827b499",
+      "explicit": "7cb6d5016829aee6"
     },
     "ZkcExamples.Structured.GkrSourceNormalForms.verifierLayer_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.GkrSourceNormalForms",
-      "structural": "254516ad91351b4a",
-      "explicit": "052a154280480da1"
+      "structural": "921fc2a7bc7cc498",
+      "explicit": "cbd8c9716dfb5691"
     },
     "ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant": {
       "package": "main",
       "module": "ZkcExamples.Structured.GkrSourceNormalForms",
-      "structural": "de5defde9df07152",
-      "explicit": "827f93271d62b5ac"
+      "structural": "488e2361bb8717f1",
+      "explicit": "ac0bcc9d7419590d"
     },
     "ZkcExamples.Structured.GkrSourceVerifier.verifier_reads": {
       "package": "main",
       "module": "ZkcExamples.Structured.GkrSourceVerifier",
-      "structural": "8b55c0260f799411",
-      "explicit": "3981d3c32178a2e4"
+      "structural": "97739b84ebf95227",
+      "explicit": "d37052e568d8cfc8"
     },
     "ZkcExamples.Structured.NormalFormSteps.repeat_embed": {
       "package": "main",
       "module": "ZkcExamples.Structured.NormalFormSteps",
-      "structural": "b08dc4c05e0e5fc4",
-      "explicit": "291fdcb95724cc49"
+      "structural": "fde3f955499082a2",
+      "explicit": "b661c7cbba3782b4"
     },
     "ZkcExamples.Structured.Okamoto.extract_representation": {
       "package": "main",
@@ -256,13 +256,13 @@
     "ZkcExamples.Structured.OkamotoNormalForms.verifier_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.OkamotoNormalForms",
-      "structural": "b57280928f4ffe21",
+      "structural": "e3e19c4bcc69ccb4",
       "explicit": "0a9db410a499cb11"
     },
     "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.SchnorrAndNormalForms",
-      "structural": "bd42fc07859bb2a0",
+      "structural": "3be7837ae25cb7aa",
       "explicit": "92137c2b4c8f12db"
     },
     "ZkcExamples.Structured.SchnorrBinding.target_special_soundness": {
@@ -286,14 +286,14 @@
     "ZkcExamples.Structured.SumcheckProverLaws.loop_honest": {
       "package": "main",
       "module": "ZkcExamples.Structured.SumcheckProverLaws",
-      "structural": "57bdc603d93f4f25",
-      "explicit": "e530554f76a870ca"
+      "structural": "003f9f9df931f0a6",
+      "explicit": "cf5d00ddd9d78978"
     },
     "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke": {
       "package": "main",
       "module": "ZkcExamples.Structured.SumcheckSourceNormalForms",
-      "structural": "408770c0c37b1372",
-      "explicit": "e1d2aa716f4b3786"
+      "structural": "b1d0a3718d32ed14",
+      "explicit": "1771fe84cf123803"
     },
     "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness": {
       "package": "arklib",
@@ -328,32 +328,32 @@
     "ZkcSecurity.Commitment.soundness": {
       "package": "security",
       "module": "ZkcSecurity.Commitment.Soundness",
-      "structural": "1843a0f3d367e2e2",
-      "explicit": "fe6ff8e32df88264"
+      "structural": "a24073f1e9e63652",
+      "explicit": "c616dda7b84f5fec"
     },
     "ZkcSecurity.Commitment.soundness_weighted": {
       "package": "security",
       "module": "ZkcSecurity.Commitment.Soundness",
-      "structural": "c8c572c6e0b743bc",
-      "explicit": "64a843f7f500aeb4"
+      "structural": "d5d5a5b1830fc2d7",
+      "explicit": "775e5a3716f35394"
     },
     "ZkcSecurity.Examples.CausalSumcheck.Iteration.repeat_uniform_residual_soundness": {
       "package": "arklib",
       "module": "ZkcArkLib.Examples.CausalSumcheck.Iteration",
-      "structural": "40e9181c6d44db11",
-      "explicit": "603852e21bda9018"
+      "structural": "ce930e152b27510b",
+      "explicit": "28187a11d5249091"
     },
     "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.reduction_residual_bound": {
       "package": "arklib",
       "module": "ZkcArkLib.Examples.CausalSumcheck.SourceVerifier",
-      "structural": "611a132126b44a20",
-      "explicit": "dad5013bd2632208"
+      "structural": "630d98fe60a12517",
+      "explicit": "bb188770a7394ec8"
     },
     "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.source_returned_true_bound": {
       "package": "arklib",
       "module": "ZkcArkLib.Examples.CausalSumcheck.SourceVerifier",
-      "structural": "97387bcfda6ab8fa",
-      "explicit": "ea9420e678be5c0b"
+      "structural": "fd03b78584b5fbca",
+      "explicit": "051e526ea31db99e"
     },
     "ZkcSecurity.Examples.ChaumPedersenSigma.knowledge_soundness": {
       "package": "security",
@@ -484,14 +484,14 @@
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged": {
       "package": "security",
       "module": "ZkcSecurity.FiatShamir.Typed",
-      "structural": "cc41e7a527528a08",
-      "explicit": "b4ea63c3eb64b1d8"
+      "structural": "9523ad2d8782d86a",
+      "explicit": "714436438ad7c603"
     },
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted": {
       "package": "security",
       "module": "ZkcSecurity.FiatShamir.Typed",
-      "structural": "25ee8d4f0e177a04",
-      "explicit": "aec857cc27459d26"
+      "structural": "0647707037913032",
+      "explicit": "3b552d518f0db854"
     },
     "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted": {
       "package": "arklib",
@@ -508,8 +508,8 @@
     "ZkcSecurity.FiatShamir.adaptive_soundness": {
       "package": "security",
       "module": "ZkcSecurity.FiatShamir.Soundness",
-      "structural": "11818ff65fe95844",
-      "explicit": "4a524afa17fcbd4d"
+      "structural": "bfe656b204b38db1",
+      "explicit": "3aed6e80e6b7bea0"
     },
     "ZkcSecurity.HashChain.Encoding.frame_prefixFree": {
       "package": "security",
@@ -520,14 +520,14 @@
     "ZkcSecurity.HashChain.concrete_le_simulated": {
       "package": "security",
       "module": "ZkcSecurity.HashChain.Bound",
-      "structural": "ea5efb0e53bbdaba",
-      "explicit": "d7094ccfea80cd3a"
+      "structural": "760fdc17e0c18dd4",
+      "explicit": "92bf72682ce8d450"
     },
     "ZkcSecurity.HashChain.concrete_soundness": {
       "package": "security",
       "module": "ZkcSecurity.HashChain.Instance",
-      "structural": "6788c6374a88fc32",
-      "explicit": "ab906f31b08450fc"
+      "structural": "f62b355d08d02d9c",
+      "explicit": "736ad144fe67d91f"
     }
   }
 }
