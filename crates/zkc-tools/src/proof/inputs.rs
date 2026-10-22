@@ -173,7 +173,7 @@ pub(super) fn prepare(
     // enter through an immutable data constructor.
     for (input, (_, ty)) in request.inputs.iter().zip(&role.inputs) {
         if host.retained_inputs
-            && !zkc_backends::has_native_wire(ty)
+            && !zkc_native::has_native_wire(ty)
             && ty.is_duplicable()
             && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
         {
@@ -256,7 +256,7 @@ pub(super) fn prepare(
             .or_insert_with(|| key.clone());
         keys.insert(port.original, key);
     }
-    let registry = zkc_backends::SetupRegistry::new(
+    let registry = zkc_native::SetupRegistry::new(
         material.values().map(|k| k.as_ref().clone()).collect(),
         &policy,
     )
@@ -279,7 +279,7 @@ pub(super) fn prepare(
         if let Some(key) = key {
             constraints.insert(
                 name.clone(),
-                zkc_backends::PortConstraint {
+                zkc_native::PortConstraint {
                     arity: None,
                     setup: Some(key.metadata()),
                 },

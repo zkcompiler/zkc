@@ -4,8 +4,8 @@ use super::inputs::{Result, read_regular};
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_backends::{NativeBackend, Policy, Value};
 use zkc_kernels::{ProverKey, VerifierKey};
+use zkc_native::{NativeBackend, Policy, Value};
 use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
@@ -103,7 +103,7 @@ impl<'a> Input<'a> {
         }
         if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
             || !ty.is_duplicable()
-            || !zkc_backends::has_native_wire(&ty)
+            || !zkc_native::has_native_wire(&ty)
         {
             return Err("native-input-private".into());
         }
@@ -499,8 +499,8 @@ thread_local! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_backends::{Domain, EntryPolicy};
     use zkc_kernels::Keys;
+    use zkc_native::{Domain, EntryPolicy};
 
     #[test]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {
@@ -526,9 +526,9 @@ mod tests {
         let backend = NativeBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "s", "main", None), Some(1)),
-            zkc_backends::SetupRegistry::new(
+            zkc_native::SetupRegistry::new(
                 vec![first.verifier_key().clone()],
-                &zkc_backends::Policy::default(),
+                &zkc_native::Policy::default(),
             )
             .unwrap(),
         )

@@ -3,10 +3,8 @@
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, fs};
-use zkc_backends::services::{ServiceReference, ServiceRegistry};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, NativeWireError, Policy, Value,
-};
+use zkc_native::services::{ServiceReference, ServiceRegistry};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, NativeWireError, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, BackendError, BoundSignature, CallContext, Cut, Frame, FrameExit, Invocation,
@@ -88,9 +86,9 @@ struct ObservedBackend {
 }
 impl Backend for ObservedBackend {
     type Value = Value;
-    type Operation = zkc_backends::NativeOperation;
-    type Call = zkc_backends::NativeCall;
-    type Checkpoint = zkc_backends::ComputationCheckpoint;
+    type Operation = zkc_native::NativeOperation;
+    type Call = zkc_native::NativeCall;
+    type Checkpoint = zkc_native::ComputationCheckpoint;
 
     fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
         self.native.computation_checkpoint()
@@ -198,13 +196,12 @@ fn value(ty: &Json, v: &Json) -> Result<Value> {
     }
     if *ty == json!(["field", "bls12-381.fr"]) {
         return Ok(Value::Field(
-            zkc_backends::parse_decimal(string(v)?).map_err(harness)?,
+            zkc_native::parse_decimal(string(v)?).map_err(harness)?,
         ));
     }
     if *ty == json!(["group", "bls12-381.g1"]) {
         return Ok(Value::Curve(
-            GroupPoint::generator()
-                .scale(zkc_backends::parse_decimal(string(v)?).map_err(harness)?),
+            GroupPoint::generator().scale(zkc_native::parse_decimal(string(v)?).map_err(harness)?),
         ));
     }
     Err(unsupported(
@@ -570,7 +567,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         let tape = p
             .tape
             .iter()
-            .map(|v| zkc_backends::parse_decimal(v).map_err(harness))
+            .map(|v| zkc_native::parse_decimal(v).map_err(harness))
             .collect::<Result<Vec<_>>>()?;
         references.insert(
             p.handle.clone(),
@@ -863,7 +860,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
                             }
                             "modulus" | "complete-modulus" => {
                                 let n = num_bigint::BigUint::parse_bytes(
-                                    zkc_backends::SCALAR_MODULUS_DECIMAL.as_bytes(),
+                                    zkc_native::SCALAR_MODULUS_DECIMAL.as_bytes(),
                                     10,
                                 )
                                 .unwrap();

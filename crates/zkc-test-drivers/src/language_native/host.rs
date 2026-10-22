@@ -3,7 +3,7 @@ use super::interface::alter;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{Scalar, Value as Native};
+use zkc_native::{Scalar, Value as Native};
 use zkc_tools::{
     entry::{Package, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value},
     execution::InputValue,

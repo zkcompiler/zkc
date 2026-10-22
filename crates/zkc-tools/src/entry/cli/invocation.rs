@@ -109,7 +109,7 @@ impl Invocation {
         &self,
         mut types: impl Iterator<Item = &'a zkc_runtime::vm::PhysicalType>,
     ) -> Result<()> {
-        if self.results.is_some() && !types.all(zkc_backends::has_native_wire) {
+        if self.results.is_some() && !types.all(zkc_native::has_native_wire) {
             return Err("entry-output-codec".into());
         }
         Ok(())

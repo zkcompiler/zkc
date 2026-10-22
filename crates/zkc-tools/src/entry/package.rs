@@ -11,7 +11,7 @@ const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
 /// Host can admit.
 pub(super) const ASSET_COUNT: usize = 256;
 const ASSET_BYTES: usize = zkc_runtime::ring::BYTE_LIMIT;
-const ASSETS_BYTES: usize = zkc_backends::ring::REGISTRY_BYTE_LIMIT;
+const ASSETS_BYTES: usize = zkc_native::ring::REGISTRY_BYTE_LIMIT;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, remote = "Self")]

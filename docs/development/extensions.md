@@ -142,7 +142,7 @@ shapes and canonical encodings there. Numerical scratch and destinations use
 explicit caller limits; provider-private storage remains documented separately.
 
 Add installed operations, concrete representations, codec adaptation and
-services to `zkc-backends`. Its adapters select policy, borrow typed operands,
+services to `zkc-native`. Its adapters select policy, borrow typed operands,
 invoke kernels and publish complete results. Keep independent installed
 signatures and VM admission checks. A new external mathematics library usually
 extends kernels; a new backend requires a complete VM backend implementation,

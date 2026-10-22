@@ -1,6 +1,6 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
 use super::{WireBackend, WireError};
-use zkc_backends::native_wire_size;
+use zkc_native::native_wire_size;
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
@@ -904,7 +904,7 @@ fn observe<B: Backend, H: Hooks<B>>(hooks: &mut H, slot: &Slot<B>, phase: Phase)
 mod contract_tests {
     use super::*;
     use serde_json::json;
-    use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
+    use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
 
     fn backend() -> NativeBackend {
         NativeBackend::new(
@@ -961,7 +961,7 @@ mod contract_tests {
             vec![RoleInput {
                 role: "Alice".into(),
                 backend: backend(),
-                values: vec![zkc_backends::Value::Index(1)],
+                values: vec![zkc_native::Value::Index(1)],
             }],
             RunLimits::default(),
             &mut NoHooks,

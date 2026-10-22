@@ -256,7 +256,7 @@ impl PreparedRun<'_> {
 }
 fn collect(
     interface: &Interface,
-    execution: &native::Report<zkc_backends::NativeBackend>,
+    execution: &native::Report<zkc_native::NativeBackend>,
 ) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {

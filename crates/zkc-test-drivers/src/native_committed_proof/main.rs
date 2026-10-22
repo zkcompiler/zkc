@@ -4,8 +4,8 @@ mod typed;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
 
@@ -41,9 +41,9 @@ fn backend(keys: &Keys) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
-        zkc_backends::SetupRegistry::new(
+        zkc_native::SetupRegistry::new(
             vec![keys.verifier_key().clone()],
-            &zkc_backends::Policy::default(),
+            &zkc_native::Policy::default(),
         )
         .unwrap(),
     )

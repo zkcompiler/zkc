@@ -1,0 +1,39 @@
+[package]
+name = "zkc-native"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Default native VM backend: concrete values, bindings, services and kernel adapters"
+
+[features]
+test-utils = ["zkc-kernels/test-utils"]
+
+[dependencies]
+sha3.workspace = true
+shake.workspace = true
+zkc-runtime.workspace = true
+zkc-kernels.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+sha2.workspace = true
+merlin.workspace = true
+spongefish = { workspace = true, features = ["keccak", "zeroize"] }
+curve25519-dalek = { workspace = true, features = ["rand_core"] }
+ark-poly.workspace = true
+ark-ff.workspace = true
+p3-field.workspace = true
+rand.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+p3-symmetric.workspace = true
+p3-koala-bear.workspace = true
+p3-merkle-tree.workspace = true
+p3-matrix.workspace = true
+p3-commit.workspace = true
+zkc-kernels = { workspace = true, features = ["test-utils"] }
+p3-poseidon2.workspace = true
+zkc-test-support.workspace = true

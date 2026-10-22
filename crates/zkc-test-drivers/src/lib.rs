@@ -11,7 +11,7 @@ pub fn execute_test(
     deployment: &zkc_tools::proof::NativeDeployment,
     input: &serde_json::Value,
     invocation: zkc_tools::proof::Invocation<'_>,
-    tapes: std::collections::BTreeMap<usize, Vec<zkc_backends::Scalar>>,
+    tapes: std::collections::BTreeMap<usize, Vec<zkc_native::Scalar>>,
 ) -> Result<zkc_tools::proof::NativeProofReport, String> {
     let input = zkc_tools::proof::ProofInputs::decode(deployment, input, invocation)?;
     deployment.execute_test(&input, invocation, tapes)

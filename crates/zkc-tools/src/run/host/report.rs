@@ -156,7 +156,7 @@ impl HostReport {
             result["roles"] = json!(execution.roles.iter().map(|role| {
                 let backend = &execution.backends.iter().find(|(name,_)|name==&role.role).expect("role custody").1;
                 let outputs = role.outputs.iter().enumerate().filter(|_|include_outputs).map(|(i,value)| {
-                    if !zkc_backends::has_native_wire(&value.physical_type()) {
+                    if !zkc_native::has_native_wire(&value.physical_type()) {
                         return json!(["private",value.physical_type().spelling()]);
                     }
                     match backend.encode_native_value(value) {

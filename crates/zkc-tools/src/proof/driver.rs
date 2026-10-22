@@ -10,7 +10,7 @@ pub enum ArtifactFailure {
     Format(FormatError),
     Runtime(RuntimeError),
     Backend(BackendError),
-    NativeWire(zkc_backends::NativeWireError),
+    NativeWire(zkc_native::NativeWireError),
     Stopped(Box<Stop>),
     UnexpectedCommunication,
     AcceptanceType,
@@ -111,20 +111,20 @@ impl Transport {
 /// Called only by the host after native proof-entry admission.
 #[cfg(test)]
 pub(super) fn produce_native(
-    runner: &mut Runner<zkc_backends::NativeBackend>,
+    runner: &mut Runner<zkc_native::NativeBackend>,
     expected_binding: &[u8; 32],
     transport: Transport,
     limit: usize,
-) -> ArtifactReport<Produced<zkc_backends::Value>> {
+) -> ArtifactReport<Produced<zkc_native::Value>> {
     produce_native_shared(runner, expected_binding, transport, limit, None)
 }
 pub(super) fn produce_native_shared(
-    runner: &mut Runner<zkc_backends::NativeBackend>,
+    runner: &mut Runner<zkc_native::NativeBackend>,
     expected_binding: &[u8; 32],
     transport: Transport,
     limit: usize,
     ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-) -> ArtifactReport<Produced<zkc_backends::Value>> {
+) -> ArtifactReport<Produced<zkc_native::Value>> {
     let encoding_retained = std::cell::RefCell::new(None);
     produce_admitted_with_limit(
         runner,
@@ -224,22 +224,22 @@ pub(super) fn produce_admitted_with_limit<B: Backend>(
 
 #[cfg(test)]
 pub(super) fn validate_native(
-    runner: &mut Runner<zkc_backends::NativeBackend>,
+    runner: &mut Runner<zkc_native::NativeBackend>,
     proof: &[u8],
     expected_binding: &[u8; 32],
     transport: Transport,
     acceptance: usize,
-) -> ArtifactReport<Vec<zkc_backends::Value>> {
+) -> ArtifactReport<Vec<zkc_native::Value>> {
     validate_native_shared(runner, proof, expected_binding, transport, acceptance, None)
 }
 pub(super) fn validate_native_shared(
-    runner: &mut Runner<zkc_backends::NativeBackend>,
+    runner: &mut Runner<zkc_native::NativeBackend>,
     proof: &[u8],
     expected_binding: &[u8; 32],
     transport: Transport,
     acceptance: usize,
     ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-) -> ArtifactReport<Vec<zkc_backends::Value>> {
+) -> ArtifactReport<Vec<zkc_native::Value>> {
     validate_admitted(
         runner,
         proof,
@@ -247,14 +247,14 @@ pub(super) fn validate_native_shared(
         transport,
         acceptance,
         |v| {
-            if let zkc_backends::Value::Bool(b) = v {
+            if let zkc_native::Value::Bool(b) = v {
                 Some(*b)
             } else {
                 None
             }
         },
         |runner, request, bytes| {
-            let cut = Action::<zkc_backends::Value>::Receive(request.clone())
+            let cut = Action::<zkc_native::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;
             let _live = if let Some(ledger) = &ledger {
@@ -272,7 +272,7 @@ pub(super) fn validate_native_shared(
                     ProofFormat::Native => {
                         match runner.backend().measure_native_wire(&request.ty, bytes) {
                             Ok(size) => size.retained_bytes(),
-                            Err(zkc_backends::NativeWireError::Invalid(reason)) => {
+                            Err(zkc_native::NativeWireError::Invalid(reason)) => {
                                 // Measurement may reject framing before allocation. It is
                                 // still an accepted receive attempt with a Decode stop.
                                 runner.complete_receive(&cut, Err(reason))?;
@@ -293,7 +293,7 @@ pub(super) fn validate_native_shared(
                 .decode(runner.backend(), &request.ty, bytes)
             {
                 Ok(value) => Ok(value),
-                Err(zkc_backends::NativeWireError::Invalid(reason)) => Err(reason),
+                Err(zkc_native::NativeWireError::Invalid(reason)) => Err(reason),
                 Err(error) => return Err(ArtifactFailure::NativeWire(error)),
             };
             runner.complete_receive(&cut, decoded)?;

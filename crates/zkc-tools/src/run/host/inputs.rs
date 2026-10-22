@@ -78,7 +78,7 @@ pub(super) fn kind(ty: &PhysicalType) -> &'static str {
         Type::ProverKey => "prover_key_file",
         Type::VerifierKey => "verifier_key",
         Type::Transcript => "unsupported-transcript",
-        _ if zkc_backends::has_native_wire(ty) => "wire",
+        _ if zkc_native::has_native_wire(ty) => "wire",
         _ => "unsupported",
     }
 }
@@ -238,7 +238,7 @@ fn check_declaration(
     value: &InputValue,
 ) -> Result<()> {
     if host.retained_inputs
-        && !zkc_backends::has_native_wire(ty)
+        && !zkc_native::has_native_wire(ty)
         && ty.is_duplicable()
         && !matches!(ty.kind(), Type::VerifierKey | Type::ProverKey)
     {

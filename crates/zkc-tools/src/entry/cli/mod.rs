@@ -309,7 +309,7 @@ mod tests {
         };
         let values = [(
             "field".into(),
-            zkc_backends::Value::Field(zkc_backends::Scalar::from(1)).into(),
+            zkc_native::Value::Field(zkc_native::Scalar::from(1)).into(),
         )]
         .into();
         let mut report = json!({"status":"refused"});

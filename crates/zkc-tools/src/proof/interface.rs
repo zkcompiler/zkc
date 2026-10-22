@@ -139,7 +139,7 @@ impl RoleInterface {
             for ty in &input_types {
                 if retained_inputs
                     && ty.is_duplicable()
-                    && !zkc_backends::has_native_wire(ty)
+                    && !zkc_native::has_native_wire(ty)
                     && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
                 {
                     continue;

@@ -10,7 +10,7 @@ use crate::run::HostLimits;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zkc_backends::{KoalaBear, KoalaBearExt8, Value as Native};
+use zkc_native::{KoalaBear, KoalaBearExt8, Value as Native};
 use zkc_runtime::{
     logical,
     ring::{Expression, Node},

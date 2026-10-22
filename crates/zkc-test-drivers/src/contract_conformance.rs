@@ -2,7 +2,7 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::vm::{
     AdmissionError, LogicalType, OperationBinding, OperationSignature, PhysicalType,
 };

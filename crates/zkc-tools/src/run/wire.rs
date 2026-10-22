@@ -1,5 +1,5 @@
 //! Host boundary for the admitted native message profile.
-use zkc_backends::{NativeBackend, NativeWireError};
+use zkc_native::{NativeBackend, NativeWireError};
 use zkc_runtime::vm::{Backend, BackendError, DecodeReason, PhysicalType};
 
 /// Distinguish invalid received bytes from failures of the trusted Host adapter.

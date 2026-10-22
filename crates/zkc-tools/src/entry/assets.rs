@@ -10,7 +10,7 @@
 use super::interface::raw::Definition;
 use super::{Interface, Package};
 use std::sync::Arc;
-use zkc_backends::{relation::Registry as RelationRegistry, ring::Registry};
+use zkc_native::{relation::Registry as RelationRegistry, ring::Registry};
 use zkc_runtime::{
     relation::Bundle,
     ring::Expression,
@@ -105,7 +105,7 @@ impl EntryAssets {
             if registry
                 .admitted_bytes()
                 .checked_add(relations.admitted_bytes())
-                .is_none_or(|bytes| bytes > zkc_backends::ring::REGISTRY_BYTE_LIMIT)
+                .is_none_or(|bytes| bytes > zkc_native::ring::REGISTRY_BYTE_LIMIT)
             {
                 return Err("entry-assets-bytes".into());
             }

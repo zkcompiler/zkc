@@ -3,7 +3,7 @@ members = [
   "crates/zkc-runtime",
   "crates/zkc-tools",
   "crates/zkc-kernels",
-  "crates/zkc-backends",
+  "crates/zkc-native",
   "crates/zkc-test-support",
   "crates/zkc-test-drivers",
   "crates/zkc-benchmarks",
@@ -65,7 +65,7 @@ p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 
 zkc-tools = { path = "crates/zkc-tools" }
 zkc-runtime = { path = "crates/zkc-runtime" }
-zkc-backends = { path = "crates/zkc-backends" }
+zkc-native = { path = "crates/zkc-native" }
 zkc-kernels = { path = "crates/zkc-kernels" }
 
 [workspace.lints.rust]

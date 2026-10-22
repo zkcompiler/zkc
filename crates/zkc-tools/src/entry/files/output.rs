@@ -9,7 +9,7 @@ use serde::{
     ser::{Error, SerializeMap, SerializeSeq},
 };
 use std::io::Write;
-use zkc_backends::NativeBackend;
+use zkc_native::NativeBackend;
 use zkc_runtime::vm::Value as _;
 
 struct Buffer {
@@ -48,12 +48,12 @@ fn encode(value: impl Serialize) -> Result<Vec<u8>> {
 // Native wire frames depend on value shape and capacity, not the session domain.
 // Outputs have already been admitted under their role's setup policy; encoding
 // here adds no setup authorization and issues no resources.
-fn backend(capacity: Capacity, setups: zkc_backends::SetupRegistry) -> Result<NativeBackend> {
+fn backend(capacity: Capacity, setups: zkc_native::SetupRegistry) -> Result<NativeBackend> {
     capacity.validate()?;
     NativeBackend::new(
         capacity.backend(),
-        zkc_backends::EntryPolicy::new(
-            zkc_backends::Domain::new("host", "entry_results", "results", None),
+        zkc_native::EntryPolicy::new(
+            zkc_native::Domain::new("host", "entry_results", "results", None),
             None,
         ),
         setups,
@@ -66,7 +66,7 @@ pub fn output_setups(
     material: &std::collections::BTreeMap<String, Vec<u8>>,
     authority: &super::SetupAuthority,
     capacity: Capacity,
-) -> Result<zkc_backends::SetupRegistry> {
+) -> Result<zkc_native::SetupRegistry> {
     let mut imports = crate::host::setups::VerifierKeys::new(capacity.backend().ark_bounds());
     output_setups_with(material, authority, capacity, &mut imports)
 }
@@ -75,7 +75,7 @@ pub(crate) fn output_setups_with(
     authority: &super::SetupAuthority,
     capacity: Capacity,
     imports: &mut crate::host::setups::VerifierKeys,
-) -> Result<zkc_backends::SetupRegistry> {
+) -> Result<zkc_native::SetupRegistry> {
     capacity.validate()?;
     imports.check_bounds(capacity.backend().ark_bounds())?;
     if material.len() != authority.keys.len() {
@@ -94,14 +94,14 @@ pub(crate) fn output_setups_with(
             keys.push((*key).clone());
         }
     }
-    zkc_backends::SetupRegistry::new(keys, &policy).map_err(|e| e.to_string())
+    zkc_native::SetupRegistry::new(keys, &policy).map_err(|e| e.to_string())
 }
 /// Encode explicitly requested role results under the admitted capacity and a
 /// 16 MiB whole-file limit. Private capabilities retain their codec refusal.
 pub fn run_outputs(
     values: &RoleValues,
     capacity: Capacity,
-    setups: zkc_backends::SetupRegistry,
+    setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
@@ -141,7 +141,7 @@ pub fn run_outputs(
 pub fn proof_outputs(
     values: &NamedValues,
     capacity: Capacity,
-    setups: zkc_backends::SetupRegistry,
+    setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
@@ -162,7 +162,7 @@ pub fn proof_outputs(
 pub fn function_output(
     value: &Value,
     capacity: Capacity,
-    setups: zkc_backends::SetupRegistry,
+    setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
@@ -255,7 +255,7 @@ impl Serialize for Item<'_> {
             }
             .serialize(serializer),
             Value::Leaf(InputValue::Native(v)) => {
-                if !zkc_backends::has_native_wire(&v.physical_type()) {
+                if !zkc_native::has_native_wire(&v.physical_type()) {
                     return Err(S::Error::custom("entry output is not serializable"));
                 }
                 self.backend
@@ -271,7 +271,7 @@ impl Serialize for Item<'_> {
 mod tests {
     use super::*;
     use crate::host::inputs::hex;
-    use zkc_backends::Value as Native;
+    use zkc_native::Value as Native;
     use zkc_runtime::vm::Identity;
     #[test]
     fn function_returns_use_one_value_envelope_and_existing_codecs() {
@@ -305,7 +305,7 @@ mod tests {
         let policy = capacity.backend();
         let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
         let table = zkc_kernels::Table::from_logical_vec(
-            vec![zkc_backends::Scalar::from(1); 2],
+            vec![zkc_native::Scalar::from(1); 2],
             &policy.ark_bounds(),
         )
         .unwrap();
@@ -350,7 +350,7 @@ mod tests {
         let value = native
             .issue_rng_for(
                 Identity::Bls12381Fr,
-                zkc_backends::Domain::new("host", "entry_results", "results", None),
+                zkc_native::Domain::new("host", "entry_results", "results", None),
                 1,
             )
             .unwrap();
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(native.retire(&token).unwrap().draw_count, 0);
         let values = [(
             "scalar".into(),
-            Native::Field(zkc_backends::Scalar::from(7u64)).into(),
+            Native::Field(zkc_native::Scalar::from(7u64)).into(),
         )]
         .into();
         let small = Capacity {

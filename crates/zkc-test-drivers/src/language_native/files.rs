@@ -9,7 +9,7 @@ use zkc_tools::{
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-fn named(values: &NamedValues, registry: &zkc_backends::SetupRegistry) -> Json {
+fn named(values: &NamedValues, registry: &zkc_native::SetupRegistry) -> Json {
     let bytes = entry::files::proof_outputs(values, Capacity::default(), registry.clone()).unwrap();
     serde_json::from_slice::<Json>(&bytes).unwrap()["values"].take()
 }

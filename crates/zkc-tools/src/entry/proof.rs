@@ -7,7 +7,7 @@ use super::{
 use crate::execution::Capacity;
 use crate::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use std::collections::BTreeMap;
-use zkc_backends::NativeBackend;
+use zkc_native::NativeBackend;
 
 type Result<T> = std::result::Result<T, String>;
 

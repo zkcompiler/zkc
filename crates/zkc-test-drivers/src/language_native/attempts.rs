@@ -1,7 +1,7 @@
 //! Named Entry decisions delegate retry, provider retention and quotas to the native Host.
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::Value as Native;
+use zkc_native::Value as Native;
 use zkc_tools::{
     entry::{
         AttemptOptions, BindingPolicy, DEFAULT_DRAW_BUDGET, NamedValues, Package, ProofEntry,

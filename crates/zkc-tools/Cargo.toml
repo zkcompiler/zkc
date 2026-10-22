@@ -8,7 +8,7 @@ toml.workspace = true
 rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 zkc-runtime.workspace = true
-zkc-backends.workspace = true
+zkc-native.workspace = true
 zkc-kernels.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
@@ -27,7 +27,7 @@ path = "src/main.rs"
 
 [features]
 execution-counts = ["zkc-runtime/execution-counts"]
-test-utils = ["zkc-backends/test-utils"]
+test-utils = ["zkc-native/test-utils"]
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

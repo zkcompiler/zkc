@@ -517,7 +517,7 @@ fn joint_children_use_native_defaults_and_exact_context_overrides() {
 fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() {
     let dir = tempfile::tempdir().unwrap();
     let options = pinned(dir.path(), &joint_setup_package());
-    let bounds = zkc_backends::Policy::default().ark_bounds();
+    let bounds = zkc_native::Policy::default().ark_bounds();
     let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
     let verifier = keys.verifier_key();
     let prover = keys.prover_key();
@@ -605,17 +605,17 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
 fn function_file_references_reuse_confinement_and_inode_protection() {
     let dir = tempfile::tempdir().unwrap();
     let options = pinned(dir.path(), &boolean_package(false));
-    let backend = zkc_backends::NativeBackend::new(
+    let backend = zkc_native::NativeBackend::new(
         Default::default(),
-        zkc_backends::EntryPolicy::new(
-            zkc_backends::Domain::new("session", "test", "entry", None),
+        zkc_native::EntryPolicy::new(
+            zkc_native::Domain::new("session", "test", "entry", None),
             None,
         ),
         Default::default(),
     )
     .unwrap();
     let wire = backend
-        .encode_native_value(&zkc_backends::Value::Bool(true))
+        .encode_native_value(&zkc_native::Value::Bool(true))
         .unwrap();
     let data = dir.path().join("data");
     std::fs::create_dir(&data).unwrap();

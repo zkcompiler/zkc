@@ -1,6 +1,6 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Value as RuntimeValue;
 use zkc_runtime::vm::{
@@ -106,7 +106,7 @@ impl WireBackend for Host {
                 .map_err(Into::into),
             Decode::Limit => Err(WireError::Limit),
             Decode::Backend => Err(WireError::Backend(BackendError::new("codec"))),
-            Decode::WrongType => Ok(Value::Field(zkc_backends::Scalar::from(1))),
+            Decode::WrongType => Ok(Value::Field(zkc_native::Scalar::from(1))),
         }
     }
 }
@@ -846,7 +846,7 @@ fn malformed_data_inputs_refuse_before_any_entry() {
         assert!(error.inputs.iter().all(|i| i.backend.enters == 0));
     }
     let mut i = inputs();
-    i[1].values = vec![Value::Field(zkc_backends::Scalar::from(1))];
+    i[1].values = vec![Value::Field(zkc_native::Scalar::from(1))];
     let error = run(
         &admit(&raw()).unwrap(),
         "session",
@@ -1383,7 +1383,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
 
 #[test]
 fn structured_bundles_transfer_dynamic_and_nested_messages() {
-    use zkc_backends::{GroupPoint, Scalar, Sequence, Variant};
+    use zkc_native::{GroupPoint, Scalar, Sequence, Variant};
     use zkc_runtime::vm::LogicalType;
     use zkc_test_support::variants::logical;
     let optional = logical("Optional", json!([["none", []], ["some", ["indices"]]]));
@@ -1398,28 +1398,28 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     let codec = Host::default();
     let mut values =
         vec![Value::table(&[Scalar::from(1), Scalar::from(2)], &Policy::default()).unwrap()];
-    values.push(Value::Bn254Field(zkc_backends::Bn254Scalar::from(9)));
+    values.push(Value::Bn254Field(zkc_native::Bn254Scalar::from(9)));
     values.extend([
-        Value::Bn254Vector(vec![zkc_backends::Bn254Scalar::from(9); 3].into()),
-        Value::Bn254G2Vector(vec![zkc_backends::Bn254G2::generator(); 2].into()),
-        Value::Bn254Gt(zkc_backends::Bn254Gt::generator()),
+        Value::Bn254Vector(vec![zkc_native::Bn254Scalar::from(9); 3].into()),
+        Value::Bn254G2Vector(vec![zkc_native::Bn254G2::generator(); 2].into()),
+        Value::Bn254Gt(zkc_native::Bn254Gt::generator()),
         Value::bn254_matrix(
             2,
             3,
-            &[(1, 2, zkc_backends::Bn254Scalar::from(7))],
+            &[(1, 2, zkc_native::Bn254Scalar::from(7))],
             &Policy::default(),
         )
         .unwrap(),
-        Value::OracleRoot(zkc_backends::oracle::Domain::Extension, [7; 32]),
+        Value::OracleRoot(zkc_native::oracle::Domain::Extension, [7; 32]),
         Value::OraclePath(
-            zkc_backends::oracle::Domain::Extension,
+            zkc_native::oracle::Domain::Extension,
             vec![[11; 32]; 2].into(),
         ),
     ]);
     values.push(Value::Sequence(
         Sequence::new(
             LogicalType::parse("field:bn254.fr").unwrap(),
-            vec![Value::Bn254Field(zkc_backends::Bn254Scalar::from(11))],
+            vec![Value::Bn254Field(zkc_native::Bn254Scalar::from(11))],
             &Policy::default(),
         )
         .unwrap(),
@@ -1504,7 +1504,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
 
 #[test]
 fn structured_wire_failures_preserve_handoff_and_cleanup() {
-    let value = Value::Vector(vec![zkc_backends::Scalar::from(9); 2].into());
+    let value = Value::Vector(vec![zkc_native::Scalar::from(9); 2].into());
     let codec = Host::default();
     let wire = codec.encode_native(&value).unwrap();
     let bundle = admit(&message_bundle(&value.physical_type().spelling())).unwrap();
@@ -1534,9 +1534,7 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
                 limits.total_wire_bytes = 2 * wire.len();
                 hooks.replacement = Some(
                     codec
-                        .encode_native(&Value::Vector(
-                            vec![zkc_backends::Scalar::from(7); 2].into(),
-                        ))
+                        .encode_native(&Value::Vector(vec![zkc_native::Scalar::from(7); 2].into()))
                         .unwrap(),
                 );
             }
@@ -1588,7 +1586,7 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
 #[test]
 fn excessive_sequence_count_preserves_pending_frame_and_cleanup() {
     let value = Value::Sequence(
-        zkc_backends::Sequence::new(
+        zkc_native::Sequence::new(
             zkc_runtime::vm::LogicalType::parse("index").unwrap(),
             vec![Value::Index(7)],
             &Policy::default(),

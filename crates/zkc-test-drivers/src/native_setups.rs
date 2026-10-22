@@ -2,8 +2,8 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 use zkc_tools::proof::{NativeDeployment, SetupAuthority};
 fn inputs(
@@ -48,9 +48,9 @@ fn inputs(
         let codec = NativeBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "test", "main", None), None),
-            zkc_backends::SetupRegistry::new(
+            zkc_native::SetupRegistry::new(
                 vec![k.verifier_key().clone()],
-                &zkc_backends::Policy::default(),
+                &zkc_native::Policy::default(),
             )
             .unwrap(),
         )

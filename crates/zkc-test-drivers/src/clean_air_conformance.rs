@@ -11,11 +11,11 @@ use p3_field::PrimeField32;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io::Read;
-use zkc_backends::{
+use zkc_kernels::plonky3::{MODULUS_DECIMAL, PACKING_WIDTH};
+use zkc_native::{
     KoalaBear as F, KoalaBearExt8 as E, Policy, parse_koala_bear_decimal,
     ring::{self, Budget, Carrier},
 };
-use zkc_kernels::plonky3::{MODULUS_DECIMAL, PACKING_WIDTH};
 use zkc_runtime::{ring::Expression, vm::Identity};
 
 // The report is linear in the control; both are bounded before parsing.

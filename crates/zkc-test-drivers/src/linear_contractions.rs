@@ -1,7 +1,7 @@
 //! Execute compiler-exported shared contractions with the unmodified native Runner.
 //! Usage: linear_contractions PROGRAM.json field|group [direct|if|for]
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, StopKind};
 

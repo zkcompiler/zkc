@@ -2,7 +2,7 @@
 use crate::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 use zkc_tools::{
     entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
@@ -267,8 +267,8 @@ fn convert_wire(
         return Ok((InputValue::Wire(bytes), retained));
     }
     if !ty.is_duplicable()
-        || !zkc_backends::has_native_wire(&ty)
-        || zkc_backends::requires_setup(ty.logical().clone())
+        || !zkc_native::has_native_wire(&ty)
+        || zkc_native::requires_setup(ty.logical().clone())
     {
         return Err(
             "benchmark-ingress: unsupported data conversion (private or setup-dependent type)"
@@ -452,7 +452,7 @@ mod tests {
     }
 
     fn assert_boolean(value: &Value, expected: bool, ingress: Ingress) {
-        let expected = wire(&zkc_backends::Value::Bool(expected));
+        let expected = wire(&zkc_native::Value::Bool(expected));
         match (ingress, value) {
             (Ingress::Wire, Value::Leaf(InputValue::Wire(bytes))) => {
                 assert_eq!(bytes.as_slice(), expected.as_slice())
@@ -467,7 +467,7 @@ mod tests {
         }
     }
 
-    fn wire(value: &zkc_backends::Value) -> Arc<Vec<u8>> {
+    fn wire(value: &zkc_native::Value) -> Arc<Vec<u8>> {
         codec(Capacity::default())
             .unwrap()
             .encode_native_value(value)
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn native_and_prepared_use_the_same_canonical_statement() {
-        let value = zkc_backends::Value::Vector(vec![zkc_backends::Scalar::from(7); 17].into());
+        let value = zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 17].into());
         let bytes = wire(&value);
         let backend = codec(Capacity::default()).unwrap();
         for ingress in [Ingress::Wire, Ingress::Native, Ingress::Prepared] {
@@ -496,7 +496,7 @@ mod tests {
                 }
                 (InputValue::Native(a), InputValue::Native(b)) => {
                     assert_eq!(backend.encode_native_value(&b).unwrap(), *bytes);
-                    let (zkc_backends::Value::Vector(a), zkc_backends::Value::Vector(b)) =
+                    let (zkc_native::Value::Vector(a), zkc_native::Value::Vector(b)) =
                         (a.as_ref(), b.as_ref())
                     else {
                         panic!("vector owners")
@@ -692,7 +692,7 @@ mod tests {
         );
         for ingress in [Ingress::Native, Ingress::Prepared] {
             let capacity = Capacity {
-                wire_bytes: wire(&zkc_backends::Value::Bool(true)).len() - 1,
+                wire_bytes: wire(&zkc_native::Value::Bool(true)).len() - 1,
                 ..Capacity::default()
             };
             assert!(
@@ -798,7 +798,7 @@ mod tests {
             for limited in [false, true] {
                 let mut limits = HostLimits::default();
                 if limited {
-                    let value = zkc_backends::Value::Bool(true);
+                    let value = zkc_native::Value::Bool(true);
                     // One Prepared owner retains both native and wire data;
                     // that fits while two independently loaded values do not.
                     limits.capacity.values.live_bytes = value.retained_bytes() + wire(&value).len();
@@ -850,7 +850,7 @@ mod tests {
 
     #[test]
     fn conversion_refuses_invalid_wire_and_current_capacity() {
-        let value = zkc_backends::Value::Bool(true);
+        let value = zkc_native::Value::Bool(true);
         let ty = value.physical_type();
         let bytes = wire(&value);
         for ingress in [Ingress::Native, Ingress::Prepared] {
@@ -865,7 +865,7 @@ mod tests {
         }
         assert!(convert_wire(bytes, ty, Ingress::Json, Capacity::default()).is_err());
         let private =
-            zkc_backends::Value::point(vec![zkc_backends::Scalar::from(7); 4], &Policy::default())
+            zkc_native::Value::point(vec![zkc_native::Scalar::from(7); 4], &Policy::default())
                 .unwrap();
         for ingress in [Ingress::Native, Ingress::Prepared] {
             let error = convert_wire(

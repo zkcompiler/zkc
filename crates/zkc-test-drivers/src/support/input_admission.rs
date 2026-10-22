@@ -1,6 +1,6 @@
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_tools::proof::{AttemptPolicy, NativeDeployment};
 
 // An empty test provider distinguishes refusal before issuance from reaching

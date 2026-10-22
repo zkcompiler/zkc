@@ -203,7 +203,7 @@ fn transcript_roots_and_extra_authority_are_refused() {
 
 #[test]
 fn key_files_are_authenticated_and_captured_before_execution() {
-    let policy = zkc_backends::Policy::default();
+    let policy = zkc_native::Policy::default();
     let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let directory = zkc_test_support::evidence(module_path!());
     let path = directory.path().join("prover.key");
@@ -576,7 +576,7 @@ fn native_construction_failure_keeps_load_usage_and_retires_all_roles() {
     // A private test mutates the prepared backend's domain. No test policy or
     // failure hook is exposed by the public installed host.
     plan.roles[1].backend = NativeBackend::new(
-        zkc_backends::Policy::default(),
+        zkc_native::Policy::default(),
         EntryPolicy::new(
             Domain::new("Bob", "wrong-session", "main", Some("root")),
             None,
@@ -683,7 +683,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
 #[test]
 fn ring_work_limit_cannot_raise_the_host_ceiling() {
     let (raw, _) = fixture("bool");
-    let limit = zkc_backends::ring::DEFAULT_WORK_LIMIT;
+    let limit = zkc_native::ring::DEFAULT_WORK_LIMIT;
     for allowed in [0, limit] {
         assert!(
             host(&raw, HostLimits::default())

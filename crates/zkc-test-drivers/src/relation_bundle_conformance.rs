@@ -3,8 +3,8 @@
 use p3_field::{BasedVectorSpace, PrimeField32};
 use serde_json::{Value, json};
 use std::io::{self, Read};
-use zkc_backends::{KoalaBear, KoalaBearExt8};
 use zkc_kernels::plonky3;
+use zkc_native::{KoalaBear, KoalaBearExt8};
 use zkc_runtime::relation::{self, Algebra, Bundle, ChannelKind, Error, Staged};
 use zkc_runtime::vm::Identity;
 

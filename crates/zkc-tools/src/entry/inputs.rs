@@ -410,12 +410,9 @@ impl Decoder {
                         .values
                         .total_bytes
                         .saturating_sub(self.inline_bytes);
-                    let bytes = zkc_backends::readable_wire(
-                        &ty,
-                        &v,
-                        remaining.min(self.capacity.wire_bytes),
-                    )
-                    .map_err(|e| error(e.into()))?;
+                    let bytes =
+                        zkc_native::readable_wire(&ty, &v, remaining.min(self.capacity.wire_bytes))
+                            .map_err(|e| error(e.into()))?;
                     self.inline_bytes += bytes.len();
                     InputValue::Wire(bytes.into()).into()
                 }

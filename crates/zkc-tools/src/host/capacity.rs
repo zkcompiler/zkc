@@ -1,7 +1,7 @@
 //! Application-selected operational ceilings, separate from proof semantics.
 use super::{admission::LoadLimits, inputs::*};
 use serde_json::{Value as Json, json};
-use zkc_backends::Policy;
+use zkc_native::Policy;
 use zkc_runtime::vm::{Limits, ValueBudget, WorkBudget};
 
 /// A host may raise the default collection count within installed hard limits,

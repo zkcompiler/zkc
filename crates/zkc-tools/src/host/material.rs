@@ -1,8 +1,8 @@
 //! Only validated immutable key material crosses invocation boundaries.
 use super::inputs::Result;
 use std::sync::Arc;
-use zkc_backends::Value;
 use zkc_kernels::{ProverKey, VerifierKey};
+use zkc_native::Value;
 use zkc_runtime::vm::Value as RuntimeValue;
 
 /// Validated immutable prover material, reusable across independent invocations.
@@ -75,7 +75,7 @@ impl ProverMaterial {
         &self,
         ty: &zkc_runtime::vm::PhysicalType,
         selected: &VerifierKey,
-        backend: &zkc_backends::NativeBackend,
+        backend: &zkc_native::NativeBackend,
     ) -> Result<Value> {
         let value = self.value();
         if value.physical_type() != *ty {

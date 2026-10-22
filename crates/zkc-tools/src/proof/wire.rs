@@ -24,8 +24,8 @@ impl ProofFormat {
     }
     pub(super) fn encode<'a>(
         self,
-        backend: &zkc_backends::NativeBackend,
-        value: &'a zkc_backends::Value,
+        backend: &zkc_native::NativeBackend,
+        value: &'a zkc_native::Value,
     ) -> Result<Cow<'a, [u8]>, super::ArtifactFailure> {
         match self {
             Self::Native => backend.encode_native_value(value).map(Cow::Owned),
@@ -35,10 +35,10 @@ impl ProofFormat {
     }
     pub(super) fn decode(
         self,
-        backend: &zkc_backends::NativeBackend,
+        backend: &zkc_native::NativeBackend,
         ty: &zkc_runtime::vm::PhysicalType,
         bytes: &[u8],
-    ) -> Result<zkc_backends::Value, zkc_backends::NativeWireError> {
+    ) -> Result<zkc_native::Value, zkc_native::NativeWireError> {
         match self {
             Self::Native => backend.decode_native_value(ty, bytes),
             Self::RawBytes => backend.decode_raw_bytes(ty, bytes),

@@ -5,7 +5,7 @@ use p3_field::PrimeCharacteristicRing;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{
+use zkc_native::{
     Bn254G1, Bn254G2, Bn254Scalar, Domain, EntryPolicy, KoalaBear, KoalaBearExt8, NativeBackend,
     Policy, RistrettoScalar, Value,
 };

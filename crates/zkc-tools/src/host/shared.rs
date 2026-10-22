@@ -28,7 +28,7 @@ pub(crate) fn allocation(
 /// widths; recursive frames retain at least their compressed payload. Include
 /// descriptor/framing slack rather than encoding merely to discover its size.
 pub(crate) fn wire_bound(value: &impl zkc_runtime::vm::Value) -> usize {
-    zkc_backends::native_wire_size(&value.physical_type()).unwrap_or_else(|| {
+    zkc_native::native_wire_size(&value.physical_type()).unwrap_or_else(|| {
         value
             .retained_bytes()
             .saturating_mul(4)

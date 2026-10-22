@@ -1,0 +1,152 @@
+//! Depth-one physical views. Private fields prevent malformed lengths or nested
+//! views; factors and values retain their complete immutable Arc slices.
+use crate::{Result, exhausted, refused, value::size};
+use std::sync::Arc;
+use zkc_runtime::vm::Backing;
+#[derive(Clone, Debug)]
+pub struct Diagonal<S, B> {
+    factors: Arc<[S]>,
+    backing: Arc<[B]>,
+}
+impl<S, B> Diagonal<S, B> {
+    pub(crate) fn new(factors: Arc<[S]>, backing: Arc<[B]>) -> Result<Self> {
+        if factors.len() != backing.len() {
+            return Err(refused("length-mismatch"));
+        }
+        Ok(Self { factors, backing })
+    }
+    pub fn factors(&self) -> &[S] {
+        &self.factors
+    }
+    pub fn backing(&self) -> &[B] {
+        &self.backing
+    }
+    pub(crate) fn retained_bytes(&self) -> Result<usize> {
+        size(self.factors.len(), std::mem::size_of::<S>())?
+            .checked_add(size(self.backing.len(), std::mem::size_of::<B>())?)
+            .and_then(|n| n.checked_add(VIEW_BYTES))
+            .ok_or_else(|| exhausted("size-overflow"))
+    }
+    /// The view's own allocation; it retains both parent slices in full.
+    pub(crate) fn view(view: &Arc<Self>) -> Backing {
+        Backing::of(view, VIEW_BYTES)
+    }
+    /// Report the view and, when it is newly retained, both parents.
+    pub(crate) fn retained_parts(
+        view: &Arc<Self>,
+        shared: &mut dyn FnMut(Backing) -> bool,
+    ) -> Result<usize> {
+        let factors = size(view.factors.len(), std::mem::size_of::<S>())?;
+        let backing = size(view.backing.len(), std::mem::size_of::<B>())?;
+        if shared(Self::view(view)) {
+            shared(Backing::of(&view.factors, factors));
+            shared(Backing::of(&view.backing, backing));
+        }
+        Ok(0)
+    }
+}
+const VIEW_BYTES: usize = 256;
+
+pub(crate) fn apply(
+    i: &zkc_runtime::vm::Invocation<'_>,
+    args: &[crate::Value],
+    p: &crate::Policy,
+) -> Result<Vec<crate::Value>> {
+    use crate::Value::*;
+    use crate::operations::arithmetic::equal_len;
+    use curve25519_dalek::traits::MultiscalarMul;
+    if !i.binding.implementation().starts_with("arkworks-diagonal/")
+        && !i.binding.implementation().starts_with("dalek-diagonal/")
+    {
+        return Err(refused("kernel-operands"));
+    }
+    let result = match (i.binding.implementation(), args) {
+        ("arkworks-diagonal/vector.mul", [Vector(f), Vector(b)]) => {
+            equal_len(f.len(), b.len())?;
+            let d = Diagonal::new(f.clone(), b.clone())?;
+            // The view shares both operands; only the view itself is new.
+            p.output(d.retained_bytes()?, usize::MAX)?;
+            p.output(VIEW_BYTES, i.max_output_bytes)?;
+            FrDiagonal(Arc::new(d))
+        }
+        ("arkworks-diagonal/vector.dot", [Vector(w), FrDiagonal(d)]) => {
+            equal_len(w.len(), d.backing.len())?;
+            p.output(512, i.max_output_bytes)?;
+            Field(
+                w.iter()
+                    .zip(d.factors.iter())
+                    .zip(d.backing.iter())
+                    .fold(crate::Scalar::from(0), |s, ((w, f), b)| s + *w * (*f * *b)),
+            )
+        }
+        ("dalek-diagonal/curve.scale_each", [RistrettoVector(f), RistrettoGroups(b)]) => {
+            equal_len(f.len(), b.len())?;
+            let d = Diagonal::new(f.clone(), b.clone())?;
+            p.output(d.retained_bytes()?, usize::MAX)?;
+            p.output(VIEW_BYTES, i.max_output_bytes)?;
+            RistrettoDiagonal(Arc::new(d))
+        }
+        ("dalek-diagonal/curve.msm", [RistrettoVector(w), RistrettoDiagonal(d)]) => {
+            equal_len(w.len(), d.backing.len())?;
+            p.output(512, i.max_output_bytes)?;
+            // Iterator carries exact checked length. No variable-time scalar API.
+            RistrettoGroup(crate::RistrettoPoint::multiscalar_mul(
+                w.iter().zip(d.factors.iter()).map(|(w, f)| w * f),
+                d.backing.iter(),
+            ))
+        }
+        _ => return Err(refused("kernel-operands")),
+    };
+    Ok(vec![result])
+}
+
+pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
+    crate::backend::registry::Alternative {
+        identity: "arkworks-diagonal/vector.mul",
+        original: "arkworks/vector.mul",
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: true,
+            port: 0,
+            representation: zkc_runtime::vm::Representation::FrDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        deterministic: true,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-diagonal/vector.dot",
+        original: "arkworks/vector.dot",
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: false,
+            port: 1,
+            representation: zkc_runtime::vm::Representation::FrDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        deterministic: true,
+    },
+    crate::backend::registry::Alternative {
+        identity: "dalek-diagonal/curve.scale_each",
+        original: "dalek/curve.scale_each",
+        primary: zkc_runtime::vm::Identity::Ristretto255Group,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: true,
+            port: 0,
+            representation: zkc_runtime::vm::Representation::RistrettoDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        deterministic: true,
+    },
+    crate::backend::registry::Alternative {
+        identity: "dalek-diagonal/curve.msm",
+        original: "dalek/curve.msm",
+        primary: zkc_runtime::vm::Identity::Ristretto255Group,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: false,
+            port: 1,
+            representation: zkc_runtime::vm::Representation::RistrettoDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        deterministic: true,
+    },
+];

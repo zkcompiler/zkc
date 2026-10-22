@@ -4,7 +4,7 @@ use p3_field::PrimeCharacteristicRing;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{
+use zkc_native::{
     Bn254G1, Bn254G2, Bn254Scalar as F, Domain, EntryPolicy, KoalaBear as B, KoalaBearExt8 as E,
     NativeBackend, Policy, Sequence, Value,
 };
@@ -287,12 +287,12 @@ fn main() {
                 let replacements = match family {
                     "qap-composition" => vec![
                         (1, Value::Bn254G1(Bn254G1::generator())),
-                        (2, Value::Bn254Gt(zkc_backends::Bn254Gt::generator())),
+                        (2, Value::Bn254Gt(zkc_native::Bn254Gt::generator())),
                     ],
                     "air-composition" => {
                         vec![(3, Value::KoalaBearExt8Vector(vec![E::ZERO].into()))]
                     }
-                    _ => vec![(0, Value::Bn254Gt(zkc_backends::Bn254Gt::generator()))],
+                    _ => vec![(0, Value::Bn254Gt(zkc_native::Bn254Gt::generator()))],
                 };
                 for (index, replacement) in replacements {
                     let encoded = codec().encode_native_value(&replacement).unwrap();

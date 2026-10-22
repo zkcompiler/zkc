@@ -66,7 +66,7 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
     let role = &interface.roles()[interface.proof().unwrap().verifier];
     for len in [1, 1024 * 1024] {
         let data = PreparedData::from_value(
-            zkc_backends::Value::Bytes(vec![0x93; len].into()),
+            zkc_native::Value::Bytes(vec![0x93; len].into()),
             Capacity::default(),
         )
         .unwrap();

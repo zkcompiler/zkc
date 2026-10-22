@@ -3,10 +3,8 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use zkc_backends::services::{ServiceReference, ServiceRegistry};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value,
-};
+use zkc_native::services::{ServiceReference, ServiceRegistry};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, LogicalType, Packet, PathElement, ProgramState, StopKind, Value as RuntimeValue,

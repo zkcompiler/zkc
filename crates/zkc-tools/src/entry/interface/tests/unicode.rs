@@ -411,7 +411,7 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     else {
         panic!("native key");
     };
-    let zkc_backends::Value::VerifierKey(returned) = returned.as_ref() else {
+    let zkc_native::Value::VerifierKey(returned) = returned.as_ref() else {
         panic!("verifier key");
     };
     assert_eq!(returned.metadata().key_id(), key.metadata().key_id());
@@ -527,7 +527,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
         else {
             panic!("native key");
         };
-        let zkc_backends::Value::VerifierKey(key) = value.as_ref() else {
+        let zkc_native::Value::VerifierKey(key) = value.as_ref() else {
             panic!("verifier key");
         };
         assert_eq!(key.metadata().key_id(), identity);
@@ -669,7 +669,7 @@ fn prepared_public_data_uses_the_named_entry_schema_and_fresh_invocations() {
     let entry =
         ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
     let material =
-        PreparedData::from_value(zkc_backends::Value::Bool(true), options.capacity).unwrap();
+        PreparedData::from_value(zkc_native::Value::Bool(true), options.capacity).unwrap();
     let ordinary = entry.prove(proof_request(entry.interface(), true)).unwrap();
     assert!(ordinary.is_success());
     let proof = ordinary.native.outcome.unwrap();

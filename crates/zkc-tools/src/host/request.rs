@@ -1,7 +1,7 @@
 //! In-process invocation data. These descriptions confer no execution authority.
 use super::material::ProverMaterial;
 use std::sync::Arc;
-use zkc_backends::Value;
+use zkc_native::Value;
 
 /// One native entry operand. Immutable data may be supplied without encoding;
 /// private capabilities are declarations and are issued by the admitted host.

@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_backends::has_native_wire;
+use zkc_native::has_native_wire;
 use zkc_runtime::vm::{Backend, Program, ProgramAction, ProgramRole};
 
 /// Structural admission ceilings. Every count is independent; bytes measure UTF-8

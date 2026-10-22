@@ -17,7 +17,7 @@ this Runner.
 
 The [runtime crate](../../crates/zkc-runtime/README.md) owns the interpreter and custody
 API; [mathematical kernels](../../crates/zkc-kernels/README.md) own typed
-arithmetic without VM authority; [backends](../../crates/zkc-backends/README.md) own installed bindings;
+arithmetic without VM authority; [native backend](../../crates/zkc-native/README.md) owns installed bindings;
 [tools](../../crates/zkc-tools/README.md) own Host APIs and commands. The
 [representation laws](../spec/realization/representations.md) state the
 obligations of a native realization. Existing independent Lean models do not

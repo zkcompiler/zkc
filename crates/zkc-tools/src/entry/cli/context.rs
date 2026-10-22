@@ -47,7 +47,7 @@ enum Binding {
 pub(super) struct Bindings {
     pub authority: BTreeMap<String, SetupAuthority>,
     pub context: InvocationContext,
-    pub output_setups: zkc_backends::SetupRegistry,
+    pub output_setups: zkc_native::SetupRegistry,
     operations: BTreeMap<String, &'static str>,
     paths: Vec<PathBuf>,
     inputs: BTreeMap<String, BTreeMap<String, Json>>,

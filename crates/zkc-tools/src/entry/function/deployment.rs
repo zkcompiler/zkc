@@ -346,7 +346,7 @@ pub(super) fn proof_request(
     })
 }
 pub(super) fn proof_bytes(value: &TypedValue) -> Result<&[u8]> {
-    let zkc_backends::Value::Bytes(bytes) = value.fields()[0]
+    let zkc_native::Value::Bytes(bytes) = value.fields()[0]
         .native()
         .map_err(|e| EntryError::new(EntryPhase::Request, e))?
     else {
@@ -377,7 +377,7 @@ pub(super) fn prove_value(outputs: NamedValues, bytes: Vec<u8>) -> super::super:
             "proof".into(),
             super::super::Value::Record(BTreeMap::from([(
                 "bytes".into(),
-                zkc_backends::Value::Bytes(bytes.into()).into(),
+                zkc_native::Value::Bytes(bytes.into()).into(),
             )])),
         ),
         ("outputs".into(), super::super::Value::Record(outputs)),
@@ -596,15 +596,15 @@ fn check_context_data(
     use crate::execution::InputValue;
     use crate::host::admission::{Admission, Input, KeySource};
     use zkc_runtime::vm::PhysicalType;
-    let registry = zkc_backends::SetupRegistry::new(
+    let registry = zkc_native::SetupRegistry::new(
         keys.values().map(|k| k.as_ref().clone()).collect(),
         &capacity.backend(),
     )
     .map_err(|e| e.to_string())?;
-    let backend = zkc_backends::NativeBackend::new(
+    let backend = zkc_native::NativeBackend::new(
         capacity.backend(),
-        zkc_backends::EntryPolicy::new(
-            zkc_backends::Domain::new(
+        zkc_native::EntryPolicy::new(
+            zkc_native::Domain::new(
                 &role.native_name,
                 "entry-context",
                 interface.selected_protocol().symbol.as_str(),

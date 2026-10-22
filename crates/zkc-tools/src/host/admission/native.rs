@@ -2,7 +2,7 @@
 //! deferred until Admission has reserved every operand in the invocation.
 use super::*;
 use crate::host::request::InputValue;
-use zkc_backends::{NativeInputSize, Variant};
+use zkc_native::{NativeInputSize, Variant};
 
 /// Check constructor shape and byte bounds before setup imports. The admitted
 /// type bounds recursion; backend validation/loading remains a later phase.
@@ -53,7 +53,7 @@ pub(crate) fn check_retained_data(
     input: &InputValue,
     capacity: crate::execution::Capacity,
 ) -> Result<()> {
-    if zkc_backends::has_native_wire(ty) {
+    if zkc_native::has_native_wire(ty) {
         return check_native_data(ty, input, capacity);
     }
     if !ty.is_duplicable() || matches!(ty.kind(), Type::ProverKey | Type::VerifierKey) {
@@ -92,7 +92,7 @@ impl<'a> Admission<'a> {
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
-        let input = if self.retained_inputs && !zkc_backends::has_native_wire(&ty) {
+        let input = if self.retained_inputs && !zkc_native::has_native_wire(&ty) {
             self.plan_retained(backend, ty, request, selected)?
         } else {
             self.plan(backend, ty, request, selected)?.0
@@ -129,7 +129,7 @@ impl<'a> Admission<'a> {
                 for (logical, input) in arm.payload().iter().zip(payload) {
                     let physical =
                         PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
-                    let child = if zkc_backends::has_native_wire(&physical) {
+                    let child = if zkc_native::has_native_wire(&physical) {
                         self.plan(backend, physical, input, selected.clone())?.0
                     } else {
                         self.plan_retained(backend, physical, input, selected.clone())?
@@ -196,7 +196,7 @@ impl<'a> Admission<'a> {
                     .alternatives()
                     .get(*alternative)
                     .ok_or("native-input-alternative")?;
-                if !ty.is_duplicable() || !zkc_backends::has_native_wire(&ty) {
+                if !ty.is_duplicable() || !zkc_native::has_native_wire(&ty) {
                     return Err("native-input-private".into());
                 }
                 if arm.payload().len() != payload.len() {
@@ -317,7 +317,7 @@ pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
             if value.retained_bytes() > estimate {
                 return Err("artifact-input-size-estimate".into());
             }
-            if zkc_backends::has_native_wire(&ty) {
+            if zkc_native::has_native_wire(&ty) {
                 backend
                     .validate_native_input(&value)
                     .map_err(|e| e.to_string())?;

@@ -2188,37 +2188,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkc-backends"
-version = "0.0.0"
-dependencies = [
- "ark-ff",
- "ark-poly",
- "curve25519-dalek",
- "merlin",
- "p3-baby-bear",
- "p3-binary-field",
- "p3-commit",
- "p3-dft 0.8.0",
- "p3-field 0.4.3",
- "p3-field 0.8.0",
- "p3-keccak",
- "p3-koala-bear",
- "p3-matrix 0.8.0",
- "p3-merkle-tree",
- "p3-symmetric 0.4.3",
- "p3-symmetric 0.8.0",
- "rand 0.10.3",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "sha3",
- "shake",
- "spongefish",
- "zkc-kernels",
- "zkc-runtime",
-]
-
-[[package]]
 name = "zkc-kernels"
 version = "0.0.0"
 dependencies = [
@@ -2245,6 +2214,26 @@ dependencies = [
  "p3-symmetric 0.8.0",
  "sha2 0.11.0",
  "sha3",
+]
+
+[[package]]
+name = "zkc-native"
+version = "0.0.0"
+dependencies = [
+ "ark-ff",
+ "ark-poly",
+ "curve25519-dalek",
+ "merlin",
+ "p3-field 0.8.0",
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sha3",
+ "shake",
+ "spongefish",
+ "zkc-kernels",
+ "zkc-runtime",
 ]
 
 [[package]]
@@ -2279,8 +2268,8 @@ dependencies = [
  "p3-koala-bear",
  "p3-matrix 0.8.0",
  "serde_json",
- "zkc-backends",
  "zkc-kernels",
+ "zkc-native",
  "zkc-plonky3-air",
  "zkc-plonky3-air-client",
  "zkc-runtime",

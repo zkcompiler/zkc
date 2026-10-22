@@ -1,6 +1,6 @@
 use super::*;
 use serde_json::json;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 
 fn fresh(role: &str) -> Runner<NativeBackend> {

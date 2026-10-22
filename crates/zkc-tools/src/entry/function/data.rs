@@ -2,7 +2,7 @@
 use super::*;
 use crate::execution::{Capacity, InputValue};
 use std::sync::Arc;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Value as Native};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Value as Native};
 use zkc_runtime::vm::{
     ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue, WorkBudget,
 };
@@ -10,7 +10,7 @@ use zkc_runtime::vm::{
 type DataResult<T> = std::result::Result<T, String>;
 // Measurement vectors can grow geometrically within the existing conservative
 // 512-byte slot reservation, before any native payload is constructed.
-const _: () = assert!(std::mem::size_of::<zkc_backends::NativeInputSize>() <= 256);
+const _: () = assert!(std::mem::size_of::<zkc_native::NativeInputSize>() <= 256);
 #[derive(Clone)]
 pub struct TypedValue {
     schema: Arc<Schema>,
@@ -126,7 +126,7 @@ impl TypedValue {
         &self,
         backend: &NativeBackend,
         ledger: &ExecutionLedger,
-        out: &mut Vec<zkc_backends::NativeInputSize>,
+        out: &mut Vec<zkc_native::NativeInputSize>,
     ) -> DataResult<()> {
         match self.payload.as_ref() {
             Payload::Unit => {}
@@ -173,7 +173,7 @@ fn measure_native_value(
     backend: &NativeBackend,
     value: &Native,
     ledger: &ExecutionLedger,
-) -> DataResult<zkc_backends::NativeInputSize> {
+) -> DataResult<zkc_native::NativeInputSize> {
     // Charge the retained bound before walking payloads, including repeated
     // uses of shared data. Recursive sequences and variants cache that bound.
     ledger
@@ -233,7 +233,7 @@ pub(super) fn pack(
             v.flatten(&mut payload)?;
         }
         let native = Native::Variant(
-            zkc_backends::Variant::new(descriptor.clone(), index, payload)
+            zkc_native::Variant::new(descriptor.clone(), index, payload)
                 .map_err(|e| e.to_string())?,
         );
         return Ok(TypedValue {
@@ -462,7 +462,7 @@ pub(super) fn from_output(
         ledger: &ExecutionLedger,
         s: &Schema,
         v: &super::super::Value,
-        mut leaves: Option<&mut Vec<zkc_backends::NativeInputSize>>,
+        mut leaves: Option<&mut Vec<zkc_native::NativeInputSize>>,
     ) -> DataResult<usize> {
         use super::super::Value;
         let add = |a: usize, b: usize| {
@@ -626,7 +626,7 @@ pub(super) fn from_output(
                     .expect("checked variant")
                     .clone();
                 let native = Native::Variant(
-                    zkc_backends::Variant::new(descriptor, index, payload)
+                    zkc_native::Variant::new(descriptor, index, payload)
                         .map_err(|e| e.to_string())?,
                 );
                 Payload::Alternative {

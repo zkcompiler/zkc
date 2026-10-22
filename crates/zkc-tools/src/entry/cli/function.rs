@@ -26,7 +26,7 @@ pub(super) fn execute(
             .leaves
             .iter()
             .filter_map(|leaf| interface.logical_type(leaf))
-            .any(|ty| zkc_backends::requires_setup(ty.clone()));
+            .any(|ty| zkc_native::requires_setup(ty.clone()));
     let mut bindings = context::Bindings::load(args, capacity, output_setups)?;
     bindings.protect(&mut destinations)?;
     let deployments = crate::entry::FunctionInterface::deployment_interfaces(&package)?;

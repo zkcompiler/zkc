@@ -318,7 +318,7 @@ pub fn check(
         state.original().logical_values().unwrap(),
         vec![Scalar::from(1), Scalar::from(2)]
     );
-    assert!(!zkc_backends::has_native_wire(
+    assert!(!zkc_native::has_native_wire(
         &Value::OpeningState(Arc::new(state)).physical_type()
     ));
 }

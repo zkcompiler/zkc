@@ -1,7 +1,7 @@
 //! Explicitly retained immutable data. Reuse grants no invocation authority.
 use super::{capacity::Capacity, inputs::Result};
 use std::sync::Arc;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, SetupRegistry, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, SetupRegistry, Value};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 /// Decoded immutable data and its canonical bytes, owned by the application.
@@ -114,8 +114,8 @@ mod tests {
             Value::Bool(false),
             Value::Index(17),
             Value::Bytes(vec![0, 1, 255].into()),
-            Value::Vector(vec![zkc_backends::Scalar::from(7); 16].into()),
-            Value::table(&[zkc_backends::Scalar::from(7); 16], &capacity.backend()).unwrap(),
+            Value::Vector(vec![zkc_native::Scalar::from(7); 16].into()),
+            Value::table(&[zkc_native::Scalar::from(7); 16], &capacity.backend()).unwrap(),
         ] {
             let ty = value.physical_type();
             let material = PreparedData::from_value(value, capacity).unwrap();
@@ -155,7 +155,7 @@ mod tests {
         );
         // An in-process value with no native wire profile cannot be prepared.
         let point =
-            Value::point(vec![zkc_backends::Scalar::from(7); 4], &capacity.backend()).unwrap();
+            Value::point(vec![zkc_native::Scalar::from(7); 4], &capacity.backend()).unwrap();
         assert_eq!(
             PreparedData::from_value(point, capacity).unwrap_err(),
             "native-input-private"

@@ -4,9 +4,7 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant,
-};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant};
 use zkc_runtime::vm::{LogicalType, Value as RuntimeValue};
 use zkc_test_support::hex;
 use zkc_test_support::variants::logical;

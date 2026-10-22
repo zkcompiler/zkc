@@ -8,7 +8,7 @@ use crate::host::{
 };
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
-use zkc_backends::{
+use zkc_native::{
     Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, SetupRegistry, Value,
     services::{ServiceReference, ServiceRegistry},
 };
@@ -94,8 +94,8 @@ impl HostLimits {
 /// Native admission proves supplied structure, not source-order correspondence.
 #[derive(Clone)]
 pub struct RunHost {
-    ring_assets: zkc_backends::ring::Registry,
-    relation_assets: zkc_backends::relation::Registry,
+    ring_assets: zkc_native::ring::Registry,
+    relation_assets: zkc_native::relation::Registry,
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
@@ -149,7 +149,7 @@ impl RunHost {
         Ok(Self {
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
+            ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
             sequence_work_limit: 16_777_216,
             shared_ledger: None,
             retained_inputs: false,
@@ -179,16 +179,16 @@ impl RunHost {
         self.retained_inputs = true;
         self
     }
-    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
+    pub fn with_ring_assets(mut self, assets: zkc_native::ring::Registry) -> Self {
         self.ring_assets = assets;
         self
     }
-    pub fn with_relation_assets(mut self, assets: zkc_backends::relation::Registry) -> Self {
+    pub fn with_relation_assets(mut self, assets: zkc_native::relation::Registry) -> Self {
         self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_backends::ring::DEFAULT_WORK_LIMIT {
+        if limit > zkc_native::ring::DEFAULT_WORK_LIMIT {
             return Err("bundle-ring-work-limit".into());
         }
         self.ring_work_limit = limit;

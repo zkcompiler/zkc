@@ -124,7 +124,7 @@ impl Options {
                 }
                 "--external-work" => {
                     let n = value.parse::<u64>().expect("admitted count");
-                    if n > zkc_backends::NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+                    if n > zkc_native::NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
                         return Err("native-proof-external-work-limit".into());
                     }
                     options.proof.external_work = n;

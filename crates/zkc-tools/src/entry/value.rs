@@ -3,7 +3,7 @@
 use super::interface::raw::{Field, Kind, Permission, Schema};
 use crate::execution::InputValue;
 use std::collections::BTreeMap;
-use zkc_backends::Value as NativeValue;
+use zkc_native::Value as NativeValue;
 
 type Result<T> = std::result::Result<T, String>;
 

@@ -2,8 +2,8 @@
 //! This is an executable integration client: expectations come from each source
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::services::{ServiceObservation, ServiceReference, ServiceRegistry};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::vm::{CutKind, DecodeReason, ServiceContract};
 use zkc_tools::run::*;
 

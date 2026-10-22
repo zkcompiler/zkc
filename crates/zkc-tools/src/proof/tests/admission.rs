@@ -847,7 +847,7 @@ fn message_origins_are_unique_complete_and_match_both_participants() {
 
 #[test]
 fn ring_work_limit_cannot_raise_the_host_ceiling() {
-    let limit = zkc_backends::ring::DEFAULT_WORK_LIMIT;
+    let limit = zkc_native::ring::DEFAULT_WORK_LIMIT;
     for allowed in [0, limit] {
         assert!(
             admit(&deployment())

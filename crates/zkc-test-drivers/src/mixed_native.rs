@@ -1,6 +1,6 @@
 //! Executes compiler-generated mixed math/local participants with real custody.
 use std::path::Path;
-use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::{Action, StopKind};
@@ -181,7 +181,7 @@ fn finish_local(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
     values
 }
 fn custody_boundaries(directory: &str) {
-    use zkc_backends::GroupPoint;
+    use zkc_native::GroupPoint;
     use zkc_runtime::vm::{Packet, Value as RuntimeValue};
     // The host deliberately supplies a reply different from the earlier send.
     // This also ensures the calculation uses the actual received component.
@@ -352,7 +352,7 @@ fn custody_boundaries(directory: &str) {
 
 fn mixed_service(directory: &str) {
     use std::collections::BTreeMap;
-    use zkc_backends::services::ServiceRegistry;
+    use zkc_native::services::ServiceRegistry;
     let bytes = std::fs::read(Path::new(directory).join("mixed-service.json")).unwrap();
     for go in [true, false] {
         let registry = ServiceRegistry::new(Policy::default());

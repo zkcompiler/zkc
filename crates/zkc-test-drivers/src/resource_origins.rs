@@ -1,7 +1,7 @@
 //! Execute fresh compiler carriers through the shared participant interpreter.
 //! Resource counts are derived from the authored loops, not the exported plan.
 use std::path::Path;
-use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_native::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::PathElement;
 use zkc_tools::run::*;
@@ -36,8 +36,8 @@ enum Mode {
 struct Audit {
     cancel: bool,
     roots: Vec<Capability>,
-    before: Vec<zkc_backends::CapabilityObservation>,
-    after: Vec<zkc_backends::CapabilityObservation>,
+    before: Vec<zkc_native::CapabilityObservation>,
+    after: Vec<zkc_native::CapabilityObservation>,
 }
 impl Hooks<NativeBackend> for Audit {
     fn cancel_before(&mut self, _: usize, _: &Step, path: &[PathElement]) -> Option<String> {

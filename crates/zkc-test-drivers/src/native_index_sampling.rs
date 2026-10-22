@@ -9,7 +9,7 @@ use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{KoalaBear, KoalaBearExt8};
+use zkc_native::{KoalaBear, KoalaBearExt8};
 use zkc_runtime::logical;
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;

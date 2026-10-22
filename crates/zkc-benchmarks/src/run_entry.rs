@@ -16,7 +16,7 @@ use zkc_tools::{
 };
 
 fn accepted(value: Option<&Value>) -> bool {
-    matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_backends::Value::Bool(true)))
+    matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_native::Value::Bool(true)))
 }
 
 fn context(entry: &FunctionEntry) -> InvocationContext {
@@ -182,10 +182,8 @@ mod tests {
     use super::*;
     #[test]
     fn acceptance_is_a_typed_boolean() {
-        assert!(accepted(Some(&Value::from(zkc_backends::Value::Bool(
-            true
-        )))));
-        assert!(!accepted(Some(&Value::from(zkc_backends::Value::Bool(
+        assert!(accepted(Some(&Value::from(zkc_native::Value::Bool(true)))));
+        assert!(!accepted(Some(&Value::from(zkc_native::Value::Bool(
             false
         )))));
         assert!(!accepted(Some(&Value::Unit)));

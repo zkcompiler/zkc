@@ -1,9 +1,9 @@
 //! Setup checks shared by native invocation hosts. Authority maps stay with each host.
 use super::inputs::Result;
-use zkc_backends::Value;
+use zkc_native::Value;
 use zkc_runtime::vm::{LogicalType, Type};
 pub(crate) fn needs_input_setup(ty: &LogicalType) -> bool {
-    ty.kind() == Type::ProverKey || zkc_backends::requires_setup(ty.clone())
+    ty.kind() == Type::ProverKey || zkc_native::requires_setup(ty.clone())
 }
 // Apply a port's configured setup recursively. Copyable aggregates may contain
 // PCS leaves; neither aggregate construction nor unused entry data bypasses it.
@@ -106,7 +106,7 @@ mod tests {
     use super::*;
     #[test]
     fn verifier_reuse_requires_identical_bytes_and_authority() {
-        let bounds = zkc_backends::Policy::default().ark_bounds();
+        let bounds = zkc_native::Policy::default().ark_bounds();
         let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
         let key = keys.verifier_key();
         let bytes = key.to_bytes(&bounds).unwrap();

@@ -9,7 +9,7 @@ use num_bigint::BigUint;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use zkc_backends::{KoalaBear, KoalaBearExt8};
+use zkc_native::{KoalaBear, KoalaBearExt8};
 
 pub struct Replay<'a> {
     envelope: &'a Json,

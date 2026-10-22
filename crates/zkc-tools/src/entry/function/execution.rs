@@ -440,7 +440,7 @@ impl Execution<'_> {
                     .saturating_sub(self.usage.external_work),
             )
             .with_ring_work_limit(
-                zkc_backends::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
+                zkc_native::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
             )
             .with_sequence_work_limit(16_777_216u64.saturating_sub(self.usage.sequence_work));
         let result = LocalRunner::new_with_ledger(
@@ -565,7 +565,7 @@ impl Execution<'_> {
                     .external_work
                     .saturating_sub(self.usage.external_work)
                     / entry.interface().roles().len() as u64;
-                let ring = zkc_backends::ring::DEFAULT_WORK_LIMIT
+                let ring = zkc_native::ring::DEFAULT_WORK_LIMIT
                     .saturating_sub(self.usage.ring_work)
                     / entry.interface().roles().len() as u64;
                 let sequence = 16_777_216u64.saturating_sub(self.usage.sequence_work)
@@ -644,7 +644,7 @@ impl Execution<'_> {
                             .limits
                             .external_work
                             .saturating_sub(self.usage.external_work),
-                        zkc_backends::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
+                        zkc_native::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
                         16_777_216u64.saturating_sub(self.usage.sequence_work),
                         proof_limit,
                         self.ledger.clone(),

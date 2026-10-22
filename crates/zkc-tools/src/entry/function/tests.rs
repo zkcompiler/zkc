@@ -270,12 +270,8 @@ fn standalone_numerical_assets_are_authenticated_including_dormant_branches() {
             .prepare(request(vec![
                 (
                     "x",
-                    zkc_backends::Value::KoalaBearVector(
-                        vec![
-                            zkc_backends::KoalaBear::new(3),
-                            zkc_backends::KoalaBear::new(4),
-                        ]
-                        .into(),
+                    zkc_native::Value::KoalaBearVector(
+                        vec![zkc_native::KoalaBear::new(3), zkc_native::KoalaBear::new(4)].into(),
                     )
                     .into(),
                 ),
@@ -290,10 +286,10 @@ fn standalone_numerical_assets_are_authenticated_including_dormant_branches() {
         else {
             panic!("vector")
         };
-        let zkc_backends::Value::KoalaBearVector(values) = *v else {
+        let zkc_native::Value::KoalaBearVector(values) = *v else {
             panic!("vector")
         };
-        assert_eq!(values.as_ref(), &[zkc_backends::KoalaBear::new(expected)]);
+        assert_eq!(values.as_ref(), &[zkc_native::KoalaBear::new(expected)]);
     }
 }
 fn numeric_document() -> Json {
@@ -317,11 +313,11 @@ fn numerical_standalone_uses_native_field_calculation_and_named_plans() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(7u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(7u64)).into(),
             ),
             (
                 "b",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(9u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(9u64)).into(),
             ),
         ]))
         .unwrap()
@@ -340,10 +336,10 @@ fn numerical_standalone_uses_native_field_calculation_and_named_plans() {
     else {
         panic!("native result")
     };
-    let zkc_backends::Value::Field(v) = *v else {
+    let zkc_native::Value::Field(v) = *v else {
         panic!("field")
     };
-    assert_eq!(v, zkc_backends::Scalar::from(16u64));
+    assert_eq!(v, zkc_native::Scalar::from(16u64));
 }
 #[test]
 fn normal_false_is_data_and_entry_calls_share_one_execution() {
@@ -586,11 +582,11 @@ fn repeated_children_exhaust_one_cumulative_meter_and_suppress_return() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(1u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(1u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
             ),
             ("lo", 0u64.into()),
             ("hi", 20u64.into()),
@@ -610,11 +606,11 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
         request(vec![
             (
                 "a",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(1u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(2u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(2u64)).into(),
             ),
         ])
     };
@@ -667,11 +663,11 @@ fn stop_retains_reached_prefix_and_never_executes_later_children() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(1u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_backends::Value::Field(zkc_backends::Scalar::from(1u64)).into(),
+                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
             ),
             ("flag", false.into()),
         ]))
@@ -893,7 +889,7 @@ fn proof_request(producing: bool, public: bool, proof: Vec<u8>) -> FunctionReque
             "proof",
             row(vec![(
                 "bytes",
-                zkc_backends::Value::Bytes(proof.into()).into(),
+                zkc_native::Value::Bytes(proof.into()).into(),
             )]),
         )
     };
@@ -923,7 +919,7 @@ fn produced_bytes() -> Vec<u8> {
     else {
         panic!("bytes")
     };
-    let zkc_backends::Value::Bytes(b) = *v else {
+    let zkc_native::Value::Bytes(b) = *v else {
         panic!("bytes")
     };
     b.to_vec()
@@ -1008,7 +1004,7 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
     else {
         panic!("bytes")
     };
-    let zkc_backends::Value::Bytes(bytes) = *v else {
+    let zkc_native::Value::Bytes(bytes) = *v else {
         panic!("bytes")
     };
     let report = proof_entry(false)
@@ -1125,18 +1121,18 @@ fn native_output_retention_does_not_require_public_input_codec() {
     let entry = admit(&d).unwrap();
     let schema = &entry.signature().result;
     let backing = std::sync::Arc::from([
-        zkc_backends::Scalar::from(2u64),
-        zkc_backends::Scalar::from(3u64),
+        zkc_native::Scalar::from(2u64),
+        zkc_native::Scalar::from(3u64),
     ]);
-    let native = zkc_backends::Value::Polynomial(backing);
-    assert!(!zkc_backends::has_native_wire(&native.physical_type()));
+    let native = zkc_native::Value::Polynomial(backing);
+    assert!(!zkc_native::has_native_wire(&native.physical_type()));
     let ledger = ExecutionLedger::new(Default::default(), Default::default());
     let typed = data::from_output(entry.host(), schema, native.into(), &ledger).unwrap();
     assert!(ledger.snapshot().live_reserved_bytes > 0);
     let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value() else {
         panic!("native polynomial")
     };
-    assert!(matches!(*v, zkc_backends::Value::Polynomial(_)));
+    assert!(matches!(*v, zkc_native::Value::Polynomial(_)));
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }
 #[test]
@@ -1211,12 +1207,12 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
     )
     .unwrap();
     let coefficients: std::sync::Arc<[_]> = std::sync::Arc::from([
-        zkc_backends::Scalar::from(2u64),
-        zkc_backends::Scalar::from(3u64),
+        zkc_native::Scalar::from(2u64),
+        zkc_native::Scalar::from(3u64),
     ]);
     let mut request = request(vec![(
         "coefficients",
-        zkc_backends::Value::Vector(coefficients.clone()).into(),
+        zkc_native::Value::Vector(coefficients.clone()).into(),
     )]);
     request.context.deployments.insert(
         "joint".into(),
@@ -1237,7 +1233,7 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
     else {
         panic!("polynomial")
     };
-    let zkc_backends::Value::Polynomial(output) = *value else {
+    let zkc_native::Value::Polynomial(output) = *value else {
         panic!("polynomial")
     };
     assert_eq!(output.as_ref(), coefficients.as_ref());
@@ -1344,14 +1340,14 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     )
     .unwrap();
     let coefficients: std::sync::Arc<[_]> = std::sync::Arc::from([
-        zkc_backends::Scalar::from(2u64),
-        zkc_backends::Scalar::from(3u64),
+        zkc_native::Scalar::from(2u64),
+        zkc_native::Scalar::from(3u64),
     ]);
     let mut request = request(vec![
         ("public", row(vec![("公開", true.into())])),
         (
             "coefficients",
-            zkc_backends::Value::Vector(coefficients.clone()).into(),
+            zkc_native::Value::Vector(coefficients.clone()).into(),
         ),
     ]);
     request.context.deployments.insert(
@@ -1370,7 +1366,7 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     else {
         panic!("polynomial")
     };
-    let zkc_backends::Value::Polynomial(output) = *value else {
+    let zkc_native::Value::Polynomial(output) = *value else {
         panic!("polynomial")
     };
     assert_eq!(output.as_ref(), coefficients.as_ref());
@@ -1430,7 +1426,7 @@ fn single_endpoint_proof_children_preserve_independent_operation_closures() {
     else {
         panic!("bytes")
     };
-    let zkc_backends::Value::Bytes(bytes) = *v else {
+    let zkc_native::Value::Bytes(bytes) = *v else {
         panic!("bytes")
     };
     let report = verifier
@@ -1650,7 +1646,7 @@ fn admit_with_capacity(doc: &Json, capacity: crate::execution::Capacity) -> Func
     options.limits.capacity = capacity;
     FunctionEntry::admit(capture(doc), options, BTreeMap::new()).unwrap()
 }
-fn pair_value(value: &zkc_backends::Value, nested: bool) -> Value {
+fn pair_value(value: &zkc_native::Value, nested: bool) -> Value {
     let child = || {
         if nested {
             Value::Variant {
@@ -1681,9 +1677,9 @@ fn host_variant_pack_and_owned_outputs_enforce_complete_active_counts() {
                 vector.clone()
             };
             let native = if group {
-                zkc_backends::Value::Groups(vec![zkc_backends::GroupPoint::generator(); 3].into())
+                zkc_native::Value::Groups(vec![zkc_native::GroupPoint::generator(); 3].into())
             } else {
-                zkc_backends::Value::Vector(vec![zkc_backends::Scalar::from(7); 3].into())
+                zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 3].into())
             };
             let doc = pair_variant_document(leaf, nested);
             for legal in [false, true] {
@@ -1743,7 +1739,7 @@ fn owned_variants_accept_internal_polynomials_and_count_shared_occurrences() {
     use zkc_runtime::vm::ExecutionLedger;
     let polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
     let doc = pair_variant_document(polynomial, true);
-    let native = zkc_backends::Value::Polynomial(vec![zkc_backends::Scalar::from(7); 3].into());
+    let native = zkc_native::Value::Polynomial(vec![zkc_native::Scalar::from(7); 3].into());
     for elements in [5, 6] {
         let capacity = Capacity {
             elements,
@@ -1791,7 +1787,7 @@ fn host_variant_retention_preflight_checks_peak_before_assembly() {
     let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
     let doc = pair_variant_document(vector, false);
     let entry = admit(&doc).unwrap();
-    let native = zkc_backends::Value::Vector(vec![zkc_backends::Scalar::from(7); 3].into());
+    let native = zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 3].into());
     let capacity = Capacity::default();
     let backend = data::backend(capacity).unwrap();
     let sizes = [
@@ -1862,7 +1858,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
-    let native = zkc_backends::Value::Curve(zkc_backends::GroupPoint::generator());
+    let native = zkc_native::Value::Curve(zkc_native::GroupPoint::generator());
     let capacity = Capacity {
         groups: 0,
         ..Capacity::default()
@@ -1885,7 +1881,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
                 ("b".into(), native.clone().into()),
             ])),
         ),
-        (index(), Value::from(zkc_backends::Value::Index(7))),
+        (index(), Value::from(zkc_native::Value::Index(7))),
     ] {
         let doc = document(vec![("x", s.clone())], s, json!([]), json!([0]));
         let entry = admit_with_capacity(&doc, capacity);
@@ -1946,7 +1942,7 @@ fn nested_variant_measurement_refuses_with_exhausted_shared_work() {
     use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let capacity = Capacity::default();
     let entry = admit_with_capacity(&pair_variant_document(index(), true), capacity);
-    let scalar = zkc_backends::Value::Index(7);
+    let scalar = zkc_native::Value::Index(7);
     let work = scalar.retained_bytes() as u64;
     let ledger = ExecutionLedger::new(
         capacity.values,
@@ -2001,13 +1997,13 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let capacity = Capacity::default();
     let policy = capacity.backend();
-    let scalar = zkc_backends::Value::Field(zkc_backends::Scalar::from(7));
-    let inner = zkc_backends::Value::Sequence(
-        zkc_backends::Sequence::new(scalar.physical_type().logical(), vec![scalar; 32], &policy)
+    let scalar = zkc_native::Value::Field(zkc_native::Scalar::from(7));
+    let inner = zkc_native::Value::Sequence(
+        zkc_native::Sequence::new(scalar.physical_type().logical(), vec![scalar; 32], &policy)
             .unwrap(),
     );
-    let native = zkc_backends::Value::Sequence(
-        zkc_backends::Sequence::new(inner.physical_type().logical(), vec![inner; 32], &policy)
+    let native = zkc_native::Value::Sequence(
+        zkc_native::Sequence::new(inner.physical_type().logical(), vec![inner; 32], &policy)
             .unwrap(),
     );
     let leaf = schema(

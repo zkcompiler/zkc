@@ -21,7 +21,7 @@ pub use setups::SetupAuthority;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 pub use wire::{FormatError, MAX_PROOF_BYTES, ProofFormat, ProofReader, ProofWriter};
-use zkc_backends::{
+use zkc_native::{
     Capability, Domain, EntryPolicy, NativeBackend, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
 };
@@ -50,8 +50,8 @@ pub(crate) struct RoleMap {
 /// with [`crate::entry::ProofOptions`] to require managed transcript binding.
 #[derive(Clone)]
 pub struct NativeDeployment {
-    ring_assets: zkc_backends::ring::Registry,
-    relation_assets: zkc_backends::relation::Registry,
+    ring_assets: zkc_native::ring::Registry,
+    relation_assets: zkc_native::relation::Registry,
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
@@ -121,8 +121,8 @@ impl<'a> Invocation<'a> {
     }
 }
 #[cfg(feature = "test-utils")]
-fn test_entropy<T: Into<zkc_backends::TestTape>>(tapes: BTreeMap<usize, T>) -> Result<Entropy> {
-    let tapes: BTreeMap<_, zkc_backends::TestTape> = tapes
+fn test_entropy<T: Into<zkc_native::TestTape>>(tapes: BTreeMap<usize, T>) -> Result<Entropy> {
+    let tapes: BTreeMap<_, zkc_native::TestTape> = tapes
         .into_iter()
         .map(|(port, t)| (port, t.into()))
         .collect();
@@ -172,7 +172,7 @@ fn wire_codec(ty: &LogicalType) -> Option<String> {
 // This host's entry constructors are narrower than ordinary local IR types.
 // Share the decision between deployment admission and invocation planning.
 fn input_kind(ty: &PhysicalType) -> Result<&'static str> {
-    if zkc_backends::has_native_wire(ty) {
+    if zkc_native::has_native_wire(ty) {
         return Ok("wire");
     }
     let logical = ty.logical();
@@ -200,8 +200,8 @@ fn backend(
     policy: Policy,
     role: &EntryRole,
     entry: &str,
-    keys: zkc_backends::SetupRegistry,
-    ports: BTreeMap<String, zkc_backends::PortConstraint>,
+    keys: zkc_native::SetupRegistry,
+    ports: BTreeMap<String, zkc_native::PortConstraint>,
 ) -> Result<NativeBackend> {
     NativeBackend::new(
         policy,
@@ -365,11 +365,11 @@ impl NativeDeployment {
             .count();
         let needs_key = maps.values().flat_map(|m| &m.data).any(|p| {
             p.logical.identity() == zkc_runtime::vm::Identity::MultilinearKzgBls12381
-                || zkc_backends::requires_setup(p.logical.clone())
+                || zkc_native::requires_setup(p.logical.clone())
         }) || messages
             .payload_types
             .values()
-            .any(|t| zkc_backends::requires_setup(t.clone()));
+            .any(|t| zkc_native::requires_setup(t.clone()));
         if keys > 64 || needs_key && keys == 0 {
             return Err("native-proof-setup-coverage".into());
         }
@@ -428,7 +428,7 @@ impl NativeDeployment {
         Ok(Self {
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
+            ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
             sequence_work_limit: 16_777_216,
             shared_ledger: None,
             retained_inputs,
@@ -507,16 +507,16 @@ impl NativeDeployment {
     pub fn capacity(&self) -> Capacity {
         self.capacity
     }
-    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
+    pub fn with_ring_assets(mut self, assets: zkc_native::ring::Registry) -> Self {
         self.ring_assets = assets;
         self
     }
-    pub fn with_relation_assets(mut self, assets: zkc_backends::relation::Registry) -> Self {
+    pub fn with_relation_assets(mut self, assets: zkc_native::relation::Registry) -> Self {
         self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_backends::ring::DEFAULT_WORK_LIMIT {
+        if limit > zkc_native::ring::DEFAULT_WORK_LIMIT {
             return Err("native-proof-ring-work-limit".into());
         }
         self.ring_work_limit = limit;
@@ -602,7 +602,7 @@ impl NativeDeployment {
     /// Deterministic provider controls for tests. No production command or file
     /// format selects this feature-gated entry point.
     #[cfg(feature = "test-utils")]
-    pub fn execute_test<T: Into<zkc_backends::TestTape>>(
+    pub fn execute_test<T: Into<zkc_native::TestTape>>(
         &self,
         input: &ProofInputs,
         invocation: Invocation<'_>,

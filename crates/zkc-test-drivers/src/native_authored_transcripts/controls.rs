@@ -3,8 +3,8 @@ use super::reference::hash_word;
 use super::{clean, codec, inputs, messages, policy, replace, unhex, words};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{NativeBackend, Scalar, Value};
 use zkc_kernels::external::openvm;
+use zkc_native::{NativeBackend, Scalar, Value};
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
 pub(super) fn prefix_controls(

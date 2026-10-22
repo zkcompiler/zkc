@@ -4,7 +4,7 @@ mod transcript;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 pub use transcript::*;
-use zkc_backends::{GroupPoint, Scalar};
+use zkc_native::{GroupPoint, Scalar};
 use zkc_test_support::hex;
 pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: Option<Scalar>) {
     let root = root(envelope, input);

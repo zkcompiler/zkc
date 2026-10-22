@@ -2,7 +2,7 @@
 use super::{data, reference};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
+use zkc_native::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value,
     services::ServiceRegistry,
 };

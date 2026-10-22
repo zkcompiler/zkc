@@ -58,14 +58,14 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     );
     let (raw, _) = fixture(&logical);
     let host = host(&raw, HostLimits::default());
-    let source: Arc<[zkc_backends::Scalar]> = [0u64, 1, 7, 19]
+    let source: Arc<[zkc_native::Scalar]> = [0u64, 1, 7, 19]
         .into_iter()
-        .map(zkc_backends::Scalar::from)
+        .map(zkc_native::Scalar::from)
         .collect::<Vec<_>>()
         .into();
     let ty = zkc_runtime::vm::LogicalType::parse(&logical).unwrap();
     let value = Value::Variant(
-        zkc_backends::Variant::new(
+        zkc_native::Variant::new(
             ty.variant_descriptor().unwrap().clone(),
             0,
             vec![Value::Vector(source.clone()), Value::Vector(source.clone())],
@@ -172,9 +172,9 @@ fn prepared_data_reuses_decode_but_preserves_invocation_charges() {
 fn prepared_collections_respect_the_current_policy() {
     use crate::execution::PreparedData;
     for value in [
-        Value::Vector(vec![zkc_backends::Scalar::from(7); 16].into()),
-        Value::RistrettoGroups(vec![zkc_backends::RistrettoPoint::default(); 16].into()),
-        Value::table(&[zkc_backends::Scalar::from(7); 16], &Default::default()).unwrap(),
+        Value::Vector(vec![zkc_native::Scalar::from(7); 16].into()),
+        Value::RistrettoGroups(vec![zkc_native::RistrettoPoint::default(); 16].into()),
+        Value::table(&[zkc_native::Scalar::from(7); 16], &Default::default()).unwrap(),
     ] {
         let (raw, _) = fixture(&value.physical_type().logical().spelling());
         let native = request(|| InputValue::from(value.clone()));
@@ -250,7 +250,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     assert_eq!(refusal(&rng_host, &rng), "bundle-resource-budget");
     let domain = Domain::new("Alice", "session", "main", Some("root"));
     let mut foreign = NativeBackend::new(
-        zkc_backends::Policy::default(),
+        zkc_native::Policy::default(),
         EntryPolicy::new(domain.clone(), None),
         Default::default(),
     )
@@ -275,7 +275,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
 
 #[test]
 fn nested_native_and_wire_data_obey_the_same_selected_setup() {
-    let policy = zkc_backends::Policy::default();
+    let policy = zkc_native::Policy::default();
     let first = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let other = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let logical = LogicalType::parse("commitment:multilinear.kzg.bls12-381/0").unwrap();
@@ -299,7 +299,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     )
     .unwrap();
     let table = zkc_kernels::Table::from_logical(
-        &[zkc_backends::Scalar::from(1), zkc_backends::Scalar::from(2)],
+        &[zkc_native::Scalar::from(1), zkc_native::Scalar::from(2)],
         &policy.ark_bounds(),
     )
     .unwrap();
@@ -324,7 +324,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     for (key, allowed) in [(&first, true), (&other, false)] {
         let committed = key.prover_key().commit(&table).unwrap();
         let value = Value::Sequence(
-            zkc_backends::Sequence::new(
+            zkc_native::Sequence::new(
                 logical.clone(),
                 vec![Value::Commitment(Arc::new(committed.commitment().clone()))],
                 &policy,
@@ -423,7 +423,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                 if native {
                     let good = first.prover_key().commit(&table).unwrap();
                     let good = Value::Sequence(
-                        zkc_backends::Sequence::new(
+                        zkc_native::Sequence::new(
                             logical.clone(),
                             vec![Value::Commitment(Arc::new(good.commitment().clone()))],
                             &policy,
@@ -443,10 +443,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
 
 #[test]
 fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
-    let policy = zkc_backends::Policy::default();
-    let leaf = Value::vector(&[zkc_backends::Scalar::from(1); 3], &policy).unwrap();
+    let policy = zkc_native::Policy::default();
+    let leaf = Value::vector(&[zkc_native::Scalar::from(1); 3], &policy).unwrap();
     let value = Value::Sequence(
-        zkc_backends::Sequence::new(
+        zkc_native::Sequence::new(
             leaf.physical_type().logical(),
             vec![leaf.clone(), leaf],
             &policy,
@@ -523,7 +523,7 @@ fn typed_wire_work_is_reserved_before_scanning() {
 
 #[test]
 fn typed_key_imports_use_explicit_authorized_constructors() {
-    let policy = zkc_backends::Policy::default();
+    let policy = zkc_native::Policy::default();
     let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let authority = SetupAuthority {
         keys: BTreeMap::from([("setup".into(), keys.verifier_key().metadata().key_id())]),
@@ -662,7 +662,7 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
     let mut limits = HostLimits::default();
     limits.capacity.elements = 4;
     let host = self::host(&raw, limits);
-    let vector = || InputValue::from(Value::Vector(vec![zkc_backends::Scalar::from(1); 3].into()));
+    let vector = || InputValue::from(Value::Vector(vec![zkc_native::Scalar::from(1); 3].into()));
     let mut wire = b"ZKCV\x00\x42\x03\0\0\0".to_vec();
     // Valid shape, deliberately invalid field encodings. Whole-value count
     // refusal must occur before expensive canonical element decoding.
