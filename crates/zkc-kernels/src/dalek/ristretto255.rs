@@ -19,3 +19,17 @@ pub fn parse_decimal(s: &str) -> Result<Scalar> {
         a * Scalar::from(10u64) + Scalar::from(u64::from(b - b'0'))
     }))
 }
+
+impl crate::field::Coefficient for Scalar {
+    type Packing = crate::vector::Scalar;
+
+    fn zero() -> Self {
+        Self::ZERO
+    }
+    fn one() -> Self {
+        Self::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        (self != Self::ZERO).then(|| self.invert())
+    }
+}

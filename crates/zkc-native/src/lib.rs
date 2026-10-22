@@ -10,6 +10,7 @@ pub mod merkle;
 mod numerical;
 mod operations;
 pub mod oracle;
+mod random;
 pub mod relation;
 mod resource;
 pub mod ring;
@@ -51,8 +52,9 @@ pub(crate) fn exhausted(reason: &str) -> BackendError {
 pub(crate) fn ark(error: zkc_kernels::arkworks::Error) -> BackendError {
     use zkc_kernels::arkworks::Error::*;
     match error {
-        ArityLimit | ElementLimit | ByteLimit | SetupLimit | CapacityOverflow | Allocation
-        | EntropyUnavailable => exhausted(error.code()),
+        ArityLimit | ElementLimit | ByteLimit | SetupLimit | CapacityOverflow | Allocation => {
+            exhausted(error.code())
+        }
         _ => refused(error.code()),
     }
 }

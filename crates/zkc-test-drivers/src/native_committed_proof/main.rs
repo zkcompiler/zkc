@@ -286,12 +286,17 @@ fn main() {
         serde_json::from_slice(&std::fs::read(directory.join("manifest.json")).unwrap()).unwrap();
     let bounds = Policy::default().ark_bounds();
     assert_eq!(
-        Keys::setup_for_development(0, &bounds).unwrap_err(),
+        Keys::setup_with_rng(0, &mut ark_std::rand::thread_rng(), &bounds).unwrap_err(),
         zkc_kernels::arkworks::Error::PositiveArityRequired
     );
     let keys: BTreeMap<_, _> = [1, 2, 3, 8]
         .into_iter()
-        .map(|n| (n, Keys::setup_for_development(n, &bounds).unwrap()))
+        .map(|n| {
+            (
+                n,
+                Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds).unwrap(),
+            )
+        })
         .collect();
     for (&n, key) in &keys {
         std::fs::write(

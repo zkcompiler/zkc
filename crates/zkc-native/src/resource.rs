@@ -1,10 +1,10 @@
-use crate::{Policy, Result, Value, ark, exhausted, refused};
+use crate::random::RandomSource;
+use crate::{Policy, Result, Value, exhausted, refused};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     sync::Arc,
 };
-use zkc_kernels::arkworks::bls12_381::RandomSource;
 use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_runtime::vm::{Frame, FrameExit, FrameKind, Identity, Type, Value as RuntimeValue};
 
@@ -452,12 +452,8 @@ impl Resources {
     fn random_state(field: Identity) -> Result<State> {
         use rand::SeedableRng;
         Ok(match field {
-            Identity::Bn254Fr => {
-                State::Bn254Rng(Box::new(RandomSource::from_os().map_err(crate::ark)?))
-            }
-            Identity::Bls12381Fr => State::Rng(Source::Os(Box::new(
-                RandomSource::from_os().map_err(crate::ark)?,
-            ))),
+            Identity::Bn254Fr => State::Bn254Rng(Box::new(RandomSource::from_os()?)),
+            Identity::Bls12381Fr => State::Rng(Source::Os(Box::new(RandomSource::from_os()?))),
             Identity::KoalaBearExt8 | Identity::Ristretto255Scalar => {
                 let rng = Box::new(
                     rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng)
@@ -485,7 +481,7 @@ impl Resources {
     ) -> Result<Value> {
         match field {
             Identity::Bls12381Fr => {
-                let k = RandomSource::from_os().map_err(ark)?.scalar();
+                let k = RandomSource::from_os()?.scalar();
                 Ok(Value::Nonce(self.issue(
                     domain,
                     budget,

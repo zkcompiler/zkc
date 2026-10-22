@@ -2486,6 +2486,7 @@ dependencies = [
 name = "zkc"
 version = "0.0.0"
 dependencies = [
+ "ark-std",
  "libc",
  "rand 0.10.3",
  "rustix",
@@ -2522,6 +2523,7 @@ dependencies = [
 name = "zkc-cli"
 version = "0.0.0"
 dependencies = [
+ "ark-std",
  "serde_json",
  "sha2 0.11.0",
  "tempfile",
@@ -2571,6 +2573,7 @@ version = "0.0.0"
 dependencies = [
  "ark-ff",
  "ark-poly",
+ "ark-std",
  "curve25519-dalek",
  "merlin",
  "p3-commit",
@@ -2613,6 +2616,7 @@ dependencies = [
  "ark-poly",
  "ark-poly-commit",
  "ark-serialize",
+ "ark-std",
  "curve25519-dalek",
  "merlin",
  "num-bigint 0.5.1",

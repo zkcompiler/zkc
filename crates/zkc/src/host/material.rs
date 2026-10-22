@@ -98,10 +98,18 @@ mod tests {
         send_sync::<ProverMaterial>();
         let capacity = Capacity::default();
         let bounds = capacity.backend().ark_bounds();
-        let keys =
-            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
-        let other =
-            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
+        let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &bounds,
+        )
+        .unwrap();
+        let other = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &bounds,
+        )
+        .unwrap();
         let bytes = keys.prover_key().to_bytes(&bounds).unwrap();
         let pin = keys.prover_key().material_fingerprint();
         let vk = keys.verifier_key();

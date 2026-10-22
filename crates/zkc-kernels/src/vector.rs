@@ -3,7 +3,6 @@
 //! exact field arithmetic. Destinations have checked exact extents; callers own
 //! their storage reservations.
 use crate::field::{Coefficient, Error, Result};
-use p3_field::{Field, PackedValue};
 use std::ops::{Add, Mul, Neg, Sub};
 
 /// A nonempty set of independent field lanes. Arithmetic on `Value` must agree
@@ -37,27 +36,6 @@ impl<S: Coefficient> Packing<S> for Scalar {
     #[inline]
     fn store(value: S, values: &mut [S]) {
         values[0] = value;
-    }
-}
-
-/// Use the field's declared packing for native element slices. Explicit base-
-/// coordinate extension packing has a different layout and conversion cost;
-/// its availability alone does not make it suitable for these destinations.
-pub struct Plonky3;
-impl<S: Coefficient + Field> Packing<S> for Plonky3 {
-    type Value = <S as Field>::Packing;
-    const WIDTH: usize = <<S as Field>::Packing as PackedValue>::WIDTH;
-    #[inline]
-    fn broadcast(value: S) -> Self::Value {
-        value.into()
-    }
-    #[inline]
-    fn load(values: &[S]) -> Self::Value {
-        *Self::Value::from_slice(values)
-    }
-    #[inline]
-    fn store(value: Self::Value, values: &mut [S]) {
-        values.copy_from_slice(value.as_slice());
     }
 }
 

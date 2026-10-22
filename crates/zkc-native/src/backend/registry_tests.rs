@@ -654,9 +654,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         I::Bls12381Fr,
         320,
     );
-    let keys =
-        zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &policy.ark_bounds())
-            .unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let (_, proof) = state.open(&[Scalar::from(2)]).unwrap();
     check(

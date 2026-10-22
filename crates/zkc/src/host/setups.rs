@@ -114,8 +114,12 @@ mod tests {
     #[test]
     fn verifier_reuse_requires_identical_bytes_and_authority() {
         let bounds = zkc_native::Policy::default().ark_bounds();
-        let keys =
-            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
+        let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &bounds,
+        )
+        .unwrap();
         let key = keys.verifier_key();
         let bytes = key.to_bytes(&bounds).unwrap();
         let same_bytes = bytes.clone();

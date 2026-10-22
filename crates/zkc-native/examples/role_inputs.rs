@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = Policy::default();
     // Development-only setup. A production application must establish its setup
     // provenance and authenticate the verifier fingerprint independently.
-    let keys = Keys::setup_for_development(1, &policy.ark_bounds())?;
+    let keys = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())?;
     let domain = Domain::new("P", "demo-session", "main", Some("demo"));
     let mut backend = NativeBackend::new(
         policy,

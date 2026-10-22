@@ -11,7 +11,12 @@ use zkc_runtime::vm::{
 };
 
 fn keys(n: usize) -> Keys {
-    Keys::setup_for_development(n, &Policy::default().ark_bounds()).unwrap()
+    Keys::setup_with_rng(
+        n,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap()
 }
 fn private_state(keys: &Keys, original: &Value) -> Value {
     let Value::Table(t) = original else { panic!() };

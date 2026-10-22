@@ -506,8 +506,10 @@ mod tests {
     #[test]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {
         let policy = Policy::default();
-        let first = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-        let other = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+        let first = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
+        let other = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("key.pk");
         std::fs::write(

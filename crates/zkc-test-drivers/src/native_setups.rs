@@ -120,7 +120,7 @@ fn main() {
         };
         let keys: Vec<_> = [1, second_arity, 1]
             .into_iter()
-            .map(|n| Keys::setup_for_development(n, &bounds).unwrap())
+            .map(|n| Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds).unwrap())
             .collect();
         let paths: Vec<_> = (0..3)
             .map(|i| dir.join(format!("{name}.setup{i}.pk")))

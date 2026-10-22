@@ -378,7 +378,7 @@ fn multibase_nonce_stages_zero_and_reuse() {
 #[test]
 fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
     let p = Policy::default();
-    let keys = Keys::setup_for_development(1, &p.ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &p.ark_bounds()).unwrap();
     let Value::Table(t) = table(&[1, 2]) else {
         panic!()
     };
@@ -416,8 +416,10 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
     }
     // Zero commitments have identical group payloads across setups. Equality
     // must still compare full setup metadata when every key is authorized.
-    let foreign = Keys::setup_for_development(1, &p.ark_bounds()).unwrap();
-    let other_arity = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
+    let foreign =
+        Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &p.ark_bounds()).unwrap();
+    let other_arity =
+        Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &p.ark_bounds()).unwrap();
     let zero = |key: &Keys| {
         let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
             vec![Scalar::from(0); 1 << key.verifier_key().metadata().arity()],

@@ -15,7 +15,7 @@
 //! use zkc_kernels::arkworks::bls12_381::{Bounds, Keys, ProverKey, Scalar, Table, VerifierKey};
 //! # fn main() -> Result<(), zkc_kernels::arkworks::Error> {
 //! let bounds = Bounds::new(8, 256, 1 << 20, 8 * 256);
-//! let keys = Keys::setup_for_development(2, &bounds)?;
+//! let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds)?;
 //! let table = Table::from_logical(
 //!     &[2u64, 3, 5, 7].map(Scalar::from), &bounds)?;
 //! let original = keys.prover_key().commit(&table)?;
@@ -58,9 +58,9 @@
 
 mod bounds;
 mod codec;
+mod coefficient;
 mod group;
 mod pcs;
-mod random;
 mod scalar;
 mod table;
 mod table_msb;
@@ -69,7 +69,6 @@ pub use ark_bls12_381::Fr as Scalar;
 pub use bounds::Bounds;
 pub use group::{G1, GROUP_BYTES, scalar_from_wide_be};
 pub use pcs::{Commitment, CommittedTable, Keys, Metadata, OpeningProof, ProverKey, VerifierKey};
-pub use random::RandomSource;
 pub use scalar::{SCALAR_BYTES, decode_scalar, encode_scalar, parse_decimal};
 pub use table::Table;
 pub use table_msb::MsbTable;

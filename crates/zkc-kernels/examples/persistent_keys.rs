@@ -55,7 +55,7 @@ fn point(n: usize) -> Vec<Scalar> {
 
 fn setup(root: &Path, n: usize) -> Result<()> {
     let started = Instant::now();
-    let keys = Keys::setup_for_development(n, &BOUNDS)?;
+    let keys = Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &BOUNDS)?;
     let setup_us = started.elapsed().as_micros();
     let started = Instant::now();
     let prover = keys.prover_key().to_bytes(&BOUNDS)?;

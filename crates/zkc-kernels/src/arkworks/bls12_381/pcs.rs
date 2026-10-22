@@ -1,7 +1,6 @@
 use super::codec::{self, G1_BYTES, G2_BYTES, HEADER, Kind};
 use crate::arkworks::Error;
 use crate::arkworks::bls12_381::Bounds;
-use crate::arkworks::bls12_381::RandomSource;
 use crate::arkworks::bls12_381::Scalar;
 use crate::arkworks::bls12_381::Table;
 use crate::arkworks::{allocation::vector, error::same_arity};
@@ -58,16 +57,6 @@ pub struct Keys {
 }
 
 impl Keys {
-    /// Locally generate structured setup using OS-seeded randomness.
-    /// This is test/development setup, not an audited ceremony. The generation
-    /// process sees trapdoor randomness; upstream does not guarantee erasure.
-    pub fn setup_for_development(n: usize, bounds: &Bounds) -> Result<Self, Error> {
-        bounds.setup(n)?;
-        bounds.bytes(codec::size(Kind::Verifier, n)?)?;
-        let mut source = RandomSource::from_os()?;
-        Self::setup_with_rng(n, &mut source.rng, bounds)
-    }
-
     /// Generate local setup with an explicitly supplied cryptographic RNG.
     /// A seeded RNG is suitable for reproducible tests only. The trait bound
     /// does not establish unpredictable seeding or honest setup generation.

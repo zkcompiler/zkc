@@ -8,9 +8,12 @@ use zkc_runtime::vm::{Backend, PhysicalType, Value as RuntimeValue};
 #[test]
 fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     let policy = Policy::default();
-    let a = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-    let b = Keys::setup_for_development(2, &policy.ark_bounds()).unwrap();
-    let foreign = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let a =
+        Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
+    let b =
+        Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
+    let foreign =
+        Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
     let registry = || {
         SetupRegistry::new(
             vec![a.verifier_key().clone(), b.verifier_key().clone()],
@@ -225,7 +228,7 @@ fn native_nested_messages_resolve_only_registered_setups() {
     let bounds = policy.ark_bounds();
     let keys: Vec<_> = [1, 2, 1]
         .into_iter()
-        .map(|n| Keys::setup_for_development(n, &bounds).unwrap())
+        .map(|n| Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds).unwrap())
         .collect();
     let host = NativeBackend::new(
         policy,

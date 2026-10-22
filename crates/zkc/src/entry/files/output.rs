@@ -305,9 +305,12 @@ mod tests {
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
         let capacity = Capacity::default();
         let policy = capacity.backend();
-        let keys =
-            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &policy.ark_bounds())
-                .unwrap();
+        let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &policy.ark_bounds(),
+        )
+        .unwrap();
         let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
             vec![zkc_native::Scalar::from(1); 2],
             &policy.ark_bounds(),

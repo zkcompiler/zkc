@@ -205,7 +205,7 @@ pub fn check(
         Some(&rebind(envelope, &changed, proof)),
         "Explicit(\"reject\")",
     );
-    let stale = Keys::setup_for_development(1, &bounds).unwrap();
+    let stale = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let changed = public(v, vk_port, &stale.verifier_key().to_bytes(&bounds).unwrap());
     refuse(
         deployment,

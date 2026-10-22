@@ -29,7 +29,7 @@ authorized. There is no implicit receive-site setup selector.
 
 `resource.rs` owns fresh affine RNG, nonce and transcript capabilities, their
 bounded counters, domain separation, generations and retirement. Local frames
-receive explicit operand views. `services` binds the four registered random
+receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the four registered random
 sampling service contracts to Host-owned providers. It does not install arbitrary
 request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
@@ -93,7 +93,7 @@ reuse still compares their complete content and exact attributes. Each VM
 instance owns its preparation, including when instances share an admitted program.
 
 `numerical` adapts policy and concrete result construction to the independent
-`zkc-kernels::numerical` scope and row-major views under the
+`zkc-kernels::numerical` scope and `matrix::RowMajor` views under the
 [native numerical-call contract](../../docs/spec/runtime/numerical.md).
 Private initialized destinations and scratch share checked memory and work
 limits. Exact field adapters and table storage owners supply interpretation;

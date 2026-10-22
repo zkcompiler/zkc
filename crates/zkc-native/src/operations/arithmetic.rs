@@ -606,7 +606,7 @@ fn dense<S: Family>(
             }
             rows.checked_mul(cols)
                 .ok_or_else(|| exhausted("size-overflow"))?;
-            let matrix = zkc_kernels::numerical::RowMajor::new(a, rows, cols)
+            let matrix = zkc_kernels::matrix::RowMajor::new(a, rows, cols)
                 .ok_or_else(|| refused("length-mismatch"))?;
             let (inner, outer) = if transpose == 0 {
                 (matrix.cols(), matrix.rows())

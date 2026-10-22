@@ -211,7 +211,12 @@ fn replaced(proof: &[u8], payload: &[u8]) -> Vec<u8> {
 fn main() {
     let directory = std::env::args().nth(1).expect("generated directory");
     let directory = Path::new(&directory);
-    let keys = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     std::fs::write(
         directory.join("nested.setups.json"),
         serde_json::to_vec(&json!([

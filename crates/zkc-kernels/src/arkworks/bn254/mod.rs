@@ -1,4 +1,5 @@
 //! BN254 arithmetic primitives. No proof system or trusted-setup validation.
+mod field;
 use crate::arkworks::Error;
 /// BN254 scalar field.
 pub use ark_bn254::Fr as Scalar;

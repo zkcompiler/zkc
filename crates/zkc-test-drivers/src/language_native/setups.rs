@@ -45,7 +45,7 @@ fn accepted(values: &NamedValues) {
 pub(super) fn run(directory: &Path) {
     let bounds = Policy::default().ark_bounds();
     let keys: Vec<_> = (0..2)
-        .map(|_| Keys::setup_for_development(1, &bounds).unwrap())
+        .map(|_| Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap())
         .collect();
     let material: Vec<_> = keys
         .iter()

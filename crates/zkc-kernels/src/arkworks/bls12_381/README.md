@@ -10,7 +10,7 @@ use zkc_kernels::arkworks::bls12_381::Table;
 use zkc_kernels::arkworks::bls12_381::VerifierKey;
 # fn main() -> Result<(), zkc_kernels::arkworks::Error> {
 let bounds = Bounds::new(8, 256, 1 << 20, 8 * 256);
-let keys = Keys::setup_for_development(2, &bounds)?;
+let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds)?;
 let table = Table::from_logical(&[2u64, 3, 5, 7].map(Scalar::from), &bounds)?;
 let original = keys.prover_key().commit(&table)?;
 let scratch = table.restrict_first(Scalar::from(11u64))?;
@@ -162,12 +162,11 @@ and ceremony integration remain omitted.
 This PCS is deterministic and **nonhiding**. Local setup sees trapdoor randomness;
 the library does not guarantee erasure, malicious-setup soundness, zero knowledge,
 knowledge extraction, constant-time execution, or an audited secure deployment.
-`RandomSource::from_os` fallibly seeds upstream StdRng once from OS entropy, then
-samples uniform Fr values with upstream rejection sampling. It is not cloneable.
-The optional `test-utils` feature exposes `for_testing(seed)`; tests otherwise use
-an explicitly seeded StdRng with `setup_with_rng`. Neither fixture mode is a
-ceremony or a freshness claim. The caller determines challenge order, use of
-independent resources, subject binding, and resource effects across suspension.
+The calling application owns RNG seeding, advancing state, challenge order,
+independent resources and effects across suspension. `Keys::setup_with_rng`
+accepts a caller-owned cryptographic RNG; kernel operations do not obtain OS
+entropy or construct new random resources. Deterministically seeded RNGs are
+fixtures, not a ceremony or evidence of freshness.
 
 ## Persistent public prover material
 
@@ -264,7 +263,7 @@ restriction, all 60 rounds from 20 Lean cases, omitted-permutation negative
 controls, real openings, key identity, malformed headers and lengths, subgroup
 and exceptional point codecs, every truncation and bounded byte mutations,
 zero arity, unchanged originals after failure/folding, shared aliases, thread
-transfer, and OS randomness.
+transfer, and caller-supplied randomness.
 Prover-key tests additionally compare independent upstream setup and manual wire/hash
 reconstruction, post-reload commitments/openings, all point slots, re-pinned hostile
 material, setup/VK mask associations and wrapper allocation requests on rejected

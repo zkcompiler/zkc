@@ -657,7 +657,8 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
     // Compare current generated observation bytes with independent Merlin calls.
     // Local-only table, point and round representations cannot be observed.
     let policy = Policy::default();
-    let keys = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let keys =
+        Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
     let zkc_native::Value::Table(table_value) = table(&[1, 2]) else {
         panic!()
     };

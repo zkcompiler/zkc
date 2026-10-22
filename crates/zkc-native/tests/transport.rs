@@ -10,7 +10,8 @@ use zkc_runtime::vm::{Action, Packet};
 #[test]
 fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets() {
     let policy = Policy::default();
-    let keys = Keys::setup_for_development(2, &policy.ark_bounds()).unwrap();
+    let keys =
+        Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
     let bytes = participants(json!([
         [
             [

@@ -259,7 +259,12 @@ fn aggregate_preflight_refuses_before_payload_construction_and_production_agrees
 fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
     use std::sync::Arc;
     let bounds = Policy::default().ark_bounds();
-    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
     let state = keys
         .prover_key()
         .commit(
@@ -301,7 +306,12 @@ fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
         common::ark_backend(None).decode_native_value(&value.physical_type(), &bytes),
         Err(Error::Backend(_))
     ));
-    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
+    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
     let wrong = common::backend()
         .verifier(other.verifier_key().clone())
         .build();
@@ -505,8 +515,9 @@ fn nested_fixed_arrays_keep_empty_shape_and_full_retained_charge() {
 fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     use std::sync::Arc;
     use zkc_runtime::{logical as encoding, vm::Identity};
-    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
+        &mut ark_std::rand::thread_rng(),
         &Policy::default().ark_bounds(),
     )
     .unwrap();
@@ -1000,9 +1011,12 @@ fn singular_pcs_handles_do_not_invent_backing_element_collection_counts() {
         max_table_elements: 8,
         ..Policy::default()
     };
-    let keys =
-        zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(3, &policy.ark_bounds())
-            .unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        3,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
         vec![Scalar::from(7); 8],
         &policy.ark_bounds(),

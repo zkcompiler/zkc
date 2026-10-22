@@ -492,11 +492,11 @@ fn pcs_frames_require_the_selected_setup_and_canonical_payloads() {
     use zkc_kernels::arkworks::bls12_381::Table;
     let policy = Policy::default();
     let bounds = policy.ark_bounds();
-    let keys = Keys::setup_for_development(2, &bounds).unwrap();
+    let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let backend = common::backend()
         .verifier(keys.verifier_key().clone())
         .build();
-    let other = Keys::setup_for_development(2, &bounds).unwrap();
+    let other = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let wrong = common::backend()
         .verifier(other.verifier_key().clone())
         .build();

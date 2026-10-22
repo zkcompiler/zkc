@@ -374,13 +374,15 @@ fn kernels_are_immutable_checked_and_charge_work_across_frames() {
 }
 #[test]
 fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
-    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
+        &mut ark_std::rand::thread_rng(),
         &Policy::default().ark_bounds(),
     )
     .unwrap();
-    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
+        &mut ark_std::rand::thread_rng(),
         &Policy::default().ark_bounds(),
     )
     .unwrap();
@@ -417,8 +419,9 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
         .unwrap(),
     )
     .unwrap();
-    let different_arity = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+    let different_arity = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         2,
+        &mut ark_std::rand::thread_rng(),
         &Policy::default().ark_bounds(),
     )
     .unwrap();

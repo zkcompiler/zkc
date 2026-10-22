@@ -2,7 +2,6 @@
 use std::{hint::black_box, time::Instant};
 use zkc_kernels::arkworks::bls12_381::Bounds;
 use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_kernels::arkworks::bls12_381::RandomSource;
 use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_kernels::arkworks::bls12_381::Table;
 use zkc_kernels::arkworks::bls12_381::VerifierKey;
@@ -16,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This example's explicit finite profile. The library has no such default.
     let bounds = Bounds::new(12, 4096, 1 << 20, 12 * 4096);
     let started = Instant::now();
-    let keys = Keys::setup_for_development(n, &bounds)?;
+    let keys = Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds)?;
     let setup_us = started.elapsed().as_micros();
     let logical: Vec<_> = (0..1usize << n)
         .map(|i| Scalar::from((i * i + 3 * i + 5) as u64))
@@ -32,8 +31,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let started = Instant::now();
     let original = keys.prover_key().commit(&table)?;
     let commit_us = started.elapsed().as_micros();
-    let mut random = RandomSource::from_os()?;
-    let point = random.point(n, &bounds)?;
+    use ark_std::UniformRand;
+    let point: Vec<_> = (0..n)
+        .map(|_| Scalar::rand(&mut ark_std::rand::thread_rng()))
+        .collect();
     let started = Instant::now();
     let (value, proof) = original.open(&point)?;
     let open_us = started.elapsed().as_micros();

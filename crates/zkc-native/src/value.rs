@@ -1379,7 +1379,9 @@ mod admission_size_tests {
     fn key_estimates_equal_imported_runtime_charges_at_small_ranks() {
         let policy = Policy::default();
         for rank in 1..=3 {
-            let keys = Keys::setup_for_development(rank, &policy.ark_bounds()).unwrap();
+            let keys =
+                Keys::setup_with_rng(rank, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+                    .unwrap();
             let vk_bytes = keys.verifier_key().to_bytes(&policy.ark_bounds()).unwrap();
             let vk = VerifierKey::from_bytes(
                 &vk_bytes,
@@ -1410,7 +1412,8 @@ mod admission_size_tests {
     #[test]
     fn wire_bounds_cover_actual_decoded_values() {
         let policy = Policy::default();
-        let keys = Keys::setup_for_development(2, &policy.ark_bounds()).unwrap();
+        let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
         let backend = NativeBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "s", "main", None), Some(2)),
