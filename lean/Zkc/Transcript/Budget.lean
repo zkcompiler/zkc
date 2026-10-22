@@ -59,7 +59,7 @@ variable {I : PIR.Signature} {Position Cost A B : Type}
 /-- Every path of the process from `position` admits its operations and charges
 at most `budget`. -/
 def Bound [Add Cost] [LE Cost] (walk : Walk I Position Cost) :
-    PIR.Proc I A → Position → Cost → Prop
+    PIR.Process I A → Position → Cost → Prop
   | .done _, _, _ => True
   | .halt _, _, _ => True
   | .call operation next, position, budget =>
@@ -70,7 +70,7 @@ def Bound [Add Cost] [LE Cost] (walk : Walk I Position Cost) :
 
 /-- One step of a path bound. -/
 theorem bound_call [Add Cost] [LE Cost] (walk : Walk I Position Cost) (operation : I.Op)
-    (next : I.Reply operation → PIR.Proc I A) (position : Position) (budget : Cost) :
+    (next : I.Reply operation → PIR.Process I A) (position : Position) (budget : Cost) :
     walk.Bound (.call operation next) position budget ↔
       walk.admits position operation ∧ ∃ remaining,
         walk.charge position operation + remaining ≤ budget ∧
@@ -82,7 +82,7 @@ variable [AddCommMonoid Cost] [Preorder Cost] (walk : Walk I Position Cost)
 
 /-- A larger budget keeps the bound. -/
 theorem Bound.mono :
-    ∀ (process : PIR.Proc I A) {position : Position} {budget larger : Cost},
+    ∀ (process : PIR.Process I A) {position : Position} {budget larger : Cost},
       walk.Bound process position budget → budget ≤ larger → walk.Bound process position larger
   | .done _, _, _, _, _, _ => trivial
   | .halt _, _, _, _, _, _ => trivial
@@ -93,9 +93,9 @@ variable [IsOrderedAddMonoid Cost]
 
 /-- Sequencing: a head bounded by `first` followed by continuations bounded by
 `second` from every position is bounded by `first + second`. -/
-theorem Bound.bind (nonneg : ∀ cost : Cost, 0 ≤ cost) (continuation : A → PIR.Proc I B)
+theorem Bound.bind (nonneg : ∀ cost : Cost, 0 ≤ cost) (continuation : A → PIR.Process I B)
     {second : Cost} (bounded : ∀ value position, walk.Bound (continuation value) position second) :
-    ∀ (head : PIR.Proc I A) {position : Position} {first : Cost},
+    ∀ (head : PIR.Process I A) {position : Position} {first : Cost},
       walk.Bound head position first →
         walk.Bound (head.bind continuation) position (first + second)
   | .done value, position, first, _ =>
@@ -108,7 +108,7 @@ theorem Bound.bind (nonneg : ∀ cost : Cost, 0 ≤ cost) (continuation : A → 
 
 /-- Repetition: `count` iterations of a body bounded by `each` from every state
 and position are bounded by `count • each`. -/
-theorem Bound.repeatN (nonneg : ∀ cost : Cost, 0 ≤ cost) (step : A → PIR.Proc I A) {each : Cost}
+theorem Bound.repeatN (nonneg : ∀ cost : Cost, 0 ≤ cost) (step : A → PIR.Process I A) {each : Cost}
     (bounded : ∀ state position, walk.Bound (step state) position each) :
     ∀ (count : ℕ) (state : A) (position : Position),
       walk.Bound (PIR.repeatN count step state) position (count • each)
@@ -135,7 +135,7 @@ theorem Bound.convert {Cost' : Type} [AddCommMonoid Cost'] [Preorder Cost']
     (follows : ∀ position operation reply after, target.next position operation reply after →
       walk.next position operation reply after)
     [IsOrderedAddMonoid Cost'] :
-    ∀ (process : PIR.Proc I A) {position : Position} {budget : Cost},
+    ∀ (process : PIR.Process I A) {position : Position} {budget : Cost},
       walk.Bound process position budget → target.Bound process position (convert budget)
   | .done _, _, _, _ => trivial
   | .halt _, _, _, _ => trivial

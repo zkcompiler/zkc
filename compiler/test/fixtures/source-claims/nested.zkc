@@ -1,0 +1,24 @@
+module claims;
+domain Fr=field("bls12-381.fr");
+relation Equal(statement claimed:Fr,witness actual:Fr){return claimed==actual;}
+protocol Child roles(P,V)(x:Fr@P,coins:Random<Fr>@V)->(actual:Fr@V){
+  let actual=send P->V(x);
+  #[site(challenge)] let c=coins.draw();
+  return(actual=actual+c-c);
+}
+protocol Wrapper roles(P,V)(x:Fr@(P,V),w:Fr@P,coins:Random<Fr>@V)->(ok:bool@V)
+  spec{target valid=Equal(in.x@V,in.w) accept out.ok;}
+{
+  #[site(inner)] let actual=Child roles(P,V)(w,coins);
+  let ok@V=actual==x;
+  return(ok=ok);
+}
+proof Demo=Wrapper{
+  prover P;verifier V;public{x};accept ok;target valid;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0",coins);
+}
+spec NestedClaims for Demo{
+  sound: soundness@0(target.valid,model=models.fiat_shamir@0(queries=Q),
+    accept=out.ok,stage=executable_bytes,
+    charge=per_site(sites.inner.challenge,1/cardinality(Fr)));
+}

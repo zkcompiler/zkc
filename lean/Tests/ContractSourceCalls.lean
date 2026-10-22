@@ -52,7 +52,7 @@ Outer source call. Its identity and complete ABI come from the checked table. -/
 theorem outer_call_substitution (self : Nat) (context : ProtocolContext)
     (environment : Environment (Component (assignment F G)) inputTypes)
     (inside : (context.enter "s0" [0, 1]).contains runSignature self = true)
-    (replacement : PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) resultTypes))
+    (replacement : PIR.Process (observedInterface F G) (Values (Component (assignment F G)) resultTypes))
     (localLaw : CalleeResolution
       (participantMeaning (unit.tables F G) self (unit.protocolTable F G) (context.enter "s0" [0, 1]))
       runBody (maskValues self ((context.enter "s0" [0, 1]).mapScopes runSignature.inputScopes)
@@ -72,7 +72,7 @@ callee body law is a premise; no whole-Outer equivalence is assumed. -/
 theorem outer_body_composition (self : Nat) (context : ProtocolContext)
     (environment : Environment (Component (assignment F G)) inputTypes)
     (inside : (context.enter "s0" [0, 1]).contains runSignature self = true)
-    (replacement : PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) resultTypes))
+    (replacement : PIR.Process (observedInterface F G) (Values (Component (assignment F G)) resultTypes))
     (localLaw : CalleeResolution
       (participantMeaning (unit.tables F G) self (unit.protocolTable F G) (context.enter "s0" [0, 1]))
       runBody (maskValues self ((context.enter "s0" [0, 1]).mapScopes runSignature.inputScopes)
@@ -94,7 +94,7 @@ theorem outer_body_composition (self : Nat) (context : ProtocolContext)
         (fun op => .call op .done) ServiceOrderViews.runDefinition run_member runSignature
         ServiceOrderViews.run_signature runBody ServiceOrderViews.run_raw [0, 1] "s0" context self
         (outerCall.callSite.operands.eval environment) replacement
-        (fun _ => by rw [PIR.Proc.interpret_identity]; exact localLaw.sound)) using 1
+        (fun _ => by rw [PIR.Process.interpret_identity]; exact localLaw.sound)) using 1
     simp only [inside, ↓reduceIte]
     rfl
   apply Eq.trans
@@ -105,10 +105,10 @@ theorem outer_body_composition (self : Nat) (context : ProtocolContext)
       | apply RegionMeaning.OperationLaw.identity
         rfl)
   · change (.call (.mark (qualifyProtocolSite context.applicationPrefix "s0")) _ :
-      PIR.Proc (observedInterface F G) _) = _
+      PIR.Process (observedInterface F G) _) = _
     congr 1
     funext reply
-    simp only [PIR.Proc.bind_assoc, Values.reify_get]
+    simp only [PIR.Process.bind_assoc, Values.reify_get]
     rfl
 
 /-- Actual Sumcheck-to-Reduce occurrence, extracted from the complete inventory. -/
@@ -124,7 +124,7 @@ example : sumcheckCall.occurrence = SumcheckContractInstantiation.publicReductio
 identity, complete ABI and body association; no second link record is supplied. -/
 theorem sumcheck_bound_operationLaw (self : Nat) (context : ProtocolContext)
     (environment : Environment (Component (assignment F G)) sumcheckCall.callSite.context)
-    (replacement : PIR.Proc (participantInterface F G)
+    (replacement : PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) sumcheckCall.callSite.signature.outputs))
     (localLaw : (context.enter sumcheckCall.callSite.site sumcheckCall.callSite.roles).contains
       sumcheckCall.callSite.signature self = true →
@@ -156,7 +156,7 @@ theorem sumcheck_reduce_substitution (self : Nat) (context : ProtocolContext)
     (environment : Environment (Component (assignment F G)) sumcheckCall.callSite.context)
     (inside : (context.enter sumcheckCall.callSite.site sumcheckCall.callSite.roles).contains
       sumcheckCall.callSite.signature self = true)
-    (replacement : PIR.Proc (participantInterface F G)
+    (replacement : PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) sumcheckCall.callSite.signature.outputs))
     (localLaw : (SumcheckSourceBodies.reduceBody.denote
       (participantMeaning (SumcheckSourceViews.unit.tables F G) self

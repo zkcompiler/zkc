@@ -1,0 +1,42 @@
+name = "zkc_security"
+version = "0.0.0"
+defaultTargets = ["ZkcSecurity", "ZkcSecurityTests"]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "VCVio"
+git = "https://github.com/Verified-zkEVM/VCVio"
+rev = "afa6593f15e1e79ecb3cf22fc56191cecb452bb0"
+
+[[require]]
+name = "CompPoly"
+git = "https://github.com/Verified-zkEVM/CompPoly"
+rev = "df591bb8c6745126d1d72f5243faae3022b0432a"
+
+[[require]]
+name = "PolyFun"
+git = "https://github.com/Verified-zkEVM/PolyFun"
+rev = "3710d71b28404a151b8d1f0ce080ea448778dec0"
+
+[[require]]
+name = "zkc"
+path = ".."
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+
+[[lean_lib]]
+name = "ZkcSecurityTests"
+roots = ["TestsSecurity"]
+globs = ["TestsSecurity.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcSecurity"
+globs = ["ZkcSecurity.+"]
+requiresModuleSystem = true

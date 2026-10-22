@@ -16,25 +16,25 @@ set_option autoImplicit false
 namespace PIR
 
 /-- Match an effect and leave its reply-dependent continuation as an obligation. -/
-theorem Proc.call_congr {I : Signature} {A : Type} {action : I.Op}
-    {left right : I.Reply action → Proc I A} (continuation : ∀ reply, left reply = right reply) :
-    Proc.call action left = Proc.call action right :=
-  congrArg (Proc.call action) (funext continuation)
+theorem Process.call_congr {I : Signature} {A : Type} {action : I.Op}
+    {left right : I.Reply action → Process I A} (continuation : ∀ reply, left reply = right reply) :
+    Process.call action left = Process.call action right :=
+  congrArg (Process.call action) (funext continuation)
 
 /-- Distribute a continuation without changing either stopping branch. -/
-theorem Proc.bind_ite {I : Signature} {A B : Type} (p : Prop) [Decidable p]
-    (left right : Proc I A) (next : A → Proc I B) :
+theorem Process.bind_ite {I : Signature} {A B : Type} (p : Prop) [Decidable p]
+    (left right : Process I A) (next : A → Process I B) :
     (if p then left else right).bind next = if p then left.bind next else right.bind next := by
   split <;> rfl
 
 structure ExactRefinement {I : Signature} {A : Type}
-    (implementation specification : Proc I A) : Prop where
+    (implementation specification : Process I A) : Prop where
   process_eq : implementation = specification
 
 namespace ExactRefinement
-variable {I : Signature} {A B S E : Type} {p q r : Proc I A}
+variable {I : Signature} {A B S E : Type} {p q r : Process I A}
 
-theorem refl (p : Proc I A) : ExactRefinement p p := ⟨rfl⟩
+theorem refl (p : Process I A) : ExactRefinement p p := ⟨rfl⟩
 
 theorem trans (first : ExactRefinement p q) (second : ExactRefinement q r) :
     ExactRefinement p r := ⟨first.process_eq.trans second.process_eq⟩
@@ -42,13 +42,13 @@ theorem trans (first : ExactRefinement p q) (second : ExactRefinement q r) :
 theorem run_eq (certificate : ExactRefinement p q) (handler : Handler I S E) (state : S) :
     p.run handler state = q.run handler state := by rw [certificate.process_eq]
 
-theorem bind (certificate : ExactRefinement p q) (next : A → Proc I B) :
+theorem bind (certificate : ExactRefinement p q) (next : A → Process I B) :
     ExactRefinement (p.bind next) (q.bind next) :=
   ⟨congrArg (fun process => process.bind next) certificate.process_eq⟩
 
 /-- Compose both implementation boundaries at the actual returned value.
 Execution bind carries the successor state and preserves every stopped prefix. -/
-theorem bind_congr (first : ExactRefinement p q) {left right : A → Proc I B}
+theorem bind_congr (first : ExactRefinement p q) {left right : A → Process I B}
     (suffix : ∀ value, ExactRefinement (left value) (right value)) :
     ExactRefinement (p.bind left) (q.bind right) := by
   have next : left = right := funext (fun value => (suffix value).process_eq)

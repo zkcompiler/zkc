@@ -64,12 +64,12 @@ theorem round_reads (ctx : ProtocolContext) (handle : Nat) (state : List F × F)
         (some state.2)).interpret CommonAdapter.project =
       (GkrVerifier.round ctx handle state).bind (fun next => .done (some next.1, some next.2)) := by
   simp only [GkrRoundsNormalForms.verifierProcess, GkrVerifier.round, GkrVerifier.roundFirst,
-    GkrVerifier.roundSecond, GkrVerifier.roundCheck, PIR.Proc.interpret, CommonAdapter.project,
-    PIR.Proc.bind, append_plain]
-  refine congrArg (PIR.Proc.call _) (funext fun c0 => congrArg (PIR.Proc.call _) (funext fun c1 =>
-    congrArg (PIR.Proc.call _) (funext fun c2 => ?_)))
+    GkrVerifier.roundSecond, GkrVerifier.roundCheck, PIR.Process.interpret, CommonAdapter.project,
+    PIR.Process.bind, append_plain]
+  refine congrArg (PIR.Process.call _) (funext fun c0 => congrArg (PIR.Process.call _) (funext fun c1 =>
+    congrArg (PIR.Process.call _) (funext fun c2 => ?_)))
   split
-  · simp only [PIR.Proc.interpret, CommonAdapter.project, PIR.Proc.bind, GkrVerifier.roundChallenge]
+  · simp only [PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind, GkrVerifier.roundChallenge]
     rfl
   · rfl
 
@@ -80,7 +80,7 @@ theorem output_reads (ctx : ProtocolContext) (handle : Nat) (point : List F) :
         (some point)).interpret CommonAdapter.project =
       (GkrVerifier.outputRound ctx handle point).bind (fun next => .done (some next)) := by
   simp only [GkrSourceNormalForms.verifierOutputProcess, GkrVerifier.outputRound,
-    GkrVerifier.outputDelivery, PIR.Proc.interpret, CommonAdapter.project, PIR.Proc.bind, append_plain]
+    GkrVerifier.outputDelivery, PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind, append_plain]
   rfl
 
 /-- One line-coefficient iteration of the original is one further coefficient. -/
@@ -89,7 +89,7 @@ theorem coefficient_reads (ctx : ProtocolContext) (coefficients : List F) :
         (some coefficients)).interpret CommonAdapter.project =
       (GkrVerifier.lineCoefficient ctx coefficients).bind (fun next => .done (some next)) := by
   simp only [GkrSourceNormalForms.verifierCoefficientProcess, GkrVerifier.lineCoefficient,
-    PIR.Proc.interpret, CommonAdapter.project, PIR.Proc.bind, append_plain]
+    PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind, append_plain]
   rfl
 
 /-! ## Loops -/
@@ -97,14 +97,14 @@ theorem coefficient_reads (ctx : ProtocolContext) (coefficients : List F) :
 /-- Repeated steps whose interpretation is a plain step on embedded states read as
 the plain steps repeated. -/
 theorem repeatN_reads {I J : PIR.Signature} (operations : PIR.OperationInterpretation I J)
-    {S T : Type} (process : S → PIR.Proc I S) (step : T → PIR.Proc J T) (embed : T → S)
+    {S T : Type} (process : S → PIR.Process I S) (step : T → PIR.Process J T) (embed : T → S)
     (same : ∀ state, (process (embed state)).interpret operations =
       (step state).bind (fun next => .done (embed next))) :
     ∀ (count : Nat) (state : T), (PIR.repeatN count process (embed state)).interpret operations =
       (PIR.repeatN count step state).bind (fun next => .done (embed next))
   | 0, _ => rfl
   | count + 1, state => by
-      simp only [PIR.repeatN, PIR.Proc.interpret_bind, same, PIR.Proc.bind_assoc, PIR.Proc.bind]
+      simp only [PIR.repeatN, PIR.Process.interpret_bind, same, PIR.Process.bind_assoc, PIR.Process.bind]
       congr 1
       funext next
       exact repeatN_reads operations process step embed same count next
@@ -127,17 +127,17 @@ theorem rounds_reads (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.rol
       (GkrVerifier.rounds ctx handle count claim).bind (fun result => .done (roundsResults result)) := by
   unfold GkrRoundsNormalForms.verifierRoundsProcess
   rw [empty_plain]
-  simp only [PIR.Proc.bind, Values.get]
+  simp only [PIR.Process.bind, Values.get]
   rw [GkrRoundsNormalForms.verifier_fold ctx separate (some handle) count bounded
     (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (some []) (.cons (some claim) .nil)))))))
     (some [], some claim) (GkrRoundsNormalForms.verifierState_masked ctx _ rfl (some []) (some claim))]
   rw [Finite.fold_range_repeatN (fun result => GkrRoundsNormalForms.verifierProcess ctx (some handle)
     result.1 result.2) 0 count (some [], some claim)]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, PIR.Proc.interpret_bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret_bind]
   rw [repeatN_reads CommonAdapter.project _ (GkrVerifier.round ctx handle)
     (fun state : List F × F => (some state.1, some state.2))
     (fun state => round_reads ctx handle state) count ([], claim)]
-  simp only [GkrVerifier.rounds, PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [GkrVerifier.rounds, PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 theorem sum_plain (xs : List F) :
@@ -274,17 +274,17 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
   dsimp only at inside pointLength ⊢
   obtain ⟨separate, leftSeparate, rightSeparate⟩ := contexts_separate
   unfold GkrSourceNormalForms.verifierLayerProcess GkrVerifier.layerStep GkrVerifier.layerAfterLeft
-  rw [PIR.Proc.interpret_bind, rounds_reads _ leftSeparate handle width widthBound claim,
-    PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+  rw [PIR.Process.interpret_bind, rounds_reads _ leftSeparate handle width widthBound claim,
+    PIR.Process.bind_assoc, PIR.Process.bind_assoc]
   refine (rounds_yields _ handle width claim).bind_congr fun left leftLength => ?_
-  simp only [PIR.Proc.bind, roundsResults, Values.get]
-  rw [PIR.Proc.interpret_bind, rounds_reads _ rightSeparate handle width widthBound left.2,
-    PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+  simp only [PIR.Process.bind, roundsResults, Values.get]
+  rw [PIR.Process.interpret_bind, rounds_reads _ rightSeparate handle width widthBound left.2,
+    PIR.Process.bind_assoc, PIR.Process.bind_assoc]
   refine (rounds_yields _ handle width left.2).bind_congr fun right rightLength => ?_
-  simp only [PIR.Proc.bind, roundsResults, Values.get, GkrVerifier.layerAfterRight,
-    GkrVerifier.layerAfterConstant, PIR.Proc.interpret, PIR.Proc.interpret_bind, CommonAdapter.project,
+  simp only [PIR.Process.bind, roundsResults, Values.get, GkrVerifier.layerAfterRight,
+    GkrVerifier.layerAfterConstant, PIR.Process.interpret, PIR.Process.interpret_bind, CommonAdapter.project,
     empty_plain, append_plain, List.nil_append]
-  refine congrArg (PIR.Proc.call _) (funext fun first => ?_)
+  refine congrArg (PIR.Process.call _) (funext fun first => ?_)
   have small : width + width + width < 64 := by omega
   have position : layer < 2 ^ selector := by omega
   have positive : 0 < 2 ^ (width + width + width) := by positivity
@@ -297,10 +297,10 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
     (GkrSourceNormalForms.verifierCoefficientState_masked {} _ rfl (some [first]))
   erw [fold]
   rw [Finite.fold_range_repeatN (fun result => GkrSourceNormalForms.verifierCoefficientProcess (G := G) {}
-    result) 0 width (some [first]), PIR.Proc.interpret_bind,
+    result) 0 width (some [first]), PIR.Process.interpret_bind,
     repeatN_reads CommonAdapter.project _ (GkrVerifier.lineCoefficient {}) some
       (fun coefficients => coefficient_reads {} coefficients) width [first]]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, PIR.Proc.interpret]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret]
   have coefficientsYield := PIR.Yields.repeatN
     (invariant := fun index (coefficients : List F) => coefficients.length = index + 1)
     (step := GkrVerifier.lineCoefficient (G := G) {})
@@ -318,7 +318,7 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
       pointLength leftLength rightLength small addBlock,
     evaluateWiring_plain width _ point left.1 right.1 (mulTables layer) (mulDecoded layer inside)
       pointLength leftLength rightLength small mulBlock,
-    PIR.Proc.bind]
+    PIR.Process.bind]
   have powers : ∀ t : F, invoke (closed (F := F) (G := G)) GkrSourceBodies.evaluateCoefficientsHelper
       (.cons coefficients (.cons t .nil)) = .done (.cons (powerSum coefficients t) .nil) :=
     fun t => evaluateCoefficients_plain coefficients t coefficientsBound
@@ -329,9 +329,9 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
   · rename_i check
     rw [lineCheck_pos {} handle width (addTables layer) (mulTables layer) (layer, point, claim) left.1 right.1
       right.2 first coefficients check]
-    refine congrArg (PIR.Proc.call _) (funext fun challenge => congrArg (PIR.Proc.call _)
+    refine congrArg (PIR.Process.call _) (funext fun challenge => congrArg (PIR.Process.call _)
       (funext fun _ => ?_))
-    simp only [PIR.Proc.bind]
+    simp only [PIR.Process.bind]
     rw [powers challenge, points challenge]
     rfl
   · rename_i check
@@ -384,12 +384,12 @@ theorem layers_reads (handle layers width selector : Nat) (add mul : List F)
   | 0, _, _, _ => rfl
   | count + 1, state, bounded, pointLength => by
       rw [List.range'_succ]
-      simp only [Finite.fold, PIR.repeatN, PIR.Proc.interpret_bind]
+      simp only [Finite.fold, PIR.repeatN, PIR.Process.interpret_bind]
       rw [layer_reads handle layers width selector add mul addTables mulTables addShape mulShape addBound
         mulBound addDecoded mulDecoded selectorBound widthBound state (by omega) pointLength,
-        PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+        PIR.Process.bind_assoc, PIR.Process.bind_assoc]
       refine (layerStep_yields handle width addTables mulTables state).bind_congr fun next valid => ?_
-      simp only [PIR.Proc.bind]
+      simp only [PIR.Process.bind]
       have rest := layers_reads handle layers width selector add mul addTables mulTables addShape mulShape
         addBound mulBound addDecoded mulDecoded selectorBound widthBound count next (by omega) valid.2
       rw [valid.1] at rest
@@ -428,29 +428,29 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
     rw [ofList?_length _ _ outputsDecoded]; exact tableBound
   have inputsBound : inputs.length < indexLimit := by
     rw [ofList?_length _ _ inputsDecoded]; exact tableBound
-  rw [GkrSourceNormalForms.verifier_participant, PIR.Proc.bind_assoc]
-  simp only [PIR.Proc.bind]
+  rw [GkrSourceNormalForms.verifier_participant, PIR.Process.bind_assoc]
+  simp only [PIR.Process.bind]
   unfold GkrSourceNormalForms.verifierProcess
   rw [empty_plain]
-  simp only [PIR.Proc.bind, Values.get]
+  simp only [PIR.Process.bind, Values.get]
   have outputFold := GkrSourceNormalForms.verifierOutput_fold (F := F) (G := G) {} separate (some handle)
     width widthBound (.cons (some []) (.cons none .nil)) (some [])
     (GkrSourceNormalForms.verifierOutputState_masked {} _ rfl (some []))
   erw [outputFold]
   rw [Finite.fold_range_repeatN (fun result => GkrSourceNormalForms.verifierOutputProcess (G := G) {}
       (some handle) result) 0 width (some []),
-    PIR.Proc.bind_assoc, PIR.Proc.bind_assoc, PIR.Proc.interpret_bind,
+    PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.interpret_bind,
     repeatN_reads CommonAdapter.project _ (GkrVerifier.outputRound {} handle) some
       (fun point => output_reads {} handle point) width []]
   unfold GkrVerifier.verifier
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   have outputsYield := PIR.Yields.repeatN (invariant := fun index (point : List F) => point.length = index)
     (step := GkrVerifier.outputRound (G := G) {} handle)
     (fun index point length => (outputRound_yields {} handle point).mono fun next same => by omega)
     width 0 [] rfl
   refine outputsYield.bind_congr fun point pointLength => ?_
   simp only [Nat.zero_add] at pointLength
-  simp only [PIR.Proc.bind, GkrSourceNormalForms.verifierOutputState, Values.get,
+  simp only [PIR.Process.bind, GkrSourceNormalForms.verifierOutputState, Values.get,
     evaluate_plain width outputs point outputsTable outputsDecoded pointLength small outputsBound]
   have layerFold := GkrSourceNormalForms.verifierLayer_fold (F := F) (G := G) {} separate (some inputs)
     (some add) (some mul) (some layers) (some selector) (some width) (some handle) layers layersBound
@@ -459,13 +459,13 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
     (GkrSourceNormalForms.verifierLayerState_masked {} _ rfl (some point)
       (some (extension width outputsTable (coordinates width point))))
   erw [layerFold]
-  rw [PIR.Proc.bind_assoc, PIR.Proc.bind_assoc, PIR.Proc.interpret_bind]
+  rw [PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.interpret_bind]
   have layersRead := layers_reads (G := G) handle layers width selector add mul addTables mulTables addShape
     mulShape addBound mulBound addDecoded mulDecoded selectorBound widthBound layers
     (0, point, extension width outputsTable (coordinates width point)) (by simp) pointLength
   erw [layersRead]
   unfold GkrVerifier.afterOutputs
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   have layersYield := PIR.Yields.repeatN
     (invariant := fun index (state : GkrVerifier.State F) => state.1 = index ∧ state.2.1.length = width)
     (step := GkrVerifier.layerStep (G := G) {} handle width addTables mulTables)
@@ -473,7 +473,7 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
       fun next advanced => ⟨by rw [advanced.1, valid.1], advanced.2⟩)
     layers 0 (0, point, extension width outputsTable (coordinates width point)) ⟨rfl, pointLength⟩
   refine layersYield.bind_congr fun final valid => ?_
-  simp only [PIR.Proc.bind, GkrSourceNormalForms.verifierLayerState, Values.get,
+  simp only [PIR.Process.bind, GkrSourceNormalForms.verifierLayerState, Values.get,
     evaluate_plain width inputs final.2.1 inputsTable inputsDecoded valid.2 small inputsBound]
   rfl
 

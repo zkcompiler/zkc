@@ -151,7 +151,7 @@ private theorem claim_contract (a0 a1 r : F) :
         (fun second => .done (output (first.get .here + second.get .here)))) =
     .done (output ((1 - r) * a0 + r * a1))
   set_option smartUnfolding true in
-    simp only [Nat.cast_one, invoke_weighted, PIR.Proc.bind, Values.get]
+    simp only [Nat.cast_one, invoke_weighted, PIR.Process.bind, Values.get]
 
 private theorem invoke_claim (a0 a1 r : F) :
     invoke (table F G) claimHelper (inputs a0 a1 r) =
@@ -173,8 +173,8 @@ theorem candidate_eq_claim (a0 a1 r : F) :
     candidate.denote F G (inputs a0 a1 r) = .done (.cons ((1 - r) * a0 + r * a1) .nil) :=
   (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
     candidate.payload candidateBody Candidate.entry_exact (inputs a0 a1 r)).trans (by
-    change PIR.Proc.done (output (((1 : Nat) - r) * a0 + r * a1)) =
-      (PIR.Proc.done (output ((1 - r) * a0 + r * a1)) : Closed _)
+    change PIR.Process.done (output (((1 : Nat) - r) * a0 + r * a1)) =
+      (PIR.Process.done (output ((1 - r) * a0 + r * a1)) : Closed _)
     simp only [Nat.cast_one])
 
 /-- Complete process equality for these exact exports, for all scalar inputs.

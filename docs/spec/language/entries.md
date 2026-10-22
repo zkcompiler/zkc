@@ -2,6 +2,23 @@
 
 This native contract defines closed Entry jobs and their source-level associations.
 
+## Semantic subject selection
+
+The inspection/export commands also accept `--subject=NAME`, mutually exclusive
+with `--entry` and `--entry-kind`. This mode selects a configured proof or closed
+protocol specialization for semantic export. Resolution, static argument checks
+and limits are shared with Entry selection. A protocol subject closes its Run
+deployment directly; a proof subject uses the ordinary proof closure. Authored
+Host Entry functions are refused as protocol subjects.
+
+The admitted source, interface, structured snapshot and optional source claims
+all refer to this same closed subject. The Run deployment name and normalized
+arguments determine its native identity. A wrapping Host function remains a
+separate computation: neither one static deployment record nor direct subject
+selection proves its reachability, invocation count, result or resource usage.
+Ordinary `--entry` selection and its default Host wrappers retain the semantics
+below.
+
 ## Entry functions
 
 A protocol without static parameters provides a default run Entry selected by

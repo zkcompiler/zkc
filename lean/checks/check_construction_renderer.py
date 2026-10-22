@@ -98,8 +98,8 @@ example : RenderedCaptures.participant.instructions =
   decide +kernel
 '''
     path = output / "Rendered.lean"
-    path.write_text("import Zkc.Construction.Participant\n" + source, encoding="utf-8")
-    run = subprocess.run([lake, "env", "lean", path], cwd=HERE,
+    path.write_text("module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n" + source, encoding="utf-8")
+    run = subprocess.run([lake, "lean", path], cwd=HERE,
                          capture_output=True, encoding="utf-8", timeout=120)
     (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
     if run.returncode:

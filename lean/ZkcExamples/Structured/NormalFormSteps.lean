@@ -19,7 +19,7 @@ open Zkc.Source
 
 theorem owned_done {Role : Type} [DecidableEq Role] {Ty : Type} {Value : Ty → Type}
     {I : PIR.Signature} {inputs outputs : List Ty} (self : Role)
-    {work : Values Value inputs → PIR.Proc I (Values Value outputs)}
+    {work : Values Value inputs → PIR.Process I (Values Value outputs)}
     (args : Values Value inputs) {results : Values Value outputs}
     (law : work args = .done results) :
     Participant.owned self self work args.present = .done results.present := by
@@ -28,7 +28,7 @@ theorem owned_done {Role : Type} [DecidableEq Role] {Ty : Type} {Value : Ty → 
 
 theorem owned_halt {Role : Type} [DecidableEq Role] {Ty : Type} {Value : Ty → Type}
     {I : PIR.Signature} {inputs outputs : List Ty} (self : Role)
-    {work : Values Value inputs → PIR.Proc I (Values Value outputs)}
+    {work : Values Value inputs → PIR.Process I (Values Value outputs)}
     (args : Values Value inputs) {reason : PIR.Stop}
     (law : work args = .halt reason) :
     Participant.owned self self work args.present = .halt reason := by
@@ -40,14 +40,14 @@ the value tuple with that tuple in every continuation. -/
 theorem denote_letOp_bind {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d I)
     {Γ out : List d.Ty} (op : d.Op) (args : Operands Γ (d.arguments op))
     (bodies : Regions d (d.regions op)) (next : Region d (d.results op ++ Γ) out)
-    (before : Values m.Value Γ) {A : Type} (process : PIR.Proc I A)
-    (added : A → Values m.Value (d.results op)) (result : A → PIR.Proc I (Values m.Value out))
+    (before : Values m.Value Γ) {A : Type} (process : PIR.Process I A)
+    (added : A → Values m.Value (d.results op)) (result : A → PIR.Process I (Values m.Value out))
     (operation : m.operation op (args.eval before.get) (bodies.denote m) =
       process.bind (fun value => .done (added value)))
     (continuation : ∀ value, next.denote m ((added value).append before).get = result value) :
     (Region.letOp op args bodies next).denote m before.get = process.bind result := by
-  rw [Region.denote_letOp_values, operation, PIR.Proc.bind_assoc]
-  apply congrArg (PIR.Proc.bind process)
+  rw [Region.denote_letOp_values, operation, PIR.Process.bind_assoc]
+  apply congrArg (PIR.Process.bind process)
   funext value
   exact continuation value
 
@@ -56,15 +56,15 @@ followed by the embedding of its carried state. -/
 theorem denote_letOp_bind_after {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d I)
     {Γ out : List d.Ty} (op : d.Op) (args : Operands Γ (d.arguments op))
     (bodies : Regions d (d.regions op)) (next : Region d (d.results op ++ Γ) out)
-    (before : Values m.Value Γ) {A B : Type} (process : PIR.Proc I A)
-    (added : A → Values m.Value (d.results op)) (result : A → PIR.Proc I B)
-    (after : B → PIR.Proc I (Values m.Value out))
+    (before : Values m.Value Γ) {A B : Type} (process : PIR.Process I A)
+    (added : A → Values m.Value (d.results op)) (result : A → PIR.Process I B)
+    (after : B → PIR.Process I (Values m.Value out))
     (operation : m.operation op (args.eval before.get) (bodies.denote m) =
       process.bind (fun value => .done (added value)))
     (continuation : ∀ value,
       next.denote m ((added value).append before).get = (result value).bind after) :
     (Region.letOp op args bodies next).denote m before.get = (process.bind result).bind after := by
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   exact denote_letOp_bind m op args bodies next before process added _ operation continuation
 
 open Zkc.Source.Structured
@@ -102,7 +102,7 @@ theorem apply_step (payload : UnitPayload)
     (masked : Values (Component (assignment F G)) signature.inputs)
     (mask : maskValues self ((ctx.enter site roles).mapScopes signature.inputScopes)
       (operands.eval before.get) = masked)
-    (process : PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) signature.outputs))
+    (process : PIR.Process (participantInterface F G) (Values (Component (assignment F G)) signature.outputs))
     (callee : body.denote (participantMeaningWith (.silent _) (participantActions F G)
       (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
       (payload.plainProtocolTable F G) (ctx.enter site roles)) masked.get = process)
@@ -111,7 +111,7 @@ theorem apply_step (payload : UnitPayload)
     (outputs : ∀ values,
       maskValues self ((ctx.enter site roles).mapScopes signature.outputScopes) values = added values)
     (result : Values (Component (assignment F G)) signature.outputs →
-      PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) out))
+      PIR.Process (participantInterface F G) (Values (Component (assignment F G)) out))
     (continuation : ∀ values,
       next.denote (participantMeaningWith (.silent _) (participantActions F G)
         (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
@@ -124,7 +124,7 @@ theorem apply_step (payload : UnitPayload)
   rw [← plain_denote, payload.protocolApply_interpret_substitute definition member signature
     sameSignature body exactRaw roles site ctx self operands next before.get inside forgetSites _ rfl,
     plain_denote, mask, callee]
-  apply congrArg (PIR.Proc.bind process)
+  apply congrArg (PIR.Process.bind process)
   funext values
   rw [plain_denote, outputs, ← continuation, Environment.prepend_values_get]
 
@@ -143,7 +143,7 @@ theorem apply_step_after (payload : UnitPayload)
     (masked : Values (Component (assignment F G)) signature.inputs)
     (mask : maskValues self ((ctx.enter site roles).mapScopes signature.inputScopes)
       (operands.eval before.get) = masked)
-    (process : PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) signature.outputs))
+    (process : PIR.Process (participantInterface F G) (Values (Component (assignment F G)) signature.outputs))
     (callee : body.denote (participantMeaningWith (.silent _) (participantActions F G)
       (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
       (payload.plainProtocolTable F G) (ctx.enter site roles)) masked.get = process)
@@ -152,8 +152,8 @@ theorem apply_step_after (payload : UnitPayload)
     (outputs : ∀ values,
       maskValues self ((ctx.enter site roles).mapScopes signature.outputScopes) values = added values)
     {B : Type} (result : Values (Component (assignment F G)) signature.outputs →
-      PIR.Proc (participantInterface F G) B)
-    (after : B → PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) out))
+      PIR.Process (participantInterface F G) B)
+    (after : B → PIR.Process (participantInterface F G) (Values (Component (assignment F G)) out))
     (continuation : ∀ values,
       next.denote (participantMeaningWith (.silent _) (participantActions F G)
         (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
@@ -164,7 +164,7 @@ theorem apply_step_after (payload : UnitPayload)
         (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
         (payload.plainProtocolTable F G) ctx) before.get =
       (process.bind result).bind after := by
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   exact apply_step payload definition member signature sameSignature body exactRaw roles site ctx self
     operands next before inside masked mask process callee added outputs _ continuation
 
@@ -180,7 +180,7 @@ theorem repeat_embed {I : PIR.Signature} (spec : RepeatSpec) (ctx : ProtocolCont
       (.index :: (spec.state ++ spec.captures), spec.state))
     {S : Type} (embed : S → Values (Component (assignment F G)) spec.state)
     (masked : ∀ value, maskValues self (ctx.mapScopes spec.stateScopes) (embed value) = embed value)
-    (process : S → Nat → PIR.Proc I S)
+    (process : S → Nat → PIR.Process I S)
     (equation : ∀ value index, body (.cons (some index) ((embed value).append captures)) =
       (process value index).bind (fun result => .done (embed result)))
     (count : Nat) (bounded : count ≤ spec.maximum)
@@ -191,9 +191,9 @@ theorem repeat_embed {I : PIR.Signature} (spec : RepeatSpec) (ctx : ProtocolCont
   rw [repeat_admitted spec ctx self state captures body count inside bounded, start]
   apply Repeat.loop_embed
   intro value index
-  rw [Repeat.step_equation, masked, equation, PIR.Proc.bind_assoc]
-  apply congrArg (PIR.Proc.bind _)
+  rw [Repeat.step_equation, masked, equation, PIR.Process.bind_assoc]
+  apply congrArg (PIR.Process.bind _)
   funext result
-  simp only [PIR.Proc.bind, masked]
+  simp only [PIR.Process.bind, masked]
 
 end ZkcExamples.Structured.NormalFormSteps

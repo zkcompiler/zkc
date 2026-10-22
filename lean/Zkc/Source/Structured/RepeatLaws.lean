@@ -14,7 +14,7 @@ namespace Zkc.Source.Finite
 /-- An index-independent finite range fold is the existing fixed-trip process,
 including every interaction and early stop, for any starting index and count. -/
 theorem fold_range_repeatN {I : PIR.Signature} {S : Type}
-    (step : S → PIR.Proc I S) (start count : Nat) (initial : S) :
+    (step : S → PIR.Process I S) (start count : Nat) (initial : S) :
     fold (fun state (_ : Nat) => step state) (List.range' start count) initial =
       PIR.repeatN count step initial := by
   induction count generalizing start initial with
@@ -65,7 +65,7 @@ values are embedded using bind/done; effects, arbitrary replies and halts remain
 No injectivity or totality premise is needed. -/
 theorem loop_embed {S : Type}
     (embed : S → Values (Component (assignment F G)) spec.state)
-    (smallStep : S → Nat → PIR.Proc I S)
+    (smallStep : S → Nat → PIR.Process I S)
     (start count : Nat) (initial : S)
     (same : ∀ value index,
       step spec context self captures body (embed value) index =
@@ -77,7 +77,7 @@ theorem loop_embed {S : Type}
   | zero => rfl
   | succ count ih =>
     simp only [loop_succ, same, List.range'_succ, Finite.fold,
-      PIR.Proc.bind_assoc, PIR.Proc.bind, ih]
+      PIR.Process.bind_assoc, PIR.Process.bind, ih]
 
 /-- The second segment continues at start + first, never at zero. -/
 theorem loop_split (start first rest : Nat)
@@ -93,7 +93,7 @@ theorem step_masked (state : Values (Component (assignment F G)) spec.state) (in
     (step spec context self captures body state index).bind
       (fun result => .done (maskValues self (context.mapScopes spec.stateScopes) result)) =
         step spec context self captures body state index := by
-  simp only [step, PIR.Proc.bind_assoc, PIR.Proc.bind, maskValues_idempotent]
+  simp only [step, PIR.Process.bind_assoc, PIR.Process.bind, maskValues_idempotent]
 
 /-- Every returning residual state remains masked, for arbitrary effects and stops. -/
 theorem loop_masked (start count : Nat)
@@ -103,15 +103,15 @@ theorem loop_masked (start count : Nat)
       (fun result => .done (maskValues self (context.mapScopes spec.stateScopes) result)) =
         loop spec context self captures body start count state := by
   induction count generalizing start state with
-  | zero => simp only [loop_zero, PIR.Proc.bind, masked]
+  | zero => simp only [loop_zero, PIR.Process.bind, masked]
   | succ count ih =>
-    simp only [loop_succ, step, PIR.Proc.bind_assoc, PIR.Proc.bind]
+    simp only [loop_succ, step, PIR.Process.bind_assoc, PIR.Process.bind]
     congr 1
     funext result
     exact ih (start + 1) _ (maskValues_idempotent _ _ _)
 
 /-- Call-free done-step equations may depend on the exact shifted induction
-value. The hypothesis requires each reached step itself to equal `Proc.done`;
+value. The hypothesis requires each reached step itself to equal `Process.done`;
 it does not merely assert a returned value after interpreting interactions. -/
 theorem loop_state (states : Nat → Values (Component (assignment F G)) spec.state)
     (start count : Nat)
@@ -128,10 +128,10 @@ theorem loop_run_stops {A S E : Type} (start first rest : Nat)
     (handler : PIR.Handler I S E) (initial finalState : S) (events : List E) (reason : PIR.Stop)
     (stops : (loop spec context self captures body start first state).run handler initial =
       ⟨.stopped reason, finalState, events⟩)
-    (next : Values (Component (assignment F G)) spec.state → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) spec.state → PIR.Process I A) :
     ((loop spec context self captures body start (first + rest) state).bind next).run handler initial =
       ⟨.stopped reason, finalState, events⟩ := by
-  rw [loop_split, PIR.Proc.bind_assoc, PIR.run_bind, stops]
+  rw [loop_split, PIR.Process.bind_assoc, PIR.run_bind, stops]
   rfl
 
 /-- The stopping callback can itself have performed effects. Earlier successful
@@ -145,12 +145,12 @@ theorem loop_first_stop {A S E : Type} (start before after : Nat)
     (stops : (body (.cons (some (start + before))
       ((maskValues self (context.mapScopes spec.stateScopes) reached).append captures))).run
         handler middle = ⟨.stopped reason, finalState, stopEvents⟩)
-    (next : Values (Component (assignment F G)) spec.state → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) spec.state → PIR.Process I A) :
     ((loop spec context self captures body start (before + (after + 1)) state).bind next).run
       handler initial = ⟨.stopped reason, finalState, prefixEvents ++ stopEvents⟩ := by
-  rw [loop_split, PIR.Proc.bind_assoc, PIR.run_bind, earlier]
+  rw [loop_split, PIR.Process.bind_assoc, PIR.run_bind, earlier]
   simp only [PIR.Execution.follow]
-  rw [loop_succ, step, PIR.Proc.bind_assoc, PIR.Proc.bind_assoc, PIR.run_bind, stops]
+  rw [loop_succ, step, PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.run_bind, stops]
   rfl
 
 /-- Execution of a returned prefix is sequenced with its actual residual handler
@@ -190,7 +190,7 @@ theorem loop_congr_on
   induction count generalizing start state phase with
   | zero => rfl
   | succ count ih =>
-    simp only [loop_succ, step, PIR.Proc.bind_assoc, PIR.Proc.bind]
+    simp only [loop_succ, step, PIR.Process.bind_assoc, PIR.Process.bind]
     rw [← same start (Nat.le_refl _) (by omega) state phase initial]
     apply PIR.Boundary.bind_congr_returns protocol _ _ phase
       (preserved start (Nat.le_refl _) (by omega) state phase initial)
@@ -216,7 +216,7 @@ theorem loop_congr
   induction count generalizing start state with
   | zero => rfl
   | succ count ih =>
-    simp only [loop_succ, step, PIR.Proc.bind_assoc, PIR.Proc.bind]
+    simp only [loop_succ, step, PIR.Process.bind_assoc, PIR.Process.bind]
     rw [same start (Nat.le_refl _) (by omega) _ (maskValues_idempotent _ _ _)]
     congr 1
     funext result
@@ -302,7 +302,7 @@ theorem repeat_masked (count : Option Nat) :
         denoteRepeat spec context self count state captures body := by
   cases active : (spec.roles.map context.roles).contains self with
   | false => simp only [repeat_outside spec context self state captures body count active,
-      PIR.Proc.bind, maskValues_absent]
+      PIR.Process.bind, maskValues_absent]
   | true =>
     cases count with
     | none => rw [repeat_missing_count spec context self state captures body active]; rfl
@@ -342,7 +342,7 @@ theorem repeat_congr (count : Option Nat)
 
 /-- An invariant-restricted call-free done-step law reuses the existing finite
 exact replacement theorem. The hypothesis equates each reached process step to
-`Proc.done`, not just its result under a handler. Count admission remains before
+`Process.done`, not just its result under a handler. Count admission remains before
 the replacement and suffix. -/
 theorem repeat_replace_on {A : Type} (count : Nat)
     (inside : (spec.roles.map context.roles).contains self = true)
@@ -353,7 +353,7 @@ theorem repeat_replace_on {A : Type} (count : Nat)
     (law : ∀ value index, index < count → valid value →
       Repeat.step spec context self captures body value index = .done (total value index) ∧
         valid (total value index))
-    (next : Values (Component (assignment F G)) spec.state → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) spec.state → PIR.Process I A) :
     PIR.ExactRefinement ((denoteRepeat spec context self (some count) state captures body).bind next)
       ((Finite.admitThen
         (Finite.Domain.check (decide (count ≤ spec.maximum)) .refused

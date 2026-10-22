@@ -19,15 +19,6 @@ glue = "lean/ZkcExamples/Construction/GkrProof.lean"
 [normal_forms]
 request = "lean/bridges/structured/normal-forms/gkr-source.toml"
 
-[family]
-module = "ZkcSecurity.FiatShamir.Composition"
-kind = "certificate"
-
-[claims]
-endpoint = "ideal-meaning"
-properties = ["soundness"]
-statement = "fixed"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
              "transport.canonical-decoding"]

@@ -8,7 +8,7 @@ public import Std.Data.HashMap.Basic
 
 /-! Executable capacity policy over the retained checked raw carrier. This is
 abstract size analysis, not a second concrete evaluator or a soundness theorem.
-Only the tools use these budgets; Source.Region and PIR.Proc remain fuel-free. -/
+Only the tools use these budgets; Source.Region and PIR.Process remain fuel-free. -/
 
 namespace ZkcTools.StructuredSource
 open Zkc.Source Zkc.Source.Structured

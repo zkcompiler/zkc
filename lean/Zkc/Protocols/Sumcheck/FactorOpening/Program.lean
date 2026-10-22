@@ -62,7 +62,7 @@ def publicChecks : Checks F where
   right statement residual opening := decide (opening = value statement.right residual.first residual.second)
 
 def terminal (wiring : Wiring) (checks : Checks F) (statement : Statement F) (residual : Residual F) :
-    PIR.Proc (actions (F := F)) (Option Bool) :=
+    PIR.Process (actions (F := F)) (Option Bool) :=
   .call (.receive (.field wiring.rounds.fieldDomain) wiring.leftSite wiring.rounds.prover) fun left =>
   if checks.left statement residual left then
     .call (.receive (.field wiring.rounds.fieldDomain) wiring.rightSite wiring.rounds.prover) fun right =>
@@ -70,13 +70,13 @@ def terminal (wiring : Wiring) (checks : Checks F) (statement : Statement F) (re
   else .halt .reject
 
 def experimentWith (wiring : Wiring) (checks : Checks F) (statement : Statement F) (claim : F) (service : Nat) :
-    PIR.Proc (actions (F := F)) (Option Bool) :=
+    PIR.Process (actions (F := F)) (Option Bool) :=
   (rounds wiring.rounds claim service).bind (terminal wiring checks statement)
 
 abbrev experiment (wiring : Wiring) (statement : Statement F) (claim : F) (service : Nat) :=
   experimentWith wiring (publicChecks (F := F)) statement claim service
 
-abbrev Verifier (F : Type) [Field F] := Statement F → F → Nat → PIR.Proc (actions (F := F)) (Option Bool)
+abbrev Verifier (F : Type) [Field F] := Statement F → F → Nat → PIR.Process (actions (F := F)) (Option Bool)
 
 structure VerifierContract (wiring : Wiring) (checks : Checks F) (implementation : Verifier F) : Prop where
   realizes : ∀ statement claim service,
@@ -84,9 +84,9 @@ structure VerifierContract (wiring : Wiring) (checks : Checks F) (implementation
 
 /-- Separate certificates meet at the actual returned residual, with no state reset. -/
 theorem compose_contract {wiring : Wiring} {checks : Checks F}
-    {implementation : F → Nat → PIR.Proc (actions (F := F)) (Residual F)}
+    {implementation : F → Nat → PIR.Process (actions (F := F)) (Residual F)}
     (roundCertificate : ResidualContract wiring.rounds implementation)
-    {finish : Statement F → Residual F → PIR.Proc (actions (F := F)) (Option Bool)}
+    {finish : Statement F → Residual F → PIR.Process (actions (F := F)) (Option Bool)}
     (openingCertificate : ∀ statement residual,
       PIR.ExactRefinement (finish statement residual) (terminal wiring checks statement residual)) :
     VerifierContract wiring checks (fun statement claim service =>

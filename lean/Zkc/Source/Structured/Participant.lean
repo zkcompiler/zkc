@@ -13,8 +13,8 @@ namespace Zkc.Source.Participant
 theorem owned_interpret {Role Ty : Type} [DecidableEq Role] {Value : Ty → Type}
     {I J : PIR.Signature} {inputs outputs : List Ty}
     (operations : PIR.OperationInterpretation I J) (self owner : Role)
-    (left : Values Value inputs → PIR.Proc I (Values Value outputs))
-    (right : Values Value inputs → PIR.Proc J (Values Value outputs))
+    (left : Values Value inputs → PIR.Process I (Values Value outputs))
+    (right : Values Value inputs → PIR.Process J (Values Value outputs))
     (work : ∀ args, (left args).interpret operations = right args)
     (args : Values (Component Value) inputs) :
     (owned self owner left args).interpret operations = owned self owner right args := by
@@ -22,7 +22,7 @@ theorem owned_interpret {Role Ty : Type} [DecidableEq Role] {Value : Ty → Type
   split
   · cases RoleFamily.sequence args with
     | none => rfl
-    | some values => simp only [PIR.Proc.interpret_bind, work, PIR.Proc.interpret]
+    | some values => simp only [PIR.Process.interpret_bind, work, PIR.Process.interpret]
   · rfl
 
 end Zkc.Source.Participant
@@ -86,8 +86,8 @@ theorem observedSites_forgetSites {F G : Type} :
 
 theorem observeAction_forgetSites {F G : Type} (action : (participantInterface F G).Op) :
     (observeAction action).interpret forgetSites = participantActions F G action := by
-  simp only [observeAction, forgetSites, participantActions, PIR.Proc.interpret,
-    PIR.Proc.bind_done]
+  simp only [observeAction, forgetSites, participantActions, PIR.Process.interpret,
+    PIR.Process.bind_done]
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -101,7 +101,7 @@ def protocolOperationWith {I : PIR.Signature} (observations : SiteObservations I
     (callbacks : Values (RegionFunction (Component (assignment F G)) I) op.regions)
     (protocols : ProtocolTable (assignment F G) I := [])
     (context : ProtocolContext := {}) :
-    PIR.Proc I (Values (Component (assignment F G)) op.results) :=
+    PIR.Process I (Values (Component (assignment F G)) op.results) :=
   match op, args with
   | .repeat spec _, .cons count values =>
     let parts := Values.split spec.state values
@@ -171,9 +171,9 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
     (protocolOperationWith leftSites leftActions left self op args callbacks leftProtocols context).interpret operations =
       protocolOperationWith rightSites rightActions right self op args
         (RegionFunctions.translate (dialect := protocolDialect) operations callbacks) rightProtocols context := by
-  have actionProcess {A : Type} (process : PIR.Proc (participantInterface F G) A) :
+  have actionProcess {A : Type} (process : PIR.Process (participantInterface F G) A) :
       (process.interpret leftActions).interpret operations = process.interpret rightActions :=
-    PIR.Proc.interpret_interchange leftActions operations rightActions actions process
+    PIR.Process.interpret_interchange leftActions operations rightActions actions process
   cases op with
   | «repeat» spec site =>
     cases args with
@@ -201,7 +201,7 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
         leftActions).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) []))).interpret operations =
         ((Participant.guard (services := services) (Value := assignment F G) self _ condition).interpret
           rightActions).bind (fun _ => .done Values.nil)
-      simp only [PIR.Proc.interpret_bind, actionProcess, PIR.Proc.interpret]
+      simp only [PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
   | exchange ty sender receiver site =>
     cases callbacks
     cases args with
@@ -214,12 +214,12 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
         ((Participant.exchange (services := services) self (context.roles sender) (context.roles receiver)
           (qualifyProtocolSite context.applicationPrefix site) value).interpret
           rightActions).bind (fun result => .done (Values.cons result Values.nil))
-      simp only [PIR.Proc.interpret_bind, actionProcess, PIR.Proc.interpret]
+      simp only [PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
   | restrict => cases callbacks; cases args with
     | cons value rest => cases rest; rfl
   | draw =>
     cases callbacks
-    simp only [protocolOperationWith, PIR.Proc.interpret_bind, actionProcess, PIR.Proc.interpret]
+    simp only [protocolOperationWith, PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
   | statement => cases callbacks; rfl
   | mark site =>
     cases callbacks
@@ -227,7 +227,7 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
     change ((leftSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind
       (fun _ => .done (Values.nil : Values (Component (assignment F G)) []))).interpret operations =
       (rightSites.mark (qualifyProtocolSite context.applicationPrefix site)).bind (fun _ => .done Values.nil)
-    simp only [PIR.Proc.interpret_bind, sites (qualifyProtocolSite context.applicationPrefix site), PIR.Proc.interpret]
+    simp only [PIR.Process.interpret_bind, sites (qualifyProtocolSite context.applicationPrefix site), PIR.Process.interpret]
   | protocolApply signature roles site =>
     cases callbacks
     change (if (context.enter site roles).contains signature self then
@@ -311,14 +311,14 @@ def CheckedProtocol.observed (root : CheckedProtocol) (tables : OpenTables F G) 
     (inputs : Values (Component (assignment F G)) root.inputs)
     (protocols : ProtocolTable (assignment F G) (observedInterface F G) := [])
     (context : ProtocolContext := {}) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) root.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) root.outputs) :=
   root.denoteWith (observedSites F G) observeAction tables protocols context self inputs
 
 def CheckedProtocol.participant (root : CheckedProtocol) (tables : OpenTables F G) (self : Nat)
     (inputs : Values (Component (assignment F G)) root.inputs)
     (protocols : ProtocolTable (assignment F G) (observedInterface F G) := [])
     (context : ProtocolContext := {}) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) root.outputs) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) root.outputs) :=
   (root.observed tables self inputs protocols context).interpret forgetSites
 
 theorem CheckedProtocol.denoteWith_interpret {I J : PIR.Signature}
@@ -337,7 +337,7 @@ theorem CheckedProtocol.denoteWith_interpret {I J : PIR.Signature}
     (args : Values (Component (assignment F G)) definition.inputs) :
     (definition.denoteWith leftSites leftActions left leftProtocols context self args).interpret operations =
       definition.denoteWith rightSites rightActions right rightProtocols context self args := by
-  simp only [denoteWith, PIR.Proc.interpret_bind, PIR.Proc.interpret]
+  simp only [denoteWith, PIR.Process.interpret_bind, PIR.Process.interpret]
   dsimp only [CheckedProtocol.signature]
   rw [participant_denote_interpret operations sites actions tables self _ _ protocols context]
 
@@ -451,7 +451,7 @@ theorem apply_returns {I : PIR.Signature} {A : Type}
     (inside : (context.enter site roles).contains signature self = true)
     (results : Values (Component (assignment F G)) signature.outputs)
     (returns : invokeProtocol protocols signature (context.enter site roles) self args = .done results)
-    (next : Values (Component (assignment F G)) signature.outputs → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) signature.outputs → PIR.Process I A) :
     (protocolOperationWith observations actions helpers self (.protocolApply signature roles site)
       args .nil protocols context).bind next = next results := by
   rw [apply_inside observations actions helpers protocols signature roles site context self args inside, returns]
@@ -469,7 +469,7 @@ theorem apply_stops {I : PIR.Signature} {A : Type}
     (inside : (context.enter site roles).contains signature self = true)
     (reason : PIR.Stop)
     (stops : invokeProtocol protocols signature (context.enter site roles) self args = .halt reason)
-    (next : Values (Component (assignment F G)) signature.outputs → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) signature.outputs → PIR.Process I A) :
     (protocolOperationWith observations actions helpers self (.protocolApply signature roles site)
       args .nil protocols context).bind next = .halt reason := by
   rw [apply_inside observations actions helpers protocols signature roles site context self args inside, stops]
@@ -489,7 +489,7 @@ theorem apply_run_stops {I : PIR.Signature} {A S E : Type}
     (handler : PIR.Handler I S E) (initial finalState : S) (events : List E) (reason : PIR.Stop)
     (stops : (invokeProtocol protocols signature (context.enter site roles) self args).run
       handler initial = ⟨.stopped reason, finalState, events⟩)
-    (next : Values (Component (assignment F G)) signature.outputs → PIR.Proc I A) :
+    (next : Values (Component (assignment F G)) signature.outputs → PIR.Process I A) :
     ((protocolOperationWith observations actions helpers self (.protocolApply signature roles site)
       args .nil protocols context).bind next).run handler initial =
         ⟨.stopped reason, finalState, events⟩ := by

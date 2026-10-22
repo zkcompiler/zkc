@@ -17,7 +17,7 @@ class HeaderParser:
     def __init__(self, lean="lean", root=ROOT, lake=None):
         command = [lake, "env", "lean"] if lake else [lean]
         self.process = subprocess.Popen(
-            [*command, "-DwarningAsError=true", "--run", str(ROOT / "ZkcTools/ImportHeaders.lean")],
+            [*command, "-DautoImplicit=false", "-DwarningAsError=true", "--run", str(ROOT / "ZkcTools/ImportHeaders.lean")],
             cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self.cache = {}
 

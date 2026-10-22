@@ -38,13 +38,13 @@ theorem run_agrees (context : ProtocolContext) (self : Nat)
         RepeatServiceBodies.runSignature context self args := rfl
 
 def senderObserved (count first second : Nat) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs) :=
   .call (.mark "s0") <| fun _ =>
   (RepeatServiceLaws.verifierObserved (F := F) (G := G) (some "s0") 2 count first second).bind
     fun result => .done (.cons (result.get (.there .here)) (.cons none (.cons none .nil)))
 
 def receiverObserved (count : Nat) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs) :=
   .call (.mark "s0") <| fun _ =>
   (RepeatServiceLaws.receiverObserved (F := F) (G := G) (some "s0") 0 count).bind
     fun result => .done (.cons none (.cons none (.cons (result.get .here) .nil)))
@@ -58,15 +58,15 @@ theorem observed_sender (count : Nat) (bound : count ≤ 3) (outside : Option F)
     (inputs (some count) outside (some first) (some second)) = _
   rw [outer_body_view]
   simp only [outerBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, inputs]
-  simp only [PIR.Proc.bind_assoc]
-  change (PIR.Proc.call (I := observedInterface F G) (.mark "s0") _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs)) =
-    PIR.Proc.call (I := observedInterface F G) (.mark "s0") _
+  simp only [PIR.Process.bind_assoc]
+  change (PIR.Process.call (I := observedInterface F G) (.mark "s0") _ :
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs)) =
+    PIR.Process.call (I := observedInterface F G) (.mark "s0") _
   congr 1
   funext ignored
-  apply congrArg₂ (PIR.Proc.bind (I := observedInterface F G)
+  apply congrArg₂ (PIR.Process.bind (I := observedInterface F G)
     (A := Values (Component (assignment F G)) runSignature.outputs)
     (B := Values (Component (assignment F G)) outerSignature.outputs))
   · exact (run_agrees ⟨some "s0", roleSubstitution [2, 0]⟩ 0
@@ -86,15 +86,15 @@ theorem observed_receiver (count : Nat) (bound : count ≤ 3) (outside : Option 
     (inputs (some count) outside first second) = _
   rw [outer_body_view]
   simp only [outerBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, inputs]
-  simp only [PIR.Proc.bind_assoc]
-  change (PIR.Proc.call (I := observedInterface F G) (.mark "s0") _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs)) =
-    PIR.Proc.call (I := observedInterface F G) (.mark "s0") _
+  simp only [PIR.Process.bind_assoc]
+  change (PIR.Process.call (I := observedInterface F G) (.mark "s0") _ :
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) outerSignature.outputs)) =
+    PIR.Process.call (I := observedInterface F G) (.mark "s0") _
   congr 1
   funext ignored
-  apply congrArg₂ (PIR.Proc.bind (I := observedInterface F G)
+  apply congrArg₂ (PIR.Process.bind (I := observedInterface F G)
     (A := Values (Component (assignment F G)) runSignature.outputs)
     (B := Values (Component (assignment F G)) outerSignature.outputs))
   · exact (run_agrees ⟨some "s0", roleSubstitution [2, 0]⟩ 2

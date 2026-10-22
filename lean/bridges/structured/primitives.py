@@ -21,8 +21,10 @@ FIXTURES = ROOT / "compiler/test/fixtures/structured-source"
 def authored(suite, label, stem):
     subject = suite.authored(label, *fixture(stem))
     interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
-    assert interface["original"] == subject[2][2].removeprefix("sha256:")
-    assert interface["protocol"] == subject[2][3]
+    if not (interface["original"] == subject[2][2].removeprefix("sha256:")):
+        raise AssertionError('bridges/structured/primitives.py:24: interface["original"] == subject[2][2].removeprefix("sha256:")')
+    if not (interface["protocol"] == subject[2][3]):
+        raise AssertionError('bridges/structured/primitives.py:25: interface["protocol"] == subject[2][3]')
     return subject
 
 
@@ -109,7 +111,8 @@ def binding_controls(suite, subject):
     # controls independently cover exporter admission; these exercise Lean's
     # reader without relying on the exporter to reject a bad declaration first.
     data = subject[2]
-    assert data[6], "expected retained primitive bindings"
+    if not (data[6]):
+        raise AssertionError("expected retained primitive bindings")
     variants = []
     bad = copy.deepcopy(data); bad[6].append(["binding", "unused_product", "vector.product", ["bls12-381.fr"], ""])
     variants.append(("unsupported-contract", bad))
@@ -134,7 +137,8 @@ def binding_controls(suite, subject):
     bad = copy.deepcopy(data)
     root = definition(bad, bad[3])
     calls = [row for row in root[9][1] if row[0][0] == "local_call"]
-    assert calls
+    if not (calls):
+        raise AssertionError('bridges/structured/primitives.py:137: calls')
     calls[0][0][1] = bad[6][0][1]
     suite.case("binding-is-not-callable", lambda: suite.refuse_snapshot("binding-is-not-callable", bad))
 

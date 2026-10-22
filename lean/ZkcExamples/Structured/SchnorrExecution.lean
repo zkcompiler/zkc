@@ -27,7 +27,7 @@ theorem execute_eq (base key : G) (service : Nat) (prover : Strategy F G) (chall
       (SchnorrInteractive.run base key service prover challenge).follow
         (fun decision state => ⟨.returned (.cons decision .nil), state, []⟩) := by
   unfold execute
-  rw [verifier_outputs_equation, PIR.Proc.interpret_bind, CommonAdapter.project_embed,
+  rw [verifier_outputs_equation, PIR.Process.interpret_bind, CommonAdapter.project_embed,
     PIR.run_bind]
   simp only [Zkc.Protocols.Schnorr.Common.run, verifier_correspondence]
   rfl

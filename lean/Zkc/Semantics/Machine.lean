@@ -125,7 +125,7 @@ theorem Machine.runFrom_events (machine : Machine I C A) (handler : Handler I S 
       exact ⟨first ++ rest, by simpa only [runFrom, hfirst, List.append_assoc] using hrest⟩
 
 /-- A finite effect tree supplies machine control without a second interpretation. -/
-def Proc.machine (process : Proc I A) : Machine I (Proc I A) A where
+def Process.machine (process : Process I A) : Machine I (Process I A) A where
   initial := process
   step
     | .done value => .returned value
@@ -133,7 +133,7 @@ def Proc.machine (process : Proc I A) : Machine I (Proc I A) A where
     | .call operation next => .request operation next
 
 /-- Continuing a finite process at the saved handler state gives its full result. -/
-def Prefix.complete (handler : Handler I S E) (saved : Prefix (Proc I A) S E A) :
+def Prefix.complete (handler : Handler I S E) (saved : Prefix (Process I A) S E A) :
     Execution S E A :=
   match saved.progress with
   | .finished outcome => ⟨outcome, saved.state, saved.events⟩
@@ -142,8 +142,8 @@ def Prefix.complete (handler : Handler I S E) (saved : Prefix (Proc I A) S E A) 
       ⟨result.outcome, result.state, saved.events ++ result.events⟩
 
 /-- A machine step preserves the complete finite interpretation, including stops. -/
-theorem Proc.complete_advance (process : Proc I A) (handler : Handler I S E)
-    (saved : Prefix (Proc I A) S E A) :
+theorem Process.complete_advance (process : Process I A) (handler : Handler I S E)
+    (saved : Prefix (Process I A) S E A) :
     (process.machine.advance handler saved).complete handler = saved.complete handler := by
   cases saved with
   | mk progress state events =>
@@ -161,8 +161,8 @@ theorem Proc.complete_advance (process : Proc I A) (handler : Handler I S E)
                       Execution.follow, List.append_assoc]
 
 /-- Every finite observation is consistent with the original complete semantics. -/
-theorem Proc.complete_runFrom (process : Proc I A) (handler : Handler I S E)
-    (fuel : Nat) (saved : Prefix (Proc I A) S E A) :
+theorem Process.complete_runFrom (process : Process I A) (handler : Handler I S E)
+    (fuel : Nat) (saved : Prefix (Process I A) S E A) :
     (process.machine.runFrom handler fuel saved).complete handler = saved.complete handler := by
   induction fuel generalizing saved with
   | zero => rfl
@@ -170,7 +170,7 @@ theorem Proc.complete_runFrom (process : Proc I A) (handler : Handler I S E)
       exact (ih (process.machine.advance handler saved)).trans
         (process.complete_advance handler saved)
 
-theorem Proc.complete_run (process : Proc I A) (handler : Handler I S E)
+theorem Process.complete_run (process : Process I A) (handler : Handler I S E)
     (fuel : Nat) (initial : S) :
     (process.machine.run handler fuel initial).complete handler = process.run handler initial := by
   simpa [Machine.run, Prefix.complete, machine] using
@@ -179,7 +179,7 @@ theorem Proc.complete_run (process : Proc I A) (handler : Handler I S E)
 /-- A finite process under a total handler eventually reaches its complete
 execution result. The budget can depend on the actual replies; no uniform
 bound over every possible environment is assumed. -/
-theorem Proc.eventually_finishes_from (process : Proc I A) (handler : Handler I S E)
+theorem Process.eventually_finishes_from (process : Process I A) (handler : Handler I S E)
     (initial : S) (events : List E) :
     ∃ fuel, process.machine.runFrom handler fuel ⟨.running process, initial, events⟩ =
       ⟨.finished (process.run handler initial).outcome, (process.run handler initial).state,
@@ -197,13 +197,13 @@ theorem Proc.eventually_finishes_from (process : Proc I A) (handler : Handler I 
           | returned value =>
               obtain ⟨fuel, finishes⟩ := ih value state (events ++ produced)
               have moved := Machine.runFrom_eq_of_step_eq
-                (Proc.call operation next).machine (next value).machine rfl handler fuel
+                (Process.call operation next).machine (next value).machine rfl handler fuel
                 ⟨.running (next value), state, events ++ produced⟩
               refine ⟨fuel + 1, ?_⟩
               simpa only [Machine.runFrom, Machine.advance, machine, run, reply,
                 Execution.follow, List.append_assoc] using moved.trans finishes
 
-theorem Proc.eventually_finishes (process : Proc I A) (handler : Handler I S E) (initial : S) :
+theorem Process.eventually_finishes (process : Process I A) (handler : Handler I S E) (initial : S) :
     ∃ fuel, process.machine.run handler fuel initial =
       ⟨.finished (process.run handler initial).outcome, (process.run handler initial).state,
         (process.run handler initial).events⟩ := by

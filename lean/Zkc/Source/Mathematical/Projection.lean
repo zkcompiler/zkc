@@ -78,7 +78,7 @@ theorem Block.denote_project (meaning : Meaning language)
   | restrict scope value next ih =>
       exact ih _
   | bind body next bodyIH nextIH =>
-      simp only [project, Region.denote, bodyIH, PIR.Proc.bind, evalAt]
+      simp only [project, Region.denote, bodyIH, PIR.Process.bind, evalAt]
       exact nextIH _
 
 /-- Complete deterministic execution preserves state and emits no events. -/
@@ -100,7 +100,7 @@ theorem Block.continue_project (meaning : Meaning language)
     (role : Role) {Γ ty} (block : Block Role language Γ ty)
     (env : Environment (fun sort => RoleFamily.Family Role (meaning.Value sort)) Γ)
     {A : Type}
-    (next : Values (fun sort => Option (meaning.Value sort)) [ty] → PIR.Proc interface A) :
+    (next : Values (fun sort => Option (meaning.Value sort)) [ty] → PIR.Process interface A) :
     ((block.project role).denote (meaning.projected condition)
       (RoleFamily.project env role)).bind next =
         next (Values.singleton (block.eval meaning env role)) := by
@@ -112,7 +112,7 @@ theorem Block.continue_project_scalar (meaning : Meaning language)
     (condition : Option (meaning.Value language.condition) → Bool)
     (role : Role) {Γ ty} (block : Block Role language Γ ty)
     (env : Environment (fun sort => RoleFamily.Family Role (meaning.Value sort)) Γ)
-    {A : Type} (next : Option (meaning.Value ty) → PIR.Proc interface A) :
+    {A : Type} (next : Option (meaning.Value ty) → PIR.Process interface A) :
     ((block.project role).denote (meaning.projected condition)
       (RoleFamily.project env role)).bind (fun values => next (values.get .here)) =
         next (block.eval meaning env role) := by
@@ -130,7 +130,7 @@ theorem Block.available_project (meaning : Meaning language)
         .done (block.scope scopes role) := by
   exact (block.continue_project_scalar meaning condition role env
     (fun value => .done value.isSome)).trans
-      (congrArg PIR.Proc.done (block.eval_available meaning env scopes bound role))
+      (congrArg PIR.Process.done (block.eval_available meaning env scopes bound role))
 
 /-- The same connection holds for a probabilistic or other monadic handler.
 No distributional premise, independence claim or security reduction is added. -/

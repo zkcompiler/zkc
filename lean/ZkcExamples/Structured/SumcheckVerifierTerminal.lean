@@ -17,7 +17,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 /-- Actual owned source work, with the original optional raw verifier vector. -/
 def actualOwnedCheck (unit : UnitPayload) (self : Nat)
     (raw point : Option (List F)) (claim : Option F) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
   Participant.owned self self (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed checkHelper)
     (.cons raw (.cons point (.cons claim .nil)))
 

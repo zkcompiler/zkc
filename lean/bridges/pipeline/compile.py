@@ -16,11 +16,12 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import ROOT, digest  # noqa: E402
-from bridges.common.native_entry import native_run  # noqa: E402
+from bridges.common.native_entry import native_subject  # noqa: E402
+from bridges.pipeline import source_claims  # noqa: E402
 
 
-def options(subject, entry, extra=()):
-    return ["--source-format=zkc", f"--entry={entry}", *subject.module_arguments(),
+def options(subject, entry, extra=(), *, protocol=False):
+    return ["--source-format=zkc", f"--{'subject' if protocol else 'entry'}={entry}", *subject.module_arguments(),
             *subject.compiler_options, *extra]
 
 
@@ -39,6 +40,10 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     interface_text = run("language-interface", *common, name="interface")
     (directory / "interface.json").write_text(interface_text)
     interface = json.loads(interface_text)
+    claim_text = run("language-check", *common, "--source-claims", name="source-claims")
+    (directory / "source-claims.json").write_text(claim_text)
+    claim_report = source_claims.decode(claim_text)
+    claim_export = claim_report["source_claims"]
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source))
     deployment_text = run("language-bundle", *common, name="bundle").rstrip("\n")
     (directory / "deployment.json").write_text(deployment_text)
@@ -47,6 +52,7 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     policy = deployment[2][1]
     (directory / "policy.json").write_text(json.dumps(policy))
     artifacts = dict(source=source, interface=interface, deployment=deployment,
+                     source_claim_inventory=claim_report["source_claim_inventory"],
                      deployment_text=deployment_text, policy=policy)
     if executable:
         package_text = run("language-package", *common, name="package")
@@ -76,21 +82,29 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
         text = run("language-bundle", *options(subject, entry, flags), name=f"bundle:{name}").rstrip("\n")
         (directory / f"deployment-{name}.json").write_text(text)
         variants[name] = json.loads(text)
+    bound_claims = source_claims.bind_export(
+        claim_export, entry=entry, source=source, interface_text=interface_text,
+        original_text=original_text, participant_text=export_text, program=artifacts.get("program"))
+    for claim in bound_claims["claims"]:
+        claim["resolved_sites"] = source_claims.resolve_sites(
+            json.loads(original_text), policy, claim["site_bindings"])
+    (directory / "bound-source-claims.json").write_text(json.dumps(bound_claims, indent=2) + "\n")
+    artifacts["source_claims"] = bound_claims
     artifacts.update(candidate=candidate, exported=exported, export_text=export_text,
                      original=json.loads(original_text), original_text=original_text, variants=variants)
     return artifacts
 
 
 def interactive_entry(runner, subject, compiler, directory):
-    """Compile and export the structured interactive Entry."""
+    """Compile and export the explicitly selected interactive protocol."""
     directory.mkdir(parents=True, exist_ok=True)
     entry = subject.get("entries", "interactive")
-    common = options(subject, entry)
+    common = options(subject, entry, protocol=True)
     prefix = f"{subject.name}:interactive"
-    source, interface = native_run(
-        lambda command: runner.run(command, name=f"{prefix}:package").stdout, compiler, common)
+    source, interface_text, interface = native_subject(
+        lambda command: runner.run(command, name=f"{prefix}:{command[1]}").stdout, compiler, common)
     (directory / "source.mlir").write_text(source, encoding="utf-8")
-    (directory / "interface.json").write_text(json.dumps(interface) + "\n", encoding="utf-8")
+    (directory / "interface.json").write_text(interface_text)
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source.encode()))
     exported = runner.run([compiler, "protocol-structured", directory / "source.mlir",
                            f"--symbol={interface['protocol']}"], name=f"{prefix}:export").stdout
@@ -98,7 +112,15 @@ def interactive_entry(runner, subject, compiler, directory):
     snapshot = json.loads(exported)
     runner.check(f"{prefix}:export-source", snapshot[2] == "sha256:" + digest(source.encode())
                  and snapshot[3] == interface["protocol"])
-    return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot)
+    claim_text = runner.run([compiler, "language-check", *common, "--source-claims"],
+                            name=f"{prefix}:source-claims").stdout
+    (directory / "source-claims.json").write_text(claim_text)
+    claim_report = source_claims.decode(claim_text)
+    bound = source_claims.bind_export(claim_report["source_claims"], entry=interface["entry"],
+        source=source.encode(), interface_text=interface_text, original_text=exported)
+    (directory / "bound-source-claims.json").write_text(json.dumps(bound, indent=2) + "\n")
+    return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot, source_claims=bound,
+                source_claim_inventory=claim_report["source_claim_inventory"])
 
 
 def relative(path):

@@ -55,13 +55,13 @@ theorem project_embed_operation {F G : Type} (op : (commonInterface F G).Op) :
 
 /-- Embedding and projecting a common process preserves every continuation and
 stop, not merely a successful transcript. -/
-theorem project_embed {F G A : Type} (process : PIR.Proc (commonInterface F G) A) :
+theorem project_embed {F G A : Type} (process : PIR.Process (commonInterface F G) A) :
     (process.interpret embed).interpret project = process := by
-  rw [PIR.Proc.interpret_comp]
+  rw [PIR.Process.interpret_comp]
   have operations : (fun op => (embed op).interpret project) =
-      (fun op : (commonInterface F G).Op => PIR.Proc.call op PIR.Proc.done) := by
+      (fun op : (commonInterface F G).Op => PIR.Process.call op PIR.Process.done) := by
     funext op
     exact project_embed_operation op
-  rw [operations, PIR.Proc.interpret_identity]
+  rw [operations, PIR.Process.interpret_identity]
 
 end Zkc.Source.Structured.CommonAdapter

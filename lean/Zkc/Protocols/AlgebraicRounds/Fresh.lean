@@ -65,9 +65,9 @@ theorem execution_exact (send : S → Message F × S) (react : S → F → S) (d
       · cases drawn : draw provider with
         | mk outcome nextProvider =>
           cases outcome <;>
-            simp [rounds, Proc.interpret, fresh, Proc.bind, Proc.run,
+            simp [rounds, Process.interpret, fresh, Process.bind, Process.run,
               handler, reference, Execution.follow, sent, accepted, drawn, ih]
-      · simp [rounds, Proc.interpret, fresh, Proc.bind, Proc.run,
+      · simp [rounds, Process.interpret, fresh, Process.bind, Process.run,
           handler, reference, Execution.follow, sent, accepted]
 
 theorem source_exact (send : S → Message F × S) (react : S → F → S) (draw : Draw F Q)

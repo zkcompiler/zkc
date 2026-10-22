@@ -79,6 +79,6 @@ theorem exhausted_point (point : List F) (large : ¬ point.length < indexLimit) 
 
 /-- A stopped replacement child never reaches the actual terminal. -/
 theorem stopped_child (reason : PIR.Stop) :
-    (PIR.Proc.halt reason).bind (terminal (F := F) (G := F) [0, 0]) = .halt reason := rfl
+    (PIR.Process.halt reason).bind (terminal (F := F) (G := F) [0, 0]) = .halt reason := rfl
 
 end ZkcExamples.Structured.SumcheckCallBoundaryControls

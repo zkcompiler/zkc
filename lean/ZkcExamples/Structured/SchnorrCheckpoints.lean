@@ -13,12 +13,12 @@ open Zkc.Source Zkc.Source.Structured SchnorrInteractive
 variable {F G : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def commitmentPrefix (base : G) (service : Nat) : PIR.Proc (participantInterface F G) (G × F) :=
+def commitmentPrefix (base : G) (service : Nat) : PIR.Process (participantInterface F G) (G × F) :=
   .call (.query nonceSite scalarDomain (.cons service .nil)) fun (nonce : F) =>
   .call (.send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)) fun _ =>
   .done (nonce • base, nonce)
 
-def resume (witness : F) (state : G × F) : PIR.Proc (participantInterface F G) (Option Bool) :=
+def resume (witness : F) (state : G × F) : PIR.Process (participantInterface F G) (Option Bool) :=
   .call (.receive (.field scalarDomain) wiring.deliverySite 1) fun (challenge : F) =>
   .call (.send (ty := .field scalarDomain) wiring.responseSite 1
     (state.2 + challenge * witness)) fun _ => .done none
@@ -40,7 +40,7 @@ theorem prefix_run (base : G) (nonce : F) (service : Nat) :
       ⟨.returned (nonce • base, nonce), (),
         [.query nonceSite scalarDomain (.cons service .nil),
          .send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)]⟩ := by
-  simp [commitmentPrefix, PIR.Proc.run, PIR.Execution.follow, SchnorrHonestProver.replyHandler,
+  simp [commitmentPrefix, PIR.Process.run, PIR.Execution.follow, SchnorrHonestProver.replyHandler,
     services, Values.get]
   rfl
 
@@ -70,6 +70,6 @@ theorem resume_run (base : G) (witness nonce challenge : F) (service : Nat) :
          .send (ty := .field scalarDomain) wiring.responseSite 1
            (nonce + challenge * witness)]⟩ := by
   rw [commitment_eq]
-  simp [resume, PIR.Proc.run, PIR.Execution.follow, SchnorrHonestProver.replyHandler]
+  simp [resume, PIR.Process.run, PIR.Execution.follow, SchnorrHonestProver.replyHandler]
 
 end ZkcExamples.Structured.SchnorrCheckpoints

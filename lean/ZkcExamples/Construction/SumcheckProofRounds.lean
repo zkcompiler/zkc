@@ -46,7 +46,7 @@ theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
     ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked rounds admitted values (some claim)
     (some handle) table decoded vectorBound]
   congr 2
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   congr 1
   funext pc
   rcases pc with ⟨_ | point, _ | value⟩ <;> rfl

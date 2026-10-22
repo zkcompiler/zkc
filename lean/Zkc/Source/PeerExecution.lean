@@ -33,7 +33,7 @@ variable {Role Ty : Type} [DecidableEq Role] [DecidableEq Ty]
 
 /-- The peer endpoint's residual process and the endpoint's service state. -/
 structure Peer (Role Ty : Type) (services : Services Ty) (Value : Ty → Type) (A S : Type) where
-  process : PIR.Proc (interface Role Ty services Value) A
+  process : PIR.Process (interface Role Ty services Value) A
   service : S
 
 /-- Answer the actions of endpoint `self` from the actual process of endpoint
@@ -63,25 +63,25 @@ variable (self other : Role) (service : PIR.Handler (interface Role Ty services 
 
 /-- A receive takes exactly the value of the peer's matching send. -/
 theorem peer_receive {ty : Ty} (site : String) (value : Value ty)
-    (next : Unit → PIR.Proc (interface Role Ty services Value) A) (state : S)
-    {B : Type} (continuation : Value ty → PIR.Proc (interface Role Ty services Value) B) :
-    (PIR.Proc.call (Action.receive ty site other) continuation).run (peerHandler self other service)
+    (next : Unit → PIR.Process (interface Role Ty services Value) A) (state : S)
+    {B : Type} (continuation : Value ty → PIR.Process (interface Role Ty services Value) B) :
+    (PIR.Process.call (Action.receive ty site other) continuation).run (peerHandler self other service)
         ⟨.call (Action.send site self value) next, state⟩ =
       (continuation value).run (peerHandler self other service) ⟨next (), state⟩ := by
-  simp only [PIR.Proc.run, peerHandler, and_self, ↓reduceDIte, PIR.Execution.follow, List.nil_append]
+  simp only [PIR.Process.run, peerHandler, and_self, ↓reduceDIte, PIR.Execution.follow, List.nil_append]
 
 /-- A send is consumed by the peer's matching receive, which obtains the value. -/
 theorem peer_send {ty : Ty} (site : String) (value : Value ty)
-    (next : Value ty → PIR.Proc (interface Role Ty services Value) A) (state : S)
-    {B : Type} (continuation : Unit → PIR.Proc (interface Role Ty services Value) B) :
-    (PIR.Proc.call (Action.send site other value) continuation).run (peerHandler self other service)
+    (next : Value ty → PIR.Process (interface Role Ty services Value) A) (state : S)
+    {B : Type} (continuation : Unit → PIR.Process (interface Role Ty services Value) B) :
+    (PIR.Process.call (Action.send site other value) continuation).run (peerHandler self other service)
         ⟨.call (Action.receive ty site self) next, state⟩ =
       (continuation ()).run (peerHandler self other service) ⟨next value, state⟩ := by
-  simp only [PIR.Proc.run, peerHandler, and_self, ↓reduceDIte, PIR.Execution.follow, List.nil_append]
+  simp only [PIR.Process.run, peerHandler, and_self, ↓reduceDIte, PIR.Execution.follow, List.nil_append]
 
 /-- Queries leave the peer untouched and use the endpoint's own service. -/
 theorem peer_query (site : String) (op : services.Op) (args : Values Value (services.arguments op))
-    (peer : PIR.Proc (interface Role Ty services Value) A) (state : S) :
+    (peer : PIR.Process (interface Role Ty services Value) A) (state : S) :
     peerHandler self other service (.query site op args) ⟨peer, state⟩ =
       let result := service (.query site op args) state
       ⟨result.outcome, ⟨peer, result.state⟩, result.events⟩ := rfl
@@ -93,7 +93,7 @@ theorem peer_receive_finished (ty : Ty) (site : String) (sender : Role) (result 
 
 /-- A receive refuses when the peer's next send names another site. -/
 theorem peer_receive_other_site {ty : Ty} (site peerSite : String) (value : Value ty)
-    (next : Unit → PIR.Proc (interface Role Ty services Value) A) (state : S)
+    (next : Unit → PIR.Process (interface Role Ty services Value) A) (state : S)
     (different : peerSite ≠ site) :
     peerHandler self other service (.receive ty site other)
         ⟨.call (.send peerSite self value) next, state⟩ =
@@ -103,7 +103,7 @@ theorem peer_receive_other_site {ty : Ty} (site peerSite : String) (value : Valu
 /-- A send refuses when the peer's next action is a send rather than a receive. -/
 theorem peer_send_unexpected {ty : Ty} (site : String) (value : Value ty)
     (peerSite : String) (peerValue : Value ty)
-    (next : Unit → PIR.Proc (interface Role Ty services Value) A) (state : S) :
+    (next : Unit → PIR.Process (interface Role Ty services Value) A) (state : S) :
     peerHandler self other service (.send site other value)
         ⟨.call (.send peerSite self peerValue) next, state⟩ =
       ⟨.stopped .refused, ⟨.call (.send peerSite self peerValue) next, state⟩, []⟩ := rfl

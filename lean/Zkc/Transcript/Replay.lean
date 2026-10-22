@@ -27,7 +27,7 @@ decoding `table` at the history before their occurrence and the occurrence. The
 result is the residual process after the last event, or `none` when the events
 are not a history the transform could absorb from this process. -/
 def replay (absorb : Interface I E P Raw) (table : (preceding : List E) → (event : E) → Raw event) :
-    PIR.Proc I A → List E → List E → Option (PIR.Proc I A)
+    PIR.Process I A → List E → List E → Option (PIR.Process I A)
   | process, _, [] => some process
   | .done _, _, _ :: _ => none
   | .halt _, _, _ :: _ => none
@@ -50,12 +50,12 @@ def replay (absorb : Interface I E P Raw) (table : (preceding : List E) → (eve
 
 variable (absorb : Interface I E P Raw) (table : (preceding : List E) → (event : E) → Raw event)
 
-@[simp] theorem replay_nil (process : PIR.Proc I A) (history : List E) :
+@[simp] theorem replay_nil (process : PIR.Process I A) (history : List E) :
     replay absorb table process history [] = some process := by
   cases process <;> rfl
 
 /-- One received message, absorbed with its event. -/
-theorem replay_receive {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem replay_receive {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : P → E} {recover : E → Option (I.Reply operation)}
     (absorbed : absorb operation = .receive event recover) (history : List E) (message : P)
     {value : I.Reply operation} (recovered : recover (event message) = some value) :
@@ -63,14 +63,14 @@ theorem replay_receive {operation : I.Op} {next : I.Reply operation → PIR.Proc
   simp [replay, absorbed, recovered]
 
 /-- One sent value, absorbed with its event. -/
-theorem replay_send {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem replay_send {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : E} {value : I.Reply operation} (absorbed : absorb operation = .send event value)
     (history : List E) :
     replay absorb table (.call operation next) history [event] = some (next value) := by
   simp [replay, absorbed]
 
 /-- One challenge occurrence, answered by decoding the table at it. -/
-theorem replay_query {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem replay_query {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : E} {decode : Raw event → Option (I.Reply operation)}
     (absorbed : absorb operation = .query event decode) (history : List E)
     {value : I.Reply operation} (decoded : decode (table history event) = some value) :
@@ -80,7 +80,7 @@ theorem replay_query {operation : I.Op} {next : I.Reply operation → PIR.Proc I
 /-- Replaying a concatenation replays the first part, then the second from the
 residual and the extended history. -/
 theorem replay_append (first second : List E) :
-    ∀ (process : PIR.Proc I A) (history : List E),
+    ∀ (process : PIR.Process I A) (history : List E),
       replay absorb table process history (first ++ second) =
         (replay absorb table process history first).bind fun residual =>
           replay absorb table residual (history ++ first) second := by
@@ -115,7 +115,7 @@ theorem replay_append (first second : List E) :
 
 /-- Replay reads the table only at histories shorter than the replayed one. -/
 theorem replay_congr {other : (preceding : List E) → (event : E) → Raw event} (events : List E) :
-    ∀ (process : PIR.Proc I A) (history : List E),
+    ∀ (process : PIR.Process I A) (history : List E),
       (∀ (preceding : List E) (event : E), preceding.length < history.length + events.length →
         table preceding event = other preceding event) →
       replay absorb table process history events = replay absorb other process history events := by

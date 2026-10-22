@@ -472,3 +472,6 @@ add_zkc_test(host_entry Compiler host-entry)
 mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
 
 add_zkc_test(language_entry_functions Language language-entry-functions)
+add_zkc_test(language_source_claims Compiler language-source-claims)
+target_compile_definitions(zkc-language_source_claims-test PRIVATE
+  ZKC_CLAIM_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")

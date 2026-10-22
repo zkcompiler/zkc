@@ -269,7 +269,7 @@ theorem public_truth_iff (raw : List F) (claim : F) (bounded : raw.length < inde
   rw [public_formula_equation raw claim bounded]
   constructor
   · intro equality
-    have output := congrArg (fun values => values.get .here) (PIR.Proc.done.inj equality)
+    have output := congrArg (fun values => values.get .here) (PIR.Process.done.inj equality)
     exact of_decide_eq_true output
   · intro equality
     simp [equality]
@@ -281,7 +281,7 @@ theorem reduction_truth_iff (raw : List F) (dimension : Nat) (claim : F)
   rw [reduction_formula_equation raw dimension 1 claim bounded]
   constructor
   · intro equality
-    have output := congrArg (fun values => values.get .here) (PIR.Proc.done.inj equality)
+    have output := congrArg (fun values => values.get .here) (PIR.Process.done.inj equality)
     exact of_decide_eq_true output
   · intro equality
     simp [equality]

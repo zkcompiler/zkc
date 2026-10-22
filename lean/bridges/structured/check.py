@@ -21,7 +21,7 @@ import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
 from bridges.common.lean_render import file_digest as digest  # noqa: E402
 
@@ -55,7 +55,7 @@ def fixture_source(spec):
 
 
 def fixture(stem):
-    """The Entry, source modules and retained name of one structured fixture."""
+    """The closed subject, source modules and retained name of a fixture."""
     spec = fixture_table()[stem]
     if "modules" in spec:
         modules = {name: ROOT / path for name, path in spec["modules"].items()}
@@ -63,9 +63,10 @@ def fixture(stem):
         sys.path.append(str(ROOT / "common/tests/support"))
         from project import project_inputs
         found, assets = project_inputs(fixture_source(spec))
-        assert not assets
+        if not (not assets):
+            raise AssertionError('bridges/structured/check.py:66: not assets')
         modules = dict(sorted(found.items()))
-    return spec["entry"], modules, (stem, spec["data"])
+    return spec["subject"], modules, (stem, spec["data"])
 
 
 def write_json(path, value):
@@ -255,8 +256,9 @@ class Suite:
         output = self.command(label + ":export",
                               [self.tools["compiler"], "protocol-structured", original, "--symbol=" + symbol])
         snapshot = json.loads(output)
-        assert snapshot[:4] == ["zkc.structured-source/0", "original",
-                                "sha256:" + digest(original), symbol], snapshot[:4]
+        if not (snapshot[:4] == ["zkc.structured-source/0", "original",
+                                "sha256:" + digest(original), symbol]):
+            raise AssertionError(snapshot[:4])
         path = folder / "source.json"
         path.write_text(output, encoding="utf-8")
         self.command(label + ":check", [self.tools["lean"], "check", path])
@@ -275,17 +277,18 @@ class Suite:
                             [self.tools["reference"], original, data[3], request]))
         formal = json.loads(self.command(label + ":lean",
                             [self.tools["lean"], "run", snapshot, lean_request]))
-        assert native == expected and formal == typed_result(entry[5], expected), {
-            "reference": native, "lean": formal, "expected": expected}
+        if not (native == expected and formal == typed_result(entry[5], expected)):
+            raise AssertionError({
+            "reference": native, "lean": formal, "expected": expected})
 
     def frontend(self, entry):
         source = Path(__file__).parent / "fixtures/accumulate.zkc"
         flags = ["--source-format=zkc", "--module=structured=" + str(source),
-                 "--entry=structured::" + entry]
-        text, interface = native_run(
+                 "--subject=structured::" + entry]
+        text, interface_text, interface = native_subject(
             lambda command: self.command(entry + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export("frontend-" + entry, text, interface["protocol"])
-        write_json(subject[1].parent / "interface.json", interface)
+        (subject[1].parent / "interface.json").write_text(interface_text, encoding="utf-8")
         shutil.copy2(source, subject[1].parent / "source.zkc")
         return subject
 
@@ -293,9 +296,11 @@ class Suite:
         path = self.directory / (label + ".json")
         write_json(path, snapshot)
         result = json.loads(self.command(label, [self.tools["lean"], "check", path], success=False))
-        assert result["status"] == "refused", result
+        if not (result["status"] == "refused"):
+            raise AssertionError(result)
         if code is not None:
-            assert result["code"] == code, result
+            if not (result["code"] == code):
+                raise AssertionError(result)
 
     def refuse_native(self, label, source, code):
         path = self.directory / (label + ".mlir")
@@ -304,21 +309,25 @@ class Suite:
         self.command(label, [self.tools["compiler"], "protocol-structured", path, "--symbol=main"],
                      success=False)
         diagnostic = (self.directory / f"command-{number:04d}.stderr").read_text(encoding="utf-8")
-        assert code in diagnostic, diagnostic
+        if code not in diagnostic:
+            raise AssertionError(diagnostic)
 
     def retained(self, subject, stem, module):
         _, _, data = subject
         fixtures = Path(__file__).parent / "fixtures"
-        assert data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))
+        if not (data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))):
+            raise AssertionError('bridges/structured/check.py:312: data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))')
         generated = constructors.render(data, "ZkcExamples.Structured." + module + "Data")
         maintained = ROOT / "lean/ZkcExamples/Structured" / (module + "Data.lean")
-        assert generated == maintained.read_text(encoding="utf-8"), "constructor data differs from actual export"
+        if not (generated == maintained.read_text(encoding="utf-8")):
+            raise AssertionError("constructor data differs from actual export")
 
     def changed_body(self, subject):
         _, path, data = subject
         changed = copy.deepcopy(data)
         terminal = definition(changed, "step")[9][2]
-        assert terminal == ["return", [2, 0]], terminal
+        if not (terminal == ["return", [2, 0]]):
+            raise AssertionError(terminal)
         terminal[1] = [0, 2]
         candidate = path.parent / "copied-digest-changed-body.json"
         write_json(candidate, changed)
@@ -327,8 +336,10 @@ class Suite:
         request = path.parent / "copied-digest.inputs.json"
         write_json(request, values)
         result = json.loads(self.command("changed-body:run", [self.tools["lean"], "run", candidate, request]))
-        assert result == typed_result(definition(data, data[3])[5], returned("2", "11")), result
-        assert changed[2] == data[2] and changed != data
+        if not (result == typed_result(definition(data, data[3])[5], returned("2", "11"))):
+            raise AssertionError(result)
+        if not (changed[2] == data[2] and changed != data):
+            raise AssertionError('bridges/structured/check.py:331: changed[2] == data[2] and changed != data')
 
     def native(self, subject, label, values, expected):
         for finite_bulk in (False, True):
@@ -360,18 +371,25 @@ class Suite:
         report = json.loads(self.command(label + ":runtime",
                             [self.tools["runtime"], "--json", "bundle", "run", bundle, digest(bundle), path],
                             success=expected[0] == "returned"))
-        assert report.get("format") == "zkc.bundle-result/0", report
+        if not (report.get("format") == "zkc.bundle-result/0"):
+            raise AssertionError(report)
         endpoint = report["roles"][0]
-        assert endpoint["active_frames"] == endpoint["live_resource_units"] == 0, report
+        if not (endpoint["active_frames"] == endpoint["live_resource_units"] == 0):
+            raise AssertionError(report)
         if expected[0] == "returned":
-            assert report["outcome"] == ["completed"], report
+            if not (report["outcome"] == ["completed"]):
+                raise AssertionError(report)
             outputs = [wire(ty, value) for ty, value in zip(entry[5], expected[1], strict=True)]
-            assert [item[2] for item in endpoint["outputs"]] == outputs, report
+            if not ([item[2] for item in endpoint["outputs"]] == outputs):
+                raise AssertionError(report)
         else:
-            assert report["outcome"] != ["completed"], report
-            assert endpoint["after"][0] == "stopped", report
-            assert endpoint["after"][1]["cause"] == ["explicit", {
-                "omitted_bytes": 0, "text": expected[1]}], report
+            if not (report["outcome"] != ["completed"]):
+                raise AssertionError(report)
+            if not (endpoint["after"][0] == "stopped"):
+                raise AssertionError(report)
+            if not (endpoint["after"][1]["cause"] == ["explicit", {
+                "omitted_bytes": 0, "text": expected[1]}]):
+                raise AssertionError(report)
 
     def verify_sources(self):
         """Finish source evidence before selecting a terminal report status."""
@@ -521,8 +539,9 @@ def boundary_cases(suite, unit_text):
         number = len(suite.commands)
         suite.command('reference-finite-instruction-limit',
                       [suite.tools['reference'], original, 'main', request], success=False)
-        assert 'structured-reference-capacity' in (
-            suite.directory / f'command-{number:04d}.stderr').read_text(encoding="utf-8")
+        if 'structured-reference-capacity' not in (
+            suite.directory / f'command-{number:04d}.stderr').read_text(encoding="utf-8"):
+            raise AssertionError('bridges/structured/check.py:524: \'structured-reference-capacity\' in (\n            suite.directory / f\'command-{number:04d}.stderr\').read_text(encoding="utf-8")')
     suite.case('finite-declaration-counts-domain-and-terminators-do-not', finite_instruction_boundary)
 
     def file_boundary():
@@ -535,16 +554,19 @@ def boundary_cases(suite, unit_text):
                                     f'{{ return {values} : {outputs} }}' for name in names))
         baseline = suite.export('file-size-baseline', source())
         padding = 1024 * 1024 - len(baseline[1].read_bytes())
-        assert 0 <= padding <= sum(512 - len(name) for name in names)
+        if not (0 <= padding <= sum(512 - len(name) for name in names)):
+            raise AssertionError('bridges/structured/check.py:538: 0 <= padding <= sum(512 - len(name) for name in names)')
         for i, name in enumerate(names):
             size = min(padding, 512 - len(name))
             names[i] += 'x' * size
             padding -= size
         exact = suite.export('maximum-file-bytes', source())
-        assert len(exact[1].read_bytes()) == 1024 * 1024
+        if not (len(exact[1].read_bytes()) == 1024 * 1024):
+            raise AssertionError('bridges/structured/check.py:544: len(exact[1].read_bytes()) == 1024 * 1024')
         suite.compare(exact, 'maximum-file-bytes', [True], returned(True))
         names[-1] += 'y'
-        assert len(names[-1]) <= 512
+        if not (len(names[-1]) <= 512):
+            raise AssertionError('bridges/structured/check.py:547: len(names[-1]) <= 512')
         suite.refuse_native('excess-file-bytes', source(), 'structured-source-limit')
     suite.case('exact-file-limit-is-readable-in-lean', file_boundary)
 
@@ -555,7 +577,8 @@ def boundary_cases(suite, unit_text):
             subject = suite.export('unicode-' + str(len(name)), simple(
                 f'func.func private {symbol}(%x:i1) -> i1 {{ return %x : i1 }}',
                 f'%r = func.call {symbol}(%flag) : (i1)->i1', '%r'))
-            assert definition(subject[2], name)[1] == name
+            if not (definition(subject[2], name)[1] == name):
+                raise AssertionError('bridges/structured/check.py:558: definition(subject[2], name)[1] == name')
             suite.compare(subject, 'unicode-identity', [True], returned(True))
             rendered = constructors.render(subject[2], 'UnicodeData')
             (subject[1].parent / 'Data.lean').write_text(rendered, encoding="utf-8")
@@ -600,7 +623,8 @@ def installed_rows_cases(suite):
             original.write_text(source, encoding="utf-8")
             snapshot = json.loads(suite.command(label + ":export", [
                 suite.tools["compiler"], "protocol-structured", original, "--symbol=main"]))
-            assert snapshot[9][0] or snapshot[9][1], snapshot[9]
+            if not (snapshot[9][0] or snapshot[9][1]):
+                raise AssertionError(snapshot[9])
             suite.refuse_snapshot(label, snapshot, code)
         suite.case(label, refused)
 
@@ -632,7 +656,8 @@ def run_cases(suite):
                 suite.case(label + "-runner", lambda v=values, e=expected, n=label: suite.native(unit, n, v, e))
 
     reversed_text = total_text.replace("func.return %b,%v", "func.return %v,%b")
-    assert reversed_text != total_text
+    if not (reversed_text != total_text):
+        raise AssertionError('bridges/structured/check.py:635: reversed_text != total_text')
     reversed_subject = suite.export("reversed-results", reversed_text)
     suite.case("same-typed-result-order-changes-meaning", lambda: suite.compare(
         reversed_subject, "reversed", [["2"], "7", "11"], returned("2", "11")))
@@ -642,10 +667,11 @@ def run_cases(suite):
             s, "active", [["2"], True], ["stopped", reason]))
 
     shared = suite.export("shared-math", (Path(__file__).parent / "fixtures/shared-math.mlir").read_text(encoding="utf-8"))
-    assert sum(item[1] == "pair" for item in shared[2][7]) == 1
+    if not (sum(item[1] == "pair" for item in shared[2][7]) == 1):
+        raise AssertionError('bridges/structured/check.py:645: sum(item[1] == "pair" for item in shared[2][7]) == 1')
     structured = ROOT / "compiler/test/fixtures/structured-source"
     indexed = suite.export("indexed-helper", (structured / "indexed-helper.mlir").read_text(encoding="utf-8"))
-    for entry in ("Run", "IndexedRun"):
+    for entry in ("Accumulate", "Indexed"):
         compiled = suite.frontend(entry)
         for items in ([], [2], [MODULUS - 1, 2, 2**180]):
             values = [fields(items), "7"]
@@ -667,12 +693,14 @@ def run_cases(suite):
     dag = suite.export("shared-local-dag", (structured / "shared-local-dag.mlir").read_text(encoding="utf-8"))
     def shared_dag_capacity():
         suite.command("shared-dag:check", [suite.tools["lean"], "check", dag[1]])
-        assert len(dag[2][7]) == 23, len(dag[2][7])
+        if not (len(dag[2][7]) == 23):
+            raise AssertionError(len(dag[2][7]))
         request = dag[1].parent / "inputs.json"
         write_json(request, [["bool", True]])
         result = json.loads(suite.command("shared-dag:capacity",
             [suite.tools["lean"], "run", dag[1], request], success=False))
-        assert result == {"code": "structured-bounds-analysis-limit", "status": "refused"}, result
+        if not (result == {"code": "structured-bounds-analysis-limit", "status": "refused"}):
+            raise AssertionError(result)
     suite.case("shared-helper-admission-is-separate-from-analysis-capacity", shared_dag_capacity)
     nested = suite.export("nested-control", (structured / "nested-controls.mlir").read_text(encoding="utf-8"))
     loops = suite.export("loop-control", (structured / "loops-and-captures.mlir").read_text(encoding="utf-8"), "entry")

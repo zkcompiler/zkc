@@ -174,33 +174,566 @@ def moduleOf (env : Environment) (name : Name) : Option Name := do
 
 def below (base name : Name) : Bool := base.isPrefixOf name
 
-/-- Implementation dependencies of the generic library cannot enter protocol
-applications or downstream clients. Probability also excludes source/compiler
-syntax. External theorem ecosystems belong only to their optional packages,
-and neither optional library may depend on tests or on the other package. -/
+/-- Shared architecture policy. Python reads this exact JSON literal; Lean
+compiles it with this module, so changing the policy invalidates audit builds.
+Exceptions name exact reachable module pairs and remember whether each edge
+was direct. Only the source graph audit checks freshness of the complete list;
+a declaration audit may intentionally select just one client module. -/
+-- BEGIN DEPENDENCY POLICY
+private def dependencyPolicyJson : String := r##"{
+  "layers": [
+    [
+      "TestsArkLib",
+      "tests"
+    ],
+    [
+      "TestsSecurity",
+      "tests"
+    ],
+    [
+      "TestsClean",
+      "tests"
+    ],
+    [
+      "Tests",
+      "tests"
+    ],
+    [
+      "CleanExamplesAudit",
+      "tests"
+    ],
+    [
+      "CleanExamples",
+      "clean-subjects"
+    ],
+    [
+      "ZkcArkLib.Examples",
+      "optional-subjects"
+    ],
+    [
+      "ZkcArkLib",
+      "adapters"
+    ],
+    [
+      "ZkcSecurity.Examples",
+      "security-subjects"
+    ],
+    [
+      "ZkcExamples",
+      "subjects"
+    ],
+    [
+      "ZkcTools",
+      "tools"
+    ],
+    [
+      "Zkc.Protocols",
+      "families"
+    ],
+    [
+      "ZkcSecurity.Families",
+      "security-families"
+    ],
+    [
+      "ZkcSecurity.Probability",
+      "probability"
+    ],
+    [
+      "ZkcSecurity",
+      "security"
+    ],
+    [
+      "ZkcClean",
+      "clean"
+    ],
+    [
+      "Zkc",
+      "core"
+    ],
+    [
+      "ArkLib",
+      "arklib-upstream"
+    ],
+    [
+      "VCVio",
+      "security-upstream"
+    ],
+    [
+      "Examples",
+      "security-upstream"
+    ],
+    [
+      "ToMathlib",
+      "security-upstream"
+    ],
+    [
+      "PolyFun",
+      "security-upstream"
+    ],
+    [
+      "Clean",
+      "clean-upstream"
+    ],
+    [
+      "CompPoly",
+      "algebra-upstream"
+    ]
+  ],
+  "allowed": [
+    [
+      "core",
+      [
+        "core",
+        "upstream"
+      ]
+    ],
+    [
+      "probability",
+      [
+        "core",
+        "probability",
+        "upstream"
+      ]
+    ],
+    [
+      "families",
+      [
+        "core",
+        "families",
+        "upstream"
+      ]
+    ],
+    [
+      "security",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-families",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "adapters",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "adapters",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "clean",
+      [
+        "core",
+        "families",
+        "clean",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "subjects",
+      [
+        "core",
+        "families",
+        "subjects",
+        "upstream"
+      ]
+    ],
+    [
+      "clean-subjects",
+      [
+        "core",
+        "families",
+        "clean",
+        "clean-subjects",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "tools",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "tests",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "security-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "clean-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "algebra-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "security-subjects",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "subjects",
+        "security-subjects"
+      ]
+    ],
+    [
+      "optional-subjects",
+      [
+        "core",
+        "families",
+        "probability",
+        "security",
+        "security-families",
+        "security-upstream",
+        "upstream",
+        "algebra-upstream",
+        "subjects",
+        "security-subjects",
+        "adapters",
+        "optional-subjects",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "arklib-upstream",
+      [
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
+        "adapters",
+        "security-subjects",
+        "subjects",
+        "tools",
+        "families",
+        "security-families",
+        "probability",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ]
+  ],
+  "guards": [
+    {
+      "name": "generic-execution",
+      "owners": [
+        "ZkcSecurity.VCVio.Execution"
+      ],
+      "exact": true,
+      "dependencies": [
+        "ZkcArkLib",
+        "ArkLib",
+        "ZkcSecurity.Examples",
+        "Zkc.Protocols",
+        "Zkc.Source",
+        "ZkcArkLib.Examples"
+      ]
+    },
+    {
+      "name": "causal-source-independence",
+      "owners": [
+        "ZkcArkLib.Sumcheck.Multilinear.Causal"
+      ],
+      "exact": false,
+      "dependencies": [
+        "ZkcSecurity.Examples",
+        "Zkc.Source",
+        "ZkcArkLib.Examples"
+      ]
+    },
+    {
+      "name": "source-before-compiler",
+      "owners": [
+        "Zkc.Modules",
+        "Zkc.Source"
+      ],
+      "exact": false,
+      "dependencies": [
+        "Zkc.Compiler"
+      ]
+    },
+    {
+      "name": "probability-without-source",
+      "owners": [
+        "ZkcSecurity.Probability"
+      ],
+      "exact": false,
+      "dependencies": [
+        "Zkc.Source",
+        "Zkc.Compiler"
+      ]
+    },
+    {
+      "name": "generic-certificates",
+      "owners": [
+        "ZkcSecurity.FiatShamir.Interface",
+        "ZkcSecurity.FiatShamir.Keyed",
+        "ZkcSecurity.FiatShamir.Typed",
+        "ZkcSecurity.FiatShamir.Sampling",
+        "ZkcSecurity.FiatShamir.Decoding",
+        "ZkcSecurity.FiatShamir.Obligations",
+        "ZkcSecurity.FiatShamir.Grinding",
+        "ZkcSecurity.FiatShamir.Laws",
+        "ZkcSecurity.FiatShamir.Lifting",
+        "ZkcSecurity.FiatShamir.Reduction"
+      ],
+      "exact": true,
+      "dependencies": [
+        "Zkc.Construction",
+        "ZkcSecurity.FiatShamir.Soundness",
+        "ZkcSecurity.FiatShamir.Composition"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "name": "clean-subjects-to-tests",
+      "reason": "Move reusable native Clean clients out of the test library.",
+      "edges": [
+        [
+          "CleanExamples",
+          "TestsClean.NativeClients",
+          true
+        ]
+      ]
+    }
+  ]
+}"##
+-- END DEPENDENCY POLICY
+
+private structure DependencyGuard where
+  name : String
+  owners : List Name
+  exact : Bool
+  dependencies : List Name
+  deriving FromJson
+
+private structure DependencyEdge where
+  owner : Name
+  dependency : Name
+  direct : Bool
+
+private instance : FromJson DependencyEdge where
+  fromJson? json := do
+    let fields ← json.getArr?
+    unless fields.size == 3 do throw "dependency edge must have three fields"
+    let owner ← fromJson? fields[0]!
+    let dependency ← fromJson? fields[1]!
+    let direct ← fromJson? fields[2]!
+    return { owner, dependency, direct }
+
+private structure DependencyException where
+  name : String
+  reason : String
+  edges : List DependencyEdge
+  deriving FromJson
+
+private structure DependencyPolicy where
+  layers : List (Name × String)
+  allowed : List (String × List String)
+  guards : List DependencyGuard
+  exceptions : List DependencyException
+  deriving FromJson
+
+-- Materialize ordinary data at elaboration time. JSON parsing is partial and
+-- cannot appear in a policy that existing clients evaluate in the kernel.
+-- Lists also retain the axiom-free computation used by the existing policy tests.
+-- The same literal is still the sole source of the table in both audits.
+private def dependencyPolicy : DependencyPolicy := by
+  run_tac
+    let .ok policy := Json.parse dependencyPolicyJson >>= (fromJson? (α := DependencyPolicy))
+      | throwError "invalid dependency policy"
+    let guards := policy.guards.map fun guard =>
+      mkAppN (mkConst ``DependencyGuard.mk) #[toExpr guard.name, toExpr guard.owners,
+        toExpr guard.exact, toExpr guard.dependencies]
+    let exceptions ← policy.exceptions.mapM fun exception => do
+      let edges := exception.edges.map fun edge =>
+        mkAppN (mkConst ``DependencyEdge.mk) #[toExpr edge.owner, toExpr edge.dependency,
+          toExpr edge.direct]
+      let edges ← Lean.Meta.mkListLit (mkConst ``DependencyEdge) edges
+      return mkAppN (mkConst ``DependencyException.mk) #[toExpr exception.name,
+        toExpr exception.reason, edges]
+    let guards ← Lean.Meta.mkListLit (mkConst ``DependencyGuard) guards
+    let exceptions ← Lean.Meta.mkListLit (mkConst ``DependencyException) exceptions
+    let value := mkAppN (mkConst ``DependencyPolicy.mk) #[toExpr policy.layers,
+      toExpr policy.allowed, guards, exceptions]
+    (← Lean.Elab.Tactic.getMainGoal).assign value
+    Lean.Elab.Tactic.replaceMainGoal []
+
+private def within (name root : Name) : Bool := root.isPrefixOf name
+
+private def layer (policy : DependencyPolicy) (name : Name) : String :=
+  ((policy.layers.find? fun entry => within name entry.1).map (·.2)).getD "upstream"
+
+/-- Exact legacy reachability exceptions are shared with the source audit.
+They never override the more specific generic-execution/source boundaries. -/
 def permitted (owner dependency : Name) : Bool := Id.run do
-  -- Only the exact generic execution module is restricted here;
-  -- `ZkcSecurity.VCVio.Schnorr` may still use the Schnorr protocol.
-  if owner == `ZkcSecurity.VCVio.Execution &&
-      [ `ZkcSecurity.ArkLib, `ArkLib, `ZkcSecurity.Examples, `Zkc.Protocols,
-        `Zkc.Source ].any (below · dependency) then return false
-  if below `ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal owner &&
-      [ `ZkcSecurity.Examples, `Zkc.Source ].any (below · dependency) then return false
-  if below `Zkc owner then
-    if [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ZkcClean,
-         `ArkLib, `VCVio, `PolyFun, `Clean ].any (below · dependency) then return false
-    if !below `Zkc.Protocols owner && below `Zkc.Protocols dependency then return false
-    if [ `Zkc.Modules, `Zkc.Source ].any (below · owner) &&
-        below `Zkc.Compiler dependency then return false
-    if below `Zkc.Probability owner &&
-        [ `Zkc.Source, `Zkc.Compiler ].any (below · dependency) then return false
-  if below `ZkcSecurity owner && !below `ZkcSecurity.Examples owner &&
-      [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcClean, `Clean ].any
-        (below · dependency) then return false
-  if below `ZkcClean owner &&
-      [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ArkLib, `VCVio,
-        `PolyFun ].any (below · dependency) then return false
-  return true
+  let policy := dependencyPolicy
+  if policy.guards.any (fun guard =>
+      guard.owners.any (fun root => if guard.exact then owner == root else within owner root) &&
+      guard.dependencies.any (within dependency)) then return false
+  let targets := (policy.allowed.find? fun entry => entry.1 == layer policy owner).map (·.2)
+  if targets.any (·.contains (layer policy dependency)) then return true
+  return policy.exceptions.any fun exception =>
+    exception.edges.any fun edge => edge.owner == owner && edge.dependency == dependency
 
 abbrev Graph := Std.HashMap Name (Array Name)
 

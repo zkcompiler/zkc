@@ -476,16 +476,16 @@ subject driver does every mechanical step from it. From the repository root in
 the pinned development environment, with the compiler built (`just build`) and
 Lean set up ([development guide](../../../docs/development/README.md)):
 
-1. Write the protocol and an Entry that runs it, for example
-   `entry fn EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) { return ChaumPedersen<G>::run(inputs); }` in a project module.
-2. Write the manifest: its sources (a project or a module map), the Entry under
-   `[entries] interactive`, the structured profile, and under `[generated]` the
+1. Write the protocol in a project module. Select a closed protocol application,
+   for example `sigma::ChaumPedersen<example::G>`; no host Entry wrapper is needed.
+2. Write the manifest: its sources (a project or a module map), that closed
+   application under `[entries] interactive`, the structured profile, and under `[generated]` the
    retained export (`interactive_export`, `interactive_source`), the data module
    (`interactive_data`) and, to admit the unit from printed bodies, the Bodies
    and Views modules (`interactive_bodies`, `interactive_views`), as
    [`chaum-pedersen.toml`](../../subjects/chaum-pedersen.toml) does.
 3. Run `python3 lean/bridges/subject.py --subject NAME --write`. It exports the
-   Entry, renders the data, builds it, prints the bodies and writes the Views
+   selected subject, renders the data, builds it, prints the bodies and writes the Views
    module, which admits the unit with `structured_views`; `--check` later
    requires all of them to be unchanged.
 4. Write a normal-form request, name it under `[normal_forms] request`, and
@@ -494,7 +494,7 @@ Lean set up ([development guide](../../../docs/development/README.md)):
    it to a library, as
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
-   [`ChaumPedersenSigma`](../../integrations/arklib/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
+   [`ChaumPedersenSigma`](../../security/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
    (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
    as errors: a lemma that does not use every section instance needs
    `omit [...] in`, written before its docstring.

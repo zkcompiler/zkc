@@ -85,6 +85,8 @@ public:
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
   bool relationIdentities();
   bool specifications(Declaration &);
+  bool sourceClaims();
+  bool sourceClaimDomains(const Declaration &, ClaimExpression &);
 
   std::optional<SpecificationSelector> selector(const Declaration &,
                                                 const SyntaxSelector &);

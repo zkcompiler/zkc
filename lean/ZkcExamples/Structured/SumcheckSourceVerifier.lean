@@ -87,10 +87,10 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
   subst self
   unfold SumcheckSourceNormalForms.verifierProcess
   rw [SumcheckVerifierPrelude.verifierReduce_rounds unit helperBodies (SumcheckSourceNormalForms.reduceContext ctx) separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
-  refine congrArg (PIR.Proc.bind _) (funext fun pc => ?_)
-  conv_rhs => rw [← PIR.Proc.bind_done (SumcheckVerifierTerminal.actualOwnedCheck unit _ rawV pc.1 pc.2)]
-  refine congrArg (PIR.Proc.bind _) (funext fun checked => ?_)
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
+  refine congrArg (PIR.Process.bind _) (funext fun pc => ?_)
+  conv_rhs => rw [← PIR.Process.bind_done (SumcheckVerifierTerminal.actualOwnedCheck unit _ rawV pc.1 pc.2)]
+  refine congrArg (PIR.Process.bind _) (funext fun checked => ?_)
   cases checked with
   | cons value rest => cases rest; rfl
 
@@ -110,7 +110,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
     reduce_invoke_plain (ctx.enter "label_726564756365" [0, 1]) self (childInputs claim count service)]
   erw [SumcheckVerifierPrelude.reduce_optional unit helperBodies (ctx.enter "label_726564756365" [0, 1])
     self verifier separate SumcheckSourceNormalForms.reduceMaximum none none none claim count service]
-  refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
+  refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl
 
 /-- Root construction skips P work and passes the unchanged raw V vector to check. -/

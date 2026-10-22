@@ -110,7 +110,7 @@ cases.
 
 ## Optional formal checks
 
-Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
+Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean security`, `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-security`, `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
 [its native control](fixtures/clean/air-control.json) and the
 [Bundle fixtures](../../compiler/adapters/clean/README.md) to be the producers'
 current outputs; the [native comparison](protocol/test_clean_air_conformance.py)
@@ -139,7 +139,47 @@ This scope exercises wrong-program, wrong-relation and unproved-certificate
 refusals as well as successful claims. Reports are retained under
 `build/reports/lean/native` (or the selected report root).
 
-Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#arklib` and
+For Lean development, select the affected stages explicitly:
+
+```sh
+python3 common/tests/run.py lean-native --stage subjects --subject schnorr
+python3 common/tests/run.py lean-native --stage subjects --stage reports --subject sumcheck
+python3 common/tests/run.py lean-native --stage normal-forms
+```
+
+The stages are `bridges`, `subjects`, `normal-forms` and `reports`, in that order.
+Omitting `--stage` still runs every stage and every subject. Each invocation
+retains `lean/native/selection.json` with its requested coverage, completed
+stages, failures and timings. A selected subject still runs its kernel checks,
+mutations, runtime differential and receipt-dependency audit. Selected reports
+require a fresh subject run in the same invocation and compare their rows with
+the maintained expectations, including intentionally unresolved claims.
+Unselected subject rows are not compared. Partial runs do not replace the full scope.
+
+Every native run checks dependency pins, path providers, compatibility sources
+and toolchain agreement before expensive work. Declaration capture builds the
+audited package and uses the Lake-built `declaration-records` executable. It
+still reads actual stored proof bodies, including private and opaque proofs,
+on every capture; declaration records and assurance status are not cached.
+
+Body printers use small Lake workspaces under `lean/.lake/body-printers`.
+Lake tracks their generated source and imports and replays their output when
+unchanged. The result remains a candidate: comparison with tracked source and
+kernel admission through the structured views still run. `--fresh-bodies`
+on a subjects run bypasses printer replay for a fresh comparison. Standalone
+`lean/bridges/structured/bodies.py --fresh` does the same. A malformed printer
+log fails; after inspecting the failure, remove only that regenerable scratch
+workspace while no process uses it and retry. No proof or status is recovered
+from an earlier validation run.
+
+For profiling, use Lean's `--profile` and `-Dtrace.profiler=true` on a selected
+file; these measure elaboration rather than a tool's `main` IO. Declaration
+capture separately logs import, provider indexing, stored-proof traversal and
+record-rendering time. The implementation uses the existing pinned Lean/Lake;
+see [Lake module targets and executables](https://lean-lang.org/doc/reference/4.34.0/Build-Tools-and-Distribution/Lake/)
+and [module import visibility](https://lean-lang.org/doc/reference/4.34.0/Source-Files-and-Modules/).
+
+Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#security`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
 The retained research sources and their vectors do not establish correspondence
 or security for the current compiler merely because their checks pass.

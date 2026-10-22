@@ -73,9 +73,13 @@ test-rust:
 test-lean: (build-lean "main")
     python3 common/tests/run.py lean
 
-# Fetch pinned main, ArkLib or Clean dependency objects for development.
+# Fetch pinned core, security, ArkLib or Clean dependency objects for development.
 fetch-lean deps="main":
     python3 scripts/develop.py fetch-lean --deps "$1"
+
+# Build and check reusable security without ArkLib.
+test-lean-security: (build-lean "security")
+    python3 common/tests/run.py lean-security
 
 # Build and check the optional ArkLib integration.
 test-lean-integration: (build-lean "arklib")

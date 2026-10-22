@@ -164,7 +164,7 @@ abbrev verifierClaimSlot : Var ([.vector "bls12-381.fr", .vector "bls12-381.fr",
 /-- The verifier's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
-    PIR.Proc (participantInterface F G) ((Option (List F)) × (Option F)) :=
+    PIR.Process (participantInterface F G) ((Option (List F)) × (Option F)) :=
   .call (.receive (.field scalarDomain) (round0Site ctx) (ctx.roles 0)) fun (round0 : F) =>
   .call (.receive (.field scalarDomain) (round1Site ctx) (ctx.roles 0)) fun (round1 : F) =>
   .call (.receive (.field scalarDomain) (round2Site ctx) (ctx.roles 0)) fun (round2 : F) =>
@@ -274,8 +274,8 @@ theorem verifier_process
     verifierFinish verifierForm verifier_normalized verifier_lawsMatch verifier_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierResults (NormalForm.noCallees _) (.cons index (.cons point (.cons claim (.cons service .nil)))) _
     (verifier_environment index point claim service) (verifier_laws index service point claim) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (verifier_presentation ctx index point claim service)
-      (funext fun result => congrArg PIR.Proc.done (verifier_embedding result)))
+    (congrArg₂ PIR.Process.bind (verifier_presentation ctx index point claim service)
+      (funext fun result => congrArg PIR.Process.done (verifier_embedding result)))
 
 /-- The repeat of `roundFn` at the verifier on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -334,7 +334,7 @@ abbrev proverPointSlot : Var ([.vector "bls12-381.fr", .vector "bls12-381.fr", .
 /-- The prover's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverProcess (ctx : ProtocolContext) (add mul left right point : Option (List F)) :
-    PIR.Proc (participantInterface F G) ((Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F))) :=
+    PIR.Process (participantInterface F G) ((Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F))) :=
   match add with
   | none =>
     .halt .incomplete
@@ -458,8 +458,8 @@ theorem prover_process
     proverFinish proverForm prover_normalized prover_lawsMatch prover_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverResults (NormalForm.noCallees _) (.cons index (.cons add (.cons mul (.cons left (.cons right (.cons point (.cons service .nil))))))) _
     (prover_environment index add mul left right point service) (prover_laws index service add mul left right point) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (prover_presentation ctx index add mul left right point service)
-      (funext fun result => congrArg PIR.Proc.done (prover_embedding result)))
+    (congrArg₂ PIR.Process.bind (prover_presentation ctx index add mul left right point service)
+      (funext fun result => congrArg PIR.Process.done (prover_embedding result)))
 
 /-- The repeat of `roundFn` at the prover on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -501,7 +501,7 @@ theorem rounds_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (
 
 /-- The verifierRounds's normal form of the whole body. -/
 def verifierRoundsProcess (ctx : ProtocolContext) (claim : Option F) (rounds service : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
   (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
   (denoteRepeat (repeatSpec 4) ctx (ctx.roles 1) rounds (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (some (emptyResults.get .here)) (.cons claim .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
@@ -603,16 +603,16 @@ theorem verifierRounds_invoke
     iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (verifierRounds_process (claim := claim) (rounds := rounds) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (verifierRounds_outputs ctx separate out)
+  exact congrArg PIR.Process.done (verifierRounds_outputs ctx separate out)
 
 /-- The proverRounds's normal form of the whole body. -/
 def proverRoundsProcess (ctx : ProtocolContext) (add mul left right : Option (List F)) (rounds : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
   (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
   (denoteRepeat (repeatSpec 4) ctx (ctx.roles 0) rounds (.cons add (.cons mul (.cons left (.cons right (.cons (some (emptyResults.get .here)) (.cons none (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
@@ -714,11 +714,11 @@ theorem proverRounds_invoke
     iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (proverRounds_process (add := add) (mul := mul) (left := left) (right := right) (rounds := rounds) (ctx := ctx) (self := ctx.roles 0) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (proverRounds_outputs ctx separate out)
+  exact congrArg PIR.Process.done (proverRounds_outputs ctx separate out)
 
 end ZkcExamples.Structured.GkrRoundsNormalForms

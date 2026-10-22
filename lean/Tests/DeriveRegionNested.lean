@@ -19,7 +19,7 @@ private theorem check_reverse (a b c : Nat) (commutes : a + b = b + a) :
     source.OperationLaw lower .check (.cons a (.cons b (.cons c .nil))) .nil
       (.done (.cons (c == b + a) .nil)) := by
   apply RegionMeaning.OperationLaw.ofTranslation translation
-  change @Eq (Proc interface (Values Value [Ty.boolean]))
+  change @Eq (Process interface (Values Value [Ty.boolean]))
     (.done (.cons (c == a + b) .nil)) (.done (.cons (c == b + a) .nil))
   rw [commutes]
 

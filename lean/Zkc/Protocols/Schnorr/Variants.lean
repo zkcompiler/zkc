@@ -43,7 +43,7 @@ structure EqualityWiring where
 
 /-- The Chaum–Pedersen verifier: one response opens both commitments. -/
 def equality (wiring : EqualityWiring) (firstBase firstKey secondBase secondKey : G) (service : Nat) :
-    PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
+    PIR.Process (actions (F := F) (G := G)) (Option Bool) :=
   .call (.receive (.group wiring.groupDomain) wiring.firstCommitmentSite wiring.prover) fun firstCommitment =>
   .call (.receive (.group wiring.groupDomain) wiring.secondCommitmentSite wiring.prover) fun secondCommitment =>
   .call (.query wiring.challengeSite wiring.fieldDomain (.cons service .nil)) fun challenge =>
@@ -67,7 +67,7 @@ structure ConjunctionWiring where
 /-- Two Schnorr verifiers under one challenge: each response opens its
 commitment. -/
 def conjunction (wiring : ConjunctionWiring) (firstBase firstKey secondBase secondKey : G) (service : Nat) :
-    PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
+    PIR.Process (actions (F := F) (G := G)) (Option Bool) :=
   .call (.receive (.group wiring.groupDomain) wiring.firstCommitmentSite wiring.prover) fun firstCommitment =>
   .call (.receive (.group wiring.groupDomain) wiring.secondCommitmentSite wiring.prover) fun secondCommitment =>
   .call (.query wiring.challengeSite wiring.fieldDomain (.cons service .nil)) fun challenge =>
@@ -91,7 +91,7 @@ structure RepresentationWiring where
 /-- Okamoto's verifier: the two responses open the commitment at the two bases
 and the point. -/
 def representation (wiring : RepresentationWiring) (firstBase secondBase point : G) (service : Nat) :
-    PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
+    PIR.Process (actions (F := F) (G := G)) (Option Bool) :=
   .call (.receive (.group wiring.groupDomain) wiring.commitmentSite wiring.prover) fun commitment =>
   .call (.query wiring.challengeSite wiring.fieldDomain (.cons service .nil)) fun challenge =>
   .call (.send (ty := .field wiring.fieldDomain) wiring.deliverySite wiring.prover challenge) fun _ =>

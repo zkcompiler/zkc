@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from native_entry import native_run
+from native_entry import native_subject
 from contracts import label
 from verify import verify, read_json
 
@@ -34,7 +34,8 @@ def main():
         receipt = verify(data, request, args.output / name, args.lake, timeout=90)
         code = receipt['obligations'][0]['code'] if receipt['obligations'] else None
         actual = receipt['status'] if code is None else code
-        assert actual == expected, (name, expected, actual, args.output / name / 'lean.log')
+        if not (actual == expected):
+            raise AssertionError((name, expected, actual, args.output / name / 'lean.log'))
         row = {'case': name, 'status': actual, 'properties': len(receipt['verified_properties']),
                'seconds': round(time.monotonic() - start, 3)}
         rows.append(row)
@@ -63,15 +64,17 @@ def main():
     native = native.replace('claim:', 'target:').replace('== claim;', '== target;')
     source = args.output / 'alternative.zkc'
     source.write_text(native)
-    flags = ['--source-format=zkc', f'--module=alternative={source}', '--entry=alternative::Horner']
+    flags = ['--source-format=zkc', f'--module=alternative={source}', '--subject=alternative::EvaluationVerifier']
     def execute(command):
         return subprocess.check_output(list(map(str, command)), cwd=ROOT, text=True, timeout=30)
-    mlir, interface = native_run(execute, args.compiler, flags)
-    assert interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()
+    mlir, interface_text, interface = native_subject(execute, args.compiler, flags)
+    if not (interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()):
+        raise AssertionError("bridges/common/verify_tests.py:70: interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()")
     path = args.output / 'alternative.mlir'
     path.write_text(mlir)
     data = json.loads(execute([args.compiler, 'protocol-lean', path, '--symbol=' + interface['protocol']]))
-    assert data[1] == 'sha256:' + interface['original']
+    if not (data[1] == 'sha256:' + interface['original']):
+        raise AssertionError("bridges/common/verify_tests.py:74: data[1] == 'sha256:' + interface['original']")
     request = copy.deepcopy(requests['factor-openings'])
     request['inputs'][0], request['inputs'][1] = request['inputs'][1], request['inputs'][0]
     request['wiring']['leftSite'] = label('open_factor_a')
@@ -185,9 +188,12 @@ def main():
         original_request = copy.deepcopy(requests['sumcheck'])
         receipt = verify(read_json(FIXTURES / 'sumcheck.json'), original_request,
                          args.output / 'mutated-request-control', args.lake)
-        assert receipt['status'] == 'verified-in-model'
-        assert [p['property'] for p in receipt['verified_properties']] == original_request['properties']
-        assert read_json(args.output / 'mutated-request-control/request.json') == original_request
+        if not (receipt['status'] == 'verified-in-model'):
+            raise AssertionError("bridges/common/verify_tests.py:188: receipt['status'] == 'verified-in-model'")
+        if not ([p['property'] for p in receipt['verified_properties']] == original_request['properties']):
+            raise AssertionError("bridges/common/verify_tests.py:189: [p['property'] for p in receipt['verified_properties']] == original_request['properties']")
+        if not (read_json(args.output / 'mutated-request-control/request.json') == original_request):
+            raise AssertionError("bridges/common/verify_tests.py:190: read_json(args.output / 'mutated-request-control/request.json') == original_request")
         rows.append({'case': 'mutated-request-control', 'status': 'verified-in-model',
                      'properties': len(receipt['verified_properties'])})
     finally:
@@ -195,7 +201,8 @@ def main():
     # A deliberately tiny external budget must never become a verified receipt.
     limited = verify(original, requests['factor-openings'], args.output / 'proof-budget-control',
                      args.lake, timeout=0.001)
-    assert limited['status'] == 'unresolved' and limited['obligations'][0]['code'] == 'proof-budget'
+    if not (limited['status'] == 'unresolved' and limited['obligations'][0]['code'] == 'proof-budget'):
+        raise AssertionError("bridges/common/verify_tests.py:198: limited['status'] == 'unresolved' and limited['obligations'][0]['code'] == 'proof-budget'")
     rows.append({'case': 'proof-budget-control', 'status': 'proof-budget', 'properties': 0})
     duplicate = args.output / 'duplicate-members.json'
     duplicate.write_text('{"format":"a","format":"b"}')
@@ -211,7 +218,8 @@ def main():
     quoted = args.output / 'quoted-delimiters.json'
     quoted_value = '[\\"' * 5000
     quoted.write_text(json.dumps(quoted_value))
-    assert read_json(quoted) == quoted_value
+    if not (read_json(quoted) == quoted_value):
+        raise AssertionError('bridges/common/verify_tests.py:214: read_json(quoted) == quoted_value')
     report = {'cases': rows, 'verified_requests': sum(r['status'] == 'verified-in-model' for r in rows),
               'property_instances': sum(r['properties'] for r in rows),
               'unresolved_controls': sum(r['status'] != 'verified-in-model' for r in rows),

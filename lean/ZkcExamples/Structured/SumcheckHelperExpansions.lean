@@ -63,9 +63,9 @@ theorem checkTable_expansion (table : Meanings F G) (xs point : List F) (claim :
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, Primitive.evaluate]
+    PIR.Process.bind, Primitive.evaluate]
   split
-  · simp only [primitiveOutcome, PIR.Proc.bind, show 1 < indexLimit by decide +kernel,
+  · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get_cons, Values.get, Environment.push, ← List.sum_eq_foldl]
     congr 1
     funext constructed
@@ -100,10 +100,10 @@ theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate]
   split
-  · simp only [primitiveOutcome, PIR.Proc.bind, show 1 < indexLimit by decide +kernel,
+  · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get_cons, Values.get, Environment.push, Evaluation.invokeCallback]
     congr 1
     funext valid
@@ -111,8 +111,8 @@ theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     | cons b rest =>
       cases rest
       cases b <;> simp only [Bool.false_eq_true, ite_false, ite_true,
-        PIR.Proc.bind, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-        singleton_eta, PIR.Proc.bind_done]
+        PIR.Process.bind, Values.get_cons, Values.get, Environment.prepend, Environment.push,
+        singleton_eta, PIR.Process.bind_done]
       rfl
   · rfl
 
