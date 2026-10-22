@@ -35,12 +35,17 @@ impl RandomSource {
 mod tests {
     use super::*;
     #[test]
-    fn owned_sources_advance_without_cloning_or_cross_field_reset() {
-        let mut a = RandomSource::for_testing([47; 32]);
-        let mut b = RandomSource::for_testing([47; 32]);
-        for _ in 0..32 {
-            assert_eq!(a.scalar(), b.scalar());
-            assert_eq!(a.bn254_scalar(), b.bn254_scalar());
+    fn owned_source_matches_one_advancing_mixed_field_stream() {
+        let seed = [47; 32];
+        let mut source = RandomSource::for_testing(seed);
+        let mut expected = StdRng::from_seed(seed);
+        for round in 0..32 {
+            // Asymmetric requests detect per-field resets or separate streams.
+            if round % 3 == 0 {
+                assert_eq!(source.bn254_scalar(), Bn254Scalar::rand(&mut expected));
+            }
+            assert_eq!(source.scalar(), Scalar::rand(&mut expected));
+            assert_eq!(source.bn254_scalar(), Bn254Scalar::rand(&mut expected));
         }
         let mut os = RandomSource::from_os().unwrap();
         let _ = (os.scalar(), os.bn254_scalar());

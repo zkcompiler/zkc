@@ -336,7 +336,7 @@ mod tests {
             for failure in 0..3 {
                 let mut output = vec![G1::identity(); points.len()];
                 crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
-                crate::arkworks::allocation::VECTOR_FAILURE.with(|count| count.set(Some(failure)));
+                let _failure = crate::allocation::failure::after(failure);
                 let mut plan = G1::scaling_plan(
                     points.len(),
                     Selection::Automatic {
@@ -356,11 +356,6 @@ mod tests {
                 } else {
                     G1::scale_each_into(&scalars, &points, &mut output, &mut plan)
                 };
-                assert!(
-                    crate::arkworks::allocation::VECTOR_FAILURE
-                        .with(|count| count.get())
-                        .is_none()
-                );
                 assert_eq!(
                     crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.get()),
                     failure + 1
@@ -376,7 +371,7 @@ mod tests {
     fn fixed_preparation_refuses_allocation_and_execution_never_reselects() {
         use crate::arkworks::bls12_381::{G1, Scalar};
         for failure in 0..3 {
-            crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.set(Some(failure)));
+            let _failure = crate::allocation::failure::after(failure);
             assert!(matches!(
                 G1::scaling_plan(17, Selection::Fixed(Algorithm::Batched { chunk_len: 7 })),
                 Err(Error::Allocation)
@@ -387,16 +382,12 @@ mod tests {
         let points = vec![G1::generator(); 17];
         let mut out = points.clone();
         crate::arkworks::allocation::VECTOR_REQUESTS.with(|value| value.set(0));
-        crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.set(Some(0)));
+        let _failure = crate::allocation::failure::after(0);
         G1::scale_many_into(&points, Scalar::from(3), &mut out, &mut plan).unwrap();
         assert_eq!(plan.algorithm(), Algorithm::Batched { chunk_len: 7 });
         assert_eq!(
             crate::arkworks::allocation::VECTOR_REQUESTS.with(|value| value.get()),
             0
-        );
-        assert_eq!(
-            crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.replace(None)),
-            Some(0)
         );
         assert!(
             out.iter()

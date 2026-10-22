@@ -23,6 +23,7 @@ pub mod failure {
     }
 
     /// Restore the previous injection schedule when this guard is dropped.
+    #[must_use = "keep the guard alive for the reservations being tested"]
     pub struct Guard(Option<usize>);
 
     /// Fail one adapter reservation after `successful` reservations on this thread.

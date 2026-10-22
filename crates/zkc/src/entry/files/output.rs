@@ -86,7 +86,7 @@ pub(crate) fn output_setups_with(
     for (name, bytes) in material {
         capacity.check_wire(bytes.len())?;
         let pin = *authority.keys.get(name).ok_or("entry-setup-authority")?;
-        let key = imports.import(bytes, pin, "entry-output-setup")?;
+        let key = imports.import(bytes, pin)?;
         if !keys
             .iter()
             .any(|old: &zkc_kernels::arkworks::bls12_381::VerifierKey| {

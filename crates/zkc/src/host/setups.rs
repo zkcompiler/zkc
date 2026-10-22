@@ -1,16 +1,15 @@
 //! Setup checks shared by native invocation hosts. Authority maps stay with each host.
 use super::inputs::Result;
+use std::{collections::BTreeMap, sync::Arc};
+use zkc_kernels::arkworks::bls12_381::{Bounds, VerifierKey};
 use zkc_native::Value;
-use zkc_runtime::vm::{LogicalType, Type};
+use zkc_runtime::vm::{ExecutionLedger, LiveReservation, LogicalType, Type};
 pub(crate) fn needs_input_setup(ty: &LogicalType) -> bool {
     ty.kind() == Type::ProverKey || zkc_native::requires_setup(ty.clone())
 }
 // Apply a port's configured setup recursively. Copyable aggregates may contain
 // PCS leaves; neither aggregate construction nor unused entry data bypasses it.
-pub(crate) fn check_input(
-    value: &Value,
-    key: &zkc_kernels::arkworks::bls12_381::VerifierKey,
-) -> Result<()> {
+pub(crate) fn check_input(value: &Value, key: &VerifierKey) -> Result<()> {
     let metadata = match value {
         Value::Commitment(v) => Some(v.metadata()),
         Value::Proof(v) => Some(v.metadata()),
@@ -41,17 +40,17 @@ pub(crate) fn check_input(
 /// Canonical byte snapshots are owned: moving or mutating a source request cannot
 /// change an authenticated cache entry. This context ends with one invocation.
 pub(crate) struct VerifierKeys {
-    bounds: zkc_kernels::arkworks::bls12_381::Bounds,
-    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-    retained: Vec<zkc_runtime::vm::LiveReservation>,
-    keys: std::collections::BTreeMap<[u8; 32], Vec<ImportedVerifierKey>>,
+    bounds: Bounds,
+    ledger: Option<ExecutionLedger>,
+    retained: Vec<LiveReservation>,
+    keys: BTreeMap<[u8; 32], Vec<ImportedVerifierKey>>,
 }
 struct ImportedVerifierKey {
     bytes: Vec<u8>,
-    key: std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>,
+    key: Arc<VerifierKey>,
 }
 impl VerifierKeys {
-    pub fn new(bounds: zkc_kernels::arkworks::bls12_381::Bounds) -> Self {
+    pub fn new(bounds: Bounds) -> Self {
         Self {
             bounds,
             ledger: None,
@@ -59,24 +58,16 @@ impl VerifierKeys {
             keys: Default::default(),
         }
     }
-    pub(crate) fn set_ledger(&mut self, ledger: Option<zkc_runtime::vm::ExecutionLedger>) {
+    pub(crate) fn set_ledger(&mut self, ledger: Option<ExecutionLedger>) {
         self.ledger = ledger;
     }
-    pub(crate) fn check_bounds(
-        &self,
-        bounds: zkc_kernels::arkworks::bls12_381::Bounds,
-    ) -> Result<()> {
+    pub(crate) fn check_bounds(&self, bounds: Bounds) -> Result<()> {
         if self.bounds != bounds {
             return Err("native-setup-capacity".into());
         }
         Ok(())
     }
-    pub fn import(
-        &mut self,
-        bytes: &[u8],
-        pin: [u8; 32],
-        canonical_error: &str,
-    ) -> Result<std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>> {
+    pub fn import(&mut self, bytes: &[u8], pin: [u8; 32]) -> Result<Arc<VerifierKey>> {
         if let Some(imported) = self
             .keys
             .get(&pin)
@@ -93,13 +84,9 @@ impl VerifierKeys {
             .ok_or("native-setup-capacity")?;
         let guard = zkc_runtime::host::wire::reserve_allocation(self.ledger.as_ref(), bound)?;
         self.retained.extend(guard);
-        let key =
-            zkc_kernels::arkworks::bls12_381::VerifierKey::from_bytes(bytes, pin, &self.bounds)
-                .map_err(|e| e.to_string())?;
-        if key.to_bytes(&self.bounds).map_err(|e| e.to_string())? != bytes {
-            return Err(canonical_error.into());
-        }
-        let key = std::sync::Arc::new(key);
+        // The provider validates canonical bytes and authenticates the pin.
+        let key = VerifierKey::from_bytes(bytes, pin, &self.bounds).map_err(|e| e.to_string())?;
+        let key = Arc::new(key);
         self.keys.entry(pin).or_default().push(ImportedVerifierKey {
             bytes: bytes.to_vec(),
             key: key.clone(),
@@ -111,15 +98,11 @@ impl VerifierKeys {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zkc_kernels::arkworks::bls12_381::Keys;
     #[test]
     fn verifier_reuse_requires_identical_bytes_and_authority() {
         let bounds = zkc_native::Policy::default().ark_bounds();
-        let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
-            1,
-            &mut ark_std::rand::thread_rng(),
-            &bounds,
-        )
-        .unwrap();
+        let keys = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
         let key = keys.verifier_key();
         let bytes = key.to_bytes(&bounds).unwrap();
         let same_bytes = bytes.clone();
@@ -127,25 +110,21 @@ mod tests {
         changed.push(0);
         let pin = key.metadata().key_id();
         let mut imports = VerifierKeys::new(bounds);
-        let first = imports.import(&bytes, pin, "canonical").unwrap();
-        let again = imports.import(&same_bytes, pin, "canonical").unwrap();
-        assert!(std::sync::Arc::ptr_eq(&first, &again));
+        let first = imports.import(&bytes, pin).unwrap();
+        let again = imports.import(&same_bytes, pin).unwrap();
+        assert!(Arc::ptr_eq(&first, &again));
         let mut wrong_pin = pin;
         wrong_pin[0] ^= 1;
-        assert!(imports.import(&bytes, wrong_pin, "canonical").is_err());
-        assert!(imports.import(&changed, pin, "canonical").is_err());
+        assert!(imports.import(&bytes, wrong_pin).is_err());
+        assert!(imports.import(&changed, pin).is_err());
         let mut source = same_bytes.clone();
-        let owned = imports.import(&source, pin, "canonical").unwrap();
+        let owned = imports.import(&source, pin).unwrap();
         source.fill(0);
-        assert!(imports.import(&source, pin, "canonical").is_err());
-        assert!(std::sync::Arc::ptr_eq(
+        assert!(imports.import(&source, pin).is_err());
+        assert!(Arc::ptr_eq(
             &owned,
-            &imports.import(&same_bytes, pin, "canonical").unwrap()
+            &imports.import(&same_bytes, pin).unwrap()
         ));
-        assert!(
-            imports
-                .check_bounds(zkc_kernels::arkworks::bls12_381::Bounds::new(0, 0, 0, 0))
-                .is_err()
-        );
+        assert!(imports.check_bounds(Bounds::new(0, 0, 0, 0)).is_err());
     }
 }

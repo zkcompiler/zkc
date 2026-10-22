@@ -12,17 +12,18 @@ macro_rules! scaling_tests {
             type Point = $point;
             type Scalar = $scalar;
 
-            fn plan(
+            fn fixed_plan(
                 len: usize,
                 chunk: usize,
             ) -> zkc_kernels::arkworks::scaling::Plan<<$affine as AffineRepr>::Config> {
-                Point::scaling_plan(
-                    len,
-                    zkc_kernels::arkworks::scaling::Selection::Automatic {
-                        max_workspace: Point::scaling_workspace_bytes(chunk).unwrap(),
-                    },
-                )
-                .unwrap()
+                use zkc_kernels::arkworks::scaling::{Algorithm, Selection};
+                let chunk_len = chunk.min(len);
+                let algorithm = if chunk_len < 2 {
+                    Algorithm::Direct
+                } else {
+                    Algorithm::Batched { chunk_len }
+                };
+                Point::scaling_plan(len, Selection::Fixed(algorithm)).unwrap()
             }
 
             fn repeated_add(point: Point, scalar: usize) -> Point {
@@ -60,7 +61,7 @@ macro_rules! scaling_tests {
                             &scalars,
                             &points,
                             &mut output,
-                            &mut plan(points.len(), chunk),
+                            &mut fixed_plan(points.len(), chunk),
                         )
                         .unwrap();
                         assert_eq!(output, expected, "per-point len={len}, chunk={chunk}");
@@ -69,7 +70,7 @@ macro_rules! scaling_tests {
                                 &points,
                                 Scalar::from(scalar as u64),
                                 &mut output,
-                                &mut plan(points.len(), chunk),
+                                &mut fixed_plan(points.len(), chunk),
                             )
                             .unwrap();
                             let expected: Vec<_> = points
@@ -86,7 +87,7 @@ macro_rules! scaling_tests {
                     &vec![Point::identity(); 257],
                     -Scalar::one(),
                     &mut output,
-                    &mut plan((&vec![Point::identity(); 257]).len(), SCALING_CHUNK_CAP),
+                    &mut fixed_plan(257, SCALING_CHUNK_CAP),
                 )
                 .unwrap();
                 assert_eq!(output, vec![Point::identity(); 257]);
@@ -152,7 +153,7 @@ macro_rules! scaling_tests {
                         &scalars,
                         &points,
                         &mut output,
-                        &mut plan(points.len(), chunk),
+                        &mut fixed_plan(points.len(), chunk),
                     )
                     .unwrap();
                     for (actual, expected) in output.iter().zip(&expected) {
@@ -164,7 +165,7 @@ macro_rules! scaling_tests {
                         &points,
                         scalar,
                         &mut output,
-                        &mut plan(points.len(), chunk),
+                        &mut fixed_plan(points.len(), chunk),
                     )
                     .unwrap();
                     for (index, actual) in output.iter().enumerate() {
@@ -182,8 +183,13 @@ macro_rules! scaling_tests {
                 for scalar in samples {
                     let short = &points[..5];
                     let mut output = vec![Point::identity(); short.len()];
-                    Point::scale_many_into(short, scalar, &mut output, &mut plan(short.len(), 2))
-                        .unwrap();
+                    Point::scale_many_into(
+                        short,
+                        scalar,
+                        &mut output,
+                        &mut fixed_plan(short.len(), 2),
+                    )
+                    .unwrap();
                     for (index, actual) in output.iter().enumerate() {
                         let mut expected = Vec::new();
                         raw[index % raw.len()]
@@ -285,7 +291,7 @@ macro_rules! scaling_tests {
                         &points,
                         Scalar::one(),
                         &mut output,
-                        &mut plan(points.len(), 2)
+                        &mut fixed_plan(points.len(), 2)
                     ),
                     Err(Error::InvalidEncoding)
                 );
@@ -295,7 +301,7 @@ macro_rules! scaling_tests {
                         &[Scalar::one(); 3],
                         &points,
                         &mut output,
-                        &mut plan(points.len(), 2)
+                        &mut fixed_plan(points.len(), 2)
                     ),
                     Err(Error::InvalidEncoding)
                 );
@@ -307,7 +313,7 @@ macro_rules! scaling_tests {
                         &[Scalar::one(); 2],
                         &points,
                         &mut output,
-                        &mut plan(points.len(), 2)
+                        &mut fixed_plan(points.len(), 2)
                     ),
                     Err(Error::InvalidEncoding)
                 );

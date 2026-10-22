@@ -330,7 +330,7 @@ pub(super) fn prepare<'a>(
     let mut material = BTreeMap::new();
     for (name, bytes) in &request.setups {
         let pin = &host.authority.keys[name];
-        let key = imports.import(bytes, *pin, "bundle-canonical-key")?;
+        let key = imports.import(bytes, *pin)?;
         material.entry(bytes).or_insert_with(|| key.clone());
         keys.insert(name.to_owned(), key);
     }

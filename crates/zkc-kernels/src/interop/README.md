@@ -14,6 +14,10 @@ order, guards, initialization, attempts, and proof encoding.
   `Hs(state || items)`. Empty update means `Hs(state)`. A grouped call is not a
   sequence of single-item calls. All scalar outputs, including zero, are returned.
   The protocol's separate zero-challenge policy decides retry/rejection.
+- `monero::cryptonote_map(Word)`: CryptoNote's field-element map followed by
+  cofactor multiplication, without hashing. It returns `Option<EdwardsPrime>`;
+  the adapter owns failure classification. This variable-time primitive is for
+  public generator inputs.
 - `openvm::Duplex::new()`: zero state, width 16, rate 8, overwrite absorption,
   descending sample positions. `.observe(&[u32])` validates the full canonical
   BabyBear slice before mutation. Empty observation does nothing. `.sample()`
@@ -44,7 +48,7 @@ accounting. The primitive helpers install no global counters, RNG or private
 attempt buffers. The owning runtime controls handle
 identity, snapshot/cloning authorization, capacity, and complete outcomes.
 
-All primitive errors are returned as `external:*` codes. The main adapter selects
+Typed `Error` values use `external:*` codes. The main adapter selects
 the enclosing malformed/refused/exhausted policy; a false witness predicate is a
 normal result with its actual state effects. The provider knows no BP+ rounds or
 SWIRL stages. Application statement/VK binding remains the caller's responsibility.
@@ -66,7 +70,7 @@ Monero hash and reduction use RustCrypto sha3 0.12.0 (`Keccak256`, **not**
 `Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` in the replay
 fixtures comes from the pinned upstream harness. The [source Bulletproofs+
 library](../../../../libraries/arguments/bulletproofs/README.md) derives this initial value
-with the separate [Edwards point map](../dalek/edwards25519.rs); its BSD source notice is
+with the [CryptoNote point map](monero.rs); its BSD source notice is
 retained in [UPSTREAM-LICENSE-BSD](UPSTREAM-LICENSE-BSD). Independent
 [map vectors](../../tests/fixtures/README.md) cover that primitive. Six additional
 hash vectors use the retained pinned native `cn_fast_hash` shared library and

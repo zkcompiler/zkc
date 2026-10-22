@@ -625,7 +625,7 @@ pub(crate) fn apply(
                 .map_err(|_| refused("encoding-width"))?;
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(
-                zkc_kernels::dalek::edwards25519::map(input)
+                zkc_kernels::interop::monero::cryptonote_map(input)
                     .ok_or_else(|| refused("edwards-map"))?,
             )])
         }

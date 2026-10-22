@@ -1,6 +1,10 @@
 //! Three independent development processes: setup once, produce, validate.
 //! Local config files are trusted setup outputs, never candidate-supplied pins.
 //! This is a PCS custody/transport example, not a protocol or Fiat-Shamir proof.
+use ark_std::rand::{
+    SeedableRng,
+    rngs::{OsRng, StdRng},
+};
 use std::{fs, io::Read, path::Path, time::Instant};
 use zkc_kernels::arkworks::{
     Error,
@@ -52,7 +56,8 @@ fn point(n: usize) -> Vec<Scalar> {
 
 fn setup(root: &Path, n: usize) -> Result<()> {
     let started = Instant::now();
-    let keys = Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &BOUNDS)?;
+    let mut rng = StdRng::from_rng(OsRng)?;
+    let keys = Keys::setup_with_rng(n, &mut rng, &BOUNDS)?;
     let setup_us = started.elapsed().as_micros();
     let started = Instant::now();
     let prover = keys.prover_key().to_bytes(&BOUNDS)?;

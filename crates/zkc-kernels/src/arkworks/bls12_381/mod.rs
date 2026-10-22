@@ -9,7 +9,7 @@
 //! bytes and the selected profile; they do not validate an adversarial setup.
 //! `ProverKey` transports only public SRS material, with a separate full-material
 //! pin and an admitted `VerifierKey`; private opening state stays local.
-//! See the crate README for wire formats, trust, and allocation limits.
+//! The adjacent PCS guide (`README.md`) defines wire formats, trust and allocation limits.
 //!
 //! ```
 //! use zkc_kernels::arkworks::bls12_381::{Bounds, Keys, ProverKey, Scalar, Table, VerifierKey};

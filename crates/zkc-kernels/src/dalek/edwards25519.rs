@@ -13,7 +13,7 @@ pub struct EdwardsPrime(EdwardsPoint);
 fn decode(bytes: &[u8]) -> Option<EdwardsPoint> {
     let compressed = CompressedEdwardsY(bytes.try_into().ok()?);
     let point = compressed.decompress()?;
-    // Reject noncanonical y and the negative encoding of x=0, as Monero does.
+    // Reject noncanonical y and the negative encoding of x=0.
     (point.compress() == compressed).then_some(point)
 }
 
@@ -63,65 +63,10 @@ impl std::ops::Neg for EdwardsPrime {
     }
 }
 
-// Algebraic form of ge_fromfe_frombytes_vartime in Monero
-// 4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5, src/crypto/crypto-ops.c.
-// Its sign test and Edwards y coordinate suffice: dalek reconstructs x.
-// This is the legacy field-element map, not an RFC 9380 hash-to-curve suite.
-// See interop/UPSTREAM-LICENSE-BSD. The implementation is variable-time; use it for public generator inputs.
-#[derive(ark_ff::MontConfig)]
-#[modulus = "57896044618658097711785492504343953926634992332820282019728792003956564819949"]
-#[generator = "2"]
-struct BaseConfig;
-type Base = ark_ff::Fp256<ark_ff::MontBackend<BaseConfig, 4>>;
-
-pub fn map(bytes: [u8; 32]) -> Option<EdwardsPrime> {
-    use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-    let u = Base::from_le_bytes_mod_order(&bytes);
-    let v = u.square().double();
-    let w = v + Base::from(1u64);
-    let a = Base::from(486662u64);
-    let denominator = w.square() - a.square() * v;
-    let cube = denominator.square() * denominator;
-    let seventh = cube.square() * denominator;
-    let candidate = w
-        * cube
-        * (w * seventh).pow([
-            0xfffffffffffffffd,
-            0xffffffffffffffff,
-            0xffffffffffffffff,
-            0x0fffffffffffffff,
-        ]);
-    let check = candidate.square() * denominator;
-    let negative = check != w && check != -w;
-    let z = -a * if negative { Base::from(1u64) } else { v };
-    let y = (z - w) * (z + w).inverse()?;
-    let mut encoded: [u8; 32] = y.into_bigint().to_bytes_le().try_into().ok()?;
-    encoded[31] |= u8::from(negative) << 7;
-    EdwardsPrime::decode_cofactor(&encoded)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use curve25519_dalek::constants::EIGHT_TORSION;
-
-    fn bytes(s: &str) -> [u8; 32] {
-        std::array::from_fn(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
-    }
-
-    #[test]
-    fn legacy_map_matches_pinned_monero() {
-        // Monero 4f92268d, ge_fromfe_frombytes_vartime followed by ge_mul8.
-        let vectors: Vec<(String, String)> =
-            serde_json::from_str(include_str!("../../tests/fixtures/edwards-map.json")).unwrap();
-        for (input, expected) in vectors {
-            assert_eq!(
-                map(bytes(&input)).unwrap().to_bytes(),
-                bytes(&expected),
-                "{input}"
-            );
-        }
-    }
 
     #[test]
     fn decoding_keeps_subgroup_and_cofactor_contracts_distinct() {

@@ -151,11 +151,7 @@ pub(super) fn check_pinned_material(
         .map(|slot| {
             Ok((
                 slot.name.clone(),
-                imports.import(
-                    &material[&slot.name],
-                    authority.keys[&slot.name],
-                    "entry-setup-canonical",
-                )?,
+                imports.import(&material[&slot.name], authority.keys[&slot.name])?,
             ))
         })
         .collect()

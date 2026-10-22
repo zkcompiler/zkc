@@ -646,7 +646,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
     )
     .unwrap();
     assert!(registry.get(keys.verifier_key().metadata()).is_some());
-    let shared = imports.import(&bytes, pin, "canonical").unwrap();
+    let shared = imports.import(&bytes, pin).unwrap();
     let (raw, _) = fixture("verifier_key:multilinear.kzg.bls12-381/0");
     let request = RunInputs {
         session: "setup_reuse".into(),

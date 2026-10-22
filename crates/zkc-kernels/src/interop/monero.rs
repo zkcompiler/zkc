@@ -2,18 +2,21 @@
 //! Source: src/ringct/bulletproofs_plus.cc (transcript_update, lines 481-499;
 //! initial transcript lines 152-156), src/ringct/rctOps.cpp (hash_to_scalar),
 //! src/crypto/hash.c (cn_fast_hash). See provenance.json for source hashes.
+//! The CryptoNote map follows src/crypto/crypto-ops.c at the same revision.
 //!
 //! Keccak-256 (NOT SHA3-256), then little-endian reduction modulo the Edwards
-//! scalar order. Crypto is delegated to RustCrypto and curve25519-dalek.
+//! scalar order. Hashing uses RustCrypto; scalar and point arithmetic use Dalek.
+//! The CryptoNote map uses an Arkworks base field before checked point decoding.
 use super::{Error, Result, Work};
+use crate::dalek::edwards25519::EdwardsPrime;
 use curve25519_dalek::scalar::Scalar;
 use sha3::{Digest, Keccak256};
 
 pub type Word = [u8; 32];
 
 /// Saved encoded hash-to-point initial value from the pinned upstream harness.
-/// This is a protocol constant, not a scalar, nor a zkc prefix. This module does
-/// not implement Monero hash-to-point; its derivation remains an external premise.
+/// This is a protocol constant, not a scalar or zkc prefix. The source library
+/// derives it with Keccak and `cryptonote_map`; replay fixtures retain this value.
 pub const BP_PLUS_INITIAL: Word = [
     0x4a, 0x67, 0x7c, 0x90, 0xeb, 0x73, 0x05, 0x1e, 0x79, 0x0d, 0xa4, 0x55, 0x91, 0x10, 0x7f, 0x6e,
     0xe1, 0x05, 0x90, 0x4d, 0x91, 0x87, 0xc5, 0xd3, 0x54, 0x71, 0x09, 0x6c, 0x44, 0x5a, 0x22, 0x75,
@@ -69,5 +72,65 @@ impl HashChain {
         }
         self.state = reduce_digest(hash.finalize().into());
         self.state
+    }
+}
+
+#[derive(ark_ff::MontConfig)]
+#[modulus = "57896044618658097711785492504343953926634992332820282019728792003956564819949"]
+#[generator = "2"]
+struct BaseConfig;
+type Base = ark_ff::Fp256<ark_ff::MontBackend<BaseConfig, 4>>;
+
+/// CryptoNote field-element map followed by cofactor multiplication.
+/// Adapted from `ge_fromfe_frombytes_vartime` in pinned Monero's
+/// `src/crypto/crypto-ops.c`; see the adjacent UPSTREAM-LICENSE-BSD.
+/// Its sign test and Edwards y coordinate suffice: Dalek reconstructs x.
+/// The implementation is variable-time and intended for public generator inputs.
+pub fn cryptonote_map(bytes: Word) -> Option<EdwardsPrime> {
+    use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
+    let u = Base::from_le_bytes_mod_order(&bytes);
+    let v = u.square().double();
+    let w = v + Base::from(1u64);
+    let a = Base::from(486662u64);
+    let denominator = w.square() - a.square() * v;
+    let cube = denominator.square() * denominator;
+    let seventh = cube.square() * denominator;
+    let candidate = w
+        * cube
+        * (w * seventh).pow([
+            0xfffffffffffffffd,
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0x0fffffffffffffff,
+        ]);
+    let check = candidate.square() * denominator;
+    let negative = check != w && check != -w;
+    let z = -a * if negative { Base::from(1u64) } else { v };
+    let y = (z - w) * (z + w).inverse()?;
+    let mut encoded: [u8; 32] = y.into_bigint().to_bytes_le().try_into().ok()?;
+    encoded[31] |= u8::from(negative) << 7;
+    EdwardsPrime::decode_cofactor(&encoded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bytes(s: &str) -> Word {
+        std::array::from_fn(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
+    }
+
+    #[test]
+    fn cryptonote_map_matches_pinned_monero() {
+        // Monero 4f92268d, ge_fromfe_frombytes_vartime followed by ge_mul8.
+        let vectors: Vec<(String, String)> =
+            serde_json::from_str(include_str!("../../tests/fixtures/edwards-map.json")).unwrap();
+        for (input, expected) in vectors {
+            assert_eq!(
+                cryptonote_map(bytes(&input)).unwrap().to_bytes(),
+                bytes(&expected),
+                "{input}"
+            );
+        }
     }
 }
