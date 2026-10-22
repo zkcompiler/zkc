@@ -55,7 +55,7 @@ variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabit
 
 /-- An event of the concrete hash-chain experiment's result. -/
 noncomputable def concreteEvent (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (event : Stmt × (PIR.Outcome A × List P) → Prop)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) (_ : Unit) : ENNReal :=
   Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial adversary)).run' ∅}[
@@ -64,7 +64,7 @@ noncomputable def concreteEvent (absorb : Typed.Interface I E P (Raw E S width))
 /-- The same event of the typed engine's adaptive experiment, for a mixture of
 provers. -/
 noncomputable def idealEvent (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (event : Stmt × (PIR.Outcome A × List P) → Prop)
     (provers : ProbComp (OracleComp (OracleSpec.ofFn (Answer E S width)) (Stmt × List P)))
     (_ : Unit) : ENNReal :=
@@ -74,7 +74,7 @@ noncomputable def idealEvent (absorb : Typed.Interface I E P (Raw E S width))
 
 /-- The hash-chain provider simulation. -/
 noncomputable def simulation (positive : 0 < width) (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (nonempty : ∀ statement, initial statement ≠ []) {queries : ℕ}
     (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
     (verifierCalls : ℕ) (callBudget : Stmt → ℕ)
@@ -134,7 +134,7 @@ theorem familyQueryBound_of_total {α : Type} :
 omit [DecidableEq S] [DecidableEq X] [Inhabited S] [Fintype S] in
 /-- The ideal event of a mixture of provers is at most that of its worst prover. -/
 theorem idealEvent_mixes (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (event : Stmt × (PIR.Outcome A × List P) → Prop) :
     Provider.Mixes (idealEvent absorb validator initial event) () := by
   intro provers
@@ -146,7 +146,7 @@ theorem idealEvent_mixes (absorb : Typed.Interface I E P (Raw E S width))
 /-- The hash-chain provider simulation as a stage relation from the ideal typed
 game to the concrete game. -/
 noncomputable def relation (positive : 0 < width) (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (nonempty : ∀ statement, initial statement ≠ []) {queries : ℕ}
     (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
     (verifierCalls : ℕ) (callBudget : Stmt → ℕ)
@@ -163,7 +163,7 @@ omit [DecidableEq S] [DecidableEq X] [Inhabited S] [Fintype S] in
 /-- The typed game and the ideal game of the simulation have the same bad
 probability for every prover. -/
 noncomputable def idealRelation (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (falseStatement : Stmt → Prop)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E) (falseStatement : Stmt → Prop)
     (accepts : A → Prop) :
     Stage.Relation (Stage.typedGame (R := Answer E S width) absorb validator initial falseStatement accepts)
       (Provider.idealGame (Answer E S width)
@@ -182,7 +182,7 @@ theorem concrete_soundness_charged (positive : 0 < width)
     {absorb : Typed.Interface I E P (Raw E S width)} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : Typed.ChargedCertificate absorb accepts charge)
     {bound : ENNReal} (bounded : ∀ history event, charge history event ≤ bound)
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
     (nonempty : ∀ statement, initial statement ≠ []) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (initial statement) (validator statement))
@@ -219,7 +219,7 @@ error of the typed certificate is at most `bound`, the validators make at most
 `queries` TranscriptQueries and at most `V` primitive calls with the chain. -/
 theorem concrete_soundness (positive : 0 < width) {absorb : Typed.Interface I E P (Raw E S width)}
     {accepts : A → Prop} {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error)
-    {bound : ENNReal} (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    {bound : ENNReal} (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)
     (nonempty : ∀ statement, initial statement ≠ []) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
@@ -251,7 +251,7 @@ statement accept with probability at most
 theorem concrete_soundness_weighted (positive : 0 < width)
     {absorb : Typed.Interface I E P (Raw E S width)} {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
-    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)
     (nonempty : ∀ statement, initial statement ≠ []) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →

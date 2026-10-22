@@ -153,7 +153,7 @@ theorem collect_queryBound :
 
 /-- The chain verifier's primitive calls on every path: one per received or sent
 event and `width + 1` per query. -/
-def CallBound (absorb : Typed.Interface I E P (Raw E S width)) : PIR.Proc I A → ℕ → Prop
+def CallBound (absorb : Typed.Interface I E P (Raw E S width)) : PIR.Process I A → ℕ → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call operation next, budget =>
@@ -166,7 +166,7 @@ def CallBound (absorb : Typed.Interface I E P (Raw E S width)) : PIR.Proc I A �
 
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
 theorem chainTransform_queryBound (absorb : Typed.Interface I E P (Raw E S width)) :
-    ∀ (process : PIR.Proc I A) (budget : ℕ) (state : S) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (budget : ℕ) (state : S) (history : List E) (proof : List P),
       CallBound absorb process budget →
         IsTotalQueryBound (chainTransform (X := X) absorb call process state history proof) budget := by
   intro process
@@ -217,7 +217,7 @@ theorem absorbAll_queryBound :
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
 /-- Binding and absorbing the initial history adds its length. -/
 theorem chainRun_queryBound (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : PIR.Proc I A) (initial : List E) (proof : List P) {budget : ℕ}
+    (validator : PIR.Process I A) (initial : List E) (proof : List P) {budget : ℕ}
     (bounded : CallBound absorb validator budget) :
     IsTotalQueryBound (chainRun (X := X) absorb call validator initial proof)
       (initial.length + budget) := by
@@ -234,7 +234,7 @@ theorem chainRun_queryBound (absorb : Typed.Interface I E P (Raw E S width))
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype S] in
 /-- The joint trace has at most the adversary's calls plus the verifier's. -/
 theorem experiment_queryBound (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {adversaryCalls : ℕ}
     (adversaryBound : IsTotalQueryBound adversary adversaryCalls) {verifierCalls : ℕ}
     (budget : Stmt → ℕ) (bounded : ∀ statement, CallBound absorb (validator statement) (budget statement))
@@ -263,7 +263,7 @@ omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype
 /-- `CallBound` is the walk without positions charging each operation its
 primitive calls. -/
 theorem callBound_iff (absorb : Typed.Interface I E P (Raw E S width)) :
-    ∀ (process : PIR.Proc I A) (budget : ℕ),
+    ∀ (process : PIR.Process I A) (budget : ℕ),
       CallBound absorb process budget ↔
         (absorb.replyWalk (callCharge absorb)).Bound process () budget
   | .done _, _ => Iff.rfl
@@ -307,7 +307,7 @@ omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] [Fintype
 /-- A vector budget of queries and messages bounds the chain verifier's primitive
 calls through the conversion `(q, m) ↦ (width + 1) q + m`. -/
 theorem callBound_of_counts (absorb : Typed.Interface I E P (Raw E S width))
-    (process : PIR.Proc I A) (counts : ℕ × ℕ)
+    (process : PIR.Process I A) (counts : ℕ × ℕ)
     (counted : (absorb.replyWalk absorb.messageQueryCharge).Bound process () counts) :
     CallBound absorb process (callsOfCounts width counts) := by
   refine (callBound_iff absorb process _).mpr
@@ -330,7 +330,7 @@ variable {I : PIR.Signature} {P A Stmt : Type} {width : ℕ}
 /-- From the empty trace, at most `calls` calls raise the flag with probability
 at most `calls² / |S|`. -/
 theorem experiment_bad_le (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {calls : ℕ}
     (bounded : IsTotalQueryBound (experiment absorb validator initial adversary) calls) :
     Pr{let result ← ((simulateQ traced (experiment absorb validator initial adversary)).run
@@ -341,7 +341,7 @@ theorem experiment_bad_le (absorb : Typed.Interface I E P (Raw E S width))
 `(q + V)² / |S|` for an adversary with at most `q` primitive calls and a verifier
 with at most `V`, initialization included. -/
 theorem concrete_le_simulated (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (nonempty : ∀ statement, initial statement ≠ [])
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {adversaryCalls : ℕ}
     (adversaryBound : IsTotalQueryBound adversary adversaryCalls) {verifierCalls : ℕ}

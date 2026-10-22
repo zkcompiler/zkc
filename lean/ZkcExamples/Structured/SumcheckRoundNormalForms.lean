@@ -69,7 +69,7 @@ abbrev verifierClaimSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector
 /-- The verifier's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
-    PIR.Proc (participantInterface F G) ((Option (List F)) × (Option F)) :=
+    PIR.Process (participantInterface F G) ((Option (List F)) × (Option F)) :=
   .call (.receive (.field scalarDomain) (round0Site ctx) (ctx.roles 0)) fun (round0 : F) =>
   .call (.receive (.field scalarDomain) (round1Site ctx) (ctx.roles 0)) fun (round1 : F) =>
   match claim with
@@ -186,8 +186,8 @@ theorem verifier_process (U : UnitPayload) (bodies : SumcheckVerifierHelpers.Bod
     verifierFinish verifierForm verifier_normalized verifier_lawsMatch verifier_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) verifierResults (NormalForm.noCallees _) (.cons index (.cons point (.cons claim (.cons service .nil)))) _
     (verifier_environment index point claim service) (verifier_laws U bodies index service point claim) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (verifier_presentation U ctx index point claim service)
-      (funext fun result => congrArg PIR.Proc.done (verifier_embedding result)))
+    (congrArg₂ PIR.Process.bind (verifier_presentation U ctx index point claim service)
+      (funext fun result => congrArg PIR.Process.done (verifier_embedding result)))
 
 /-- The prover's components of the carried state; the other slots are absent. -/
 def proverState (entries : List F) (dimension width : Nat) (point : List F) :
@@ -225,7 +225,7 @@ abbrev proverPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "
 /-- The prover's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverProcess (ctx : ProtocolContext) (entries : List F) (dimension width : Nat) (point : List F) :
-    PIR.Proc (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
+    PIR.Process (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
   .call (.send (ty := .field scalarDomain) (round0Site ctx) (ctx.roles 1) ((entries.take (entries.length / 2)).sum)) fun _ =>
   .call (.send (ty := .field scalarDomain) (round1Site ctx) (ctx.roles 1) ((entries.drop (entries.length / 2)).sum)) fun _ =>
   .call (.receive (.field scalarDomain) (deliverySite ctx) (ctx.roles 1)) fun (delivery : F) =>
@@ -333,13 +333,13 @@ theorem prover_process (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies 
     proverFinish proverForm prover_normalized prover_lawsMatch prover_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) proverResults (NormalForm.noCallees _) (.cons index (.cons entries (.cons dimension (.cons width (.cons point (.cons service .nil)))))) _
     (prover_environment index entries dimension width point service) (prover_laws U bodies index service entries dimension width point shape bound positive) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (prover_presentation U ctx index entries dimension width point service)
-      (funext fun result => congrArg PIR.Proc.done (prover_embedding result)))
+    (congrArg₂ PIR.Process.bind (prover_presentation U ctx index entries dimension width point service)
+      (funext fun result => congrArg PIR.Process.done (prover_embedding result)))
 
 /-- The proverEmpty's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverEmptyProcess :
-    PIR.Proc (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
+    PIR.Process (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
   .halt .reject
 
 /-- The positions of the carried state the proverEmpty presents. -/
@@ -421,8 +421,8 @@ theorem prover_empty_process (U : UnitPayload) (bodies : SumcheckUnitContracts.B
     proverEmptyFinish proverEmptyForm proverEmpty_normalized proverEmpty_lawsMatch proverEmpty_finishes ctx (NormalForm.RosterDistinct.only ctx)
     (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) proverEmptyResults (NormalForm.noCallees _) (.cons index (.cons entries (.cons width (.cons point (.cons service .nil))))) _
     (proverEmpty_environment index entries width point service) (proverEmpty_laws U bodies index service entries width point) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (proverEmpty_presentation U ctx index entries width point service)
-      (funext fun result => congrArg PIR.Proc.done (proverEmpty_embedding result)))
+    (congrArg₂ PIR.Process.bind (proverEmpty_presentation U ctx index entries width point service)
+      (funext fun result => congrArg PIR.Process.done (proverEmpty_embedding result)))
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def reduceFn (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (self : Nat) :
@@ -433,7 +433,7 @@ def reduceFn (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (self : N
 
 /-- The verifierReduce's normal form of the whole body. -/
 def verifierReduceProcess (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (claim : Option F) (count service : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
   (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 1) count (.cons none (.cons none (.cons none (.cons none (.cons (some []) (.cons claim .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
     (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 1))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
@@ -529,7 +529,7 @@ theorem verifierReduce_process (U : UnitPayload) (maximum : Nat) (bodies : Sumch
 
 /-- The proverReduce's normal form of the whole body. -/
 def proverReduceProcess (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (entries : List F) (count rounds : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
   (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 0) (some rounds) (.cons (some entries) (.cons (some count) (.cons (some 1) (.cons (some []) (.cons none (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
     (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 0))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>

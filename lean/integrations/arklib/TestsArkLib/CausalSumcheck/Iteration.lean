@@ -123,7 +123,7 @@ theorem round_logged (point : List F) (s : State F) :
       let r ← ($ᵗ F)
       pure ⟨.returned (point ++ [r], r * s.high), nextState s r,
         roundEvents s.high r⟩) := by
-  simp [roundPresent, PIR.Proc.runM, handler,
+  simp [roundPresent, PIR.Process.runM, handler,
     query_handler (network (zeroLow (F := F))) before after child serviceHandle,
     network, zeroLow,
     mapped_roles.1, high_site_distinct,
@@ -153,7 +153,7 @@ theorem two_rounds_exact :
   simp only [PIR.repeatN, PIR.runM_bind, initial, mul_one, List.nil_append,
     nextState]
   rw [second]
-  simp [PIR.Proc.runM, PIR.Execution.followM, mul_comm]
+  simp [PIR.Process.runM, PIR.Execution.followM, mul_comm]
 
 end LoggedRounds
 
@@ -171,7 +171,7 @@ theorem low_stop (s t : S) (events : List E) (why : PIR.Stop)
         (withUniformQueries net [queryKey context handle] pre post) s =
       pure ⟨.stopped why, t, events⟩ := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     law, pure_bind, PIR.Execution.followM]
 
 /-- HIGH sees the actual post-LOW state; its stop retains both event prefixes. -/
@@ -182,7 +182,7 @@ theorem high_stop (s t u : S) (lo : F) (lowEvents highEvents : List E) (why : PI
         (withUniformQueries net [queryKey context handle] pre post) s =
       pure ⟨.stopped why, u, lowEvents ++ highEvents⟩ := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     lowLaw, highLaw, pure_bind, PIR.Execution.followM]
 
 /-- Rejection has no before/after callbacks, designated draw, send or next round. -/
@@ -194,7 +194,7 @@ theorem guard_reject (s t u : S) (lo hi : F) (lowEvents highEvents : List E)
         (withUniformQueries net [queryKey context handle] pre post) s =
       pure ⟨.stopped .reject, u, lowEvents ++ highEvents⟩ := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     lowLaw, highLaw, pure_bind, PIR.Execution.followM, wrong, ite_false,
     List.append_nil]
 
@@ -210,7 +210,7 @@ theorem before_stop (s t u v : S) (lo hi : F)
         (withUniformQueries net [queryKey context handle] pre post) s =
       pure ⟨.stopped why, v, lowEvents ++ highEvents ++ preEvents⟩ := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     lowLaw, highLaw, pure_bind, PIR.Execution.followM, guard, ite_true]
   simp [query_handler net pre post context handle, freshQuery, preLaw, PIR.Execution.followM,
     List.append_assoc]
@@ -232,7 +232,7 @@ theorem after_stop (s t u v : S) (lo hi : F)
       pure ⟨.stopped (why r), finalState r,
         lowEvents ++ highEvents ++ preEvents ++ postEvents r⟩) := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     lowLaw, highLaw, pure_bind, PIR.Execution.followM, guard, ite_true]
   simp [query_handler net pre post context handle, freshQuery, preLaw, postLaw,
     PIR.Execution.followM, List.append_assoc]
@@ -256,7 +256,7 @@ theorem send_stop (s t u v : S) (lo hi : F)
       pure ⟨.stopped (why r), finalState r,
         lowEvents ++ highEvents ++ preEvents ++ postEvents r ++ sendEvents r⟩) := by
   rw [PIR.repeatN]
-  simp only [roundPresent, PIR.Proc.bind, PIR.Proc.runM, withUniformQueries_receive,
+  simp only [roundPresent, PIR.Process.bind, PIR.Process.runM, withUniformQueries_receive,
     lowLaw, highLaw, pure_bind, PIR.Execution.followM, guard, ite_true]
   simp [query_handler net pre post context handle, freshQuery, preLaw, postLaw, sendLaw,
     PIR.Execution.followM, result, List.append_assoc]
@@ -348,7 +348,7 @@ theorem early_cached_exact (s : State F2) :
       let x ← ($ᵗ F2)
       pure ⟨.returned ([x], 0), ⟨x, x, s.history ++ cachedEvents x⟩,
         cachedEvents x⟩) := by
-  simp [roundPresent, PIR.Proc.runM, network, earlyLow,
+  simp [roundPresent, PIR.Process.runM, network, earlyLow,
     mapped_roles.1, high_site_distinct,
     lowSite, highSite, sendSite, serviceKey, serviceHandle, queryKey,
     record, cachedEvents, PIR.Execution.followM, List.append_assoc,
@@ -362,7 +362,7 @@ theorem early_wrapped_exact (s : State F2) :
       let r ← ($ᵗ F2)
       pure ⟨.returned ([r], (1 - r) * x + r * (1 - x)),
         ⟨r, x, s.history ++ earlyEvents x r⟩, earlyEvents x r⟩) := by
-  simp [roundPresent, PIR.Proc.runM, handler,
+  simp [roundPresent, PIR.Process.runM, handler,
     query_handler (network earlyLow) before after child serviceHandle, network, earlyLow,
     mapped_roles.1, high_site_distinct,
     lowSite, highSite, sendSite, serviceKey,

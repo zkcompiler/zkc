@@ -186,12 +186,12 @@ theorem decision_outputs (outputs : Values (Component (assignment F G)) program.
   (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
 
 /-- The admitted root's validator process, read through its acceptance output. -/
-def process (offset : F) (handle : Nat) : PIR.Proc (participantInterface F G) (Option Bool) :=
+def process (offset : F) (handle : Nat) : PIR.Process (participantInterface F G) (Option Bool) :=
   (program.participant F G 1 (verifierInputs offset handle)).bind fun outputs =>
     .done (outputs.get .here)
 
 /-- The original validator, read through its acceptance output. -/
-def verifier (offset : F) (handle : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+def verifier (offset : F) (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   (process offset handle).interpret CommonAdapter.project
 
 /-- The original validator, read through its outputs, is the verifier. -/
@@ -266,7 +266,7 @@ theorem spec_equation (offset : F) (handle : Nat) (initial : History F G) :
           ((inputs offset).map .data ++ [.transcript initial])).bind
           (fun values => .done (values.dropLast.map some))).bind
           (fun options => .done (decision options)) := by
-        rw [PIR.Proc.bind_assoc]
+        rw [PIR.Process.bind_assoc]
         rfl
     _ = (((program.participant F G context.validator (verifierInputs offset handle)).bind
           fun outputs => .done (validatorOutputs context.validator program.payload.entry.outputScopes
@@ -276,7 +276,7 @@ theorem spec_equation (offset : F) (handle : Nat) (initial : History F G) :
     _ = ((program.participant F G context.validator (verifierInputs offset handle)).bind
           fun outputs => .done (decision (validatorOutputs context.validator
             program.payload.entry.outputScopes outputs))).interpret CommonAdapter.project := by
-        rw [PIR.Proc.interpret_bind, PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+        rw [PIR.Process.interpret_bind, PIR.Process.interpret_bind, PIR.Process.bind_assoc]
         rfl
     _ = experiment offset handle := by
         rw [original_verifier, verifier_correspondence]

@@ -25,7 +25,7 @@ open OracleComp OracleSpec ZkcSecurity.FiatShamir
 variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Type}
 
 theorem settle_settle (tables : List (Table Value)) :
-    ∀ process : PIR.Proc (committed J Shape Value) A,
+    ∀ process : PIR.Process (committed J Shape Value) A,
       settle tables (settle tables process) = settle tables process
   | .done _ => rfl
   | .halt _ => rfl
@@ -45,7 +45,7 @@ variable (extracted : Shape → Y → Table Value) (answers : (key : TranscriptK
 /-- A replay along nonempty events answers the reads at the head first. -/
 theorem replay_settle (tables : List (Table Value)) (history : List (Absorbed E Shape Y))
     (observed : Absorbed E Shape Y) (rest : List (Absorbed E Shape Y)) :
-    ∀ process : PIR.Proc (committed J Shape Value) A,
+    ∀ process : PIR.Process (committed J Shape Value) A,
       replay absorb words extracted answers process tables history (observed :: rest) =
         replay absorb words extracted answers (settle tables process) tables history
           (observed :: rest)
@@ -61,7 +61,7 @@ theorem replay_settle (tables : List (Table Value)) (history : List (Absorbed E 
 
 /-- Replaying a concatenation replays the first part, then the second from the residual. -/
 theorem replay_append (second : List (Absorbed E Shape Y)) :
-    ∀ (first : List (Absorbed E Shape Y)) (process : PIR.Proc (committed J Shape Value) A)
+    ∀ (first : List (Absorbed E Shape Y)) (process : PIR.Process (committed J Shape Value) A)
       (tables : List (Table Value)) (history : List (Absorbed E Shape Y)),
       replay absorb words extracted answers process tables history (first ++ second) =
         (replay absorb words extracted answers process tables history first).bind fun result =>
@@ -126,7 +126,7 @@ theorem replay_append (second : List (Absorbed E Shape Y)) :
                   · rfl
 
 /-- Replaying no events answers the reads at the head. -/
-@[simp] theorem replay_nil (process : PIR.Proc (committed J Shape Value) A)
+@[simp] theorem replay_nil (process : PIR.Process (committed J Shape Value) A)
     (tables : List (Table Value)) (history : List (Absorbed E Shape Y)) :
     replay absorb words extracted answers process tables history [] =
       some (settle tables process, tables) := by
@@ -137,7 +137,7 @@ theorem replay_append (second : List (Absorbed E Shape Y)) :
 
 /-- One received event. -/
 theorem replay_receive {operation : J.Op}
-    {next : J.Reply operation → PIR.Proc (committed J Shape Value) A} {event : P → E}
+    {next : J.Reply operation → PIR.Process (committed J Shape Value) A} {event : P → E}
     {recover : E → Option (J.Reply operation)} (absorbed : absorb operation = .receive event recover)
     (tables : List (Table Value)) (history : List (Absorbed E Shape Y)) (received : E)
     {value : J.Reply operation} (recovered : recover received = some value) :
@@ -148,7 +148,7 @@ theorem replay_receive {operation : J.Op}
 
 /-- One sent event. -/
 theorem replay_send {operation : J.Op}
-    {next : J.Reply operation → PIR.Proc (committed J Shape Value) A} {event : E}
+    {next : J.Reply operation → PIR.Process (committed J Shape Value) A} {event : E}
     {value : J.Reply operation} (absorbed : absorb operation = .send event value)
     (tables : List (Table Value)) (history : List (Absorbed E Shape Y)) :
     replay absorb words extracted answers (.call (.base operation) next) tables history
@@ -158,7 +158,7 @@ theorem replay_send {operation : J.Op}
 
 /-- One query occurrence, answered by decoding the answer at its key. -/
 theorem replay_query {operation : J.Op}
-    {next : J.Reply operation → PIR.Proc (committed J Shape Value) A} {event : E}
+    {next : J.Reply operation → PIR.Process (committed J Shape Value) A} {event : E}
     {decode : Raw event → Option (J.Reply operation)}
     (absorbed : absorb operation = .query event decode) (tables : List (Table Value))
     (history : List (Absorbed E Shape Y)) {value : J.Reply operation}
@@ -169,7 +169,7 @@ theorem replay_query {operation : J.Op}
   simp only [absorbed, ↓reduceIte, decoded, replay_nil]
 
 /-- One committed root, recorded as its normalized extraction. -/
-theorem replay_commit {shape : Shape} {next : Unit → PIR.Proc (committed J Shape Value) A}
+theorem replay_commit {shape : Shape} {next : Unit → PIR.Process (committed J Shape Value) A}
     (tables : List (Table Value)) (history : List (Absorbed E Shape Y)) (root : Y) :
     replay absorb words extracted answers (.call (.commit shape) next) tables history
         [.root shape root] =
@@ -180,7 +180,7 @@ theorem replay_commit {shape : Shape} {next : Unit → PIR.Proc (committed J Sha
 
 /-- A replay reads the transcript answers only at histories shorter than the replayed one. -/
 theorem replay_congr_answers {other : (key : TranscriptKey E Shape Y) → Raw key.2} :
-    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Proc (committed J Shape Value) A)
+    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Process (committed J Shape Value) A)
       (tables : List (Table Value)) (history : List (Absorbed E Shape Y)),
       (∀ key : TranscriptKey E Shape Y, key.1.length < history.length + events.length →
         answers key = other key) →
@@ -247,7 +247,7 @@ theorem replay_congr_answers {other : (key : TranscriptKey E Shape Y) → Raw ke
 
 /-- A replay reads the extraction only at the roots among the replayed events. -/
 theorem replay_congr_extracted {other : Shape → Y → Table Value} :
-    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Proc (committed J Shape Value) A)
+    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Process (committed J Shape Value) A)
       (tables : List (Table Value)) (history : List (Absorbed E Shape Y)),
       (∀ shape root, Absorbed.root shape root ∈ events → extracted shape root = other shape root) →
       replay absorb words extracted answers process tables history events =
@@ -311,7 +311,7 @@ theorem replay_congr_extracted {other : Shape → Y → Table Value} :
 end Replay
 
 /-- At most `budget` commitments on every path. -/
-def CommitBound : PIR.Proc (committed J Shape Value) A → ℕ → Prop
+def CommitBound : PIR.Process (committed J Shape Value) A → ℕ → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call (.base _) next, budget => ∀ reply, CommitBound (next reply) budget
@@ -325,9 +325,9 @@ variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
 
 /-- A replay from a process with at most `budget` commitments absorbs at most `budget` roots. -/
 theorem replay_committed_le :
-    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Proc (committed J Shape Value) A)
+    ∀ (events : List (Absorbed E Shape Y)) (process : PIR.Process (committed J Shape Value) A)
       (budget : ℕ) (tables : List (Table Value)) (history : List (Absorbed E Shape Y))
-      (result : PIR.Proc (committed J Shape Value) A × List (Table Value)),
+      (result : PIR.Process (committed J Shape Value) A × List (Table Value)),
       CommitBound process budget →
       replay absorb words extracted answers process tables history events = some result →
       (events.filterMap Absorbed.committed).length ≤ budget := by
@@ -406,7 +406,7 @@ variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value 
   (table : JointTable Raw Shape Y Query)
 
 /-- The concrete reading against a complete answer table: the outcome and the keys queried. -/
-def runTable : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) →
+def runTable : PIR.Process (committed J Shape Value) A → List (Absorbed E Shape Y) →
     List (Shape × Y) → List (Message P Y) → List (Opening Value Y) →
     PIR.Outcome A × List (JointKey E Shape Y Query)
   | .done value, _, _, _, _ => (.returned value, [])
@@ -451,7 +451,7 @@ def runTable : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y
 /-- The oracle run against a complete answer table is `runTable`: the same outcome, and a table
 log with the same keys. -/
 theorem run_table :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (history : List (Absorbed E Shape Y))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (history : List (Absorbed E Shape Y))
       (roots : List (Shape × Y)) (messages : List (Message P Y))
       (openings : List (Opening Value Y)),
       evalWithAnswerFn (QueryImpl.ofFn table)

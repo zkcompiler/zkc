@@ -33,7 +33,7 @@ variable {F G S E : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G
 
 /-- A final value conversion; earlier stops and their states are unchanged. -/
 theorem observation_bind_done {I : PIR.Signature} {A B : Type}
-    (handler : PIR.MonadHandler ProbComp I S E) (process : PIR.Proc I A)
+    (handler : PIR.MonadHandler ProbComp I S E) (process : PIR.Process I A)
     (convert : A → B) (predicate : B → Prop) (s : S) :
     (do
       let e ← (process.bind (fun a => .done (convert a))).runM handler s
@@ -45,7 +45,7 @@ theorem observation_bind_done {I : PIR.Signature} {A B : Type}
   intro e
   cases e with
   | mk outcome state events =>
-    cases outcome <;> simp [PIR.Execution.followM, PIR.Proc.runM, returnedSatisfies]
+    cases outcome <;> simp [PIR.Execution.followM, PIR.Process.runM, returnedSatisfies]
 
 omit [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The logical refutation premise is exactly a false initial sum. -/
@@ -200,10 +200,10 @@ theorem repacked_observation
     change SumcheckRepackedViews.program.participant F G 1 _ = _
     rw [SumcheckRepackedVerifier.verifier_optional]
     simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
-    rw [SumcheckVerifierLaws.repeat_present _ handle count ([], claim), PIR.Proc.bind_assoc]
+    rw [SumcheckVerifierLaws.repeat_present _ handle count ([], claim), PIR.Process.bind_assoc]
     rfl
   change (do
-    let e ← PIR.Proc.runM
+    let e ← PIR.Process.runM
       (A := Values (Component (assignment F G)) SumcheckRepackedBodies.runSignature.outputs) handler
       (SumcheckRepackedViews.imported.program.participant F G 1
         (SumcheckRepackedVerifier.rootInputs (some claim) (some count) proverDimension proverValues
@@ -239,7 +239,7 @@ theorem repacked_bound [Fintype F] [SampleableType F]
     rw [rootMap.atom_holds]
     exact ⟨.cons table (.cons claim .nil), rfl, equality⟩
   change mass (do
-    let execution ← PIR.Proc.runM
+    let execution ← PIR.Process.runM
       (A := Values (Component (assignment F G)) SumcheckRepackedBodies.runSignature.outputs)
       (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after)
       (SumcheckRepackedViews.imported.program.participant F G 1
@@ -271,7 +271,7 @@ theorem repacked_bound [Fintype F] [SampleableType F]
     exact congrArg pure (congrFun observed execution)
   · erw [SumcheckRepackedVerifier.verifier_excess (some claim) count (Nat.lt_of_not_ge admitted)
       proverDimension proverValues (some handle)]
-    simp [PIR.Proc.runM, repackedRequest, ComponentInput.returnedEvent]
+    simp [PIR.Process.runM, repackedRequest, ComponentInput.returnedEvent]
 
 section ConcreteField
 
@@ -353,26 +353,26 @@ theorem other_binder_unbounded {S E : Type}
     change (1 : ZMod 5) ≠ 0
     decide
   · change ¬ mass (do
-      let execution ← PIR.Proc.runM
+      let execution ← PIR.Process.runM
         (A := Values (Component (assignment (ZMod 5) (ZMod 5))) SumcheckReduceBodies.runSignature.outputs)
         handler (SumcheckReduceViews.program.participant (ZMod 5) (ZMod 5) 1
           (SumcheckReduceVerifier.reduceRootInputs none none (some 1) (some 0) (some handle))) s
       pure (retainedRequest 0 0 second (reductionRootInput none none 1 0 handle) execution.outcome)) ≤ _
     rw [SumcheckReduceVerifier.verifier_zero]
-    simp only [PIR.Proc.runM, pure_bind]
+    simp only [PIR.Process.runM, pure_bind]
     have request : retainedRequest 0 0 second (reductionRootInput (G := ZMod 5) none none 1 0 handle)
         (.returned (SumcheckReduceVerifier.reduceRootResults (some [], some 1))) :=
       (residual_iff 0 0 second none none 1 handle _).mpr holds
     simp only [request]
     simp [mass]
   · change ¬ mass (do
-      let execution ← PIR.Proc.runM
+      let execution ← PIR.Process.runM
         (A := Values (Component (assignment (ZMod 5) (ZMod 5))) SumcheckRepackedBodies.runSignature.outputs)
         handler (SumcheckRepackedViews.program.participant (ZMod 5) (ZMod 5) 1
           (SumcheckRepackedVerifier.rootInputs (some 1) (some 0) none none (some handle))) s
       pure (repackedRequest 0 0 second (repackedInput 1 0 none none handle) execution.outcome)) ≤ _
     rw [SumcheckRepackedVerifier.verifier_optional, SumcheckVerifierPrelude.admittedRounds_zero]
-    simp only [PIR.Proc.bind, PIR.Proc.runM, pure_bind]
+    simp only [PIR.Process.bind, PIR.Process.runM, pure_bind]
     have request : repackedRequest 0 0 second (repackedInput (G := ZMod 5) 1 0 none none handle)
         (.returned (SumcheckRepackedVerifier.rootResults (some [], some 1))) :=
       (repacked_residual_iff 0 0 second 1 none none handle _).mpr

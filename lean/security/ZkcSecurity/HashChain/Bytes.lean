@@ -92,7 +92,7 @@ theorem collect_congr {count : ℕ} [Monad m] {first second : Fin count → m S}
 theorem chainTransform_congr (absorb : Typed.Interface I E P (Raw E S width))
     {first second : Input E S X → m S}
     (same : ∀ input, VerifierInput width input → first input = second input) :
-    ∀ (process : PIR.Proc I A) (state : S) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (state : S) (history : List E) (proof : List P),
       chainTransform absorb first process state history proof =
         chainTransform absorb second process state history proof := by
   intro process
@@ -137,7 +137,7 @@ theorem absorbAll_congr {first second : Input E S X → m S}
 theorem chainRun_congr (absorb : Typed.Interface I E P (Raw E S width))
     {first second : Input E S X → m S}
     (same : ∀ input, VerifierInput width input → first input = second input)
-    (validator : PIR.Proc I A) (initial : List E) (proof : List P) :
+    (validator : PIR.Process I A) (initial : List E) (proof : List P) :
     chainRun absorb first validator initial proof = chainRun absorb second validator initial proof := by
   cases initial with
   | nil => rfl
@@ -160,7 +160,7 @@ def byteCall (bytes : Bytes) : OracleComp (ByteHash S) S := liftM ((ByteHash S).
 /-- The concrete experiment over the byte hash: the adversary calls the byte hash
 directly; the chain verifier calls it at the encodings of its inputs. -/
 def byteExperiment (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (ByteHash S) (Stmt × List P)) :
     OracleComp (ByteHash S) (Stmt × (PIR.Outcome A × List P)) :=
   adversary >>= fun claimed => (fun result => (claimed.1, result)) <$>
@@ -203,7 +203,7 @@ theorem byteExperiment_coupling {width' : ℕ}
     (stateLength : ∀ state, (stateBytes state).length = width')
     (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes)
     (small : width ≤ 2 ^ 64) (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (ByteHash S) (Stmt × List P)) :
     RelTriple
       ((simulateQ randomOracle (byteExperiment stateBytes eventBytes absorb validator initial
@@ -227,7 +227,7 @@ theorem byteExperiment_coupling {width' : ℕ}
     congr 1
     funext bytes
     simp [call]
-  have byteVerifier : ∀ (validatorProcess : PIR.Proc I A) (history : List E) (proof : List P),
+  have byteVerifier : ∀ (validatorProcess : PIR.Process I A) (history : List E) (proof : List P),
       simulateQ randomOracle (chainRun absorb
           (fun input => byteCall (encodeInput stateBytes eventBytes input)) validatorProcess
           history proof) =
@@ -245,7 +245,7 @@ theorem byteExperiment_coupling {width' : ℕ}
     congr 1
     funext input
     simp [encoded, byteCall]
-  have inputVerifier : ∀ (validatorProcess : PIR.Proc I A) (history : List E) (proof : List P),
+  have inputVerifier : ∀ (validatorProcess : PIR.Process I A) (history : List E) (proof : List P),
       simulateQ randomOracle (chainRun absorb call validatorProcess history proof) =
         simulateQ (fun input : Input E S Bytes => randomOracle (spec := Primitive E S Bytes)
           (parse stateBytes eventBytes (encodeInput stateBytes eventBytes input)))
@@ -283,7 +283,7 @@ theorem byteExperiment_eq {width' : ℕ}
     (stateLength : ∀ state, (stateBytes state).length = width')
     (stateInjective : Function.Injective stateBytes) (eventInjective : Function.Injective eventBytes)
     (small : width ≤ 2 ^ 64) (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (ByteHash S) (Stmt × List P))
     (event : Stmt × (PIR.Outcome A × List P) → Prop) :
     Pr{let result ← (simulateQ randomOracle (byteExperiment stateBytes eventBytes absorb validator
@@ -326,7 +326,7 @@ theorem byte_soundness {stateLength : ℕ}
     (small : width ≤ 2 ^ 64) (positive : 0 < width)
     {absorb : Typed.Interface I E P (Raw E S width)} {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
-    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)
     (nonempty : ∀ statement, initial statement ≠ []) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →

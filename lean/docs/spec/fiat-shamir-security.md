@@ -20,7 +20,7 @@ the Sumcheck instance is `ZkcArkLib.Examples.SumcheckFiatShamir`.
 
 ## Typed query sites
 
-A validator is a process `PIR.Proc I A` over any operation signature `I`. A
+A validator is a process `PIR.Process I A` over any operation signature `I`. A
 **transcript interface** `Zkc.Transcript.Interface I E P Raw` (also
 `Typed.Interface`) states, for each operation, how the transform treats it
 (`Zkc.Transcript.Absorption`); `Raw : E → Type` is the raw answer type of each

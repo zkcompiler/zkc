@@ -239,7 +239,7 @@ needs its own correspondence.
 `runM_bind_transport` transports returned values, not just Unit work.
 `runM_bind_determined` handles effectful trusted work followed by a determined
 value, retaining stops and events. `runM_determined_of_proc` derives the local
-execution law from a Proc-level body equation. `checked_le_of_proc` composes a
+execution law from a Process-level body equation. `checked_le_of_proc` composes a
 Boolean checker through any prefix, requiring only that true implies the
 mathematical terminal predicate. A conservative checker is sufficient.
 

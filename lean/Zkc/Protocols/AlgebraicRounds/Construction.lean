@@ -132,12 +132,12 @@ theorem framed_returns (count : Nat) (claim : F) :
 
 theorem fresh_bounded (count : Nat) (claim : F) :
     Within (2 * count) ((rounds count claim).interpret fresh) := by
-  simpa using Proc.within_interpret fresh 1
+  simpa using Process.within_interpret fresh 1
     (fun op => by cases op <;> exact fun _ => trivial) _ _ (bounded count claim)
 
 theorem framed_bounded (count : Nat) (claim : F) :
     Within (2 * count * 2) ((rounds count claim).interpret framed) :=
-  Proc.within_interpret framed 2
+  Process.within_interpret framed 2
     (fun op => by cases op <;> simp [framed, Within]) _ _ (bounded count claim)
 
 theorem structured_source (construction : OperationInterpretation

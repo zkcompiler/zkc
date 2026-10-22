@@ -18,7 +18,7 @@ set_option autoImplicit false
 
 namespace Zkc.Source.Finite
 
-open PIR (Outcome Proc Stop Signature)
+open PIR (Outcome Process Stop Signature)
 
 /-- Sequence a checked computation without replacing its first stopping reason. -/
 def continueWith {A B : Type} (first : Outcome A) (next : A → Outcome B) : Outcome B :=
@@ -49,14 +49,14 @@ def Domain.admit {A : Type} : Domain A → Outcome (List A)
         .returned (xs.flatMap fun x => ys.map fun y => (x, y))
 
 /-- An ordered loop can stop or interact at every reached item. -/
-def fold {I : Signature} {A S : Type} (step : S → A → Proc I S) :
-    List A → S → Proc I S
+def fold {I : Signature} {A S : Type} (step : S → A → Process I S) :
+    List A → S → Process I S
   | [], initial => .done initial
   | item :: rest, initial => (step initial item).bind fun state => fold step rest state
 
 /-- Keep checked admission in front of an open computation. -/
 def admitThen {I : Signature} {A B : Type} (admission : Outcome A)
-    (next : A → Proc I B) : Proc I B :=
+    (next : A → Process I B) : Process I B :=
   match admission with
   | .stopped reason => .halt reason
   | .returned value => next value
@@ -64,30 +64,30 @@ def admitThen {I : Signature} {A B : Type} (admission : Outcome A)
 /-- Admission occurs even for zero trips. Captures are explicit parameters of
 `step`; its state parameter is the current accumulator at each reached item. -/
 def execute {I : Signature} {A S : Type} (domain : Domain A)
-    (step : S → A → Proc I S) (initial : S) : Proc I S :=
+    (step : S → A → Process I S) (initial : S) : Process I S :=
   admitThen domain.admit fun items => fold step items initial
 
 /-- Pointwise operation translation commutes with every reached loop callback. -/
 theorem interpret_fold {I J : Signature} {A S : Type}
-    (operations : PIR.OperationInterpretation I J) (step : S → A → Proc I S)
+    (operations : PIR.OperationInterpretation I J) (step : S → A → Process I S)
     (items : List A) (initial : S) :
     (fold step items initial).interpret operations =
       fold (fun state item => (step state item).interpret operations) items initial := by
   induction items generalizing initial with
   | nil => rfl
-  | cons item rest ih => simp only [fold, Proc.interpret_bind, ih]
+  | cons item rest ih => simp only [fold, Process.interpret_bind, ih]
 
 /-- Translation retains the admission stop before any translated action. -/
 theorem interpret_admitThen {I J : Signature} {A B : Type}
     (operations : PIR.OperationInterpretation I J) (admission : Outcome A)
-    (next : A → Proc I B) :
+    (next : A → Process I B) :
     (admitThen admission next).interpret operations =
       admitThen admission (fun value => (next value).interpret operations) := by
   cases admission <;> rfl
 
 theorem interpret_execute {I J : Signature} {A S : Type}
     (operations : PIR.OperationInterpretation I J) (domain : Domain A)
-    (step : S → A → Proc I S) (initial : S) :
+    (step : S → A → Process I S) (initial : S) :
     (execute domain step initial).interpret operations =
       execute domain (fun state item => (step state item).interpret operations) initial := by
   simp only [execute, interpret_admitThen, interpret_fold]
@@ -96,26 +96,26 @@ theorem interpret_execute {I J : Signature} {A S : Type}
 fold. This sufficient law quantifies over all states and all items, including
 unreachable ones. `fold_total_on` below permits a restricted law. -/
 theorem fold_total {I : Signature} {A S : Type}
-    (step : S → A → Proc I S) (total : S → A → S)
+    (step : S → A → Process I S) (total : S → A → S)
     (law : ∀ state item, step state item = .done (total state item))
     (items : List A) (initial : S) :
     fold step items initial = .done (items.foldl total initial) := by
   induction items generalizing initial with
   | nil => rfl
-  | cons item rest ih => simp only [fold, law, Proc.bind, List.foldl_cons, ih]
+  | cons item rest ih => simp only [fold, law, Process.bind, List.foldl_cons, ih]
 
 /-- Indexed invariant for a counted loop. The callback equation is required
 only at reached indices and their corresponding states. This supports checked
 arithmetic whose range premise depends on the remaining iterations. -/
 theorem fold_range_state {I : Signature} {S : Type}
-    (step : S → Nat → Proc I S) (state : Nat → S) (start count : Nat)
+    (step : S → Nat → Process I S) (state : Nat → S) (start count : Nat)
     (law : ∀ index, start ≤ index → index < start + count →
       step (state index) index = .done (state (index + 1))) :
     fold step (List.range' start count) (state start) = .done (state (start + count)) := by
   induction count generalizing start with
   | zero => simp [fold]
   | succ count ih =>
-    rw [List.range'_succ, fold, law start (Nat.le_refl _) (by omega), Proc.bind]
+    rw [List.range'_succ, fold, law start (Nat.le_refl _) (by omega), Process.bind]
     simpa only [Nat.add_assoc, Nat.add_comm 1 count] using
       ih (start + 1) (fun index lower upper => law index (by omega) (by omega))
 
@@ -123,7 +123,7 @@ theorem fold_range_state {I : Signature} {S : Type}
 This conditional theorem does not erase failed admission on other inputs. -/
 theorem execute_total {I : Signature} {A S : Type}
     (domain : Domain A) (items : List A) (admitted : domain.admit = .returned items)
-    (step : S → A → Proc I S) (total : S → A → S)
+    (step : S → A → Process I S) (total : S → A → S)
     (law : ∀ state item, step state item = .done (total state item)) (initial : S) :
     execute domain step initial = .done (items.foldl total initial) := by
   simp only [execute, admitted, admitThen]
@@ -132,14 +132,14 @@ theorem execute_total {I : Signature} {A S : Type}
 /-- Reuse a checked pure equation only after retaining the same admission.
 Both paths preserve the same stop on failure, for any open suffix and handler. -/
 theorem execute_replace {I : Signature} {A S B : Type}
-    (domain : Domain A) (step : S → A → Proc I S) (total : S → A → S)
+    (domain : Domain A) (step : S → A → Process I S) (total : S → A → S)
     (law : ∀ state item, step state item = .done (total state item))
     (candidate : List A → S → S)
     (same : ∀ items state, items.foldl total state = candidate items state)
-    (initial : S) (next : S → Proc I B) :
+    (initial : S) (next : S → Process I B) :
     PIR.ExactRefinement ((execute domain step initial).bind next)
       ((admitThen domain.admit fun items =>
-        Proc.done (candidate items initial)).bind next) := by
+        Process.done (candidate items initial)).bind next) := by
   refine ⟨?_⟩
   cases admitted : domain.admit with
   | stopped reason => simp only [execute, admitted, admitThen]
@@ -148,7 +148,7 @@ theorem execute_replace {I : Signature} {A S B : Type}
 
 /-- Pointwise equality of an effectful transition lifts through the entire loop.
 No purity, fixed replies or honest-message assumptions are required. -/
-theorem fold_congr {I : Signature} {A S : Type} (left right : S → A → Proc I S)
+theorem fold_congr {I : Signature} {A S : Type} (left right : S → A → Process I S)
     (same : ∀ state item, left state item = right state item)
     (items : List A) (initial : S) : fold left items initial = fold right items initial := by
   induction items generalizing initial with
@@ -226,7 +226,7 @@ theorem Domain.admit_before_returned {A B : Type} (first : Domain B) (next : Dom
 
 /-- Totality need only hold on admitted items and invariant-preserving states. -/
 theorem fold_total_on {I : Signature} {A S : Type}
-    (step : S → A → Proc I S) (total : S → A → S) (valid : S → Prop)
+    (step : S → A → Process I S) (total : S → A → S) (valid : S → Prop)
     (items : List A) (initial : S) (start : valid initial)
     (law : ∀ state item, item ∈ items → valid state →
       step state item = .done (total state item) ∧ valid (total state item)) :
@@ -235,14 +235,14 @@ theorem fold_total_on {I : Signature} {A S : Type}
   | nil => rfl
   | cons item rest ih =>
       obtain ⟨head, preserved⟩ := law initial item (by simp) start
-      simp only [fold, head, Proc.bind, List.foldl_cons]
+      simp only [fold, head, Process.bind, List.foldl_cons]
       exact ih _ preserved (fun state value member stateValid =>
         law state value (by simp [member]) stateValid)
 
 /-- A useful equation may depend on the exact admitted list and initial state.
 Its totality premise is restricted to admitted items and a preserved invariant. -/
 theorem execute_replace_on {I : Signature} {A S B : Type}
-    (domain : Domain A) (step : S → A → Proc I S) (total : S → A → S)
+    (domain : Domain A) (step : S → A → Process I S) (total : S → A → S)
     (valid : S → Prop) (initial : S) (start : valid initial)
     (law : ∀ items, domain.admit = .returned items →
       ∀ state item, item ∈ items → valid state →
@@ -250,9 +250,9 @@ theorem execute_replace_on {I : Signature} {A S B : Type}
     (candidate : List A → S)
     (same : ∀ items, domain.admit = .returned items →
       items.foldl total initial = candidate items)
-    (next : S → Proc I B) :
+    (next : S → Process I B) :
     PIR.ExactRefinement ((execute domain step initial).bind next)
-      ((admitThen domain.admit fun items => Proc.done (candidate items)).bind next) := by
+      ((admitThen domain.admit fun items => Process.done (candidate items)).bind next) := by
   refine ⟨?_⟩
   cases admitted : domain.admit with
   | stopped reason => simp only [execute, admitted, admitThen]
@@ -262,7 +262,7 @@ theorem execute_replace_on {I : Signature} {A S B : Type}
         same items admitted]
 
 /-- Embed a closed stopping computation into the existing open process model. -/
-def toProc {I : Signature} {A : Type} : Outcome A → Proc I A
+def toProc {I : Signature} {A : Type} : Outcome A → Process I A
   | .returned value => .done value
   | .stopped reason => .halt reason
 
@@ -280,28 +280,28 @@ theorem fold_checked {I : Signature} {A S : Type} (step : S → A → Outcome S)
   | nil => rfl
   | cons item rest ih =>
       cases h : step initial item with
-      | stopped reason => simp only [fold, foldChecked, h, toProc, continueWith, Proc.bind]
+      | stopped reason => simp only [fold, foldChecked, h, toProc, continueWith, Process.bind]
       | returned state =>
-          simp only [fold, foldChecked, h, toProc, continueWith, Proc.bind]
+          simp only [fold, foldChecked, h, toProc, continueWith, Process.bind]
           exact ih state
 
 /-- Concatenation preserves sequencing, including replies and early stops. -/
-theorem fold_append {I : Signature} {A S : Type} (step : S → A → Proc I S)
+theorem fold_append {I : Signature} {A S : Type} (step : S → A → Process I S)
     (first rest : List A) (initial : S) :
     fold step (first ++ rest) initial = (fold step first initial).bind (fold step rest) := by
   induction first generalizing initial with
   | nil => rfl
   | cons item tail ih =>
-      simp only [List.cons_append, fold, ih, Proc.bind_assoc]
+      simp only [List.cons_append, fold, ih, Process.bind_assoc]
 
-theorem fold_map {I : Signature} {A B S : Type} (step : S → B → Proc I S)
+theorem fold_map {I : Signature} {A B S : Type} (step : S → B → Process I S)
     (map : A → B) (items : List A) (initial : S) :
     fold step (items.map map) initial = fold (fun state item => step state (map item)) items initial := by
   induction items generalizing initial with
   | nil => rfl
   | cons item rest ih => simp only [List.map_cons, fold, ih]
 
-theorem fold_flatMap {I : Signature} {A B S : Type} (step : S → B → Proc I S)
+theorem fold_flatMap {I : Signature} {A B S : Type} (step : S → B → Process I S)
     (map : A → List B) (items : List A) (initial : S) :
     fold step (items.flatMap map) initial =
       fold (fun state item => fold step (map item) state) items initial := by
@@ -315,7 +315,7 @@ theorem fold_flatMap {I : Signature} {A B S : Type} (step : S → B → Proc I S
 
 /-- Hoisted admission of both factors is essential even for an empty outer list. -/
 theorem execute_product {I : Signature} {A B S : Type}
-    (left : Domain A) (right : Domain B) (step : S → A × B → Proc I S) (initial : S) :
+    (left : Domain A) (right : Domain B) (step : S → A × B → Process I S) (initial : S) :
     execute (.product left right) step initial =
       admitThen left.admit fun xs => admitThen right.admit fun ys =>
         fold (fun state x => fold (fun state y => step state (x, y)) ys state) xs initial := by
@@ -323,7 +323,7 @@ theorem execute_product {I : Signature} {A B S : Type}
     simp [execute, Domain.admit, continueWith, admitThen, hl, hr, fold_flatMap, fold_map]
 
 /-- The fold reuses the existing fixed-trip interaction semantics. -/
-theorem fold_replicate {I : Signature} {S : Type} (step : S → Proc I S)
+theorem fold_replicate {I : Signature} {S : Type} (step : S → Process I S)
     (count : Nat) (initial : S) :
     fold (fun state (_ : Unit) => step state) (List.replicate count ()) initial =
       PIR.repeatN count step initial := by

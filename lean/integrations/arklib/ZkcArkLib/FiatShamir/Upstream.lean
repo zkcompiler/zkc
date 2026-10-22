@@ -228,7 +228,7 @@ def fullTranscript {last : Fin (n + 1)} (finish : last.val = n)
 return the verdict on the full transcript. -/
 def processFrom {A : Type} (verdict : FullTranscript pSpec → A) :
     (remaining : ℕ) → (round : Fin (n + 1)) → round.val + remaining = n → Transcript round pSpec →
-      PIR.Proc (signature pSpec) A
+      PIR.Process (signature pSpec) A
   | 0, _, finish, transcript => .done (verdict (fullTranscript finish transcript))
   | remaining + 1, round, finish, transcript =>
       .call (I := signature pSpec) (⟨round.val, by omega⟩ : Fin n) fun value =>
@@ -238,7 +238,7 @@ def processFrom {A : Type} (verdict : FullTranscript pSpec → A) :
 /-- The process form of a verdict on a statement: from round `0` with the empty
 transcript. -/
 def validator {A : Type} (verdict : StmtIn → FullTranscript pSpec → A) (statement : StmtIn) :
-    PIR.Proc (signature pSpec) A :=
+    PIR.Process (signature pSpec) A :=
   processFrom (verdict statement) n 0 (by simp) default
 
 /-- The error of each event: a challenge round's error at its occurrence, zero
@@ -349,7 +349,7 @@ theorem run_eq (statement : StmtIn) (transcript : FullTranscript pSpec) :
 /-- The doomed residuals of the process form under a state function: a
 residual at some round of a false input whose state is false. -/
 def Doomed (stateFunction : verifier.StateFunction init impl langIn langOut) :
-    PIR.Proc (signature pSpec) (Option StmtOut) → Prop := fun process =>
+    PIR.Process (signature pSpec) (Option StmtOut) → Prop := fun process =>
   ∃ statement remaining round finish transcript, statement ∉ langIn ∧
     process = processFrom (guardedVerdict guarded statement) remaining round finish transcript ∧
     ¬ stateFunction round statement transcript

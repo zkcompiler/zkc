@@ -13,17 +13,17 @@ abbrev Interface : PIR.Signature where
   Op := Unit
   Reply _ := Unit
 
-def work : PIR.Proc Interface Unit := .call () .done
+def work : PIR.Process Interface Unit := .call () .done
 
 def handler (stop : Bool) : PIR.MonadHandler ProbComp Interface Nat String := fun _ s =>
   pure ⟨if stop then .stopped .exhausted else .returned (), s + 1, ["trusted-work"]⟩
 
-def calculation (value : Nat) : PIR.Proc Interface Nat := work.bind fun _ => .done value
+def calculation (value : Nat) : PIR.Process Interface Nat := work.bind fun _ => .done value
 
 /-- An effectful calculation followed by an arbitrary continuation uses the
 same residual state and events. The returned value is not an ignored Unit. -/
 theorem determined_context (stop : Bool) (value : Nat)
-    (next : Nat → PIR.Proc Interface Nat) (s : Nat) :
+    (next : Nat → PIR.Process Interface Nat) (s : Nat) :
     ((calculation value).bind next).runM (handler stop) s = (do
       let e ← work.runM (handler stop) s
       e.followM fun _ s => (next value).runM (handler stop) s) := by
@@ -35,15 +35,15 @@ theorem determined_context (stop : Bool) (value : Nat)
 theorem determined_stop (value : Nat) (s : Nat) :
     (calculation value).runM (handler true) s =
       pure ⟨.stopped .exhausted, s + 1, ["trusted-work"]⟩ := by
-  simp [calculation, work, handler, PIR.Proc.bind, PIR.Proc.runM, PIR.Execution.followM]
+  simp [calculation, work, handler, PIR.Process.bind, PIR.Process.runM, PIR.Execution.followM]
 
 theorem determined_return (value : Nat) (s : Nat) :
     (calculation value).runM (handler false) s =
       pure ⟨.returned value, s + 1, ["trusted-work"]⟩ := by
-  simp [calculation, work, handler, PIR.Proc.bind, PIR.Proc.runM, PIR.Execution.followM]
+  simp [calculation, work, handler, PIR.Process.bind, PIR.Process.runM, PIR.Execution.followM]
 
-/-- The Proc-level law suffices for a conservative checker after any prefix. -/
-theorem checker_from_proc (stop : Bool) (p : PIR.Proc Interface Nat) (s : Nat) :
+/-- The Process-level law suffices for a conservative checker after any prefix. -/
+theorem checker_from_proc (stop : Bool) (p : PIR.Process Interface Nat) (s : Nat) :
     mass (checked (handler stop) p (fun a => work.bind fun _ => .done (decide (a = 0))) s) ≤
       mass (acceptance (handler stop) (attachWork p (fun _ => work)) s (fun a => a ≤ 1)) := by
   apply checked_le_of_proc (handler stop) p (fun _ => work) _ (fun a => decide (a = 0)) s
@@ -67,7 +67,7 @@ theorem sampled_handler_law (stop : Bool) (op : Interface.Op) (s : Nat) :
 /-- Arbitrary continuations preserve the complete observed execution, including
 the stopped prefix; no unfolding of the particular caller is needed. -/
 theorem sampled_handler_context {A : Type} (stop : Bool)
-    (process : PIR.Proc Interface A) (s : Nat) :
+    (process : PIR.Process Interface A) (s : Nat) :
     SameDist (process.runM (sampledHandler stop) s) (process.runM (handler stop) s) :=
   runM_sameDist _ _ (sampled_handler_law stop) process s
 

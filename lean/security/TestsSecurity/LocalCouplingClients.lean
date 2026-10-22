@@ -85,6 +85,6 @@ theorem zero_result_before_stop (r : Bit) (s : Nat) :
     (sendThenStop.denote meaning (Values.get (.cons r .nil))).runM (handler false) s =
       pure ⟨.stopped .abort, s + 1, [.sent r]⟩ := by
   simp [sendThenStop, Region.denote, Regions.denote, meaning, Operands.eval,
-    Values.get, PIR.Proc.bind, PIR.Proc.runM, handler, PIR.Execution.followM]
+    Values.get, PIR.Process.bind, PIR.Process.runM, handler, PIR.Execution.followM]
 
 end TestsSecurity.LocalCouplingClients

@@ -18,7 +18,7 @@ structure Residual (F : Type) where
 variable {F : Type} [Field F] [DecidableEq F]
 
 def roundsWith (wiring : Wiring) (arithmetic : VerifierArithmetic F)
-    (claim : F) (service : Nat) : PIR.Proc (actions (F := F)) (Residual F) :=
+    (claim : F) (service : Nat) : PIR.Process (actions (F := F)) (Residual F) :=
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.1 wiring.prover) fun a =>
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.2.1 wiring.prover) fun b =>
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.2.2 wiring.prover) fun c =>
@@ -39,7 +39,7 @@ abbrev rounds (wiring : Wiring) (claim : F) (service : Nat) :=
   roundsWith wiring (standardArithmetic (F := F)) claim service
 
 private theorem bind_if {I : PIR.Signature} {A B : Type} (p : Prop) [Decidable p]
-    (left right : PIR.Proc I A) (next : A → PIR.Proc I B) :
+    (left right : PIR.Process I A) (next : A → PIR.Process I B) :
     (if p then left else right).bind next = if p then left.bind next else right.bind next := by
   split <;> rfl
 
@@ -49,16 +49,16 @@ theorem rounds_terminal (wiring : Wiring) (arithmetic : VerifierArithmetic F)
     (roundsWith wiring arithmetic claim service).bind (fun residual =>
       .done (some (decide (residual.claim = arithmetic.statement coefficients residual.first residual.second)))) =
     experimentWith wiring arithmetic coefficients claim service := by
-  simp only [roundsWith, experimentWith, PIR.Proc.bind, bind_if]
+  simp only [roundsWith, experimentWith, PIR.Process.bind, bind_if]
 
 structure ResidualContract (wiring : Wiring)
-    (implementation : F → Nat → PIR.Proc (actions (F := F)) (Residual F)) : Prop where
+    (implementation : F → Nat → PIR.Process (actions (F := F)) (Residual F)) : Prop where
   realizes : ∀ claim service, PIR.ExactRefinement (implementation claim service) (rounds wiring claim service)
 
 theorem ResidualContract.compose {wiring : Wiring}
-    {implementation : F → Nat → PIR.Proc (actions (F := F)) (Residual F)}
+    {implementation : F → Nat → PIR.Process (actions (F := F)) (Residual F)}
     (certificate : ResidualContract wiring implementation)
-    {A : Type} {left right : Residual F → PIR.Proc (actions (F := F)) A}
+    {A : Type} {left right : Residual F → PIR.Process (actions (F := F)) A}
     (terminal : ∀ residual, PIR.ExactRefinement (left residual) (right residual))
     (claim : F) (service : Nat) :
     PIR.ExactRefinement ((implementation claim service).bind left)

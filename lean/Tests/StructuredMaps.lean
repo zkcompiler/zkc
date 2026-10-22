@@ -99,7 +99,7 @@ private def wrongIdentity : Meanings F F := [⟨{spec.helper with name := "other
 example : Evaluation.denoteMap wrongIdentity spec (.cons [1] (.cons (8 : F) .nil)) = .halt .refused := rfl
 
 private def rowInterface : PIR.Signature := ⟨Nat, fun _ => Unit⟩
-private def effectfulRow (index : Nat) : PIR.Proc rowInterface Nat :=
+private def effectfulRow (index : Nat) : PIR.Process rowInterface Nat :=
   .call index (fun _ => if index = 1 then .halt .reject else .done index)
 example : Evaluation.mapRows effectfulRow [0, 1, 2] =
     .call (0 : Nat) (fun _ => .call (1 : Nat) (fun _ => .halt .reject)) := rfl

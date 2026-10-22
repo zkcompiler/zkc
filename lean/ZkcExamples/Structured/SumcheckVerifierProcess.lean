@@ -31,7 +31,7 @@ abbrev deliverySite (ctx : ProtocolContext) : String :=
 delivery, actual append, then calculated interpolation. -/
 def roundPlain (ctx : ProtocolContext) (service : Option Nat)
     (pc : Option (List F) × Option F) :
-    PIR.Proc (participantInterface F G) (Option (List F) × Option F) :=
+    PIR.Process (participantInterface F G) (Option (List F) × Option F) :=
   .call (.receive (.field "bls12-381.fr")
     (lowSite ctx) (ctx.roles 0)) fun (lo : F) =>
   .call (.receive (.field "bls12-381.fr")
@@ -55,7 +55,7 @@ def roundPlain (ctx : ProtocolContext) (service : Option Nat)
 
 /-- A present-state view of the same four calls and calculated values. -/
 def roundPresent (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
-    PIR.Proc (participantInterface F G) (List F × F) :=
+    PIR.Process (participantInterface F G) (List F × F) :=
   .call (.receive (.field "bls12-381.fr")
     (lowSite ctx) (ctx.roles 0)) fun (lo : F) =>
   .call (.receive (.field "bls12-381.fr")
@@ -73,7 +73,7 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem round_present (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
     roundPlain (G := G) ctx (some handle) (some pc.1, some pc.2) =
       (roundPresent ctx handle pc).bind (fun result => .done (some result.1, some result.2)) := by
-  simp only [roundPlain, roundPresent, PIR.Proc.bind]
+  simp only [roundPlain, roundPresent, PIR.Process.bind]
   congr 1
   funext lo
   congr 1
@@ -90,7 +90,7 @@ theorem repeat_present (ctx : ProtocolContext) (handle count : Nat) (pc : List F
   induction count generalizing pc with
   | zero => rfl
   | succ count ih =>
-    simp only [PIR.repeatN, round_present, PIR.Proc.bind_assoc, PIR.Proc.bind]
+    simp only [PIR.repeatN, round_present, PIR.Process.bind_assoc, PIR.Process.bind]
     congr 1
     funext result
     exact ih result

@@ -61,7 +61,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 checked context and policy statements. -/
 structure SigmaFamily (context : Context) (Policy : Type) (Stmt Wit Commit PrvState Resp : Type) where
   /-- The model validator of a policy statement. -/
-  validator : Policy → PIR.Proc (Actions F G) (Option Bool)
+  validator : Policy → PIR.Process (Actions F G) (Option Bool)
   shape : Sigma.Shape F G Commit Resp
   /-- The protocol statement of a policy statement. -/
   key : Policy → Stmt

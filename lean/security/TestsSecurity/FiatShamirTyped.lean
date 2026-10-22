@@ -64,18 +64,18 @@ def absorb : Interface signature Event (Fin 4) Raw
 
 /-- After the gated draw: reject unless the gate bits are zero, accept exactly at
 the challenge `2`. -/
-def afterDraw (reply : Fin 2 × Scalar) : PIR.Proc signature Bool :=
+def afterDraw (reply : Fin 2 × Scalar) : PIR.Process signature Bool :=
   if reply.1 = 0 then .done (decide (reply.2 = 2)) else .halt .reject
 
-def gatedDraw : PIR.Proc signature Bool := .call Op.draw afterDraw
+def gatedDraw : PIR.Process signature Bool := .call Op.draw afterDraw
 
-def validator : PIR.Proc signature Bool := .call Op.nonce fun _ => gatedDraw
+def validator : PIR.Process signature Bool := .call Op.nonce fun _ => gatedDraw
 
 def accepts (accepted : Bool) : Prop := accepted = true
 
 /-- The doomed residuals: before the nonce, before the draw, a rejecting result
 and every stop. -/
-def doomed (process : PIR.Proc signature Bool) : Prop :=
+def doomed (process : PIR.Process signature Bool) : Prop :=
   process = validator ∨ process = gatedDraw ∨ process = .done false ∨
     ∃ stop, process = .halt stop
 

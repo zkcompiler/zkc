@@ -15,7 +15,7 @@ theorem Evaluation.fieldAdd_reverse (observations : SiteObservations I)
     (table : Evaluation.Meanings F G I) (domain : String) (a b : F) :
     Evaluation.operation observations table (.fieldAdd domain)
       (.cons a (.cons b .nil)) .nil = .done (.cons (b + a) .nil) := by
-  change @Eq (PIR.Proc _ (Values (assignment F G) [.field domain]))
+  change @Eq (PIR.Process _ (Values (assignment F G) [.field domain]))
     (.done (.cons (a + b) .nil)) (.done (.cons (b + a) .nil))
   rw [add_comm a b]
 
@@ -67,7 +67,7 @@ theorem vectorSum_law (observations : SiteObservations I) (table : Evaluation.Me
     (Evaluation.meaning observations table).OperationLaw (fun op => .call op .done)
       (.exec (.vectorSum domain)) (.cons xs .nil) .nil (.done (.cons xs.sum .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change @Eq (PIR.Proc _ (Values (assignment F G) [.field domain]))
+  change @Eq (PIR.Process _ (Values (assignment F G) [.field domain]))
     (.done (.cons (xs.foldl (· + ·) 0) .nil)) (.done (.cons xs.sum .nil))
   rw [List.sum_eq_foldl]
 

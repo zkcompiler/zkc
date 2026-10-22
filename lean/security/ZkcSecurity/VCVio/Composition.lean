@@ -14,8 +14,8 @@ every accepting continuation implies that event. The local implication holds
 at every residual state, including states changed by an effectful prefix.
 Stops on either side are nonaccepting; no losslessness premise is needed. -/
 theorem acceptance_bind_le {I : PIR.Signature} {S E A B : Type}
-    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (next : A → PIR.Proc I B) (s : S)
+    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (next : A → PIR.Process I B) (s : S)
     (accepted : B → Prop) (residual : A → Prop)
     (terminal : ∀ a state, ∀ e ∈ support ((next a).runM h state),
       returnedSatisfies accepted e → residual a) :

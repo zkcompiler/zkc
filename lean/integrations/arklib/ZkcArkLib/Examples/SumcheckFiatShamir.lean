@@ -57,14 +57,14 @@ variable [CommRing F] [DecidableEq F]
 
 /-- After the challenge: deliver it, then interpolate the next claim. -/
 def afterChallenge (ctx : ProtocolContext) (pc : List F × F) (low high challenge : F) :
-    PIR.Proc (Actions F G) (List F × F) :=
+    PIR.Process (Actions F G) (List F × F) :=
   .call (.send (ty := .field "bls12-381.fr") (SumcheckVerifierLaws.deliverySite ctx)
     (ctx.roles 0) challenge) fun _ =>
     .done (pc.1 ++ [challenge], (1 - challenge) * low + challenge * high)
 
 /-- After both halves: the boundary check, then the challenge. -/
 def afterHigh (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) (low high : F) :
-    PIR.Proc (Actions F G) (List F × F) :=
+    PIR.Process (Actions F G) (List F × F) :=
   if pc.2 = low + high then
     .call (.query (SumcheckVerifierLaws.challengeSite ctx) "bls12-381.fr" (.cons handle .nil))
       fun challenge => afterChallenge ctx pc low high challenge
@@ -72,13 +72,13 @@ def afterHigh (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) (low hig
 
 /-- After the low half: receive the high half. -/
 def afterLow (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) (low : F) :
-    PIR.Proc (Actions F G) (List F × F) :=
+    PIR.Process (Actions F G) (List F × F) :=
   .call (.receive (.field "bls12-381.fr") (SumcheckVerifierLaws.highSite ctx) (ctx.roles 0))
     fun high => afterHigh ctx handle pc low high
 
 /-- One verifier round over the common participant actions. -/
 def verifierRound (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
-    PIR.Proc (Actions F G) (List F × F) :=
+    PIR.Process (Actions F G) (List F × F) :=
   .call (.receive (.field "bls12-381.fr") (SumcheckVerifierLaws.lowSite ctx) (ctx.roles 0))
     fun low => afterLow ctx handle pc low
 
@@ -88,13 +88,13 @@ def decision (count : Nat) (table : Table F count) (pc : List F × F) : Option B
 
 /-- The public-table terminal check on the final point and claim. -/
 def terminal (count : Nat) (table : Table F count) (pc : List F × F) :
-    PIR.Proc (Actions F G) (Option Bool) :=
+    PIR.Process (Actions F G) (Option Bool) :=
   .done (decision count table pc)
 
 /-- The plain verifier: `count` rounds from the empty point and the claim, then
 the terminal check. -/
 def validator (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) (claim : F) :
-    PIR.Proc (Actions F G) (Option Bool) :=
+    PIR.Process (Actions F G) (Option Bool) :=
   (PIR.repeatN count (verifierRound ctx handle) ([], claim)).bind (terminal count table)
 
 end Process
@@ -105,19 +105,19 @@ variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 /-- The actual imported verifier of `example::Interactive` at role 1, with its
 present inputs, projected to the common participant actions. -/
 def importedValidator (raw : List F) (claim : F) (count handle : Nat) :
-    PIR.Proc (Actions F G) (Option Bool) :=
+    PIR.Process (Actions F G) (Option Bool) :=
   ((SumcheckSourceViews.imported.program.participant F G 1
     (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
       (some handle))).bind fun outputs => .done (outputs.get .here)).interpret
     CommonAdapter.project
 
 theorem repeatN_interpret {I J : PIR.Signature} {S : Type}
-    (operations : PIR.OperationInterpretation I J) (step : S → PIR.Proc I S) :
+    (operations : PIR.OperationInterpretation I J) (step : S → PIR.Process I S) :
     ∀ (count : Nat) (state : S), (PIR.repeatN count step state).interpret operations =
       PIR.repeatN count (fun next => (step next).interpret operations) state
   | 0, _ => rfl
   | count + 1, state => by
-      simp only [PIR.repeatN, PIR.Proc.interpret_bind]
+      simp only [PIR.repeatN, PIR.Process.interpret_bind]
       congr 1
       funext next
       exact repeatN_interpret operations step count next
@@ -127,9 +127,9 @@ theorem roundPresent_project (ctx : ProtocolContext) (handle : Nat) (pc : List F
     (SumcheckVerifierLaws.roundPresent (G := G) ctx handle pc).interpret CommonAdapter.project =
       verifierRound ctx handle pc := by
   unfold SumcheckVerifierLaws.roundPresent verifierRound afterLow afterHigh afterChallenge
-  refine congrArg (PIR.Proc.call _) (funext fun low => ?_)
-  refine congrArg (PIR.Proc.call _) (funext fun high => ?_)
-  simp only [PIR.Proc.bind]
+  refine congrArg (PIR.Process.call _) (funext fun low => ?_)
+  refine congrArg (PIR.Process.call _) (funext fun high => ?_)
+  simp only [PIR.Process.bind]
   by_cases checked : pc.2 = low + high <;> simp only [checked, ↓reduceIte] <;> rfl
 
 /-- On every admitted count the imported verifier is the plain verifier, with
@@ -139,20 +139,20 @@ theorem importedValidator_eq (count : Nat) (admitted : count ≤ 2) (raw : List 
     (handle : Nat) :
     importedValidator (G := G) raw claim count handle =
       validator SumcheckSourceVerifier.childContext handle count table claim := by
-  have collapse : ∀ process : PIR.Proc (participantInterface F G) (List F × F),
+  have collapse : ∀ process : PIR.Process (participantInterface F G) (List F × F),
       (process.bind fun pc =>
-          PIR.Proc.done (CausalSumcheck.SourceVerifier.checkedResult (G := G) count table pc)).bind
+          PIR.Process.done (CausalSumcheck.SourceVerifier.checkedResult (G := G) count table pc)).bind
         (fun outputs : Values (Component (assignment F G)) [.boolean] =>
-          PIR.Proc.done (outputs.get .here)) =
+          PIR.Process.done (outputs.get .here)) =
       process.bind fun pc => .done (some (decide (pc.1.length = count ∧
         extension count table (coordinates count pc.1) = pc.2))) := by
     intro process
-    rw [PIR.Proc.bind_assoc]
+    rw [PIR.Process.bind_assoc]
     rfl
   rw [importedValidator, CausalSumcheck.SourceVerifier.source_present count admitted raw table
     decoded claim handle]
-  refine (congrArg (PIR.Proc.interpret CommonAdapter.project) (collapse _)).trans ?_
-  rw [PIR.Proc.interpret_bind, repeatN_interpret]
+  refine (congrArg (PIR.Process.interpret CommonAdapter.project) (collapse _)).trans ?_
+  rw [PIR.Process.interpret_bind, repeatN_interpret]
   simp only [roundPresent_project]
   rfl
 
@@ -187,7 +187,7 @@ variable [Field F] [DecidableEq F]
 `output` of the final point and claim, exactly as the verifier's continuations
 produce it. -/
 def residual {A : Type} (ctx : ProtocolContext) (handle : Nat) (output : List F × F → A) :
-    Phase F → PIR.Proc (Actions F G) A
+    Phase F → PIR.Process (Actions F G) A
   | .round remaining point claim =>
       (PIR.repeatN remaining (verifierRound ctx handle) (point, claim)).bind
         fun pc => .done (output pc)
@@ -228,7 +228,7 @@ def Holds (count : Nat) (table : Table F count) : Phase F → Prop
 
 /-- Doomed residuals: those of phases satisfying the invariant. -/
 def Doomed {A : Type} (ctx : ProtocolContext) (handle count : Nat) (table : Table F count)
-    (output : List F × F → A) (process : PIR.Proc (Actions F G) A) : Prop :=
+    (output : List F × F → A) (process : PIR.Process (Actions F G) A) : Prop :=
   ∃ phase, Holds count table phase ∧ residual ctx handle output phase = process
 
 omit [DecidableEq F] in
@@ -473,7 +473,7 @@ projection equation (that validator is the plain Sumcheck verifier). -/
 theorem compiled_soundness (context : Context)
     (compiled :
       Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome (Option Bool) × Proof F G))
-    (original : PIR.Proc (Actions F G) (Option Bool)) (initial : History F G)
+    (original : PIR.Process (Actions F G) (Option Bool)) (initial : History F G)
     (construction :
       ∀ proof, compiled proof = transform context historyQuery original initial proof)
     (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) (claim : F)
@@ -550,11 +550,11 @@ theorem compiled_participant_soundness {B : Type} (context : Context)
   have same : (prover >>= compiled) = FiatShamir.experiment context
       (participant.bind fun outputs => .done (final outputs)) initial prover := by
     refine congrArg (prover >>= ·) (funext fun proof => ?_)
-    rw [construction, PIR.Proc.interpret_bind]
+    rw [construction, PIR.Process.interpret_bind]
     rfl
   have imported : importedValidator (G := G) raw claim count handle =
       participant.bind fun outputs => .done (outputs.get .here) := by
-    rw [importedValidator, PIR.Proc.interpret_bind]
+    rw [importedValidator, PIR.Process.interpret_bind]
     rfl
   rw [same, acceptance_bind_done]
   refine (prEvent_mono _ _ _ fun result accepted => ?_).trans
@@ -588,13 +588,13 @@ variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
 
 /-- Doomed residuals of every table and claim, and the refused verifier. -/
 def DoomedAny (ctx : ProtocolContext) (handle : Nat)
-    (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
+    (process : PIR.Process (Actions F G) (Option Bool)) : Prop :=
   (∃ count table, Doomed ctx handle count table (decision count table) process) ∨
     process = .halt .refused
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem doomedAny_step (ctx : ProtocolContext) (handle : Nat) :
-    ∀ process : PIR.Proc (Actions F G) (Option Bool), DoomedAny ctx handle process →
+    ∀ process : PIR.Process (Actions F G) (Option Bool), DoomedAny ctx handle process →
       Step (DoomedAny ctx handle) (· = some true) (1 / (Fintype.card F : ENNReal))
         process := by
   rintro process (⟨count, table, member⟩ | refused)
@@ -612,7 +612,7 @@ noncomputable def anyCertificate (ctx : ProtocolContext) (handle : Nat) :
 /-- The imported verifier at a statement, in plain form: the plain verifier on
 admitted counts and a refusal above them. -/
 def plainFamily (handle : Nat) (statement : PublicStatement F) :
-    PIR.Proc (Actions F G) (Option Bool) :=
+    PIR.Process (Actions F G) (Option Bool) :=
   if statement.count ≤ 2 then
     validator SumcheckSourceVerifier.childContext handle statement.count statement.table
       statement.claim
@@ -762,7 +762,7 @@ theorem compiled_adaptive_participant_soundness {B C : Type} [SampleableType B]
         (fun result => (claimed.1, result)) <$> compiled claimed.1 claimed.2)).run' ∅}[
       result.1.claim ≠ result.1.raw.sum ∧ Accepted accepts result.2.1] ≤
       (queries + 2) * (1 / (Fintype.card F : ENNReal) + loss) := by
-  let participant : PublicStatement F → PIR.Proc (Actions F G)
+  let participant : PublicStatement F → PIR.Process (Actions F G)
       (Values (Component (assignment F G))
         SumcheckSourceViews.imported.program.payload.entry.outputs) := fun statement =>
     (SumcheckSourceViews.imported.program.participant F G 1
@@ -775,13 +775,13 @@ theorem compiled_adaptive_participant_soundness {B C : Type} [SampleableType B]
           initial prover := by
     unfold adaptiveExperiment
     refine congrArg (prover >>= ·) (funext fun claimed => ?_)
-    rw [construction, PIR.Proc.interpret_bind]
+    rw [construction, PIR.Process.interpret_bind]
     rfl
   have imported : (fun statement : PublicStatement F =>
       importedValidator (G := G) statement.raw statement.claim statement.count handle) =
         fun statement => (participant statement).bind fun outputs => .done (outputs.get .here) := by
     funext statement
-    rw [importedValidator, PIR.Proc.interpret_bind]
+    rw [importedValidator, PIR.Process.interpret_bind]
     rfl
   rw [same]
   refine (adaptive_acceptance_bind_done context decode participant final initial prover
@@ -822,7 +822,7 @@ abbrev reductionOutput (pc : List F × F) :
 common participant actions. Its prover-side inputs are arbitrary. -/
 def importedReduction (vector : Option (List F)) (dimension : Option Nat) (claim : F)
     (count handle : Nat) :
-    PIR.Proc (Actions F G) (Values (Component (assignment F G))
+    PIR.Process (Actions F G) (Values (Component (assignment F G))
       SumcheckReduceBodies.runSignature.outputs) :=
   (SumcheckReduceViews.imported.program.participant F G 1
     (SumcheckReduceVerifier.reduceRootInputs vector dimension (some claim) (some count)
@@ -834,7 +834,7 @@ theorem importedReduction_eq (vector : Option (List F)) (dimension : Option Nat)
     importedReduction (G := G) vector dimension claim count handle =
       residual reductionContext handle reductionOutput (.round count [] claim) := by
   rw [importedReduction, CausalSumcheck.SourceVerifier.reduction_present vector dimension count
-    admitted claim handle, PIR.Proc.interpret_bind, repeatN_interpret]
+    admitted claim handle, PIR.Process.interpret_bind, repeatN_interpret]
   simp only [roundPresent_project]
   rfl
 

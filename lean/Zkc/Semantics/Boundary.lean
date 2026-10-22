@@ -14,12 +14,12 @@ variable {I : Signature} {A B S E : Type}
 /-- A returned value's phase postcondition, quantified over all typed replies.
     Stops have no returning continuation; they remain observable in Execution. -/
 def Returns (P : Interaction I) (post : A → P.Phase → Prop) :
-    Proc I A → P.Phase → Prop
+    Process I A → P.Phase → Prop
   | .done a, phase => post a phase
   | .halt _, _ => True
   | .call o k, phase => ∀ a, Returns P post (k a) (P.advance phase o a)
 
-theorem returns_mono (P : Interaction I) (p : Proc I A)
+theorem returns_mono (P : Interaction I) (p : Process I A)
     (post out : A → P.Phase → Prop) (phase : P.Phase)
     (exits : Returns P post p phase)
     (implies : ∀ value finalPhase, post value finalPhase → out value finalPhase) :
@@ -31,7 +31,7 @@ theorem returns_mono (P : Interaction I) (p : Proc I A)
 
 /-- The missing premise of phase-safe sequencing is the first body's exit,
     not its conformance at some unrelated initial phase. -/
-theorem conforms_bind (P : Interaction I) (p : Proc I A) (k : A → Proc I B)
+theorem conforms_bind (P : Interaction I) (p : Process I A) (k : A → Process I B)
     (post : A → P.Phase → Prop) (phase : P.Phase)
     (formed : Conforms P p phase) (exits : Returns P post p phase)
     (next : ∀ a phase, post a phase → Conforms P (k a) phase) :
@@ -42,7 +42,7 @@ theorem conforms_bind (P : Interaction I) (p : Proc I A) (k : A → Proc I B)
   | call o cont ih =>
     exact ⟨formed.1, fun a => ih a _ (formed.2 a) (exits a)⟩
 
-theorem returns_bind (P : Interaction I) (p : Proc I A) (k : A → Proc I B)
+theorem returns_bind (P : Interaction I) (p : Process I A) (k : A → Process I B)
     (post : A → P.Phase → Prop) (out : B → P.Phase → Prop) (phase : P.Phase)
     (exits : Returns P post p phase)
     (next : ∀ a phase, post a phase → Returns P out (k a) phase) :
@@ -53,23 +53,23 @@ theorem returns_bind (P : Interaction I) (p : Proc I A) (k : A → Proc I B)
   | call o cont ih => exact fun a => ih a _ (exits a)
 
 /-- Continuations need agree only at successful returns, for every typed reply. -/
-theorem bind_congr_returns (interaction : Interaction I) (process : Proc I A)
+theorem bind_congr_returns (interaction : Interaction I) (process : Process I A)
     (post : A → interaction.Phase → Prop) (phase : interaction.Phase)
     (returns : Returns interaction post process phase)
-    (left right : A → Proc I B)
+    (left right : A → Process I B)
     (same : ∀ value finalPhase, post value finalPhase → left value = right value) :
     process.bind left = process.bind right := by
   induction process generalizing phase with
   | done value => exact same value phase returns
   | halt reason => rfl
   | call operation next ih =>
-    simp only [Proc.bind]
+    simp only [Process.bind]
     congr 1
     funext reply
     exact ih reply _ (returns reply)
 
 /-- Postconditions refer to the actual instrumented execution's final phase. -/
-theorem actual_return (P : Interaction I) (p : Proc I A) (h : Handler I S E)
+theorem actual_return (P : Interaction I) (p : Process I A) (h : Handler I S E)
     (post : A → P.Phase → Prop) (phase : P.Phase) (s : S)
     (exits : Returns P post p phase) (a : A)
     (returned : (p.run (ExecutionPath.handler P h) (phase,s)).outcome = .returned a) :
@@ -80,7 +80,7 @@ theorem actual_return (P : Interaction I) (p : Proc I A) (h : Handler I S E)
     exact exits
   | halt why => cases returned
   | call o k ih =>
-    simp only [Proc.run, ExecutionPath.handler] at returned ⊢
+    simp only [Process.run, ExecutionPath.handler] at returned ⊢
     cases hx : h o s with
     | mk outcome t es =>
       cases outcome with
@@ -89,7 +89,7 @@ theorem actual_return (P : Interaction I) (p : Proc I A) (h : Handler I S E)
         simp only [hx, Execution.follow] at returned ⊢
         exact ih reply _ t (exits reply) returned
 
-theorem within_mono (p : Proc I A) (n m : Nat) (le : n ≤ m)
+theorem within_mono (p : Process I A) (n m : Nat) (le : n ≤ m)
     (bound : Within n p) : Within m p := by
   induction p generalizing n m with
   | done => cases m <;> trivial
@@ -102,7 +102,7 @@ theorem within_mono (p : Proc I A) (n m : Nat) (le : n ≤ m)
       | zero => omega
       | succ m => exact fun a => ih a n m (by omega) (bound a)
 
-theorem within_bind (p : Proc I A) (k : A → Proc I B) (n m : Nat)
+theorem within_bind (p : Process I A) (k : A → Process I B) (n m : Nat)
     (first : Within n p) (next : ∀ a, Within m (k a)) :
     Within (n+m) (p.bind k) := by
   induction p generalizing n with
@@ -118,8 +118,8 @@ theorem within_bind (p : Proc I A) (k : A → Proc I B) (n m : Nat)
 /-- A suffix bound is needed only at returns certified by the prefix, at
 their actual logical phase. This retains value-dependent invariants instead
 of requiring a bound for unreachable continuation values. -/
-theorem within_bind_of_returns (P : Interaction I) (p : Proc I A)
-    (k : A → Proc I B) (post : A → P.Phase → Prop) (phase : P.Phase) (n m : Nat)
+theorem within_bind_of_returns (P : Interaction I) (p : Process I A)
+    (k : A → Process I B) (post : A → P.Phase → Prop) (phase : P.Phase) (n m : Nat)
     (first : Within n p) (exits : Returns P post p phase)
     (next : ∀ a phase, post a phase → Within m (k a)) :
     Within (n + m) (p.bind k) := by
@@ -133,7 +133,7 @@ theorem within_bind_of_returns (P : Interaction I) (p : Proc I A)
       rw [Nat.succ_add]
       exact fun a => ih a _ _ (first a) (exits a)
 
-theorem repeat_bound (step : A → Proc I A) (m : Nat) (bound : ∀ a, Within m (step a))
+theorem repeat_bound (step : A → Process I A) (m : Nat) (bound : ∀ a, Within m (step a))
     (n : Nat) (a : A) : Within (n*m) (repeatN n step a) := by
   induction n generalizing a with
   | zero => simp [repeatN, Within]
@@ -142,7 +142,7 @@ theorem repeat_bound (step : A → Proc I A) (m : Nat) (bound : ∀ a, Within m 
       within_bind (step a) (repeatN n step) m (n*m) (bound a) ih
 
 /-- Public finite repetition carries an invariant across actual return edges. -/
-theorem repeat_formed (P : Interaction I) (step : A → Proc I A)
+theorem repeat_formed (P : Interaction I) (step : A → Process I A)
     (inv : A → P.Phase → Prop)
     (body : ∀ a phase, inv a phase → Conforms P (step a) phase)
     (preserve : ∀ a phase, inv a phase → Returns P inv (step a) phase)

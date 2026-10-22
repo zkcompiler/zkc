@@ -197,8 +197,8 @@ theorem laws_absorb (block : Block b s) : (laws (F := F) block).absorb = absorb 
 omit [Field F] [DecidableEq F] in
 /-- The local obligations over uniform sorts are the uniform-sort obligations of the law
 interface. -/
-theorem uniformStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool → Prop}
-    {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Proc (operations F) Bool)
+theorem uniformStep (block : Block b s) {doomed : PIR.Process (operations F) Bool → Prop}
+    {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Process (operations F) Bool)
     (step : Step doomed (siteError foldError queryError) process) :
     UniformEventStep (laws block) doomed (· = true) (siteError foldError queryError) process := by
   cases process with
@@ -225,8 +225,8 @@ omit [Field F] [DecidableEq F] in
 /-- The local obligations over uniform sorts are the typed obligations, by the generic lifting of
 law interfaces: folding challenges decode exactly, and the query block's error is scaled by its
 sampler's realized law. -/
-theorem typedStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool → Prop}
-    {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Proc (operations F) Bool)
+theorem typedStep (block : Block b s) {doomed : PIR.Process (operations F) Bool → Prop}
+    {foldError : ℕ → ENNReal} {queryError : ENNReal} (process : PIR.Process (operations F) Bool)
     (step : Step doomed (siteError foldError queryError) process) :
     Typed.Step (absorb block) doomed (· = true)
       (eventError foldError (block.factor * queryError + block.slack)) process := by

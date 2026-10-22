@@ -43,21 +43,21 @@ end
 
 abbrev RegionFunction {Ty : Type} (Value : Ty → Type) (interface : PIR.Signature)
     (signature : List Ty × List Ty) :=
-  Values Value signature.1 → PIR.Proc interface (Values Value signature.2)
+  Values Value signature.1 → PIR.Process interface (Values Value signature.2)
 
 /-- The operation controls how, when and whether its region arguments execute. -/
 structure RegionMeaning (dialect : Dialect) (interface : PIR.Signature) where
   Value : dialect.Ty → Type
   operation : (op : dialect.Op) → Values Value (dialect.arguments op) →
     Values (RegionFunction Value interface) (dialect.regions op) →
-      PIR.Proc interface (Values Value (dialect.results op))
+      PIR.Process interface (Values Value (dialect.results op))
 
 variable {dialect : Dialect} {interface : PIR.Signature}
 
 mutual
   def Region.denote (meaning : RegionMeaning dialect interface) {Γ out} :
       Region dialect Γ out → Environment meaning.Value Γ →
-        PIR.Proc interface (Values meaning.Value out)
+        PIR.Process interface (Values meaning.Value out)
     | .ret values, env => .done (Operands.eval env values)
     | .stop reason, _ => .halt reason
     | .letOp op arguments bodies next, env =>
@@ -101,7 +101,7 @@ theorem Region.denote_rename (meaning : RegionMeaning dialect interface)
     (region.rename rename).denote meaning env =
       region.denote meaning (fun value => env (rename value)) := by
   cases region with
-  | ret values => exact congrArg PIR.Proc.done (Operands.eval_rename rename env values)
+  | ret values => exact congrArg PIR.Process.done (Operands.eval_rename rename env values)
   | stop reason => rfl
   | letOp op arguments bodies next =>
     simp only [Region.rename, denote, Operands.eval_rename]

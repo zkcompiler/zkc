@@ -25,11 +25,11 @@ def hornerImport : Imported := Variants.SumcheckHornerData.snapshot.check.toOpti
 variable {F : Type} [Field F] [DecidableEq F]
 
 set_option maxRecDepth 20000 in
-def helpers (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Proc (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
+def helpers (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Process (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
   helpersImport.denote (scalarMeaning F F) id 1 (Sumcheck.verifierInputs coefficients claim service)
 
 set_option maxRecDepth 20000 in
-def horner (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Proc (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
+def horner (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Process (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
   hornerImport.denote (scalarMeaning F F) id 1 (Sumcheck.verifierInputs coefficients claim service)
 
 set_option maxRecDepth 20000 in
@@ -44,12 +44,12 @@ set_option maxRecDepth 20000 in
 theorem helpers_correspondence (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) :
     helpers coefficients claim service = Sumcheck.experiment coefficients claim service := by
   change (helpersImport.program.denote (scalarMeaning F F) id 1
-    (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   repeat' first
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-       rw [PIR.Proc.bind_ite]
+    | (apply PIR.Process.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+       rw [PIR.Process.bind_ite]
        simp only [↓reduceIte])
     | rfl
     | fail_if_no_progress congr 1
@@ -84,12 +84,12 @@ theorem horner_correspondence (coefficients : Coefficients F) (claim : F) (servi
   have source : horner coefficients claim service =
       experimentWith Sumcheck.wiring hornerArithmetic coefficients claim service := by
     change (hornerImport.program.denote (scalarMeaning F F) id 1
-      (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
-    rw [PIR.Proc.bind_done]
+      (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Process.done = _
+    rw [PIR.Process.bind_done]
     repeat' first
-      | (apply PIR.Proc.call_congr; intro reply)
-      | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-         rw [PIR.Proc.bind_ite]
+      | (apply PIR.Process.call_congr; intro reply)
+      | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+         rw [PIR.Process.bind_ite]
          simp only [↓reduceIte])
       | rfl
       | fail_if_no_progress congr 1

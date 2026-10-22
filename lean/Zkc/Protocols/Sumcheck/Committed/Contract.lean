@@ -18,7 +18,7 @@ variable {F S : Type} {n : Nat} {scheme : Scheme F n}
 variable [Field F] [DecidableEq F]
 
 abbrev RoundImplementation (F : Type) :=
-  F → PIR.Proc (AlgebraicRounds.interface F) (Source.Accumulator F)
+  F → PIR.Process (AlgebraicRounds.interface F) (Source.Accumulator F)
 
 structure RoundContract (implementation : RoundImplementation F) (count : Nat) : Prop where
   realizes : ∀ claim, PIR.ExactRefinement (implementation claim) (Source.rounds count ⟨claim, []⟩)

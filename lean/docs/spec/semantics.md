@@ -14,7 +14,7 @@ caller context. The empty result list is valid and does not remove an operation.
 `bind` stores its continuation once. Region bodies see only declared inputs;
 operation operands and contracts explicitly transmit captured values.
 
-`RegionMeaning` interprets operations and effectful callbacks into `PIR.Proc`.
+`RegionMeaning` interprets operations and effectful callbacks into `PIR.Process`.
 Its contracts determine callback execution and failure behavior. Pointwise process
 equality lifts through nested bodies and shared suffixes. Translating effects
 requires the explicit operation compatibility law in `RegionMeaning.Translation`.
@@ -147,7 +147,7 @@ of `self` is consumed by that process's next matching receive; queries of
 the peer may not query a service of its own. It models no loss, reordering or
 adversarial network and is not a scheduler for more than two endpoints.
 
-`PIR.Proc` is a well-founded interaction tree with returned values, terminal stops and
+`PIR.Process` is a well-founded interaction tree with returned values, terminal stops and
 typed requests whose continuations consume actual replies. A handler maps an
 operation and state to its outcome, successor state and ordered events. `run`
 threads that state. `runM` does the same in a lawful monad, enabling VCVio
@@ -180,7 +180,7 @@ A zero/exhausted observation budget does not become protocol rejection. Resuming
 for budgets `m` and `n` equals running for `m+n`; terminal states are stable and
 prior events remain a prefix. A spin control stays running at every budget.
 
-A `Proc` embeds in this machine. `complete_run` relates every observed
+A `Process` embeds in this machine. `complete_run` relates every observed
 prefix to the full finite execution. `eventually_finishes` proves that every
 fixed total handler reaches the same complete result at some finite budget.
 It does not assert a uniform depth across all reply-dependent continuations or

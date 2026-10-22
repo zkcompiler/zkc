@@ -66,7 +66,7 @@ variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} (absorb : Typed.I
 
 /-- A larger cost bounds the charged queries too. -/
 theorem chargedCostBound_mono (charge : List E → E → ENNReal) :
-    ∀ (process : PIR.Proc I A) (history : List E) {cost larger : ENNReal},
+    ∀ (process : PIR.Process I A) (history : List E) {cost larger : ENNReal},
       Typed.ChargedCostBound absorb charge process history cost → cost ≤ larger →
         Typed.ChargedCostBound absorb charge process history larger
   | .done _, _, _, _, _, _ => trivial

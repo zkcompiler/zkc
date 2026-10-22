@@ -105,26 +105,26 @@ abbrev absorb : Interface signature Event Scalar Raw := laws.absorb
 
 /-- After the claim, the challenge and the index: the block request, then the
 verdict. -/
-def afterIndex (claimed challenge : Scalar) (position : Fin 3) : PIR.Proc signature Bool :=
+def afterIndex (claimed challenge : Scalar) (position : Fin 3) : PIR.Process signature Bool :=
   .call Op.block fun pair =>
     .done (decide (challenge = claimed ∨ position = 0 ∨ pair.1 = pair.2))
 
 /-- After the claim and the challenge: the index request below `3`. -/
-def afterField (claimed challenge : Scalar) : PIR.Proc signature Bool :=
+def afterField (claimed challenge : Scalar) : PIR.Process signature Bool :=
   .call (Op.index 2) fun position => afterIndex claimed challenge position
 
 /-- After the claim: the field request. -/
-def afterClaim (claimed : Scalar) : PIR.Proc signature Bool :=
+def afterClaim (claimed : Scalar) : PIR.Process signature Bool :=
   .call Op.field fun challenge => afterField claimed challenge
 
-def validator : PIR.Proc signature Bool := .call Op.claim afterClaim
+def validator : PIR.Process signature Bool := .call Op.claim afterClaim
 
 def accepts (accepted : Bool) : Prop := accepted = true
 
 /-- The doomed residuals: before the claim, before the challenge, before the
 index after a missed challenge, before the block after a missed challenge and a
 nonzero index, and the rejecting verdict. -/
-def doomed (process : PIR.Proc signature Bool) : Prop :=
+def doomed (process : PIR.Process signature Bool) : Prop :=
   process = validator ∨ (∃ claimed, process = afterClaim claimed) ∨
     (∃ claimed challenge, challenge ≠ claimed ∧ process = afterField claimed challenge) ∨
     (∃ claimed challenge position, challenge ≠ claimed ∧ position ≠ 0 ∧

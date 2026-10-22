@@ -55,7 +55,7 @@ theorem runM_relTriple (R : S → T → Prop)
     (g : PIR.MonadHandler ProbComp I T F)
     (localLaw : ∀ action s t, R s t →
       RelTriple (h action s) (g action t) (PIR.Related R left right))
-    (process : PIR.Proc I A) (s : S) (t : T) (initial : R s t) :
+    (process : PIR.Process I A) (s : S) (t : T) (initial : R s t) :
     RelTriple (process.runM h s) (process.runM g t) (PIR.Related R left right) := by
   induction process generalizing s t with
   | done value => exact relTriple_pure_pure ⟨rfl, initial, rfl⟩

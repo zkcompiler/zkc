@@ -412,12 +412,12 @@ def placedAbsorb : Typed.Interface placedSignature PlacedEvent (Attempts × Atte
   | .draw => .query .gated fun raw => some raw
 
 /-- Accept when the gate passes and the challenge hits. -/
-def placedDraw : PIR.Proc placedSignature Bool :=
+def placedDraw : PIR.Process placedSignature Bool :=
   .call PlacedOp.draw fun raw => .done (decide (raw = (0, 0)))
 
-def placedValidator : PIR.Proc placedSignature Bool := .call PlacedOp.context fun _ => placedDraw
+def placedValidator : PIR.Process placedSignature Bool := .call PlacedOp.context fun _ => placedDraw
 
-def placedDoomed (process : PIR.Proc placedSignature Bool) : Prop :=
+def placedDoomed (process : PIR.Process placedSignature Bool) : Prop :=
   process = placedValidator ∨ process = placedDraw ∨ process = .done false ∨
     ∃ stop, process = .halt stop
 

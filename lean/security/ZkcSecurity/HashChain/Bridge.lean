@@ -277,7 +277,7 @@ variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} {R : List E → T
 the simulated oracle, read by occurrence. -/
 theorem simulateQ_transform (absorb : Typed.Interface I E P Raw)
     (impl : QueryImpl (OracleSpec.ofFn R) n) :
-    ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (history : List E) (proof : List P),
       simulateQ impl (Typed.transform absorb Typed.ask process history proof) =
         Typed.transform absorb (fun preceding event =>
           Typed.ReadsByOccurrence.read preceding event <$> impl (preceding ++ [event]))
@@ -544,7 +544,7 @@ omit [DecidableEq S] [DecidableEq X] in
 /-- The typed transform over the history oracle, from the filled history answers,
 has the law of the typed transform over the lazy history cells. -/
 theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw E S width))
-    (process : PIR.Proc I A) (history : List E) (proof : List P) {queries : ℕ}
+    (process : PIR.Process I A) (history : List E) (proof : List P) {queries : ℕ}
     (bounded : Typed.QueryBound absorb process queries) {slots : ℕ}
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : tables.touched.length + queries ≤ slots) :
@@ -933,7 +933,7 @@ theorem completedWith_empty {length : ℕ} (suffix : Fin length → S) :
 adversary against the hash-chain simulator with a uniform private tape, then the
 typed transform, over one lazily sampled history oracle. -/
 theorem simulatedExperiment_eq_translated (positive : 0 < width)
-    (absorb : Typed.Interface I E P (Raw E S width)) (validator : Stmt → PIR.Proc I A)
+    (absorb : Typed.Interface I E P (Raw E S width)) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) {queries : ℕ}
     (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {calls : ℕ}

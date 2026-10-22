@@ -306,7 +306,7 @@ def RoundsFalse (remaining : Nat) (state : List F × F) : Prop :=
 variable (ctx : ProtocolContext) (handle : Nat)
 
 /-- The residuals of one round from `state`. -/
-def RoundResidual (remaining : Nat) (state : List F × F) (process : PIR.Proc (Actions F G) (List F × F)) :
+def RoundResidual (remaining : Nat) (state : List F × F) (process : PIR.Process (Actions F G) (List F × F)) :
     Prop :=
   process = round ctx handle state ∨ (∃ c0, process = roundFirst ctx handle state c0) ∨
     (∃ c0 c1, process = roundSecond ctx handle state c0 c1) ∨

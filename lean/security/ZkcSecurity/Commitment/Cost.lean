@@ -41,7 +41,7 @@ variable (absorb : Typed.Interface J E P Raw) (admissible : Shape → Prop)
 /-- Every path of a verifier with committed tables charges at most `budget`: a transcript query
 its occurrence's charge, a read `readCharge`; every committed shape is admissible. -/
 def Charged {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E → ω) (readCharge : ω) :
-    PIR.Proc (committed J Shape Value) A → ω → Prop
+    PIR.Process (committed J Shape Value) A → ω → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call (.base operation) next, budget =>
@@ -56,7 +56,7 @@ def Charged {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E → ω) (re
 
 theorem Charged.mono {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E → ω)
     (readCharge : ω) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) {budget larger : ω},
+    ∀ (process : PIR.Process (committed J Shape Value) A) {budget larger : ω},
       Charged absorb admissible charge readCharge process budget → budget ≤ larger →
         Charged absorb admissible charge readCharge process larger
   | .done _, _, _, _, _ => trivial
@@ -99,7 +99,7 @@ def chargedWalk {ω : Type} [Zero ω] (charge : E → ω) (readCharge : ω) :
 
 /-- `Charged` is the path bound of its walk. -/
 theorem charged_iff {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E → ω) (readCharge : ω) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ω),
+    ∀ (process : PIR.Process (committed J Shape Value) A) (budget : ω),
       Charged absorb admissible charge readCharge process budget ↔
         (chargedWalk absorb admissible charge readCharge).Bound process () budget
   | .done _, _ => Iff.rfl
@@ -156,7 +156,7 @@ def commitWalk : Zkc.Transcript.Walk (committed J Shape Value) Unit ℕ where
 
 /-- `CommitBound` is the path bound of its walk. -/
 theorem commitBound_iff :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ℕ),
+    ∀ (process : PIR.Process (committed J Shape Value) A) (budget : ℕ),
       CommitBound process budget ↔ (commitWalk (J := J)).Bound process () budget
   | .done _, _ => Iff.rfl
   | .halt _, _ => Iff.rfl
@@ -201,7 +201,7 @@ error of its occurrence and each hash call `hashError`. -/
 theorem run_costBound (error : E → ENNReal) (hashError : ENNReal) (authCalls : ℕ)
     (authenticated : ∀ shape, admissible shape → ∀ root position opening,
       IsTotalQueryBound (scheme.authenticate shape root position opening) authCalls) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ENNReal),
+    ∀ (process : PIR.Process (committed J Shape Value) A) (budget : ENNReal),
       Charged absorb admissible error ((authCalls : ENNReal) * hashError) process budget →
       ∀ (history : List (Absorbed E Shape Y)) (roots : List (Shape × Y))
         (messages : List (Message P Y)) (openings : List (Opening Value Y)),
@@ -282,7 +282,7 @@ charge `1` per transcript query and `authCalls` per read. -/
 theorem run_queryBound (authCalls : ℕ)
     (authenticated : ∀ shape, admissible shape → ∀ root position opening,
       IsTotalQueryBound (scheme.authenticate shape root position opening) authCalls) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (budget : ℕ),
+    ∀ (process : PIR.Process (committed J Shape Value) A) (budget : ℕ),
       Charged absorb admissible (fun _ => 1) authCalls process budget →
       ∀ (history : List (Absorbed E Shape Y)) (roots : List (Shape × Y))
         (messages : List (Message P Y)) (openings : List (Opening Value Y)),

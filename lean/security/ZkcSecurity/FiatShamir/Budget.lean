@@ -30,7 +30,7 @@ variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} (absorb : Interfa
 
 /-- The query count is the walk without positions charging one per query. -/
 theorem queryBound_iff :
-    ∀ (process : PIR.Proc I A) (budget : ℕ),
+    ∀ (process : PIR.Process I A) (budget : ℕ),
       QueryBound absorb process budget ↔
         (absorb.replyWalk absorb.queryCharge).Bound process () budget
   | .done _, _ => Iff.rfl
@@ -63,7 +63,7 @@ theorem queryBound_iff :
 /-- The cost with an error per occurrence is the walk without positions charging
 each query its occurrence's error. -/
 theorem costBound_iff (error : E → ENNReal) :
-    ∀ (process : PIR.Proc I A) (cost : ENNReal),
+    ∀ (process : PIR.Process I A) (cost : ENNReal),
       CostBound absorb error process cost ↔
         (absorb.replyWalk (absorb.errorCharge error)).Bound process () cost
   | .done _, _ => Iff.rfl
@@ -94,7 +94,7 @@ theorem costBound_iff (error : E → ENNReal) :
 /-- The charged cost from a history is the walk over absorbed histories charging
 each query its key. -/
 theorem chargedCostBound_iff (charge : List E → E → ENNReal) :
-    ∀ (process : PIR.Proc I A) (history : List E) (cost : ENNReal),
+    ∀ (process : PIR.Process I A) (history : List E) (cost : ENNReal),
       ChargedCostBound absorb charge process history cost ↔
         (absorb.walk (absorb.lossCharge charge)).Bound process history cost
   | .done _, _, _ => Iff.rfl
@@ -133,7 +133,7 @@ theorem chargedCostBound_iff (charge : List E → E → ENNReal) :
 the interface walk follows a subset of the transitions without positions. -/
 theorem replyWalk_walk {Cost : Type} [AddCommMonoid Cost] [Preorder Cost]
     (charge : I.Op → Cost) :
-    ∀ (process : PIR.Proc I A) (budget : Cost),
+    ∀ (process : PIR.Process I A) (budget : Cost),
       (absorb.replyWalk charge).Bound process () budget →
         ∀ history, (absorb.walk fun _ operation => charge operation).Bound process history budget
   | .done _, _, _, _ => trivial
@@ -151,7 +151,7 @@ theorem replyWalk_walk {Cost : Type} [AddCommMonoid Cost] [Preorder Cost]
 charge is at most `bound`, a query count `budget` bounds the charged cost by
 `budget * bound` from every history. -/
 theorem QueryBound.chargedCostBound_of_walk {charge : List E → E → ENNReal} {bound : ENNReal}
-    (bounded : ∀ history event, charge history event ≤ bound) (process : PIR.Proc I A)
+    (bounded : ∀ history event, charge history event ≤ bound) (process : PIR.Process I A)
     (budget : ℕ) (counted : QueryBound absorb process budget) (history : List E) :
     ChargedCostBound absorb charge process history (budget * bound) := by
   have walked := replyWalk_walk absorb absorb.queryCharge process budget

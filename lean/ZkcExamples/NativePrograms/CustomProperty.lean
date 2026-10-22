@@ -23,7 +23,7 @@ def denote (program : Zkc.Source.Common.Native.Imported) : Verifier F G :=
   fun base key service =>
     if same : program.snapshot.inputs = SchnorrData.snapshot.inputs then
       if result : program.snapshot.result = .boolean then
-        cast (congrArg (fun ty => PIR.Proc (actions (F := F) (G := G))
+        cast (congrArg (fun ty => PIR.Process (actions (F := F) (G := G))
           (Option (ScalarValue F G ty))) result)
           (program.denote (scalarMeaning F G) id 1
             (same ▸ Schnorr.verifierInputs (F := F) base key service))

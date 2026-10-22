@@ -73,7 +73,7 @@ with its answer. -/
 def chainRead (absorb : Typed.Interface J E P (fun _ => Fin width → S))
     (scheme : Extractable Shape Value Query S) (chain : Input (Absorbed E Shape S) S Bytes → m S)
     (hash : QueryImpl (Query →ₒ S) m) :
-    PIR.Proc (committed J Shape Value) A → S → List (Absorbed E Shape S) → List (Shape × S) →
+    PIR.Process (committed J Shape Value) A → S → List (Absorbed E Shape S) → List (Shape × S) →
       List (Message P S) → List (Opening Value S) →
         m (PIR.Outcome A × QueryLog (OracleSpec.ofFn (Cells E Shape S Query width)))
   | .done value, _, _, _, _, _ => pure (.returned value, [])
@@ -126,7 +126,7 @@ def chainRead (absorb : Typed.Interface J E P (fun _ => Fin width → S))
 resulting state. An empty initial history binds nothing and refuses. -/
 def chainVerify (absorb : Typed.Interface J E P (fun _ => Fin width → S))
     (scheme : Extractable Shape Value Query S) (chain : Input (Absorbed E Shape S) S Bytes → m S)
-    (hash : QueryImpl (Query →ₒ S) m) (verifier : PIR.Proc (committed J Shape Value) A)
+    (hash : QueryImpl (Query →ₒ S) m) (verifier : PIR.Process (committed J Shape Value) A)
     (initial : List (Absorbed E Shape S)) (roots : List (Shape × S)) (messages : List (Message P S))
     (openings : List (Opening Value S)) :
     m (PIR.Outcome A × QueryLog (OracleSpec.ofFn (Cells E Shape S Query width))) :=
@@ -158,7 +158,7 @@ variable {ι : Type} {spec : OracleSpec ι} (impl : QueryImpl spec n)
 /-- Simulating the oracle of a chain reading answers its chain inputs and hash calls through the
 simulation. -/
 theorem simulateQ_chainRead :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
       (roots : List (Shape × S)) (messages : List (Message P S)) (openings : List (Opening Value S)),
       simulateQ impl (chainRead absorb scheme chain hash process state history roots messages openings) =
         chainRead absorb scheme (fun input => simulateQ impl (chain input))
@@ -220,7 +220,7 @@ theorem simulateQ_absorbAll :
       simp only [absorbAll, simulateQ_bind]
       exact bind_congr fun next => simulateQ_absorbAll rest next
 
-theorem simulateQ_chainVerify (verifier : PIR.Proc (committed J Shape Value) A)
+theorem simulateQ_chainVerify (verifier : PIR.Process (committed J Shape Value) A)
     (initial : List (Absorbed E Shape S)) (roots : List (Shape × S)) (messages : List (Message P S))
     (openings : List (Opening Value S)) :
     simulateQ impl (chainVerify absorb scheme chain hash verifier initial roots messages openings) =
@@ -261,7 +261,7 @@ def ReadInput.toCall {input : Input (Absorbed E Shape S) S Bytes} (small : width
 /-- The chain reading depends on its chain answers only at the inputs it makes. -/
 theorem chainRead_congr {first second : Input (Absorbed E Shape S) S Bytes → m S}
     (same : ∀ input, ReadInput width input → first input = second input) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
       (roots : List (Shape × S)) (messages : List (Message P S)) (openings : List (Opening Value S)),
       chainRead absorb scheme first hash process state history roots messages openings =
         chainRead absorb scheme second hash process state history roots messages openings := by
@@ -324,7 +324,7 @@ theorem absorbAll_congr' {first second : Input (Absorbed E Shape S) S Bytes → 
 
 theorem chainVerify_congr {first second : Input (Absorbed E Shape S) S Bytes → m S}
     (same : ∀ input, ReadInput width input → first input = second input)
-    (verifier : PIR.Proc (committed J Shape Value) A) (initial : List (Absorbed E Shape S))
+    (verifier : PIR.Process (committed J Shape Value) A) (initial : List (Absorbed E Shape S))
     (roots : List (Shape × S)) (messages : List (Message P S)) (openings : List (Opening Value S)) :
     chainVerify absorb scheme first hash verifier initial roots messages openings =
       chainVerify absorb scheme second hash verifier initial roots messages openings := by
@@ -415,7 +415,7 @@ section Experiment
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query]
   (encoding : Encoding E Shape S Query) (width : ℕ)
   (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
-  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (verifier : Stmt → PIR.Process (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
   (statementRoots : Stmt → List (Shape × S))
 
 /-- The deployed verifier on the byte hash. -/

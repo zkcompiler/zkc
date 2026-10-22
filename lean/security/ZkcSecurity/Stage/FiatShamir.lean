@@ -94,7 +94,7 @@ variable {I : PIR.Signature} {E P A Stmt : Type} {Raw : E → Type} {R : List E 
 history oracle that output a statement and a proof, admissible at `q` with at
 most `q` queries on every path; the bad event is a false statement's
 acceptance. -/
-noncomputable def typedGame (absorb : Typed.Interface I E P Raw) (validator : Stmt → PIR.Proc I A)
+noncomputable def typedGame (absorb : Typed.Interface I E P Raw) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (falseStatement : Stmt → Prop) (accepts : A → Prop) : Game :=
   oracleGame R (OracleComp (OracleSpec.ofFn R) (Stmt × List P)) ℕ
     (fun queries prover => IsTotalQueryBound prover queries)
@@ -105,7 +105,7 @@ noncomputable def typedGame (absorb : Typed.Interface I E P Raw) (validator : St
 when its queries charge at most `c` on every path, every key charged
 `keyCharge charge`. -/
 noncomputable def weightedGame (absorb : Typed.Interface I E P Raw) (charge : List E → E → ENNReal)
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (falseStatement : Stmt → Prop)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E) (falseStatement : Stmt → Prop)
     (accepts : A → Prop) : Game :=
   oracleGame R (OracleComp (OracleSpec.ofFn R) (Stmt × List P)) ENNReal
     (fun cost prover => WorstCaseCostBound prover ⟨Typed.keyCharge charge⟩ cost)
@@ -117,7 +117,7 @@ stage from the trivial game: loss `(q + budget) · bound` at `q` prover
 queries. -/
 noncomputable def typedRelation {absorb : Typed.Interface I E P Raw} {accepts : A → Prop}
     {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
-    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
@@ -135,7 +135,7 @@ total query budgets: when every key's charge is at most `bound`, loss
 noncomputable def chargedRelation {absorb : Typed.Interface I E P Raw} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : Typed.ChargedCertificate absorb accepts charge)
     {bound : ENNReal} (bounded : ∀ history event, charge history event ≤ bound)
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (initial statement) (validator statement))
@@ -154,7 +154,7 @@ noncomputable def chargedRelation {absorb : Typed.Interface I E P Raw} {accepts 
 trivial game: loss `c + validatorCost` at a prover's weighted budget `c`. -/
 noncomputable def weightedRelation {absorb : Typed.Interface I E P Raw} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : Typed.ChargedCertificate absorb accepts charge)
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E) (determined : Typed.Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (initial statement) (validator statement))

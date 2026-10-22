@@ -279,7 +279,7 @@ end VerifierPhase
 section Experiments
 variable (encoding : Encoding E Shape S Query) (width : ℕ)
   (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
-  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (verifier : Stmt → PIR.Process (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
   (statementRoots : Stmt → List (Shape × S))
 
 /-- The translated experiment: draw the private tape, run the logged adversary against the joint
@@ -523,7 +523,7 @@ end Logs
 section Ideal
 variable (encoding : Encoding E Shape S Query) (width : ℕ)
   (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
-  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (verifier : Stmt → PIR.Process (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
   (statementRoots : Stmt → List (Shape × S))
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query] [Inhabited S]

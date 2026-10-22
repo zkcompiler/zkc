@@ -31,7 +31,7 @@ example : ¬ WorstCaseCostBound prover ⟨fun _ => (2 : ENNReal)⟩ 1 := by
 private abbrev signature : PIR.Signature := ⟨Unit, fun _ => Unit⟩
 private def absorb : Typed.Interface signature Unit Unit (fun _ => Unit) :=
   fun _ => .query () (fun _ => some ())
-private def validator : PIR.Proc signature Bool := .call () (fun _ => .done false)
+private def validator : PIR.Process signature Bool := .call () (fun _ => .done false)
 
 example : Typed.ChargedCostBound absorb (fun _ _ => 1) validator [] 1 :=
   ⟨0, by norm_num, fun _ => trivial⟩

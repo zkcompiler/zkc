@@ -205,7 +205,7 @@ doomed set contains the model validator of every false model statement after
 every initial transcript. -/
 structure CertificateFamily (context : Context) (regime : Regime F) {publics : List Ty}
     (relation : ModelRelation F G publics) where
-  validator : relation.Model → PIR.Proc (Actions F G) (Option Bool)
+  validator : relation.Model → PIR.Process (Actions F G) (Option Bool)
   charge : History F G → Event F G → ENNReal
   certificate : Typed.ChargedCertificate (interface (G := G) context regime.decode) (· = some true) charge
   doomed : ∀ model initial, relation.falseModel model → certificate.doomed initial (validator model)

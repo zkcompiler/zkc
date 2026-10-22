@@ -35,7 +35,7 @@ theorem postprocessed_local_law (s : Bool) (reachable : s = false) :
       (freshQuery (F := F) noOp afterQuery s) := by
   subst s
   let : MeasurableSpace (PIR.Execution Bool String F) := ⊤
-  simp only [SameDist, participantActions, PIR.Proc.runM, postprocessedHandler,
+  simp only [SameDist, participantActions, PIR.Process.runM, postprocessedHandler,
     Bool.false_eq_true, ite_eq_right, not_false_eq_true, freshQuery, noOp,
     result, PIR.Execution.followM, afterQuery, bind_assoc, pure_bind, List.nil_append,
     List.append_nil]
@@ -48,9 +48,9 @@ theorem postprocessed_local_law (s : Bool) (reachable : s = false) :
 theorem reachable_prefix :
     Reaches ((queryPrefix (.silent Actual) (participantActions F F) names (1 : F)).runM
       postprocessedHandler false) (fun _ s => s = false) := by
-  simp only [queryPrefix, SiteObservations.silent, participantActions, PIR.Proc.bind,
-    PIR.Proc.runM, postprocessedHandler, names, boundary]
-  simp [PIR.Execution.followM, PIR.Proc.runM, Reaches]
+  simp only [queryPrefix, SiteObservations.silent, participantActions, PIR.Process.bind,
+    PIR.Process.runM, postprocessedHandler, names, boundary]
+  simp [PIR.Execution.followM, PIR.Process.runM, Reaches]
 
 /-- The weaker interface is used by the final theorem, including the bad state
 which the premise correctly excludes. No syntactic query equality is supplied. -/
@@ -81,15 +81,15 @@ theorem early_actual_query_marginal :
           (fun _ => participantActions F F (queryAction names.query 7))).runM earlyHandler 0
         pure e.outcome) = (do let r ← ($ᵗ F); pure (PIR.Outcome.returned r)) := by
   have passed (r : F) : boundary (r, 1-r) = 1 := by dsimp [boundary]; ring
-  simp [queryPrefix, SiteObservations.silent, participantActions, PIR.Proc.bind,
-    PIR.Proc.runM, PIR.Execution.followM, earlyHandler, names, passed]
+  simp [queryPrefix, SiteObservations.silent, participantActions, PIR.Process.bind,
+    PIR.Process.runM, PIR.Execution.followM, earlyHandler, names, passed]
 
 set_option backward.isDefEq.respectTransparency false in
 /-- The state projected above is precisely the reply reused at the query. -/
 theorem early_query_reply (s : F) :
     (participantActions F F (queryAction names.query 7)).runM earlyHandler s =
       pure (⟨.returned s, s, ["reused-query"]⟩ : PIR.Execution F String F) := by
-  simp [participantActions, PIR.Proc.runM, earlyHandler, PIR.Execution.followM]
+  simp [participantActions, PIR.Process.runM, earlyHandler, PIR.Execution.followM]
 
 /-- A constant-challenge provider cannot implement the fresh-query contract. -/
 theorem constant_high_not_factorizable :
@@ -120,7 +120,7 @@ theorem bad_state_not_fresh :
   have left : mass (do
       let e ← (participantActions F F (queryAction names.query 7)).runM postprocessedHandler true
       pure (e.outcome = .returned (0 : F))) = 1 := by
-    simp [participantActions, PIR.Proc.runM, postprocessedHandler, PIR.Execution.followM, mass]
+    simp [participantActions, PIR.Process.runM, postprocessedHandler, PIR.Execution.followM, mass]
   have right : mass (do
       let e ← freshQuery (F := F) noOp afterQuery true
       pure (e.outcome = .returned (0 : F))) = (1 : ENNReal)/2 := by

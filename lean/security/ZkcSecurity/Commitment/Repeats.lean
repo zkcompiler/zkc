@@ -159,7 +159,7 @@ variable [∀ key, SampleableType (Raw key)] [SampleableType Y]
 /-- The bridge's event is at most as likely for a prover as for its memoized version, which asks
 each key once, for an extractor that reads first matches. -/
 theorem falseAcceptance_le_memo {P A : Type} (absorb : Typed.Interface J E P Raw)
-    (firstMatch : scheme.FirstMatch) (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (firstMatch : scheme.FirstMatch) (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (falseStatement : Stmt → List (Table Value) → Prop)
     (accepts : A → Prop)
     (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y)) :

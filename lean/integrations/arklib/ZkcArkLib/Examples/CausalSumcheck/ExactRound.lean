@@ -20,10 +20,10 @@ variable (sites : SiteObservations I)
   (actions : PIR.OperationInterpretation (participantInterface F G) I)
   (h : PIR.MonadHandler ProbComp I S E) (names : Sites)
   (before : Phase S E Unit) (after : F → Phase S E Unit)
-  (advance terminal : Message F → F → PIR.Proc I Unit)
+  (advance terminal : Message F → F → PIR.Process I Unit)
 
 /-- All non-query local operations are extracted using the actual interpreter.
-    These phases describe joint execution; trusted Proc work is not a P action. -/
+    These phases describe joint execution; trusted Process work is not a P action. -/
 def phaseTail (pair : Message F) : AfterPair F S E (Strategy F S E 0) where
   beforeDraw := fun s => do
     let marked ← (sites.mark names.query).runM h s
@@ -87,9 +87,9 @@ theorem one_round_execution [SampleableType F]
     rw [PIR.followM_assoc]
     simp only [pure_bind, follow_result]
     rfl
-  · simp [passed, phaseTail, noOp, result, stopped, PIR.Proc.runM, PIR.Execution.followM]
+  · simp [passed, phaseTail, noOp, result, stopped, PIR.Process.runM, PIR.Execution.followM]
 
-def acceptanceOf (process : PIR.Proc I (List F × F)) (s : S)
+def acceptanceOf (process : PIR.Process I (List F × F)) (s : S)
     (observation : List F → F → Prop) : ProbComp Prop := do
   let e ← process.runM h s
   pure (accepts observation e)
@@ -97,7 +97,7 @@ def acceptanceOf (process : PIR.Proc I (List F × F)) (s : S)
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The curried Sumcheck observation is the generic returned-value observation. -/
 theorem acceptanceOf_eq (h : PIR.MonadHandler ProbComp I S E)
-    (p : PIR.Proc I (List F × F)) (s : S) (terminal : List F → F → Prop) :
+    (p : PIR.Process I (List F × F)) (s : S) (terminal : List F → F → Prop) :
     acceptanceOf h p s terminal = acceptance h p s (fun pc => terminal pc.1 pc.2) := by
   unfold acceptanceOf acceptance
   apply bind_congr

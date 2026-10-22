@@ -33,12 +33,12 @@ def valueTables : Evaluation.ComponentTables F G I :=
 
 /-- Extract the actual returned component; absence stops. -/
 def takeComponent {ty : Ty} (values : Values (Component (assignment F G)) [ty]) :
-    PIR.Proc I (assignment F G ty) :=
+    PIR.Process I (assignment F G ty) :=
   match values.get .here with
   | some value => .done value
   | none => .halt .incomplete
 
-def guardValue (claim lo hi : F) : PIR.Proc I Bool :=
+def guardValue (claim lo hi : F) : PIR.Process I Bool :=
   (protocolOperationWith sites actions (valueTables sites) 1
     (.calculate (.fieldAdd scalarDomain) rfl) (.cons (some lo) (.cons (some hi) .nil)) .nil [] {}).bind fun values =>
   (takeComponent values).bind fun sum =>
@@ -46,7 +46,7 @@ def guardValue (claim lo hi : F) : PIR.Proc I Bool :=
     (.calculate (.fieldEqual scalarDomain) rfl)
     (.cons (some claim) (.cons (some sum) .nil)) .nil [] {}).bind takeComponent
 
-def nextClaim (lo hi r : F) : PIR.Proc I F :=
+def nextClaim (lo hi r : F) : PIR.Process I F :=
   (protocolOperationWith sites actions (valueTables sites) 1
     (.calculate (.fieldConstant scalarDomain 1) rfl) .nil .nil [] {}).bind fun values =>
   (takeComponent values).bind fun one =>
@@ -66,7 +66,7 @@ def nextClaim (lo hi r : F) : PIR.Proc I F :=
     (.calculate (.fieldAdd scalarDomain) rfl)
     (.cons (some left) (.cons (some right) .nil)) .nil [] {}).bind takeComponent
 
-def appendPoint (point : List F) (r : F) : PIR.Proc I (List F) :=
+def appendPoint (point : List F) (r : F) : PIR.Process I (List F) :=
   (protocolOperationWith sites actions (valueTables sites) 1
     (.localCall appendDefinition.helper rfl 1 "append")
     (.cons (some point) (.cons (some r) .nil)) .nil [] {}).bind takeComponent
@@ -76,7 +76,7 @@ theorem guardValue_eq (claim lo hi : F) :
 
 theorem nextClaim_eq (lo hi r : F) :
     nextClaim sites actions lo hi r = .done (evaluate (lo, hi) r) := by
-  change PIR.Proc.done ((((1 : Nat) : F) - r) * lo + r * hi) = _
+  change PIR.Process.done ((((1 : Nat) : F) - r) * lo + r * hi) = _
   simp only [Nat.cast_one]
   rfl
 
@@ -85,18 +85,18 @@ theorem appendPoint_eq (point : List F) (r : F) :
   rfl
 
 /-- Value-returning trusted calculation in source order: append then arithmetic. -/
-def calculatedUpdate (point : List F) (pair : Message F) (r : F) : PIR.Proc I (List F × F) :=
+def calculatedUpdate (point : List F) (pair : Message F) (r : F) : PIR.Process I (List F × F) :=
   (appendPoint sites actions point r).bind fun point =>
   (nextClaim sites actions pair.1 pair.2 r).bind fun claim => .done (point, claim)
 
 theorem calculatedUpdate_eq (point : List F) (pair : Message F) (r : F) :
     calculatedUpdate sites actions point pair r = .done (point ++ [r], evaluate pair r) := by
-  simp only [calculatedUpdate, appendPoint_eq, nextClaim_eq, PIR.Proc.bind]
+  simp only [calculatedUpdate, appendPoint_eq, nextClaim_eq, PIR.Process.bind]
 
 /-- Contextual execution equation, so later work consumes the actual values. -/
 theorem calculatedUpdate_runM_bind {A : Type} (h : PIR.MonadHandler ProbComp I S E)
     (point : List F) (pair : Message F) (r : F)
-    (next : (List F × F) → PIR.Proc I A) (s : S) :
+    (next : (List F × F) → PIR.Process I A) (s : S) :
     ((calculatedUpdate sites actions point pair r).bind next).runM h s =
       (next (point ++ [r], evaluate pair r)).runM h s := by
   apply (runM_bind_transport h _ next
@@ -108,8 +108,8 @@ theorem calculatedUpdate_runM_bind {A : Type} (h : PIR.MonadHandler ProbComp I S
 /-- Canonical structured fragment with actual value flow through calculations.
 Advance may stop before append; terminal work receives the computed point/claim. -/
 def calculatedRound (names : Sites) (service : Nat) (claim : F)
-    (advance : Message F → F → PIR.Proc I Unit)
-    (terminal : List F → F → PIR.Proc I Unit) : PIR.Proc I (List F × F) :=
+    (advance : Message F → F → PIR.Process I Unit)
+    (terminal : List F → F → PIR.Process I Unit) : PIR.Process I (List F × F) :=
   (mark sites actions (valueTables sites) names.round).bind fun _ =>
   (receive sites actions (valueTables sites) names.low).bind fun lo =>
   (receive sites actions (valueTables sites) names.high).bind fun hi =>
@@ -125,13 +125,13 @@ def calculatedRound (names : Sites) (service : Nat) (claim : F)
   (terminal pc.1 pc.2).bind fun _ => .done pc
 
 theorem calculatedRound_eq (names : Sites) (service : Nat) (claim : F)
-    (advance : Message F → F → PIR.Proc I Unit)
-    (terminal : List F → F → PIR.Proc I Unit) :
+    (advance : Message F → F → PIR.Process I Unit)
+    (terminal : List F → F → PIR.Process I Unit) :
     calculatedRound sites actions names service claim advance terminal =
       scalarRound sites actions (valueTables sites) names service claim advance
         (fun pair r => terminal [r] (evaluate pair r)) := by
   simp only [calculatedRound, guardValue_eq, calculatedUpdate_eq, 
-    PIR.Proc.bind, List.nil_append, scalarRound]
+    PIR.Process.bind, List.nil_append, scalarRound]
 
 
 end ZkcSecurity.Examples.CausalSumcheck

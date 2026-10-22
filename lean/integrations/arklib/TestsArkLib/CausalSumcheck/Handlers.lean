@@ -23,10 +23,10 @@ abbrev Actual := participantInterface F F
 
 def names : Sites := {}
 def tables : Evaluation.ComponentTables F F Actual := ⟨[], []⟩
-def tail : Message F → F → PIR.Proc Actual Unit := fun _ _ => .done ()
+def tail : Message F → F → PIR.Process Actual Unit := fun _ _ => .done ()
 def zeroTable : Table F 1 := fun _ => 0
 
-def participant (claim : F) : PIR.Proc Actual (List F × F) :=
+def participant (claim : F) : PIR.Process Actual (List F × F) :=
   scalarRound (.silent Actual) (participantActions F F) tables names 7 claim tail tail
 
 /-- Samples before the first committed scalar, then reuses that sample at query.
@@ -87,7 +87,7 @@ theorem early_execution : (participant 1).runM earlyHandler 0 = (do
     let r ← ($ᵗ F)
     pure ⟨.returned ([r], 0), r, ["sample-at-low", "low-ack", "high", "reused-query", "delivered"]⟩) := by
   simp only [participant, scalarRound_eq]
-  simp [SiteObservations.silent, participantActions, PIR.Proc.runM, PIR.Proc.bind, PIR.Execution.followM,
+  simp [SiteObservations.silent, participantActions, PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM,
     earlyHandler, names, tail, lowAction, queryAction, sendAction, boundary]
   congr 1
   funext r
@@ -99,7 +99,7 @@ theorem constant_challenge_execution : (participant 1).runM constantChallengeHan
     pure ⟨.returned ([0], 0), 0,
       ["low-ack", "sample-at-high", "constant-challenge", "reused-query", "delivered"]⟩) := by
   simp [participant, scalarRound_eq, SiteObservations.silent, participantActions,
-    PIR.Proc.runM, PIR.Proc.bind, PIR.Execution.followM, constantChallengeHandler, names, tail,
+    PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM, constantChallengeHandler, names, tail,
     lowAction, queryAction, sendAction, boundary, evaluate]
 
 set_option backward.isDefEq.respectTransparency false in
@@ -108,7 +108,7 @@ theorem uniform_high_execution : (participant 1).runM uniformHighHandler 0 = (do
     pure ⟨.returned ([r], r), r,
       ["low-ack", "sample-at-high", "reused-query", "delivered"]⟩) := by
   simp [participant, scalarRound_eq, SiteObservations.silent, participantActions,
-    PIR.Proc.runM, PIR.Proc.bind, PIR.Execution.followM, uniformHighHandler, names, tail,
+    PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM, uniformHighHandler, names, tail,
     lowAction, queryAction, sendAction, boundary, evaluate]
 
 
@@ -162,13 +162,13 @@ set_option backward.isDefEq.respectTransparency false in
 theorem honest_query_law (s : F) :
     (participantActions F F (queryAction names.query 7)).runM honestHandler s =
       freshQuery noOp (fun r _ => pure ⟨.returned (), r, ["fresh-query"]⟩) s := by
-  simp [participantActions, queryAction, PIR.Proc.runM, honestHandler, freshQuery,
+  simp [participantActions, queryAction, PIR.Process.runM, honestHandler, freshQuery,
     noOp, result, PIR.Execution.followM]
 
 theorem honest_participant_mass :
     mass (acceptanceOf honestHandler (participant 0) 0 (tableTerminal zeroTable)) = 1 := by
   simp [acceptanceOf, participant, scalarRound_eq, SiteObservations.silent, participantActions,
-    PIR.Proc.runM, PIR.Proc.bind, PIR.Execution.followM, honestHandler, names, tail,
+    PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM, honestHandler, names, tail,
     lowAction, queryAction, sendAction, boundary, evaluate, accepts,
     mass]
   change ∀ r : F, tableTerminal zeroTable [r] 0

@@ -11,7 +11,7 @@ public import Zkc.Semantics.Execution
 
 `Conforms` follows every interface-typed reply, including dishonest values;
 `Reaches` records only returned replies. `Within` is a separately established
-bound uniform over those replies. Well-founded `Proc` execution alone does not
+bound uniform over those replies. Well-founded `Process` execution alone does not
 give such a bound. Interface calls do not count a handler's internal arithmetic,
 allocation, native instructions, or cryptographic oracle queries automatically.
 Role ownership describes the interface schedule; locality of an actual endpoint
@@ -32,22 +32,22 @@ structure Interaction (I : Signature) where
 variable {I : Signature} {A : Type}
 
 /-- All interface-typed replies are considered, including dishonest payloads. -/
-def Conforms (P : Interaction I) : Proc I A → P.Phase → Prop
+def Conforms (P : Interaction I) : Process I A → P.Phase → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call o k, phase => P.enabled phase o ∧
       ∀ reply, Conforms P (k reply) (P.advance phase o reply)
 
 /-- A finite returned-response history; terminal failure does not fabricate a reply. -/
-inductive Reaches (P : Interaction I) : Proc I A → P.Phase → Proc I A → P.Phase → Prop where
-  | refl (p : Proc I A) (phase : P.Phase) : Reaches P p phase p phase
-  | step (o : I.Op) (k : I.Reply o → Proc I A) (phase : P.Phase)
-      (reply : I.Reply o) (tail : Proc I A) (last : P.Phase)
+inductive Reaches (P : Interaction I) : Process I A → P.Phase → Process I A → P.Phase → Prop where
+  | refl (p : Process I A) (phase : P.Phase) : Reaches P p phase p phase
+  | step (o : I.Op) (k : I.Reply o → Process I A) (phase : P.Phase)
+      (reply : I.Reply o) (tail : Process I A) (last : P.Phase)
       (rest : Reaches P (k reply) (P.advance phase o reply) tail last) :
       Reaches P (.call o k) phase tail last
 
 theorem conformance_preserved (P : Interaction I)
-    (p q : Proc I A) (start finish : P.Phase)
+    (p q : Process I A) (start finish : P.Phase)
     (path : Reaches P p start q finish) (formed : Conforms P p start) :
     Conforms P q finish := by
   induction path with
@@ -55,19 +55,19 @@ theorem conformance_preserved (P : Interaction I)
   | step o k phase reply tail last rest ih => exact ih (formed.2 reply)
 
 theorem reached_call_permitted (P : Interaction I)
-    (p : Proc I A) (start finish : P.Phase) (o : I.Op) (k : I.Reply o → Proc I A)
+    (p : Process I A) (start finish : P.Phase) (o : I.Op) (k : I.Reply o → Process I A)
     (path : Reaches P p start (.call o k) finish) (formed : Conforms P p start) :
     P.enabled finish o := (conformance_preserved P _ _ _ _ path formed).1
 
 /-- Public bound on calls, uniform over every possible reply at this instance. -/
-def Within : Nat → Proc I A → Prop
+def Within : Nat → Process I A → Prop
   | _, .done _ => True
   | _, .halt _ => True
   | 0, .call _ _ => False
   | n+1, .call _ k => ∀ reply, Within n (k reply)
 
 /-- Public bounded iteration is elaboration, not unrestricted recursive execution. -/
-def repeatN (n : Nat) (step : A → Proc I A) (a : A) : Proc I A :=
+def repeatN (n : Nat) (step : A → Process I A) (a : A) : Process I A :=
   match n with
   | 0 => .done a
   | n+1 => (step a).bind (fun b => repeatN n step b)
@@ -78,8 +78,8 @@ abbrev LocalStrategy (View Memory Move : Type) := View → Memory → Move × Me
 
 /-- Honest behavior is an additional predicate, never the admissible-strategy set. -/
 structure HonestRole (P : Interaction I) (start : P.Phase)
-    (honest : Proc I A → Prop) where
-  body : Proc I A
+    (honest : Process I A → Prop) where
+  body : Process I A
   conforms : Conforms P body start
   correct : honest body
 

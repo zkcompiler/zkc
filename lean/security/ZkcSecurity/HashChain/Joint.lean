@@ -60,7 +60,7 @@ variable {J : PIR.Signature} {E P Shape Value Query S A Stmt : Type} [DecidableE
 section Frame
 variable (encoding : Encoding E Shape S Query) (width : ℕ)
   (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
-  (words : Words J Shape Value) (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+  (words : Words J Shape Value) (verifier : Stmt → PIR.Process (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape S)) (statementRoots : Stmt → List (Shape × S))
   (falseStatement : Stmt → List (Table Value) → Prop) (accepts : A → Prop)
 

@@ -165,7 +165,7 @@ def collect : (count : ℕ) → (Fin count → m S) → m (Fin count → S)
 `absorb` call each; a query occurrence is answered by the counter blocks at the
 current state, its occurrence is then absorbed, and the site decodes the blocks. -/
 def chainTransform (absorb : Typed.Interface I E P (Raw E S width)) (hash : Input E S X → m S) :
-    PIR.Proc I A → S → List E → List P → m (PIR.Outcome A × List P)
+    PIR.Process I A → S → List E → List P → m (PIR.Outcome A × List P)
   | .done value, _, _, proof => pure (.returned value, proof)
   | .halt stop, _, _, proof => pure (.stopped stop, proof)
   | .call operation next, state, history, proof =>
@@ -201,7 +201,7 @@ def absorbAll (hash : Input E S X → m S) : S → List E → m S
 validator from the resulting state. An empty initial history binds nothing and
 refuses. -/
 def chainRun (absorb : Typed.Interface I E P (Raw E S width)) (hash : Input E S X → m S)
-    (validator : PIR.Proc I A) (initial : List E) (proof : List P) :
+    (validator : PIR.Process I A) (initial : List E) (proof : List P) :
     m (PIR.Outcome A × List P) :=
   match initial with
   | [] => pure (.stopped .refused, proof)
@@ -222,7 +222,7 @@ def call (input : Input E S X) : OracleComp (Primitive E S X) S :=
 /-- The concrete experiment: the adversary calls the primitive and outputs a
 statement and a proof; the statement's validator then runs with the chain on the
 same primitive, from the statement's initial history. -/
-def experiment (absorb : Typed.Interface I E P (Raw E S width)) (validator : Stmt → PIR.Proc I A)
+def experiment (absorb : Typed.Interface I E P (Raw E S width)) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (adversary : OracleComp (Primitive E S X) (Stmt × List P)) :
     OracleComp (Primitive E S X) (Stmt × (PIR.Outcome A × List P)) :=
   adversary >>= fun claimed => (fun result => (claimed.1, result)) <$>
@@ -241,7 +241,7 @@ theorem simulateQ_collect :
       simp only [collect, simulateQ_bind, simulateQ_pure, call, simulateQ_spec_query, tail]
 
 theorem simulateQ_chainTransform (absorb : Typed.Interface I E P (Raw E S width)) :
-    ∀ (process : PIR.Proc I A) (state : S) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (state : S) (history : List E) (proof : List P),
       simulateQ impl (chainTransform absorb call process state history proof) =
         chainTransform absorb (fun input => impl input) process state history proof := by
   intro process
@@ -282,7 +282,7 @@ theorem simulateQ_absorbAll :
       exact bind_congr fun next => simulateQ_absorbAll rest next
 
 theorem simulateQ_chainRun (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : PIR.Proc I A) (initial : List E) (proof : List P) :
+    (validator : PIR.Process I A) (initial : List E) (proof : List P) :
     simulateQ impl (chainRun absorb call validator initial proof) =
       chainRun absorb (fun input => impl input) validator initial proof := by
   cases initial with

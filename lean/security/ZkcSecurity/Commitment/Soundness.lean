@@ -69,7 +69,7 @@ theorem bad_transcript_resample_charged [SampleableType Y] {accepts : A → Prop
     (dominates : ∀ extracted history occurrence,
       charge (ideal.read extracted history) occurrence ≤ concreteCharge history occurrence)
     {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (determined : Typed.Determined initial)
     (statementRoots : Stmt → List (Shape × Y)) (bound : ℕ) (key : TranscriptKey E Shape Y)
     (table : JointTable Raw Shape Y Query) :
@@ -139,7 +139,7 @@ occurrence: its checkpoint extraction and the replay before it are fixed before 
 theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {α : Type}
     (game : OracleComp (joint Raw Shape Y Query) α)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (determined : Typed.Determined initial)
     (statementRoots : Stmt → List (Shape × Y)) (bound : ℕ) (key : TranscriptKey E Shape Y)
     (table : JointTable Raw Shape Y Query) :
@@ -156,9 +156,9 @@ theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error
 /-- Resampling a hash call's answer makes it bad with probability at most the number of targets
 over the number of hash values: the targets are fixed before the call's first query. -/
 theorem bad_hash_resampleAt [SampleableType Y] [Fintype Y] {α : Type}
-    (game : OracleComp (joint Raw Shape Y Query) α) (doomed : List E → PIR.Proc J A → Prop)
+    (game : OracleComp (joint Raw Shape Y Query) α) (doomed : List E → PIR.Process J A → Prop)
     (ideal : IdealHistory E Shape Y Value)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound targetBound : ℕ)
     (targetsBounded : ∀ table : JointTable Raw Shape Y Query,
@@ -199,15 +199,15 @@ theorem bad_hash_resampleAt [SampleableType Y] [Fintype Y] {α : Type}
         ENNReal.div_le_div_right (by exact_mod_cast length) _
 
 section Trace
-variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+variable (verifier : Stmt → PIR.Process (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
   (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 
 /-- Resampling a hash call's answer makes it bad with probability at most the number of targets
 over the number of hash values: the targets are fixed before the call's first query. -/
 theorem bad_hash_resample [SampleableType Y] [Fintype Y] {α : Type}
-    (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Process J A → Prop)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound targetBound : ℕ)
     (targetsBounded : ∀ table : JointTable Raw Shape Y Query,
@@ -445,7 +445,7 @@ end Trace
 
 section Main
 variable [SampleableType Y] [Fintype Y]
-variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+variable (verifier : Stmt → PIR.Process (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
   (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 

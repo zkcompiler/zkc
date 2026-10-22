@@ -62,7 +62,7 @@ def payloadComponentTablesOn (observations : SiteObservations interface) (payloa
 
 def payloadComponentOn (observations : SiteObservations interface) (payload : Payload)
     (inputs : Values (Component model.Value) payload.entry.inputs) :
-    PIR.Proc interface (Values (Component model.Value) payload.entry.outputs) :=
+    PIR.Process interface (Values (Component model.Value) payload.entry.outputs) :=
   payload.entry.body.component
     (meaningOn model observations (payloadComponentTablesOn model observations payload).closed)
     (componentOperationOn model observations (payloadComponentTablesOn model observations payload))
@@ -116,7 +116,7 @@ theorem meaning_eq_operationOn (observations : SiteObservations interface)
 operations; with the same values, equal ones give equal executions. -/
 theorem component_operation_congr {Value : Ty → Type} {I : PIR.Signature}
     {first second : (op : Op) → Values Value op.arguments →
-      Values (RegionFunction Value I) op.regions → PIR.Proc I (Values Value op.results)}
+      Values (RegionFunction Value I) op.regions → PIR.Process I (Values Value op.results)}
     (same : first = second)
     (firstComponents secondComponents :
       ComponentOperations (⟨Value, first⟩ : RegionMeaning dialect I))
@@ -132,7 +132,7 @@ theorem component_operation_congr {Value : Ty → Type} {I : PIR.Signature}
 the meaning. -/
 theorem strictComponent_operation_congr {Value : Ty → Type} {I : PIR.Signature}
     {first second : (op : Op) → Values Value op.arguments →
-      Values (RegionFunction Value I) op.regions → PIR.Proc I (Values Value op.results)}
+      Values (RegionFunction Value I) op.regions → PIR.Process I (Values Value op.results)}
     (same : first = second) :
     strictComponent (⟨Value, first⟩ : RegionMeaning dialect I) =
       strictComponent (⟨Value, second⟩ : RegionMeaning dialect I) := by

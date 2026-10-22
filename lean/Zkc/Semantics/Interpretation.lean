@@ -19,12 +19,12 @@ variable {I J K : Signature} {A B C S E : Type}
 
 /-- An interpretation preserves the logical reply type of each source operation. -/
 abbrev OperationInterpretation (I J : Signature) :=
-  (op : I.Op) → Proc J (I.Reply op)
+  (op : I.Op) → Process J (I.Reply op)
 
-namespace Proc
+namespace Process
 
-theorem bind_assoc (source : Proc I A) (next : A → Proc I B)
-    (last : B → Proc I C) :
+theorem bind_assoc (source : Process I A) (next : A → Process I B)
+    (last : B → Process I C) :
     (source.bind next).bind last = source.bind (fun value => (next value).bind last) := by
   induction source with
   | done value => rfl
@@ -35,7 +35,7 @@ theorem bind_assoc (source : Proc I A) (next : A → Proc I B)
     funext reply
     exact ih reply
 
-@[simp] theorem bind_done (source : Proc I A) : source.bind .done = source := by
+@[simp] theorem bind_done (source : Process I A) : source.bind .done = source := by
   induction source with
   | done value => rfl
   | halt why => rfl
@@ -45,13 +45,13 @@ theorem bind_assoc (source : Proc I A) (next : A → Proc I B)
     funext reply
     exact ih reply
 
-def interpret (operations : OperationInterpretation I J) : Proc I A → Proc J A
+def interpret (operations : OperationInterpretation I J) : Process I A → Process J A
   | .done value => .done value
   | .halt why => .halt why
   | .call op next => (operations op).bind (fun reply => (next reply).interpret operations)
 
 theorem interpret_bind (operations : OperationInterpretation I J)
-    (source : Proc I A) (next : A → Proc I B) :
+    (source : Process I A) (next : A → Process I B) :
     (source.bind next).interpret operations =
       (source.interpret operations).bind (fun value => (next value).interpret operations) := by
   induction source with
@@ -63,7 +63,7 @@ theorem interpret_bind (operations : OperationInterpretation I J)
     funext reply
     exact ih reply
 
-@[simp] theorem interpret_identity (source : Proc I A) :
+@[simp] theorem interpret_identity (source : Process I A) :
     source.interpret (fun op => .call op .done) = source := by
   induction source with
   | done value => rfl
@@ -75,7 +75,7 @@ theorem interpret_bind (operations : OperationInterpretation I J)
     exact ih reply
 
 theorem interpret_comp (first : OperationInterpretation I J)
-    (second : OperationInterpretation J K) (source : Proc I A) :
+    (second : OperationInterpretation J K) (source : Process I A) :
     (source.interpret first).interpret second =
       source.interpret (fun op => (first op).interpret second) := by
   induction source with
@@ -90,7 +90,7 @@ theorem interpret_comp (first : OperationInterpretation I J)
 /-- Lowering and then executing agrees with executing the composed handler,
 including all stopped post-states and the ordered events of expanded calls. -/
 theorem run_interpret (operations : OperationInterpretation I J)
-    (backend : Handler J S E) (source : Proc I A) (state : S) :
+    (backend : Handler J S E) (source : Process I A) (state : S) :
     (source.interpret operations).run backend state =
       source.run (fun op s => (operations op).run backend s) state := by
   induction source generalizing state with
@@ -113,7 +113,7 @@ theorem run_interpret_related {T F O : Type}
     (law : ∀ op s t, relation s t →
       Related relation left right (sourceHandler op s)
         ((operations op).run targetHandler t))
-    (source : Proc I A) (s : S) (t : T) (initial : relation s t) :
+    (source : Process I A) (s : S) (t : T) (initial : relation s t) :
     Related relation left right (source.run sourceHandler s)
       ((source.interpret operations).run targetHandler t) := by
   rw [run_interpret]
@@ -124,7 +124,7 @@ theorem run_interpret_related {T F O : Type}
 /-- Separate construction of a prefix and suffix passes the actual residual
 state to the suffix, including provider state and transcript history. -/
 theorem run_interpret_bind (operations : OperationInterpretation I J)
-    (backend : Handler J S E) (source : Proc I A) (next : A → Proc I B) (state : S) :
+    (backend : Handler J S E) (source : Process I A) (next : A → Process I B) (state : S) :
     ((source.bind next).interpret operations).run backend state =
       ((source.interpret operations).run backend state).follow
         (fun value residual => ((next value).interpret operations).run backend residual) := by
@@ -134,7 +134,7 @@ theorem run_interpret_bind (operations : OperationInterpretation I J)
 expansions. Composition associativity does not supply this square. -/
 theorem interpret_interchange (first : OperationInterpretation I J)
     (second : OperationInterpretation J K) (direct : OperationInterpretation I K)
-    (square : ∀ op, (first op).interpret second = direct op) (source : Proc I A) :
+    (square : ∀ op, (first op).interpret second = direct op) (source : Process I A) :
     (source.interpret first).interpret second = source.interpret direct := by
   rw [interpret_comp]
   congr 1
@@ -144,7 +144,7 @@ theorem interpret_interchange (first : OperationInterpretation I J)
 /-- A model-specific equation survives staging only if the actual composite
 handler satisfies the model's premises. No law follows from an interface alone. -/
 theorem interpret_model_law (models : Handler I S E → Prop)
-    (before after : Proc I A)
+    (before after : Process I A)
     (law : ∀ handler, models handler → ∀ state,
       before.run handler state = after.run handler state)
     (operations : OperationInterpretation I J) (backend : Handler J S E)
@@ -154,5 +154,5 @@ theorem interpret_model_law (models : Handler I S E → Prop)
   rw [run_interpret, run_interpret]
   exact law _ admissible state
 
-end Proc
+end Process
 end PIR

@@ -91,7 +91,7 @@ theorem round_exact (context : ProtocolContext) (handle : Nat)
         (handler context handle update) s = (do
       let r ← ($ᵗ F)
       pure ⟨.returned (point ++ [r], r*s), update r s, []⟩) := by
-  simp [roundPresent, PIR.Proc.runM, query_handler, handler, network,
+  simp [roundPresent, PIR.Process.runM, query_handler, handler, network,
     different_sites context, freshQuery, noOp, result, PIR.Execution.followM]
 
 theorem adaptive_two (context : ProtocolContext) (handle : Nat) :
@@ -105,7 +105,7 @@ theorem adaptive_two (context : ProtocolContext) (handle : Nat) :
   apply bind_congr
   intro r1
   rw [PIR.repeatN, PIR.runM_bind, round_exact]
-  simp [PIR.repeatN, PIR.Proc.runM, PIR.Execution.followM, mul_comm]
+  simp [PIR.repeatN, PIR.Process.runM, PIR.Execution.followM, mul_comm]
 
 theorem zero_two (context : ProtocolContext) (handle : Nat) :
     (PIR.repeatN 2 (roundPresent (G := Unit) context handle) ([], (0 : F))).runM
@@ -118,7 +118,7 @@ theorem zero_two (context : ProtocolContext) (handle : Nat) :
   apply bind_congr
   intro r1
   rw [PIR.repeatN, PIR.runM_bind, round_exact]
-  simp [PIR.repeatN, PIR.Proc.runM, PIR.Execution.followM]
+  simp [PIR.repeatN, PIR.Process.runM, PIR.Execution.followM]
 
 
 omit [DecidableEq F] in
@@ -139,7 +139,7 @@ theorem wrong_handle (context : ProtocolContext) (handle n : Nat)
     (PIR.repeatN (n+1) (roundPresent (G := Unit) context handle) (point,s)).runM
         (withUniformQueries (network context update) [queryKey context (handle+1)]
           (fun _ => noOp) (fun _ _ => noOp)) s = pure ⟨.stopped .refused, s, []⟩ := by
-  simp [PIR.repeatN, roundPresent, PIR.Proc.bind, PIR.Proc.runM,
+  simp [PIR.repeatN, roundPresent, PIR.Process.bind, PIR.Process.runM,
     refused_query, network, different_sites context, PIR.Execution.followM]
 
 end Processes
@@ -239,7 +239,7 @@ theorem source_wrong_handle_record (handle : Nat) :
         (some 2) (some handle))).runM
       (handler SumcheckSourceVerifier.childContext (handle+1) (fun r _ => r)) 1 =
         pure ⟨.stopped .refused, 1, []⟩ := by
-  change PIR.Proc.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
+  change PIR.Process.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
     (handler SumcheckSourceVerifier.childContext (handle+1) (fun r _ => r))
     (SumcheckSourceViews.imported.program.participant F5 Unit 1
       (SumcheckSourceVerifier.sourceRootInputs (some [0,0,0,0]) (some 1)
@@ -267,14 +267,14 @@ theorem source_zero_false_record (handle : Nat) :
         (some 0) (some handle))).runM
       (handler SumcheckSourceVerifier.childContext handle (fun r _ => r)) 1 =
         pure ⟨.returned (.cons (some false) .nil), 1, []⟩ := by
-  change PIR.Proc.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
+  change PIR.Process.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
     (handler SumcheckSourceVerifier.childContext handle (fun r _ => r))
     (SumcheckSourceViews.imported.program.participant F5 Unit 1
       (SumcheckSourceVerifier.sourceRootInputs (some [0]) (some 1)
         (some 0) (some handle))) 1 =
       pure ⟨.returned (.cons (some false) .nil), 1, []⟩
   rw [source_present 0 (by decide) [0] (fun _ => 0) (by decide)]
-  simp [PIR.repeatN, PIR.Proc.bind, PIR.Proc.runM, checkedResult, extension]
+  simp [PIR.repeatN, PIR.Process.bind, PIR.Process.runM, checkedResult, extension]
 
 theorem source_zero_false_mass (handle : Nat) :
     mass (do
@@ -320,7 +320,7 @@ theorem source_excess_record (handle : Nat) (initial : F5) :
         (some 3) (some handle))).runM
       (handler SumcheckSourceVerifier.childContext handle (fun r _ => r)) initial =
         pure ⟨.stopped .refused, initial, []⟩ := by
-  change PIR.Proc.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
+  change PIR.Process.runM (A := Values (Component (assignment F5 Unit)) [.boolean])
     (handler SumcheckSourceVerifier.childContext handle (fun r _ => r))
     (SumcheckSourceViews.program.participant F5 Unit 1
       (SumcheckSourceVerifier.sourceRootInputs (some [0]) (some 1)
@@ -336,7 +336,7 @@ theorem reduction_excess_record (xs : Option (List F5)) (dimension : Option Nat)
         (some 5) (some handle))).runM
       (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r)) initial =
         pure ⟨.stopped .refused, initial, []⟩ := by
-  change PIR.Proc.runM
+  change PIR.Process.runM
     (A := Values (Component (assignment F5 Unit)) SumcheckReduceBodies.runSignature.outputs)
     (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r))
     (SumcheckReduceViews.program.participant F5 Unit 1

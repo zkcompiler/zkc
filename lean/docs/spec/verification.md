@@ -11,7 +11,7 @@ composition need separate correspondence results when a claim includes them.
 
 The structured path retains contracts on original protocol declarations and
 formula links on relation declarations. One typed `Region` denotes the program
-in `PIR.Proc`. Proof construction uses that body, its actual calls and its
+in `PIR.Process`. Proof construction uses that body, its actual calls and its
 actual returned observations. It does not introduce a second executable model.
 The bounded scalar request generator described later is a separate client.
 
@@ -201,7 +201,7 @@ child satisfying that same bound can reuse the caller theorem unchanged.
 An honest-prover property can take its messages from the actual checked prover
 process instead of a handwritten strategy. For Interactive Schnorr,
 `SchnorrHonestProver.replyHandler` runs the prover's participant process with
-`PIR.Proc.run`. It answers the nonce query and the challenge receive with fixed
+`PIR.Process.run`. It answers the nonce query and the challenge receive with fixed
 replies, acknowledges the commitment and response sends, checks the domain,
 site, peer and service handle of every action, refuses any other action, and
 logs each action in order. The handler is deterministic for its fixed inputs:

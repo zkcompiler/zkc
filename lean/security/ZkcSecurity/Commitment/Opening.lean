@@ -83,7 +83,7 @@ def words (depth : ℕ) (default : Row) : Words (signature Row depth) Unit Row w
 /-- The verifier: draw the index, read the committed row there, accept exactly when it is
 accepted. The table is the statement's commitment, with handle `0`. -/
 def validator (accepts : Row → Bool) (depth : ℕ) :
-    PIR.Proc (committed (signature Row depth) Unit Row) Bool :=
+    PIR.Process (committed (signature Row depth) Unit Row) Bool :=
   .call (.base .index) fun index => .call (.read 0 index.val) fun row => .done (accepts row)
 
 /-- A table at least a `δ` fraction of whose rows are rejected. -/
@@ -99,7 +99,7 @@ def FalseTable (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (defa
 
 /-- The ideal reading's doomed residuals: rejection, stops, and the verifier on a far table. -/
 def Doomed (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (default : Row)
-    (process : PIR.Proc (signature Row depth) Bool) : Prop :=
+    (process : PIR.Process (signature Row depth) Bool) : Prop :=
   process = .done false ∨ (∃ stop, process = .halt stop) ∨
     ∃ rows, FarRows accepts depth fraction rows ∧
       process = withTables (words depth default) [(words depth default).toTable () rows]

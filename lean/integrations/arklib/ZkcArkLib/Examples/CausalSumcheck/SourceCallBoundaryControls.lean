@@ -21,7 +21,7 @@ local instance primeFive : Fact (Nat.Prime 5) := ⟨by decide⟩
 
 variable {S E : Type}
 
-def replacement : PIR.Proc (participantInterface F F)
+def replacement : PIR.Process (participantInterface F F)
     (Values (Component (assignment F F)) SumcheckVerifierBodies.reduceOutputs) :=
   .done (outputs (some []) (some 0))
 
@@ -39,7 +39,7 @@ theorem replacement_interface
     (handler : PIR.MonadHandler ProbComp (participantInterface F F) S E) (state : S) :
     mass (acceptance handler replacement state
       (SourceVerifier.childResidualRequest [0, 0] (1 : F) 1 0)) ≤ 0 := by
-  simp [replacement, acceptance, PIR.Proc.runM, returnedSatisfies, replacement_request_false]
+  simp [replacement, acceptance, PIR.Process.runM, returnedSatisfies, replacement_request_false]
 
 /-- A correct V result discharges the typed request even with these arbitrary
 foreign slots; the actual terminal theorem supplies the implication. -/
@@ -50,7 +50,7 @@ theorem positive_request
     (outputs (some [0]) (some 0)) state
     ⟨.returned (.cons (some true) .nil), state, []⟩
   · rw [correct_terminal]
-    simp [PIR.Proc.runM]
+    simp [PIR.Process.runM]
   · rfl
 
 /-- The caller proof is unchanged and invokes no theorem about Reduce's body. -/

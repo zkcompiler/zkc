@@ -166,10 +166,10 @@ def inputs (statement : Statement F) (claim : F) (service : Nat) :
     Values (fun ty => Option (ScalarValue F F ty)) ZkcExamples.NativePrograms.Variants.FactorHornerData.snapshot.inputs :=
   .cons (some statement.left.constant) (.cons (some statement.left.second) (.cons (some statement.left.first) (.cons (some statement.left.mixed) (.cons (some statement.right.constant) (.cons (some statement.right.second) (.cons (some statement.right.first) (.cons (some statement.right.mixed) (.cons (some claim) (.cons (some service) (.nil))))))))))
 
-def verifier (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
+def verifier (statement : Statement F) (claim : F) (service : Nat) : PIR.Process (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
   imported.denote (scalarMeaning F F) id 1 (inputs (F := F) statement claim service)
 
-def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
+def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Process (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
   (
     .call (.receive (.field "bls12-381.fr") "label_666972737430_0" 0) fun reply0 =>
     .call (.receive (.field "bls12-381.fr") "label_666972737431_0" 0) fun reply1 =>
@@ -195,12 +195,12 @@ def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Pr
 theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
     verifier (F := F) statement claim service = sourceProcess (F := F) statement claim service := by
   change (imported.program.denote (scalarMeaning F F) id 1
-    (inputs (F := F) statement claim service).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (inputs (F := F) statement claim service).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   repeat' first
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-       rw [PIR.Proc.bind_ite]
+    | (apply PIR.Process.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+       rw [PIR.Process.bind_ite]
        simp only [↓reduceIte])
     | rfl
     | fail_if_no_progress congr 1
@@ -209,11 +209,11 @@ theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
 theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :
     sourceProcess (F := F) statement claim service = experiment (F := F) wiring statement claim service := by
   dsimp +instances [sourceProcess, wiring, Zkc.Protocols.Sumcheck.FactorOpening.experiment, Zkc.Protocols.Sumcheck.FactorOpening.experimentWith, Zkc.Protocols.Sumcheck.FactorOpening.terminal, Zkc.Protocols.Sumcheck.FactorOpening.publicChecks, Zkc.Protocols.Sumcheck.FactorOpening.value, Zkc.Protocols.Sumcheck.Common.rounds, Zkc.Protocols.Sumcheck.Common.roundsWith, Zkc.Protocols.Sumcheck.Common.standardArithmetic, Zkc.Protocols.Sumcheck.Common.wireBoundary, Zkc.Protocols.Sumcheck.Common.wireEvaluate]
-  simp only [PIR.Proc.bind_ite, PIR.Proc.bind]
+  simp only [PIR.Process.bind_ite, PIR.Process.bind]
   dsimp +instances [terminal, publicChecks, value]
   all_goals repeat' first
     | rfl
-    | (apply PIR.Proc.call_congr; intro reply)
+    | (apply PIR.Process.call_congr; intro reply)
     | (solve | ring1)
     | (solve | abel1)
     | fail_if_no_progress congr 1

@@ -81,7 +81,7 @@ variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Typ
 /-- The ideal reading: commitments receive their tables in the clear, reads return the entries of
 received tables, and a read outside every received table rejects. -/
 def withTables (words : Words J Shape Value) :
-    List (Table Value) → PIR.Proc (committed J Shape Value) A → PIR.Proc J A
+    List (Table Value) → PIR.Process (committed J Shape Value) A → PIR.Process J A
   | _, .done value => .done value
   | _, .halt stop => .halt stop
   | tables, .call (.base operation) next =>
@@ -193,7 +193,7 @@ variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value 
 
 /-- The concrete reading of a verifier with committed tables against the joint oracle, from the
 absorbed `history` and the committed `roots`, reading `messages` and `openings`. -/
-def run : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) → List (Shape × Y) →
+def run : PIR.Process (committed J Shape Value) A → List (Absorbed E Shape Y) → List (Shape × Y) →
     List (Message P Y) → List (Opening Value Y) →
     OracleComp (joint Raw Shape Y Query) (PIR.Outcome A)
   | .done value, _, _, _, _ => pure (.returned value)
@@ -238,7 +238,7 @@ variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
 
 /-- Answer the reads at the head of a process from the tables. -/
 def settle (tables : List (Table Value)) :
-    PIR.Proc (committed J Shape Value) A → PIR.Proc (committed J Shape Value) A
+    PIR.Process (committed J Shape Value) A → PIR.Process (committed J Shape Value) A
   | .call (.read handle position) next =>
       match lookup tables handle position with
       | some value => settle tables (next value)
@@ -252,9 +252,9 @@ result is the residual after the events, with its reads at the head answered, an
 `none` when the events are not a history the concrete reading could absorb. -/
 def replay (extracted : Shape → Y → Table Value)
     (answers : (key : TranscriptKey E Shape Y) → Raw key.2) :
-    PIR.Proc (committed J Shape Value) A → List (Table Value) → List (Absorbed E Shape Y) →
+    PIR.Process (committed J Shape Value) A → List (Table Value) → List (Absorbed E Shape Y) →
       List (Absorbed E Shape Y) →
-      Option (PIR.Proc (committed J Shape Value) A × List (Table Value))
+      Option (PIR.Process (committed J Shape Value) A × List (Table Value))
   | process, tables, _, [] => some (settle tables process, tables)
   | .done _, _, _, _ :: _ => none
   | .halt _, _, _, _ :: _ => none
@@ -300,8 +300,8 @@ variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
 
 /-- A residual at a transcript query, doomed in its ideal reading, whose query decodes `raw` to a
 reply that leaves the doomed set. Only base queries can escape. -/
-def Escapes (doomed : PIR.Proc J A → Prop) :
-    PIR.Proc (committed J Shape Value) A → List (Table Value) → (event : E) → Raw event → Prop
+def Escapes (doomed : PIR.Process J A → Prop) :
+    PIR.Process (committed J Shape Value) A → List (Table Value) → (event : E) → Raw event → Prop
   | .call (.base operation) next, tables, event, raw =>
       ∃ decode, absorb operation = .query event decode ∧
         doomed (withTables words tables (.call (.base operation) next)) ∧
@@ -314,7 +314,7 @@ variable [∀ key, SampleableType (Raw key)]
 occurrence. -/
 theorem escapes_le {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error)
-    (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (event : E) :
+    (process : PIR.Process (committed J Shape Value) A) (tables : List (Table Value)) (event : E) :
     Pr{let raw ← $ᵗ (Raw event)}[Escapes absorb words certificate.doomed process tables event raw] ≤
       error event := by
   classical
@@ -349,8 +349,8 @@ theorem escapes_le {accepts : A → Prop} {error : E → ENNReal}
 omit [∀ key, SampleableType (Raw key)] in
 /-- `Escapes` for a doomed set indexed by the ideal reading's absorbed history: the ideal reading
 is doomed at `ideal`, and the decoded answer leaves the doomed set at `ideal ++ [event]`. -/
-def EscapesAt (doomed : List E → PIR.Proc J A → Prop) :
-    PIR.Proc (committed J Shape Value) A → List (Table Value) → List E → (event : E) → Raw event →
+def EscapesAt (doomed : List E → PIR.Process J A → Prop) :
+    PIR.Process (committed J Shape Value) A → List (Table Value) → List E → (event : E) → Raw event →
       Prop
   | .call (.base operation) next, tables, ideal, event, raw =>
       ∃ decode, absorb operation = .query event decode ∧
@@ -361,8 +361,8 @@ def EscapesAt (doomed : List E → PIR.Proc J A → Prop) :
 
 omit [∀ key, SampleableType (Raw key)] in
 /-- A doomed set that ignores the history escapes as `Escapes` does. -/
-theorem escapesAt_const (doomed : PIR.Proc J A → Prop)
-    (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
+theorem escapesAt_const (doomed : PIR.Process J A → Prop)
+    (process : PIR.Process (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
     (event : E) (raw : Raw event) :
     EscapesAt absorb words (fun _ process => doomed process) process tables ideal event raw ↔
       Escapes absorb words doomed process tables event raw := by
@@ -377,7 +377,7 @@ theorem escapesAt_const (doomed : PIR.Proc J A → Prop)
 answer with probability at most the charge at that history. -/
 theorem escapesAt_le {accepts : A → Prop} {charge : List E → E → ENNReal}
     (certificate : Typed.ChargedCertificate absorb accepts charge)
-    (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
+    (process : PIR.Process (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
     (event : E) :
     Pr{let raw ← $ᵗ (Raw event)}[
       EscapesAt absorb words certificate.doomed process tables ideal event raw] ≤

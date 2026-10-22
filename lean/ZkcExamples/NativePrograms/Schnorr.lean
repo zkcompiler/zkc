@@ -37,7 +37,7 @@ def wiring : Zkc.Protocols.Schnorr.Common.Wiring :=
 
 abbrev experiment := Zkc.Protocols.Schnorr.Common.experiment (F := F) (G := G) wiring
 
-def verifier (base key : G) (service : Nat) : PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
+def verifier (base key : G) (service : Nat) : PIR.Process (actions (F := F) (G := G)) (Option Bool) :=
   imported.denote (scalarMeaning F G) id 1 (verifierInputs base key service)
 
 /-- Equality of open processes preserves every handler's replies, stops, state

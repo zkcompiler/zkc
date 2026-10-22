@@ -110,13 +110,13 @@ theorem repeat_distribution_of_queryLaw [SampleableType F]
         (strategyOf handler before after context handle n point claim) s) := by
   induction n generalizing point claim s with
   | zero =>
-    simp only [PIR.repeatN, PIR.Proc.runM, Causal.run, strategyOf, noOp,
+    simp only [PIR.repeatN, PIR.Process.runM, Causal.run, strategyOf, noOp,
       pure_bind, follow_result]
     exact SameDist.refl _
   | succ n ih =>
     rw [PIR.repeatN, strategyOf_run_succ]
     simp only [participantActions_runM (F := F) (G := G)]
-    simp only [SumcheckVerifierLaws.roundPresent, PIR.Proc.bind, PIR.Proc.runM]
+    simp only [SumcheckVerifierLaws.roundPresent, PIR.Process.bind, PIR.Process.runM]
     refine SameDist.follow_congr (SameDist.refl (handler (lowAction context) s))
       (fun _ _ => True) _ _
       (by intro e he a returned; trivial) ?_
@@ -127,7 +127,7 @@ theorem repeat_distribution_of_queryLaw [SampleableType F]
     intro hi s _
     by_cases guard : claim = lo + hi
     · have pairGuard : boundary (lo, hi) = claim := guard.symm
-      simp only [guard, pairGuard, ite_true, PIR.Proc.bind, PIR.Proc.runM]
+      simp only [guard, pairGuard, ite_true, PIR.Process.bind, PIR.Process.runM]
       have localLaw := queryLaw s
       rw [participantActions_runM (F := F) (G := G)] at localLaw
       refine SameDist.follow_congr (A := F) localLaw (fun _ _ => True) _ _
@@ -139,7 +139,7 @@ theorem repeat_distribution_of_queryLaw [SampleableType F]
       intro acknowledgment s _
       exact ih (point ++ [r]) (evaluate (lo, hi) r) s
     · have pairGuard : ¬ boundary (lo, hi) = claim := fun same => guard same.symm
-      simp only [guard, pairGuard, ite_false, PIR.Proc.bind, PIR.Proc.runM]
+      simp only [guard, pairGuard, ite_false, PIR.Process.bind, PIR.Process.runM]
       exact SameDist.refl _
 
 theorem repeat_uniform_distribution [SampleableType F]

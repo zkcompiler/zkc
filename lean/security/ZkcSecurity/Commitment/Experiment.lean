@@ -193,7 +193,7 @@ structure JointRun (Stmt P Value Y A Log : Type) where
 
 /-- The joint experiment: the prover, then the concrete reading of its statement's verifier on
 its proof, on one shared oracle, both logged. -/
-def experiment (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+def experiment (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y)) :
     OracleComp (joint Raw Shape Y Query)
@@ -223,7 +223,7 @@ def FalseAcceptance [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [Decidab
       falseStatement result.statement (checkpointTables words scheme statementRoots
         (result.proverLog ++ result.verifierLog) key result.statement)
 
-variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+variable (verifier : Stmt → PIR.Process (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
   (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 
@@ -276,8 +276,8 @@ def checkpointExtract {α : Type} (game : OracleComp (joint Raw Shape Y Query) �
 statement's verifier along it, with every root read as its checkpoint extraction, reaches a doomed
 query whose answer at the key escapes. A hash call is bad when its answer hits a target of the
 record before its first query. -/
-def Bad {α : Type} (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+def Bad {α : Type} (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Process J A → Prop)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound : ℕ) : (key : JointKey E Shape Y Query) → JointTable Raw Shape Y Query → Prop
   | .inl key, table =>
@@ -365,9 +365,9 @@ def WordMessages.ideal (messages : WordMessages absorb words) : IdealHistory E S
 /-- A doomed set indexed by the ideal history stays doomed across a commitment: the ideal reading
 receives the extracted table after the history read through the extraction. -/
 def CommitDoomed (words : Words J Shape Value) (ideal : IdealHistory E Shape Y Value)
-    (doomed : List E → PIR.Proc J A → Prop) : Prop :=
+    (doomed : List E → PIR.Process J A → Prop) : Prop :=
   ∀ (extracted : Shape → Y → Table Value) (history : List (Absorbed E Shape Y)) (shape : Shape)
-    (root : Y) (tables : List (Table Value)) (next : Unit → PIR.Proc (committed J Shape Value) A),
+    (root : Y) (tables : List (Table Value)) (next : Unit → PIR.Process (committed J Shape Value) A),
     doomed (ideal.read extracted history) (withTables words tables (.call (.commit shape) next)) →
       doomed (ideal.read extracted (history ++ [.root shape root]))
         (withTables words (tables ++ [normalized words extracted shape root]) (next ()))
@@ -410,8 +410,8 @@ a statement's verifier along it, with every root read as its checkpoint extracti
 residual whose ideal reading, doomed at the key's history read through that extraction, escapes at
 the key. Hash calls are bad as in `Bad`. -/
 def BadAt {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
-    (doomed : List E → PIR.Proc J A → Prop) (ideal : IdealHistory E Shape Y Value)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (doomed : List E → PIR.Process J A → Prop) (ideal : IdealHistory E Shape Y Value)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound : ℕ) : (key : JointKey E Shape Y Query) → JointTable Raw Shape Y Query → Prop
   | .inl key, table =>
@@ -430,8 +430,8 @@ def BadAt {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
 omit [DecidableEq Query] in
 /-- A doomed set that ignores the history makes the same keys bad as `Bad`. -/
 theorem badAt_const {α : Type} [DecidableEq Query] (game : OracleComp (joint Raw Shape Y Query) α)
-    (doomed : PIR.Proc J A → Prop) (ideal : IdealHistory E Shape Y Value)
-    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (doomed : PIR.Process J A → Prop) (ideal : IdealHistory E Shape Y Value)
+    (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound : ℕ) (key : JointKey E Shape Y Query) (table : JointTable Raw Shape Y Query) :
     BadAt absorb words scheme game (fun _ process => doomed process) ideal verifier initial

@@ -101,7 +101,7 @@ theorem experiment_outcome (wiring : Wiring) (coefficients : Coefficients F) (cl
       else .stopped .reject := by
   by_cases hfirst : wireBoundary prover.first = claim
   all_goals by_cases hsecond : wireBoundary (prover.second first) = wireEvaluate prover.first first
-  all_goals simp only [experiment, experimentWith, standardArithmetic, PIR.Proc.run, PIR.Execution.follow, handler_receive_field,
+  all_goals simp only [experiment, experimentWith, standardArithmetic, PIR.Process.run, PIR.Execution.follow, handler_receive_field,
     handler_query, handler_send, received, hfirst, hsecond, decide_true, decide_false,
     Bool.false_eq_true, ite_true, ite_false, Nat.reduceAdd, Nat.reduceEqDiff]
   all_goals rfl

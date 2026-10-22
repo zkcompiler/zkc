@@ -19,7 +19,7 @@ theorem add_comm_law (table : Meanings F G) (domain : String) (a b : F) :
     (meaning F G table).OperationLaw (fun op => .call op .done) (.fieldAdd domain)
       (.cons a (.cons b .nil)) .nil (.done (.cons (b + a) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change @Eq (PIR.Proc _ (Values (assignment F G) [.field domain]))
+  change @Eq (PIR.Process _ (Values (assignment F G) [.field domain]))
     (.done (.cons (a + b) .nil)) (.done (.cons (b + a) .nil))
   rw [add_comm a b]
 

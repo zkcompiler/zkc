@@ -32,8 +32,8 @@ variable [SampleableType F]
 
 /-- The local obligation of a doomed set of sub-validator residuals whose
 returned values satisfy `final`. -/
-def StepTo (doomed : PIR.Proc (Actions F G) A → Prop) (final : A → Prop) (error : ENNReal) :
-    PIR.Proc (Actions F G) A → Prop
+def StepTo (doomed : PIR.Process (Actions F G) A → Prop) (final : A → Prop) (error : ENNReal) :
+    PIR.Process (Actions F G) A → Prop
   | .done value => final value
   | .halt _ => True
   | .call (.receive _ _ _) next => ∀ value, doomed (next value)
@@ -43,13 +43,13 @@ def StepTo (doomed : PIR.Proc (Actions F G) A → Prop) (final : A → Prop) (er
 /-- A reduction certificate: a doomed set whose every member meets its local
 obligation. -/
 structure Reduction (final : A → Prop) (error : ENNReal) where
-  doomed : PIR.Proc (Actions F G) A → Prop
+  doomed : PIR.Process (Actions F G) A → Prop
   step : ∀ process, doomed process → StepTo doomed final error process
 
 /-- Enlarging the doomed set, weakening the final predicate and raising the
 error keep every local obligation. -/
 theorem StepTo.mono {final final' : A → Prop} {error error' : ENNReal}
-    {small large : PIR.Proc (Actions F G) A → Prop}
+    {small large : PIR.Process (Actions F G) A → Prop}
     (included : ∀ process, small process → large process)
     (weaker : ∀ value, final value → final' value) (larger : error ≤ error') :
     ∀ process, StepTo small final error process → StepTo large final' error' process
@@ -87,7 +87,7 @@ def Reduction.roundByRound {accepts : A → Prop} {error : ENNReal}
 /-- Sequential composition: the residuals of the first sub-validator followed by
 the continuation, and the doomed residuals of the continuation. -/
 def Reduction.bind {final : A → Prop} {final' : B → Prop} {error : ENNReal}
-    (first : Reduction (F := F) (G := G) final error) (continuation : A → PIR.Proc (Actions F G) B)
+    (first : Reduction (F := F) (G := G) final error) (continuation : A → PIR.Process (Actions F G) B)
     (second : Reduction (F := F) (G := G) final' error)
     (linked : ∀ value, final value → second.doomed (continuation value)) :
     Reduction (F := F) (G := G) final' error where
@@ -123,7 +123,7 @@ def Reduction.union {final : A → Prop} {error : ENNReal} {ι : Type}
 /-- A received message followed by certified continuations. -/
 def Reduction.receive {final : A → Prop} {error : ENNReal} (ty : Zkc.Source.Common.Native.Ty)
     (site : String) (sender : Nat)
-    (next : Zkc.Source.Common.Native.ScalarValue F G ty → PIR.Proc (Actions F G) A)
+    (next : Zkc.Source.Common.Native.ScalarValue F G ty → PIR.Process (Actions F G) A)
     (continuation : Zkc.Source.Common.Native.ScalarValue F G ty →
       Reduction (F := F) (G := G) final error)
     (linked : ∀ value, (continuation value).doomed (next value)) :
@@ -137,10 +137,10 @@ def Reduction.receive {final : A → Prop} {error : ENNReal} (ty : Zkc.Source.Co
         ((continuation value).step _ member)
 
 theorem Reduction.bind_doomed {final : A → Prop} {final' : B → Prop} {error : ENNReal}
-    (first : Reduction (F := F) (G := G) final error) (continuation : A → PIR.Proc (Actions F G) B)
+    (first : Reduction (F := F) (G := G) final error) (continuation : A → PIR.Process (Actions F G) B)
     (second : Reduction (F := F) (G := G) final' error)
     (linked : ∀ value, final value → second.doomed (continuation value))
-    (head : PIR.Proc (Actions F G) A) (member : first.doomed head) :
+    (head : PIR.Process (Actions F G) A) (member : first.doomed head) :
     (first.bind continuation second linked).doomed (head.bind continuation) :=
   .inl ⟨head, member, rfl⟩
 
@@ -148,7 +148,7 @@ theorem Reduction.bind_doomed {final : A → Prop} {final' : B → Prop} {error 
 iterations remain; `certificate m` covers one iteration from such a state with
 `m + 1` remaining, and its returned states satisfy `invariant m`. -/
 def Reduction.repeatN {invariant : Nat → A → Prop} {error : ENNReal}
-    (step : A → PIR.Proc (Actions F G) A)
+    (step : A → PIR.Process (Actions F G) A)
     (certificate : ∀ remaining, Reduction (F := F) (G := G) (invariant remaining) error)
     (entry : ∀ remaining state, invariant (remaining + 1) state →
       (certificate remaining).doomed (step state)) :
@@ -158,7 +158,7 @@ def Reduction.repeatN {invariant : Nat → A → Prop} {error : ENNReal}
     (∃ remaining head, (certificate remaining).doomed head ∧
       process = head.bind (PIR.repeatN remaining step))
   step := by
-    let doomed : PIR.Proc (Actions F G) A → Prop := fun process =>
+    let doomed : PIR.Process (Actions F G) A → Prop := fun process =>
       (∃ remaining state, invariant remaining state ∧ process = PIR.repeatN remaining step state) ∨
       (∃ remaining head, (certificate remaining).doomed head ∧
         process = head.bind (PIR.repeatN remaining step))
@@ -167,7 +167,7 @@ def Reduction.repeatN {invariant : Nat → A → Prop} {error : ENNReal}
           StepTo doomed (invariant 0) error (PIR.repeatN remaining step state)) ∧
         (∀ head, (certificate remaining).doomed head →
           StepTo doomed (invariant 0) error (head.bind (PIR.repeatN remaining step))) := by
-      have calls : ∀ remaining (head : PIR.Proc (Actions F G) A),
+      have calls : ∀ remaining (head : PIR.Process (Actions F G) A),
           (certificate remaining).doomed head →
           (∀ value, (certificate remaining).doomed (.done value) →
             head = .done value →
@@ -202,7 +202,7 @@ def Reduction.repeatN {invariant : Nat → A → Prop} {error : ENNReal}
     · exact (both remaining).2 head member
 
 theorem Reduction.repeatN_doomed {invariant : Nat → A → Prop} {error : ENNReal}
-    (step : A → PIR.Proc (Actions F G) A)
+    (step : A → PIR.Process (Actions F G) A)
     (certificate : ∀ remaining, Reduction (F := F) (G := G) (invariant remaining) error)
     (entry : ∀ remaining state, invariant (remaining + 1) state →
       (certificate remaining).doomed (step state))
@@ -214,8 +214,8 @@ end Certificates
 
 /-! ## Challenge budgets -/
 
-theorem QueryBound.bind {A B : Type} (head : PIR.Proc (Actions F G) A)
-    (continuation : A → PIR.Proc (Actions F G) B) {first second : Nat}
+theorem QueryBound.bind {A B : Type} (head : PIR.Process (Actions F G) A)
+    (continuation : A → PIR.Process (Actions F G) B) {first second : Nat}
     (headBound : QueryBound head first) (continuationBound : ∀ value, QueryBound (continuation value) second) :
     QueryBound (head.bind continuation) (first + second) := by
   induction head generalizing first with
@@ -234,7 +234,7 @@ theorem QueryBound.bind {A B : Type} (head : PIR.Proc (Actions F G) A)
             omega
           rwa [arithmetic] at remaining
 
-theorem QueryBound.repeatN {A : Type} (step : A → PIR.Proc (Actions F G) A) {each : Nat}
+theorem QueryBound.repeatN {A : Type} (step : A → PIR.Process (Actions F G) A) {each : Nat}
     (stepBound : ∀ state, QueryBound (step state) each) :
     ∀ (remaining : Nat) (state : A), QueryBound (PIR.repeatN remaining step state) (remaining * each)
   | 0, _ => trivial

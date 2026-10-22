@@ -47,9 +47,9 @@ def handler (selective : Bool) : PIR.MonadHandler ProbComp interface Nat Event
       else pure ⟨.stopped .refused, s, []⟩
   | .send r, s => pure ⟨.returned (), s + 1, [.sent r]⟩
 
-def draw : PIR.Proc interface Bit := .call (.draw "challenge" 7) .done
+def draw : PIR.Process interface Bit := .call (.draw "challenge" 7) .done
 
-def withSend : PIR.Proc interface Bool :=
+def withSend : PIR.Process interface Bool :=
   draw.bind fun r => .call (.send r) fun _ => .done true
 
 def expected (s : Nat) (r : Bit) : PIR.Execution Nat Event Bool :=
@@ -58,7 +58,7 @@ def expected (s : Nat) (r : Bit) : PIR.Execution Nat Event Bool :=
 
 theorem stopped_bit_exact (s : Nat) :
     withSend.runM (handler true) s = (do let r ← ($ᵗ Bit); pure (expected s r)) := by
-  simp only [withSend, draw, PIR.Proc.bind, PIR.Proc.runM, handler]
+  simp only [withSend, draw, PIR.Process.bind, PIR.Process.runM, handler]
   simp only [and_self, ↓reduceIte, freshQuery, before, pure_bind, PIR.Execution.followM]
   simp only [after, Bool.true_and, bind_assoc, pure_bind]
   apply bind_congr
@@ -106,7 +106,7 @@ theorem draw_exact (s : Nat) :
       let r ← ($ᵗ Bit)
       pure ⟨if r = 0 then .stopped .exhausted else .returned r,
         s + 2, [.before, .after r]⟩) := by
-  simp only [draw, PIR.Proc.runM, handler]
+  simp only [draw, PIR.Process.runM, handler]
   simp only [and_self, ↓reduceIte, freshQuery, before, pure_bind, PIR.Execution.followM]
   simp only [after, Bool.true_and, bind_assoc, pure_bind]
   apply bind_congr
@@ -180,22 +180,22 @@ theorem before_stop {A : Type} (afterWork : Bit → Phase Nat Event Unit)
         e.followM suffix) = pure ⟨.stopped .abort, s + 1, [.before]⟩ := by
   simp [freshQuery, PIR.Execution.followM]
 
-def twoReceives : PIR.Proc interface (Bit × Bit) :=
+def twoReceives : PIR.Process interface (Bit × Bit) :=
   .call (.receive 0) fun low => .call (.receive 1) fun high => .done (low, high)
 
 theorem shared_mutable_receives : twoReceives.runM (handler false) 0 =
     pure ⟨.returned (0, 1), 2, [.received 0 0, .received 1 1]⟩ := by
-  simp [twoReceives, PIR.Proc.runM, handler, PIR.Execution.followM]
+  simp [twoReceives, PIR.Process.runM, handler, PIR.Execution.followM]
 
 /-- The same service handle is called twice, threading one shared counter. -/
-def twoDraws : PIR.Proc interface (Bit × Bit) :=
+def twoDraws : PIR.Process interface (Bit × Bit) :=
   draw.bind fun a => draw.bind fun b => .done (a, b)
 
 theorem unselective_draw (s : Nat) :
     draw.runM (handler false) s = (do
       let r ← ($ᵗ Bit)
       pure ⟨.returned r, s + 2, [.before, .after r]⟩) := by
-  simp [draw, PIR.Proc.runM, handler, freshQuery, before, after,
+  simp [draw, PIR.Process.runM, handler, freshQuery, before, after,
     PIR.Execution.followM, result, Nat.add_assoc]
 
 theorem shared_handle_two_draws (s : Nat) :
@@ -205,12 +205,12 @@ theorem shared_handle_two_draws (s : Nat) :
       pure ⟨.returned (a, b), s + 4, [.before, .after a, .before, .after b]⟩) := by
   simp only [twoDraws, PIR.runM_bind, unselective_draw, bind_assoc, pure_bind,
     PIR.Execution.followM]
-  simp [PIR.Proc.runM, Nat.add_assoc]
+  simp [PIR.Process.runM, Nat.add_assoc]
 
 theorem wrong_route_refuses (s : Nat) :
-    (PIR.Proc.call (I := interface) (.draw "other" 7) PIR.Proc.done).runM (handler false) s =
+    (PIR.Process.call (I := interface) (.draw "other" 7) PIR.Process.done).runM (handler false) s =
       pure ⟨.stopped .refused, s, []⟩ := by
-  simp [PIR.Proc.runM, handler, PIR.Execution.followM]
+  simp [PIR.Process.runM, handler, PIR.Execution.followM]
 
 def stoppingSend : PIR.MonadHandler ProbComp interface Nat Event
   | .send bit, s => pure ⟨.stopped .abort, s + 1, [.sent bit]⟩
@@ -218,10 +218,10 @@ def stoppingSend : PIR.MonadHandler ProbComp interface Nat Event
 
 /-- A send stop suppresses the subsequent receive, retaining its own effect. -/
 theorem stopped_send_skips_receive (s : Nat) (r : Bit) :
-    (PIR.Proc.call (I := interface) (.send r) fun _ =>
-      PIR.Proc.call (.receive 9) PIR.Proc.done).runM stoppingSend s =
+    (PIR.Process.call (I := interface) (.send r) fun _ =>
+      PIR.Process.call (.receive 9) PIR.Process.done).runM stoppingSend s =
       pure ⟨.stopped .abort, s + 1, [.sent r]⟩ := by
-  simp [PIR.Proc.runM, stoppingSend, PIR.Execution.followM]
+  simp [PIR.Process.runM, stoppingSend, PIR.Execution.followM]
 
 /-- A service that caches its first draw, unlike the installed fresh service. -/
 def cachedDraw : Phase (Option Bit) Event Bit
@@ -289,7 +289,7 @@ theorem representation_action_law (selective : Bool) (action : Action)
   simpa only [bind_pure] using coupled
 
 theorem unequal_state_representations (selective : Bool) {A : Type}
-    (process : PIR.Proc interface A) (s : Nat) (flag : Bool) :
+    (process : PIR.Process interface A) (s : Nat) (flag : Bool) :
     RelTriple (process.runM (handler selective) s)
       (process.runM (representedHandler selective) ⟨s, flag⟩)
       (PIR.Related stateRelated (fun e => [e]) observe) :=

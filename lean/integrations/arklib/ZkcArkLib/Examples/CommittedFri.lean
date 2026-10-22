@@ -94,7 +94,7 @@ variable [Field F] [DecidableEq F] (roots : ℕ → F)
 pair, checks the chain and moves to the halved word; at the end it checks the final polynomial.
 The continuation receives the decision. -/
 def walkReads (coefficients : List F) : List F → ℕ → ℕ → F → ℕ → F → ℕ →
-    (Bool → PIR.Proc (signature F) Bool) → PIR.Proc (signature F) Bool
+    (Bool → PIR.Process (signature F) Bool) → PIR.Process (signature F) Bool
   | [], _, m, current, position, expected, _, onDecision =>
       onDecision (decide (terminal roots coefficients current m position = expected))
   | beta :: rest, handle, m + 1, current, position, expected, round, onDecision =>
@@ -112,7 +112,7 @@ variable (t : ℕ) (shift : F) (s : ℕ)
 /-- Every query's checks in order, from the initial word of size `2 ^ n`, rejecting at the first
 failed query. -/
 def queryReads (coefficients foldingChallenges : List F) (n : ℕ)
-    (positions : Fin s → Fin (2 ^ n)) : List (Fin s) → PIR.Proc (signature F) Bool
+    (positions : Fin s → Fin (2 ^ n)) : List (Fin s) → PIR.Process (signature F) Bool
   | [] => .done true
   | query :: rest =>
       walkReads roots coefficients foldingChallenges 0 n shift (positions query).val 0 0
@@ -121,7 +121,7 @@ def queryReads (coefficients foldingChallenges : List F) (n : ℕ)
 
 /-- After the last folding challenge: the final coefficients, their bound, the query block and the
 queries' reads. -/
-def finalPhaseReads (n : ℕ) (foldingChallenges : List F) : PIR.Proc (signature F) Bool :=
+def finalPhaseReads (n : ℕ) (foldingChallenges : List F) : PIR.Process (signature F) Bool :=
   .call (.base .final) fun coefficients =>
     if bounded t coefficients then
       .call (.base (.positions n s)) fun positions =>
@@ -131,7 +131,7 @@ def finalPhaseReads (n : ℕ) (foldingChallenges : List F) : PIR.Proc (signature
 /-- The commit phase from the word committed at round `round`, of size `2 ^ (m + 1)` with
 `R + 1` folds left: the folding challenge, then the commitment of the next word, or the final
 phase after the last fold. -/
-def foldPhaseReads (n : ℕ) : (m R : ℕ) → ℕ → List F → PIR.Proc (signature F) Bool
+def foldPhaseReads (n : ℕ) : (m R : ℕ) → ℕ → List F → PIR.Process (signature F) Bool
   | _, 0, round, foldingChallenges => .call (.base (.fold round)) fun beta =>
       finalPhaseReads roots t shift s n (foldingChallenges ++ ([beta] : List F))
   | m + 1, R + 1, round, foldingChallenges => .call (.base (.fold round)) fun beta =>
@@ -141,7 +141,7 @@ def foldPhaseReads (n : ℕ) : (m R : ℕ) → ℕ → List F → PIR.Proc (sign
 
 /-- The verifier with committed words, for an initial word of size `2 ^ (N + 1)` and `K + 1`
 folds. The initial word is the statement's commitment, with handle `0`. -/
-def verifier (N K : ℕ) : PIR.Proc (signature F) Bool :=
+def verifier (N K : ℕ) : PIR.Process (signature F) Bool :=
   foldPhaseReads roots t shift s (N + 1) N K 0 []
 
 end Verifier
@@ -161,7 +161,7 @@ theorem lookup_tableOf {tables : List (Table F)} {handle logSize : ℕ}
 query's checks on the transcript. -/
 theorem withTables_walkReads (tables : List (Table F)) :
     ∀ {m R : ℕ} (layers : Layers F m R) (handle : ℕ) (current : F) (position : Fin (2 ^ m))
-      (expected : F) (round : ℕ) (onDecision : Bool → PIR.Proc (signature F) Bool),
+      (expected : F) (round : ℕ) (onDecision : Bool → PIR.Process (signature F) Bool),
       Matches tables handle layers →
       withTables words tables (walkReads roots layers.coefficients (challenges layers) handle m
           current position.val expected round onDecision) =
@@ -212,20 +212,20 @@ theorem withTables_queryReads (tables : List (Table F)) {n R : ℕ} (layers : La
 
 omit [DecidableEq F] in
 theorem withTables_base (tables : List (Table F)) (operation : Operation)
-    (next : (signature F).Reply (.base operation) → PIR.Proc (signature F) Bool) :
+    (next : (signature F).Reply (.base operation) → PIR.Process (signature F) Bool) :
     withTables words tables (.call (.base operation) next) =
       .call operation fun reply => withTables words tables (next reply) := rfl
 
 omit [DecidableEq F] in
 theorem withTables_commit (tables : List (Table F)) (shape : Shape)
-    (next : (signature F).Reply (.commit shape) → PIR.Proc (signature F) Bool) :
+    (next : (signature F).Reply (.commit shape) → PIR.Process (signature F) Bool) :
     withTables words tables (.call (.commit shape) next) =
       .call (.word shape.1 shape.2) fun received =>
         withTables words (tables ++ [tableOf shape.2 received]) (next ()) := rfl
 
 omit [DecidableEq F] in
 theorem withTables_halt (tables : List (Table F)) (stop : PIR.Stop) :
-    withTables words tables (.halt stop : PIR.Proc (signature F) Bool) = .halt stop := rfl
+    withTables words tables (.halt stop : PIR.Process (signature F) Bool) = .halt stop := rfl
 
 variable (t : ℕ)
 
@@ -245,17 +245,17 @@ theorem withTables_foldPhaseReads {N K : ℕ} :
         foldPhase roots t shift s round wrap word
   | m, 0, round, wrap, word, tables, foldingChallenges, _, completes => by
       rw [foldPhase_last, foldPhaseReads, withTables_base]
-      refine congrArg (@PIR.Proc.call (operations F) Bool (Operation.fold round))
+      refine congrArg (@PIR.Process.call (operations F) Bool (Operation.fold round))
         (funext fun (beta : F) => ?_)
       rw [finalPhaseReads, withTables_base, finalPhase]
-      refine congrArg (@PIR.Proc.call (operations F) Bool Operation.final)
+      refine congrArg (@PIR.Process.call (operations F) Bool Operation.final)
         (funext fun (coefficients : List F) => ?_)
       obtain ⟨matched, completed, final⟩ := completes beta (.final coefficients) [] (by simp [Matches])
       rw [List.append_nil] at matched
       by_cases withinBound : bounded t coefficients = true
       · simp only [withinBound, ↓reduceIte]
         rw [withTables_base, queryPhase]
-        refine congrArg (@PIR.Proc.call (operations F) Bool (Operation.positions (N + 1) s))
+        refine congrArg (@PIR.Process.call (operations F) Bool (Operation.positions (N + 1) s))
           (funext fun (positions : Fin s → Fin (2 ^ (N + 1))) => ?_)
         have read := withTables_queryReads roots shift s tables
           (wrap (.fold word beta (.final coefficients))) matched positions (List.finRange s)
@@ -267,10 +267,10 @@ theorem withTables_foldPhaseReads {N K : ℕ} :
         rfl
   | m + 1, R + 1, round, wrap, word, tables, foldingChallenges, length, completes => by
       rw [foldPhase_next, foldPhaseReads, withTables_base]
-      refine congrArg (@PIR.Proc.call (operations F) Bool (Operation.fold round))
+      refine congrArg (@PIR.Process.call (operations F) Bool (Operation.fold round))
         (funext fun (beta : F) => ?_)
       rw [withTables_commit]
-      refine congrArg (@PIR.Proc.call (operations F) Bool (Operation.word (round + 1) (m + 1)))
+      refine congrArg (@PIR.Process.call (operations F) Bool (Operation.word (round + 1) (m + 1)))
         (funext fun (next : Fin (2 ^ (m + 1)) → F) => ?_)
       refine withTables_foldPhaseReads (round + 1) (fun rest => wrap (.fold word beta rest)) next
         (tables ++ [tableOf (m + 1) next]) (foldingChallenges ++ [beta])
@@ -306,7 +306,7 @@ variable [Field F] [DecidableEq F] (roots : ℕ → F) (t : ℕ) (shift : F) (s 
 
 theorem walkReads_commitBound (coefficients : List F) (budget : ℕ) :
     ∀ (foldingChallenges : List F) (handle m : ℕ) (current : F) (position : ℕ) (expected : F)
-      (round : ℕ) (onDecision : Bool → PIR.Proc (signature F) Bool),
+      (round : ℕ) (onDecision : Bool → PIR.Process (signature F) Bool),
       (∀ accepted, CommitBound (onDecision accepted) budget) →
       CommitBound (walkReads roots coefficients foldingChallenges handle m current position
         expected round onDecision) budget
@@ -355,7 +355,7 @@ variable {b : ℕ} (block : Block b s) (charge : Event F → ω) (readCharge : �
 
 theorem walkReads_charged (coefficients : List F) (budget : ω) :
     ∀ (foldingChallenges : List F) (handle m : ℕ) (current : F) (position : ℕ) (expected : F)
-      (round : ℕ) (onDecision : Bool → PIR.Proc (signature F) Bool),
+      (round : ℕ) (onDecision : Bool → PIR.Process (signature F) Bool),
       (∀ accepted, Charged (absorb block) (Admissible n) charge readCharge (onDecision accepted)
         budget) →
       Charged (absorb block) (Admissible n) charge readCharge

@@ -67,12 +67,12 @@ theorem observed_excess_outer (count : Nat) (large : 3 < count)
   change invokeProtocol (unit.protocolTable F G) runSignature {} 0
     (inputs (some count) inner x) = _
   rw [run_body_view]
-  change ((PIR.Proc.call (I := observedInterface F G) (.mark "s3") (fun _ =>
+  change ((PIR.Process.call (I := observedInterface F G) (.mark "s3") (fun _ =>
     (denoteRepeat (F := F) (G := G)
       ⟨[.field "bls12-381.fr"], [.index, .field "bls12-381.fr"], [0], [[0]], 3⟩
       {} 0 (some count) (.cons x .nil) (.cons inner (.cons x .nil)) _).bind _)).bind _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-  simp only [PIR.Proc.bind]
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+  simp only [PIR.Process.bind]
   rw [repeat_above_maximum
     ⟨[.field "bls12-381.fr"], [.index, .field "bls12-381.fr"], [0], [[0]], 3⟩ {} 0 _ _ _ count rfl large]
   rfl

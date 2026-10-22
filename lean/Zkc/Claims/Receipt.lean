@@ -97,7 +97,7 @@ def ofDerivation {dialect : Zkc.Source.Dialect} {I J : PIR.Signature}
     {operations : PIR.OperationInterpretation I J} {Γ out : List dialect.Ty}
     {region : Zkc.Source.Region dialect Γ out}
     {environment : Zkc.Source.Environment semantics.Value Γ}
-    {process : PIR.Proc J (Zkc.Source.Values semantics.Value out)}
+    {process : PIR.Process J (Zkc.Source.Values semantics.Value out)}
     (derivation : Zkc.Source.Region.Derivation semantics operations region environment process)
     (consume : (region.denote semantics environment).interpret operations = process → meaning.proposition)
     (provenance : Provenance)

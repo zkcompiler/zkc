@@ -45,14 +45,14 @@ def absorb : Typed.Interface signature Event (Fin 2) Raw
   | .draw => .query .draw fun raw => some (decide (raw = 1))
 
 /-- After the bit `bit`, draw and return whether the bit was `1`. -/
-def drawing (bit : Fin 2) : PIR.Proc signature Bool := .call Op.draw fun _ => .done (decide (bit = 1))
+def drawing (bit : Fin 2) : PIR.Process signature Bool := .call Op.draw fun _ => .done (decide (bit = 1))
 
-def validator : PIR.Proc signature Bool := .call Op.message drawing
+def validator : PIR.Process signature Bool := .call Op.message drawing
 
 def accepts (accepted : Bool) : Prop := accepted = true
 
 /-- Before the bit, before the draw, a rejecting result and every stop. -/
-def doomed (process : PIR.Proc signature Bool) : Prop :=
+def doomed (process : PIR.Process signature Bool) : Prop :=
   process = validator ∨ (∃ bit, process = drawing bit) ∨ process = .done false ∨
     ∃ stop, process = .halt stop
 

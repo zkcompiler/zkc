@@ -52,8 +52,8 @@ variable {F G : Type} [Field F] [DecidableEq F]
 
 /-- The residual of the rounds followed by a terminal process `k` of the final
 point and claim, at each phase of a round. -/
-def residualK (ctx : ProtocolContext) (handle : Nat) (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) :
-    Phase F → PIR.Proc (Actions F G) (Option Bool)
+def residualK (ctx : ProtocolContext) (handle : Nat) (k : List F × F → PIR.Process (Actions F G) (Option Bool)) :
+    Phase F → PIR.Process (Actions F G) (Option Bool)
   | .round remaining point claim =>
       (PIR.repeatN remaining (verifierRound ctx handle) (point, claim)).bind k
   | .low remaining point claim low =>
@@ -72,19 +72,19 @@ def Sized (count : Nat) : Phase F → Prop
   | .challenged remaining point _ _ _ _ => point.length + (remaining + 1) = count
 
 /-- A terminal that never accepts: a false decision or a stop. -/
-def Rejects (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
+def Rejects (process : PIR.Process (Actions F G) (Option Bool)) : Prop :=
   process = .done (some false) ∨ ∃ stop, process = .halt stop
 
 /-- The residuals of the rounds followed by a terminal that never accepts at a
 point of the round count's length. -/
 def Rejecting (ctx : ProtocolContext) (handle count : Nat)
-    (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) (process : PIR.Proc (Actions F G) (Option Bool)) :
+    (k : List F × F → PIR.Process (Actions F G) (Option Bool)) (process : PIR.Process (Actions F G) (Option Bool)) :
     Prop :=
   (∀ pc : List F × F, pc.1.length = count → Rejects (k pc)) ∧
     ∃ phase, Sized count phase ∧ residualK ctx handle k phase = process
 
 theorem residualK_high_pass (ctx : ProtocolContext) (handle : Nat)
-    (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) (remaining : Nat) (point : List F)
+    (k : List F × F → PIR.Process (Actions F G) (Option Bool)) (remaining : Nat) (point : List F)
     (claim low high : F) (checked : claim = low + high) :
     residualK ctx handle k (.high remaining point claim low high) =
       .call (.query (SumcheckVerifierLaws.challengeSite ctx) "bls12-381.fr" (.cons handle .nil))
@@ -94,7 +94,7 @@ theorem residualK_high_pass (ctx : ProtocolContext) (handle : Nat)
   rfl
 
 theorem residualK_high_fail (ctx : ProtocolContext) (handle : Nat)
-    (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) (remaining : Nat) (point : List F)
+    (k : List F × F → PIR.Process (Actions F G) (Option Bool)) (remaining : Nat) (point : List F)
     (claim low high : F) (failed : ¬ claim = low + high) :
     residualK ctx handle k (.high remaining point claim low high) = .halt .reject := by
   simp only [residualK, afterHigh]
@@ -106,7 +106,7 @@ variable [Fintype F] [SampleableType F]
 /-- Every rejecting residual meets its local obligation: a challenge never leaves
 the set. -/
 theorem rejecting_step (ctx : ProtocolContext) (handle count : Nat)
-    (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) :
+    (k : List F × F → PIR.Process (Actions F G) (Option Bool)) :
     ∀ process, Rejecting ctx handle count k process →
       Step (Rejecting ctx handle count k) (· = some true) (1 / (Fintype.card F : ENNReal)) process := by
   rintro _ ⟨rejects, phase, sized, rfl⟩
@@ -140,11 +140,11 @@ theorem rejecting_step (ctx : ProtocolContext) (handle count : Nat)
 
 /-- The doomed set of the subject's certificate: the residuals of every table
 and claim, the refused verifier, and the rejecting runs. -/
-def DoomedAll (ctx : ProtocolContext) (handle : Nat) (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
+def DoomedAll (ctx : ProtocolContext) (handle : Nat) (process : PIR.Process (Actions F G) (Option Bool)) : Prop :=
   DoomedAny ctx handle process ∨ ∃ count k, Rejecting ctx handle count k process
 
 theorem doomedAll_step (ctx : ProtocolContext) (handle : Nat) :
-    ∀ process : PIR.Proc (Actions F G) (Option Bool), DoomedAll ctx handle process →
+    ∀ process : PIR.Process (Actions F G) (Option Bool), DoomedAll ctx handle process →
       Step (DoomedAll ctx handle) (· = some true) (1 / (Fintype.card F : ENNReal)) process := by
   rintro process (any | ⟨count, k, rejecting⟩)
   · exact Step.mono (fun _ member => .inl member) process (doomedAny_step ctx handle process any)
@@ -165,7 +165,7 @@ section Original
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The terminal of the admitted original on a vector, at a final point and claim. -/
-def terminalK (raw : List F) (pc : List F × F) : PIR.Proc (Actions F G) (Option Bool) :=
+def terminalK (raw : List F) (pc : List F × F) : PIR.Process (Actions F G) (Option Bool) :=
   ((SumcheckVerifierTerminal.actualOwnedCheck (G := G) SumcheckSourceViews.unit 1 (some raw) (some pc.1)
     (some pc.2)).bind fun outputs => .done (outputs.get .here)).interpret CommonAdapter.project
 
@@ -185,17 +185,17 @@ theorem importedValidator_malformed (count : Nat) (admitted : count ≤ maximum)
   have bounded : count ≤ SumcheckSourceNormalForms.reduceMaximum := admitted
   simp only [SumcheckVerifierPrelude.admittedRounds, bounded, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count ([], claim)]
-  have collapse : ∀ process : PIR.Proc (participantInterface F G) (List F × F),
-      (((process.bind fun result => PIR.Proc.done (some result.1, some result.2)).bind fun pc =>
+  have collapse : ∀ process : PIR.Process (participantInterface F G) (List F × F),
+      (((process.bind fun result => PIR.Process.done (some result.1, some result.2)).bind fun pc =>
           SumcheckVerifierTerminal.actualOwnedCheck (G := G) SumcheckSourceViews.unit 1 (some raw) pc.1 pc.2).bind
-        fun outputs : Values (Component (assignment F G)) [.boolean] => PIR.Proc.done (outputs.get .here)) =
+        fun outputs : Values (Component (assignment F G)) [.boolean] => PIR.Process.done (outputs.get .here)) =
       process.bind fun pc => (SumcheckVerifierTerminal.actualOwnedCheck (G := G) SumcheckSourceViews.unit 1
         (some raw) (some pc.1) (some pc.2)).bind fun outputs => .done (outputs.get .here) := by
     intro process
-    rw [PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+    rw [PIR.Process.bind_assoc, PIR.Process.bind_assoc]
     rfl
-  refine (congrArg (PIR.Proc.interpret CommonAdapter.project) (collapse _)).trans ?_
-  rw [PIR.Proc.interpret_bind, repeatN_interpret]
+  refine (congrArg (PIR.Process.interpret CommonAdapter.project) (collapse _)).trans ?_
+  rw [PIR.Process.interpret_bind, repeatN_interpret]
   simp only [roundPresent_project]
   rfl
 
@@ -233,7 +233,7 @@ theorem terminal_queryBound (raw : List F) (pc : List F × F) : QueryBound (term
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem residualK_queryBound (ctx : ProtocolContext) (handle : Nat)
-    (k : List F × F → PIR.Proc (Actions F G) (Option Bool)) (terminal : ∀ pc, QueryBound (k pc) 0) :
+    (k : List F × F → PIR.Process (Actions F G) (Option Bool)) (terminal : ∀ pc, QueryBound (k pc) 0) :
     ∀ (remaining : Nat) (point : List F) (claim : F),
       QueryBound (residualK ctx handle k (.round remaining point claim)) remaining := by
   intro remaining

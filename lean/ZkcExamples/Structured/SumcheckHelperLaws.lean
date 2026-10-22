@@ -53,13 +53,13 @@ theorem checkTable_generic_body (table : Meanings F G) (laws : MapPrefixContract
   rw [checkTable_expansion, ite_eq_left pointBound,
     laws.tableLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
   by_cases shape : HasShape xs point.length 1
-  · simp only [shape, ite_true, PIR.Proc.bind]
+  · simp only [shape, ite_true, PIR.Process.bind]
     change (invoke table prefixHelper (prefixInputs xs point.length 1 point)).bind _ = _
     rw [laws.fixPrefix xs point.length 1 point shape vectorBound pointBound]
-    simp only [Nat.le_refl, ite_true, Nat.sub_self, PIR.Proc.bind]
+    simp only [Nat.le_refl, ite_true, Nat.sub_self, PIR.Process.bind]
     rw [laws.values]
     rfl
-  · simp only [shape, ite_false, PIR.Proc.bind]
+  · simp only [shape, ite_false, PIR.Process.bind]
 
 /-- No semantic premise about check_table is needed for the malformed branch. -/
 theorem check_malformed_generic_body (table : Meanings F G)
@@ -72,7 +72,7 @@ theorem check_malformed_generic_body (table : Meanings F G)
     checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .done (boolResult false) := by
   rw [check_expansion, ite_eq_left pointBound,
     shapeLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
-  simp only [boolResult, PIR.Proc.bind, Values.get, decide_eq_false malformed, Bool.false_eq_true, ite_false]
+  simp only [boolResult, PIR.Process.bind, Values.get, decide_eq_false malformed, Bool.false_eq_true, ite_false]
 
 /-- The only callback premise is an exact body equation; no intended result is assumed. -/
 theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
@@ -87,10 +87,10 @@ theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Law
   rw [check_expansion, ite_eq_left pointBound,
     laws.shape xs point.length 1 vectorBound pointBound (by decide +kernel)]
   by_cases shape : HasShape xs point.length 1
-  · simp only [boolResult, PIR.Proc.bind, Values.get, decide_eq_true shape, ite_true]
+  · simp only [boolResult, PIR.Process.bind, Values.get, decide_eq_true shape, ite_true]
     rw [callback, checkTable_generic_body table laws xs point claim vectorBound pointBound, ite_eq_left shape]
     simp only [shape, true_and, boolResult]
-  · simp only [boolResult, PIR.Proc.bind, Values.get,
+  · simp only [boolResult, PIR.Process.bind, Values.get,
       shape, false_and, decide_false, Bool.false_eq_true, ite_false]
 
 /-- Point-length exhaustion occurs before shape or constructor in both bodies. -/
@@ -171,7 +171,7 @@ theorem append_then_length (table : Meanings F G) (xs : List F) (x : F) :
       if (xs ++ [x]).length < indexLimit then .done (.cons (xs ++ [x]).length .nil)
       else .halt .exhausted := by
   rw [append_body]
-  simp only [PIR.Proc.bind, Evaluation.operation, Primitive.evaluate]
+  simp only [PIR.Process.bind, Evaluation.operation, Primitive.evaluate]
   split <;> rfl
 
 /-- Pure component arithmetic preserves independent absent operands. -/

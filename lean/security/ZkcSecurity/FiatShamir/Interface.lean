@@ -144,7 +144,7 @@ def readTable [ReadsByOccurrence R Raw] (table : (key : List E) → R key)
 section Bounds
 
 /-- At most `budget` queries on every path, for every reply. -/
-def QueryBound (absorb : Interface I E P Raw) : PIR.Proc I A → ℕ → Prop
+def QueryBound (absorb : Interface I E P Raw) : PIR.Process I A → ℕ → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call operation next, budget =>
@@ -157,7 +157,7 @@ def QueryBound (absorb : Interface I E P Raw) : PIR.Proc I A → ℕ → Prop
 /-- The queries on every path charge at most `cost` in total, each query the
 error of its absorbed occurrence. -/
 def CostBound (absorb : Interface I E P Raw) (error : E → ENNReal) :
-    PIR.Proc I A → ENNReal → Prop
+    PIR.Process I A → ENNReal → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call operation next, cost =>
@@ -171,7 +171,7 @@ def CostBound (absorb : Interface I E P Raw) (error : E → ENNReal) :
 variable (absorb : Interface I E P Raw) (error : E → ENNReal)
 
 theorem CostBound.mono :
-    ∀ (process : PIR.Proc I A) {cost larger : ENNReal},
+    ∀ (process : PIR.Process I A) {cost larger : ENNReal},
       CostBound absorb error process cost → cost ≤ larger → CostBound absorb error process larger
   | .done _, _, _, _, _ => trivial
   | .halt _, _, _, _, _ => trivial
@@ -190,7 +190,7 @@ theorem CostBound.mono :
 /-- A query count with every occurrence error at most `bound` charges at most
 `budget * bound`. -/
 theorem QueryBound.costBound {bound : ENNReal} (bounded : ∀ event, error event ≤ bound) :
-    ∀ (process : PIR.Proc I A) (budget : ℕ),
+    ∀ (process : PIR.Process I A) (budget : ℕ),
       QueryBound absorb process budget → CostBound absorb error process (budget * bound)
   | .done _, _, _ => trivial
   | .halt _, _, _ => trivial
@@ -257,7 +257,7 @@ in total, each query the charge of its key: the history before it and its
 occurrence. A receive continues only with the reply its absorbed event
 recovers, so only those replies are constrained. -/
 def ChargedCostBound (charge : List E → E → ENNReal) :
-    PIR.Proc I A → List E → ENNReal → Prop
+    PIR.Process I A → List E → ENNReal → Prop
   | .done _, _, _ => True
   | .halt _, _, _ => True
   | .call operation next, history, cost =>
@@ -272,7 +272,7 @@ def ChargedCostBound (charge : List E → E → ENNReal) :
 /-- A cost bound with an error per occurrence is a charged cost bound, from any
 history, for the charge that ignores the history. -/
 theorem CostBound.charged :
-    ∀ (process : PIR.Proc I A) (cost : ENNReal), CostBound absorb error process cost →
+    ∀ (process : PIR.Process I A) (cost : ENNReal), CostBound absorb error process cost →
       ∀ history, ChargedCostBound absorb (fun _ event => error event) process history cost
   | .done _, _, _, _ => trivial
   | .halt _, _, _, _ => trivial
@@ -295,7 +295,7 @@ theorem CostBound.charged :
 `budget * bound` from every history. -/
 theorem QueryBound.chargedCostBound {charge : List E → E → ENNReal} {bound : ENNReal}
     (bounded : ∀ history event, charge history event ≤ bound) :
-    ∀ (process : PIR.Proc I A) (budget : ℕ), QueryBound absorb process budget →
+    ∀ (process : PIR.Process I A) (budget : ℕ), QueryBound absorb process budget →
       ∀ history, ChargedCostBound absorb charge process history (budget * bound)
   | .done _, _, _, _ => trivial
   | .halt _, _, _, _ => trivial
@@ -370,7 +370,7 @@ theorem ask_bind {β : Type} (preceding : List E) (event : E)
 /-- The transform makes at most the validator's cost on every path, each query
 charged the error of its key. -/
 theorem transform_costBound :
-    ∀ (process : PIR.Proc I A) (cost : ENNReal) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (cost : ENNReal) (history : List E) (proof : List P),
       CostBound absorb error process cost →
         WorstCaseCostBound (transform absorb (ask (R := R)) process history proof)
           ⟨keyError error⟩ cost := by
@@ -426,7 +426,7 @@ theorem transform_costBound :
 /-- The transform charges at most the validator's charged cost on every path,
 each query charged `keyCharge charge` at its key. -/
 theorem transform_chargedCostBound (charge : List E → E → ENNReal) :
-    ∀ (process : PIR.Proc I A) (cost : ENNReal) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (cost : ENNReal) (history : List E) (proof : List P),
       ChargedCostBound absorb charge process history cost →
         WorstCaseCostBound (transform absorb (ask (R := R)) process history proof)
           ⟨keyCharge charge⟩ cost := by
@@ -481,7 +481,7 @@ theorem transform_chargedCostBound (charge : List E → E → ENNReal) :
 
 /-- The transform makes at most the validator's query count on every path. -/
 theorem transform_queryBound :
-    ∀ (process : PIR.Proc I A) (budget : ℕ) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (budget : ℕ) (history : List E) (proof : List P),
       QueryBound absorb process budget →
         IsTotalQueryBound (transform absorb (ask (R := R)) process history proof) budget := by
   intro process
@@ -529,7 +529,7 @@ theorem tableQueryLog_map {α β : Type} (f : α → β)
 the transform with the table, read by occurrence, as challenge function. -/
 theorem evalWithAnswerFn_transform (absorb : Interface I E P Raw)
     (table : (key : List E) → R key) :
-    ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (history : List E) (proof : List P),
       evalWithAnswerFn (QueryImpl.ofFn table) (transform absorb (ask (R := R)) process history proof) =
         transform (m := Id) absorb (readTable (Raw := Raw) table) process history proof := by
   intro process

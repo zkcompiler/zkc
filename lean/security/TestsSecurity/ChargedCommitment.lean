@@ -70,7 +70,7 @@ theorem receivedFraction_rows (accepts : Row → Bool) (depth : ℕ) (rows : Fin
 /-- The doomed pairs: rejection, stops, and the verifier on a far table after the ideal history
 that received it. -/
 def Doomed (accepts : Row → Bool) (depth : ℕ) (fraction : ENNReal) (default : Row)
-    (history : List (Event Row)) (process : PIR.Proc (signature Row depth) Bool) : Prop :=
+    (history : List (Event Row)) (process : PIR.Process (signature Row depth) Bool) : Prop :=
   process = .done false ∨ (∃ stop, process = .halt stop) ∨
     ∃ rows, FarRows accepts depth fraction rows ∧ history = [Event.table (List.ofFn rows)] ∧
       process = withTables (words depth default) [(words depth default).toTable () rows]

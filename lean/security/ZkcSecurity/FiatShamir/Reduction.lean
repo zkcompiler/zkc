@@ -53,9 +53,9 @@ satisfies `Post` at that history; after a receive whose event recovers a reply,
 and after a send, the residual is doomed at the extended history; and a doomed
 query's decoded fresh raw answer leaves the doomed set at the extended history
 with probability at most `charge history event`. -/
-def ChargedStepTo (absorb : Interface I E P Raw) (doomed : List E → PIR.Proc I A → Prop)
+def ChargedStepTo (absorb : Interface I E P Raw) (doomed : List E → PIR.Process I A → Prop)
     (Post : List E → A → Prop) (charge : List E → E → ENNReal) (history : List E) :
-    PIR.Proc I A → Prop
+    PIR.Process I A → Prop
   | .done value => Post history value
   | .halt _ => True
   | .call operation next =>
@@ -73,7 +73,7 @@ def ChargedStepTo (absorb : Interface I E P Raw) (doomed : List E → PIR.Proc I
 residual whose every member meets `ChargedStepTo`. -/
 structure Reduction (absorb : Interface I E P Raw) (Post : List E → A → Prop)
     (charge : List E → E → ENNReal) where
-  doomed : List E → PIR.Proc I A → Prop
+  doomed : List E → PIR.Process I A → Prop
   step : ∀ history process, doomed history process →
     ChargedStepTo absorb doomed Post charge history process
 
@@ -82,7 +82,7 @@ variable (absorb : Interface I E P Raw)
 /-- Enlarging the doomed set, weakening the postcondition and raising the charge
 keep every local obligation. -/
 theorem ChargedStepTo.mono {Post Post' : List E → A → Prop} {charge larger : List E → E → ENNReal}
-    {small large : List E → PIR.Proc I A → Prop}
+    {small large : List E → PIR.Process I A → Prop}
     (included : ∀ history process, small history process → large history process)
     (weaker : ∀ history value, Post history value → Post' history value)
     (le : ∀ history event, charge history event ≤ larger history event) (history : List E) :
@@ -154,7 +154,7 @@ continuation doomed, at the history where the head returns, at every returned
 value the head's postcondition admits. -/
 def Reduction.bind {Post₁ : List E → A → Prop} {Post₂ : List E → B → Prop}
     {charge : List E → E → ENNReal} (first : Reduction absorb Post₁ charge)
-    (continuation : A → PIR.Proc I B) (second : Reduction absorb Post₂ charge)
+    (continuation : A → PIR.Process I B) (second : Reduction absorb Post₂ charge)
     (link : ∀ history value, Post₁ history value → second.doomed history (continuation value)) :
     Reduction absorb Post₂ charge where
   doomed history process :=
@@ -190,9 +190,9 @@ def Reduction.bind {Post₁ : List E → A → Prop} {Post₂ : List E → B →
 
 theorem Reduction.bind_doomed {Post₁ : List E → A → Prop} {Post₂ : List E → B → Prop}
     {charge : List E → E → ENNReal} (first : Reduction absorb Post₁ charge)
-    (continuation : A → PIR.Proc I B) (second : Reduction absorb Post₂ charge)
+    (continuation : A → PIR.Process I B) (second : Reduction absorb Post₂ charge)
     (link : ∀ history value, Post₁ history value → second.doomed history (continuation value))
-    (history : List E) (head : PIR.Proc I A) (member : first.doomed history head) :
+    (history : List E) (head : PIR.Process I A) (member : first.doomed history head) :
     (first.bind absorb continuation second link).doomed history (head.bind continuation) :=
   .inl ⟨head, member, rfl⟩
 
@@ -223,7 +223,7 @@ recovers a reply leads to a doomed continuation at the extended history. -/
 def Reduction.receive {Post : List E → A → Prop} {charge : List E → E → ENNReal}
     {operation : I.Op} {event : P → E} {recover : E → Option (I.Reply operation)}
     (absorbed : absorb operation = .receive event recover) (history : List E)
-    (next : I.Reply operation → PIR.Proc I A) (continuation : P → Reduction absorb Post charge)
+    (next : I.Reply operation → PIR.Process I A) (continuation : P → Reduction absorb Post charge)
     (linked : ∀ message value, recover (event message) = some value →
       (continuation message).doomed (history ++ [event message]) (next value)) :
     Reduction absorb Post charge where
@@ -242,7 +242,7 @@ which `m` iterations remain, at the absorbed history; `certificate m` covers one
 iteration from such a state with `m + 1` remaining, and its returned states
 satisfy `invariant · m`. -/
 def Reduction.repeatN {invariant : List E → ℕ → A → Prop} {charge : List E → E → ENNReal}
-    (step : A → PIR.Proc I A)
+    (step : A → PIR.Process I A)
     (certificate : ∀ remaining, Reduction absorb (fun history => invariant history remaining) charge)
     (entry : ∀ history remaining state, invariant history (remaining + 1) state →
       (certificate remaining).doomed history (step state)) :
@@ -253,12 +253,12 @@ def Reduction.repeatN {invariant : List E → ℕ → A → Prop} {charge : List
     (∃ remaining head, (certificate remaining).doomed history head ∧
       process = head.bind (PIR.repeatN remaining step))
   step := by
-    let doomed : List E → PIR.Proc I A → Prop := fun history process =>
+    let doomed : List E → PIR.Process I A → Prop := fun history process =>
       (∃ remaining state, invariant history remaining state ∧
         process = PIR.repeatN remaining step state) ∨
       (∃ remaining head, (certificate remaining).doomed history head ∧
         process = head.bind (PIR.repeatN remaining step))
-    have calls : ∀ remaining history (head : PIR.Proc I A),
+    have calls : ∀ remaining history (head : PIR.Process I A),
         (certificate remaining).doomed history head →
         (∀ value, (certificate remaining).doomed history (.done value) → head = .done value →
           ChargedStepTo absorb doomed (fun history => invariant history 0) charge history
@@ -315,7 +315,7 @@ def Reduction.repeatN {invariant : List E → ℕ → A → Prop} {charge : List
     · exact (both remaining).2 history head member
 
 theorem Reduction.repeatN_doomed {invariant : List E → ℕ → A → Prop}
-    {charge : List E → E → ENNReal} (step : A → PIR.Proc I A)
+    {charge : List E → E → ENNReal} (step : A → PIR.Process I A)
     (certificate : ∀ remaining, Reduction absorb (fun history => invariant history remaining) charge)
     (entry : ∀ history remaining state, invariant history (remaining + 1) state →
       (certificate remaining).doomed history (step state))

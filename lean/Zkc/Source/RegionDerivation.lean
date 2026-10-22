@@ -10,7 +10,7 @@ The indices fix the source, environment and target process before a proof is
 constructed. There is no constructor taking a whole-region semantic equation.
 Only an operation occurrence may supply a semantic law, after its callbacks
 have themselves been derived for every declared input. Effects are interpreted
-using the existing `PIR.Proc.interpret`; no second program evaluator is defined.
+using the existing `PIR.Process.interpret`; no second program evaluator is defined.
 -/
 
 set_option autoImplicit false
@@ -26,7 +26,7 @@ def RegionMeaning.OperationLaw (meaning : RegionMeaning dialect I)
     (operations : PIR.OperationInterpretation I J) (op : dialect.Op)
     (args : Values meaning.Value (dialect.arguments op))
     (callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op))
-    (target : PIR.Proc J (Values meaning.Value (dialect.results op))) : Prop :=
+    (target : PIR.Process J (Values meaning.Value (dialect.results op))) : Prop :=
   ∀ bodies, RegionFunctions.translate operations bodies = callbacks →
     (meaning.operation op args bodies).interpret operations = target
 
@@ -37,7 +37,7 @@ theorem RegionMeaning.OperationLaw.ofTranslation
     (translation : meaning.Translation operations) (op : dialect.Op)
     (args : Values meaning.Value (dialect.arguments op))
     (callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op))
-    {target : PIR.Proc J (Values meaning.Value (dialect.results op))}
+    {target : PIR.Process J (Values meaning.Value (dialect.results op))}
     (equation : translation.operation op args callbacks = target) :
     meaning.OperationLaw operations op args callbacks target := by
   intro bodies same
@@ -52,21 +52,21 @@ mutual
   inductive Region.Derivation (meaning : RegionMeaning dialect I)
       (operations : PIR.OperationInterpretation I J) :
       {Γ out : List dialect.Ty} → Region dialect Γ out →
-      Environment meaning.Value Γ → PIR.Proc J (Values meaning.Value out) → Prop where
+      Environment meaning.Value Γ → PIR.Process J (Values meaning.Value out) → Prop where
     | ret {Γ out} (refs : Operands Γ out) (env : Environment meaning.Value Γ) :
         Region.Derivation meaning operations (.ret refs) (@env) (.done (Operands.eval env refs))
     | stop {Γ out} (reason : PIR.Stop) (env : Environment meaning.Value Γ) :
         Region.Derivation meaning operations (Region.stop (out := out) reason) (@env) (.halt reason)
     | bind {Γ mid out} {body : Region dialect Γ mid}
         {next : Region dialect (mid ++ Γ) out} {env : Environment meaning.Value Γ}
-        {first : PIR.Proc J (Values meaning.Value mid)}
-        {suffix : Values meaning.Value mid → PIR.Proc J (Values meaning.Value out)}
+        {first : PIR.Process J (Values meaning.Value mid)}
+        {suffix : Values meaning.Value mid → PIR.Process J (Values meaning.Value out)}
         (bodyLaw : Region.Derivation meaning operations body (@env) first)
         (nextLaw : ∀ values, Region.Derivation meaning operations next (env.prepend values) (suffix values)) :
         Region.Derivation meaning operations (.bind body next) (@env) (first.bind suffix)
     | bindReturn {Γ mid out} {body : Region dialect Γ mid}
         {next : Region dialect (mid ++ Γ) out} {env : Environment meaning.Value Γ}
-        {values : Values meaning.Value mid} {target : PIR.Proc J (Values meaning.Value out)}
+        {values : Values meaning.Value mid} {target : PIR.Process J (Values meaning.Value out)}
         (bodyLaw : Region.Derivation meaning operations body (@env) (.done values))
         (nextLaw : Region.Derivation meaning operations next (env.prepend values) target) :
         Region.Derivation meaning operations (.bind body next) (@env) target
@@ -80,8 +80,8 @@ mutual
         {next : Region dialect (dialect.results op ++ Γ) out}
         {env : Environment meaning.Value Γ}
         {callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op)}
-        {step : PIR.Proc J (Values meaning.Value (dialect.results op))}
-        {suffix : Values meaning.Value (dialect.results op) → PIR.Proc J (Values meaning.Value out)}
+        {step : PIR.Process J (Values meaning.Value (dialect.results op))}
+        {suffix : Values meaning.Value (dialect.results op) → PIR.Process J (Values meaning.Value out)}
         (callbackLaws : Regions.Derivation meaning operations bodies callbacks)
         (operationLaw : meaning.OperationLaw operations op (Operands.eval env args) callbacks step)
         (nextLaw : ∀ values, Region.Derivation meaning operations next (env.prepend values) (suffix values)) :
@@ -92,7 +92,7 @@ mutual
         {env : Environment meaning.Value Γ}
         {callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op)}
         {values : Values meaning.Value (dialect.results op)}
-        {target : PIR.Proc J (Values meaning.Value out)}
+        {target : PIR.Process J (Values meaning.Value out)}
         (callbackLaws : Regions.Derivation meaning operations bodies callbacks)
         (operationLaw : meaning.OperationLaw operations op (Operands.eval env args) callbacks (.done values))
         (nextLaw : Region.Derivation meaning operations next (env.prepend values) target) :
@@ -126,7 +126,7 @@ end
 theorem Region.Derivation.sound {meaning : RegionMeaning dialect I}
     {operations : PIR.OperationInterpretation I J} {Γ out}
     {body : Region dialect Γ out} {env : Environment meaning.Value Γ}
-    {target : PIR.Proc J (Values meaning.Value out)}
+    {target : PIR.Process J (Values meaning.Value out)}
     (derivation : Region.Derivation meaning operations body (@env) target) :
     (body.denote meaning env).interpret operations = target := by
   induction derivation using Region.Derivation.rec
@@ -135,24 +135,24 @@ theorem Region.Derivation.sound {meaning : RegionMeaning dialect I}
   | ret => rfl
   | stop => rfl
   | bind bodyLaw nextLaw bodyIH nextIH =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, bodyIH]
+      simp only [Region.denote, PIR.Process.interpret_bind, bodyIH]
       congr 1
       funext values
       exact nextIH values
   | bindReturn bodyLaw nextLaw bodyIH nextIH =>
-      simpa only [Region.denote, PIR.Proc.interpret_bind, bodyIH, PIR.Proc.bind] using nextIH
+      simpa only [Region.denote, PIR.Process.interpret_bind, bodyIH, PIR.Process.bind] using nextIH
   | bindStop next bodyLaw bodyIH =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, bodyIH, PIR.Proc.bind]
+      simp only [Region.denote, PIR.Process.interpret_bind, bodyIH, PIR.Process.bind]
   | letOp op args callbackLaws operationLaw nextLaw callbacksIH nextIH =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, operationLaw _ callbacksIH]
+      simp only [Region.denote, PIR.Process.interpret_bind, operationLaw _ callbacksIH]
       congr 1
       funext values
       exact nextIH values
   | letOpReturn op args callbackLaws operationLaw nextLaw callbacksIH nextIH =>
-      simpa only [Region.denote, PIR.Proc.interpret_bind,
-        operationLaw _ callbacksIH, PIR.Proc.bind] using nextIH
+      simpa only [Region.denote, PIR.Process.interpret_bind,
+        operationLaw _ callbacksIH, PIR.Process.bind] using nextIH
   | letOpStop op args next callbackLaws operationLaw callbacksIH =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, operationLaw _ callbacksIH, PIR.Proc.bind]
+      simp only [Region.denote, PIR.Process.interpret_bind, operationLaw _ callbacksIH, PIR.Process.bind]
   | nil => rfl
   | cons bodyLaw tailLaw bodyIH tailIH =>
       simp only [Regions.denote, RegionFunctions.translate, tailIH]
@@ -180,29 +180,29 @@ decreasing_by all_goals subst_vars; all_goals simp_all; all_goals omega
 /-- Same-interface normalization needs no separate evaluator or equality record. -/
 theorem Region.Derivation.sound_identity {meaning : RegionMeaning dialect I} {Γ out}
     {body : Region dialect Γ out} {env : Environment meaning.Value Γ}
-    {target : PIR.Proc I (Values meaning.Value out)}
+    {target : PIR.Process I (Values meaning.Value out)}
     (derivation : Region.Derivation meaning (fun op => .call op .done) body (@env) target) :
     body.denote meaning env = target := by
-  simpa only [PIR.Proc.interpret_identity] using derivation.sound
+  simpa only [PIR.Process.interpret_identity] using derivation.sound
 
 /-- Equality retains all returned values, stopped post-states and ordered events,
 including effects introduced by the operation interpretation. -/
 theorem Region.Derivation.run {meaning : RegionMeaning dialect I}
     {operations : PIR.OperationInterpretation I J} {Γ out}
     {body : Region dialect Γ out} {env : Environment meaning.Value Γ}
-    {target : PIR.Proc J (Values meaning.Value out)}
+    {target : PIR.Process J (Values meaning.Value out)}
     (derivation : Region.Derivation meaning operations body (@env) target)
     {S E : Type} (backend : PIR.Handler J S E) (state : S) :
     target.run backend state =
       (body.denote meaning env).run (fun op s => (operations op).run backend s) state := by
-  rw [← derivation.sound, PIR.Proc.run_interpret]
+  rw [← derivation.sound, PIR.Process.run_interpret]
 
 /-- Existing per-effect state/observation simulation composes with the derived
 process equation. The local handler law is separate from structural construction. -/
 theorem Region.Derivation.run_related {meaning : RegionMeaning dialect I}
     {operations : PIR.OperationInterpretation I J} {Γ out}
     {body : Region dialect Γ out} {env : Environment meaning.Value Γ}
-    {target : PIR.Proc J (Values meaning.Value out)}
+    {target : PIR.Process J (Values meaning.Value out)}
     (derivation : Region.Derivation meaning operations body (@env) target)
     {S T E F O : Type} (sourceHandler : PIR.Handler I S E) (targetHandler : PIR.Handler J T F)
     (relation : S → T → Prop) (left : E → List O) (right : F → List O)
@@ -212,7 +212,7 @@ theorem Region.Derivation.run_related {meaning : RegionMeaning dialect I}
     PIR.Related relation left right ((body.denote meaning env).run sourceHandler s)
       (target.run targetHandler t) := by
   rw [← derivation.sound]
-  exact PIR.Proc.run_interpret_related operations sourceHandler targetHandler
+  exact PIR.Process.run_interpret_related operations sourceHandler targetHandler
     relation left right law _ s t initial
 
 end Zkc.Source

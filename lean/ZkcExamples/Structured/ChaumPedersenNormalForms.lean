@@ -36,7 +36,7 @@ def proverInputs (firstBase firstKey secondBase secondKey : G) (witness : F) (no
 
 /-- The prover's normal form: its ordered actions and its returned tuple. -/
 def proverProcess (firstBase secondBase : G) (witness : F) (nonces : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   .call (.query nonceSite scalarDomain (.cons nonces .nil)) fun (nonce : F) =>
   .call (.send (ty := .group groupDomain) firstCommitmentSite 1 (nonce • firstBase)) fun _ =>
@@ -77,7 +77,7 @@ def verifierInputs (firstBase firstKey secondBase secondKey : G) (challenges : N
 
 /-- The verifier's normal form: its ordered actions and its returned tuple. -/
 def verifierProcess (firstBase firstKey secondBase secondKey : G) (challenges : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   .call (.receive (.group groupDomain) firstCommitmentSite 0) fun (firstCommitment : G) =>
   .call (.receive (.group groupDomain) secondCommitmentSite 0) fun (secondCommitment : G) =>
@@ -173,7 +173,7 @@ theorem relation_iff (firstBase firstKey secondBase secondKey : G) (witness : F)
     Relation firstBase firstKey secondBase secondKey witness ↔ firstKey = witness • firstBase ∧ secondKey = witness • secondBase := by
   unfold Relation
   rw [formula_process]
-  change (PIR.Proc.done (I := closedInterface) (.cons ((decide (firstKey = witness • firstBase)) && (decide (secondKey = witness • secondBase))) .nil :
+  change (PIR.Process.done (I := closedInterface) (.cons ((decide (firstKey = witness • firstBase)) && (decide (secondKey = witness • secondBase))) .nil :
     Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
 

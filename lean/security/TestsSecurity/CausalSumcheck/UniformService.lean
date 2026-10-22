@@ -15,7 +15,7 @@ open scoped ENNReal
 
 variable {F G S E : Type}
 
-def query (key : Key) : PIR.Proc (participantInterface F G) F :=
+def query (key : Key) : PIR.Process (participantInterface F G) F :=
   participantActions F G (.query key.1 key.2.1 (.cons key.2.2 .nil))
 
 /-- An arbitrary query branch, including cached replies or stops. -/
@@ -143,7 +143,7 @@ theorem query_logged (prepare : Key → S → S) (preEvents : Key → S → List
 
 theorem before_stop_suppresses_suffix {A : Type} (why : PIR.Stop) (t : S) (events : List E)
     (after : Key → F → Phase S E Unit)
-    (suffix : F → PIR.Proc (participantInterface F G) A) (s : S) :
+    (suffix : F → PIR.Process (participantInterface F G) A) (s : S) :
     ((query key).bind suffix).runM
         (withUniformQueries network ports (fun _ _ => pure ⟨.stopped why, t, events⟩)
           after) s = pure ⟨.stopped why, t, events⟩ := by
@@ -153,7 +153,7 @@ theorem before_stop_suppresses_suffix {A : Type} (why : PIR.Stop) (t : S) (event
 theorem after_stop_suppresses_suffix {A : Type}
     (prepare : Key → S → S) (preEvents : Key → S → List E)
     (why : F → PIR.Stop) (record : F → S → S) (postEvents : F → S → List E)
-    (suffix : F → PIR.Proc (participantInterface F G) A) (s : S) :
+    (suffix : F → PIR.Process (participantInterface F G) A) (s : S) :
     ((query key).bind suffix).runM
         (withUniformQueries network ports (logBefore prepare preEvents)
           (fun _ r t => pure ⟨.stopped (why r), record r t, postEvents r t⟩)) s = (do
@@ -165,7 +165,7 @@ theorem after_stop_suppresses_suffix {A : Type}
 
 end Records
 
-def twoQueries (first second : Key) : PIR.Proc (participantInterface F G) (F × F) :=
+def twoQueries (first second : Key) : PIR.Process (participantInterface F G) (F × F) :=
   (query first).bind fun a => (query second).bind fun b => .done (a, b)
 
 section Pairs
@@ -193,7 +193,7 @@ theorem two_queries_logged
           preEvents second u ++ postEvents second b v⟩) := by
   simp only [twoQueries, runM_bind_function, query_logged network ports first firstMember,
     query_logged network ports second secondMember]
-  simp [PIR.Execution.followM, PIR.Proc.runM, List.append_assoc]
+  simp [PIR.Execution.followM, PIR.Process.runM, List.append_assoc]
 
 theorem two_queries_fresh (s : S) :
     (twoQueries (F := F) (G := G) first second).runM
@@ -203,7 +203,7 @@ theorem two_queries_fresh (s : S) :
       pure (result (a, b) s)) := by
   simp only [twoQueries, runM_bind_function, query_exact network ports _ _ first firstMember,
     query_exact network ports _ _ second secondMember]
-  simp [freshQuery, noOp, result, PIR.Execution.followM, PIR.Proc.runM]
+  simp [freshQuery, noOp, result, PIR.Execution.followM, PIR.Process.runM]
 
 end Pairs
 
@@ -307,10 +307,10 @@ theorem cached_pair_exact (key : Key) :
       (query (F := F2) (G := Unit) key).runM cachedNetwork s = cachedDraw s := by
     exact participantActions_runM cachedNetwork _ s
   have second (a : F2) :
-      ((query key).bind fun b => PIR.Proc.done (a, b)).runM cachedNetwork (some a) =
+      ((query key).bind fun b => PIR.Process.done (a, b)).runM cachedNetwork (some a) =
         pure (result (a, a) (some a)) := by
     rw [PIR.runM_bind, queryLaw]
-    simp [cachedDraw, PIR.Proc.runM, result, PIR.Execution.followM]
+    simp [cachedDraw, PIR.Process.runM, result, PIR.Execution.followM]
   rw [twoQueries, PIR.runM_bind, queryLaw]
   simp only [cachedDraw, bind_assoc, pure_bind, follow_result]
   apply bind_congr

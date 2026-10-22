@@ -8,18 +8,18 @@ open OracleComp OracleSpec
 open ZkcSecurity.VCVio.Execution ZkcSecurity.VCVio.Composition
 
 /-- A terminal guard accepts exactly true and refuses false. -/
-def guarded {I : PIR.Signature} (value : Bool) : PIR.Proc I Bool :=
+def guarded {I : PIR.Signature} (value : Bool) : PIR.Process I Bool :=
   if value then .done true else .halt .refused
 
 theorem guarded_terminal {I : PIR.Signature} {S E : Type}
     (h : PIR.MonadHandler ProbComp I S E) (a : Bool) (state : S)
     (e : PIR.Execution S E Bool) (supported : e ∈ support ((guarded a).runM h state))
     (accepted : returnedSatisfies (· = true) e) : a = true := by
-  cases a <;> simp_all [guarded, PIR.Proc.runM, returnedSatisfies]
+  cases a <;> simp_all [guarded, PIR.Process.runM, returnedSatisfies]
 
 /-- No restrictions on the prefix, its effects, or its stopping behavior. -/
 theorem arbitrary_prefix_bound {I : PIR.Signature} {S E : Type}
-    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I Bool) (s : S) :
+    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I Bool) (s : S) :
     mass (acceptance h (p.bind guarded) s (· = true)) ≤
       mass (acceptance h p s (· = true)) :=
   acceptance_bind_le h p guarded s _ _ (guarded_terminal h)
@@ -46,17 +46,17 @@ def handler : PIR.MonadHandler ProbComp interface Nat Event
       let bit ← ($ᵗ Fin 2)
       pure ⟨if bit = 0 then .stopped .abort else .returned true, s + 1, [.drawn bit]⟩
 
-def changingPrefix : PIR.Proc interface Bool := .call .prepare .done
+def changingPrefix : PIR.Process interface Bool := .call .prepare .done
 
-def stateSensitive (_ : Bool) : PIR.Proc interface Bool := .call .inspect .done
+def stateSensitive (_ : Bool) : PIR.Process interface Bool := .call .inspect .done
 
-def randomPrefix : PIR.Proc interface Bool := .call .draw .done
+def randomPrefix : PIR.Process interface Bool := .call .draw .done
 
 /-- Refusal keeps the prefix's updated state and event. -/
 theorem guard_refusal (s : Nat) :
     (changingPrefix.bind guarded).runM handler s =
       pure ⟨.stopped .refused, s + 1, [.prepared s]⟩ := by
-  simp [changingPrefix, guarded, PIR.Proc.bind, PIR.Proc.runM, handler,
+  simp [changingPrefix, guarded, PIR.Process.bind, PIR.Process.runM, handler,
     PIR.Execution.followM]
 
 theorem guard_refusal_mass (s : Nat) :
@@ -67,14 +67,14 @@ theorem guard_refusal_mass (s : Nat) :
 theorem initial_state_terminal (a : Bool) (e : PIR.Execution Nat Event Bool)
     (supported : e ∈ support ((stateSensitive a).runM handler 0)) :
     returnedSatisfies (· = true) e → False := by
-  simp [stateSensitive, PIR.Proc.runM, handler, PIR.Execution.followM] at supported
+  simp [stateSensitive, PIR.Process.runM, handler, PIR.Execution.followM] at supported
   subst e
   simp [returnedSatisfies]
 
 theorem changed_state_accepts :
     (changingPrefix.bind stateSensitive).runM handler 0 =
       pure ⟨.returned true, 1, [.prepared 0, .inspected 1]⟩ := by
-  simp [changingPrefix, stateSensitive, PIR.Proc.bind, PIR.Proc.runM,
+  simp [changingPrefix, stateSensitive, PIR.Process.bind, PIR.Process.runM,
     handler, PIR.Execution.followM]
 
 /-- Checking the terminal implication only at the initial state gives a false bound. -/
@@ -83,23 +83,23 @@ theorem initial_state_is_insufficient :
       mass (acceptance handler changingPrefix 0 (fun _ => False)) := by
   unfold acceptance
   rw [changed_state_accepts]
-  simp [changingPrefix, PIR.Proc.runM,
+  simp [changingPrefix, PIR.Process.runM,
     handler, PIR.Execution.followM, returnedSatisfies, mass]
 
 /-- Even a pure prefix disproves the bound when its terminal premise is omitted. -/
 theorem terminal_premise_is_necessary :
-    ¬ mass (acceptance handler ((PIR.Proc.done false).bind fun _ => .done true)
+    ¬ mass (acceptance handler ((PIR.Process.done false).bind fun _ => .done true)
         0 (· = true)) ≤
       mass (acceptance handler (.done false) 0 (· = true)) := by
-  simp [acceptance, PIR.Proc.bind, PIR.Proc.runM, returnedSatisfies, mass]
+  simp [acceptance, PIR.Process.bind, PIR.Process.runM, returnedSatisfies, mass]
 
 /-- The stopped prefix skips the state-reading continuation and its event. -/
 theorem stopped_prefix (s : Nat) :
-    ((PIR.Proc.halt .abort).bind stateSensitive).runM handler s =
+    ((PIR.Process.halt .abort).bind stateSensitive).runM handler s =
       pure ⟨.stopped .abort, s, []⟩ := rfl
 
 theorem stopped_prefix_mass (s : Nat) :
-    mass (acceptance handler ((PIR.Proc.halt .abort).bind stateSensitive)
+    mass (acceptance handler ((PIR.Process.halt .abort).bind stateSensitive)
       s (· = true)) = 0 := by
   simp [acceptance, stopped_prefix, returnedSatisfies, mass]
 
@@ -110,11 +110,11 @@ theorem random_call_exact (s : Nat) :
       let bit ← ($ᵗ Fin 2)
       pure ⟨if bit = 0 then .stopped .abort else .returned true,
         s + 1, [.drawn bit]⟩) := by
-  simp only [randomPrefix, PIR.Proc.bind, PIR.Proc.runM, handler, bind_assoc]
+  simp only [randomPrefix, PIR.Process.bind, PIR.Process.runM, handler, bind_assoc]
   apply bind_congr
   intro bit
   by_cases zero : bit = 0 <;>
-    simp [zero, PIR.Execution.followM, guarded, PIR.Proc.runM]
+    simp [zero, PIR.Execution.followM, guarded, PIR.Process.runM]
 
 theorem random_call_mass (s : Nat) :
     mass (acceptance handler (randomPrefix.bind guarded) s (· = true)) = 1 / 2 := by

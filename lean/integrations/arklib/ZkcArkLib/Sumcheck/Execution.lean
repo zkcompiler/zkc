@@ -79,21 +79,21 @@ theorem execution_game {wiring : Wiring} {program : Verifier F}
         return result.outcome = .returned (some true)) = game coefficients claim prover := by
   rw [execution, (certificate.realizes coefficients claim service).process_eq]
   by_cases firstCheck : wireBoundary prover.first = claim
-  · simp only [experiment, experimentWith, standardArithmetic, PIR.Proc.runM,
+  · simp only [experiment, experimentWith, standardArithmetic, PIR.Process.runM,
       PIR.Execution.followM, handler_receive_field, handler_send, handler_query, received,
       pure_bind, bind_assoc, Nat.reduceAdd, firstCheck, decide_true, ite_true, game]
     apply bind_congr
     intro first
     by_cases secondCheck : wireBoundary (prover.second first) = wireEvaluate prover.first first
-    · simp only [PIR.Proc.runM, PIR.Execution.followM, handler_send,
+    · simp only [PIR.Process.runM, PIR.Execution.followM, handler_send,
         handler_query, pure_bind, bind_assoc, Nat.reduceAdd, Nat.reduceEqDiff,
         secondCheck, decide_true, ite_true, ite_false]
       apply bind_congr
       intro second
       simp
       exact ⟨of_decide_eq_true, fun h => decide_eq_true h⟩
-    · simp [PIR.Proc.runM, secondCheck]
-  · simp [experiment, experimentWith, standardArithmetic, PIR.Proc.runM,
+    · simp [PIR.Process.runM, secondCheck]
+  · simp [experiment, experimentWith, standardArithmetic, PIR.Process.runM,
       PIR.Execution.followM, handler_receive_field, received, firstCheck, game]
 
 end ZkcSecurity.ArkLib.Sumcheck

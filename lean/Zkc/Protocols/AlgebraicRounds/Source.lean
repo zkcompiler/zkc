@@ -48,7 +48,7 @@ variable [Semiring F] [DecidableEq F]
 
 /-- An independently recursive logical round process, used to specify the
 structured source's execution meaning. It includes the rejected prefix. -/
-def rounds : Nat → F → Proc (interface F) F
+def rounds : Nat → F → Process (interface F) F
   | 0, claim => .done claim
   | count + 1, claim => .call .message fun message =>
       if message.boundary = claim then
@@ -109,7 +109,7 @@ theorem roundBody_denote {Γ : List Ty} (env : Environment (Value F) (.scalar ::
           .call .challenge (fun challenge => .done (message.evaluate challenge))
         else .call .reject (fun _ => .halt .reject)) := by
   simp [roundBody, Program.denote, Operands.eval,
-    Environment.push, meaning, Proc.bind, result]
+    Environment.push, meaning, Process.bind, result]
 
 theorem repeat_rounds (count : Nat) (claim : F) :
     repeatN (I := interface F) count (fun current =>
@@ -120,11 +120,11 @@ theorem repeat_rounds (count : Nat) (claim : F) :
   induction count generalizing claim with
   | zero => rfl
   | succ count ih =>
-    simp only [repeatN, rounds, Proc.bind]
+    simp only [repeatN, rounds, Process.bind]
     congr 1
     funext message
     split
-    · simp only [Proc.bind]
+    · simp only [Process.bind]
       congr 1
       funext challenge
       exact ih _
@@ -133,8 +133,8 @@ theorem repeat_rounds (count : Nat) (claim : F) :
 theorem program_denote (count : Nat) (env : Environment (Value F) [.scalar]) :
     (program count).denote meaning env = rounds count (env .here) := by
   simp only [program, Program.denote, roundBody_denote, Environment.push]
-  change (repeatN count _ (env .here)).bind Proc.done = _
-  rw [Proc.bind_done, repeat_rounds]
+  change (repeatN count _ (env .here)).bind Process.done = _
+  rw [Process.bind_done, repeat_rounds]
 
 
 /-- The maintained round reference lowered to the canonical explicit-capture carrier. -/

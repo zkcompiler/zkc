@@ -78,7 +78,7 @@ theorem decodedQuery_id : decodedQuery (F := F) (G := G) (id : F → F) = histor
   exact id_map _
 
 /-- At most `budget` challenge queries on every path, for every reply. -/
-def QueryBound : PIR.Proc (Actions F G) A → ℕ → Prop
+def QueryBound : PIR.Process (Actions F G) A → ℕ → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call (.receive _ _ _) next, budget => ∀ value, QueryBound (next value) budget
@@ -87,7 +87,7 @@ def QueryBound : PIR.Proc (Actions F G) A → ℕ → Prop
       0 < budget ∧ ∀ challenge, QueryBound (next challenge) (budget - 1)
 
 theorem QueryBound.mono :
-    ∀ (process : PIR.Proc (Actions F G) A) {budget larger : ℕ},
+    ∀ (process : PIR.Process (Actions F G) A) {budget larger : ℕ},
       QueryBound process budget → budget ≤ larger → QueryBound process larger
   | .done _, _, _, _, _ => trivial
   | .halt _, _, _, _, _ => trivial
@@ -100,7 +100,7 @@ theorem QueryBound.mono :
 
 /-- The prover's oracle computation followed by the transform of `validator`
 from the history `initial`, sharing one oracle. -/
-def experiment (context : Context) (validator : PIR.Proc (Actions F G) A)
+def experiment (context : Context) (validator : PIR.Process (Actions F G) A)
     (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) :
     OracleComp (FieldOracle F G) (PIR.Outcome A × Proof F G) :=
   prover >>= fun proof => transform context historyQuery validator initial proof
@@ -108,7 +108,7 @@ def experiment (context : Context) (validator : PIR.Proc (Actions F G) A)
 /-- The prover chooses a statement and a proof; the transform runs that
 statement's validator from that statement's initial history. -/
 def adaptiveExperiment (context : Context) (decode : B → F)
-    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (validator : Stmt → PIR.Process (Actions F G) A) (initial : Stmt → History F G)
     (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) :
     OracleComp (Oracle F G B) (Stmt × (PIR.Outcome A × Proof F G)) :=
   prover >>= fun claimed => (fun result => (claimed.1, result)) <$>
@@ -128,23 +128,23 @@ a doomed set of residual processes that received or sent messages cannot leave,
 that contains no accepting result, and that a fresh uniform challenge leaves
 with probability at most `error`. -/
 structure RoundByRound (accepts : A → Prop) (error : ENNReal) where
-  doomed : PIR.Proc (Actions F G) A → Prop
+  doomed : PIR.Process (Actions F G) A → Prop
   done : ∀ value, doomed (.done value) → ¬ accepts value
   receive : ∀ (ty : Ty) (site : String) (sender : Nat)
-    (next : ScalarValue F G ty → PIR.Proc (Actions F G) A),
+    (next : ScalarValue F G ty → PIR.Process (Actions F G) A),
     doomed (.call (.receive ty site sender) next) → ∀ value, doomed (next value)
   send : ∀ (ty : Ty) (site : String) (receiver : Nat) (sent : ScalarValue F G ty)
-    (next : Unit → PIR.Proc (Actions F G) A),
+    (next : Unit → PIR.Process (Actions F G) A),
     doomed (.call (.send site receiver sent) next) → doomed (next ())
   query : ∀ (site : String) (op : services.Op)
     (arguments : Values (ScalarValue F G) (services.arguments op))
-    (next : F → PIR.Proc (Actions F G) A),
+    (next : F → PIR.Process (Actions F G) A),
     doomed (.call (.query site op arguments) next) →
       Pr{let challenge ← $ᵗ F}[¬ doomed (next challenge)] ≤ error
 
 /-- The local obligation of a doomed set at one residual. -/
-def Step (doomed : PIR.Proc (Actions F G) A → Prop) (accepts : A → Prop) (error : ENNReal) :
-    PIR.Proc (Actions F G) A → Prop
+def Step (doomed : PIR.Process (Actions F G) A → Prop) (accepts : A → Prop) (error : ENNReal) :
+    PIR.Process (Actions F G) A → Prop
   | .done value => ¬ accepts value
   | .halt _ => True
   | .call (.receive _ _ _) next => ∀ value, doomed (next value)
@@ -153,7 +153,7 @@ def Step (doomed : PIR.Proc (Actions F G) A → Prop) (accepts : A → Prop) (er
 
 /-- Enlarging the doomed set keeps every local obligation. -/
 theorem Step.mono {accepts : A → Prop} {error : ENNReal}
-    {small large : PIR.Proc (Actions F G) A → Prop}
+    {small large : PIR.Process (Actions F G) A → Prop}
     (included : ∀ process, small process → large process) :
     ∀ process, Step small accepts error process → Step large accepts error process
   | .done _, step => step
@@ -166,7 +166,7 @@ theorem Step.mono {accepts : A → Prop} {error : ENNReal}
 
 /-- A doomed set whose every member meets its local obligation. -/
 def RoundByRound.ofStep {accepts : A → Prop} {error : ENNReal}
-    (doomed : PIR.Proc (Actions F G) A → Prop)
+    (doomed : PIR.Process (Actions F G) A → Prop)
     (step : ∀ process, doomed process → Step doomed accepts error process) :
     RoundByRound (F := F) (G := G) accepts error where
   doomed := doomed
@@ -228,7 +228,7 @@ theorem interface_eq_mapRaw (context : Context) (decode : B → F) :
 /-- The transform of the participant actions is the transform over their
 interface, with the decoded oracle as challenge function. -/
 theorem transform_eq (context : Context) (decode : B → F) :
-    ∀ (process : PIR.Proc (Actions F G) A) (history : History F G) (proof : Proof F G),
+    ∀ (process : PIR.Process (Actions F G) A) (history : History F G) (proof : Proof F G),
       transform context (decodedQuery decode) process history proof =
         Typed.transform (interface context decode) Typed.ask process history proof := by
   intro process history proof
@@ -238,7 +238,7 @@ theorem transform_eq (context : Context) (decode : B → F) :
 /-- The query count of a participant process is its query count over the
 interface. -/
 theorem QueryBound.typed (context : Context) (decode : B → F) :
-    ∀ (process : PIR.Proc (Actions F G) A) (budget : ℕ), QueryBound process budget →
+    ∀ (process : PIR.Process (Actions F G) A) (budget : ℕ), QueryBound process budget →
       Typed.QueryBound (interface context decode) process budget
   | .done _, _, _ => trivial
   | .halt _, _, _ => trivial
@@ -304,7 +304,7 @@ noncomputable def RoundByRound.dominated {accepts : A → Prop} {error factor : 
 omit [SampleableType F] [SampleableType B] in
 /-- The adaptive experiment is the experiment over the interface. -/
 theorem adaptiveExperiment_eq (context : Context) (decode : B → F)
-    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (validator : Stmt → PIR.Process (Actions F G) A) (initial : Stmt → History F G)
     (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) :
     adaptiveExperiment context decode validator initial prover =
       Typed.experiment (interface context decode) validator initial prover := by
@@ -314,7 +314,7 @@ theorem adaptiveExperiment_eq (context : Context) (decode : B → F)
 omit [SampleableType F] [SampleableType B] in
 /-- The fixed-statement experiment is the experiment over the interface with
 undecoded field answers. -/
-theorem experiment_eq (context : Context) (validator : PIR.Proc (Actions F G) A)
+theorem experiment_eq (context : Context) (validator : PIR.Process (Actions F G) A)
     (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) :
     experiment context validator initial prover =
       Typed.fixedExperiment (interface context id) validator initial prover := by
@@ -343,7 +343,7 @@ transform, whose challenges add at most `budget` queries. A statement satisfying
 theorem adaptive_soundness {accepts : A → Prop} {error loss : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
     (decode : B → F) (balanced : Balanced decode loss)
-    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (validator : Stmt → PIR.Process (Actions F G) A) (initial : Stmt → History F G)
     (determined : Determined initial) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (validator statement))
@@ -368,7 +368,7 @@ multiplied by the factor instead of being increased by an additive loss. -/
 theorem adaptive_soundness_dominated {accepts : A → Prop} {error factor : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
     (decode : B → F) (dominated : Dominated decode factor)
-    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (validator : Stmt → PIR.Process (Actions F G) A) (initial : Stmt → History F G)
     (determined : Determined initial) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (validator statement))
@@ -390,7 +390,7 @@ decoded challenges: a bijective decoding keeps the round error unchanged. -/
 theorem adaptive_soundness_exact [Fintype F] [Fintype B] {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
     (decode : B → F) (bijective : Function.Bijective decode)
-    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (validator : Stmt → PIR.Process (Actions F G) A) (initial : Stmt → History F G)
     (determined : Determined initial) (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
       certificate.doomed (validator statement))
@@ -419,7 +419,7 @@ with an empty cache and is shared by the prover and the transform. The
 transform's own challenges add at most `budget` queries. -/
 theorem soundness {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (doomedValidator : certificate.doomed validator)
+    (validator : PIR.Process (Actions F G) A) (doomedValidator : certificate.doomed validator)
     (budget : ℕ) (validatorBound : QueryBound validator budget) (initial : History F G)
     (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : ℕ)
     (proverBound : IsTotalQueryBound prover queries) :
@@ -436,7 +436,7 @@ the support of `provers` is bounded by `queries`, so the mixture inherits the
 bound. -/
 theorem randomized_soundness {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (doomedValidator : certificate.doomed validator)
+    (validator : PIR.Process (Actions F G) A) (doomedValidator : certificate.doomed validator)
     (budget : ℕ) (validatorBound : QueryBound validator budget) (initial : History F G)
     (provers : ProbComp (OracleComp (FieldOracle F G) (Proof F G))) (queries : ℕ)
     (proverBound : ∀ prover ∈ support provers, IsTotalQueryBound prover queries) :
@@ -453,7 +453,7 @@ accepted image comes only from an accepted outcome, the compiled verifier accept
 no more often than the transform. The image covers an acceptance projection and
 stop reasons that the compiled program reports differently. -/
 theorem acceptance_le_of_image {A' : Type} (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (initial : History F G)
+    (validator : PIR.Process (Actions F G) A) (initial : History F G)
     (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome A' × Proof F G))
     (image : PIR.Outcome A × Proof F G → PIR.Outcome A' × Proof F G)
     (construction : ∀ proof,
@@ -476,7 +476,7 @@ theorem acceptance_le_of_image {A' : Type} (context : Context)
 `validator.bind (done ∘ f)` accepts with `accepts` exactly as often as the
 transform of `validator` accepts with `accepts ∘ f`. -/
 theorem acceptance_bind_done {A' : Type} (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (f : A → A') (initial : History F G)
+    (validator : PIR.Process (Actions F G) A) (f : A → A') (initial : History F G)
     (prover : OracleComp (FieldOracle F G) (Proof F G)) (accepts : A' → Prop) :
     Pr{let result ← (simulateQ randomOracle (experiment context
         (validator.bind fun value => .done (f value)) initial prover)).run' ∅}[
@@ -505,7 +505,7 @@ omit [SampleableType F] in
 experiment moves into the acceptance predicate, together with any event on the
 chosen statement. -/
 theorem adaptive_acceptance_bind_done {A' : Type} [SampleableType B] (context : Context)
-    (decode : B → F) (validator : Stmt → PIR.Proc (Actions F G) A) (f : A → A')
+    (decode : B → F) (validator : Stmt → PIR.Process (Actions F G) A) (f : A → A')
     (initial : Stmt → History F G) (prover : OracleComp (Oracle F G B) (Stmt × Proof F G))
     (event : Stmt → Prop) (accepts : A' → Prop) :
     Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context decode

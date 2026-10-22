@@ -61,7 +61,7 @@ from bridges.structured import bodies as printer, snapshot as structured  # noqa
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
 NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
-# walk lists every equation between processes (`PIR.Proc`), whether the kernel
+# walk lists every equation between processes (`PIR.Process`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
 # compiled program; the record keeps the original-side ones, and none may name
 # a compiled meaning.
@@ -957,7 +957,7 @@ def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do
     let isProcess ← forallTelescope info.type fun _ body => do
       let body ← whnfR body
       if body.isAppOfArity ``Eq 3 then
-        return (← whnfR (body.getArg! 0)).isAppOf ``PIR.Proc
+        return (← whnfR (body.getArg! 0)).isAppOf ``PIR.Process
       return false
     unless isProcess do continue
     let evaluated ← lambdaTelescope info.value fun _ proof =>

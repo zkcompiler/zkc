@@ -22,7 +22,7 @@ theorem fieldEqual_reverse_law (observations : SiteObservations I)
       (.fieldEqual domain) (.cons left (.cons right .nil)) .nil
       (.done (.cons (decide (right = left)) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change @Eq (PIR.Proc _ (Values (assignment F G) [.boolean]))
+  change @Eq (PIR.Process _ (Values (assignment F G) [.boolean]))
     (.done (.cons (decide (left = right)) .nil)) (.done (.cons (decide (right = left)) .nil))
   rw [Evaluation.decide_equality_reverse left right]
 
@@ -32,7 +32,7 @@ theorem groupEqual_reverse_law (observations : SiteObservations I)
       (.groupEqual domain) (.cons left (.cons right .nil)) .nil
       (.done (.cons (decide (right = left)) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change @Eq (PIR.Proc _ (Values (assignment F G) [.boolean]))
+  change @Eq (PIR.Process _ (Values (assignment F G) [.boolean]))
     (.done (.cons (decide (left = right)) .nil)) (.done (.cons (decide (right = left)) .nil))
   rw [Evaluation.decide_equality_reverse left right]
 

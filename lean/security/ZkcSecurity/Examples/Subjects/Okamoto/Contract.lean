@@ -97,7 +97,7 @@ theorem holds_iff (firstBase secondBase point : G) (witnesses : F × F) :
       point = witnesses.1 • firstBase + witnesses.2 • secondBase := by
   unfold holds
   rw [formula_process]
-  change (PIR.Proc.done (I := closedInterface)
+  change (PIR.Process.done (I := closedInterface)
     (.cons (decide (point = witnesses.1 • firstBase + witnesses.2 • secondBase)) .nil :
       Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp

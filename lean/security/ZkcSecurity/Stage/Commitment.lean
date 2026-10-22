@@ -69,7 +69,7 @@ variable [∀ key, SampleableType (Raw key)] [SampleableType Y]
 /-- The joint game of a verifier that sees roots and openings: provers on the joint oracle,
 admissible at their total query count; the bad event is a false acceptance at a checkpoint. -/
 noncomputable def jointGame (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
-    (scheme : Extractable Shape Value Query Y) (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (scheme : Extractable Shape Value Query Y) (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (falseStatement : Stmt → List (Table Value) → Prop) (accepts : A → Prop) : Game :=
   oracleGame (JointRange Raw Shape Y Query)
@@ -90,7 +90,7 @@ variable [Fintype Y]
 reading's certificate at most `siteBound`, the loss at `q` prover queries is
 `q · (siteBound + hashCharge q) + verifierCost q`. -/
 noncomputable def commitmentRelation (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
-    (scheme : Extractable Shape Value Query Y) (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (scheme : Extractable Shape Value Query Y) (verifier : Stmt → PIR.Process (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     {accepts : A → Prop} {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error)
     {siteBound : ENNReal} (bounded : ∀ event, error event ≤ siteBound)

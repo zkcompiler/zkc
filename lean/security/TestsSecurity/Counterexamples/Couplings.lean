@@ -182,10 +182,10 @@ def absorb : Typed.Interface signature Event Unit Raw
   | .draw => .query .draw fun raw => some raw
 
 /-- Without the pinned witness: draw and return the bit. -/
-def ungated : PIR.Proc signature (Fin 2) := .call Op.draw fun bit => .done bit
+def ungated : PIR.Process signature (Fin 2) := .call Op.draw fun bit => .done bit
 
 /-- With the pinned witness absorbed first. -/
-def pinnedFirst : PIR.Proc signature (Fin 2) := .call Op.pinned fun _ => ungated
+def pinnedFirst : PIR.Process signature (Fin 2) := .call Op.pinned fun _ => ungated
 
 /-- A challenge function that reads the length of its key: the absorbed history
 before the occurrence, followed by the occurrence. -/

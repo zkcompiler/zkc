@@ -101,7 +101,7 @@ theorem experiment_accepted (wiring : Wiring) (checks : Checks F) (statement : S
   all_goals by_cases hleft : checks.left statement (residual prover first second) (prover.left first second) = true
   all_goals simp only [residual] at hleft
   all_goals simp only [run, experimentWith, rounds, roundsWith, standardArithmetic, terminal,
-    PIR.Proc.bind, PIR.Proc.run, PIR.Execution.follow, handler_receive_field,
+    PIR.Process.bind, PIR.Process.run, PIR.Execution.follow, handler_receive_field,
     handler_query, handler_send, received, Common.received, residual, Accepted, Reached,
     hfirst, hsecond, hleft, decide_true, decide_false, Bool.false_eq_true, ite_true, ite_false,
     Nat.reduceAdd, Nat.reduceEqDiff]

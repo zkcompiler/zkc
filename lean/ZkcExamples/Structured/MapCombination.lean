@@ -45,7 +45,7 @@ theorem formula_expansion {I : PIR.Signature} (sites : SiteObservations I)
           .done (.cons (left.get .here - right.get .here + 3) .nil) := by
   simp only [formulaBody, scalarInputs, Region.denote, Evaluation.meaning,
     Evaluation.operation, Op.results, Op.arguments, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_one, Environment.prepend, Environment.push, PIR.Proc.bind, Nat.cast_ofNat]
+    prepend_one, Environment.prepend, Environment.push, PIR.Process.bind, Nat.cast_ofNat]
 
 theorem scale_equation (s a : F) :
     invoke (program.payload.tables F G).closed scaleHelper (.cons s (.cons a .nil)) =
@@ -60,7 +60,7 @@ theorem formula_equation (s a t b unusedRow unusedScalar : F) :
   refine (program.payload.closed_body_view_as formulaDefinition formula_member formulaHelper formula_signature
     formulaBody formula_exact (scalarInputs s a t b unusedRow unusedScalar)).trans ?_
   rw [formula_expansion, scale_equation]
-  simp only [PIR.Proc.bind]
+  simp only [PIR.Process.bind]
   rw [scale_equation]
   rfl
 
@@ -100,14 +100,14 @@ theorem map_equation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unused
       simp only [List.getElem_map, List.getElem_range, formula,
         List.getElem?_eq_getElem bound, List.getElem?_eq_getElem boundB,
         Option.getD_some, List.getElem_zipWith]
-  exact equation.trans (congrArg (fun values => PIR.Proc.done (Values.cons values Values.nil)) ordered)
+  exact equation.trans (congrArg (fun values => PIR.Process.done (Values.cons values Values.nil)) ordered)
 
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 private theorem singleton_return {I : PIR.Signature}
-    (process : PIR.Proc I (Values (assignment F G) [.vector "bls12-381.fr"])) :
+    (process : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr"])) :
     process.bind (fun values => .done (Values.singleton (Value := assignment F G) (ty := .vector "bls12-381.fr") (values.get .here))) = process := by
-  simp only [Values.singleton_get, PIR.Proc.bind_done]
+  simp only [Values.singleton_get, PIR.Process.bind_done]
 
 set_option smartUnfolding true in
 theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
@@ -116,7 +116,7 @@ theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
       Evaluation.denoteMap table mapSpec (inputs s a t b unusedRow unusedScalar) := by
   simp only [mapBody, inputs, mapSpec, MapSpec.arguments, List.map_cons, List.map_nil, ↓reduceIte, Region.denote, Evaluation.meaning, Evaluation.operation,
     Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
-    Environment.prepend, Environment.push, PIR.Proc.bind]
+    Environment.prepend, Environment.push, PIR.Process.bind]
   exact singleton_return _
 
 theorem map_invocation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
@@ -132,7 +132,7 @@ theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
       (sites.mark "s0").bind (fun _ => invoke table mapHelper (inputs s a t b unusedRow unusedScalar)) := by
   simp only [wrapperBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
     Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
-    Environment.prepend, Environment.push, PIR.Proc.bind, PIR.Proc.bind_assoc]
+    Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
   exact singleton_return _
@@ -144,7 +144,7 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
       (sites.mark "s0").bind (fun _ => invoke table wrapperHelper (inputs s a t b unusedRow unusedScalar)) := by
   simp only [ownerBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
     Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
-    Environment.prepend, Environment.push, PIR.Proc.bind, PIR.Proc.bind_assoc]
+    Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
   exact singleton_return _
@@ -192,7 +192,7 @@ theorem observed_expansion (s : F) (a : List F) (t : F) (b unusedRow : List F) (
     owner_projection.denote_present _ program.payload.tables_adequate]
   set_option smartUnfolding true in
     rw [owner_body]
-    simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, output_mask, PIR.Proc.bind_done, observedSites]
+    simp only [PIR.Process.bind_assoc, PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
 
 
 /-- The complete retained protocol preserves both reached source marks. -/

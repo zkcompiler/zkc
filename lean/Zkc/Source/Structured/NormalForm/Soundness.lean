@@ -924,9 +924,9 @@ section Rules
 variable (model : DomainModel) (tables : Tables model)
   (protocols : ProtocolTable model.Value (Interface model)) (context : ProtocolContext) (self : Nat)
 
-theorem interpret_plain {A : Type} (process : PIR.Proc (Interface model) A) :
+theorem interpret_plain {A : Type} (process : PIR.Process (Interface model) A) :
     process.interpret (participantActionsOn model.toCarriers) = process :=
-  PIR.Proc.interpret_identity process
+  PIR.Process.interpret_identity process
 
 theorem calculate_absent (op : Op) (allowed : op.isCalculation = true) (total : op.total = true)
     (args : Values (Component model.Value) (ProtocolOp.calculate op allowed).arguments)
@@ -958,7 +958,7 @@ theorem calculate_present (op : Op) (allowed : op.isCalculation = true) (total :
   · rename_i present found
     have same : present = values := Option.some.inj (found.symm.trans (RoleFamily.sequence_present values))
     subst same
-    change PIR.Proc.bind (Evaluation.operationOn model _ tables.closed op present _) _ = _
+    change PIR.Process.bind (Evaluation.operationOn model _ tables.closed op present _) _ = _
     rw [operationOn_total model _ tables.closed op total]
     rfl
 
@@ -1041,7 +1041,7 @@ theorem apply_rule (signature : ProtocolSignature) (roles : List Nat) (site : St
       else .done (Values.absent model.Value signature.outputs) := rfl
 
 theorem owned_absent {I : PIR.Signature} {inputs outputs : List Ty} (self : Nat)
-    (work : Values model.Value inputs → PIR.Proc I (Values model.Value outputs))
+    (work : Values model.Value inputs → PIR.Process I (Values model.Value outputs))
     (args : Values (Component model.Value) inputs) (absent : RoleFamily.sequence args = none) :
     Participant.owned self self work args = .halt .incomplete := by
   simp [Participant.owned, absent]
@@ -1050,8 +1050,8 @@ end Rules
 
 /-! The main theorem. -/
 
-theorem bind_congr_left {I : PIR.Signature} {A B : Type} {first second : PIR.Proc I A}
-    (same : first = second) (next : A → PIR.Proc I B) : first.bind next = second.bind next := by
+theorem bind_congr_left {I : PIR.Signature} {A B : Type} {first second : PIR.Process I A}
+    (same : first = second) (next : A → PIR.Process I B) : first.bind next = second.bind next := by
   rw [same]
 
 theorem except_bind_ok {ε α β : Type} (value : α) (f : α → Except ε β) :
@@ -1347,7 +1347,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
               · split at normalized
                 · obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
                   cases built
-                  refine (PIR.Proc.bind_assoc _ _ _).trans ?_
+                  refine (PIR.Process.bind_assoc _ _ _).trans ?_
                   simp only [Form.denote, Form.denoteWith]
                   apply congrArg
                   funext values
@@ -1370,14 +1370,14 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
         split at normalized
         · rename_i stored
           cases normalized
-          simp [Participant.exchange, stored, Comp.eval, PIR.Proc.bind, Form.denote, Form.denoteWith]
+          simp [Participant.exchange, stored, Comp.eval, PIR.Process.bind, Form.denote, Form.denoteWith]
         · rename_i term stored
           cases rest : next (state.push (.cons (.present term) .nil)) with
           | error refusal => rw [rest, except_bind_error] at normalized; cases normalized
           | ok restForm =>
             rw [rest, except_bind_ok] at normalized
             cases normalized
-            simp only [Participant.exchange, stored, Comp.eval, ite_true, PIR.Proc.bind, Form.denote,
+            simp only [Participant.exchange, stored, Comp.eval, ite_true, PIR.Process.bind, Form.denote,
               Form.denoteWith]
             apply congrArg
             funext reply
@@ -1396,7 +1396,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
           | ok restForm =>
             rw [rest, except_bind_ok] at normalized
             cases normalized
-            simp only [Participant.exchange, different, ite_false, ite_true, PIR.Proc.bind, Form.denote,
+            simp only [Participant.exchange, different, ite_false, ite_true, PIR.Process.bind, Form.denote,
               Form.denoteWith]
             apply congrArg
             funext reply
@@ -1405,7 +1405,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
         · rename_i notReceiver
           have otherReceiver : context.roles receiver ≠ context.roles role :=
             distinct receiver bounded.2 (by simpa using notReceiver)
-          simp only [Participant.exchange, different, otherReceiver, ite_false, PIR.Proc.bind]
+          simp only [Participant.exchange, different, otherReceiver, ite_false, PIR.Process.bind]
           exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
             _ rfl
   | restrict ty roles =>
@@ -1416,7 +1416,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
     · rename_i bounded
       have contains := restrict_contains distinct roles (by simpa using bounded)
       refine (bind_congr_left (restrict_rule model tables protocols context _ ty roles _ _) _).trans ?_
-      simp only [contains, PIR.Proc.bind]
+      simp only [contains, PIR.Process.bind]
       split at normalized
       · rename_i member
         simp only [member, Participant.restrict, ite_true]
@@ -1440,7 +1440,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
       · rename_i other
         have different : context.roles owner ≠ context.roles role :=
           distinct owner (by omega) (by simpa using other)
-        simp only [Participant.query, different, ite_false, PIR.Proc.bind]
+        simp only [Participant.query, different, ite_false, PIR.Process.bind]
         exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
           _ rfl
       · rename_i own
@@ -1459,7 +1459,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
             rw [rest, except_bind_ok] at normalized
             cases normalized
             simp only [Participant.query, ite_true, stored]
-            refine congrArg (PIR.Proc.call _) (funext fun reply => ?_)
+            refine congrArg (PIR.Process.call _) (funext fun reply => ?_)
             exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _ reply _ restForm rest
               matched binders inputsEq _ rfl
         · cases normalized
@@ -1475,7 +1475,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
       · rename_i other
         have different : context.roles owner ≠ context.roles role :=
           distinct owner (by omega) (by simpa using other)
-        simp only [Participant.guard, different, ite_false, PIR.Proc.bind]
+        simp only [Participant.guard, different, ite_false, PIR.Process.bind]
         exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
           _ rfl
       · rename_i own
@@ -1484,18 +1484,18 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
         split at normalized
         · rename_i stored
           cases normalized
-          simp [Participant.guard, stored, Comp.eval, PIR.Proc.bind, Form.denote, Form.denoteWith]
+          simp [Participant.guard, stored, Comp.eval, PIR.Process.bind, Form.denote, Form.denoteWith]
         · rename_i condition stored
           split at normalized
           · rename_i decided
             simp only [Participant.guard, stored, Comp.eval, decision_holds results binders condition decided,
-              ite_true, PIR.Proc.bind]
+              ite_true, PIR.Process.bind]
             exact continue_push sig results processes _ inputs nextRegion next sound state _ form normalized matched binders inputsEq
               _ rfl
           · rename_i decided
             cases normalized
             simp [Participant.guard, stored, Comp.eval, decision_fails results binders condition decided,
-              PIR.Proc.bind, Form.denote, Form.denoteWith]
+              PIR.Process.bind, Form.denote, Form.denoteWith]
           · rename_i ty equality left right decided
             cases rest : next ((state.set arg (.present (.bool true))).push .nil) with
             | error refusal => rw [rest, except_bind_error] at normalized; cases normalized
@@ -1572,7 +1572,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
                 rw [calleeRole, enter_roles _ _ _ _ bound, located]
               rw [self, ← filled] at summary
               refine (bind_congr_left summary _).trans ?_
-              refine (PIR.Proc.bind_assoc _ _ _).trans ?_
+              refine (PIR.Process.bind_assoc _ _ _).trans ?_
               simp only [Form.denote, Form.denoteWith]
               apply congrArg
               funext values

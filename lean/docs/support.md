@@ -792,7 +792,7 @@ so it cannot satisfy even the reachable full-distribution contract. A literal
 fresh-HIGH-only sample has mass one half in this control. The bijective sampler
 r ↦ 1-r satisfies the law on the reached false flag and composes through two
 queries; an unreachable constant-provider flag violates the specified law.
-Effectful determined values and Proc-level conservative checker contracts are
+Effectful determined values and Process-level conservative checker contracts are
 also exercised.
 
 The exhaustive optional audit covers every owned declaration and its transitive

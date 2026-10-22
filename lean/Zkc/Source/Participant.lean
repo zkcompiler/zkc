@@ -42,7 +42,7 @@ variable {Role Ty : Type} [DecidableEq Role] {services : Services Ty} {Value : T
 actual reply, ignoring its local operand. Other roles obtain no component.
 Sender precedence also defines the unadmitted case of equal endpoints. -/
 def exchange (self sender receiver : Role) (site : String) {ty : Ty}
-    (value : Option (Value ty)) : PIR.Proc (interface Role Ty services Value) (Option (Value ty)) :=
+    (value : Option (Value ty)) : PIR.Process (interface Role Ty services Value) (Option (Value ty)) :=
   if sender = self then
     match value with
     | none => .halt .incomplete
@@ -55,7 +55,7 @@ def exchange (self sender receiver : Role) (site : String) {ty : Ty}
 The service's actual reply supplies the result; no sampling law is assumed. -/
 def query (self owner : Role) (site : String) (op : services.Op)
     (args : Values (fun ty => Option (Value ty)) (services.arguments op)) :
-    PIR.Proc (interface Role Ty services Value) (Option (Value (services.result op))) :=
+    PIR.Process (interface Role Ty services Value) (Option (Value (services.result op))) :=
   if owner = self then
     match RoleFamily.sequence args with
     | none => .halt .incomplete
@@ -65,7 +65,7 @@ def query (self owner : Role) (site : String) (op : services.Op)
 /-- A missing owned condition is incomplete; a false one rejects. Other roles
 continue without inspecting the condition or emitting an action. -/
 def guard (self owner : Role) (condition : Option Bool) :
-    PIR.Proc (interface Role Ty services Value) Unit :=
+    PIR.Process (interface Role Ty services Value) Unit :=
   if owner = self then
     match condition with
     | none => .halt .incomplete
@@ -80,8 +80,8 @@ def restrict {A : Type} (selected : Bool) (value : Option A) : Option A :=
 Other participants skip the work entirely. The rule is independent of the
 effect interface, so closed callbacks can retain internal observations. -/
 def owned {I : PIR.Signature} {inputs outputs : List Ty}
-    (self owner : Role) (work : Values Value inputs → PIR.Proc I (Values Value outputs))
-    (args : Values (Component Value) inputs) : PIR.Proc I (Values (Component Value) outputs) :=
+    (self owner : Role) (work : Values Value inputs → PIR.Process I (Values Value outputs))
+    (args : Values (Component Value) inputs) : PIR.Process I (Values (Component Value) outputs) :=
   if owner = self then
     match RoleFamily.sequence args with
     | none => .halt .incomplete
@@ -90,13 +90,13 @@ def owned {I : PIR.Signature} {inputs outputs : List Ty}
 
 theorem owned_other {I : PIR.Signature} {inputs outputs : List Ty}
     (self owner : Role) (different : owner ≠ self)
-    (work : Values Value inputs → PIR.Proc I (Values Value outputs))
+    (work : Values Value inputs → PIR.Process I (Values Value outputs))
     (args : Values (Component Value) inputs) :
     owned self owner work args = .done (Values.absent Value outputs) := by
   simp [owned, different]
 
 theorem owned_present {I : PIR.Signature} {inputs outputs : List Ty}
-    (self : Role) (work : Values Value inputs → PIR.Proc I (Values Value outputs))
+    (self : Role) (work : Values Value inputs → PIR.Process I (Values Value outputs))
     (args : Values Value inputs) :
     owned self self work args.present = (work args).bind fun results => .done results.present := by
   simp [owned]

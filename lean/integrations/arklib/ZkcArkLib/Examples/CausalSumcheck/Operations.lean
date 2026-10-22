@@ -42,7 +42,7 @@ variable (sites : SiteObservations I)
 /-- Existing operation semantics, including scalar ownership restriction.
 The canonical fragment fixes root self 1, the identity ProtocolContext and an
 empty ProtocolTable. Its operations have no protocol-region callbacks. -/
-def receive (site : String) : PIR.Proc I F :=
+def receive (site : String) : PIR.Process I F :=
   (protocolOperationWith sites actions tables 1 (.exchange scalar 0 1 site)
     (.cons none .nil) .nil [] {}).bind fun values =>
   (protocolOperationWith sites actions tables 1 (.restrict scalar [1]) values .nil [] {}).bind fun values =>
@@ -51,7 +51,7 @@ def receive (site : String) : PIR.Proc I F :=
     | none => .halt .incomplete
 
 /-- The query has an operand; a field/service name alone is not randomness. -/
-def draw (site : String) (service : Nat) : PIR.Proc I F :=
+def draw (site : String) (service : Nat) : PIR.Process I F :=
   (protocolOperationWith sites actions tables 1 (.restrict randomService [1])
     (.cons (some service) .nil) .nil [] {}).bind fun serviceValues =>
   (protocolOperationWith sites actions tables 1 (.draw 1 scalarDomain site) serviceValues .nil [] {}).bind fun values =>
@@ -59,17 +59,17 @@ def draw (site : String) (service : Nat) : PIR.Proc I F :=
     | some value => .done value
     | none => .halt .incomplete
 
-def send (site : String) (r : F) : PIR.Proc I Unit :=
+def send (site : String) (r : F) : PIR.Process I Unit :=
   (protocolOperationWith sites actions tables 1 (.exchange scalar 1 0 site)
     (.cons (some r) .nil) .nil [] {}).bind fun _ => .done ()
 
-def mark (site : String) : PIR.Proc I Unit :=
+def mark (site : String) : PIR.Process I Unit :=
   (protocolOperationWith sites actions tables 1 (.mark site) .nil .nil [] {}).bind fun _ => .done ()
 
-/-- A canonical one-round fragment in the ONE existing Proc, not an imported
-    Sumcheck body or a second source interpreter. Trusted tails are actual Proc. -/
+/-- A canonical one-round fragment in the ONE existing Process, not an imported
+    Sumcheck body or a second source interpreter. Trusted tails are actual Process. -/
 def scalarRound (names : Sites) (service : Nat) (claim : F)
-    (advance terminal : Message F → F → PIR.Proc I Unit) : PIR.Proc I (List F × F) :=
+    (advance terminal : Message F → F → PIR.Process I Unit) : PIR.Process I (List F × F) :=
   (mark sites actions tables names.round).bind fun _ =>
   (receive sites actions tables names.low).bind fun lo =>
   (receive sites actions tables names.high).bind fun hi =>
@@ -86,27 +86,27 @@ set_option backward.isDefEq.respectTransparency false in
 theorem receive_eq (site : String) :
     receive sites actions tables site = actions (lowAction site) := by
   simp [receive, protocolOperationWith, Participant.exchange, Participant.restrict,
-    PIR.Proc.interpret, PIR.Proc.bind, PIR.Proc.bind_assoc, PIR.Proc.bind_done,
+    PIR.Process.interpret, PIR.Process.bind, PIR.Process.bind_assoc, PIR.Process.bind_done,
     Values.get, lowAction]
 
 set_option backward.isDefEq.respectTransparency false in
 theorem draw_eq (site : String) (service : Nat) :
     draw sites actions tables site service = actions (queryAction site service) := by
   simp [draw, protocolOperationWith, Participant.query, Participant.restrict,
-    RoleFamily.sequence, PIR.Proc.interpret, PIR.Proc.bind, PIR.Proc.bind_assoc,
-    PIR.Proc.bind_done, Values.get, queryAction, services]
+    RoleFamily.sequence, PIR.Process.interpret, PIR.Process.bind, PIR.Process.bind_assoc,
+    PIR.Process.bind_done, Values.get, queryAction, services]
 
 set_option backward.isDefEq.respectTransparency false in
 theorem send_eq (site : String) (r : F) :
     send sites actions tables site r = (actions (sendAction site r)).bind (fun _ => .done ()) := by
-  simp [send, protocolOperationWith, Participant.exchange, PIR.Proc.interpret,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, sendAction]
+  simp [send, protocolOperationWith, Participant.exchange, PIR.Process.interpret,
+    PIR.Process.bind, PIR.Process.bind_assoc, sendAction]
 
 theorem mark_eq (site : String) : mark sites actions tables site = sites.mark site := by
-  simp only [mark, protocolOperationWith, PIR.Proc.bind_assoc, PIR.Proc.bind]
-  have unit_eta : (fun _ : Unit => (PIR.Proc.done () : PIR.Proc I Unit)) = PIR.Proc.done := by
+  simp only [mark, protocolOperationWith, PIR.Process.bind_assoc, PIR.Process.bind]
+  have unit_eta : (fun _ : Unit => (PIR.Process.done () : PIR.Process I Unit)) = PIR.Process.done := by
     funext u; cases u; rfl
-  rw [unit_eta, PIR.Proc.bind_done, qualify_root]
+  rw [unit_eta, PIR.Process.bind_done, qualify_root]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- Scopes use root-local Nat roles P=0 and V=1; @V claim is absent at P. -/
@@ -122,12 +122,12 @@ set_option backward.isDefEq.respectTransparency false in
 theorem guard_is_bare_stop (h : PIR.MonadHandler ProbComp I S E) (s : S) :
     (protocolOperationWith sites actions tables 1 (.guard 1 "guard")
       (.cons (some false) .nil) .nil [] {}).runM h s = pure ⟨.stopped .reject, s, []⟩ := by
-  simp [protocolOperationWith, Participant.guard, PIR.Proc.interpret,
-    PIR.Proc.bind, PIR.Proc.runM]
+  simp [protocolOperationWith, Participant.guard, PIR.Process.interpret,
+    PIR.Process.bind, PIR.Process.runM]
 
 set_option backward.isDefEq.respectTransparency false in
 theorem scalarRound_eq (names : Sites) (service : Nat) (claim : F)
-    (advance terminal : Message F → F → PIR.Proc I Unit) :
+    (advance terminal : Message F → F → PIR.Process I Unit) :
     scalarRound sites actions tables names service claim advance terminal =
       (sites.mark names.round).bind (fun _ =>
       (actions (lowAction names.low)).bind (fun lo =>
@@ -144,12 +144,12 @@ theorem scalarRound_eq (names : Sites) (service : Nat) (claim : F)
   congr 1; funext u; congr 1; funext lo; congr 1; funext hi
   by_cases passed : lo + hi = claim
   · have cond : decide (claim = lo + hi) = true := decide_eq_true passed.symm
-    simp [protocolOperationWith, Participant.guard, PIR.Proc.interpret,
-      PIR.Proc.bind, PIR.Proc.bind_assoc, boundary, cond, ite_eq_left passed]
+    simp [protocolOperationWith, Participant.guard, PIR.Process.interpret,
+      PIR.Process.bind, PIR.Process.bind_assoc, boundary, cond, ite_eq_left passed]
     rfl
   · have cond : decide (claim = lo + hi) = false := decide_eq_false (Ne.symm passed)
-    simp [protocolOperationWith, Participant.guard, PIR.Proc.interpret,
-      PIR.Proc.bind, PIR.Proc.bind_assoc, boundary, cond, ite_eq_right passed]
+    simp [protocolOperationWith, Participant.guard, PIR.Process.interpret,
+      PIR.Process.bind, PIR.Process.bind_assoc, boundary, cond, ite_eq_right passed]
 
 /-- V obtains the two distinct replies in order; HIGH sees LOW's residual state.
     This equation holds before imposing any sampling law. -/

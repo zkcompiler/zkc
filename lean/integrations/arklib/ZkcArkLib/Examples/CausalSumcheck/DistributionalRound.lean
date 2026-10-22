@@ -17,9 +17,9 @@ variable (sites : SiteObservations I)
   (actions : PIR.OperationInterpretation (participantInterface F G) I)
   (h : PIR.MonadHandler ProbComp I S E) (names : Sites)
 
-/-- The cut is after the guard and query mark. This is a Proc subexpression;
+/-- The cut is after the guard and query mark. This is a Process subexpression;
 calculatedRound_cut proves its relation to the typed canonical fragment. -/
-def queryPrefix (claim : F) : PIR.Proc I (Message F) :=
+def queryPrefix (claim : F) : PIR.Process I (Message F) :=
   (sites.mark names.round).bind fun _ =>
   (actions (lowAction names.low)).bind fun lo =>
   (actions (lowAction names.high)).bind fun hi =>
@@ -27,17 +27,17 @@ def queryPrefix (claim : F) : PIR.Proc I (Message F) :=
     (sites.mark names.query).bind fun _ => .done (lo, hi)
   else .halt .reject
 
-def querySuffix (advance : Message F → F → PIR.Proc I Unit)
-    (terminal : List F → F → PIR.Proc I Unit) (pair : Message F) (r : F) :
-    PIR.Proc I (List F × F) :=
+def querySuffix (advance : Message F → F → PIR.Process I Unit)
+    (terminal : List F → F → PIR.Process I Unit) (pair : Message F) (r : F) :
+    PIR.Process I (List F × F) :=
   (sites.mark names.delivery).bind fun _ =>
   (actions (sendAction names.delivery r)).bind fun _ =>
   (advance pair r).bind fun _ =>
   (calculatedUpdate sites actions [] pair r).bind fun pc =>
   (terminal pc.1 pc.2).bind fun _ => .done pc
 
-variable (advance : Message F → F → PIR.Proc I Unit)
-  (terminal : List F → F → PIR.Proc I Unit)
+variable (advance : Message F → F → PIR.Process I Unit)
+  (terminal : List F → F → PIR.Process I Unit)
 
 set_option backward.isDefEq.respectTransparency false in
 theorem calculatedRound_cut (service : Nat) (claim : F) :
@@ -47,9 +47,9 @@ theorem calculatedRound_cut (service : Nat) (claim : F) :
       querySuffix sites actions names advance terminal pair r := by
   rw [calculatedRound_eq, scalarRound_eq]
   simp only [queryPrefix, querySuffix, calculatedUpdate_eq, List.nil_append,
-    PIR.Proc.bind_assoc, PIR.Proc.bind]
+    PIR.Process.bind_assoc, PIR.Process.bind]
   congr 1; funext u; congr 1; funext lo; congr 1; funext hi
-  split <;> simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  split <;> simp only [PIR.Process.bind_assoc, PIR.Process.bind]
 
 variable (before : Phase S E Unit) (after : F → Phase S E Unit)
 
@@ -64,7 +64,7 @@ theorem phase_at_cut [SampleableType F] (claim : F) (s : S) :
           let q ← freshQuery (F := F) before after s
           q.followM fun r s => (querySuffix sites actions names advance terminal pair r).runM h s) := by
   simp only [queryPrefix, querySuffix, calculatedUpdate_eq, List.nil_append,
-    PIR.Proc.bind, PIR.runM_bind, run, prepare, phaseStrategy, mapPhase,
+    PIR.Process.bind, PIR.runM_bind, run, prepare, phaseStrategy, mapPhase,
     bind_assoc, PIR.followM_assoc, follow_result, pure_bind]
   apply bind_congr; intro marked
   apply congrArg (PIR.Execution.followM marked)
@@ -78,14 +78,14 @@ theorem phase_at_cut [SampleableType F] (claim : F) (s : S) :
   by_cases passed : boundary (lo, hi) = claim
   · simp only [ite_eq_left passed, phaseTail, freshQuery, mapPhase,
       PIR.runM_bind, runM_bind_function, bind_assoc, PIR.followM_assoc,
-      follow_result, pure_bind, PIR.Proc.runM]
+      follow_result, pure_bind, PIR.Process.runM]
     have returned (pair : Message F) (s : S)
         (k : Message F → S → ProbComp (PIR.Execution S E (List F × F))) :
         (⟨.returned pair, s, []⟩ : PIR.Execution S E (Message F)).followM k = k pair s :=
       follow_result pair s k
     simp only [returned]
     rfl
-  · simp [passed, phaseTail, noOp, result, stopped, PIR.Proc.runM, PIR.Execution.followM]
+  · simp [passed, phaseTail, noOp, result, stopped, PIR.Process.runM, PIR.Execution.followM]
 
 /-- Full execution distribution equality from local query equality on reachable
 states. The prefix itself supplies residual states and ordered observations. -/

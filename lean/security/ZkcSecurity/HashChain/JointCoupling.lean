@@ -445,7 +445,7 @@ variable (encoding : Encoding E Shape S Query) (width : ℕ)
 
 /-- The deployed reading against the split oracle is the reading with chain inputs answered by
 the traced oracle and hash calls by their own table. -/
-theorem chainRead_split (small : width ≤ 2 ^ 64) (process : PIR.Proc (committed J Shape Value) A)
+theorem chainRead_split (small : width ≤ 2 ^ 64) (process : PIR.Process (committed J Shape Value) A)
     (state : S) (history : List (Absorbed E Shape S)) (roots : List (Shape × S))
     (messages : List (Message P S)) (openings : List (Opening Value S)) :
     simulateQ (splitTraced encoding)
@@ -465,7 +465,7 @@ theorem chainRead_split (small : width ≤ 2 ^ 64) (process : PIR.Proc (committe
   simp only [byteChain, byteCall, simulateQ_spec_query]
   exact splitTraced_inr encoding (encoding.classify_chainBytes (read.toCall small))
 
-theorem chainVerify_split (small : width ≤ 2 ^ 64) (verifier : PIR.Proc (committed J Shape Value) A)
+theorem chainVerify_split (small : width ≤ 2 ^ 64) (verifier : PIR.Process (committed J Shape Value) A)
     (initial : List (Absorbed E Shape S)) (roots : List (Shape × S)) (messages : List (Message P S))
     (openings : List (Opening Value S)) :
     simulateQ (splitTraced encoding)
@@ -487,7 +487,7 @@ theorem chainVerify_split (small : width ≤ 2 ^ 64) (verifier : PIR.Proc (commi
 
 include encoding in
 /-- The reading against the traced oracle from a bad trace ends bad. -/
-theorem chainRead_persists (small : width ≤ 2 ^ 64) (process : PIR.Proc (committed J Shape Value) A)
+theorem chainRead_persists (small : width ≤ 2 ^ 64) (process : PIR.Process (committed J Shape Value) A)
     (state : S) (history : List (Absorbed E Shape S)) (roots : List (Shape × S))
     (messages : List (Message P S)) (openings : List (Opening Value S))
     (first : Trace (Absorbed E Shape S) S Bytes × (Query → Option S)) (isBad : first.1.bad = true) :
@@ -501,7 +501,7 @@ include encoding in
 /-- The verifier's reading against the traced oracle and its joint-oracle reading against the
 lazy joint oracle return the same outcome and log, unless the trace raises the bad flag. -/
 theorem read_coupling (small : width ≤ 2 ^ 64) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (state : S) (history : List (Absorbed E Shape S))
       (roots : List (Shape × S)) (messages : List (Message P S)) (openings : List (Opening Value S))
       (trace : Trace (Absorbed E Shape S) S Bytes) (tables : Simulated (Absorbed E Shape S) S Bytes width)
       (rows : Query → Option S),
@@ -639,7 +639,7 @@ end VerifierPhase
 section Experiments
 variable (encoding : Encoding E Shape S Query) (width : ℕ)
   (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
-  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (verifier : Stmt → PIR.Process (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
   (statementRoots : Stmt → List (Shape × S))
 
 /-- The verifier's joint-oracle reading, logged. -/

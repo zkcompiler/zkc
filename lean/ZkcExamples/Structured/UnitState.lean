@@ -113,7 +113,7 @@ private theorem invoke_fold (xs : List F) (enabled : Bool) :
       funext result
       cases result
       rfl
-    · exact PIR.Proc.bind_done _
+    · exact PIR.Process.bind_done _
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
     program.payload foldDefinition fold_member
     foldBody (by rfl) (inputs xs enabled)).trans bodyLaw
@@ -129,7 +129,7 @@ private theorem invoke_work (xs : List F) (enabled : Bool) :
     set_option smartUnfolding true in
       simp only [workBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
         Values.get, Evaluation.meaning, Evaluation.operation,
-        SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind, Environment.prepend]
+        SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Environment.prepend]
     dsimp only [Op.results, Values.get, Environment.prepend, Environment.push]
     congr 1
     funext result
@@ -156,13 +156,13 @@ private theorem process_fold (xs : List F) (enabled : Bool) :
     set_option smartUnfolding true in
       simp only [mainBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
         Values.get, Evaluation.meaning, Evaluation.operation,
-        SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind, Environment.prepend]
+        SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Environment.prepend]
     trans (invoke (table F G) workHelper (inputs xs enabled)).bind .done
     · congr 1
       funext result
       cases result with
       | cons enabled rest => cases rest; rfl
-    · exact PIR.Proc.bind_done _
+    · exact PIR.Process.bind_done _
   exact (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
     program.payload mainBody (by rfl) (inputs xs enabled)).trans
     (bodyLaw.trans (invoke_work xs enabled))
@@ -204,7 +204,7 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
   cases enabled with
   | false =>
     erw [Finite.fold_total _ (fun state _ => state) (fun state item => transition (G := G) xs false item state)]
-    simp [reference, PIR.Proc.bind]
+    simp [reference, PIR.Process.bind]
   | true =>
     cases xs with
     | nil => rfl
@@ -223,7 +223,7 @@ theorem process_exhausted (xs : List F) (enabled : Bool)
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [Evaluation.denoteFold_pack]
   simp [Finite.execute, DomainSpec.denote, foldSpec, Values.get, Finite.Domain.admit,
-    lengthInvalid, Finite.admitThen, PIR.Proc.bind]
+    lengthInvalid, Finite.admitThen, PIR.Process.bind]
 
 theorem process_eq_checked_reference (xs : List F) (enabled : Bool) :
     process (G := G) xs enabled =

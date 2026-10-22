@@ -58,12 +58,12 @@ abbrev hashSignature : PIR.Signature where
     | .hash _ => Fin 2
 
 /-- Authenticate the same leaf twice. -/
-def unpruned (expected : Fin 2) : PIR.Proc hashSignature Bool :=
+def unpruned (expected : Fin 2) : PIR.Process hashSignature Bool :=
   .call (.hash 0) fun first => .call (.hash 0) fun second =>
     .done (decide (first = expected ∧ second = expected))
 
 /-- Authenticate it once and reuse the digest. -/
-def pruned (expected : Fin 2) : PIR.Proc hashSignature Bool :=
+def pruned (expected : Fin 2) : PIR.Process hashSignature Bool :=
   .call (.hash 0) fun first => .done (decide (first = expected ∧ first = expected))
 
 /-- Under every handler with the hash laws, possibly stopping on an input, the
@@ -74,7 +74,7 @@ theorem lawful_preserves {S E : Type} (handler : PIR.Handler hashSignature S E)
   obtain ⟨result, results⟩ := lawful
   have first := results (.hash 0) trivial state
   have second := results (.hash 0) trivial (handler (.hash 0) state).state
-  simp only [unpruned, pruned, PIR.Proc.run, PIR.Execution.follow, first]
+  simp only [unpruned, pruned, PIR.Process.run, PIR.Execution.follow, first]
   rcases outcome : result (.hash 0) with answer | stop
   · simp only [second, outcome]
   · rfl
@@ -278,7 +278,7 @@ def flawedInitial (configuration : Configuration Bool) : List (Event Unit Unit (
 
 /-- The flawed verifier: the intended depth and width, and the scheme the
 producer supplies as a runtime parameter. -/
-def flawedVerifier (scheme : Bool) : PIR.Proc (signature (List Coordinate) Digest) Bool :=
+def flawedVerifier (scheme : Bool) : PIR.Process (signature (List Coordinate) Digest) Bool :=
   verifier accepts ⟨scheme, intended.depth, intended.width⟩
 
 /-- The flawed construction's key for a root. -/

@@ -39,7 +39,7 @@ variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value 
 
 /-- Every transcript key a run queries extends the run's starting history. -/
 theorem runTable_history :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (history : List (Absorbed E Shape Y))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (history : List (Absorbed E Shape Y))
       (roots : List (Shape × Y)) (messages : List (Message P Y))
       (openings : List (Opening Value Y)) (key : TranscriptKey E Shape Y),
       (.inl key : JointKey E Shape Y Query) ∈
@@ -128,11 +128,11 @@ theorem lookup_rootTables (roots : List (Shape × Y)) (handle position : ℕ) :
   cases roots[handle]? <;> rfl
 
 theorem settle_base (tables : List (Table Value)) (operation : J.Op)
-    (next : J.Reply operation → PIR.Proc (committed J Shape Value) A) :
+    (next : J.Reply operation → PIR.Process (committed J Shape Value) A) :
     settle tables (.call (.base operation) next) = .call (.base operation) next := rfl
 
 theorem settle_commit (tables : List (Table Value)) (shape : Shape)
-    (next : Unit → PIR.Proc (committed J Shape Value) A) :
+    (next : Unit → PIR.Process (committed J Shape Value) A) :
     settle tables (.call (.commit shape) next) = .call (.commit shape) next := rfl
 
 end Tables
@@ -158,9 +158,9 @@ theorem runTable_escapeAt {accepts : A → Prop} {charge : List E → E → ENNR
       evalWithAnswerFn (QueryImpl.ofFn (hashAnswers table))
         (scheme.authenticate shape root position opening) = true →
       extracted shape root position = some opening.value)
-    (start : PIR.Proc (committed J Shape Value) A) (startTables : List (Table Value))
+    (start : PIR.Process (committed J Shape Value) A) (startTables : List (Table Value))
     (initial : List (Absorbed E Shape Y)) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (events history : List (Absorbed E Shape Y))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (events history : List (Absorbed E Shape Y))
       (roots : List (Shape × Y)) (messages : List (Message P Y))
       (openings : List (Opening Value Y)),
       replay absorb words extracted (fun key => table (.inl key)) start startTables initial events =
@@ -308,9 +308,9 @@ theorem runTable_escape {accepts : A → Prop} {error : E → ENNReal}
       evalWithAnswerFn (QueryImpl.ofFn (hashAnswers table))
         (scheme.authenticate shape root position opening) = true →
       extracted shape root position = some opening.value)
-    (start : PIR.Proc (committed J Shape Value) A) (startTables : List (Table Value))
+    (start : PIR.Process (committed J Shape Value) A) (startTables : List (Table Value))
     (initial : List (Absorbed E Shape Y)) :
-    ∀ (process : PIR.Proc (committed J Shape Value) A) (events history : List (Absorbed E Shape Y))
+    ∀ (process : PIR.Process (committed J Shape Value) A) (events history : List (Absorbed E Shape Y))
       (roots : List (Shape × Y)) (messages : List (Message P Y))
       (openings : List (Opening Value Y)),
       replay absorb words extracted (fun key => table (.inl key)) start startTables initial events =

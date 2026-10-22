@@ -37,7 +37,7 @@ theorem follow_mapPhase (f : A → B) (p : Phase S E A) (s : S)
   simp [mapPhase, bind_assoc, PIR.followM_assoc]
 
 theorem runM_bind_function (h : PIR.MonadHandler ProbComp I S E)
-    (p : PIR.Proc I A) (k : A → PIR.Proc I B) :
+    (p : PIR.Process I A) (k : A → PIR.Process I B) :
     (p.bind k).runM h = (fun s => do
       let e ← p.runM h s
       e.followM fun a s => (k a).runM h s) := by
@@ -57,8 +57,8 @@ def freshQuery [SampleableType F] (before : Phase S E Unit)
 /-- Transport value-returning work through the existing bind. Stops, state and
 ordered events belong to the phase; a successful value selects the continuation. -/
 theorem runM_bind_transport {I : PIR.Signature} {S E A B : Type}
-    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (k : A → PIR.Proc I B) (step : Phase S E A) (next : A → Phase S E B)
+    (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (k : A → PIR.Process I B) (step : Phase S E A) (next : A → Phase S E B)
     (stepLaw : ∀ s, p.runM h s = step s)
     (nextLaw : ∀ a s, (k a).runM h s = next a s) (s : S) :
     (p.bind k).runM h s = (do let e ← step s; e.followM next) := by
@@ -67,8 +67,8 @@ theorem runM_bind_transport {I : PIR.Signature} {S E A B : Type}
   rw [hn]
 
 /-- No determinism restriction: every probabilistic stopped record, including
-    its residual state and events, survives any existing Proc continuation. -/
-theorem stopped_distribution {A B : Type} (p : PIR.Proc I A) (k : A → PIR.Proc I B)
+    its residual state and events, survives any existing Process continuation. -/
+theorem stopped_distribution {A B : Type} (p : PIR.Process I A) (k : A → PIR.Process I B)
     (h : PIR.MonadHandler ProbComp I S E) (s : S)
     (distribution : ProbComp (PIR.Stop × S × List E))
     (localStop : p.runM h s = (do
@@ -83,18 +83,18 @@ theorem stopped_distribution {A B : Type} (p : PIR.Proc I A) (k : A → PIR.Proc
 /-- Trusted work may emit events or stop before returning its determined value.
 The continuation consumes that value only on successful completion. -/
 theorem runM_bind_determined (h : PIR.MonadHandler ProbComp I S E)
-    (p : PIR.Proc I A) (work : Phase S E Unit) (value : A)
+    (p : PIR.Process I A) (work : Phase S E Unit) (value : A)
     (stepLaw : ∀ s, p.runM h s = mapPhase (fun _ => value) work s)
-    (next : A → PIR.Proc I B) (s : S) :
+    (next : A → PIR.Process I B) (s : S) :
     (p.bind next).runM h s = (do
       let e ← work s
       e.followM fun _ s => (next value).runM h s) := by
   rw [runM_bind_transport h p next _ _ stepLaw (fun _ _ => rfl), follow_mapPhase]
 
-/-- A handler-independent Proc equation discharges the local runM value law,
+/-- A handler-independent Process equation discharges the local runM value law,
 including checker work that stops or records observations. -/
 theorem runM_determined_of_proc (h : PIR.MonadHandler ProbComp I S E)
-    (p : PIR.Proc I A) (work : PIR.Proc I Unit) (value : A)
+    (p : PIR.Process I A) (work : PIR.Process I Unit) (value : A)
     (equation : p = work.bind (fun _ => .done value)) (s : S) :
     p.runM h s = (do
       let e ← work.runM h s
@@ -189,7 +189,7 @@ The complete outcome, residual state and ordered events are preserved. Internal
 oracle queries of a handler are not counted by this observation. -/
 theorem runM_sameDist (left right : PIR.MonadHandler ProbComp I S E)
     (localLaw : ∀ action state, SameDist (left action state) (right action state))
-    (process : PIR.Proc I A) (state : S) :
+    (process : PIR.Process I A) (state : S) :
     SameDist (process.runM left state) (process.runM right state) := by
   induction process generalizing state with
   | done value => exact SameDist.refl _
@@ -268,23 +268,23 @@ def returnedSatisfies {S E A : Type} (predicate : A → Prop) (e : PIR.Execution
   | .stopped _ => False
   | .returned a => predicate a
 
-def acceptance (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
+def acceptance (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
     (s : S) (predicate : A → Prop) : ProbComp Prop := do
   let e ← p.runM h s
   pure (returnedSatisfies predicate e)
 
-def attachWork (p : PIR.Proc I A) (work : A → PIR.Proc I Unit) : PIR.Proc I A :=
+def attachWork (p : PIR.Process I A) (work : A → PIR.Process I Unit) : PIR.Process I A :=
   p.bind fun a => (work a).bind fun _ => .done a
 
-def checked (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (checker : A → PIR.Proc I Bool) (s : S) : ProbComp Prop := do
+def checked (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (checker : A → PIR.Process I Bool) (s : S) : ProbComp Prop := do
   let e ← (p.bind checker).runM h s
   pure (e.outcome = .returned true)
 
 /-- A local checker equation composes through any prefix, preserving stopping
 work and all observations. No equality of complete games is a premise. -/
-theorem checked_eq (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (work : A → PIR.Proc I Unit) (checker : A → PIR.Proc I Bool)
+theorem checked_eq (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (work : A → PIR.Process I Unit) (checker : A → PIR.Process I Bool)
     (value : A → Bool) (s : S)
     (checkLaw : ∀ a s, (checker a).runM h s = (do
       let e ← (work a).runM h s
@@ -301,10 +301,10 @@ theorem checked_eq (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
       apply bind_congr
       intro checked
       cases checked with | mk out s es =>
-        cases out <;> simp [PIR.Proc.runM, result, returnedSatisfies]
+        cases out <;> simp [PIR.Process.runM, result, returnedSatisfies]
 
 theorem acceptance_mono (h : PIR.MonadHandler ProbComp I S E)
-    (p : PIR.Proc I A) (s : S) (left right : A → Prop)
+    (p : PIR.Process I A) (s : S) (left right : A → Prop)
     (implies : ∀ a, left a → right a) :
     mass (acceptance h p s left) ≤ mass (acceptance h p s right) := by
   apply OracleComp.prEvent_mono_of_support
@@ -315,8 +315,8 @@ theorem acceptance_mono (h : PIR.MonadHandler ProbComp I S E)
     | returned a => exact implies a
 
 /-- Conservative trusted checkers need acceptance implication, not equality. -/
-theorem checked_le (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (work : A → PIR.Proc I Unit) (checker : A → PIR.Proc I Bool)
+theorem checked_le (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (work : A → PIR.Process I Unit) (checker : A → PIR.Process I Bool)
     (value : A → Bool) (s : S)
     (checkLaw : ∀ a s, (checker a).runM h s = (do
       let e ← (work a).runM h s
@@ -326,9 +326,9 @@ theorem checked_le (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
   rw [checked_eq h p work checker value s checkLaw]
   exact acceptance_mono h _ s _ predicate mathematics
 
-/-- Proc-level checker equations are sufficient for the local execution law. -/
-theorem checked_le_of_proc (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Proc I A)
-    (work : A → PIR.Proc I Unit) (checker : A → PIR.Proc I Bool)
+/-- Process-level checker equations are sufficient for the local execution law. -/
+theorem checked_le_of_proc (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)
+    (work : A → PIR.Process I Unit) (checker : A → PIR.Process I Bool)
     (value : A → Bool) (s : S)
     (checkLaw : ∀ a, checker a = (work a).bind (fun _ => .done (value a)))
     (predicate : A → Prop) (mathematics : ∀ a, value a = true → predicate a) :

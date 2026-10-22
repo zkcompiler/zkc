@@ -107,7 +107,7 @@ def verifier {m : Type → Type} [Monad m] (challenge : History F G → m F) (st
 
 /-- The admitted original validator on a statement's published values, with the
 replaced service at `handle`, read through its acceptance output. -/
-def original (statement : art.Statement F G) (handle : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+def original (statement : art.Statement F G) (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   ((c.imported.program.participant F G c.context.validator
       (heldInputs handle (encodeValues statement) c.selection.slots
         c.imported.program.payload.entry.inputs)).bind

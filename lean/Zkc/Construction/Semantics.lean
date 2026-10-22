@@ -93,12 +93,12 @@ def encodeValues : {tys : List Structured.Ty} → Values (Structured.assignment 
   | ty :: _, .cons value rest => Value.encode ty value :: encodeValues rest
 
 /-- A finished outcome as a process. -/
-def ofOutcome {I : PIR.Signature} {A : Type} : PIR.Outcome A → PIR.Proc I A
+def ofOutcome {I : PIR.Signature} {A : Type} : PIR.Outcome A → PIR.Process I A
   | .returned value => .done value
   | .stopped reason => .halt reason
 
 /-- The outcome of a process that cannot call. -/
-def closedOutcome {A : Type} : PIR.Proc Structured.closedInterface A → PIR.Outcome A
+def closedOutcome {A : Type} : PIR.Process Structured.closedInterface A → PIR.Outcome A
   | .done value => .returned value
   | .halt reason => .stopped reason
   | .call operation _ => (show Empty from operation).elim
@@ -145,9 +145,9 @@ theorem operation_eq {I : PIR.Signature} (observations : Structured.SiteObservat
   case boundedAt domain =>
     rcases arguments with _ | ⟨container, _ | ⟨index, _ | _⟩⟩
     change (match container[index]? with
-      | some value => PIR.Proc.done (Values.cons (Value := Structured.assignment F G)
+      | some value => PIR.Process.done (Values.cons (Value := Structured.assignment F G)
           (ty := .field domain) value Values.nil)
-      | none => PIR.Proc.halt PIR.Stop.refused) =
+      | none => PIR.Process.halt PIR.Stop.refused) =
         ofOutcome (match container[index]? with
           | some value => PIR.Outcome.returned (Values.cons (Value := Structured.assignment F G)
               (ty := .field domain) value Values.nil)
@@ -232,7 +232,7 @@ def scalarType : Structured.Ty → Option Zkc.Source.Common.Native.Ty
 
 /-- Send a payload to `receiver` at `site`. -/
 def sendPayload {A : Type} (site : String) (receiver : Nat) (payload : Payload F G)
-    (next : PIR.Proc (Actions F G) A) : PIR.Proc (Actions F G) A :=
+    (next : PIR.Process (Actions F G) A) : PIR.Process (Actions F G) A :=
   match payload with
   | .boolean value => .call (.send (ty := .boolean) site receiver value) fun _ => next
   | .field domain value => .call (.send (ty := .field domain) site receiver value) fun _ => next
@@ -245,9 +245,9 @@ variable (context : Context) (handle : Nat)
 
 /-- Iterate a loop body over the given induction values. -/
 def iterate {I : PIR.Signature} {A : Type}
-    (body : List (Value F G) → (List (Value F G) → PIR.Proc I A) → PIR.Proc I A)
+    (body : List (Value F G) → (List (Value F G) → PIR.Process I A) → PIR.Process I A)
     (env : List (Value F G)) (yielded : List Nat) :
-    List Nat → List (Value F G) → (List (Value F G) → PIR.Proc I A) → PIR.Proc I A
+    List Nat → List (Value F G) → (List (Value F G) → PIR.Process I A) → PIR.Process I A
   | [], carried, next => next carried
   | index :: rest, carried, next =>
       body (env ++ .index index :: carried) fun final =>
@@ -261,13 +261,13 @@ style. Receives come from the producer; each challenge becomes the selected
 query on `handle`; an observed message sent by the validator is its delivery to
 the producer. Transcript values are computed as inert histories. -/
 def specK {A : Type} : List Instruction → List (Value F G) →
-    (List (Value F G) → PIR.Proc (Actions F G) A) → PIR.Proc (Actions F G) A
+    (List (Value F G) → PIR.Process (Actions F G) A) → PIR.Process (Actions F G) A
   | [], env, next => next env
   | instruction :: rest, env, next =>
       specStep instruction env fun env' => specK rest env' next
 
 def specStep {A : Type} : Instruction → List (Value F G) →
-    (List (Value F G) → PIR.Proc (Actions F G) A) → PIR.Proc (Actions F G) A
+    (List (Value F G) → PIR.Process (Actions F G) A) → PIR.Process (Actions F G) A
   | ⟨.receive site _ _ ty, [], _, _⟩, env, next =>
       match scalarType ty with
       | some common =>
@@ -436,7 +436,7 @@ def ideal (context : Context) (challenge : History F G → m F)
 def spec (context : Context) (handle : Nat)
     (table : Structured.Evaluation.Meanings F G Structured.closedInterface) (returned : List Nat)
     (instructions : List Instruction) (env : List (Value F G)) :
-    PIR.Proc (Actions F G) (List (Value F G)) :=
+    PIR.Process (Actions F G) (List (Value F G)) :=
   specK context handle table instructions env fun final =>
     match read final returned with
     | some values => .done values

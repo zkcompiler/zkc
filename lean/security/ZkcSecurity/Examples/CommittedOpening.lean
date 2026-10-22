@@ -261,18 +261,18 @@ abbrev signature (Row Digest : Type) : PIR.Signature where
 
 /-- Processes compose associatively. -/
 theorem bind_assoc {I : PIR.Signature} {A B C : Type} :
-    ∀ (process : PIR.Proc I A) (first : A → PIR.Proc I B) (second : B → PIR.Proc I C),
+    ∀ (process : PIR.Process I A) (first : A → PIR.Process I B) (second : B → PIR.Process I C),
       (process.bind first).bind second = process.bind fun value => (first value).bind second
   | .done _, _, _ => rfl
   | .halt _, _, _ => rfl
   | .call operation next, first, second => by
-      simp only [PIR.Proc.bind]
+      simp only [PIR.Process.bind]
       congr
       funext reply
       exact bind_assoc (next reply) first second
 
 /-- The climb as a process of hash-effect calls. -/
-def climbProcess : ℕ → List Digest → Digest → PIR.Proc (signature Row Digest) Digest
+def climbProcess : ℕ → List Digest → Digest → PIR.Process (signature Row Digest) Digest
   | _, [], current => .done current
   | index, sibling :: rest, current =>
       .call (.hash (parent index current sibling)) fun up => climbProcess (index / 2) rest up
@@ -293,7 +293,7 @@ the row's leaf hash reaches the root. The shape comes from the configuration,
 never from the opening. -/
 def authenticate [DecidableEq Digest] (configuration : Configuration Scheme) (rootValue : Digest)
     (index : ℕ) (row : List Coordinate) (siblings : List Digest) :
-    PIR.Proc (signature (List Coordinate) Digest) Bool :=
+    PIR.Process (signature (List Coordinate) Digest) Bool :=
   if row.length = configuration.width ∧ siblings.length = configuration.depth then
     .call (.hash (.leaf row)) fun leafDigest =>
       (climbProcess index siblings leafDigest).bind fun top => .done (decide (top = rootValue))
@@ -303,7 +303,7 @@ def authenticate [DecidableEq Digest] (configuration : Configuration Scheme) (ro
 reject unless it authenticates, and accept exactly when the scheme accepts the
 row. -/
 def verifier [DecidableEq Digest] (accepts : Scheme → List Coordinate → Bool)
-    (configuration : Configuration Scheme) : PIR.Proc (signature (List Coordinate) Digest) Bool :=
+    (configuration : Configuration Scheme) : PIR.Process (signature (List Coordinate) Digest) Bool :=
   .call .root fun rootValue =>
     .call (.position configuration.depth) fun index =>
       .call .opening fun opened =>
@@ -383,7 +383,7 @@ absorbed history followed by its occurrence, and hash calls pass through to
 the oracle. Returns the outcome and the unread proof. -/
 def interpret {m : Type → Type} [Monad m] {A : Type}
     (oracle : (query : Query Context Scheme Row Digest) → m (Range query)) (absorbOpening : Bool) :
-    PIR.Proc (signature Row Digest) A → List (Event Context Scheme Row Digest) →
+    PIR.Process (signature Row Digest) A → List (Event Context Scheme Row Digest) →
       List (Message Row Digest) → m (PIR.Outcome A × List (Message Row Digest))
   | .done value, _, proof => pure (.returned value, proof)
   | .halt stop, _, proof => pure (.stopped stop, proof)
@@ -418,7 +418,7 @@ def hashOf (oracle : (query : Query Context Scheme Row Digest) → Range query) 
 /-- A climb process followed by a continuation is the climb's digest followed
 by the continuation, in a deterministic reading. -/
 theorem interpret_climb {A : Type} (oracle : (query : Query Context Scheme Row Digest) → Range query)
-    (absorbOpening : Bool) (next : Digest → PIR.Proc (signature Row Digest) A)
+    (absorbOpening : Bool) (next : Digest → PIR.Process (signature Row Digest) A)
     (history : List (Event Context Scheme Row Digest)) (proof : List (Message Row Digest)) :
     ∀ (index : ℕ) (siblings : List Digest) (current : Digest),
       interpret (m := Id) oracle absorbOpening ((climbProcess index siblings current).bind next)
@@ -427,7 +427,7 @@ theorem interpret_climb {A : Type} (oracle : (query : Query Context Scheme Row D
           history proof
   | _, [], _ => rfl
   | index, sibling :: rest, current => by
-      simp only [climbProcess, PIR.Proc.bind, interpret, climb]
+      simp only [climbProcess, PIR.Process.bind, interpret, climb]
       exact interpret_climb oracle absorbOpening next history proof (index / 2) rest _
 
 /-- Authentication followed by a continuation is the continuation at the
@@ -436,7 +436,7 @@ theorem interpret_authenticate [DecidableEq Digest] {A Bound : Type}
     (oracle : (query : Query Context Bound (List Coordinate) Digest) → Range query)
     (absorbOpening : Bool) (configuration : Configuration Scheme) (rootValue : Digest) (index : ℕ)
     (row : List Coordinate) (siblings : List Digest)
-    (next : Bool → PIR.Proc (signature (List Coordinate) Digest) A)
+    (next : Bool → PIR.Process (signature (List Coordinate) Digest) A)
     (history : List (Event Context Bound (List Coordinate) Digest))
     (proof : List (Message (List Coordinate) Digest)) :
     interpret (m := Id) oracle absorbOpening
@@ -448,17 +448,17 @@ theorem interpret_authenticate [DecidableEq Digest] {A Bound : Type}
   unfold authenticate
   split
   · rename_i shape
-    simp only [PIR.Proc.bind, interpret]
+    simp only [PIR.Process.bind, interpret]
     change interpret (m := Id) oracle absorbOpening
       (((climbProcess index siblings (hashOf oracle (.leaf row))).bind fun top =>
         .done (decide (top = rootValue))).bind next) history proof = _
     rw [bind_assoc, interpret_climb]
-    simp only [PIR.Proc.bind, shape, true_and]
+    simp only [PIR.Process.bind, shape, true_and]
   · rename_i shape
     have refused : ¬ (row.length = configuration.width ∧ siblings.length = configuration.depth ∧
         climb (hashOf oracle) index siblings (hashOf oracle (.leaf row)) = rootValue) :=
       fun held => shape ⟨held.1, held.2.1⟩
-    simp only [PIR.Proc.bind, refused, decide_false]
+    simp only [PIR.Process.bind, refused, decide_false]
 
 /-- The validator's outcome in a deterministic reading from any absorbed history,
 whose binding events may record any metadata `Bound`, on a proof that starts
@@ -520,7 +520,7 @@ def concreteOracle (challenge : (key : List (Event Context Scheme Row Digest)) �
 
 /-- The random-oracle reading: every query goes to the joint lazily sampled
 oracle. -/
-def oracleReading {A : Type} (absorbOpening : Bool) (process : PIR.Proc (signature Row Digest) A)
+def oracleReading {A : Type} (absorbOpening : Bool) (process : PIR.Process (signature Row Digest) A)
     (history : List (Event Context Scheme Row Digest)) (proof : List (Message Row Digest)) :
     OracleComp (spec Context Scheme Row Digest) (PIR.Outcome A × List (Message Row Digest)) :=
   interpret (fun query => liftM ((spec Context Scheme Row Digest).query query)) absorbOpening
@@ -530,7 +530,7 @@ def oracleReading {A : Type} (absorbOpening : Bool) (process : PIR.Proc (signatu
 concrete reading with that table. -/
 theorem evalWithAnswerFn_interpret {A : Type}
     (table : QueryImpl (spec Context Scheme Row Digest) Id) (absorbOpening : Bool) :
-    ∀ (process : PIR.Proc (signature Row Digest) A)
+    ∀ (process : PIR.Process (signature Row Digest) A)
       (history : List (Event Context Scheme Row Digest)) (proof : List (Message Row Digest)),
       evalWithAnswerFn table (oracleReading absorbOpening process history proof) =
         interpret (m := Id) (fun query => table query) absorbOpening process history proof := by

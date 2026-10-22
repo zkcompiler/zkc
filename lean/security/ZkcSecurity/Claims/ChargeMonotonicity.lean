@@ -61,7 +61,7 @@ theorem keyCharge_mono {E : Type} {small large : List E → E → ENNReal}
 the same prices. It says nothing about increasing the prices themselves. -/
 theorem chargedCostBound_mono_bound {I : PIR.Signature} {E P A : Type} {Raw : E → Type}
     (absorb : ZkcSecurity.FiatShamir.Typed.Interface I E P Raw) (charge : List E → E → ENNReal) :
-    ∀ (process : PIR.Proc I A) (history : List E) (small large : ENNReal),
+    ∀ (process : PIR.Process I A) (history : List E) (small large : ENNReal),
       ZkcSecurity.FiatShamir.Typed.ChargedCostBound absorb charge process history small → small ≤ large →
         ZkcSecurity.FiatShamir.Typed.ChargedCostBound absorb charge process history large
   | .done _, _, _, _, _, _ => trivial

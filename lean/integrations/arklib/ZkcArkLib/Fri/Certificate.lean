@@ -76,8 +76,8 @@ variable {F : Type} [Field F] [DecidableEq F]
 
 /-- The local obligations of a doomed set over the verifier's operations, with every query
 answered by a uniform value of its sort and the verifier accepting exactly on `true`. -/
-def Step [SampleableType F] (doomed : PIR.Proc (operations F) Bool → Prop)
-    (error : Operation → ENNReal) : PIR.Proc (operations F) Bool → Prop
+def Step [SampleableType F] (doomed : PIR.Process (operations F) Bool → Prop)
+    (error : Operation → ENNReal) : PIR.Process (operations F) Bool → Prop
   | .done accepted => accepted = false
   | .halt _ => True
   | .call (.fold round) next =>
@@ -91,18 +91,18 @@ def Step [SampleableType F] (doomed : PIR.Proc (operations F) Bool → Prop)
 /-- A round-by-round certificate over the verifier's residual processes: a doomed set whose every
 member meets its local obligation. -/
 structure Certificate [SampleableType F] (error : Operation → ENNReal) where
-  doomed : PIR.Proc (operations F) Bool → Prop
+  doomed : PIR.Process (operations F) Bool → Prop
   step : ∀ process, doomed process → Step doomed error process
 
 variable (roots : ℕ → F) (t : ℕ) (shift : F) {n R₀ : ℕ} (s : ℕ)
 
 /-- After the final coefficients: the coefficient bound (lines 120–121), then the query block and
 the checks. -/
-def queryPhase (layers : Layers F n R₀) : PIR.Proc (operations F) Bool :=
+def queryPhase (layers : Layers F n R₀) : PIR.Process (operations F) Bool :=
   .call (.positions n s) fun positions => .done (verify roots t shift layers positions)
 
 /-- Receiving the final coefficient vector, which completes the transcript `assemble`. -/
-def finalPhase (assemble : List F → Layers F n R₀) : PIR.Proc (operations F) Bool :=
+def finalPhase (assemble : List F → Layers F n R₀) : PIR.Process (operations F) Bool :=
   .call .final fun coefficients =>
     if bounded t coefficients then queryPhase roots t shift s (assemble coefficients)
     else .halt .reject
@@ -111,7 +111,7 @@ def finalPhase (assemble : List F → Layers F n R₀) : PIR.Proc (operations F)
 folds left: the folding challenge, then the next committed word, or the final coefficients after
 the last fold. `wrap` completes the transcript from the remaining rounds. -/
 def foldPhase : {m R : ℕ} → ℕ → (Layers F (m + 1) (R + 1) → Layers F n R₀) →
-    (Fin (2 ^ (m + 1)) → F) → PIR.Proc (operations F) Bool
+    (Fin (2 ^ (m + 1)) → F) → PIR.Process (operations F) Bool
   | _, 0, round, wrap, word => .call (.fold round) fun beta =>
       finalPhase roots t shift s fun coefficients => wrap (.fold word beta (.final coefficients))
   | m + 1, _ + 1, round, wrap, word => .call (.fold round) fun beta =>
@@ -120,7 +120,7 @@ def foldPhase : {m R : ℕ} → ℕ → (Layers F (m + 1) (R + 1) → Layers F n
   | 0, _ + 1, round, _, _ => .call (.fold round) fun _ => .halt .refused
 
 /-- The verifier once the initial word, of size `2^(m + 1)` with `R + 1` folds, is committed. -/
-def afterCommit {m R : ℕ} (word : Fin (2 ^ (m + 1)) → F) : PIR.Proc (operations F) Bool :=
+def afterCommit {m R : ℕ} (word : Fin (2 ^ (m + 1)) → F) : PIR.Process (operations F) Bool :=
   foldPhase (n := m + 1) (R₀ := R + 1) roots t shift s 0 id word
 
 variable [SampleableType F]
@@ -128,7 +128,7 @@ variable [SampleableType F]
 /-- The doomed residuals: the initial word of every completion is far, completed rounds are safe
 exactly when the remaining rounds are, and the remaining folding sites meet their errors. -/
 inductive Doomed (D : SmoothCosetFftDomain n F) (θ δ : ℝ) (error : ℕ → ENNReal) :
-    PIR.Proc (operations F) Bool → Prop
+    PIR.Process (operations F) Bool → Prop
   | halt (stop : PIR.Stop) : Doomed D θ δ error (.halt stop)
   | rejected : Doomed D θ δ error (.done false)
   | fold {m R : ℕ} (round : ℕ) (domain : SmoothCosetFftDomain (m + 1) F)

@@ -150,13 +150,13 @@ structure Runs (model : DomainModel) where
   run : (spec : RepeatSpec) → Option Nat → Values (Component model.Value) spec.state →
     Values (Component model.Value) spec.captures →
     RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state) →
-    PIR.Proc (Interface model) (Values (Component model.Value) spec.state)
+    PIR.Process (Interface model) (Values (Component model.Value) spec.state)
 
 /-- The callees' presented processes, one per callee of the signature, at a child
 context and on the callee's binders. -/
 abbrev CalleeProcesses (model : DomainModel) (callees : List CalleeKey) :=
   (callee : Fin callees.length) → ProtocolContext → Binders model (calleeAt callees callee).pattern.scope →
-    PIR.Proc (Interface model) (Values (Component model.Value) (calleeAt callees callee).signature.outputs)
+    PIR.Process (Interface model) (Values (Component model.Value) (calleeAt callees callee).signature.outputs)
 
 section Denote
 variable (model) (tables : Tables model) (results : LawResults model laws)
@@ -164,8 +164,8 @@ variable (model) (tables : Tables model) (results : LawResults model laws)
 
 /-- A form's process, with the given meaning of its returned tuples. -/
 def Form.denoteWith {A : Type}
-    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Proc (Interface model) A) :
-    {Δ : Scope} → Form laws callees Δ out → Binders model Δ → PIR.Proc (Interface model) A
+    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process (Interface model) A) :
+    {Δ : Scope} → Form laws callees Δ out → Binders model Δ → PIR.Process (Interface model) A
   | _, .done values, binders => leaf values binders
   | _, .halt reason, _ => .halt reason
   | _, .send ty site peer value next, binders =>
@@ -205,7 +205,7 @@ def Form.denoteWith {A : Type}
 
 /-- A form's process, returning its tuple of components. -/
 def Form.denote {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) :
-    PIR.Proc (Interface model) (Values (Component model.Value) out) :=
+    PIR.Process (Interface model) (Values (Component model.Value) out) :=
   form.denoteWith model tables results context runs processes
     (fun values binders => .done (Comps.eval results values binders)) binders
 

@@ -22,12 +22,12 @@ abbrev Interpretation.translate (meaning : Interpretation language I)
   operation op args := (meaning.operation op args).interpret operations
 
 theorem interpret_repeat {A : Type} (operations : PIR.OperationInterpretation I J)
-    (count : Nat) (body : A → PIR.Proc I A) (value : A) :
+    (count : Nat) (body : A → PIR.Process I A) (value : A) :
     (PIR.repeatN count body value).interpret operations =
       PIR.repeatN count (fun a => (body a).interpret operations) value := by
   induction count generalizing value with
   | zero => rfl
-  | succ count ih => simp [PIR.repeatN, PIR.Proc.interpret_bind, ih]
+  | succ count ih => simp [PIR.repeatN, PIR.Process.interpret_bind, ih]
 
 theorem Program.denote_translate (meaning : Interpretation language I)
     (operations : PIR.OperationInterpretation I J) {Γ ty}
@@ -38,7 +38,7 @@ theorem Program.denote_translate (meaning : Interpretation language I)
   | ret value => rfl
   | stop why => rfl
   | letOp op args next ih =>
-    simp only [denote, Interpretation.translate, PIR.Proc.interpret_bind]
+    simp only [denote, Interpretation.translate, PIR.Process.interpret_bind]
     congr 1
     funext value
     exact ih (env.push value)
@@ -47,7 +47,7 @@ theorem Program.denote_translate (meaning : Interpretation language I)
     change (if meaning.condition (env condition) then _ else _) = _
     split <;> simp_all
   | iterate count initial body next ihBody ihNext =>
-    simp only [denote, PIR.Proc.interpret_bind, interpret_repeat]
+    simp only [denote, PIR.Process.interpret_bind, interpret_repeat]
     have bodySame :
         (fun value => body.denote (meaning.translate operations) (env.push value)) =
         (fun value => (body.denote meaning (env.push value)).interpret operations) := by

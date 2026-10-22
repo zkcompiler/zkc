@@ -871,7 +871,7 @@ most `queries` TranscriptQueries on every path of every prover in its support:
 `(queries + budget) * bound` when every site's error is at most `bound`. -/
 theorem randomized_soundness_of_queryBound {absorb : Typed.Interface I E P Raw} {accepts : A → Prop}
     {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
-    (bounded : ∀ event, error event ≤ bound) (validator : PIR.Proc I A)
+    (bounded : ∀ event, error event ≤ bound) (validator : PIR.Process I A)
     (doomedValidator : certificate.doomed validator) (budget : ℕ)
     (validatorBound : Typed.QueryBound absorb validator budget) (initial : List E)
     (provers : ProbComp (OracleComp (OracleSpec.ofFn R) (List P))) (queries : ℕ)
@@ -900,7 +900,7 @@ simulation whose ideal failure is this experiment's, it is the ideal bound that
 theorem randomized_adaptive_soundness_of_queryBound {Stmt : Type}
     {absorb : Typed.Interface I E P Raw} {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
-    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Process I A)
     (initial : Stmt → List E) (determined : Typed.Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →

@@ -72,7 +72,7 @@ def absorb : Typed.Interface signature Event Unit Raw
 
 /-- The validator of a word with one bad position: accept when the block avoids
 it. -/
-def validator : PIR.Proc signature Bool := .call Op.positions fun block => .done (decide (Good block))
+def validator : PIR.Process signature Bool := .call Op.positions fun block => .done (decide (Good block))
 
 /-- The query-free prover sends nothing. -/
 def cheater : OracleComp (OracleSpec.ofFn HistoryRaw) (List Unit) := pure []

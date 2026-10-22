@@ -203,7 +203,7 @@ theorem absorbAll_support (tables : Simulated E S X width) :
 /-- The verifier with the chain and the typed transform over the history table
 return the same outcome and unread proof, unless the trace raises the flag. -/
 theorem verifier_coupling (absorb : Typed.Interface I E P (Raw E S width))
-    (process : PIR.Proc I A) :
+    (process : PIR.Process I A) :
     ∀ (state : S) (history : List E) (proof : List P) (trace : Trace E S X)
       (tables : Simulated E S X width),
       trace.bad = true ∨ (Consistent width trace tables ∧
@@ -280,7 +280,7 @@ theorem verifier_coupling (absorb : Typed.Interface I E P (Raw E S width))
 /-- Binding and absorbing the initial history, then the verifier with the chain,
 against the typed transform from the initial history. -/
 theorem chainRun_coupling (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : PIR.Proc I A) {initial : List E} (nonempty : initial ≠ []) (proof : List P)
+    (validator : PIR.Process I A) {initial : List E} (nonempty : initial ≠ []) (proof : List P)
     {trace : Trace E S X} {tables : Simulated E S X width}
     (consistent : Consistent width trace tables) :
     RelTriple ((chainRun absorb (fun input => traced input) validator initial proof).run trace)
@@ -329,7 +329,7 @@ theorem agrees_empty : Agrees width (Trace.empty : Trace E S X) (Simulated.empty
 /-- The concrete experiment with its trace against the simulated experiment:
 equal results unless the trace raises the bad flag. -/
 theorem experiment_coupling (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (nonempty : ∀ statement, initial statement ≠ [])
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) :
     RelTriple ((simulateQ traced (experiment absorb validator initial adversary)).run Trace.empty)
@@ -385,7 +385,7 @@ theorem randomOracle_coupling {α : Type} (computation : OracleComp (Primitive E
 probability that the joint primitive-query trace raises the bad flag, for any
 event of the result. -/
 theorem concrete_le (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (nonempty : ∀ statement, initial statement ≠ [])
     (adversary : OracleComp (Primitive E S X) (Stmt × List P))
     (event : Stmt × (PIR.Outcome A × List P) → Prop) :

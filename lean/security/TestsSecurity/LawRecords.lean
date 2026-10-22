@@ -118,14 +118,14 @@ noncomputable def laws : LawInterface signature Event Unit Raw
 
 /-- After the challenge `beta`: draw the block and accept when `beta` or the first
 position is `0`. -/
-def afterFold (beta : Fin 5) : PIR.Proc signature Bool :=
+def afterFold (beta : Fin 5) : PIR.Process signature Bool :=
   .call (I := signature) .positions fun block => .done (decide (beta = 0 ∨ block 0 = 0))
 
-def validator : PIR.Proc signature Bool := .call (I := signature) .fold afterFold
+def validator : PIR.Process signature Bool := .call (I := signature) .fold afterFold
 
 /-- Residuals, at the histories where the validator reaches them, that accept with
 probability zero unless a draw escapes. -/
-inductive Doomed : List Event → PIR.Proc signature Bool → Prop
+inductive Doomed : List Event → PIR.Process signature Bool → Prop
   | start : Doomed [] validator
   | folded (beta : Fin 5) (nonzero : beta ≠ 0) : Doomed [.fold] (afterFold beta)
   | rejected (history : List Event) : Doomed history (.done false)
@@ -242,12 +242,12 @@ noncomputable def loopLaws : LawInterface loopSignature LoopEvent Unit LoopRaw
 
 /-- The second draw, after a first draw `first`: accept when `first` is `0` or
 the second draw is below `2`. -/
-def secondRound (first : Fin 4) : PIR.Proc loopSignature Bool :=
+def secondRound (first : Fin 4) : PIR.Process loopSignature Bool :=
   .call (I := loopSignature) .draw fun second => .done (decide (first = 0 ∨ second.val < 2))
 
-def loop : PIR.Proc loopSignature Bool := .call (I := loopSignature) .draw secondRound
+def loop : PIR.Process loopSignature Bool := .call (I := loopSignature) .draw secondRound
 
-inductive LoopDoomed : List LoopEvent → PIR.Proc loopSignature Bool → Prop
+inductive LoopDoomed : List LoopEvent → PIR.Process loopSignature Bool → Prop
   | start : LoopDoomed [] loop
   | second (first : Fin 4) (nonzero : first ≠ 0) : LoopDoomed [.draw] (secondRound first)
   | rejected (history : List LoopEvent) : LoopDoomed history (.done false)

@@ -48,7 +48,7 @@ theorem source_context_prover (ctx : ProtocolContext) (self : Nat)
   rw [proverReduce_honest unit SumcheckSourceContracts.bodies
     (SumcheckSourceNormalForms.reduceContext ctx) separate SumcheckSourceNormalForms.reduceMaximum raw rounds shape bound
     rounds admitted]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
 
 /-- The complete Source root at the prover. -/
 theorem source_prover (raw : List F) (rounds : Nat) (shape : HasShape raw rounds 1)
@@ -96,7 +96,7 @@ theorem reduction_context_prover (ctx : ProtocolContext) (self : Nat)
   rw [proverReduce_honest unit SumcheckReduceContracts.bodies
     (SumcheckReductionNormalForms.reduceContext ctx) separate SumcheckReductionNormalForms.reduceMaximum raw count shape bound
     rounds admitted]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 /-- The complete Reduction root at the prover. -/

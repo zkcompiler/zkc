@@ -80,7 +80,7 @@ def cheater : OracleComp (FieldOracle Scalar Scalar) (Proof Scalar Scalar) := pu
 theorem cheater_bound : IsTotalQueryBound cheater 0 := trivial
 
 /-- The plain verifier for the instance, equal to the imported one. -/
-abbrev plain (claim : Scalar) : PIR.Proc (Actions Scalar Scalar) (Option Bool) :=
+abbrev plain (claim : Scalar) : PIR.Process (Actions Scalar Scalar) (Option Bool) :=
   validator SumcheckSourceVerifier.childContext handle 1 table claim
 
 theorem imported_plain (claim : Scalar) :
@@ -142,7 +142,7 @@ theorem cheat_transform :
     transform context historyQuery (plain 0) initial cheat =
       cheatDecision <$> historyQuery cheatKey := by
   simp only [plain, validator, PIR.repeatN, verifierRound, afterLow, afterHigh, afterChallenge,
-    terminal, decision, PIR.Proc.bind, cheat, transform_eq_done, transform_eq_receive,
+    terminal, decision, PIR.Process.bind, cheat, transform_eq_done, transform_eq_receive,
     transform_eq_query, transform_eq_send, Payload.value, ↓reduceIte, add_zero,
     List.nil_append]
   rfl
@@ -264,7 +264,7 @@ theorem weak_transform (challenge : Scalar) :
       weakDecision challenge <$> liftM ((FieldOracle Scalar Scalar).query cheatKey) := by
   have admitted : (1 : ℕ) ≤ 2 := by decide
   simp only [plainFamily, admitted, ↓reduceIte, chosenStatement, unbound, validator, PIR.repeatN,
-    verifierRound, afterLow, afterHigh, afterChallenge, terminal, decision, PIR.Proc.bind, cheat,
+    verifierRound, afterLow, afterHigh, afterChallenge, terminal, decision, PIR.Process.bind, cheat,
     transform_eq_done, transform_eq_receive, transform_eq_query, transform_eq_send,
     Payload.value, add_zero, List.nil_append, decodedQuery, id_map]
   rfl

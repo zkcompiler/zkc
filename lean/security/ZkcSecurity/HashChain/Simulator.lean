@@ -254,7 +254,7 @@ variable {I : PIR.Signature} {P A Stmt : Type}
 /-- The simulated experiment: the adversary against the simulator, then the
 typed transform of the statement's validator over the history table. -/
 noncomputable def simulatedExperiment (absorb : Typed.Interface I E P (Raw E S width))
-    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
+    (validator : Stmt → PIR.Process I A) (initial : Stmt → List E)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) :
     ProbComp (Stmt × (PIR.Outcome A × List P)) := do
   let started ← (simulateQ (simulator width) adversary).run (Simulated.empty width)

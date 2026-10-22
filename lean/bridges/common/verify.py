@@ -200,7 +200,7 @@ def render_certificate(data, request, proposal):
     generic = 'G' if contract.group else 'F'
     context = ('\n    [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
-    actual_type = f'PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
+    actual_type = f'PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
     unfolds = ['sourceProcess', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
 
@@ -262,12 +262,12 @@ def sourceProcess {contract.binders} : {actual_type} :=
 theorem source_expansion {contract.binders} :
     verifier {parameters} {contract.arguments} = sourceProcess {parameters} {contract.arguments} := by
   change (imported.program.denote (scalarMeaning F {generic}) id {request['role']}
-    (inputs {parameters} {contract.arguments}).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (inputs {parameters} {contract.arguments}).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   repeat' first
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-       rw [PIR.Proc.bind_ite]
+    | (apply PIR.Process.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+       rw [PIR.Process.bind_ite]
        simp only [↓reduceIte])
     | rfl
     | fail_if_no_progress congr 1
@@ -276,10 +276,10 @@ theorem source_expansion {contract.binders} :
 theorem correspondence {contract.binders} :
     sourceProcess {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
   dsimp +instances [{', '.join(unfolds)}]
-  {('simp only [PIR.Proc.bind_ite, PIR.Proc.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
+  {('simp only [PIR.Process.bind_ite, PIR.Process.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
   all_goals repeat' first
     | rfl
-    | (apply PIR.Proc.call_congr; intro reply)
+    | (apply PIR.Process.call_congr; intro reply)
     | (solve | ring1)
     | (solve | abel1)
     | fail_if_no_progress congr 1
@@ -343,7 +343,7 @@ def expectedInputs {contract.binders} :
   {values}
 
 def expectedVerifier {contract.binders} :
-    PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
+    PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
   GeneratedCertificate.imported.denote (scalarMeaning F {generic}) id {request['role']}
     (expectedInputs {parameters} {contract.arguments})
 

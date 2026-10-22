@@ -81,9 +81,9 @@ accept; after a receive whose event recovers a reply, and after a send, the
 residual is doomed at the extended history; and a doomed query's uniform reply
 of its sort leaves the doomed set at the extended history with probability at
 most the error of its operation at that history. -/
-def UniformStep (laws : LawInterface I E P Raw) (doomed : List E → PIR.Proc I A → Prop)
+def UniformStep (laws : LawInterface I E P Raw) (doomed : List E → PIR.Process I A → Prop)
     (accepts : A → Prop) (error : List E → I.Op → ENNReal) (history : List E) :
-    PIR.Proc I A → Prop
+    PIR.Process I A → Prop
   | .done value => ¬ accepts value
   | .halt _ => True
   | .call operation next =>
@@ -102,7 +102,7 @@ doomed pairs of an absorbed history and a residual, whose every member meets its
 uniform-sort obligation. -/
 structure UniformCertificate (laws : LawInterface I E P Raw) (accepts : A → Prop)
     (error : List E → I.Op → ENNReal) where
-  doomed : List E → PIR.Proc I A → Prop
+  doomed : List E → PIR.Process I A → Prop
   step : ∀ history process, doomed history process →
     UniformStep laws doomed accepts error history process
 
@@ -111,7 +111,7 @@ variable (laws : LawInterface I E P Raw)
 /-- The uniform-sort obligation lifts to the charged obligation of the typed
 engine when every query's charge at a history covers its law record's
 coefficient times its error at that history plus its slack. -/
-theorem UniformStep.charged {doomed : List E → PIR.Proc I A → Prop} {accepts : A → Prop}
+theorem UniformStep.charged {doomed : List E → PIR.Process I A → Prop} {accepts : A → Prop}
     {error : List E → I.Op → ENNReal} {charge : List E → E → ENNReal}
     (covers : ∀ history operation (event : E) (sort : SampleableType (I.Reply operation))
       (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →
@@ -155,8 +155,8 @@ def UniformCertificate.charged {accepts : A → Prop} {error : List E → I.Op �
 doomed result does not accept; every reply of a doomed receive and the reply of a
 doomed send stay doomed; and a doomed query's uniform reply of its sort leaves
 the doomed set with probability at most the error of its operation. -/
-def UniformEventStep (laws : LawInterface I E P Raw) (doomed : PIR.Proc I A → Prop)
-    (accepts : A → Prop) (error : I.Op → ENNReal) : PIR.Proc I A → Prop
+def UniformEventStep (laws : LawInterface I E P Raw) (doomed : PIR.Process I A → Prop)
+    (accepts : A → Prop) (error : I.Op → ENNReal) : PIR.Process I A → Prop
   | .done value => ¬ accepts value
   | .halt _ => True
   | .call operation next =>
@@ -172,13 +172,13 @@ def UniformEventStep (laws : LawInterface I E P Raw) (doomed : PIR.Proc I A → 
 set and errors that ignore the history. -/
 structure UniformEventCertificate (laws : LawInterface I E P Raw) (accepts : A → Prop)
     (error : I.Op → ENNReal) where
-  doomed : PIR.Proc I A → Prop
+  doomed : PIR.Process I A → Prop
   step : ∀ process, doomed process → UniformEventStep laws doomed accepts error process
 
 /-- The uniform-sort obligation of a history-free doomed set lifts to the typed
 per-event obligation when every query occurrence's error covers its law record's
 coefficient times its operation's error plus its slack. -/
-theorem UniformEventStep.typed {doomed : PIR.Proc I A → Prop} {accepts : A → Prop}
+theorem UniformEventStep.typed {doomed : PIR.Process I A → Prop} {accepts : A → Prop}
     {error : I.Op → ENNReal} {eventError : E → ENNReal}
     (covers : ∀ operation (event : E) (sort : SampleableType (I.Reply operation))
       (law : LawRecord (Raw event) (I.Reply operation)), laws operation = .query event sort law →

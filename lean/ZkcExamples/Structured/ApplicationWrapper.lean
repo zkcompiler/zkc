@@ -70,7 +70,7 @@ theorem observed_verifier (go : Bool) (first second : Nat) :
   simp only [ServiceOrder.servicesInput] at draw_view
   rw [outer_body_view]
   simp only [outerBody, runBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, ServiceOrder.inputs, run_view, draw_view]
   set_option smartUnfolding false in
     cases go <;> rfl
@@ -86,7 +86,7 @@ theorem observed_receiver (go : Option Bool) (first second : Option Nat) :
   simp only [ServiceOrder.servicesInput] at draw_view
   rw [outer_body_view]
   simp only [outerBody, runBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, ServiceOrder.inputs, run_view, draw_view]
   rfl
 

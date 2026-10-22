@@ -64,7 +64,7 @@ def honestState (raw : List F) (count : Nat) (point : List F) : ProverState F :=
 /-- One round on the prover's own received point. Beyond the table's dimension
 the actual sums helper rejects before any send. -/
 def roundHonest (ctx : ProtocolContext) (raw : List F) (count : Nat) (point : List F) :
-    PIR.Proc (participantInterface F G) (List F) :=
+    PIR.Process (participantInterface F G) (List F) :=
   if point.length < count then
     (roundPresent ctx (honestState raw count point)).bind (fun result => .done result.2.2.2)
   else .halt .reject
@@ -118,7 +118,7 @@ theorem step_honest (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.d
       dsimp only [honestState]; omega
     rw [round_body_present U bodies ctx self prover separate index service _ stateShape
       stateBound positive]
-    simp only [roundHonest, fits, ↓reduceIte, roundPresent, PIR.Proc.bind]
+    simp only [roundHonest, fits, ↓reduceIte, roundPresent, PIR.Process.bind]
     congr 1; funext; congr 1; funext; congr 1; funext cp
     simp only [mask_embedP ctx self prover maximum]
     rw [honestState_next raw count point cp]
@@ -129,7 +129,7 @@ theorem step_honest (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.d
         ((honestState raw count point).1, 0, 1, point) := by
       rw [← zero]; rfl
     rw [equation, round_body_zero U bodies ctx self prover index service]
-    simp only [roundHonest, fits, ↓reduceIte, PIR.Proc.bind]
+    simp only [roundHonest, fits, ↓reduceIte, PIR.Process.bind]
 
 /-- The actual repeat loop at the prover, for every number of rounds and every
 delivered challenge, as rounds on the prover's own received point. -/

@@ -246,7 +246,7 @@ def climbEntries (answers : (query : Query Context Scheme (List Coordinate) Dige
 
 theorem tableQueryLog_climb {A : Type}
     (answers : (query : Query Context Scheme (List Coordinate) Digest) → Range query)
-    (absorbOpening : Bool) (next : Digest → PIR.Proc (signature (List Coordinate) Digest) A)
+    (absorbOpening : Bool) (next : Digest → PIR.Process (signature (List Coordinate) Digest) A)
     (history : List (Event Context Scheme (List Coordinate) Digest))
     (proof : List (Message (List Coordinate) Digest)) :
     ∀ (index : ℕ) (siblings : List Digest) (current : Digest),
@@ -257,7 +257,7 @@ theorem tableQueryLog_climb {A : Type}
             (next (climb (hashOf answers) index siblings current)) history proof) answers
   | _, [], _ => rfl
   | index, sibling :: rest, current => by
-      simp only [climbProcess, PIR.Proc.bind, oracleReading, interpret]
+      simp only [climbProcess, PIR.Process.bind, oracleReading, interpret]
       rw [tableQueryLog_query_bind]
       exact congrArg (List.cons _) (tableQueryLog_climb answers absorbOpening next history proof
         (index / 2) rest _)
@@ -298,14 +298,14 @@ theorem tableQueryLog_verifier (accepts : Scheme → List Coordinate → Bool) (
   refine congrArg (List.cons _) ?_
   simp only [authenticate]
   split
-  · simp only [PIR.Proc.bind, interpret]
+  · simp only [PIR.Process.bind, interpret]
     rw [tableQueryLog_query_bind]
     refine congrArg (List.cons _) ?_
     rw [CommittedOpening.bind_assoc]
     refine (tableQueryLog_climb answers absorbOpening _ _ _ _ _ _).trans ?_
-    simp only [PIR.Proc.bind]
+    simp only [PIR.Process.bind]
     split <;> simp [oracleReading, interpret]
-  · simp [PIR.Proc.bind, interpret]
+  · simp [PIR.Process.bind, interpret]
 
 /-- The joint experiment against complete answers: the adversary's proof and the validator's
 outcome. -/
@@ -442,7 +442,7 @@ theorem familyQueryBound_total {α : Type} :
 
 /-- A climb of `n` levels makes `n` hash calls. -/
 theorem climb_familyQueryBound {A : Type} (absorbOpening : Bool)
-    (next : Digest → PIR.Proc (signature (List Coordinate) Digest) A)
+    (next : Digest → PIR.Process (signature (List Coordinate) Digest) A)
     (history : List (Event Context Scheme (List Coordinate) Digest))
     (proof : List (Message (List Coordinate) Digest))
     (final : ∀ top budget, Provider.FamilyQueryBound familyOf
@@ -453,7 +453,7 @@ theorem climb_familyQueryBound {A : Type} (absorbOpening : Bool)
         ((climbProcess index siblings current).bind next) history proof) budget
   | _, [], _, budget, _ => final _ budget
   | index, sibling :: rest, current, budget, enough => by
-      simp only [climbProcess, PIR.Proc.bind, oracleReading, interpret]
+      simp only [climbProcess, PIR.Process.bind, oracleReading, interpret]
       rw [Provider.familyQueryBound_query_bind_iff]
       simp only [List.length_cons] at enough
       refine ⟨by simp only [familyOf]; omega, fun reply => ?_⟩
@@ -483,15 +483,15 @@ theorem verifier_familyQueryBound (accepts : Scheme → List Coordinate → Bool
           simp only [interpret, authenticate]
           split
           · rename_i shape
-            simp only [PIR.Proc.bind, interpret]
+            simp only [PIR.Process.bind, interpret]
             rw [Provider.familyQueryBound_query_bind_iff]
             refine ⟨by simp [familyOf], fun leafDigest => ?_⟩
             rw [CommittedOpening.bind_assoc]
             refine climb_familyQueryBound absorbOpening _ _ _ (fun top budget => ?_) _ _ _ _ ?_
-            · simp only [PIR.Proc.bind]
+            · simp only [PIR.Process.bind]
               split <;> trivial
             · simp [familyOf, shape.2]
-          · simp only [PIR.Proc.bind]
+          · simp only [PIR.Process.bind]
             trivial
 
 end Budgets

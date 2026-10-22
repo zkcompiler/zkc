@@ -50,21 +50,21 @@ variable {n : ℕ} {pSpec : ProtocolSpec n} {F G A A' : Type} (context : Context
 operation: receives realize message rounds, queries realize challenge rounds by
 a bijection whose occurrence is charged at least the round's error, sends realize
 no round, and returned values realize related verdicts. -/
-inductive Realizes : PIR.Proc (signature pSpec) A → PIR.Proc (Actions F G) A' → Prop where
+inductive Realizes : PIR.Process (signature pSpec) A → PIR.Process (Actions F G) A' → Prop where
   | done {value : A} {value' : A'} : results value value' →
       Realizes (.done value) (.done value')
-  | send {process : PIR.Proc (signature pSpec) A} {ty : Ty} {site : String} {receiver : Nat}
-      {sent : ScalarValue F G ty} {next' : Unit → PIR.Proc (Actions F G) A'} :
+  | send {process : PIR.Process (signature pSpec) A} {ty : Ty} {site : String} {receiver : Nat}
+      {sent : ScalarValue F G ty} {next' : Unit → PIR.Process (Actions F G) A'} :
       Realizes process (next' ()) → Realizes process (.call (.send site receiver sent) next')
-  | receive {round : Fin n} {next : pSpec.«Type» round → PIR.Proc (signature pSpec) A}
+  | receive {round : Fin n} {next : pSpec.«Type» round → PIR.Process (signature pSpec) A}
       {ty : Ty} {site : String} {sender : Nat}
-      {next' : ScalarValue F G ty → PIR.Proc (Actions F G) A'}
+      {next' : ScalarValue F G ty → PIR.Process (Actions F G) A'}
       (message : pSpec.dir round = .P_to_V) (read : ScalarValue F G ty → pSpec.«Type» round) :
       (∀ value, Realizes (next (read value)) (next' value)) →
       Realizes (.call (I := signature pSpec) round next) (.call (.receive ty site sender) next')
-  | query {round : Fin n} {next : pSpec.«Type» round → PIR.Proc (signature pSpec) A}
+  | query {round : Fin n} {next : pSpec.«Type» round → PIR.Process (signature pSpec) A}
       {site field : String} {arguments : Values (ScalarValue F G) (services.arguments field)}
-      {next' : F → PIR.Proc (Actions F G) A'}
+      {next' : F → PIR.Process (Actions F G) A'}
       (challengeRound : pSpec.dir round = .V_to_P)
       (read : F ≃ pSpec.Challenge ⟨round, challengeRound⟩)
       (charged : roundError pSpec error round ≤
