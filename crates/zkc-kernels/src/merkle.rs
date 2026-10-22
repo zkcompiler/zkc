@@ -63,22 +63,31 @@ pub fn encode_digests<W: DigestWord, const N: usize>(digests: &[[W; N]]) -> Vec<
     }
     out
 }
-/// `None` unless the bytes are whole digests of canonical words.
-pub fn decode_digests<W: DigestWord, const N: usize>(bytes: &[u8]) -> Option<Vec<[W; N]>> {
-    let width = N.checked_mul(W::BYTES)?;
+/// A malformed digest is distinct from insufficient decoding storage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    Invalid,
+    Allocation,
+}
+
+/// Decode whole digests of canonical words, preserving allocation failures.
+pub fn decode_digests<W: DigestWord, const N: usize>(
+    bytes: &[u8],
+) -> Result<Vec<[W; N]>, DecodeError> {
+    let width = N.checked_mul(W::BYTES).ok_or(DecodeError::Invalid)?;
     if width == 0 || !bytes.len().is_multiple_of(width) {
-        return None;
+        return Err(DecodeError::Invalid);
     }
-    let mut digests = Vec::new();
-    digests.try_reserve_exact(bytes.len() / width).ok()?;
+    let mut digests =
+        crate::allocation::reserve(bytes.len() / width).map_err(|_| DecodeError::Allocation)?;
     for digest in bytes.chunks_exact(width) {
         let mut words = [W::default(); N];
         for (word, encoded) in words.iter_mut().zip(digest.chunks_exact(W::BYTES)) {
-            *word = W::read(encoded)?;
+            *word = W::read(encoded).ok_or(DecodeError::Invalid)?;
         }
         digests.push(words);
     }
-    Some(digests)
+    Ok(digests)
 }
 
 type Commitment<I> = <<I as Instance>::Mmcs as Mmcs<<I as Instance>::Element>>::Commitment;
@@ -95,9 +104,9 @@ pub trait Instance: 'static {
     const DIGEST_BYTES: usize;
     fn mmcs() -> &'static Self::Mmcs;
     fn root(commitment: &Commitment<Self>) -> Vec<u8>;
-    fn commitment(root: &[u8]) -> Option<Commitment<Self>>;
+    fn commitment(root: &[u8]) -> Result<Commitment<Self>, DecodeError>;
     fn proof_bytes(proof: &MultiProof<Self>) -> Vec<u8>;
-    fn proof(bytes: &[u8]) -> Option<MultiProof<Self>>;
+    fn proof(bytes: &[u8]) -> Result<MultiProof<Self>, DecodeError>;
     /// Whether the bytes are whole canonical digests.
     fn valid_digests(bytes: &[u8]) -> bool;
 }
@@ -109,6 +118,7 @@ pub enum Error {
     Coordinate,
     ValueCount,
     ByteLimit,
+    Allocation,
 }
 
 /// Prover-private immutable tree custody. No deserializer or public-root
@@ -187,8 +197,9 @@ pub fn open<I: Instance>(
     Ok((rows, I::proof_bytes(&proof)))
 }
 
-/// `Err` only for an invalid verifier request; every malformed or false
-/// opening, including a wrong row count or digest encoding, is `Ok(false)`.
+/// `Err` for an invalid verifier request or insufficient decoding storage;
+/// malformed or false openings, including a wrong row count or digest encoding,
+/// are `Ok(false)` when decoding storage is available.
 pub fn verify<I: Instance>(
     root: &[u8],
     shape: Shape,
@@ -200,8 +211,12 @@ pub fn verify<I: Instance>(
     if at.len().checked_mul(shape.width()) != Some(rows.len()) {
         return Ok(false);
     }
-    let (Some(commitment), Some(proof)) = (I::commitment(root), I::proof(proof)) else {
-        return Ok(false);
+    let decoded =
+        I::commitment(root).and_then(|commitment| I::proof(proof).map(|proof| (commitment, proof)));
+    let (commitment, proof) = match decoded {
+        Ok(decoded) => decoded,
+        Err(DecodeError::Invalid) => return Ok(false),
+        Err(DecodeError::Allocation) => return Err(Error::Allocation),
     };
     let opened: Vec<Vec<Vec<I::Element>>> = rows
         .chunks_exact(shape.width())
@@ -331,16 +346,47 @@ mod tests {
         let bytes = encode_digests(&digests);
         assert_eq!(bytes.len(), 64);
         assert_eq!(decode_digests::<KoalaBear, 8>(&bytes).unwrap(), digests);
-        assert!(decode_digests::<KoalaBear, 8>(&bytes[..63]).is_none());
+        assert!(decode_digests::<KoalaBear, 8>(&bytes[..63]).is_err());
         let mut high = bytes.clone();
         high[60..].copy_from_slice(&crate::plonky3::MODULUS.to_le_bytes());
-        assert!(decode_digests::<KoalaBear, 8>(&high).is_none());
+        assert!(decode_digests::<KoalaBear, 8>(&high).is_err());
         assert!(!poseidon2::Base::valid_digests(&high));
         // A byte-word digest has no canonicality condition beyond its width.
         assert_eq!(decode_digests::<u8, 32>(&[7; 64]).unwrap(), [[7; 32]; 2]);
-        assert!(decode_digests::<u8, 32>(&[7; 63]).is_none());
+        assert!(decode_digests::<u8, 32>(&[7; 63]).is_err());
         assert_eq!(encode_digests::<u8, 32>(&[]), Vec::<u8>::new());
-        assert_eq!(decode_digests::<u8, 32>(&[]), Some(Vec::new()));
+        assert_eq!(decode_digests::<u8, 32>(&[]), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn decoding_allocation_failures_do_not_reject_valid_openings() {
+        let shape = Shape::new(2, 8, 16).unwrap();
+        let (root, tree) = commit::<poseidon2::Base>(table(2, 8), shape, 1 << 20).unwrap();
+        let (rows, proof) = open(&tree, &[1]).unwrap();
+        for successful in [0, 1] {
+            // The commitment digest and the proof digests are separate owned
+            // decodes. Either reservation can fail without changing the claim.
+            let guard = crate::allocation::failure::after(successful);
+            assert_eq!(
+                verify::<poseidon2::Base>(&root, shape, &[1], &rows, &proof),
+                Err(Error::Allocation)
+            );
+            drop(guard);
+        }
+        assert_eq!(
+            verify::<poseidon2::Base>(&root, shape, &[1], &rows, &proof),
+            Ok(true)
+        );
+        assert_eq!(
+            decode_digests::<KoalaBear, 8>(&proof[..proof.len() - 1]),
+            Err(DecodeError::Invalid)
+        );
+        let guard = crate::allocation::failure::after(0);
+        assert_eq!(
+            decode_digests::<KoalaBear, 8>(&proof),
+            Err(DecodeError::Allocation)
+        );
+        drop(guard);
     }
 
     // Zero-sized test words let width arithmetic be exercised without huge
@@ -360,13 +406,13 @@ mod tests {
 
     #[test]
     fn digest_decoding_rejects_zero_and_overflowing_widths() {
-        assert!(decode_digests::<u8, 0>(&[]).is_none());
-        assert!(decode_digests::<TestWord<0>, 1>(&[]).is_none());
+        assert!(decode_digests::<u8, 0>(&[]).is_err());
+        assert!(decode_digests::<TestWord<0>, 1>(&[]).is_err());
         // Wrapping multiplication would turn this width into two bytes and
         // accept default words without decoding either of them.
         type OverflowWord = TestWord<{ usize::MAX / 2 + 2 }>;
-        assert!(decode_digests::<OverflowWord, 2>(&[0, 0]).is_none());
-        assert!(decode_digests::<OverflowWord, 2>(&[]).is_none());
+        assert!(decode_digests::<OverflowWord, 2>(&[0, 0]).is_err());
+        assert!(decode_digests::<OverflowWord, 2>(&[]).is_err());
     }
 
     #[test]

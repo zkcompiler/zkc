@@ -1,16 +1,21 @@
 //! Destination arithmetic shared by dense kernels and numerical expressions.
 //! Provider packing is a physical implementation detail; scalar tails preserve
-//! exact field arithmetic. Callers own shape checks and storage reservations.
+//! exact field arithmetic. Destinations have checked exact extents; callers own
+//! their storage reservations.
 use crate::fields::{Coefficient, Error, Result};
 use p3_field::{Field, PackedValue};
 use std::ops::{Add, Mul, Neg, Sub};
 
+/// A nonempty set of independent field lanes. Arithmetic on `Value` must agree
+/// with scalar arithmetic in every lane. `load` and `store` receive exactly
+/// `WIDTH` elements; they must preserve lane order without extra storage.
 pub trait Packing<S: Coefficient> {
     type Value: Copy
         + Add<Output = Self::Value>
         + Sub<Output = Self::Value>
         + Mul<Output = Self::Value>
         + Neg<Output = Self::Value>;
+    /// Must be greater than zero, including for the scalar implementation.
     const WIDTH: usize;
     fn broadcast(value: S) -> Self::Value;
     fn load(values: &[S]) -> Self::Value;

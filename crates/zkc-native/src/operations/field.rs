@@ -1,7 +1,6 @@
 //! Exact native field adapters shared by dense kernels and numerical consumers.
 //! Values are matched by nominal field; vectors are borrowed immutable backings.
 //! Arithmetic and canonical literals remain delegated to the existing providers.
-use super::arithmetic::equal_len;
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
 use std::sync::Arc;
@@ -9,14 +8,10 @@ pub(crate) use zkc_kernels::fields::Coefficient;
 
 pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
-        equal_len(a.len(), b.len())?;
         Self::dot_product(a, b).map_err(crate::field_error)
     }
     fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
-        equal_len(a.len(), b.len())?;
-        equal_len(a.len(), out.len())?;
-        zkc_kernels::vector::mul::<Self>(a, b, out).map_err(crate::field_error)?;
-        Ok(())
+        zkc_kernels::vector::mul::<Self>(a, b, out).map_err(crate::field_error)
     }
     fn field(v: &Value) -> Result<Self>;
     fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;

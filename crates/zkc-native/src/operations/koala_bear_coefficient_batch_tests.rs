@@ -110,13 +110,9 @@ fn allocation_failure_checks<E: Family>() {
     let before = destination.clone();
     let failure = zkc_kernels::allocation::failure::after(0);
     assert_eq!(
-        Kernels::default().coset_evaluate_batch_into(
-            &values,
-            3,
-            3,
-            Domain::new(8, sample::<E>(3), 32).unwrap(),
-            &mut destination,
-        ),
+        CoefficientBatch::new(&values, 3, 3, Domain::new(8, sample::<E>(3), 32).unwrap())
+            .unwrap()
+            .write_into(&Kernels::default(), &mut destination),
         Err(polynomial::Error::Allocation)
     );
     drop(failure);
@@ -321,6 +317,12 @@ fn refusal_checks<E: Family>() {
     }
     let arguments = args(shrinking.clone(), 2, 5, 2);
     let alias = arguments[0].clone();
+    // Native output admission still precedes mathematical tail validation;
+    // the checked kernel borrow is constructed before numerical work admission.
+    assert_eq!(
+        run::<E>(&arguments, &policy, 0).unwrap_err().code,
+        "exhausted:output-bytes"
+    );
     assert_eq!(
         run::<E>(
             &arguments,

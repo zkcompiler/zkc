@@ -124,6 +124,7 @@ impl State {
 fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     match error {
         Error::ByteLimit => exhausted("oracle-byte-limit"),
+        Error::Allocation => exhausted("allocation"),
         Error::Positions => refused("oracle-positions"),
         Error::Coordinate => refused("oracle-coordinate"),
         Error::ValueCount => refused("oracle-value-count"),
@@ -516,3 +517,43 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("plonky3/oracle.open_many", "oracle.open_many"),
     ("plonky3/oracle.check_many", "oracle.check_many"),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decoding_exhaustion<I: Instance>(
+        scheme: Scheme,
+        values: Vec<I::Element>,
+        value: impl FnOnce(Vec<I::Element>) -> Value,
+    ) {
+        let shape = Shape::new(2, 8, 16).unwrap();
+        let (root, tree) = commit::<I>(values, shape, 1 << 20).unwrap();
+        let (rows, proof) = open(&tree, &[1]).unwrap();
+        let rows = value(rows);
+        let check = || check_state(scheme, &root, 2, 8, &[1], &rows, &proof, &Policy::default());
+        for successful in [0, 1] {
+            let guard = zkc_kernels::allocation::failure::after(successful);
+            let error = check().unwrap_err();
+            assert_eq!(error.code, "exhausted:allocation");
+            assert_eq!(crate::classify_error(&error), crate::ErrorClass::Exhausted);
+            drop(guard);
+        }
+        assert_eq!(check(), Ok(true));
+    }
+
+    #[test]
+    fn merkle_decode_capacity_failures_propagate_as_native_exhaustion() {
+        let values: Vec<_> = (1..=16).map(crate::KoalaBear::new).collect();
+        decoding_exhaustion::<poseidon2::Base>(
+            Scheme::Poseidon2KoalaBear,
+            values.clone(),
+            |values| Value::KoalaBearVector(values.into()),
+        );
+        decoding_exhaustion::<poseidon2::Quartic>(
+            Scheme::Poseidon2KoalaBearExt4,
+            values.into_iter().map(crate::KoalaBearExt4::from).collect(),
+            |values| Value::KoalaBearExt4Vector(values.into()),
+        );
+    }
+}

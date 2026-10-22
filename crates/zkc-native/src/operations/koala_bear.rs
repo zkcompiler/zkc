@@ -7,7 +7,7 @@ use crate::{
     refused, value::size,
 };
 use p3_field::ExtensionField;
-use zkc_kernels::plonky3::polynomial::{self, Domain, Error, Kernels};
+use zkc_kernels::plonky3::polynomial::{self, CoefficientBatch, Domain, Error, Kernels};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]
@@ -207,25 +207,25 @@ fn execute<E: Family>(
             let shape = CosetBatchShape::new(coefficients.len(), index(1)?, index(2)?, index(4)?)?;
             let shift = field(3)?;
             let limit = policy.max_table_elements.min(1 << 20);
-            if shape.width != 0 {
-                Domain::validate(shape.output_height, shift, limit).map_err(failure)?;
-            }
+            let domain = if shape.width == 0 {
+                None
+            } else {
+                Some(Domain::new(shape.output_height, shift, limit).map_err(failure)?)
+            };
             let retained = shape.admit(policy, width, available)?;
-            shape.check_coefficient_tails(coefficients, E::ZERO)?;
+            let batch = domain
+                .map(|domain| {
+                    CoefficientBatch::new(coefficients, shape.width, shape.height, domain)
+                })
+                .transpose()
+                .map_err(failure)?;
             let call = Call::new(policy, available);
             call.work(shape.coefficient_evaluation_work(E::DIMENSION)?)?;
             let _workspace = call.reserve_workspace::<E>(shape.output_len)?;
             let mut output = call.output(shape.output_len, E::ZERO, retained)?;
-            if shape.width != 0 {
-                let domain = Domain::new(shape.output_height, shift, limit).map_err(failure)?;
-                kernels
-                    .coset_evaluate_batch_into(
-                        coefficients,
-                        shape.width,
-                        shape.height,
-                        domain,
-                        output.as_mut_slice(),
-                    )
+            if let Some(batch) = batch {
+                batch
+                    .write_into(kernels, output.as_mut_slice())
                     .map_err(failure)?;
             }
             output.finish(|values| Ok(E::vector_value(values)))?

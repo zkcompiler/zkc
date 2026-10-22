@@ -92,52 +92,73 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
     }
 }
 
-/// Reusable DFT preparation is local numerical state, not protocol state.
-#[derive(Clone, Default)]
-pub struct Kernels {
-    dft: Radix2DitParallel<KoalaBear>,
+/// Checked column-major coefficient blocks on one exact coset. Construction
+/// validates input extents and discarded coefficients before workspace admission.
+/// The borrowed coefficients cannot change while the checked batch is retained.
+pub struct CoefficientBatch<'a, E> {
+    coefficients: &'a [E],
+    width: usize,
+    height: usize,
+    domain: Domain<E>,
+    output_len: usize,
 }
-
-impl Kernels {
-    /// Evaluate admitted column-major coefficient blocks with shared shift
-    /// powers and one provider batch. Nonzero discarded tails are refused before
-    /// allocation or writes. The caller reserves matrix and destination storage.
-    pub fn coset_evaluate_batch_into<E: ExtensionField<KoalaBear>>(
-        &self,
-        coefficients: &[E],
+impl<'a, E: ExtensionField<KoalaBear>> CoefficientBatch<'a, E> {
+    pub fn new(
+        coefficients: &'a [E],
         width: usize,
-        coefficient_height: usize,
+        height: usize,
         domain: Domain<E>,
-        destination: &mut [E],
-    ) -> Result<(), Error> {
-        let input_len = width
-            .checked_mul(coefficient_height)
-            .ok_or(Error::SizeOverflow)?;
+    ) -> Result<Self, Error> {
+        let input_len = width.checked_mul(height).ok_or(Error::SizeOverflow)?;
         let output_len = width.checked_mul(domain.size).ok_or(Error::SizeOverflow)?;
-        if coefficients.len() != input_len || destination.len() != output_len {
+        if coefficients.len() != input_len {
             return Err(Error::BatchShape);
         }
-        if width == 0 {
-            return Ok(());
-        }
-        if coefficient_height > domain.size
+        if width != 0
+            && height > domain.size
             && coefficients
-                .chunks_exact(coefficient_height)
+                .chunks_exact(height)
                 .any(|column| column[domain.size..].iter().any(|c| *c != E::ZERO))
         {
             return Err(Error::CoefficientCount);
         }
+        Ok(Self {
+            coefficients,
+            width,
+            height,
+            domain,
+            output_len,
+        })
+    }
+
+    /// Evaluate with shared shift powers and one provider batch. Only the
+    /// destination extent needs checking after construction; a mismatch or
+    /// matrix allocation failure leaves it untouched. The caller reserves
+    /// transform and destination storage separately.
+    pub fn write_into(&self, kernels: &Kernels, destination: &mut [E]) -> Result<(), Error> {
+        if destination.len() != self.output_len {
+            return Err(Error::BatchShape);
+        }
+        let Self {
+            coefficients,
+            width,
+            height,
+            domain,
+            output_len,
+        } = *self;
+        if width == 0 {
+            return Ok(());
+        }
         let mut scaled = crate::allocation::reserve(output_len).map_err(|_| Error::Allocation)?;
         scaled.resize(output_len, E::ZERO);
         let mut power = E::ONE;
-        for row in 0..coefficient_height.min(domain.size) {
+        for row in 0..height.min(domain.size) {
             for column in 0..width {
-                scaled[row * width + column] =
-                    coefficients[column * coefficient_height + row] * power;
+                scaled[row * width + column] = coefficients[column * height + row] * power;
             }
             power *= domain.shift;
         }
-        let evaluations = self
+        let evaluations = kernels
             .dft
             .dft_algebra_batch(RowMajorMatrix::new(scaled, width));
         for column in 0..width {
@@ -147,7 +168,15 @@ impl Kernels {
         }
         Ok(())
     }
+}
 
+/// Reusable DFT preparation is local numerical state, not protocol state.
+#[derive(Clone, Default)]
+pub struct Kernels {
+    dft: Radix2DitParallel<KoalaBear>,
+}
+
+impl Kernels {
     /// Extend independent column-major evaluation vectors into a fixed private
     /// destination. The caller admits output and transform workspace first.
     /// Neither the borrowed input nor published values are modified. The

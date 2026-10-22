@@ -140,6 +140,10 @@ Add typed arithmetic to `zkc-kernels` when it can run without VM values or
 resource authority. Keep provider details in that crate and test mathematical
 shapes and canonical encodings there. Numerical scratch and destinations use
 explicit caller limits; provider-private storage remains documented separately.
+When validation scans mathematical inputs, retain an immutable checked borrow
+before admitting workspace, as with `CoefficientBatch` and `OpeningQuotient`.
+Execution then checks the supplied destination extent without repeating the
+input scan. Native adapters retain policy checks and their refusal order.
 
 Add installed operations, concrete representations, codec adaptation and
 services to `zkc-native`. Its adapters select policy, borrow typed operands,

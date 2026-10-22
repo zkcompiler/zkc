@@ -8,7 +8,7 @@
 //! call where the build enables SIMD packing. Rows of the quartic extension are
 //! flattened to their ascending base coordinates before hashing, as Plonky3's
 //! `ExtensionMmcs` does, so both instances share one tree and digest form.
-use super::{Instance, decode_digests, encode_digests};
+use super::{DecodeError, Instance, decode_digests, encode_digests};
 use crate::plonky3::{KoalaBear, KoalaBearExt4, poseidon2::permutation};
 use p3_commit::ExtensionMmcs;
 use p3_field::Field;
@@ -46,15 +46,18 @@ pub fn quartic_mmcs() -> &'static QuarticMmcs {
 fn root(commitment: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
     encode_digests(commitment.roots())
 }
-fn commitment(root: &[u8]) -> Option<MerkleCap<KoalaBear, Digest>> {
+fn commitment(root: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
+    if root.len() != 32 {
+        return Err(DecodeError::Invalid);
+    }
     let digests = decode_digests::<KoalaBear, 8>(root)?;
-    (digests.len() == 1).then(|| MerkleCap::new(digests))
+    Ok(MerkleCap::new(digests))
 }
 fn proof_bytes(proof: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
     encode_digests(&proof.sibling_hashes)
 }
-fn proof(bytes: &[u8]) -> Option<PrunedMerklePaths<KoalaBear, 8>> {
-    Some(PrunedMerklePaths {
+fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
+    Ok(PrunedMerklePaths {
         sibling_hashes: decode_digests::<KoalaBear, 8>(bytes)?,
     })
 }
@@ -74,13 +77,13 @@ impl Instance for Base {
     fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
         root(c)
     }
-    fn commitment(bytes: &[u8]) -> Option<MerkleCap<KoalaBear, Digest>> {
+    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
         commitment(bytes)
     }
     fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
         proof_bytes(p)
     }
-    fn proof(bytes: &[u8]) -> Option<PrunedMerklePaths<KoalaBear, 8>> {
+    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
         proof(bytes)
     }
     fn valid_digests(bytes: &[u8]) -> bool {
@@ -100,13 +103,13 @@ impl Instance for Quartic {
     fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
         root(c)
     }
-    fn commitment(bytes: &[u8]) -> Option<MerkleCap<KoalaBear, Digest>> {
+    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
         commitment(bytes)
     }
     fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
         proof_bytes(p)
     }
-    fn proof(bytes: &[u8]) -> Option<PrunedMerklePaths<KoalaBear, 8>> {
+    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
         proof(bytes)
     }
     fn valid_digests(bytes: &[u8]) -> bool {
