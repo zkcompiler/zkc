@@ -695,13 +695,12 @@ def owned_module_path(module):
     return found[0]
 
 
-def verified_environment(records):
-    """Read-only pin and compatibility verification; never prepare dependencies."""
+def verified_dependencies(packages):
+    """Read-only preflight shared with reports; never prepare dependencies."""
     import subprocess
     from .declarations import PACKAGES
-    facts = checker(records)
     verified, reasons, seen = [], [], set()
-    for package in sorted(records.packages()):
+    for package in sorted(packages):
         if package not in PACKAGES:
             reasons.append(f"unknown package provider: {package}")
             continue
@@ -753,6 +752,13 @@ def verified_environment(records):
                                  "compatibility": config})
             except (OSError, ValueError, subprocess.CalledProcessError) as error:
                 reasons.append(f"unverified dependency {pin['name']}: {error}")
+    return verified, reasons
+
+
+def verified_environment(records):
+    """Verify dependencies again when assembling a report from fresh records."""
+    facts = checker(records)
+    verified, reasons = verified_dependencies(records.packages())
     facts["verified_dependencies"] = verified
     return facts, reasons
 

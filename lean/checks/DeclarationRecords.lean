@@ -19,6 +19,11 @@ Run after building the selected packages, from the package directory:
 lake env lean --run ../checks/DeclarationRecords.lean [OPTION]... OUTPUT DIRECTORY...
 ```
 
+The maintained Python driver builds the `declaration-records` executable and
+the audited package first, then runs the executable in that package's Lake
+environment. The interpreted command above remains a comparison/debugging
+route. Both traverse the same stored declarations; no records are cached.
+
 Each `DIRECTORY` is a source directory or a single `.lean` file relative to the
 current directory, such as `Zkc` or `ZkcTools/JsonSupport.lean`; every module
 below it is imported and selected. Executable roots, which each define `main`,
@@ -1068,16 +1073,21 @@ unsafe def main (arguments : List String) : IO UInt32 := do
       IO.eprintln s!"no modules below {directory}"; return 2
     modules := modules ++ found
     families := families.push ((path.withExtension "").components.foldl Name.str Name.anonymous)
+  let started ← IO.monoMsNow
   initSearchPath (← findSysroot)
   enableInitializersExecution
   let env ← importModules (modules.qsort Name.lt |>.map fun module => { module, importAll := true }) {}
     (loadExts := true)
+  let imported ← IO.monoMsNow
+  IO.eprintln s!"declaration-records: import {imported - started}ms"
   let moduleOf := fun (name : Name) => Id.run do
     let some index := env.getModuleIdxFor? name | return none
     let some module := env.header.modules[index.toNat]? | return none
     return if families.any (·.isPrefixOf module.module) then some module.module else none
   let sources := providers env
   let owners := resolvedOwners env
+  let indexed ← IO.monoMsNow
+  IO.eprintln s!"declaration-records: providers {indexed - imported}ms"
   let mut provenanceCache : DeclarationRecords.Cache := {}
   let mut checkedAxioms : Std.HashMap Name (Array Name) := {}
   let mut auditRoots := options.details
@@ -1093,6 +1103,8 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     let (axioms, updated) ← storedAxioms env sources owners {} info provenanceCache
     provenanceCache := updated
     checkedAxioms := checkedAxioms.insert name axioms
+  let audited ← IO.monoMsNow
+  IO.eprintln s!"declaration-records: stored proof audit {audited - indexed}ms"
   -- A requested declaration that does not exist is reported by its consumer
   -- (an assurance report names a missing evidence instance), not here.
   for name in options.details do
@@ -1166,6 +1178,7 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     let json ← runMeta env (record env registered properties name info module actualAxioms detailed)
     lines := lines.push json.compress
   IO.FS.writeFile output (String.intercalate "\n" lines.toList ++ "\n")
+  IO.eprintln s!"declaration-records: records and output {(← IO.monoMsNow) - audited}ms"
   IO.println s!"{sorted.size} declarations from {modules.size} modules"
   if let some baseline := options.check then
     let expected := ((← IO.FS.readFile baseline).splitOn "\n").toArray.filter (· ≠ "")
