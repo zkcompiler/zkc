@@ -872,6 +872,7 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
     }
 }
 mod arguments;
+mod selected_public;
 pub(in crate::entry) mod unicode;
 
 #[test]

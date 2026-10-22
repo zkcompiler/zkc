@@ -66,7 +66,7 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     let ty = zkc_runtime::vm::LogicalType::parse(&logical).unwrap();
     let value = Value::Variant(
         zkc_native::Variant::new(
-            ty.variant_descriptor().unwrap().clone(),
+            zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
             0,
             vec![Value::Vector(source.clone()), Value::Vector(source.clone())],
         )
@@ -335,7 +335,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
         let committed = key.prover_key().commit(&table).unwrap();
         let value = Value::Sequence(
             zkc_native::Sequence::new(
-                logical.clone(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
+                )
+                .unwrap(),
                 vec![Value::Commitment(Arc::new(committed.commitment().clone()))],
                 &policy,
             )
@@ -434,7 +437,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                     let good = first.prover_key().commit(&table).unwrap();
                     let good = Value::Sequence(
                         zkc_native::Sequence::new(
-                            logical.clone(),
+                            zkc_runtime::vm::PhysicalType::default_for(
+                                zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
+                            )
+                            .unwrap(),
                             vec![Value::Commitment(Arc::new(good.commitment().clone()))],
                             &policy,
                         )
@@ -457,7 +463,10 @@ fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
     let leaf = Value::vector(&[zkc_native::Scalar::from(1); 3], &policy).unwrap();
     let value = Value::Sequence(
         zkc_native::Sequence::new(
-            leaf.physical_type().logical(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(leaf.physical_type().logical()).unwrap(),
+            )
+            .unwrap(),
             vec![leaf.clone(), leaf],
             &policy,
         )

@@ -7,6 +7,7 @@ use zkc_test_support::variants::{encode_tree, logical};
 
 fn binding(operation: &str, field: &str, length: &str) -> OperationBinding {
     OperationBinding {
+        physical_arguments: vec![],
         contract: format!("fixed_vector.{operation}"),
         arguments: vec![field.into(), length.into()],
         implementation: format!("plonky3/fixed_vector.{operation}"),

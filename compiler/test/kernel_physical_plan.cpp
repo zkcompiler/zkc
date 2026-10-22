@@ -459,7 +459,7 @@ int main() {
 
   for (StringRef domain : {"bls12-381.g1", "bls12-381.g2"})
     cases.run(
-        "foreign provider retains fixed shared-port binding for " + domain,
+        "resident provider retains fixed exact-port binding for " + domain,
         [&] {
           auto source = std::string(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
@@ -473,7 +473,7 @@ kernel.module @difference {
    func.return %r : !F
  }
 }
-"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/curve.msm"} : ()->()
+"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
 "local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )mlir",
                               "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
@@ -489,10 +489,10 @@ local.return %scaled : !G
           auto checked = checkedPlan(*module);
           const auto &choice = bindingFor(checked.choices(), "curve.msm");
           require(choice.fixed && choice.binding.application.implementation ==
-                                      "blst/curve.msm",
+                                      "blst/resident/curve.msm",
                   "physical planning replaced an explicit foreign provider");
           auto candidate = materializedCopy(*module, checked);
-          application(*candidate, "blst/curve.msm");
+          application(*candidate, "blst/resident/curve.msm");
         });
 
   cases.run(

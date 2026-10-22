@@ -83,6 +83,8 @@ enum Backend {
         kernel: kernel::Kernel,
         boundary: kernel::Boundary,
         elements: usize,
+        #[serde(default = "kernel::single_call")]
+        chain_length: usize,
     },
     Schnorr {
         public: PathBuf,
@@ -225,7 +227,16 @@ fn run() -> Result<Report> {
             kernel,
             boundary,
             elements,
-        } => kernel::run(&request, *provider, *group, *kernel, *boundary, *elements),
+            chain_length,
+        } => kernel::run(
+            &request,
+            *provider,
+            *group,
+            *kernel,
+            *boundary,
+            *elements,
+            *chain_length,
+        ),
         Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
             schnorr::run(&request, public, witness.as_deref())
         }

@@ -6,27 +6,32 @@ use crate::{Result, RistrettoScalar, Scalar, Value, refused};
 use std::sync::Arc;
 pub(crate) use zkc_kernels::field::Coefficient;
 
-pub(crate) trait Family: crate::matrix::IdentityCoefficient {
+/// Scalar/vector adaptation requires only the provider's coefficient algebra.
+pub(crate) trait Family: Coefficient {
+    /// Owned provider bulk buffers freeze without another element allocation.
+    const RESIDENT_STORAGE: bool = false;
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         Self::dot_product(a, b).map_err(crate::field_error)
     }
     fn field(v: &Value) -> Result<Self>;
+    fn vector(v: &Value) -> Result<&[Self]>;
+    fn field_value(v: Self) -> Value;
+    fn vector_value(v: Vec<Self>) -> Value;
+    fn decimal(s: &str) -> Result<Self>;
+}
+
+/// Structured consumers additionally require canonical matrix coefficients and
+/// actual matrix, polynomial and round payloads in the Native value inventory.
+pub(crate) trait StructuredFamily: Family + crate::matrix::IdentityCoefficient {
     fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;
-    fn vector(v: &Value) -> Result<&Arc<[Self]>>;
     fn polynomial(v: &Value) -> Result<&[Self]>;
     fn round(v: &Value) -> Result<&[Self]>;
-    fn field_value(v: Self) -> Value;
-    fn vector_value(v: Arc<[Self]>) -> Value;
-    fn polynomial_value(v: Arc<[Self]>) -> Value;
-    fn decimal(s: &str) -> Result<Self>;
+    fn polynomial_value(v: Arc<[Self]>) -> Result<Value>;
 }
 macro_rules! family {
     ($s:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
         impl Family for $s {
             $($extra)*
-            fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> {
-                if let Value::$matrix(v) = v {Ok(v)} else {Err(refused("kernel-operands"))}
-            }
             fn field(v: &Value) -> Result<Self> {
                 if let Value::$field(v) = v {
                     Ok(*v)
@@ -34,12 +39,28 @@ macro_rules! family {
                     Err(refused("kernel-operands"))
                 }
             }
-            fn vector(v: &Value) -> Result<&Arc<[Self]>> {
+            fn vector(v: &Value) -> Result<&[Self]> {
                 if let Value::$vector(v) = v {
                     Ok(v)
                 } else {
                     Err(refused("kernel-operands"))
                 }
+            }
+            fn field_value(v: Self) -> Value {
+                Value::$field(v)
+            }
+            fn vector_value(v: Vec<Self>) -> Value {
+                Value::$vector(v.into())
+            }
+            fn decimal(s: &str) -> Result<Self> {
+                #[cfg(test)]
+                LITERAL_DECODES.with(|count| count.set(count.get() + 1));
+                ($parse)(s)
+            }
+        }
+        impl StructuredFamily for $s {
+            fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> {
+                if let Value::$matrix(v) = v {Ok(v)} else {Err(refused("kernel-operands"))}
             }
             fn polynomial(v: &Value) -> Result<&[Self]> {
                 if let Value::$poly(v) = v {
@@ -55,19 +76,8 @@ macro_rules! family {
                     Err(refused("kernel-operands"))
                 }
             }
-            fn field_value(v: Self) -> Value {
-                Value::$field(v)
-            }
-            fn vector_value(v: Arc<[Self]>) -> Value {
-                Value::$vector(v)
-            }
-            fn polynomial_value(v: Arc<[Self]>) -> Value {
-                Value::$poly(v)
-            }
-            fn decimal(s: &str) -> Result<Self> {
-                #[cfg(test)]
-                LITERAL_DECODES.with(|count| count.set(count.get() + 1));
-                ($parse)(s)
+            fn polynomial_value(v: Arc<[Self]>) -> Result<Value> {
+                Ok(Value::$poly(v))
             }
         }
     };

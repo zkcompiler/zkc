@@ -17,6 +17,7 @@ fn binding(operation: &str, element: &str) -> OperationBinding {
         contract: format!("sequence.{operation}"),
         arguments: vec![element.into()],
         implementation: format!("native/sequence.{operation}"),
+        physical_arguments: vec![],
     }
 }
 fn collected(record: bool) -> (Vec<u8>, String) {
@@ -74,7 +75,7 @@ fn drive(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (Result<Vec<Value>, String>, Usage, NativeBackend) {
-    let admitted = zkc_runtime::vm::Program::decode(program)
+    let admitted = zkc_runtime::vm::Program::decode(program, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -169,7 +170,10 @@ fn retained_input_traversal_charges_only_the_examined_edge() {
         &["out".into()],
     );
     let sequence = Sequence::new(
-        LogicalType::parse("index").unwrap(),
+        zkc_runtime::vm::PhysicalType::default_for(
+            zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
+        )
+        .unwrap(),
         (0..n).map(Value::Index).collect(),
         &Policy::default(),
     )
@@ -188,6 +192,8 @@ fn retained_input_traversal_charges_only_the_examined_edge() {
 #[test]
 fn collection_budget_failures_release_all_carried_storage() {
     let (program, _) = collected(true);
+    // The complete variant descriptor exhausts cumulative capacity during
+    // packing; the live capacity limit instead reaches append's backend check.
     let limits = [
         (
             ValueBudget {
@@ -205,7 +211,7 @@ fn collection_budget_failures_release_all_carried_storage() {
             },
             WorkBudget::default(),
             u64::MAX,
-            "exhausted:output-bytes",
+            "Limit",
         ),
         (
             ValueBudget::default(),
@@ -240,7 +246,11 @@ fn collection_budget_failures_release_all_carried_storage() {
             values,
             work,
         );
-        assert_eq!(result.unwrap_err(), expected, "{usage:?}");
+        assert_eq!(
+            result.unwrap_err(),
+            expected,
+            "{values:?} {work:?} {usage:?}"
+        );
         assert_eq!(usage.live_value_bytes, 0);
         assert!(backend.sequence_work_spent() <= sequence_work);
     }
@@ -257,13 +267,15 @@ fn participant_loop_carries_persistent_sequences_with_default_budgets() {
                 "empty",
                 "sequence.empty",
                 ["index"],
-                "native/sequence.empty"
+                "native/sequence.empty",
+                []
             ],
             [
                 "append",
                 "sequence.append",
                 ["index"],
-                "native/sequence.append"
+                "native/sequence.append",
+                []
             ]
         ],
         [

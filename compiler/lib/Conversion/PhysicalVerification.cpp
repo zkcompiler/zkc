@@ -33,7 +33,15 @@ class PhysicalCorrespondence {
          zip(op.getArguments(), expected.application.arguments))
       if (cast<StringAttr>(actual).getValue() != argument)
         return false;
-    return op->getAttrs().size() == 4;
+    auto physical = op.getPhysicalArgumentsAttr();
+    if (!physical ||
+        physical.size() != expected.application.physicalArguments.size())
+      return false;
+    for (auto [actual, argument] :
+         zip(physical, expected.application.physicalArguments))
+      if (cast<StringAttr>(actual).getValue() != argument)
+        return false;
+    return op->getAttrs().size() == 5;
   }
   bool application(Operation *op, const protocol::OperationBinding &binding,
                    ValueRange operands, TypeRange results, Attribute site,
@@ -116,6 +124,13 @@ class PhysicalCorrespondence {
         auto selected = originals.lookup(index);
         if (!selected)
           return false;
+        SmallVector<Attribute> parameters;
+        for (const auto &parameter :
+             selected->binding.application.physicalArguments)
+          parameters.push_back(
+              StringAttr::get(source->getContext(), parameter));
+        attributes.set("physical_arguments",
+                       ArrayAttr::get(source->getContext(), parameters));
         attributes.set(
             "implementation",
             StringAttr::get(source->getContext(),

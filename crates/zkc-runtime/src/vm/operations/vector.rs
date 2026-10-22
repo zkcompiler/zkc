@@ -354,18 +354,21 @@ use super::super::Representation;
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/vector.from_table",
         contract: "vector.from_table",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/vector.to_table",
         contract: "vector.to_table",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-diagonal/vector.mul",
         contract: "vector.mul",
         domains: &[Identity::Bls12381Fr],
@@ -376,6 +379,7 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-diagonal/vector.dot",
         contract: "vector.dot",
         domains: &[Identity::Bls12381Fr],
@@ -386,6 +390,7 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-pairwise/vector.dot",
         contract: "vector.dot",
         domains: &[Identity::Bls12381Fr],

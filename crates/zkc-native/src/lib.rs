@@ -3,6 +3,8 @@
 mod backend;
 mod bindings;
 mod codec;
+mod contracts;
+pub use contracts::{native_contracts, native_contracts_with_policy};
 mod diagonal;
 pub mod hash;
 pub mod matrix;

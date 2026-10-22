@@ -65,7 +65,13 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
     let bytes = std::fs::read(directory.join(format!("{family}_{mode}.bundle"))).unwrap();
     let raw: Json = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(raw["format"], "zkc.run/0");
-    let b = Bundle::admit(&bytes, &backend("P", family), BundleLimits::default()).unwrap();
+    let b = Bundle::admit(
+        &bytes,
+        &backend("P", family),
+        zkc_native::native_contracts(),
+        BundleLimits::default(),
+    )
+    .unwrap();
     for format in ["invalid.run", ""] {
         let mut bad = raw.clone();
         bad["format"] = json!(format);
@@ -73,6 +79,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
             Bundle::admit(
                 &serde_json::to_vec(&bad).unwrap(),
                 &backend("P", family),
+                zkc_native::native_contracts(),
                 BundleLimits::default()
             )
             .is_err()
@@ -90,6 +97,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
         Bundle::admit(
             &serde_json::to_vec(&missing).unwrap(),
             &backend("P", family),
+            zkc_native::native_contracts(),
             BundleLimits::default()
         )
         .is_err()

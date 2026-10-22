@@ -130,6 +130,7 @@ fn binding(field: &str, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![field.into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn call(field: &str, name: &str, attrs: &[&str], args: Vec<Value>) -> Result<Vec<Value>, String> {
@@ -509,7 +510,7 @@ fn bit_pattern_literals_name_every_element() {
             &signature.outputs,
             &["o0".to_string()],
         );
-        let admitted = zkc_runtime::vm::Program::decode(&program)
+        let admitted = zkc_runtime::vm::Program::decode(&program, zkc_native::native_contracts())
             .and_then(|program| program.check_installation(&backend(Policy::default())))
             .is_ok();
         // The backend checks the attributes it is handed, independently of

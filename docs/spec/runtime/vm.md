@@ -7,8 +7,10 @@ application authorization, transport and scheduling between participants.
 
 ## Program, instance and evaluator
 
-`vm::Program::decode` checks the entire retained artifact without a backend. The
-result owns its exact bytes and immutable typed code. Local functions use
+`vm::Program::decode(bytes, &contracts)` checks the entire retained artifact
+against a trusted immutable installation context without constructing a backend.
+The result owns its exact bytes, immutable typed code and a clone of that context.
+Local functions use
 positional operands and shared region layouts; participants retain named SSA
 registers and shared loop-input layouts recorded during admission.
 Loop frames use those admitted types in induction, carried-value and capture
@@ -18,7 +20,8 @@ same instruction, frame, failure and work boundaries.
 
 `Program::check_installation` is an optional deployment preflight. It checks
 Boolean literal support, service interfaces and exact installed operation
-signatures. It transfers no handles or authority to execution. Each instance
+signatures, catalog-scoped implementation identities and timing premises. It
+transfers no handles or authority to execution. Each instance
 links its own backend before entering any frame. The existing Runner constructors
 retain full-program installation, including dormant definitions.
 `check_local_installation(function, backend)` and
@@ -80,6 +83,32 @@ flow. Participant count checks use one VM operation; actual loop entry uses the
 checked count after host agreement or local control selection.
 Structural admission and installation do not
 prove compiler correspondence, cryptographic correctness or protocol security.
+
+## Trusted installation context
+
+`ContractsBuilder` accepts physical layouts and exact implementations of existing
+logical operations from the trusted composition root. Logical erasure, attributes
+and static arguments remain independently checked. Freezing produces `Contracts`;
+artifact names cannot mutate its inventory or install executable handlers.
+An empty builder retains the VM's control semantics while omitting the standard
+implementation contribution. Runtime requires no Native or kernel dependency.
+
+Contributed layout and implementation identities are scoped to their immutable
+catalog. Clones share those identities; independently rebuilt catalogs do not.
+Equal provider names grant neither compatible memory nor interchangeable setup
+custody. An installed handler independently reports its complete physical ports,
+scoped implementation identity and requirements. Linking compares those reports
+before entering frames. Direct conversions require exact installed source and
+target contracts and remain reached operations with their own failure behavior.
+
+Timing requirements are trusted implementation premises. A deployment explicitly
+authorizes them through its retained policy or an exact binding grant, including
+the relevant operand positions. A grant for one binding authorizes no other
+specialization. Unspecified timing is not operand-independent timing; allowing it
+establishes no constant-time guarantee. Neither roles nor deterministic preparation
+imply timing permission. A new immutable policy view leaves admitted Programs'
+policies unchanged. Physical transport permission is separate from implementation
+eligibility, copyability and a backend's advertised codec capability.
 
 ## Calls and authority
 

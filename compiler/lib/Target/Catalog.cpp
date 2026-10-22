@@ -96,6 +96,16 @@ public:
   }
   std::vector<BindingApplication>
   conversions(const BoundType &from, const BoundType &to) const override {
+    if (from.kind == to.kind && from.identity == to.identity &&
+        from.arguments == to.arguments && !(from == to) &&
+        (StringRef(from.representation).starts_with("blst/") ||
+         StringRef(to.representation).starts_with("blst/"))) {
+      auto logical = erasePhysicalType(from);
+      return {{"representation.convert",
+               {logical.spelling()},
+               "native/representation.convert",
+               {from.spelling(), to.spelling()}}};
+    }
     if (from.kind != "table" || to.kind != "table" ||
         from.identity != to.identity || from == to)
       return {};
@@ -146,12 +156,20 @@ const CandidateCatalog &installedCandidates() {
 }
 Error checkDirectConversion(const BindingApplication &application,
                             const BoundType &from, const BoundType &to) {
-  if (from.kind != "table" || to.kind != "table" ||
-      from.identity != to.identity || from == to ||
-      application.contract != "table.relayout" ||
-      application.arguments != std::vector<std::string>{from.identity,
-                                                        from.representation,
-                                                        to.representation})
+  auto logical = erasePhysicalType(from);
+  bool resident =
+      application.contract == "representation.convert" &&
+      application.arguments == std::vector<std::string>{logical.spelling()} &&
+      application.physicalArguments ==
+          std::vector<std::string>{from.spelling(), to.spelling()};
+  bool table = from.kind == "table" && to.kind == "table" &&
+               application.contract == "table.relayout" &&
+               application.arguments ==
+                   std::vector<std::string>{from.identity, from.representation,
+                                            to.representation};
+  if (from.kind != to.kind || from.identity != to.identity ||
+      !(erasePhysicalType(from) == erasePhysicalType(to)) || from == to ||
+      (!resident && !table))
     return error("binding-no-conversion");
   auto installed = resolveBinding(application, true);
   if (!installed)

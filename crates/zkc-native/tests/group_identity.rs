@@ -17,6 +17,7 @@ fn binding(group: &str, contract: &str) -> OperationBinding {
                 "arkworks"
             }
         ),
+        physical_arguments: vec![],
     }
 }
 fn call(group: &str, contract: &str, args: Vec<Value>) -> Value {
@@ -316,7 +317,7 @@ fn exact_provider_group_codec_and_nullary_signature() {
                 &["z".into()],
             );
             assert!(
-                zkc_runtime::vm::Program::decode(&wire)
+                zkc_runtime::vm::Program::decode(&wire, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend)?;
                         Ok(program)

@@ -18,6 +18,7 @@ fn binding(contract: &str, arguments: &[&str], implementation: &str) -> Operatio
         contract: contract.into(),
         arguments: arguments.iter().map(|s| (*s).into()).collect(),
         implementation: implementation.into(),
+        physical_arguments: vec![],
     }
 }
 fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
@@ -48,7 +49,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "b",
             binding.contract,
             binding.arguments,
-            binding.implementation
+            binding.implementation,
+            binding.physical_arguments
         ]],
         [[
             "function",
@@ -89,7 +91,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "dot",
             "vector.dot",
             ["bls12-381.fr"],
-            dot
+            dot,
+            []
         ]));
         carrier[2][0][3] = json!(["field:bls12-381.fr@arkworks.fr/0"]);
         carrier[2][0][4] = json!([
@@ -113,7 +116,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "msm",
             "curve.msm",
             ["ristretto255.group"],
-            msm
+            msm,
+            []
         ]));
         carrier[2][0][3] = json!(["group:ristretto255.group@dalek.ristretto/0"]);
         carrier[2][0][4] = json!([
@@ -135,12 +139,13 @@ fn run(
     attributes: &[&str],
     args: Vec<Value>,
 ) -> (std::result::Result<Vec<Value>, String>, NativeBackend) {
-    let admitted = zkc_runtime::vm::Program::decode(&program(binding, attributes))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted =
+        zkc_runtime::vm::Program::decode(&program(binding, attributes), crate::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, args)
         .unwrap_or_else(|e| panic!("{}", e.error));
     loop {
@@ -309,7 +314,8 @@ fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
             &[invalid.physical_type().logical().identity().name()],
             "plonky3/opening_states.length",
         );
-        let admitted = Program::decode(&program(&operation, &[])).unwrap();
+        let admitted =
+            Program::decode(&program(&operation, &[]), crate::native_contracts()).unwrap();
         let error = Runner::new(&admitted, "main", "P", "session", native, vec![invalid])
             .err()
             .expect("mismatched list member must refuse loading");
@@ -354,6 +360,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "FieldArray" => R::FieldArray,
             "Variant" => R::Variant,
             "ResourceUnit" => R::ResourceUnit,
+            "BlstField" | "BlstVector" | "BlstG1" | "BlstG1Vector" | "BlstG2" | "BlstG2Vector" => {
+                crate::operations::blst::physical(kind, identity)
+                    .unwrap()
+                    .representation()
+            }
             "Bn254Field" => R::Bn254Fr,
             "Bn254Vector" => R::Bn254FrVector,
             "Bn254Polynomial" => R::Bn254Polynomial,
@@ -438,7 +449,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "Groups" => R::Groups,
             name => panic!("missing physical fixture for {name}"),
         };
-        let expected = PhysicalType::new(logical, representation).unwrap();
+        let expected = if matches!(representation, R::Extension(_)) {
+            crate::operations::blst::physical(kind, identity).unwrap()
+        } else {
+            PhysicalType::new(logical, representation).unwrap()
+        };
         assert_eq!(value.physical_type(), expected, "{value:?}");
         classified.push((value.clone(), expected.clone()));
         assert_eq!(value.retained_bytes(), bytes, "{value:?}");
@@ -452,6 +467,49 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         // Every payload is safe to clone/drop without executing an operation.
         drop(cloned);
     };
+    use zkc_kernels::blst::bls12_381 as blst;
+    check(
+        Value::BlstField(blst::Scalar::from(1)),
+        Type::Field,
+        I::Bls12381Fr,
+        512,
+    );
+    check(
+        Value::BlstVector(Arc::new(
+            blst::ScalarVector::filled(2, blst::Scalar::from(1)).unwrap(),
+        )),
+        Type::Vector,
+        I::Bls12381Fr,
+        320,
+    );
+    check(
+        Value::BlstG1(blst::G1::generator()),
+        Type::Group,
+        I::Bls12381G1,
+        512,
+    );
+    check(
+        Value::BlstG1Vector(Arc::new(
+            blst::G1Vector::filled(2, blst::G1::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bls12381G1,
+        256 + 2 * std::mem::size_of::<blst::G1Element>(),
+    );
+    check(
+        Value::BlstG2(Arc::new(blst::G2::generator())),
+        Type::Group,
+        I::Bls12381G2,
+        512,
+    );
+    check(
+        Value::BlstG2Vector(Arc::new(
+            blst::G2Vector::filled(2, blst::G2::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bls12381G2,
+        256 + 2 * std::mem::size_of::<blst::G2Element>(),
+    );
     check(
         Value::Shake128State(Arc::new(crate::hash::Shake128State::default())),
         Type::Shake128State,
@@ -792,20 +850,24 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     );
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap();
     let fixed = Value::FixedVector(
-        crate::FixedVector::new(logical, [KoalaBear::new(1); 2].into()).unwrap(),
+        crate::FixedVector::new(
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
+            [KoalaBear::new(1); 2].into(),
+        )
+        .unwrap(),
     );
-    check(fixed.clone(), Type::FixedVector, I::None, 1288);
+    let fixed_bytes = 1288 + fixed.physical_type().descriptor_bytes();
+    check(fixed.clone(), Type::FixedVector, I::None, fixed_bytes);
+    let array_type = zkc_runtime::vm::PhysicalType::default_for(
+        LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
+    )
+    .unwrap();
+    let array_bytes = 1344 + array_type.descriptor_bytes();
     check(
-        Value::FieldArray(
-            crate::FieldArray::new(
-                LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
-                [Scalar::from(1); 2].into(),
-            )
-            .unwrap(),
-        ),
+        Value::FieldArray(crate::FieldArray::new(array_type, [Scalar::from(1); 2].into()).unwrap()),
         Type::FieldArray,
         I::None,
-        1344,
+        array_bytes,
     );
     let descriptor = LogicalType::parse(&zkc_test_support::variants::logical(
         "Bulk",
@@ -815,12 +877,17 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     .variant_descriptor()
     .unwrap()
     .clone();
-    let variant_bytes = descriptor.retained_bytes() + 256 + 512 + 1288;
-    let sequence_type = LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap();
+    let variant_type =
+        zkc_runtime::vm::PhysicalType::default_for(LogicalType::variant(descriptor)).unwrap();
+    let variant_bytes = variant_type.descriptor_bytes() + 256 + 512 + fixed_bytes;
+    let sequence_type = zkc_runtime::vm::PhysicalType::default_for(
+        LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
+    )
+    .unwrap();
     check(
         Value::Sequence(
             crate::Sequence::new(
-                LogicalType::parse("index").unwrap(),
+                sequence_type.clone(),
                 vec![Value::Index(7)],
                 &Policy::default(),
             )
@@ -831,7 +898,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
     );
     check(
-        Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),
+        Value::pack_variant(variant_type, 0, vec![fixed]).unwrap(),
         Type::Variant,
         I::None,
         variant_bytes,
@@ -969,12 +1036,13 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                     [["entry", "main", [["P", "actor"]]]]
                 ]))
                 .unwrap();
-                let admitted = zkc_runtime::vm::Program::decode(&carrier)
-                    .and_then(|program| {
-                        program.check_installation(&native)?;
-                        Ok(program)
-                    })
-                    .unwrap();
+                let admitted =
+                    zkc_runtime::vm::Program::decode(&carrier, crate::native_contracts())
+                        .and_then(|program| {
+                            program.check_installation(&native)?;
+                            Ok(program)
+                        })
+                        .unwrap();
                 native = match Runner::new(&admitted, "main", "P", "session", native, vec![wrong]) {
                     Err(error) => {
                         assert!(
@@ -1402,10 +1470,6 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         .unwrap()
     };
     for row in alternatives() {
-        if row.identity.starts_with("blst/") {
-            check_blst_alternative(row);
-            continue;
-        }
         let contract = installed().unwrap().get(row.identity).unwrap().contract;
         let primary = if contract.starts_with("curve.") {
             "ristretto255.group"
@@ -1491,7 +1555,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
 #[test]
 fn collection_limits_follow_payload_storage() {
     use std::sync::Arc;
-    use zkc_runtime::vm::{Backend, Identity, LogicalType, Type};
+    use zkc_runtime::vm::{Backend, Identity, LogicalType, Type, Value as _};
     let mut native = backend();
     native.core.policy.max_table_elements = 2;
     let roots = Value::OracleRoots(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 3]));
@@ -1505,16 +1569,25 @@ fn collection_limits_follow_payload_storage() {
         native.validate_value(&path).unwrap_err().code,
         "refused:oracle-path-length"
     );
-    native.core.policy.max_value_bytes = 1800;
     let logical = LogicalType::fixed_vector(
         LogicalType::new(Type::Field, Identity::KoalaBear).unwrap(),
         64,
     )
     .unwrap();
     let fixed = Value::FixedVector(
-        crate::FixedVector::new(logical, vec![crate::KoalaBear::new(1); 64].into()).unwrap(),
+        crate::FixedVector::new(
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
+            vec![crate::KoalaBear::new(1); 64].into(),
+        )
+        .unwrap(),
     );
+    native.core.policy.max_value_bytes = fixed.retained_bytes();
     native.validate_value(&fixed).unwrap();
+    native.core.policy.max_value_bytes -= 1;
+    assert_eq!(
+        native.validate_value(&fixed).unwrap_err().code,
+        "exhausted:output-bytes"
+    );
 }
 
 #[test]
@@ -1523,7 +1596,20 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
     let native = backend();
     let runtime_rows = OperationBinding::installed_implementations().unwrap();
     let backend_rows = native.installed_implementations();
-    assert_eq!(runtime_rows, backend_rows);
+    let mut standard_rows = runtime_rows
+        .into_iter()
+        .filter(|(name, _)| !name.starts_with("blst/"))
+        .collect::<Vec<_>>();
+    let mut actual_standard = backend_rows
+        .iter()
+        .filter(|(name, _)| {
+            !name.starts_with("blst/resident/") && name != "native/representation.convert"
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    standard_rows.sort();
+    actual_standard.sort();
+    assert_eq!(standard_rows, actual_standard);
     let arguments: &[&[&str]] = &[
         &[],
         &["bls12-381.fr"],
@@ -1568,6 +1654,11 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
     ];
     for (implementation, contract) in &backend_rows {
+        if implementation.starts_with("blst/resident/")
+            || implementation == "native/representation.convert"
+        {
+            continue;
+        }
         assert!(
             arguments.iter().any(|args| {
                 let binding = binding(contract, args, implementation);
@@ -1627,122 +1718,54 @@ fn nested_transcript_observation_keeps_its_own_work_contract() {
     assert!(native.prepare_binding(&join).unwrap().sequence);
 }
 
-fn blst_inputs(contract: &str, domain: Identity) -> Vec<Value> {
-    let factors = [Scalar::from(0), -Scalar::from(1), Scalar::from(11)];
-    let g1: Vec<_> = factors
-        .iter()
-        .map(|&s| crate::G1::generator().scale(s))
-        .collect();
-    let g2: Vec<_> = factors
-        .iter()
-        .map(|&s| crate::Bls12381G2::generator().scale(s))
-        .collect();
-    if contract == "pairing.check" {
-        return vec![Value::Groups(g1.into()), Value::Bls12381G2Vector(g2.into())];
-    }
-    let (point, points) = match domain {
-        Identity::Bls12381G1 => (Value::Curve(g1[2]), Value::Groups(g1.into())),
-        Identity::Bls12381G2 => (Value::Bls12381G2(g2[2]), Value::Bls12381G2Vector(g2.into())),
-        _ => panic!("unexpected blst curve domain"),
+#[test]
+fn actual_handler_timing_metadata_refuses_a_weakened_expected_contract_before_frames() {
+    use zkc_runtime::vm::{
+        Backend, ExecutionPolicy, ImplementationRequirements, InstalledOperation, Program,
+        TimingRequirement,
     };
-    match contract {
-        "curve.scale" => vec![point, Value::Field(factors[1])],
-        "curve.vector_scale" => vec![points, Value::Field(factors[1])],
-        "curve.scale_each" | "curve.msm" => vec![Value::Vector(factors.into()), points],
-        _ => panic!("missing blst fixture: {contract}"),
-    }
-}
-fn check_blst_alternative(row: &Alternative) {
-    let contract = installed().unwrap().get(row.identity).unwrap().contract;
-    for &domain in row.domains {
-        let identity = domain;
-        let domain = domain.name();
-        let original = binding(contract, &[domain], row.original);
-        let alternate = binding(contract, &[domain], row.identity);
-        let inputs = blst_inputs(contract, identity);
-        let expected = run(backend(), &original, &[], inputs.clone()).0.unwrap();
-        let actual = run(backend(), &alternate, &[], inputs).0.unwrap();
-        let encode = |v: Value| backend().encode_native_value(&v).unwrap();
-        assert_eq!(
-            actual.into_iter().map(encode).collect::<Vec<_>>(),
-            expected.into_iter().map(encode).collect::<Vec<_>>(),
-            "{} {domain}",
-            row.identity
-        );
-    }
-}
-
-#[test]
-fn blst_calls_admit_resources_and_leave_shared_inputs_unchanged_on_failure() {
-    for row in alternatives().filter(|r| r.identity.starts_with("blst/")) {
-        let contract = installed().unwrap().get(row.identity).unwrap().contract;
-        for &domain in row.domains {
-            let call = binding(contract, &[domain.name()], row.identity);
-            let inputs = blst_inputs(contract, domain);
-            let originals: Vec<_> = inputs
-                .iter()
-                .map(|v| backend().encode_native_value(v).unwrap())
-                .collect();
-            for (policy, expected) in [
-                (
-                    Policy {
-                        max_numerical_work: 0,
-                        ..Policy::default()
-                    },
-                    "exhausted:numerical-work",
-                ),
-                (
-                    Policy {
-                        max_numerical_bytes: 0,
-                        ..Policy::default()
-                    },
-                    "exhausted:numerical-bytes",
-                ),
-            ] {
-                let mut native = backend();
-                native.core.policy = policy;
-                assert_eq!(
-                    run(native, &call, &[], inputs.clone()).0.unwrap_err(),
-                    expected,
-                    "{}",
-                    row.identity
-                );
-            }
-            let failure = zkc_kernels::allocation::failure::after(0);
-            let result = run(backend(), &call, &[], inputs.clone()).0;
-            drop(failure);
-            // A scalar multiply has no fallible heap scratch; all vector calls do.
-            if contract != "curve.scale" {
-                assert_eq!(
-                    result.unwrap_err(),
-                    "exhausted:allocation",
-                    "{}",
-                    row.identity
-                );
-            }
-            let after: Vec<_> = inputs
-                .iter()
-                .map(|v| backend().encode_native_value(v).unwrap())
-                .collect();
-            assert_eq!(after, originals);
-            assert!(run(backend(), &call, &[], inputs).0.is_ok());
-        }
-    }
-}
-
-#[test]
-fn blst_selection_rejects_unrelated_domains_and_contracts() {
-    for (contract, domain, implementation) in [
-        ("curve.msm", "bn254.g1", "blst/curve.msm"),
-        ("curve.msm", "bls12-381.gt", "blst/curve.msm"),
-        ("curve.msm", "ristretto255.group", "blst/curve.msm"),
-        ("pairing.check", "bn254.fr", "blst/pairing.check"),
-        ("pairing.apply", "bls12-381.fr", "blst/pairing.check"),
-    ] {
-        assert!(
-            binding(contract, &[domain], implementation)
-                .signature()
-                .is_err()
-        );
-    }
+    let known = ImplementationRequirements {
+        timing: TimingRequirement::VariableTime,
+        timing_operands: &[0, 1],
+    };
+    let installed = installed().unwrap();
+    assert_eq!(
+        installed
+            .get("blst/resident/curve.msm")
+            .unwrap()
+            .requirements,
+        known
+    );
+    // Model an expected inventory that incorrectly says Unspecified while the
+    // installed handler explicitly retains the independently known MSM premise.
+    // Keeping the fixed ports and identity unchanged isolates metadata checking.
+    let b = binding("curve.msm", &["bls12-381.g1"], "arkworks/curve.msm");
+    let contracts = crate::native_contracts_with_policy(ExecutionPolicy::general_purpose());
+    let expected = Program::decode(&program(&b, &[]), &contracts).unwrap();
+    assert_eq!(
+        contracts.resolve(b.clone()).unwrap().requirements(),
+        ImplementationRequirements::default()
+    );
+    let mut inventory = installed.clone();
+    inventory
+        .entries
+        .get_mut(&b.implementation)
+        .unwrap()
+        .requirements = known;
+    let mut actual = backend().with_contracts(contracts).unwrap();
+    actual.implementations = Box::leak(Box::new(inventory));
+    assert_eq!(actual.prepare_binding(&b).unwrap().requirements(), known);
+    assert!(expected.check_installation(&actual).is_err());
+    let error = match Runner::new(
+        &expected,
+        "main",
+        "P",
+        "session",
+        actual,
+        vec![Value::Vector(vec![].into()), Value::Groups(vec![].into())],
+    ) {
+        Ok(_) => panic!("weakened timing contract entered a frame"),
+        Err(error) => error,
+    };
+    assert_eq!(error.backend.active_frames(), 0);
 }

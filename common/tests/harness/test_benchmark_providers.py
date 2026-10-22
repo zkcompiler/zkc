@@ -91,3 +91,117 @@ def test_execution_counts_preset_keeps_source_workloads(modules, monkeypatch, tm
     # source-only observation preset and trip its preflight refusal.
     with pytest.raises(Prepared):
         suites.prepare(args, tmp_path, None, {})
+
+
+@pytest.mark.parametrize('group,kernel', [('scalar', 'field_mul'), ('scalar', 'vector_mul'),
+                                         ('g1', 'scale'), ('g2', 'msm'), ('pairing', 'pairing_check')])
+def test_resident_catalog_retains_repetition_and_full_wire_boundaries(modules, group, kernel):
+    providers, results, _ = modules
+    cases = [shape for _, _, shape in providers.catalog()
+             if shape['group'] == group and shape['kernel'] == kernel]
+    for boundary in ('resident_installed_chain', 'wire_resident_chain'):
+        selected = [shape for shape in cases if shape['boundary'] == boundary]
+        assert selected
+        assert all(shape['chain_length'] == 4 for shape in selected)
+        for shape in selected:
+            results.validate_backend({'kind': 'kernel', 'provider': 'blst', **shape},
+                                     boundary=providers.BOUNDARIES[boundary])
+    if kernel in ('vector_mul', 'msm'):
+        assert {1, 32, 1024} <= {shape['elements'] for shape in cases}
+
+
+@pytest.mark.parametrize('change', [
+    {'chain_length': 0}, {'chain_length': 33}, {'chain_length': True},
+    {'chain_length': 4, 'boundary': 'installed'},
+    {'group': 'scalar', 'kernel': 'msm'},
+    {'group': 'g1', 'kernel': 'vector_mul'},
+    {'group': 'scalar', 'kernel': 'vector_mul', 'boundary': 'import'},
+])
+def test_resident_requests_refuse_invalid_chain_contracts(modules, change):
+    _, results, io = modules
+    request = {'kind': 'kernel', 'provider': 'blst', 'group': 'scalar',
+               'kernel': 'vector_mul', 'elements': 32, 'boundary': 'resident_installed_chain',
+               'chain_length': 4}
+    with pytest.raises(io.MeasurementError):
+        results.validate_backend(request | change)
+
+
+@pytest.fixture
+def resident_evidence():
+    return {'diagnostics': {
+        'provider': 'blst', 'chain_length': 4, 'arithmetic_calls': 4,
+        'trusted_timing_authorization': {'allow_unspecified_timing': True, 'allow_variable_time': False},
+        'explicit_conversions': [],
+        'input_physical_types': ['field:bls12-381.fr@blst/fr'] * 2,
+        'output_physical_types': ['field:bls12-381.fr@blst/fr'],
+         'program': ['zkc.program/0',
+                    [['b0', 'field.mul', ['bls12-381.fr'], 'blst/resident/field.mul', []]],
+                    [['function', 'f', [['a0', 'field:bls12-381.fr@blst/fr'],
+                                        ['a1', 'field:bls12-381.fr@blst/fr']],
+                      ['field:bls12-381.fr@blst/fr'],
+                      [['op', f'site{i}', 'b0', [], ['a0' if i == 0 else f'v{i-1}', 'a1'], [f'v{i}']]
+                       for i in range(4)] + [['return', ['v3']]], ['f', []]]],
+                    [['participant', 'actor', 'instance', 'P',
+                      [['a0', 'field:bls12-381.fr@blst/fr'], ['a1', 'field:bls12-381.fr@blst/fr']],
+                      ['field:bls12-381.fr@blst/fr'],
+                      [['local', 'work', 'f', ['a0', 'a1'], ['v3']], ['return', ['v3']]], []]],
+                    [['entry', 'main', [['P', 'actor']]]]],
+        'managed': {'input_retained_payload_bytes': 1024, 'terminal_runner_usage': {},
+                    'peak_retained_payload_bytes': None, 'peak_scratch_bytes': None},
+        'input_wire_bytes': 66, 'output_wire_bytes': 33}}
+
+
+def test_resident_evidence_records_selected_codec_and_unknown_managed_peaks(modules, resident_evidence):
+    providers, _, _ = modules
+    backend = {'kind': 'kernel', 'provider': 'blst', 'group': 'scalar', 'kernel': 'field_mul',
+               'boundary': 'wire_resident_chain', 'elements': 1, 'chain_length': 4}
+    providers.validate_evidence(resident_evidence, backend)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('provider', 'arkworks'), ('chain_length', 1), ('arithmetic_calls', 1),
+    ('trusted_timing_authorization', {'allow_unspecified_timing': True, 'allow_variable_time': True}),
+    ('input_physical_types', ['field:bls12-381.fr@arkworks.fr/0']),
+    ('managed', {'input_retained_payload_bytes': 10, 'terminal_runner_usage': {}}),
+    ('program', ['zkc.program/0', [['b', 'field.mul', ['bls12-381.fr'], 'blst/field.mul', []]], [], [], []]),
+    ('explicit_conversions', [{'calls': 1}]),
+])
+def test_resident_evidence_refuses_fallback_policy_and_missing_observations(modules, resident_evidence, field, value):
+    providers, _, io = modules
+    backend = {'kind': 'kernel', 'provider': 'blst', 'group': 'scalar', 'kernel': 'field_mul',
+               'boundary': 'wire_resident_chain', 'elements': 1, 'chain_length': 4}
+    resident_evidence['diagnostics'][field] = value
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(resident_evidence, backend)
+
+
+@pytest.mark.parametrize('mutation', [
+    'functions', 'participants', 'entries', 'invented_output', 'known_output',
+    'wrong_operation', 'wrong_link', 'missing_call', 'wrong_chain', 'conversion',
+])
+def test_retained_provider_program_cannot_contradict_workload(modules, resident_evidence, mutation):
+    providers, _, io = modules
+    backend = dict(kind='kernel', provider='blst', group='scalar', kernel='field_mul',
+                   boundary='wire_resident_chain', elements=1, chain_length=4)
+    evidence = resident_evidence['diagnostics']
+    program = evidence['program']
+    if mutation in ('functions', 'participants', 'entries'):
+        program[{'functions': 2, 'participants': 3, 'entries': 4}[mutation]] = []
+    elif mutation in ('invented_output', 'known_output'):
+        evidence['output_physical_types'] = [
+            'field:bls12-381.fr@invented/layout' if mutation == 'invented_output'
+            else 'field:bls12-381.fr@arkworks.fr/0']
+    elif mutation == 'wrong_operation':
+        program[1][0][1:4] = ['field.add', ['bls12-381.fr'], 'blst/resident/field.add']
+    elif mutation == 'wrong_link':
+        program[3][0][6][0][2] = 'missing'
+    elif mutation == 'missing_call':
+        del program[2][0][4][1]
+    elif mutation == 'wrong_chain':
+        program[2][0][4][1][4][0] = 'a0'
+    else:
+        evidence['explicit_conversions'] = [dict(logical_type='field:bls12-381.fr',
+            source='field:bls12-381.fr@blst/fr', target='field:bls12-381.fr@arkworks.fr/0',
+            calls=1, elements=1, canonical_payload_bytes=32)]
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(resident_evidence, backend)

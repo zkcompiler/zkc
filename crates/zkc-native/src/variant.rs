@@ -21,23 +21,28 @@ pub struct Variant {
 }
 impl Variant {
     pub fn new(
-        descriptor: Arc<VariantDescriptor>,
+        physical_type: PhysicalType,
         alternative: usize,
         payload: Vec<Value>,
     ) -> Result<Self> {
-        let physical_type =
-            PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(descriptor.clone()))
-                .map_err(|_| refused("variant-payload-representation"))?;
+        if physical_type.representation() != zkc_runtime::vm::Representation::Variant {
+            return Err(refused("variant-payload-representation"));
+        }
+        let logical = physical_type.logical();
+        let descriptor = logical
+            .variant_descriptor()
+            .ok_or_else(|| refused("variant-type"))?
+            .clone();
         let inline = payload.iter().try_fold(0usize, |sum, value| {
             sum.checked_add(value.retained_parts(&mut |_| false))
         });
         let spine = inline
-            .and_then(|bytes| Self::storage_bytes(&descriptor, payload.len(), bytes))
+            .and_then(|bytes| Self::storage_bytes(&physical_type, payload.len(), bytes))
             .unwrap_or(usize::MAX);
         let retained = payload
             .iter()
             .try_fold(0usize, |sum, value| sum.checked_add(value.retained_bytes()))
-            .and_then(|bytes| Self::storage_bytes(&descriptor, payload.len(), bytes))
+            .and_then(|bytes| Self::storage_bytes(&physical_type, payload.len(), bytes))
             .unwrap_or(usize::MAX);
         let resource_free = payload.iter().all(Value::is_resource_free);
         let value = Self {
@@ -86,14 +91,15 @@ impl Variant {
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let arm = self
-            .descriptor
-            .alternatives()
-            .get(self.alternative)
+            .physical_type
+            .variant_payload(self.alternative)
             .ok_or_else(|| refused("variant-alternative"))?;
-        if self.payload.len() != arm.payload().len()
-            || self.payload.iter().zip(arm.payload()).any(|(v, t)| {
-                !PhysicalType::default_for(t.clone()).is_ok_and(|ty| v.physical_type() == ty)
-            })
+        if self.payload.len() != arm.len()
+            || self
+                .payload
+                .iter()
+                .zip(arm)
+                .any(|(v, t)| v.physical_type() != *t)
         {
             return Err(refused("variant-payload"));
         }
@@ -111,12 +117,12 @@ impl Variant {
         self.retained
     }
     pub(crate) fn storage_bytes(
-        descriptor: &VariantDescriptor,
+        physical_type: &PhysicalType,
         length: usize,
         payload_bytes: usize,
     ) -> Option<usize> {
-        descriptor
-            .retained_bytes()
+        physical_type
+            .descriptor_bytes()
             .checked_add(256)?
             .checked_add(length.checked_mul(512)?)?
             .checked_add(payload_bytes)

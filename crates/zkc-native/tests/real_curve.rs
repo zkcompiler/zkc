@@ -1,10 +1,11 @@
+#[cfg(feature = "test-utils")]
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
-use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::{Backend, ErrorCode};
 fn real() -> NativeBackend {
@@ -44,6 +45,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
             contract: contract.into(),
             arguments: arguments.into_iter().map(str::to_owned).collect(),
             implementation: format!("arkworks/{contract}"),
+            physical_arguments: vec![],
         };
         assert_eq!(
             b.binding_signature(&declaration),
@@ -78,6 +80,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
             contract: contract.into(),
             arguments: arguments.into_iter().map(str::to_owned).collect(),
             implementation: implementation.into(),
+            physical_arguments: vec![],
         };
         assert!(declaration.signature().is_err(), "{implementation}");
         assert!(
@@ -147,7 +150,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
             &["got"],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&b)
+            zkc_runtime::vm::Program::decode(&b, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&real())?;
                     Ok(program)
@@ -519,7 +522,7 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
             .issue_nonce_for(Identity::Bls12381Fr, wrong, 2)
             .unwrap();
         let old = nonce.clone();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -548,7 +551,7 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
     let nonce = backend
         .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
         .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&aliases)
+    let admitted = zkc_runtime::vm::Program::decode(&aliases, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)

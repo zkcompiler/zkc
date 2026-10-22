@@ -11,6 +11,7 @@ fn binding(name: &str, group: &str, provider: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![group.into()],
         implementation: format!("{provider}/{name}"),
+        physical_arguments: vec![],
     }
 }
 

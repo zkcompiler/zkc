@@ -231,11 +231,12 @@ class Decoder {
   protocol::OperationBinding binding(const V &v) {
     protocol::OperationBinding out;
 
-    if (const auto *r = array(v, 4, "binding-declaration")) {
+    if (const auto *r = array(v, 5, "binding-declaration")) {
       out.name = string((*r)[0]);
       out.application.contract = string((*r)[1]);
       out.application.arguments = names((*r)[2]);
       out.application.implementation = string((*r)[3]);
+      out.application.physicalArguments = names((*r)[4]);
     }
     return out;
   }

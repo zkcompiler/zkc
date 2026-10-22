@@ -82,6 +82,8 @@ def execute_job(job, directory, plan, timeout):
     journal = Journal(directory / 'commands', timeout)
     command = journal.command([job.executable, path], cwd=directory)
     report = validate_worker(read_report(command), plan, job.boundary)
+    from .providers import validate_evidence
+    validate_evidence(report, job.backend)
     require(report['build'].get('execution_counts', False) is job.execution_counts,
             'worker execution-counts feature differs from the requested observation')
     if job.backend.get('kind') in ('host', 'run'):

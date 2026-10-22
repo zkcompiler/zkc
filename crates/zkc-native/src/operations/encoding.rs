@@ -822,6 +822,7 @@ mod tests {
             contract: "encoding.index_uleb128".into(),
             arguments: vec![],
             implementation: "native/encoding.index_uleb128".into(),
+            physical_arguments: vec![],
         };
         assert!(signature(&binding).is_some());
         binding.arguments.push("bls12-381.fr".into());
@@ -1507,6 +1508,7 @@ mod tests {
                 contract: contract.into(),
                 arguments: vec![domain.into()],
                 implementation: format!("{provider}/{contract}"),
+                physical_arguments: vec![],
             };
             assert_eq!(
                 signature(&binding).is_some(),

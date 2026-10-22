@@ -8,11 +8,19 @@ impl BoundInterface {
     /// compiler publication owns source correspondence and run compile options;
     /// run bundles do not carry an independent original or options record.
     pub fn check_run(&self, host: &RunHost) -> Result<()> {
+        self.check_run_bundle(host.bundle(), host.identity())
+    }
+    /// Bind a portable backend Host to the exact authenticated publication.
+    /// The logical source ABI is checked independently of backend storage.
+    pub(in crate::entry) fn check_run_bundle(
+        &self,
+        bundle: &zkc_runtime::host::joint::Bundle,
+        identity: &str,
+    ) -> Result<()> {
         let p = &self.document.protocols[self.selected];
-        let bundle = host.bundle();
         require(
             matches!(self.document.job, Job::Run {})
-                && host.identity() == self.artifact
+                && identity == self.artifact
                 && bundle.entry() == p.symbol
                 && bundle.roles().len() == p.roles.len(),
             E::NativeBinding,

@@ -48,9 +48,9 @@ fn mapped(names: &Names, value: &str) -> String {
 fn values(names: &Names, input: &[String]) -> Vec<String> {
     input.iter().map(|v| mapped(names, v)).collect()
 }
-fn data_function(function: &Function) -> Result<()> {
-    construction_function(function, &[])?;
-    source_transcript_function(function, None)
+fn data_function(function: &Function, contracts: &crate::vm::Contracts) -> Result<()> {
+    construction_function(function, &[], contracts)?;
+    source_transcript_function(function, None, contracts)
 }
 fn signature(function: &Function, inputs: &[PhysicalType], outputs: &[PhysicalType]) -> Result<()> {
     if !function.inputs.iter().map(|(_, t)| t).eq(inputs.iter()) || function.outputs != outputs {
@@ -309,11 +309,16 @@ fn same_body(
         }
     }
 }
-fn conditional(function: &Function, source: &Function, writing: bool) -> Result<()> {
+fn conditional(
+    function: &Function,
+    source: &Function,
+    writing: bool,
+    contracts: &crate::vm::Contracts,
+) -> Result<()> {
     let mut inputs = vec![ty("bool")];
     inputs.extend(source.inputs.iter().map(|(_, t)| t.clone()));
     signature(function, &inputs, &source.outputs)?;
-    data_function(function)?;
+    data_function(function, contracts)?;
     let mut ops = no_releases(&function.body);
     let Some(LocalInstruction::Conditional {
         condition,
@@ -422,7 +427,7 @@ impl<'a> CheckedCodec<'a> {
             if let Some(function) = selected_function(name, false)?
                 && data_functions.insert(name.clone())
             {
-                data_function(function)?;
+                data_function(function, admitted.contracts())?;
             }
         }
         if let Some(write) = selected_function(&codec.write, producing)? {
@@ -438,10 +443,15 @@ impl<'a> CheckedCodec<'a> {
         }
         if !codec.conditional_write.is_empty() {
             if let Some(write) = selected_function(&codec.conditional_write, producing)? {
-                conditional(write, function(&codec.write)?, true)?;
+                conditional(write, function(&codec.write)?, true, admitted.contracts())?;
             }
             if let Some(finish) = selected_function(&codec.conditional_finish, validating)? {
-                conditional(finish, function(&codec.finish)?, false)?;
+                conditional(
+                    finish,
+                    function(&codec.finish)?,
+                    false,
+                    admitted.contracts(),
+                )?;
             }
         }
         let mut messages = Vec::new();
@@ -560,7 +570,7 @@ impl<'a> CheckedCodec<'a> {
                 if let Some(function) = selected_function(name, false)?
                     && data_functions.insert(name.clone())
                 {
-                    data_function(function)?;
+                    data_function(function, admitted.contracts())?;
                 }
                 reserved.insert(name.clone());
             }
@@ -569,7 +579,7 @@ impl<'a> CheckedCodec<'a> {
                 inputs.extend(chunk_types);
                 signature(function(&selection.wire)?, &inputs, state)?;
                 if wire_functions.insert(selection.wire.clone()) {
-                    construction_function(function(&selection.wire)?, state)?;
+                    construction_function(function(&selection.wire)?, state, admitted.contracts())?;
                 }
                 reserved.insert(selection.wire.clone());
             }
@@ -651,7 +661,10 @@ impl<'a> CheckedCodec<'a> {
     }
     fn check_data(&self, name: &str) -> Result<()> {
         if !self.data_functions.borrow().contains(name) {
-            data_function(&self.admitted.program.functions[name])?;
+            data_function(
+                &self.admitted.program.functions[name],
+                self.admitted.contracts(),
+            )?;
             self.data_functions.borrow_mut().insert(name.into());
         }
         Ok(())

@@ -75,7 +75,10 @@ fn inputs(envelope: &Json, family: &str, n: u64, producing: bool) -> Json {
                 3 => Value::Field(claim),
                 5 => Value::FieldArray(
                     FieldArray::new(
-                        LogicalType::field_array(Identity::Bls12381Fr, 3).unwrap(),
+                        zkc_runtime::vm::PhysicalType::default_for(
+                            LogicalType::field_array(Identity::Bls12381Fr, 3).unwrap(),
+                        )
+                        .unwrap(),
                         vec![Scalar::from(1), Scalar::from(2), Scalar::from(3)].into(),
                     )
                     .unwrap(),

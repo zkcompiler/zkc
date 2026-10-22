@@ -47,7 +47,7 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
     let bytes = program(&[("a", "rng"), ("b", "rng")], vec![], &[], &[]);
     let mut b = ark_backend(None);
     let r = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -87,12 +87,13 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
         let r = b
             .issue_rng_for(Identity::Bls12381Fr, bad_domain, 1)
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&draw_program())
-            .and_then(|program| {
-                program.check_installation(&b)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted =
+            zkc_runtime::vm::Program::decode(&draw_program(), zkc_native::native_contracts())
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
+                .unwrap();
         match Runner::new(&admitted, "main", "P", "session", b, vec![r]) {
             Err(e) => {
                 assert!(e.error.to_string().contains("capability-domain"));
@@ -124,12 +125,13 @@ fn exhausted_attempt_advances_generation_and_counter_without_touching_other_slot
     );
     assert_eq!(b.observe(token(&other)).unwrap(), before);
     assert_eq!(b.active_frames(), 0);
-    let admitted = zkc_runtime::vm::Program::decode(&draw_program())
-        .and_then(|program| {
-            program.check_installation(&b)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted =
+        zkc_runtime::vm::Program::decode(&draw_program(), zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![r]).is_err());
 }
 #[test]

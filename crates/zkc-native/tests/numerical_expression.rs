@@ -26,6 +26,7 @@ fn binding(domain: domains::NativeDomain, mode: &str, mask: &str) -> OperationBi
         contract: format!("numerical.{mode}"),
         arguments: vec![domain.field.name().into(), mask.into()],
         implementation: format!("{}/numerical.{mode}", domain.provider),
+        physical_arguments: vec![],
     }
 }
 
@@ -131,6 +132,7 @@ fn exercise<F>(
             contract: "vector.add".into(),
             arguments: vec![domain.field.name().into()],
             implementation: format!("{}/vector.add", domain.provider),
+            physical_arguments: vec![],
         };
         let output = one(
             backend(Policy::default()),
@@ -171,6 +173,7 @@ fn exercise<F>(
                 contract: format!("vector.{operation}"),
                 arguments: vec![domain.field.name().into()],
                 implementation: format!("{}/vector.{operation}", domain.provider),
+                physical_arguments: vec![],
             };
             let result = one(backend(Policy::default()), binding, &[], args)
                 .0
@@ -1350,7 +1353,8 @@ fn expression_program(binding: &OperationBinding, expression: &str, conditional:
             "expr",
             binding.contract,
             binding.arguments,
-            binding.implementation
+            binding.implementation,
+            binding.physical_arguments
         ]],
         [[
             "function",
@@ -1421,6 +1425,7 @@ fn failure_preserves_an_earlier_random_draw_and_publishes_no_expression_result()
         contract: "random.draw".into(),
         arguments: vec![Identity::Bls12381Fr.name().into()],
         implementation: "arkworks/random.draw".into(),
+        physical_arguments: vec![],
     };
     let mut inputs = expr.signature().unwrap().inputs;
     inputs.push(draw.signature().unwrap().inputs[0].clone());
@@ -1491,11 +1496,10 @@ fn reusable_computations_preserve_results_and_reject_changed_numerical_policy() 
         json!([["input", 0], ["mul", 0, 0], ["add", 1, 0]]),
         2,
     );
-    let admitted = Program::decode(&expression_program(
-        &binding(domains::BLS, "map", "0"),
-        &expression,
-        false,
-    ))
+    let admitted = Program::decode(
+        &expression_program(&binding(domains::BLS, "map", "0"), &expression, false),
+        zkc_native::native_contracts(),
+    )
     .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     // Computation reuse accepts bounded scalar parameters, not vector content

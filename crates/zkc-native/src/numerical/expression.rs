@@ -6,7 +6,7 @@ use super::Call;
 fn payload_bytes<T>(len: usize) -> crate::Result<usize> {
     zkc_kernels::numerical::payload_bytes::<T>(len).map_err(|e| crate::exhausted(e.code()))
 }
-use crate::operations::field::Family;
+use crate::operations::field::StructuredFamily;
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::mem::size_of;
 use zkc_kernels::vector;
@@ -209,7 +209,7 @@ fn work_counts(bytes: usize, inputs: usize, nodes: usize) -> Result<(u64, u64)> 
     Ok((per_row, setup))
 }
 
-impl<S: Family> Plan<S> {
+impl<S: StructuredFamily> Plan<S> {
     fn new(
         expression: Expression,
         mask: &[u8],
@@ -355,7 +355,7 @@ impl<S: Family> Plan<S> {
             *destination = if *bit == b'0' {
                 Operand::Scalar(S::field(operand)?)
             } else {
-                Operand::Column(S::vector(operand)?.as_ref())
+                Operand::Column(S::vector(operand)?)
             };
         }
         let mut scratch = call.scratch(self.expression.nodes().len() * stride, S::zero())?;
@@ -371,7 +371,7 @@ impl<S: Family> Plan<S> {
                 )?;
                 destination.copy_from_slice(values);
             }
-            output.finish(|values| Ok(S::vector_value(values.into())))?
+            output.finish(|values| Ok(S::vector_value(values)))?
         } else {
             let output = call.scalar(retained)?;
             let mut accumulator = if matches!(self.mode, Mode::Sum) {
@@ -497,13 +497,15 @@ impl Prepared {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operations::field::Family as _;
     use serde_json::json;
 
-    fn captured_square<S: Family>(field: Identity, mode: Mode) -> Plan<S> {
+    fn captured_square<S: StructuredFamily>(field: Identity, mode: Mode) -> Plan<S> {
         let binding = OperationBinding {
             contract: "numerical.map".into(),
             arguments: vec![field.name().into(), "10".into()],
             implementation: "test/numerical.map".into(),
+            physical_arguments: vec![],
         };
         let body = json!([
             "zkc.ring/0",
@@ -522,7 +524,7 @@ mod tests {
         .unwrap()
     }
 
-    fn varying_memory_floor<S: Family>(field: Identity) {
+    fn varying_memory_floor<S: StructuredFamily>(field: Identity) {
         for mode in [Mode::Map, Mode::Sum, Mode::Product] {
             let plan = captured_square::<S>(field, mode);
             for rows in [0, 1, 513] {
@@ -540,7 +542,7 @@ mod tests {
                     + retained;
                 let args = [
                     Value::Index(rows as u64),
-                    S::vector_value(vec![S::one(); rows].into()),
+                    S::vector_value(vec![S::one(); rows]),
                     S::field_value(S::one()),
                 ];
                 let policy = Policy {
@@ -592,15 +594,14 @@ mod tests {
                             .collect();
                         let args = [
                             Value::Index(rows as u64),
-                            S::vector_value(inputs.clone().into()),
+                            S::vector_value(inputs.clone()),
                             S::field_value(S::new(capture)),
                         ];
                         let result = plan.apply(&args, retained, &policy).unwrap();
                         match mode {
-                            Mode::Map => assert_eq!(
-                                S::vector(&result[0]).unwrap().as_ref(),
-                                expected.as_slice()
-                            ),
+                            Mode::Map => {
+                                assert_eq!(S::vector(&result[0]).unwrap(), expected.as_slice())
+                            }
                             Mode::Sum => assert_eq!(
                                 S::field(&result[0]).unwrap(),
                                 expected.iter().copied().sum::<S>()

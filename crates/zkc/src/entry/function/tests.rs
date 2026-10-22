@@ -127,7 +127,13 @@ fn calculation() -> Json {
     let physical = "field:bls12-381.fr@arkworks.fr/0";
     let program = json!([
         "zkc.program/0",
-        [["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"]],
+        [[
+            "add",
+            "field.add",
+            ["bls12-381.fr"],
+            "arkworks/field.add",
+            []
+        ]],
         [[
             "function",
             "sum",
@@ -182,7 +188,13 @@ fn standalone_numerical_assets_are_authenticated_including_dormant_branches() {
         .spelling();
     let program = json!([
         "zkc.program/0",
-        [["ring", "ring.point", ["koala-bear"], "plonky3/ring.point"]],
+        [[
+            "ring",
+            "ring.point",
+            ["koala-bear"],
+            "plonky3/ring.point",
+            []
+        ]],
         [[
             "function",
             "evaluate",
@@ -1151,7 +1163,8 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
             "poly",
             "poly.from_coefficients",
             ["bls12-381.fr"],
-            "arkworks/poly.from_coefficients"
+            "arkworks/poly.from_coefficients",
+            []
         ]],
         [[
             "function",
@@ -1302,7 +1315,8 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
             "poly",
             "poly.from_coefficients",
             ["bls12-381.fr"],
-            "arkworks/poly.from_coefficients"
+            "arkworks/poly.from_coefficients",
+            []
         ]],
         [[
             "function",
@@ -1999,12 +2013,26 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     let policy = capacity.backend();
     let scalar = zkc_native::Value::Field(zkc_native::Scalar::from(7));
     let inner = zkc_native::Value::Sequence(
-        zkc_native::Sequence::new(scalar.physical_type().logical(), vec![scalar; 32], &policy)
+        zkc_native::Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(scalar.physical_type().logical()).unwrap(),
+            )
             .unwrap(),
+            vec![scalar; 32],
+            &policy,
+        )
+        .unwrap(),
     );
     let native = zkc_native::Value::Sequence(
-        zkc_native::Sequence::new(inner.physical_type().logical(), vec![inner; 32], &policy)
+        zkc_native::Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(inner.physical_type().logical()).unwrap(),
+            )
             .unwrap(),
+            vec![inner; 32],
+            &policy,
+        )
+        .unwrap(),
     );
     let leaf = schema(
         "builtin",

@@ -89,6 +89,7 @@ impl<'a> DeploymentPolicy<'a> {
 pub(super) struct RoleInterface {
     pub(super) maps: BTreeMap<String, RoleMap>,
     pub(super) public: Vec<Port>,
+    pub(super) public_types: Vec<PhysicalType>,
     // Preserve the final acceptance-presence check after setup authority.
     pub(super) acceptance: Option<usize>,
 }
@@ -271,9 +272,32 @@ impl RoleInterface {
                 return Err("native-proof-shared-port-type".into());
             }
         }
+        // Source maps authenticate logical ports; storage belongs to the
+        // admitted Program. Preserve the complete selection, including inactive
+        // variant children, and require agreement at every shared occurrence.
+        let mut public_types = Vec::with_capacity(public.len());
+        for public_port in &public {
+            let mut selected = None;
+            for role in &roles {
+                let Some(mapping) = maps.get(&role.role) else {
+                    continue;
+                };
+                for (port, (_, ty)) in mapping.data.iter().zip(&role.inputs) {
+                    if port.original != public_port.original {
+                        continue;
+                    }
+                    if selected.is_some_and(|previous| previous != ty) {
+                        return Err("native-proof-shared-port-type".into());
+                    }
+                    selected = Some(ty);
+                }
+            }
+            public_types.push(selected.ok_or("native-proof-public-map")?.clone());
+        }
         Ok(Self {
             maps,
             public,
+            public_types,
             acceptance,
         })
     }

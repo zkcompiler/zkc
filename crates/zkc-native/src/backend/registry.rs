@@ -30,10 +30,20 @@ pub(super) struct Implementation {
     pub(super) handler: Handler,
     pub(super) prepared_handler: Option<PreparedHandler>,
     pub(super) deterministic: bool,
+    pub(super) requirements: zkc_runtime::vm::ImplementationRequirements,
 }
 impl Implementation {
     pub(super) fn signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
         if binding.contract != self.contract {
+            return None;
+        }
+        if !binding.physical_arguments.is_empty()
+            && !binding.contract.starts_with("sequence.")
+            && !binding.contract.starts_with("field_array.")
+            && !binding.contract.starts_with("fixed_vector.")
+            && binding.contract != "representation.convert"
+            && binding.contract != "transcript.native.indexed.observe.data"
+        {
             return None;
         }
         match self.signature {
@@ -83,6 +93,7 @@ impl Registry {
                     handler,
                     prepared_handler: None,
                     deterministic,
+                    requirements: Default::default(),
                 },
             )?;
         }
@@ -138,6 +149,7 @@ impl Registry {
                         handler,
                         prepared_handler: None,
                         deterministic,
+                        requirements: Default::default(),
                     },
                 )?;
             }
@@ -209,7 +221,6 @@ pub(super) fn alternatives() -> impl Iterator<Item = &'static Alternative> {
         crate::operations::conversions::ALTERNATIVES,
         crate::diagonal::ALTERNATIVES,
         crate::operations::pairwise::ALTERNATIVES,
-        crate::operations::blst::ALTERNATIVES,
     ]
     .into_iter()
     .flatten()
@@ -302,6 +313,16 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 field_array,
             )?;
             r.pure_family(
+                crate::field_array::RESIDENT_IMPLEMENTATIONS,
+                Signature::Custom(crate::field_array::signature),
+                field_array,
+            )?;
+            r.pure_family(
+                crate::fixed_vector::RESIDENT_IMPLEMENTATIONS,
+                Signature::Custom(crate::fixed_vector::signature),
+                fixed_vector,
+            )?;
+            r.pure_family(
                 crate::sequence::IMPLEMENTATIONS,
                 Signature::Custom(crate::sequence::signature),
                 sequence,
@@ -327,6 +348,59 @@ pub(super) fn installed() -> Result<&'static Registry> {
             )?;
             r.pure_shaped(crate::operations::arithmetic::EMBEDDINGS, arithmetic)?;
             r.pure_shaped(crate::operations::curve::PAIRINGS, curve)?;
+            // Resident installation derives actual ports from native-owned shapes.
+            for row in crate::operations::arithmetic::CONTRACTS
+                .iter()
+                .chain(crate::operations::curve::CONTRACTS)
+                .chain(crate::operations::curve::PAIRINGS)
+            {
+                let domain = if row.name.starts_with("curve.") {
+                    "bls12-381.g1"
+                } else {
+                    "bls12-381.fr"
+                };
+                let binding = OperationBinding {
+                    contract: row.name.into(),
+                    implementation: format!("blst/resident/{}", row.name),
+                    arguments: vec![domain.into()],
+                    physical_arguments: vec![],
+                };
+                if crate::operations::blst::signature(&binding).is_some() {
+                    r.insert(
+                        binding.implementation.clone(),
+                        Implementation {
+                            contract: row.name,
+                            signature: Signature::Custom(crate::operations::blst::signature),
+                            handler: blst,
+                            prepared_handler: if row.name == "field.constant" {
+                                Some(prepared_field_constant)
+                            } else {
+                                None
+                            },
+                            deterministic: true,
+                            // Actual handler premises are authored here, independently
+                            // of expected Contracts contribution metadata.
+                            requirements: zkc_runtime::vm::ImplementationRequirements {
+                                timing: if row.name == "curve.msm" {
+                                    zkc_runtime::vm::TimingRequirement::VariableTime
+                                } else {
+                                    zkc_runtime::vm::TimingRequirement::Unspecified
+                                },
+                                timing_operands: if row.name == "curve.msm" {
+                                    &[0, 1]
+                                } else {
+                                    &[]
+                                },
+                            },
+                        },
+                    )?;
+                }
+            }
+            r.pure_family(
+                &[("native/representation.convert", "representation.convert")],
+                Signature::Custom(crate::operations::blst::conversion_signature),
+                resident_conversion,
+            )?;
             for row in alternatives() {
                 r.alternative(row)?;
             }
@@ -547,4 +621,12 @@ mod tests;
 
 fn field_array(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::field_array::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}
+
+fn resident_conversion(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::blst::convert(i, args, &b.core.policy)
 }

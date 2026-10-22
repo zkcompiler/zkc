@@ -136,11 +136,14 @@ mathematical rewrite.
 
 ## Native array boundary
 
-The installed array representation is
-`field_array<bls12-381.fr,N>@arkworks.field-array/0`, with an empty extra nominal
-identity. This complete identity is checked independently in C++ and Rust.
-Other fields can have mathematical formation without an installed native array
-provider.
+The default BLS array representation is
+`field_array<bls12-381.fr,N>@arkworks.field-array/0`. Native also installs
+`field_array<bls12-381.fr,N>@blst/field-array[blst/fr]`, whose dense storage owns
+resident blst scalars. The complete child layout and extent are checked
+independently in C++ and Rust. Existing array operations specialize one complete
+container layout; construction and access preserve its scalar layout. There is
+no implicit aggregate conversion. Other fields can have mathematical formation
+without an installed Native array provider.
 
 `field_array.get<F,N>(array, position)` is ordinary checked execution with a
 dynamic `index` operand and no attributes. It returns the element of `F` at

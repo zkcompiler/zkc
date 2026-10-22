@@ -43,7 +43,11 @@ pub(super) fn monero_data(count: usize, snapshot: bool) -> (Vec<Value>, Vec<Valu
     }
     let batch = Value::Sequence(
         Sequence::new(
-            LogicalType::parse("indices").unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("indices").unwrap())
+                    .unwrap(),
+            )
+            .unwrap(),
             expected.clone(),
             &Policy::default(),
         )
@@ -174,7 +178,11 @@ pub(super) fn archived_answers(deployment: &NativeDeployment, envelope: &Json, f
         let a = words(proof[..32].iter().copied().map(u64::from));
         let batch = Value::Sequence(
             Sequence::new(
-                LogicalType::parse("indices").unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("indices").unwrap())
+                        .unwrap(),
+                )
+                .unwrap(),
                 vec![a.clone()],
                 &Policy::default(),
             )

@@ -1,4 +1,5 @@
 #include "zkc/Target/Selection.h"
+#include "zkc/Contracts/Implementations.h"
 #include "zkc/Support/Json.h"
 namespace zkc::target {
 llvm::Expected<ImplementationChoice>
@@ -19,9 +20,21 @@ selectImplementation(protocol::BindingApplication application,
       return selected.takeError();
     application.implementation = std::move(*selected);
   }
-  auto installed = protocol::resolveBinding(application, true);
-  if (!installed)
-    return installed.takeError();
+  auto descriptor = protocol::installedImplementations().find(
+      application.contract, application.implementation);
+  if (!fixed && descriptor && descriptor->requiresExplicitSelection)
+    return error("binding-implementation");
+  if (descriptor &&
+      descriptor->family != protocol::ImplementationDescriptor::Family::Exact &&
+      application.physicalArguments.empty()) {
+    auto logical = protocol::resolveLogicalBinding(application);
+    if (!logical)
+      return logical.takeError();
+  } else {
+    auto installed = protocol::resolveBinding(application, true);
+    if (!installed)
+      return installed.takeError();
+  }
   return ImplementationChoice{std::move(application), fixed};
 }
 } // namespace zkc::target

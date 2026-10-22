@@ -413,7 +413,7 @@ int main(int argc, char **argv) {
     OpBuilder builder(function);
     local::OperationBindingOp::create(
         builder, function.getLoc(), "partial_inverse", "field.inverse",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "");
+        builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
     builder.setInsertionPoint(returned);
     OperationState state(returned->getLoc(), "algebra.exec.field_inverse");
     state.addOperands(returned->getOperands());
@@ -443,7 +443,7 @@ int main(int argc, char **argv) {
     OpBuilder builder(function);
     local::OperationBindingOp::create(
         builder, function.getLoc(), "extra", "field.add",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "");
+        builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
     program::LocalDefinitions empty;

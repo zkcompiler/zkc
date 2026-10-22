@@ -1,11 +1,32 @@
 # Virtual machine
 
-`vm::Program::decode` admits `zkc.program/0` into immutable typed VM code. It
+`vm::Program::decode(bytes, &contracts)` admits `zkc.program/0` into immutable typed VM code. It
 checks all retained definitions and prepares local positional operands, region
 layouts and operation bindings without consulting a backend. Participant code
 uses named SSA registers and loop-input layouts retained by the same admission
 walk. Both forms retain the admitted structured control;
 there is no second serialized format.
+
+The Program retains its trusted immutable `Contracts`, including execution policy.
+`ContractsBuilder` extends the existing operation inventory with exact trusted
+physical realizations, mathematical layouts and bounded aggregate families. Logical erasure and
+attributes are checked against the independent mathematical owner. Catalog-scoped
+extension IDs cannot be substituted across independently built contexts.
+`Contracts::standard(policy)` explicitly supplies the fixed Native inventory;
+`Contracts::with_policy` preserves identity without altering admitted programs.
+Names and declared signatures in artifact bytes confer no installation authority.
+The fixed Boolean/index constructors and existing affine and capacity rules remain
+VM contracts. Complete aggregate types retain all selected child layouts,
+including inactive variant alternatives, separately from their logical schema.
+Generic sequence and dense operations specialize these types through checked
+physical arguments. Unknown storage, mismatched children and aggregate conversions
+without an installed law refuse admission.
+
+Wire permission is a separate positive contract. The standard context owns
+sequence and variant frames; every selected child still needs codec permission.
+An empty context needs an exact container grant or a contributed frame family,
+as well as every child grant. Fixed vectors remain local-only. Preparation
+eligibility is independent of wire permission and excludes live resources.
 
 `Program::check_installation` optionally checks backend availability before a
 Host admits a deployment. Every execution independently links its owned backend.
@@ -40,6 +61,10 @@ constructor and full-program installation remain available for low-level callers
 `Backend::Operation: InstalledOperation` names the installed handle contract.
 `prepare_binding` resolves one exact `OperationBinding`; `OperationSignature`
 describes ports and attributes, with `BoundSignature` using physical port types.
+Extension handles report their independently installed `ImplementationId` and
+`ImplementationRequirements`. Before frames, linking checks actual ports,
+identity and timing premises against expected contracts and explicit policy.
+Timing authorization never follows from role, determinism or provider name.
 Dynamic checks and resource transitions remain in backend execution hooks.
 
 Inside `instance`, `loading` admits the initial invocation and participant
@@ -58,7 +83,7 @@ snapshot or adjusts a backing reference count.
 | `code` | Typed VM instructions and shared local execution layouts |
 | `link` | Independent installation checks for exact bindings and services |
 | `instance` | Per-execution backend, frame and capacity ownership |
-| `backend`, `bindings`, `operations` | Value, frame and installed-operation contracts |
+| `backend`, `bindings`, `contracts`, `operations` | Value, frame and trusted admission/installation contracts |
 | `retention` | Shared immutable backing and validation evidence |
 | `preparation` | Bounded storage for certified public computations |
 | `program`, `observe`, `native_proof` | Static layout, runtime observations and proof-policy inspection |

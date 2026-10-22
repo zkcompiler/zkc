@@ -5,6 +5,19 @@ use crate::{
 };
 use std::sync::Arc;
 
+fn public_types(interface: &Interface) -> Vec<zkc_runtime::vm::PhysicalType> {
+    interface
+        .public_ports()
+        .flat_map(|p| p.schema.leaves.clone())
+        .map(|spelling| {
+            zkc_runtime::vm::PhysicalType::default_for(
+                interface.logical_type(&spelling).unwrap().clone(),
+            )
+            .unwrap()
+        })
+        .collect()
+}
+
 fn statement_interface(statement: Value) -> Interface {
     let mut doc = document();
     let leaves = statement["leaves"].as_array().unwrap().len();
@@ -82,6 +95,7 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
             &interface,
             role,
             &public,
+            &public_types(&interface),
             NamedValues::new(),
             Capacity::default(),
         )
@@ -128,7 +142,14 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
         let mut capacity = Capacity::default();
         capacity.values.live_bytes = live;
         capacity.values.total_bytes = total;
-        let result = proof_inputs(&interface, role, &public, NamedValues::new(), capacity);
+        let result = proof_inputs(
+            &interface,
+            role,
+            &public,
+            &public_types(&interface),
+            NamedValues::new(),
+            capacity,
+        );
         if succeeds {
             let inputs = result.unwrap();
             let InputValue::Variant { payload, .. } = &inputs[0] else {
@@ -151,7 +172,15 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
     capacity.values.live_bytes = 0;
     capacity.wire_bytes = owner.len() - 1;
     assert_eq!(
-        proof_inputs(&interface, role, &public, NamedValues::new(), capacity).unwrap_err(),
+        proof_inputs(
+            &interface,
+            role,
+            &public,
+            &public_types(&interface),
+            NamedValues::new(),
+            capacity
+        )
+        .unwrap_err(),
         "native-capacity-wire"
     );
     let malformed = vec![InputValue::Variant {
@@ -159,7 +188,15 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
         payload: vec![],
     }];
     assert_eq!(
-        proof_inputs(&interface, role, &malformed, NamedValues::new(), capacity).unwrap_err(),
+        proof_inputs(
+            &interface,
+            role,
+            &malformed,
+            &public_types(&interface),
+            NamedValues::new(),
+            capacity
+        )
+        .unwrap_err(),
         "native-input-alternative"
     );
     capacity.wire_bytes = owner.len();
@@ -174,7 +211,15 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
         ],
     }];
     assert_eq!(
-        proof_inputs(&interface, role, &malformed, NamedValues::new(), capacity).unwrap_err(),
+        proof_inputs(
+            &interface,
+            role,
+            &malformed,
+            &public_types(&interface),
+            NamedValues::new(),
+            capacity
+        )
+        .unwrap_err(),
         "native-input-payload"
     );
 }

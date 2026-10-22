@@ -82,7 +82,8 @@ pub(crate) enum Input<'a> {
         fingerprint: [u8; 32],
         verifier: Arc<VerifierKey>,
     },
-    Ready(Value),
+    // Cold Host staging owns one value; the pool charges its retained payload.
+    Ready(Box<Value>),
     Retained {
         ty: PhysicalType,
         value: &'a Value,
@@ -90,6 +91,10 @@ pub(crate) enum Input<'a> {
     },
 }
 impl<'a> Input<'a> {
+    pub fn ready(value: Value) -> Self {
+        Self::Ready(Box::new(value))
+    }
+
     /// Borrow immutable application data until loading has reserved its full
     /// charge. Foreign capabilities and setup keys require separate host paths.
     pub fn native_value(
@@ -383,7 +388,7 @@ impl<'a> Admission<'a> {
         let mut key_cache = BTreeMap::new();
         for (input, estimate) in std::mem::take(&mut self.inputs) {
             let value = match input {
-                Input::Ready(value) => value,
+                Input::Ready(value) => *value,
                 Input::Retained { value, .. } => value.clone(),
                 input @ (Input::Native { .. }
                 | Input::NativeWire { .. }

@@ -70,7 +70,7 @@ bool isDiagonalRepresentation(StringRef representation) {
 }
 
 Expected<std::string> defaultImplementation(const BindingApplication &binding) {
-  auto logical = resolveBinding(binding, false);
+  auto logical = resolveLogicalBinding(binding);
   if (!logical)
     return logical.takeError();
   if (resourceUnitContract(binding.contract))
@@ -80,6 +80,12 @@ Expected<std::string> defaultImplementation(const BindingApplication &binding) {
     return implementation.takeError();
   auto selected = binding;
   selected.implementation = (*implementation)->identity;
+  if ((*implementation)->family != ImplementationDescriptor::Family::Exact)
+    return selected.implementation;
+  auto parameters = defaultPhysicalArguments(selected);
+  if (!parameters)
+    return parameters.takeError();
+  selected.physicalArguments = *parameters;
   auto physical = resolveBinding(selected, true);
   if (!physical)
     return physical.takeError();
@@ -209,6 +215,12 @@ namespace {
 Expected<BoundOperation>
 resolveBindingSignature(const BindingApplication &binding, bool physical,
                         const ImplementationCatalog *catalog) {
+  if (binding.contract != "representation.convert" &&
+      (!physical || resourceUnitContract(binding.contract) ||
+       binding.contract == "table.relayout" ||
+       numericalContract(binding.contract)) &&
+      !binding.physicalArguments.empty())
+    return error("binding-representation");
   if (resourceUnitContract(binding.contract)) {
     if (binding.arguments.size() != 1 ||
         !resourceUnitDomain(binding.arguments[0]))
@@ -226,6 +238,44 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
   }
   // This is a physical adapter contract, not a generic logical primitive. Its
   // implementation must execute and account for the representation conversion.
+  if (binding.contract == "representation.convert") {
+    if (!physical || binding.arguments.size() != 1 ||
+        binding.physicalArguments.size() != 2 ||
+        binding.implementation != "native/representation.convert")
+      return error("binding-conversion");
+    auto logical = parseBoundType(binding.arguments[0], false);
+    if (!logical)
+      return logical.takeError();
+    auto from = parseBoundType(binding.physicalArguments[0], true);
+    if (!from)
+      return from.takeError();
+    auto to = parseBoundType(binding.physicalArguments[1], true);
+    if (!to)
+      return to.takeError();
+    if (!(erasePhysicalType(*from) == *logical) ||
+        !(erasePhysicalType(*to) == *logical) || *from == *to)
+      return error("binding-conversion");
+    auto ordinary = defaultRepresentation(*logical);
+    if (!ordinary)
+      return ordinary.takeError();
+    StringRef resident;
+    if ((logical->kind == "field" || logical->kind == "vector") &&
+        logical->identity == "bls12-381.fr")
+      resident = "blst/fr";
+    if (logical->kind == "group" || logical->kind == "groups") {
+      if (logical->identity == "bls12-381.g1")
+        resident = "blst/g1";
+      if (logical->identity == "bls12-381.g2")
+        resident = "blst/g2";
+    }
+    if (resident.empty() ||
+        !((from->representation == ordinary->representation &&
+           to->representation == resident) ||
+          (to->representation == ordinary->representation &&
+           from->representation == resident)))
+      return error("binding-conversion");
+    return BoundOperation{{*from}, {*to}};
+  }
   if (binding.contract == "table.relayout") {
     if (!physical || binding.arguments.size() != 3 ||
         installedDomains().identitySort(binding.arguments[0]) != "Field" ||
@@ -286,7 +336,7 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
   if (auto e = checkClosedRequirements(signature->requirements, *identities))
     return e;
   const ImplementationDescriptor *implementation = nullptr;
-  if (physical) {
+  if (physical || (!binding.implementation.empty() && catalog)) {
     implementation = catalog->find(binding.contract, binding.implementation);
     if (!implementation)
       return error("binding-implementation");
@@ -311,9 +361,7 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
     if (!application)
       return application.takeError();
     BoundType logical = std::move(*application);
-    if (!physical)
-      return logical;
-    return defaultRepresentation(logical);
+    return logical;
   };
   for (const auto &t : signature->inputs) {
     auto selected = type(t);
@@ -339,8 +387,8 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
         return error("binding-implementation");
     }
   }
-  if (implementation)
-    if (auto e = applyImplementationRepresentations(*implementation, result))
+  if (implementation && physical)
+    if (auto e = applyImplementationFamily(*implementation, binding, result))
       return e;
   return result;
 }
@@ -348,7 +396,9 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
 } // namespace
 Expected<BoundOperation>
 resolveLogicalBinding(const BindingApplication &binding) {
-  return resolveBindingSignature(binding, false, nullptr);
+  auto logical = binding;
+  logical.physicalArguments.clear();
+  return resolveBindingSignature(logical, false, nullptr);
 }
 Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
                                         bool physical) {
@@ -362,9 +412,13 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
   if (!physical && !binding.implementation.empty()) {
     // A source may constrain future implementation selection without lowering
     // its logical ports. Validate that exact choice independently here.
-    auto selected = resolveBinding(binding, true, catalog);
-    if (!selected)
-      return selected.takeError();
+    auto descriptor = catalog.find(binding.contract, binding.implementation);
+    if (!descriptor ||
+        descriptor->family == ImplementationDescriptor::Family::Exact) {
+      auto selected = resolveBinding(binding, true, catalog);
+      if (!selected)
+        return selected.takeError();
+    }
   }
   return resolveBindingSignature(binding, physical, &catalog);
 }

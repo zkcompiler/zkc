@@ -1,4 +1,4 @@
-//! Closed nominal contracts shared by admission and execution. Installed
+//! Standard nominal contracts shared by admission and execution. Installed
 //! backends independently advertise implementations of these contracts.
 
 use super::{AdmissionError, ErrorCode, OperationSignature, Type};
@@ -370,7 +370,7 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
 pub struct LogicalType {
     kind: Type,
     identity: Identity,
-    resource_domain: Option<super::ResourceDomain>,
+    resource_domain: Option<std::sync::Arc<super::ResourceDomain>>,
     variant: Option<std::sync::Arc<super::VariantDescriptor>>,
     structural: Option<std::sync::Arc<super::StructuralType>>,
 }
@@ -379,13 +379,13 @@ impl LogicalType {
         Self {
             kind: Type::ResourceUnit,
             identity: Identity::None,
-            resource_domain: Some(domain),
+            resource_domain: Some(std::sync::Arc::new(domain)),
             variant: None,
             structural: None,
         }
     }
     pub fn resource_domain(&self) -> Option<super::ResourceDomain> {
-        self.resource_domain
+        self.resource_domain.as_deref().copied()
     }
     pub fn new(kind: Type, identity: Identity) -> Result<Self> {
         use Identity::*;
@@ -490,7 +490,7 @@ impl LogicalType {
         if let Some(d) = &self.variant {
             return d.spelling().to_owned();
         }
-        if let Some(domain) = self.resource_domain {
+        if let Some(domain) = &self.resource_domain {
             return format!("resource_unit:{}", domain.name());
         }
         if matches!(
@@ -681,6 +681,8 @@ impl LogicalType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Representation {
+    /// Contributed explicitly by a trusted immutable admission catalog.
+    Extension(super::ExtensionRepresentation),
     Sequence,
     FieldArray,
     FixedVector,
@@ -768,6 +770,7 @@ pub enum Representation {
 impl Representation {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Extension(id) => id.name(),
             Self::Sequence => "logical.sequence/0",
             Self::FieldArray => "arkworks.field-array/0",
             Self::FixedVector => "plonky3.fixed-vector/0",
@@ -953,11 +956,25 @@ impl Representation {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PhysicalType {
-    logical: LogicalType,
-    representation: Representation,
+    pub(super) logical: LogicalType,
+    pub(super) representation: Representation,
+    pub(super) children: Option<std::sync::Arc<[PhysicalType]>>,
 }
 impl PhysicalType {
+    pub(crate) fn extension(
+        logical: LogicalType,
+        representation: super::ExtensionRepresentation,
+    ) -> Self {
+        Self {
+            logical,
+            representation: Representation::Extension(representation),
+            children: None,
+        }
+    }
     pub fn new(logical: LogicalType, representation: Representation) -> Result<Self> {
+        if matches!(representation, Representation::Extension(_)) {
+            return Err(representation_error("extension requires trusted catalog"));
+        }
         let default = Self::default_for(logical.clone())?;
         if representation != default.representation
             && !matches!(
@@ -980,25 +997,18 @@ impl PhysicalType {
             ));
         }
         Ok(Self {
+            children: default.children,
             logical,
             representation,
         })
     }
-    pub fn default_for(logical: LogicalType) -> Result<Self> {
+    pub(super) fn default_representation(logical: &LogicalType) -> Result<Representation> {
         use Identity as I;
         use Representation as R;
         use Type as T;
         // LogicalType construction has already checked the finite sort/identity pairs.
         let representation = match (logical.kind, logical.identity) {
-            (T::Sequence, I::None) => {
-                Self::default_for(
-                    logical
-                        .sequence_element()
-                        .ok_or_else(|| representation_error("sequence-element"))?
-                        .clone(),
-                )?;
-                R::Sequence
-            }
+            (T::Sequence, I::None) => R::Sequence,
             (T::FieldArray, I::None) => {
                 let (field, _) = logical
                     .field_array_parts()
@@ -1017,13 +1027,7 @@ impl PhysicalType {
                 }
                 R::FixedVector
             }
-            (T::Variant, I::None) => {
-                logical
-                    .variant_descriptor()
-                    .ok_or_else(|| error("variant-descriptor"))?
-                    .default_representation()?;
-                R::Variant
-            }
+            (T::Variant, I::None) => R::Variant,
             (T::ResourceUnit, I::None) => R::ResourceUnit,
             (T::Field, I::Bn254Fr) => R::Bn254Fr,
             (T::Vector, I::Bn254Fr) => R::Bn254FrVector,
@@ -1108,9 +1112,26 @@ impl PhysicalType {
             },
             _ => return Err(representation_error("unrepresented logical type")),
         };
+        Ok(representation)
+    }
+    pub fn default_for(logical: LogicalType) -> Result<Self> {
+        Self::default_layout(logical)?.check_aggregate_layout()
+    }
+    fn default_layout(logical: LogicalType) -> Result<Self> {
+        let representation = Self::default_representation(&logical)?;
+        let children = Self::logical_children(&logical)?
+            .map(|children| {
+                children
+                    .into_iter()
+                    .map(Self::default_layout)
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?
+            .map(Into::into);
         Ok(Self {
             logical,
             representation,
+            children,
         })
     }
     pub fn logical(&self) -> LogicalType {
@@ -1135,6 +1156,7 @@ impl PhysicalType {
                     structural,
                 },
             representation: actual_representation,
+            children,
         } = self;
         *actual_kind == kind
             && *actual_identity == identity
@@ -1142,6 +1164,7 @@ impl PhysicalType {
             && resource_domain.is_none()
             && variant.is_none()
             && structural.is_none()
+            && children.is_none()
     }
     pub fn is_affine(&self) -> bool {
         !self.logical.is_duplicable()
@@ -1181,33 +1204,10 @@ impl PhysicalType {
         self.kind().is_serializable()
             && !matches!(
                 self.representation,
-                Representation::FrDiagonal | Representation::RistrettoDiagonal
+                Representation::FrDiagonal
+                    | Representation::RistrettoDiagonal
+                    | Representation::Extension(_)
             )
-    }
-    pub fn spelling(&self) -> String {
-        format!("{}@{}", self.logical.spelling(), self.representation.name())
-    }
-    pub fn parse(spelling: &str) -> Result<Self> {
-        // Preserve the variant transport ceiling. Ordinary logical spellings
-        // have their own bound; an outer representation does not count toward it.
-        if spelling.starts_with("variant:") && spelling.len() > 256 * 1024 + 18 {
-            return Err(error("physical type spelling limit"));
-        }
-        if !spelling.starts_with("variant:")
-            && spelling.len() > super::STRUCTURAL_SPELLING_LIMIT + 1 + super::Limits::STRING_BYTES
-        {
-            return Err(error("physical type spelling limit"));
-        }
-        let (logical, representation) = spelling
-            .split_once('@')
-            .ok_or_else(|| error("physical representation required"))?;
-        if representation.len() > super::Limits::STRING_BYTES {
-            return Err(error("physical type spelling limit"));
-        }
-        Self::new(
-            LogicalType::parse(logical)?,
-            Representation::parse(representation)?,
-        )
     }
 }
 
@@ -1218,6 +1218,7 @@ pub struct OperationBinding {
     pub contract: String,
     pub arguments: Vec<String>,
     pub implementation: String,
+    pub physical_arguments: Vec<String>,
 }
 
 pub type BoundSignature = OperationSignature<PhysicalType>;
@@ -1230,8 +1231,14 @@ pub struct ResolvedBinding {
     pub(crate) signature: BoundSignature,
     pub(crate) implementation: String,
     history: bool,
+    installation_id: Option<super::ImplementationId>,
+    requirements: super::ImplementationRequirements,
+    physical_arguments: Vec<PhysicalType>,
 }
 impl ResolvedBinding {
+    pub fn physical_arguments(&self) -> &[PhysicalType] {
+        &self.physical_arguments
+    }
     pub fn declaration(&self) -> &OperationBinding {
         &self.declaration
     }
@@ -1245,37 +1252,54 @@ impl ResolvedBinding {
     pub fn observes_history(&self) -> bool {
         self.history
     }
-    pub(crate) fn explicit(binding: OperationBinding) -> Result<Self> {
+    pub fn implementation_id(&self) -> Option<super::ImplementationId> {
+        self.installation_id
+    }
+    pub fn requirements(&self) -> super::ImplementationRequirements {
+        self.requirements
+    }
+    pub(crate) fn admitted(
+        binding: OperationBinding,
+        signature: BoundSignature,
+        installation_id: Option<super::ImplementationId>,
+        requirements: super::ImplementationRequirements,
+        physical_arguments: Vec<PhysicalType>,
+    ) -> Result<Self> {
         Ok(Self {
-            signature: binding.signature()?,
+            signature,
             history: binding.observes_history()?,
             implementation: binding.implementation.clone(),
             declaration: binding,
+            installation_id,
+            requirements,
+            physical_arguments,
         })
     }
 }
 
 impl OperationBinding {
-    /// Query the installed contract's history facet. Unknown contracts refuse.
+    /// Query the fixed logical contract's history facet. Unknown contracts refuse.
     /// Like registry discovery, this does not admit the static arguments or
     /// implementation; use signature admission before interpreting a binding.
     pub fn observes_history(&self) -> Result<bool> {
         super::operations::observes_history(&self.contract)
     }
 
-    /// Discover exact implementation and contract identities from the installed
-    /// registry. Rows may still refuse particular static arguments; discovery
+    /// Discover exact implementation and contract identities from the standard
+    /// contribution. Rows may still refuse particular static arguments; discovery
     /// does not replace logical or physical signature admission.
     pub fn installed_implementations() -> Result<Vec<(String, &'static str)>> {
         super::operations::installed_implementations()
     }
 
-    /// Instantiate logical ports without choosing a representation. A supplied
-    /// implementation still constrains selection and must be independently valid.
+    /// Instantiate standard logical ports without choosing a representation.
+    /// Physical specialization is checked separately by physical admission.
     pub fn logical_signature(&self) -> Result<OperationSignature<LogicalType>> {
         let logical = self.instantiate_logical_signature()?;
         if !self.implementation.is_empty() {
-            self.select_signature(&logical)?;
+            let mut selection = self.clone();
+            selection.physical_arguments.clear();
+            super::operations::select_signature(&selection, &logical)?;
         }
         Ok(logical)
     }
@@ -1286,15 +1310,9 @@ impl OperationBinding {
         super::operations::logical_signature(self)
     }
 
-    /// Resolve the finite source contract independently of backend advertisement.
+    /// Resolve a standard implementation independently of backend advertisement.
+    /// Contributed implementations require an explicit `Contracts::resolve`.
     pub fn signature(&self) -> Result<BoundSignature> {
         super::operations::signature(self)
-    }
-
-    fn select_signature(
-        &self,
-        logical: &OperationSignature<LogicalType>,
-    ) -> Result<BoundSignature> {
-        super::operations::select_signature(self, logical)
     }
 }

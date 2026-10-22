@@ -1038,12 +1038,15 @@ fn check_exit_mutations(envelope: &Json) {
                 .clone();
             *body[n][3].as_array_mut().unwrap().last_mut().unwrap() = stale;
         }
-        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
-            .and_then(|program| {
-                program.check_installation(&codec)?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&candidate).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&codec)?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(
             error.code,
             if missing {
@@ -1084,11 +1087,14 @@ fn check_exit_mutations(envelope: &Json) {
     *last = observed;
     body.insert(delivery, calculation);
     body.insert(delivery + 1, exit);
-    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
-        .and_then(|program| {
-            program.check_installation(&codec)?;
-            Ok(program)
-        })
-        .expect("pending-observation mutation must remain typed and affine");
+    zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&candidate).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&codec)?;
+        Ok(program)
+    })
+    .expect("pending-observation mutation must remain typed and affine");
     assert_eq!(refuse(&candidate), "native-proof-observation-order");
 }

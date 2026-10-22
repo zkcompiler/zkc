@@ -12,6 +12,7 @@ struct BindingApplication {
   std::string contract;
   std::vector<std::string> arguments;
   std::string implementation;
+  std::vector<std::string> physicalArguments = {};
 };
 using Assignments = std::vector<std::pair<std::string, std::string>>;
 

@@ -166,6 +166,69 @@ impl Transcript {
 mod tests {
     use super::*;
 
+    #[test]
+    fn resident_canonical_frames_preserve_transcript_bytes_and_successor_state() {
+        use crate::{Bls12381G2, Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+        use zkc_runtime::host::wire::WireBackend;
+        use zkc_runtime::vm::Value as _;
+        let codec = NativeBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new("P", "session", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let root =
+            zkc_runtime::logical::encode_tree(&serde_json::json!(["transcript-fixture"])).unwrap();
+        let samples = [
+            Value::Field(Scalar::from(7)),
+            Value::Vector(vec![Scalar::from(0), Scalar::from(7)].into()),
+            Value::Curve(G1::generator()),
+            Value::Groups(vec![G1::identity(), G1::generator()].into()),
+            Value::Bls12381G2(Bls12381G2::generator()),
+            Value::Bls12381G2Vector(vec![Bls12381G2::identity(), Bls12381G2::generator()].into()),
+        ];
+        for suite in [
+            Identity::Merlin3Fr64Be,
+            Identity::Spongefish080KeccakFr64Be,
+            Identity::HashChainKeccak256Fr64Be,
+        ] {
+            let mut ark_state = Transcript::new(suite, &root).unwrap();
+            let mut resident_state = Transcript::new(suite, &root).unwrap();
+            for ark in &samples {
+                let logical = ark.physical_type().logical();
+                let representation = match logical.identity() {
+                    Identity::Bls12381Fr => "blst/fr",
+                    Identity::Bls12381G1 => "blst/g1",
+                    Identity::Bls12381G2 => "blst/g2",
+                    _ => unreachable!(),
+                };
+                let ty = crate::native_contracts()
+                    .physical_type(&format!("{}@{representation}", logical.spelling()))
+                    .unwrap();
+                let ark_bytes = codec.encode_wire(ark).unwrap();
+                let resident = codec.decode_wire(&ty, &ark_bytes).unwrap();
+                let resident_bytes = codec.encode_wire(&resident).unwrap();
+                assert_eq!(ark_bytes, resident_bytes);
+                // Use the existing framing and state transitions. Each request
+                // advances both actual suite states, including the second draw.
+                ark_state.append_message(b"origin", b"same-origin");
+                ark_state.append_message(b"value", &ark_bytes);
+                resident_state.append_message(b"origin", b"same-origin");
+                resident_state.append_message(b"value", &resident_bytes);
+                let mut previous = None;
+                for _ in 0..2 {
+                    let mut ark_challenge = [0; 64];
+                    let mut resident_challenge = [0; 64];
+                    ark_state.challenge_bytes(b"challenge", &mut ark_challenge);
+                    resident_state.challenge_bytes(b"challenge", &mut resident_challenge);
+                    assert_eq!(ark_challenge, resident_challenge);
+                    assert_ne!(previous, Some(ark_challenge));
+                    previous = Some(ark_challenge);
+                }
+            }
+        }
+    }
+
     /// Every primitive step against the independent reference, including two
     /// requests with no event between them, which differ because a request
     /// advances the state.

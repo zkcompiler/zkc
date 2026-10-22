@@ -55,7 +55,7 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
         ],
     );
     assert!(out.unwrap().is_empty());
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend())?;
             Ok(program)
@@ -258,8 +258,17 @@ fn native_nested_messages_resolve_only_registered_setups() {
         })
         .collect();
     let logical = values[0].physical_type().logical();
-    let value =
-        Value::Sequence(Sequence::new(logical.clone(), values[..2].to_vec(), &policy).unwrap());
+    let value = Value::Sequence(
+        Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
+            )
+            .unwrap(),
+            values[..2].to_vec(),
+            &policy,
+        )
+        .unwrap(),
+    );
     let bytes = host.encode_native_value(&value).unwrap();
     let decoded = host
         .decode_native_value(&value.physical_type(), &bytes)
@@ -302,7 +311,15 @@ fn native_nested_messages_resolve_only_registered_setups() {
             .is_err()
     );
     let bad = Value::Sequence(
-        Sequence::new(logical, vec![values[0].clone(), values[2].clone()], &policy).unwrap(),
+        Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(logical).unwrap(),
+            )
+            .unwrap(),
+            vec![values[0].clone(), values[2].clone()],
+            &policy,
+        )
+        .unwrap(),
     );
     assert!(host.encode_native_value(&bad).is_err());
 }

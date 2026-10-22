@@ -7,7 +7,8 @@
 namespace zkc::protocol {
 
 /// Exact replacement of a default physical port representation. No index means
-/// all ports of this kind; otherwise only the named input or output is changed.
+/// all ports of this kind and domain; otherwise only the named input or output
+/// is changed.
 struct ImplementationRepresentation {
   std::string kind, domain, identity;
   std::optional<unsigned> port = {};
@@ -19,6 +20,7 @@ struct ImplementationRepresentation {
 /// owned.
 struct ImplementationDescriptor {
   enum class Compatibility { Nominal, Transcript, Independent };
+  enum class Family { Exact, Sequence, FieldArray, FixedVector, Observation };
   std::string contract, identity, provider;
   Compatibility compatibility = Compatibility::Nominal;
   /// Optional exact identities admitted for providerTerm, in addition to
@@ -30,6 +32,9 @@ struct ImplementationDescriptor {
   /// projection. Nominal excludes Codec/Transcript; Transcript requires a
   /// Transcript term. Independent has no selector and retains the value zero.
   unsigned providerTerm = 0;
+  Family family = Family::Exact;
+  /// A preference or automatic search cannot authorize this implementation.
+  bool requiresExplicitSelection = false;
 };
 
 /// Preference is independent of descriptor applicability. No entry means no
@@ -81,6 +86,11 @@ checkImplementationArguments(const ImplementationDescriptor &,
 /// checks remain mandatory even for installed descriptors.
 llvm::Error applyImplementationRepresentations(const ImplementationDescriptor &,
                                                BoundOperation &);
+llvm::Error applyImplementationFamily(const ImplementationDescriptor &,
+                                      const BindingApplication &,
+                                      BoundOperation &);
+llvm::Expected<std::vector<std::string>>
+defaultPhysicalArguments(const BindingApplication &);
 } // namespace zkc::protocol
 
 #endif

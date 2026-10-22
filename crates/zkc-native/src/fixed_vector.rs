@@ -1,4 +1,4 @@
-//! Private immutable KoalaBear bulk values with a retained logical length.
+//! Local immutable dense vectors with complete selected element layouts.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
 use zkc_runtime::vm::{
@@ -9,16 +9,30 @@ use zkc_runtime::vm::{
 #[derive(Clone, Debug)]
 pub struct FixedVector {
     physical_type: PhysicalType,
-    elements: Arc<[KoalaBear]>,
+    storage: Storage,
+}
+#[derive(Clone, Debug)]
+enum Storage {
+    KoalaBear(Arc<[KoalaBear]>),
+    Blst(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
 }
 impl FixedVector {
     /// Admission and exact length precede construction. There is no wire codec.
-    pub fn new(logical: LogicalType, elements: Arc<[KoalaBear]>) -> Result<Self> {
-        let physical_type = PhysicalType::new(logical, Representation::FixedVector)
-            .map_err(|_| refused("fixed-vector-representation"))?;
+    pub fn new(physical_type: PhysicalType, elements: Arc<[KoalaBear]>) -> Result<Self> {
         let value = Self {
             physical_type,
-            elements,
+            storage: Storage::KoalaBear(elements),
+        };
+        value.validate()?;
+        Ok(value)
+    }
+    pub fn from_resident(
+        physical_type: PhysicalType,
+        elements: Arc<zkc_kernels::blst::bls12_381::ScalarVector>,
+    ) -> Result<Self> {
+        let value = Self {
+            physical_type,
+            storage: Storage::Blst(elements),
         };
         value.validate()?;
         Ok(value)
@@ -26,66 +40,150 @@ impl FixedVector {
     pub fn physical_type(&self) -> &PhysicalType {
         &self.physical_type
     }
-    pub fn elements(&self) -> &[KoalaBear] {
-        &self.elements
+    pub fn len(&self) -> usize {
+        match &self.storage {
+            Storage::KoalaBear(v) => v.len(),
+            Storage::Blst(v) => v.len(),
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn element_width(&self) -> usize {
+        match self.storage {
+            Storage::KoalaBear(_) => 4,
+            Storage::Blst(_) => 32,
+        }
+    }
+    pub fn koala_bear_elements(&self) -> Option<&[KoalaBear]> {
+        match &self.storage {
+            Storage::KoalaBear(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn resident_elements(&self) -> Option<&Arc<zkc_kernels::blst::bls12_381::ScalarVector>> {
+        match &self.storage {
+            Storage::Blst(v) => Some(v),
+            _ => None,
+        }
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let logical = self.physical_type.logical();
-        let (_, length) = logical
+        let (element, length) = logical
             .fixed_vector_parts()
             .ok_or_else(|| refused("fixed-vector-type"))?;
-        if self.elements.len() as u64 != length {
+        if self.len() as u64 != length {
             return Err(refused("fixed-vector-length"));
+        }
+        let (expected, storage) = match self.storage {
+            Storage::KoalaBear(_) => (
+                crate::domains::KOALA_BEAR.physical(Type::Field),
+                "plonky3.fixed-vector/0",
+            ),
+            Storage::Blst(_) => (
+                crate::operations::blst::physical(Type::Field, Identity::Bls12381Fr),
+                "blst/fixed-vector",
+            ),
+        };
+        if expected.as_ref() != self.physical_type.fixed_vector_element()
+            || expected.as_ref().map(PhysicalType::logical).as_ref() != Some(element)
+            || self.physical_type.representation().name() != storage
+            || matches!(self.storage, Storage::Blst(_))
+                && Some(self.physical_type.representation())
+                    != crate::contracts::dense_representation(Type::FixedVector)
+        {
+            return Err(refused("fixed-vector-representation"));
         }
         Ok(())
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
-        // Includes the small, fixed-shape field/N descriptor and shared storage.
-        bytes(self.elements.len())
+        self.owned_bytes()
+            .checked_add(self.backing()?.bytes())
+            .ok_or_else(|| exhausted("output-bytes"))
     }
-    /// Element storage, shared with the vector it converts from or to; the
-    /// descriptor charge belongs to each binding.
+    pub(crate) fn owned_bytes(&self) -> usize {
+        DESCRIPTOR_BYTES.saturating_add(self.physical_type.descriptor_bytes())
+    }
     pub(crate) fn backing(&self) -> Result<Backing> {
-        Ok(Backing::of(
-            &self.elements,
-            crate::value::size(self.elements.len(), 4)?,
-        ))
+        Ok(match &self.storage {
+            Storage::KoalaBear(v) => Backing::of(v, crate::value::size(v.len(), 4)?),
+            Storage::Blst(v) => Backing::of(
+                v,
+                v.storage_bytes()
+                    .checked_add(256)
+                    .ok_or_else(|| exhausted("output-bytes"))?,
+            ),
+        })
     }
 }
 
 const DESCRIPTOR_BYTES: usize = 1024;
-fn bytes(length: usize) -> Result<usize> {
-    crate::value::size(length, 4)?
-        .checked_add(DESCRIPTOR_BYTES)
-        .ok_or_else(|| exhausted("output-bytes"))
+pub(crate) fn supports_type(ty: &PhysicalType) -> bool {
+    let logical = ty.logical();
+    let Some((element, length)) = logical.fixed_vector_parts() else {
+        return false;
+    };
+    if length > 1_048_576 {
+        return false;
+    }
+    let expected = match ty.representation() {
+        Representation::FixedVector => crate::domains::KOALA_BEAR.physical(Type::Field),
+        representation
+            if Some(representation)
+                == crate::contracts::dense_representation(Type::FixedVector) =>
+        {
+            crate::operations::blst::physical(Type::Field, Identity::Bls12381Fr)
+        }
+        _ => None,
+    };
+    expected
+        .as_ref()
+        .is_some_and(|scalar| scalar.logical() == *element)
+        && expected.as_ref() == ty.fixed_vector_element()
 }
-pub(crate) fn owned_bytes() -> usize {
-    DESCRIPTOR_BYTES
-}
-
 /// Independent native advertisement; never call the runtime operation resolver.
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     let [field, length] = binding.arguments.as_slice() else {
         return None;
     };
-    if field != "koala-bear" || binding.implementation != format!("plonky3/{}", binding.contract) {
-        return None;
-    }
     let length = zkc_runtime::logical::natural_index(length).ok()?;
-    if length > 1_048_576 {
-        return None;
-    }
-    let scalar = crate::domains::KOALA_BEAR.physical(Type::Field)?;
-    let vector = crate::domains::KOALA_BEAR.physical(Type::Vector)?;
-    let fixed = PhysicalType::new(
-        LogicalType::fixed_vector(
-            LogicalType::new(Type::Field, Identity::KoalaBear).ok()?,
-            length,
+    let fixed = match binding.physical_arguments.as_slice() {
+        [] => PhysicalType::default_for(
+            LogicalType::fixed_vector(LogicalType::parse(&format!("field:{field}")).ok()?, length)
+                .ok()?,
         )
         .ok()?,
-        Representation::FixedVector,
-    )
-    .ok()?;
+        [selected] => crate::native_contracts().physical_type(selected).ok()?,
+        _ => return None,
+    };
+    let (scalar, vector) = if field == "koala-bear"
+        && binding.implementation == format!("plonky3/{}", binding.contract)
+    {
+        if fixed.representation() != Representation::FixedVector {
+            return None;
+        }
+        (
+            crate::domains::KOALA_BEAR.physical(Type::Field)?,
+            crate::domains::KOALA_BEAR.physical(Type::Vector)?,
+        )
+    } else if field == "bls12-381.fr"
+        && binding.implementation == format!("blst/resident/{}", binding.contract)
+    {
+        if fixed.representation().name() != "blst/fixed-vector" {
+            return None;
+        }
+        (
+            crate::operations::blst::physical(Type::Field, Identity::Bls12381Fr)?,
+            crate::operations::blst::physical(Type::Vector, Identity::Bls12381Fr)?,
+        )
+    } else {
+        return None;
+    };
+    if fixed.logical() != LogicalType::fixed_vector(scalar.logical(), length).ok()?
+        || fixed.fixed_vector_element() != Some(&scalar)
+    {
+        return None;
+    }
     let (inputs, outputs) = match binding.contract.as_str() {
         "fixed_vector.from_vector" => (vec![vector], vec![fixed]),
         "fixed_vector.to_vector" => (vec![fixed], vec![vector]),
@@ -107,19 +205,34 @@ pub(crate) fn apply(
 ) -> Result<Vec<Value>> {
     let value = match (name, args) {
         ("fixed_vector.from_vector", [Value::KoalaBearVector(elements)]) => {
-            // The fixed vector shares the elements; only its descriptor is new.
-            policy.output(bytes(elements.len())?, usize::MAX)?;
-            policy.output(DESCRIPTOR_BYTES, invocation.max_output_bytes)?;
-            Value::FixedVector(FixedVector::new(
-                invocation.binding.signature().outputs[0].logical(),
-                elements.clone(),
-            )?)
+            let ty = invocation.binding.signature().outputs[0].clone();
+            let owned = DESCRIPTOR_BYTES.saturating_add(ty.descriptor_bytes());
+            policy.output(
+                crate::value::size(elements.len(), 4)?.saturating_add(owned),
+                usize::MAX,
+            )?;
+            policy.output(owned, invocation.max_output_bytes)?;
+            Value::FixedVector(FixedVector::new(ty, elements.clone())?)
+        }
+        ("fixed_vector.from_vector", [Value::BlstVector(elements)]) => {
+            let ty = invocation.binding.signature().outputs[0].clone();
+            let owned = DESCRIPTOR_BYTES.saturating_add(ty.descriptor_bytes());
+            policy.output(
+                elements
+                    .storage_bytes()
+                    .saturating_add(256)
+                    .saturating_add(owned),
+                usize::MAX,
+            )?;
+            policy.output(owned, invocation.max_output_bytes)?;
+            Value::FixedVector(FixedVector::from_resident(ty, elements.clone())?)
         }
         ("fixed_vector.to_vector", [Value::FixedVector(value)]) => {
             value.validate()?;
-            // The vector shares the existing elements; nothing new is allocated.
-            policy.output(crate::value::size(value.elements.len(), 4)?, usize::MAX)?;
-            Value::KoalaBearVector(value.elements.clone())
+            match &value.storage {
+                Storage::KoalaBear(v) => Value::KoalaBearVector(v.clone()),
+                Storage::Blst(v) => Value::BlstVector(v.clone()),
+            }
         }
         ("fixed_vector.dot", [Value::FixedVector(a), Value::FixedVector(b)]) => {
             a.validate()?;
@@ -128,17 +241,32 @@ pub(crate) fn apply(
                 return Err(refused("fixed-vector-type"));
             }
             policy.output(512, invocation.max_output_bytes)?;
-            // Existing backend field operations own arithmetic and reduction.
-            Value::KoalaBearField(
-                zkc_kernels::plonky3::dot(a.elements(), b.elements())
-                    .map_err(crate::field_error)?,
-            )
+            match (&a.storage, &b.storage) {
+                (Storage::KoalaBear(a), Storage::KoalaBear(b)) => Value::KoalaBearField(
+                    zkc_kernels::plonky3::dot(a, b).map_err(crate::field_error)?,
+                ),
+                (Storage::Blst(a), Storage::Blst(b)) => {
+                    Value::BlstField(a.dot(b).map_err(crate::field_error)?)
+                }
+                _ => return Err(refused("fixed-vector-type")),
+            }
         }
         _ => return Err(refused("kernel-operands")),
     };
     Ok(vec![value])
 }
 
+pub(crate) const RESIDENT_IMPLEMENTATIONS: &[(&str, &str)] = &[
+    (
+        "blst/resident/fixed_vector.from_vector",
+        "fixed_vector.from_vector",
+    ),
+    (
+        "blst/resident/fixed_vector.to_vector",
+        "fixed_vector.to_vector",
+    ),
+    ("blst/resident/fixed_vector.dot", "fixed_vector.dot"),
+];
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     (
         "plonky3/fixed_vector.from_vector",

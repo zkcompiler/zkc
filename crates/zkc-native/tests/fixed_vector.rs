@@ -15,6 +15,7 @@ fn binding(operation: &str, n: u64) -> OperationBinding {
         contract: format!("fixed_vector.{operation}"),
         arguments: vec!["koala-bear".into(), n.to_string()],
         implementation: format!("plonky3/fixed_vector.{operation}"),
+        physical_arguments: vec![],
     }
 }
 fn vector(values: &[u32]) -> Value {
@@ -25,7 +26,7 @@ fn fixed(values: &[u32]) -> Value {
         LogicalType::parse(&format!("fixed_vector<field:koala-bear,{}>", values.len())).unwrap();
     Value::FixedVector(
         FixedVector::new(
-            logical,
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
             values.iter().copied().map(KoalaBear::new).collect(),
         )
         .unwrap(),
@@ -112,7 +113,8 @@ fn conversions_retain_length_identity_and_never_expose_a_codec() {
     };
     assert_eq!(
         storage
-            .elements()
+            .koala_bear_elements()
+            .unwrap()
             .iter()
             .map(PrimeField32::as_canonical_u32)
             .collect::<Vec<_>>(),
@@ -157,18 +159,16 @@ fn exact_length_is_checked_at_construction_and_conversion() {
     }
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,4>").unwrap();
     assert_eq!(
-        FixedVector::new(logical, vec![KoalaBear::new(1); 3].into())
-            .unwrap_err()
-            .code,
+        FixedVector::new(
+            PhysicalType::default_for(logical).unwrap(),
+            vec![KoalaBear::new(1); 3].into()
+        )
+        .unwrap_err()
+        .code,
         "refused:fixed-vector-length"
     );
     let unsupported = LogicalType::parse("fixed_vector<field:bls12-381.fr,1>").unwrap();
-    assert_eq!(
-        FixedVector::new(unsupported, vec![KoalaBear::new(1)].into())
-            .unwrap_err()
-            .code,
-        "refused:fixed-vector-representation"
-    );
+    assert!(PhysicalType::default_for(unsupported).is_err());
 }
 
 #[test]
@@ -271,7 +271,7 @@ fn native_invocation_refuses_wrong_types_attributes_and_handles() {
         &["x".into()],
     );
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend(Policy::default()))?;
                 Ok(program)
@@ -336,12 +336,15 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "zkcv.fixed_vector.koala-bear/0",
     ] {
         carrier[2][0][5][1][1][1] = json!(bad);
-        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend(Policy::default()))?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&carrier).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend(Policy::default()))?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::Type);
         assert_eq!(error.detail, "logical origin static identity");
     }
@@ -370,7 +373,15 @@ fn variants_contain_real_fixed_vectors_and_refuse_unrepresented_payloads() {
     );
     let logical = LogicalType::parse(&spelling).unwrap();
     let descriptor = logical.variant_descriptor().unwrap().clone();
-    let value = Value::pack_variant(descriptor, 0, vec![fixed(&[1, 2])]).unwrap();
+    let value = Value::pack_variant(
+        zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+            descriptor,
+        ))
+        .unwrap(),
+        0,
+        vec![fixed(&[1, 2])],
+    )
+    .unwrap();
     backend(Policy::default()).validate_value(&value).unwrap();
     assert_eq!(value.physical_type().logical(), logical);
     assert!(matches!(
@@ -385,9 +396,5 @@ fn variants_contain_real_fixed_vectors_and_refuse_unrepresented_payloads() {
         ]),
     );
     let logical = LogicalType::parse(&unsupported).unwrap();
-    let descriptor = logical.variant_descriptor().unwrap().clone();
-    assert_eq!(
-        Value::pack_variant(descriptor, 1, vec![]).unwrap_err().code,
-        "refused:variant-payload-representation"
-    );
+    assert!(PhysicalType::default_for(logical).is_err());
 }

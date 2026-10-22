@@ -303,48 +303,56 @@ fn resolve(
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.product_sum",
         contract: "poly.product_sum",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.product_round",
         contract: "poly.product_round",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.boundary",
         contract: "poly.boundary",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.round_evaluate",
         contract: "poly.round_evaluate",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.fold",
         contract: "poly.fold",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.evaluate",
         contract: "poly.evaluate",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.empty_point",
         contract: "poly.empty_point",
         domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.append_point",
         contract: "poly.append_point",
         domains: &[Identity::Bls12381Fr],

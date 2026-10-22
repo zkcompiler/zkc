@@ -10,6 +10,7 @@ fn binding(name: &str, domain: domains::NativeDomain) -> OperationBinding {
         contract: name.into(),
         arguments: vec![domain.field.name().into()],
         implementation: format!("{}/{name}", domain.provider),
+        physical_arguments: vec![],
     }
 }
 fn call(name: &str, args: Vec<Value>) -> Value {

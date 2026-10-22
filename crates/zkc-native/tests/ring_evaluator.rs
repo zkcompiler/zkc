@@ -417,11 +417,13 @@ fn runner_frames_retain_ring_work_after_a_later_operation_fails() {
         contract: "ring.point".into(),
         arguments: vec!["koala-bear".into()],
         implementation: "plonky3/ring.point".into(),
+        physical_arguments: vec![],
     };
     let at = OperationBinding {
         contract: "vector.at".into(),
         arguments: vec!["koala-bear".into()],
         implementation: "plonky3/vector.at".into(),
+        physical_arguments: vec![],
     };
     let signature = ring.signature().unwrap();
     let first = json!(["op", "evaluate", "b0", [digest], ["a0"], ["r"]]);

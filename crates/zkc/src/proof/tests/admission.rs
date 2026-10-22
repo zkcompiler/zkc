@@ -592,13 +592,14 @@ fn authentication_and_inner_bindings_precede_candidate_and_interface_checks() {
         Default::default(),
     )
     .unwrap();
-    let expected = zkc_runtime::vm::Program::decode(b"invalid candidate")
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap_err()
-        .to_string();
+    let expected =
+        zkc_runtime::vm::Program::decode(b"invalid candidate", zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .to_string();
     assert_eq!(admit(&bad).unwrap_err(), expected);
 }
 

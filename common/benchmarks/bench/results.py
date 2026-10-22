@@ -62,16 +62,22 @@ def validate_backend(backend, ingress=None, boundary=None):
     if kind == 'kernel':
         from .providers import BOUNDARIES
         required |= {'provider', 'group', 'kernel', 'boundary', 'elements'}
+        optional.add('chain_length')
         require(backend.get('provider') in ('arkworks', 'blst')
-                and backend.get('group') in ('g1', 'g2', 'pairing')
-                and backend.get('kernel') in ('scale', 'scale_each', 'vector_scale', 'msm', 'pairing_check')
+                and backend.get('group') in ('g1', 'g2', 'pairing', 'scalar')
+                and backend.get('kernel') in ('scale', 'scale_each', 'vector_scale', 'msm', 'pairing_check', 'field_mul', 'vector_mul')
                 and backend.get('boundary') in BOUNDARIES, 'invalid kernel control')
         require(boundary is None or boundary == BOUNDARIES[backend['boundary']], 'invalid kernel boundary')
         require(type(backend.get('elements')) is int and 1 <= backend['elements'] <= 4096, 'invalid kernel length')
         require((backend['group'] == 'pairing') == (backend['kernel'] == 'pairing_check')
-                and (backend['kernel'] != 'scale' or backend['elements'] == 1)
+                and (backend['kernel'] not in ('scale', 'field_mul') or backend['elements'] == 1)
+                and ((backend['group'] == 'scalar') == (backend['kernel'] in ('field_mul', 'vector_mul')))
                 and (backend['boundary'] not in ('import', 'export')
-                     or backend['provider'] == 'blst' and backend['group'] != 'pairing'), 'unsupported kernel control')
+                     or backend['provider'] == 'blst' and backend['group'] not in ('pairing', 'scalar')), 'unsupported kernel control')
+        chain_length = backend.get('chain_length', 1)
+        require(type(chain_length) is int and 1 <= chain_length <= 32
+                and (chain_length == 1 or backend['boundary'] in ('resident', 'converted', 'resident_installed_chain', 'wire_resident_chain')),
+                'invalid provider chain length')
     elif kind in ('host', 'run'):
         required |= {'ingress', 'package', 'sha256'}
         require(boundary is None or boundary == ('admitted_entry_call' if kind == 'host' else 'admitted_function_call'),
@@ -291,6 +297,8 @@ def validate_manifest(manifest):
         require(key[:3] in jobs and result['repetition'] < processes, 'unexpected measurement')
         job = jobs[key[:3]]
         worker = validate_worker(result['worker'], plan, job['boundary'])
+        from .providers import validate_evidence
+        validate_evidence(worker, job['backend'])
         if job['boundary'] == 'admitted_entry_call':
             validate_preparation_limits(worker['lifecycle']['preparation_limits'], job['backend'])
         if job['boundary'] in ('admitted_entry_call', 'admitted_function_call'):

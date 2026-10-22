@@ -228,7 +228,7 @@ fn exact_attribute_counts_canonical_naturals_and_scalar_moduli_are_admitted() {
                 &ret,
             );
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&bytes)
+                zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend)?;
                         Ok(program)
@@ -250,7 +250,7 @@ fn exact_attribute_counts_canonical_naturals_and_scalar_moduli_are_admitted() {
         &["x".into()],
     );
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)

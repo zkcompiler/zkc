@@ -20,6 +20,19 @@ not authorize moving a failure, erasing a draw or reusing a consumed capability.
 [Operation contracts](operation-contracts.md) and
 [local control](control.md) define those distinctions.
 
+Physical aggregates retain their complete ordered child layouts separately from
+the logical schema. Sequences and dense containers have one element layout;
+variants retain every payload position of every alternative. Inactive values
+allocate no payload, but their layouts still affect identity and admissibility.
+Logical static arguments never become physical types.
+
+The canonical physical spelling is `logical@representation[child-layouts]`.
+Brackets are omitted exactly for the canonical default children; flat types have
+no brackets. For example,
+`sequence<field:bls12-381.fr>@logical.sequence/0[blst/fr]` selects resident scalar
+elements. Execution reads the stored complete layout. It does not infer a
+container's layout from its active values or reconstruct default children.
+
 ## Checked physical decisions
 
 One physical plan retains the original subject, including retained maps and
@@ -57,8 +70,11 @@ certificate or protection against concurrent mutation of IR.
 
 Each mismatched operand gets its conversion immediately before its consumer, in
 operand order. Declarations may be shared; dynamic instructions and results are
-not silently shared or hoisted. Function/control ports use installed defaults;
-operation results retain their chosen representation until a use needs conversion.
+not silently shared or hoisted. Function ports use installed defaults unless an
+exact input/output occurrence is selected in the physical-plan options. Captures,
+branch yields and loop state retain checked physical equations, including the
+zero-iteration path. Operation results retain their selected representation until
+a use needs conversion. Incompatible participant and local signatures refuse.
 The candidate catalog supplies preferences for installed implementations and
 direct adapters. It cannot create a conversion law or install a new contract.
 
@@ -120,15 +136,23 @@ The current [formal semantics](../../lean/docs/spec/semantics.md) proves selecte
 open-process and observation laws. Native physical lowering remains a separate
 implementation boundary; these laws do not establish its correctness.
 
-### Foreign providers on shared ports
+### Resident providers
 
-An implementation can keep the installed physical ports while internally
-staging another library's values. BLS12-381 `blst/curve.scale`,
-`blst/curve.scale_each`, `blst/curve.vector_scale`, `blst/curve.msm` and
-`blst/pairing.check` follow this model. An explicit `local.binding` implementation
-is retained by physical planning. Ordinary `.zkc` kernel calls retain the current
-Arkworks defaults; installing this provider does not add a frontend selector.
-Native owns the checked imports, arithmetic, exports and their resource admission
-as one operation. The foreign staging representation never crosses a VM port.
+BLS12-381 scalar/vector and G1/G2 scalar/bulk values have explicit `blst/fr`,
+`blst/g1` and `blst/g2` representations. The `blst/resident/` implementations
+consume these physical ports directly. Adjacent calls can retain provider-owned
+buffers. Ordinary kernel calls retain Arkworks defaults; adding a provider does
+not change a source program's selections.
+
+`native/representation.convert` implements only explicitly installed direct
+conversions. Its logical arguments contain the erased logical type; its physical
+arguments contain the complete source and target types, in that order.
+Mathematical identity alone grants no adapter.
+Conversions remain reached operations and retain their failure and capacity
+boundaries. There is no call-local fallback that silently converts every
+arithmetic invocation.
+
 The [kernel guide](../../crates/zkc-kernels/README.md#alternative-bls12-381-provider)
-states supported domains, variable-time behavior and the GT limitation.
+documents remaining normalization, workspace, timing and allocation costs.
+Residency does not grant wire permission, constant-time behavior, or compatible
+GT and PCS custody. Variable-time MSM requires trusted execution authorization.

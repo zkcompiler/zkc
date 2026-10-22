@@ -16,6 +16,7 @@ fn err(code: ErrorCode, detail: impl Into<String>) -> AdmissionError {
 pub struct Program {
     pub(super) program: Arc<Model>,
     bytes: Arc<[u8]>,
+    contracts: super::Contracts,
     pub(crate) executable: Arc<super::code::Executable>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,15 +87,20 @@ impl Program {
     }
     /// Decode, structurally admit and prepare an immutable VM program.
     /// This performs no backend installation and grants no execution authority.
-    pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let program = decode::physical(bytes)?;
-        let participant_layouts = validate(&program)?;
+    pub fn decode(bytes: &[u8], contracts: &super::Contracts) -> Result<Self> {
+        let program = decode::physical(bytes, contracts)?;
+        let participant_layouts = validate(&program, contracts)?;
         let executable = super::code::prepare(&program, participant_layouts);
         Ok(Program {
             executable: Arc::new(executable),
             program: Arc::new(program),
             bytes: Arc::from(bytes),
+            contracts: contracts.clone(),
         })
+    }
+
+    pub fn contracts(&self) -> &super::Contracts {
+        &self.contracts
     }
 
     /// Optional deployment preflight. Execution independently links its owned
@@ -434,18 +440,15 @@ fn local_body(
                 let descriptor = logical
                     .variant_descriptor()
                     .ok_or_else(|| err(ErrorCode::Type, "variant-constructor-type"))?;
-                let arm = descriptor
+                let alternative = descriptor
                     .alternatives()
                     .iter()
-                    .find(|a| a.label() == alternative)
+                    .position(|a| a.label() == alternative)
                     .ok_or_else(|| err(ErrorCode::Signature, "variant-alternative"))?;
-                let types = arm
-                    .payload()
-                    .iter()
-                    .cloned()
-                    .map(PhysicalType::default_for)
-                    .collect::<Result<Vec<_>>>()?;
-                operands(&mut env, payload, &types)?;
+                let types = ty
+                    .variant_payload(alternative)
+                    .ok_or_else(|| err(ErrorCode::Type, "variant-physical-children"))?;
+                operands(&mut env, payload, types)?;
                 define(&mut env, &mut seen, output, ty.clone())?;
             }
             LocalInstruction::Match {
@@ -483,7 +486,9 @@ fn local_body(
                     capture_ports.push((name.clone(), ty));
                 }
                 let mut joined = None;
-                for (arm, declared) in arms.iter().zip(descriptor.alternatives()) {
+                for (alternative, (arm, declared)) in
+                    arms.iter().zip(descriptor.alternatives()).enumerate()
+                {
                     // The contract decides this, not the attribute rule: the
                     // external duplex states are ordinary checked data and carry
                     // no origin attribute, yet they hold the same history.
@@ -500,12 +505,10 @@ fn local_body(
                         .iter()
                         .cloned()
                         .zip(
-                            declared
-                                .payload()
+                            ty.variant_payload(alternative)
+                                .ok_or_else(|| err(ErrorCode::Type, "variant-physical-children"))?
                                 .iter()
-                                .cloned()
-                                .map(PhysicalType::default_for)
-                                .collect::<Result<Vec<_>>>()?,
+                                .cloned(),
                         )
                         .collect::<Ports>();
                     ports.extend(capture_ports.clone());
@@ -740,6 +743,7 @@ fn local_body(
     returned.ok_or_else(|| err(ErrorCode::Terminal, "missing local terminator"))
 }
 struct Check<'a> {
+    contracts: &'a super::Contracts,
     program: &'a Model,
     role: &'a str,
     instance: &'a str,
@@ -755,7 +759,7 @@ impl Check<'_> {
         if peer == self.role {
             return Err(err(ErrorCode::Role, "self message"));
         }
-        if !ty.is_message_type() {
+        if !self.contracts.permits_wire(&ty, super::WireCodec::Native) {
             return Err(err(ErrorCode::Type, "nonserializable message type"));
         }
         if let Some(old) = self
@@ -944,7 +948,7 @@ impl Check<'_> {
         Ok(())
     }
 }
-fn validate(p: &Model) -> Result<ParticipantLayouts> {
+fn validate(p: &Model, contracts: &super::Contracts) -> Result<ParticipantLayouts> {
     for f in p.functions.values() {
         function(f)?;
     }
@@ -984,6 +988,7 @@ fn validate(p: &Model) -> Result<ParticipantLayouts> {
             }
         }
         Check {
+            contracts,
             program: p,
             role: &participant.role,
             instance: &participant.instance,

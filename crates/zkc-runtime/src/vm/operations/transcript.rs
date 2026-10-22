@@ -1,4 +1,5 @@
 //! Independently authored transcript contracts and admission.
+use super::super::PhysicalType;
 use super::*;
 use Type::*;
 
@@ -149,4 +150,23 @@ fn select(
     selection: Selection,
 ) -> Result<BoundSignature> {
     support::select_nominal(binding, logical, selection)
+}
+
+/// Only the canonical message payload is physically selectable. Resource and
+/// coordinate ports, logical schema and exact suite owner retain their rules.
+pub(super) fn select_payload(
+    binding: &OperationBinding,
+    logical: &OperationSignature<LogicalType>,
+    selection: Selection,
+    physical: &[PhysicalType],
+) -> Result<BoundSignature> {
+    let mut signature = select(binding, logical, selection)?;
+    match physical {
+        [] => {}
+        [payload] if payload.logical() == logical.inputs[1] => {
+            signature.inputs[1] = payload.clone();
+        }
+        _ => return Err(support::failure()),
+    }
+    Ok(signature)
 }

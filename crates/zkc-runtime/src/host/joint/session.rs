@@ -224,7 +224,8 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
         if role.actions.iter().any(|action| {
             matches!(action,
                 ProgramAction::Send { ty, .. } | ProgramAction::Receive { ty, .. }
-                if !input.backend.supports_wire(ty))
+                if !bundle.admitted.contracts().permits_wire(ty, crate::vm::WireCodec::Native)
+                    || !input.backend.supports_wire(ty))
         }) {
             return refuse(FailureKind::Setup, "role-wire-type", inputs);
         }
@@ -968,6 +969,7 @@ mod contract_tests {
         Bundle::admit(
             &serde_json::to_vec(&raw).unwrap(),
             &backend(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
             super::super::BundleLimits::default(),
         )
         .unwrap()

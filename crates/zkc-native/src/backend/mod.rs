@@ -35,10 +35,18 @@ pub struct NativeOperation {
     read_extent: work::ReadExtent,
     sequence: bool,
     deterministic: bool,
+    implementation_id: Option<zkc_runtime::vm::ImplementationId>,
+    requirements: zkc_runtime::vm::ImplementationRequirements,
 }
 impl zkc_runtime::vm::InstalledOperation for NativeOperation {
     fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         &self.binding.signature
+    }
+    fn implementation_id(&self) -> Option<zkc_runtime::vm::ImplementationId> {
+        self.implementation_id
+    }
+    fn requirements(&self) -> zkc_runtime::vm::ImplementationRequirements {
+        self.requirements
     }
     fn deterministic(&self) -> bool {
         self.deterministic
@@ -57,6 +65,7 @@ pub struct NativeBackend {
     core: Core,
     services: Option<crate::services::ServiceBindings>,
     implementations: &'static registry::Registry,
+    contracts: zkc_runtime::vm::Contracts,
 }
 impl NativeBackend {
     fn invoke(
@@ -208,9 +217,22 @@ impl NativeBackend {
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::operations::external::Budget::default(),
             implementations: registry::installed()?,
+            contracts: crate::native_contracts().clone(),
             core: Core::new(policy, entry, setups),
             services: None,
         })
+    }
+    /// Attach the exact trusted admission catalog used for this deployment.
+    /// Native resident IDs must come from native_contracts or its policy view.
+    pub fn with_contracts(mut self, contracts: zkc_runtime::vm::Contracts) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("contracts-active-backend"));
+        }
+        self.contracts = contracts;
+        Ok(self)
+    }
+    pub fn contracts(&self) -> &zkc_runtime::vm::Contracts {
+        &self.contracts
     }
     #[cfg(feature = "test-utils")]
     pub fn issue_test_nonce(
@@ -396,6 +418,14 @@ impl Backend for NativeBackend {
     ) -> Option<NativeOperation> {
         let implementation = self.implementations.get(&binding.implementation)?;
         let signature = implementation.signature(binding)?;
+        let actual = crate::contracts::actual_identity(binding);
+        let requirements = implementation.requirements;
+        if !self
+            .contracts
+            .permits_implementation(binding, actual, requirements)
+        {
+            return None;
+        }
         // Traversal charging belongs to the operation contract. Observing a
         // sequence through a transcript retains that operation's own budget.
         let sequence = binding.contract == "bytes.join"
@@ -412,6 +442,8 @@ impl Backend for NativeBackend {
             read_extent: work::ReadExtent::for_contract(&binding.contract),
             sequence,
             deterministic: implementation.deterministic,
+            implementation_id: actual,
+            requirements,
         })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {

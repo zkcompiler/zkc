@@ -34,6 +34,28 @@ list for participants without services. Indices are canonical nonnegative
 decimal strings. Entry maps and instruction records retain their positional
 shapes.
 
+Each operation binding has exactly five fields:
+
+```text
+[name, contract, logical_arguments, implementation, physical_arguments]
+```
+
+Logical arguments identify the mathematical operation. Physical arguments are
+canonical complete physical type spellings selected under the trusted context;
+they grant no new logical operation or effect. Flat implementations use `[]`.
+Container implementation families use a complete container layout to determine
+their exact ports. A direct `representation.convert` has one logical argument
+and two physical arguments, the ordered source and target types. Only an
+explicitly installed endpoint pair admits that conversion. A leaf conversion
+does not imply a container conversion.
+
+`transcript.native.indexed.observe.data` accepts `[]` for its default payload
+layout or one complete payload physical type. The selected type must preserve
+the declared logical payload schema, including every inactive alternative, and
+have positive Native codec permission under the trusted context. Only the payload
+input changes; suite, implementation ownership, resource and coordinate ports,
+canonical observation framing and consumption order retain their contracts.
+
 A function-only executable module has at least one Local function and empty
 participant and entry arrays. It uses these same function records and all the
 same eager structural checks, including bindings and dormant definitions. An
@@ -182,9 +204,13 @@ reports the iteration whose yield was attempted. Earlier effects remain installe
 
 ## Consumers and assurance boundary
 
-`vm::Program::decode` structurally admits supplied physical programs without a
-backend. `Program::check_installation` optionally checks a deployment's installed
-signatures; each execution independently links its owned backend. The native
+`vm::Program::decode(bytes, &contracts)` structurally admits supplied physical
+programs against an immutable trusted contract context, without constructing a
+backend. The Program retains that context. Artifact declarations select existing
+contracts; they cannot register a representation, authorize timing behavior or
+grant a codec. `Program::check_installation` optionally checks a deployment's
+installed signatures, scoped implementation identities and premises; each
+execution independently links its owned backend before entering frames. The native
 backend supplies Boolean construction and the existing kernels/codecs. The
 [VM contract](../runtime/vm.md) defines this boundary. Structural admission does not establish correspondence
 to a mathematical source. A generic role runner can expose a message to a named

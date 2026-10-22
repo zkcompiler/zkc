@@ -23,6 +23,7 @@ fn binding(field: usize, contract: &str) -> OperationBinding {
         contract: contract.into(),
         arguments: vec![FIELDS[field].0.into()],
         implementation: format!("{}/{contract}", FIELDS[field].1),
+        physical_arguments: vec![],
     }
 }
 
@@ -403,7 +404,7 @@ fn native_reader_refuses_contraction_port_attribute_and_provider_mutations() {
                     &["out".into()],
                 );
                 assert_eq!(
-                    zkc_runtime::vm::Program::decode(&bytes)
+                    zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                         .and_then(|program| {
                             program.check_installation(&backend(Policy::default()))?;
                             Ok(program)
@@ -456,6 +457,7 @@ fn native_reader_refuses_contraction_port_attribute_and_provider_mutations() {
                 contract: "matrix.bilinear".into(),
                 implementation: format!("{expected_provider}/matrix.bilinear"),
                 arguments: operation.arguments.clone(),
+                physical_arguments: vec![],
             });
             assert_eq!(
                 one(controlled, operation, &[], args).0.unwrap_err(),

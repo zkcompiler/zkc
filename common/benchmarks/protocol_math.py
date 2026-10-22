@@ -214,7 +214,8 @@ def kernel_inventory(package):
     visit(program[2:4])
     return {'scope': 'static op sites in all emitted functions and participants; loops not expanded',
             'kernels': [{'binding': name, 'contract': row[1], 'arguments': row[2],
-                         'implementation': row[3], 'call_sites': calls[name]}
+                         'implementation': row[3], 'physical_arguments': row[4],
+                         'call_sites': calls[name]}
                         for name, row in sorted(bindings.items())],
             'program_bytes': len(artifact[4].encode())}
 

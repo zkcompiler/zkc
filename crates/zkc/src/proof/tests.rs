@@ -34,6 +34,7 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
         ])
         .to_string()
         .as_bytes(),
+        zkc_native::native_contracts(),
     )
     .unwrap();
     let binding = [7; 32];
@@ -122,6 +123,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
     for handling in ["consume", "discard", "return"] {
         let returned = handling == "return";
         let binding = zkc_runtime::vm::OperationBinding {
+            physical_arguments: Vec::new(),
             contract: "resource_unit.create".into(),
             arguments: vec!["Slot.A".into()],
             implementation: "logical/resource_unit.create".into(),
@@ -148,13 +150,15 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "create",
                     "resource_unit.create",
                     ["Slot.A"],
-                    "logical/resource_unit.create"
+                    "logical/resource_unit.create",
+                    []
                 ],
                 [
                     "consume",
                     "resource_unit.consume",
                     ["Slot.A"],
-                    "logical/resource_unit.consume"
+                    "logical/resource_unit.consume",
+                    []
                 ]
             ],
             [
@@ -287,12 +291,15 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 Default::default(),
             )
             .unwrap();
-            let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
-                .and_then(|program| {
-                    program.check_installation(&backend)?;
-                    Ok(program)
-                })
-                .unwrap();
+            let program = zkc_runtime::vm::Program::decode(
+                candidate.as_bytes(),
+                zkc_native::native_contracts(),
+            )
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
             let mut runner = Runner::new(&program, "main", "P", "s", backend, vec![])
                 .unwrap_or_else(|e| panic!("{}", e.error));
             let zkc_runtime::vm::Action::Local(action) = runner.poll() else {

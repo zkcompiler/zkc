@@ -327,7 +327,8 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
             "create",
             "resource_unit.create",
             ["Slot.A"],
-            "logical/resource_unit.create"
+            "logical/resource_unit.create",
+            []
         ]],
         [[
             "function",
@@ -475,13 +476,15 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
                 "init",
                 "external.openvm.init",
                 [],
-                "native/external.openvm.init"
+                "native/external.openvm.init",
+                []
             ],
             [
                 "sample",
                 "external.openvm.sample",
                 [],
-                "native/external.openvm.sample"
+                "native/external.openvm.sample",
+                []
             ]
         ],
         [[

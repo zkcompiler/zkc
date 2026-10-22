@@ -172,36 +172,7 @@ use super::super::Representation;
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
-        implementation: "blst/curve.scale",
-        contract: "curve.scale",
-        domains: &[Identity::Bls12381G1, Identity::Bls12381G2],
-        ports: PortTransform::Default,
-    },
-    Alternative {
-        implementation: "blst/curve.scale_each",
-        contract: "curve.scale_each",
-        domains: &[Identity::Bls12381G1, Identity::Bls12381G2],
-        ports: PortTransform::Default,
-    },
-    Alternative {
-        implementation: "blst/curve.vector_scale",
-        contract: "curve.vector_scale",
-        domains: &[Identity::Bls12381G1, Identity::Bls12381G2],
-        ports: PortTransform::Default,
-    },
-    Alternative {
-        implementation: "blst/curve.msm",
-        contract: "curve.msm",
-        domains: &[Identity::Bls12381G1, Identity::Bls12381G2],
-        ports: PortTransform::Default,
-    },
-    Alternative {
-        implementation: "blst/pairing.check",
-        contract: "pairing.check",
-        domains: &[Identity::Bls12381Fr],
-        ports: PortTransform::Default,
-    },
-    Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "dalek-diagonal/curve.scale_each",
         contract: "curve.scale_each",
         domains: &[Identity::Ristretto255Group],
@@ -212,6 +183,7 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "dalek-diagonal/curve.msm",
         contract: "curve.msm",
         domains: &[Identity::Ristretto255Group],

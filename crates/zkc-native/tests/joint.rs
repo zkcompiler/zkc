@@ -185,6 +185,7 @@ fn admit(raw: &Json) -> Result<Bundle, BundleError> {
     Bundle::admit(
         raw.to_string().as_bytes(),
         &Host::default(),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
 }
@@ -394,7 +395,13 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
         format!("{}0", "[".repeat(512)),
     ] {
         assert!(
-            Bundle::admit(bad.as_bytes(), &Host::default(), BundleLimits::default()).is_err(),
+            Bundle::admit(
+                bad.as_bytes(),
+                &Host::default(),
+                zkc_native::native_contracts(),
+                BundleLimits::default()
+            )
+            .is_err(),
             "{bad}"
         );
     }
@@ -429,7 +436,13 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
         },
     ] {
         assert_eq!(
-            Bundle::admit(text.as_bytes(), &Host::default(), limits).unwrap_err(),
+            Bundle::admit(
+                text.as_bytes(),
+                &Host::default(),
+                zkc_native::native_contracts(),
+                limits
+            )
+            .unwrap_err(),
             BundleError::Limit
         );
     }
@@ -592,6 +605,7 @@ fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity(
             .to_string()
             .as_bytes(),
         &backend("Alice"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap();
@@ -665,6 +679,7 @@ fn native_standalone_group_messages_do_not_consume_collection_capacity() {
             .to_string()
             .as_bytes(),
         &backend("Alice"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap();
@@ -1241,6 +1256,7 @@ fn every_nested_schedule_field_has_closed_bounded_object_grammar() {
         Bundle::admit(
             loop_bundle().to_string().as_bytes(),
             &Host::default(),
+            zkc_native::native_contracts(),
             limits
         )
         .unwrap_err(),
@@ -1270,12 +1286,15 @@ fn structured_participant_admission_checks_every_nested_body() {
 #[test]
 fn structured_runner_poll_cannot_cross_control_cuts() {
     let raw = loop_bundle();
-    let admitted = zkc_runtime::vm::Program::decode(raw["candidate"].as_str().unwrap().as_bytes())
-        .and_then(|program| {
-            program.check_installation(&Host::default())?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(
+        raw["candidate"].as_str().unwrap().as_bytes(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&Host::default())?;
+        Ok(program)
+    })
+    .unwrap();
     for at_yield in [false, true] {
         let mut runner = Runner::new(
             &admitted,
@@ -1343,12 +1362,15 @@ fn structured_runner_poll_cannot_cross_control_cuts() {
 #[test]
 fn entering_native_loop_preserves_count_failure_as_stopped_outcome() {
     let raw = loop_bundle();
-    let admitted = zkc_runtime::vm::Program::decode(raw["candidate"].as_str().unwrap().as_bytes())
-        .and_then(|program| {
-            program.check_installation(&Host::default())?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(
+        raw["candidate"].as_str().unwrap().as_bytes(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&Host::default())?;
+        Ok(program)
+    })
+    .unwrap();
     let mut runner = Runner::new(
         &admitted,
         "main",
@@ -1383,13 +1405,16 @@ fn unknown_formats_and_wrong_participant_shapes_refuse() {
             matches!(admit(&raw), Err(BundleError::Candidate(_))),
             "{format}"
         );
-        let error = zkc_runtime::vm::Program::decode(candidate.to_string().as_bytes())
-            .and_then(|program| {
-                program.check_installation(&Host::default())?;
-                Ok(program)
-            })
-            .err()
-            .unwrap();
+        let error = zkc_runtime::vm::Program::decode(
+            candidate.to_string().as_bytes(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&Host::default())?;
+            Ok(program)
+        })
+        .err()
+        .unwrap();
         assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Record, "{format}");
         assert_eq!(
             error.detail, "unknown participant module format",
@@ -1409,12 +1434,15 @@ fn unknown_formats_and_wrong_participant_shapes_refuse() {
 fn proof_policies_check_messages_and_loops_independently_of_program_format() {
     use zkc_runtime::vm::NativeProofEntry;
     let admit = |program: &Json| {
-        zkc_runtime::vm::Program::decode(program.to_string().as_bytes())
-            .and_then(|program| {
-                program.check_installation(&Host::default())?;
-                Ok(program)
-            })
-            .unwrap()
+        zkc_runtime::vm::Program::decode(
+            program.to_string().as_bytes(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&Host::default())?;
+            Ok(program)
+        })
+        .unwrap()
     };
     NativeProofEntry::new(
         admit(&carrier()),
@@ -1522,7 +1550,14 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     );
     let variant = |ty: &str, tag, values| {
         let ty = LogicalType::parse(ty).unwrap();
-        Value::Variant(Variant::new(ty.variant_descriptor().unwrap().clone(), tag, values).unwrap())
+        Value::Variant(
+            Variant::new(
+                zkc_runtime::vm::PhysicalType::default_for(ty.clone()).unwrap(),
+                tag,
+                values,
+            )
+            .unwrap(),
+        )
     };
     let codec = Host::default();
     let mut values =
@@ -1547,7 +1582,13 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     ]);
     values.push(Value::Sequence(
         Sequence::new(
-            LogicalType::parse("field:bn254.fr").unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(
+                    LogicalType::parse("field:bn254.fr").unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             vec![Value::Bn254Field(zkc_native::Bn254Scalar::from(11))],
             &Policy::default(),
         )
@@ -1581,7 +1622,11 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     for elements in [vec![], records] {
         values.push(Value::Sequence(
             Sequence::new(
-                LogicalType::parse(&record).unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(LogicalType::parse(&record).unwrap())
+                        .unwrap(),
+                )
+                .unwrap(),
                 elements,
                 &Policy::default(),
             )
@@ -1590,7 +1635,13 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     }
     values.push(Value::Sequence(
         Sequence::new(
-            LogicalType::parse("matrix:bls12-381.fr").unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(
+                    LogicalType::parse("matrix:bls12-381.fr").unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             vec![
                 Value::matrix(0, 3, &[], &Policy::default()).unwrap(),
                 Value::matrix(2, 0, &[], &Policy::default()).unwrap(),
@@ -1716,7 +1767,13 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
 fn excessive_sequence_count_preserves_pending_frame_and_cleanup() {
     let value = Value::Sequence(
         zkc_native::Sequence::new(
-            zkc_runtime::vm::LogicalType::parse("index").unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(
+                    zkc_runtime::vm::LogicalType::parse("index").unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             vec![Value::Index(7)],
             &Policy::default(),
         )
@@ -1775,12 +1832,19 @@ fn exact_pin_precedes_parsing_and_limit_requests_are_not_clamped() {
             bytes.as_bytes(),
             &pin,
             &Host::default(),
+            zkc_native::native_contracts(),
             BundleLimits::default()
         )
         .is_ok()
     );
     assert!(matches!(
-        Bundle::admit_pinned(b"not json", &pin, &Host::default(), BundleLimits::default()),
+        Bundle::admit_pinned(
+            b"not json",
+            &pin,
+            &Host::default(),
+            zkc_native::native_contracts(),
+            BundleLimits::default()
+        ),
         Err(BundleError::Identity)
     ));
     assert!(matches!(
@@ -1788,6 +1852,7 @@ fn exact_pin_precedes_parsing_and_limit_requests_are_not_clamped() {
             format!("{bytes}\n").as_bytes(),
             &pin,
             &Host::default(),
+            zkc_native::native_contracts(),
             BundleLimits::default()
         ),
         Err(BundleError::Identity)

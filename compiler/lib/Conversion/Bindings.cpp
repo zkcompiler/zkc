@@ -1,6 +1,7 @@
 #include "Bindings.h"
 #include "../Target/PhysicalPlan.h"
 #include "Storage.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -10,6 +11,24 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
+static Error applyCheckedSignature(Block &block, ArrayRef<Type> types) {
+  if (block.getNumArguments() != types.size())
+    return error("binding-operation-signature");
+  TypeConverter::SignatureConversion conversion(block.getNumArguments());
+  for (auto [index, type] : enumerate(types))
+    conversion.addInputs(index, {type});
+  // The checked plan preserves argument positions and cardinality. Apply its
+  // explicit one-to-one signature without asking a converter to materialize
+  // casts for uses whose exact conversions are recorded separately.
+  for (auto [index, argument] : enumerate(block.getArguments())) {
+    auto mapping = conversion.getInputMapping(index);
+    if (!mapping || mapping->inputNo != index || mapping->size != 1 ||
+        mapping->replacedWithValues())
+      return error("binding-operation-signature");
+    argument.setType(conversion.getConvertedTypes()[mapping->inputNo]);
+  }
+  return Error::success();
+}
 static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   auto work = target::physicalPlanOperations(module);
   SmallVector<SmallVector<Value>, 0> conversions;
@@ -18,13 +37,23 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   OpBuilder builder(module.getContext());
+  auto physicalArguments = [&](const std::vector<std::string> &values) {
+    SmallVector<Attribute> attributes;
+    for (const auto &value : values)
+      attributes.push_back(builder.getStringAttr(value));
+    return builder.getArrayAttr(attributes);
+  };
   // All choices, including names and ports, have been checked on this exact
   // selected Local payload. Application contains no numerical producer,
   // selection/default/adapter policy or catalog query.
   for (const auto &decision : plan.bindings) {
     if (decision.purpose == target::BindingPurpose::Original) {
-      cast<zkc::local::OperationBindingOp>(work[*decision.declaration])
-          .setImplementation(decision.binding.application.implementation);
+      auto declaration =
+          cast<zkc::local::OperationBindingOp>(work[*decision.declaration]);
+      declaration.setImplementation(
+          decision.binding.application.implementation);
+      declaration.setPhysicalArgumentsAttr(
+          physicalArguments(decision.binding.application.physicalArguments));
       continue;
     }
     builder.setInsertionPointToStart(&root.getBody().front());
@@ -35,7 +64,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
     zkc::local::OperationBindingOp::create(
         builder, work[decision.location]->getLoc(), binding.name,
         binding.application.contract, builder.getArrayAttr(arguments),
-        binding.application.implementation);
+        binding.application.implementation,
+        physicalArguments(binding.application.physicalArguments));
   }
   // Apply interface ports without changing operation order. Bound operations
   // get their selected result ports when replaced below.
@@ -43,9 +73,9 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
     size_t blockIndex = 0;
     for (auto &region : op->getRegions())
       for (auto &block : region) {
-        for (auto [argument, type] :
-             zip(block.getArguments(), decision.blockArguments[blockIndex]))
-          argument.setType(type);
+        if (auto error = applyCheckedSignature(
+                block, decision.blockArguments[blockIndex]))
+          return error;
         ++blockIndex;
       }
     if (decision.functionType)
@@ -158,19 +188,22 @@ Error materializePhysical(ModuleOp module,
   module.getBodyRegion().takeBody((*candidate)->getBodyRegion());
   return Error::success();
 }
-LogicalResult
-lowerBoundPhysical(ModuleOp original,
-                   ArrayRef<std::pair<std::string, std::string>> selections,
-                   bool linearContractions, LinearContractionStats *stats,
-                   bool releaseStorage) {
+LogicalResult lowerBoundPhysical(
+    ModuleOp original, ArrayRef<std::pair<std::string, std::string>> selections,
+    bool linearContractions, LinearContractionStats *stats, bool releaseStorage,
+    ArrayRef<target::FunctionPortSelection> functionPorts) {
   // One plan binds the original Kernel-bearing input through both checked
   // edges. Materialization owns the candidate and publishes only after all
   // admission, physical correspondence and projection checks succeed.
   Location failureLocation = original->getLoc();
-  auto proposal = target::proposePhysical(
-      original, target::installedCandidates(), selections,
-      {linearContractions, releaseStorage, checkProgramCapacity},
-      &failureLocation);
+  target::PhysicalPlanOptions options;
+  options.linearContractions = linearContractions;
+  options.releaseStorage = releaseStorage;
+  options.programCapacity = checkProgramCapacity;
+  options.functionPorts.assign(functionPorts.begin(), functionPorts.end());
+  auto proposal =
+      target::proposePhysical(original, target::installedCandidates(),
+                              selections, options, &failureLocation);
   if (!proposal) {
     diagnostics::emit(emitError(failureLocation), proposal.takeError());
     return failure();

@@ -2,7 +2,9 @@
 //! inputs. This module allocates bytes only; Host admission owns native decoding.
 use super::{bulk, frame, structured, table_type};
 use serde_json::Value as Json;
-use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Type};
+#[cfg(test)]
+use zkc_runtime::vm::LogicalType;
+use zkc_runtime::vm::{Identity, PhysicalType, Type};
 type Result<T> = std::result::Result<T, &'static str>;
 
 /// Decode readable JSON using an independently checked expected physical type.
@@ -170,6 +172,7 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     }
     out.put(&bytes[..width])
 }
+#[cfg(test)]
 fn physical(logical: LogicalType) -> Result<PhysicalType> {
     PhysicalType::default_for(logical).map_err(|_| "entry-input-codec")
 }
@@ -290,17 +293,11 @@ fn write(ty: &PhysicalType, value: &Json, out: &mut Buffer, depth: usize) -> Res
                 let values = array(value)?;
                 out.header(tag)?;
                 out.count(values.len())?;
-                let logical = ty.logical();
-                let element = physical(
-                    logical
-                        .sequence_element()
-                        .ok_or("entry-input-codec")?
-                        .clone(),
-                )?;
+                let element = ty.sequence_element().ok_or("entry-input-codec")?;
                 for v in values {
                     let at = out.bytes.len();
                     out.count(0)?;
-                    write(&element, v, out, depth + 1)?;
+                    write(element, v, out, depth + 1)?;
                     let length =
                         u32::try_from(out.bytes.len() - at - 4).map_err(|_| "entry-input-limit")?;
                     out.bytes[at..at + 4].copy_from_slice(&length.to_le_bytes());
@@ -474,15 +471,13 @@ impl serde::Serialize for Frame<'_> {
                 );
             }
             if ty.kind() == Type::Sequence {
-                let logical = ty.logical();
-                let child = physical(logical.sequence_element().expect("native sequence").clone())
-                    .expect("native sequence element");
+                let child = ty.sequence_element().expect("native sequence element");
                 let count = u32::from_le_bytes(bytes[6..10].try_into().unwrap()) as usize;
                 let mut sequence = serializer.serialize_seq(Some(count))?;
                 let mut rest = &bytes[10..];
                 while !rest.is_empty() {
                     let n = u32::from_le_bytes(rest[..4].try_into().unwrap()) as usize;
-                    sequence.serialize_element(&Frame(&child, &rest[4..4 + n]))?;
+                    sequence.serialize_element(&Frame(child, &rest[4..4 + n]))?;
                     rest = &rest[4 + n..];
                 }
                 return sequence.end();
@@ -576,7 +571,10 @@ mod tests {
             Value::Bytes(vec![0, 127, 128, 255].into()),
             Value::FieldArray(
                 crate::FieldArray::new(
-                    LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),
+                    PhysicalType::default_for(
+                        LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),
+                    )
+                    .unwrap(),
                     vec![crate::Scalar::from(1), crate::Scalar::from(2)].into(),
                 )
                 .unwrap(),
@@ -584,7 +582,10 @@ mod tests {
             Value::groups(&[crate::G1::identity()], &Policy::default()).unwrap(),
             Value::Sequence(
                 crate::Sequence::new(
-                    LogicalType::parse("index").unwrap(),
+                    PhysicalType::default_for(
+                        LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
+                    )
+                    .unwrap(),
                     vec![Value::Index(1), Value::Index(2)],
                     &Policy::default(),
                 )

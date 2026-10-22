@@ -68,13 +68,34 @@ explicit. The `poseidon2_permutation` test compares the permutation with the
 upstream known answer, p3-poseidon2's generic round functions and an integer
 implementation.
 
+`native_contracts()` contributes resident `blst/fr`, `blst/g1` and `blst/g2`
+scalar and bulk storage to the neutral VM. Default layouts remain Arkworks.
+Selected values stay in their provider representation across adjacent calls,
+control flow and supported containers. Explicit flat conversion calls delimit
+provider boundaries; there is no implicit container conversion.
+
+Complete sequence and variant types retain every physical child, including
+inactive alternatives. Resident field arrays and fixed vectors retain typed
+scalar backing with exact extents. Sequence and dense operation families receive
+one checked complete container parameter, without enumerating every length or
+schema. Codec permission combines the installed frame owner with every child
+permission; fixed vectors remain local-only. Immutable preparation eligibility
+is checked separately from wire support.
+
+Scalar/vector arithmetic uses a small provider family. Structured polynomial and
+matrix operations extend that family only where supported; resident scalars do
+not implement placeholder structured operations. Group algebra is separate from
+Native value projection, policy and error translation. Resident MSM borrows the
+typed provider buffers directly.
+
 `backend/registry.rs` assembles exact implementation ownership. Duplicate owners
 and alternatives of alternatives refuse. Alternative implementations inherit the
 installed family resolver and must match their primary domain. Constant-time
 Ristretto MSM, diagonal contractions, table layouts and the independently
-implemented pairwise dot product remain selectable. No variable-time MSM
-public-operand authority is installed. Kernel-specific timing properties do not
-establish a timing guarantee for the entire runtime.
+implemented pairwise dot product remain selectable. Resident BLS12-381 MSM declares variable-time input positions independently
+of the trusted admission catalog. It requires an explicit compatible execution
+policy or an exact scoped timing grant; a role or provider name grants neither.
+Kernel timing premises do not establish a whole-runtime timing guarantee.
 
 Each contract row lists its actual default implementation names. Custom families
 list exact implementation/contract pairs. The inventory contains no inferred
@@ -174,7 +195,13 @@ Generated transcripts use only `transcript.native.indexed.observe.data`,
 suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
-supported cross-domain data. Merlin and Spongefish suites own their exact
+supported cross-domain data. The observation binding accepts either no physical
+arguments (default payload storage) or one complete selected payload type,
+including all inactive child layouts. Expected Contracts and independently
+authored installed metadata require the same logical schema and positive Native
+codec support. Observation uses the existing canonical message encoder before
+consuming the transcript; selected storage changes neither framing nor custody.
+Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
 [their source pins and construction details](../zkc-kernels/src/interop/README.md).

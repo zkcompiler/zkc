@@ -6,6 +6,12 @@ use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 type Result<T> = std::result::Result<T, Error>;
 
+fn admitted_type(ty: &PhysicalType) -> bool {
+    crate::native_contracts()
+        .physical_type(&ty.spelling())
+        .is_ok_and(|admitted| admitted == *ty)
+}
+
 /// Opaque physical-profile measurements, not authority to construct a value.
 #[derive(Debug)]
 pub struct NativeInputSize {
@@ -37,10 +43,7 @@ impl NativeBackend {
     /// conservative retained-byte bound without recursively scanning it first.
     pub fn measure_native_value(&self, value: &Value) -> Result<NativeInputSize> {
         let ty = value.physical_type();
-        if !ty.is_duplicable()
-            || !value.is_resource_free()
-            || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(&ty)
-        {
+        if !ty.is_duplicable() || !value.is_resource_free() || !admitted_type(&ty) {
             return Err(unsupported());
         }
         self.policy()
@@ -73,7 +76,8 @@ impl NativeBackend {
             super::pcs::preflight(self.setups(), tag, bytes)?;
         }
         let mut counts = structured::Counts::default();
-        let fixed_leaf = super::frame(ty).is_some() && !ty.has_native_array_frame();
+        let fixed_leaf =
+            super::frame(ty).is_some() && ty.kind() != zkc_runtime::vm::Type::FieldArray;
         let retained = if super::table_type(ty) || fixed_leaf {
             // Match the ordinary leaf decoder's retention contract. Recursive
             // framing may need a more conservative estimate for nested leaves.
@@ -123,18 +127,14 @@ impl NativeBackend {
         payload: &[NativeInputSize],
     ) -> Result<NativeInputSize> {
         if ty.kind() != zkc_runtime::vm::Type::Variant
+            || ty.representation() != zkc_runtime::vm::Representation::Variant
             || !ty.is_duplicable()
-            || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty)
+            || !admitted_type(ty)
         {
             return Err(unsupported());
         }
-        let logical = ty.logical();
-        let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
-        let arm = descriptor
-            .alternatives()
-            .get(alternative)
-            .ok_or_else(unsupported)?;
-        if arm.payload().len() != payload.len() {
+        let arm = ty.variant_payload(alternative).ok_or_else(unsupported)?;
+        if arm.len() != payload.len() {
             return Err(unsupported());
         }
         let mut counts = structured::Counts {
@@ -143,8 +143,8 @@ impl NativeBackend {
         };
         let mut bytes = 0;
         let mut wire = 0;
-        for (expected, child) in arm.payload().iter().zip(payload) {
-            if PhysicalType::default_for(expected.clone()).ok().as_ref() != Some(&child.ty) {
+        for (expected, child) in arm.iter().zip(payload) {
+            if *expected != child.ty {
                 return Err(unsupported());
             }
             counts.nodes = structured::add(counts.nodes, child.counts.nodes)?;
@@ -154,8 +154,7 @@ impl NativeBackend {
             wire = structured::add(wire, child.wire)?;
         }
         counts.admit(self.policy())?;
-        let retained =
-            Variant::storage_bytes(descriptor, payload.len(), bytes).ok_or(Error::Limit)?;
+        let retained = Variant::storage_bytes(ty, payload.len(), bytes).ok_or(Error::Limit)?;
         // Retained siblings coexist with wire/decode buffers. Native-only
         // requests need only the Vec-to-Arc construction peak.
         structured::peak(self.policy(), retained, wire)?;

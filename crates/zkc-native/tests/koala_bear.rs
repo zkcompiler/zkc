@@ -16,6 +16,7 @@ fn binding(name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec!["koala-bear".into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn field(n: u32) -> Value {
@@ -255,7 +256,7 @@ fn scalar_arithmetic_matches_integer_modular_reference_and_zero_inverse_refuses(
             &["x".into()],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&backend(Policy::default()))?;
                     Ok(program)

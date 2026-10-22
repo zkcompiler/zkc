@@ -291,7 +291,7 @@ module { "protocol.module"() ({
         builder.setInsertionPointToStart(&owner.getBody().front());
         local::OperationBindingOp::create(builder, owner.getLoc(), "combine",
                                           "bool.and", builder.getArrayAttr({}),
-                                          "");
+                                          "", mlir::ArrayAttr{});
         auto endpoint = *owner.getBody()
                              .front()
                              .getOps<protocol_ir::ParticipantOp>()

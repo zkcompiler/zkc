@@ -69,6 +69,7 @@ pub struct NativeDeployment {
     binding_metadata_bytes: usize,
     format: ProofFormat,
     public: Vec<Port>,
+    public_types: Vec<PhysicalType>,
     maps: BTreeMap<String, RoleMap>,
 }
 pub(crate) struct SourceInterface<'a> {
@@ -330,8 +331,11 @@ impl NativeDeployment {
                 Default::default(),
             )
             .map_err(|e| e.to_string())?;
-            let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
-                .map_err(|e| e.to_string())?;
+            let program = zkc_runtime::vm::Program::decode(
+                candidate.as_bytes(),
+                zkc_native::native_contracts(),
+            )
+            .map_err(|e| e.to_string())?;
             match operation {
                 Some(producing) => program.check_role_installation(
                     entry,
@@ -348,6 +352,7 @@ impl NativeDeployment {
         let interface::RoleInterface {
             maps,
             public,
+            public_types,
             acceptance,
         } = interface::RoleInterface::read(
             &admitted,
@@ -458,6 +463,7 @@ impl NativeDeployment {
                 .saturating_add(4096),
             format: policy.format,
             public,
+            public_types,
             maps,
         })
     }
@@ -532,6 +538,9 @@ impl NativeDeployment {
     }
     pub fn entry(&self) -> &NativeProofEntry {
         &self.entry
+    }
+    pub(crate) fn public_types(&self) -> &[PhysicalType] {
+        &self.public_types
     }
     // The source Host consumes this admitted view rather than decoding the
     // deployment carrier again or keeping a second interpretation of its ABI.

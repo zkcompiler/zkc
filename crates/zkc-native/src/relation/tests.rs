@@ -442,6 +442,7 @@ fn static_signature_is_independent_and_exact() {
             contract: "relation.table_rows".into(),
             arguments: vec![field.into(), table.into()],
             implementation: "plonky3/relation.table_rows".into(),
+            physical_arguments: vec![],
         };
         assert_eq!(signature(&binding).is_some(), accepted);
         if accepted {

@@ -65,7 +65,7 @@ pub(super) fn admit(
         for s in c.parameters.iter().chain(&c.results) {
             check_schema(s, &mut validator.schemas)?;
         }
-        let program = Program::decode(c.program.as_bytes())
+        let program = Program::decode(c.program.as_bytes(), zkc_native::native_contracts())
             .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
         require(
             program.entry_names().next().is_none(),

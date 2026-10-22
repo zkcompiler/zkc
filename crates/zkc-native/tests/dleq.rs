@@ -182,7 +182,7 @@ fn run_validator(
             &backend.encode_native_value(&z).unwrap(),
         )
         .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&validator())
+    let admitted = zkc_runtime::vm::Program::decode(&validator(), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)

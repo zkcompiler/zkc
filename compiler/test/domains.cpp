@@ -640,11 +640,9 @@ void installedBindings() {
                          ArrayRef<BoundType> after) {
         require(before.size() == after.size(), "installed signature arity");
         for (auto [a, b] : zip(before, after)) {
-          auto expected = a;
-          expected.representation =
-              prefix == "arkworks-msb/" && a.kind == "table"
-                  ? "arkworks.mle-msb/0"
-                  : accept(defaultRepresentation(a)).representation;
+          auto expected = accept(defaultRepresentation(a));
+          if (prefix == "arkworks-msb/" && a.kind == "table")
+            expected.representation = "arkworks.mle-msb/0";
           require(b == expected,
                   "installed operation representation selection");
         }

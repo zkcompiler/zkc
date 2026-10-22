@@ -79,7 +79,13 @@ fn execute(directory: &Path, suffix: &str, mode: Mode, outer: u64, inner: u64, g
         _ => "execution",
     };
     let bytes = std::fs::read(directory.join(format!("{name}{suffix}.bundle"))).unwrap();
-    let bundle = Bundle::admit(&bytes, &backend(), BundleLimits::default()).unwrap();
+    let bundle = Bundle::admit(
+        &bytes,
+        &backend(),
+        zkc_native::native_contracts(),
+        BundleLimits::default(),
+    )
+    .unwrap();
     let mut native = backend();
     let rng_budget = if mode == Mode::RngFailure { 1 } else { 64 };
     let transcript_budget = if mode == Mode::TranscriptFailure {

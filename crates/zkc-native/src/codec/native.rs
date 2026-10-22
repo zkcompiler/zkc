@@ -30,6 +30,15 @@ impl std::fmt::Display for NativeWireError {
 impl std::error::Error for NativeWireError {}
 
 fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
+    // Positive selected codec inventory. Canonical ZKCV tags are unchanged.
+    if crate::operations::blst::is_resident(ty) {
+        return match (ty.kind(), ty.logical().identity()) {
+            (Type::Field, zkc_runtime::vm::Identity::Bls12381Fr) => Some((1, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bls12381G1) => Some((9, 54)),
+            (Type::Group, zkc_runtime::vm::Identity::Bls12381G2) => Some((51, 102)),
+            _ => None,
+        };
+    }
     // Exact physical identities, including storage. Other providers never fall
     // through merely because their coarse kind is Field or Group.
     if *ty == Value::Bool(false).physical_type() {
@@ -40,7 +49,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         Some((9, 54))
     } else if *ty == Value::Index(0).physical_type() {
         Some((31, 14))
-    } else if ty.has_native_array_frame() {
+    } else if crate::field_array::supports_type(ty) {
         let (field, length) = ty.logical().field_array_parts()?;
         if field != zkc_runtime::vm::Identity::Bls12381Fr {
             return None;
@@ -167,7 +176,7 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         .map_err(|_| NativeWireError::Limit)?;
     if let Value::FieldArray(array) = value {
         policy
-            .vector(array.elements().len())
+            .vector(array.len())
             .map_err(|_| NativeWireError::Limit)?;
     }
     let mut bytes = Vec::new();
@@ -180,14 +189,26 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
     match value {
         Value::FieldArray(array) => {
             array.validate().map_err(NativeWireError::Backend)?;
-            for element in array.elements() {
-                bytes.extend_from_slice(
-                    &zkc_kernels::arkworks::bls12_381::encode_scalar(element).map_err(encoding)?,
-                );
+            if let Some(elements) = array.resident_elements() {
+                let offset = bytes.len();
+                bytes.resize(width, 0);
+                elements
+                    .write_bytes(&mut bytes[offset..])
+                    .map_err(|e| NativeWireError::Backend(crate::operations::blst::failure(e)))?;
+            } else {
+                for element in array.ark_elements().ok_or_else(unsupported)? {
+                    bytes.extend_from_slice(
+                        &zkc_kernels::arkworks::bls12_381::encode_scalar(element)
+                            .map_err(encoding)?,
+                    );
+                }
             }
         }
         Value::Index(v) => bytes.extend_from_slice(&v.to_le_bytes()),
         Value::Bool(v) => bytes.push(u8::from(*v)),
+        Value::BlstField(v) => bytes.extend_from_slice(&v.to_bytes_le()),
+        Value::BlstG1(v) => bytes.extend_from_slice(&v.to_bytes()),
+        Value::BlstG2(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::Field(v) => bytes.extend_from_slice(
             &zkc_kernels::arkworks::bls12_381::encode_scalar(v).map_err(encoding)?,
         ),
@@ -328,10 +349,28 @@ impl NativeBackend {
                 .output(retained, usize::MAX)
                 .map_err(|_| Limit)?;
         }
+        if crate::operations::blst::is_resident(ty) {
+            use zkc_kernels::blst::bls12_381 as kernel;
+            return match tag {
+                1 => kernel::decode_scalar(&bytes[6..])
+                    .map(Value::BlstField)
+                    .map_err(|_| Invalid(DecodeReason::Scalar)),
+                9 => kernel::G1::from_bytes(&bytes[6..])
+                    .map(Value::BlstG1)
+                    .map_err(|_| Invalid(DecodeReason::Group)),
+                51 => kernel::G2::from_bytes(&bytes[6..])
+                    .map(|p| Value::BlstG2(std::sync::Arc::new(p)))
+                    .map_err(|_| Invalid(DecodeReason::Group)),
+                _ => Err(unsupported()),
+            };
+        }
         let value = match tag {
             64 => {
                 let count = (width - 6) / 32;
-                let retained = crate::field_array::bytes(count).map_err(|_| Limit)?;
+                let retained = crate::field_array::bytes(count)
+                    .map_err(|_| Limit)?
+                    .checked_add(ty.descriptor_bytes())
+                    .ok_or(Limit)?;
                 // Vec-to-Arc conversion temporarily retains both scalar buffers.
                 // Account for the peak before either allocation. Rust allocator
                 // failure itself is outside the typed runtime failure contract.
@@ -340,18 +379,33 @@ impl NativeBackend {
                     .ok_or(Limit)?;
                 self.policy().output(peak, usize::MAX).map_err(|_| Limit)?;
                 self.policy().vector(count).map_err(|_| Limit)?;
-                let mut elements = Vec::new();
-                elements.try_reserve_exact(count).map_err(|_| Limit)?;
-                for element in bytes[6..].as_chunks::<32>().0 {
-                    elements.push(
-                        zkc_kernels::arkworks::bls12_381::decode_scalar(element)
-                            .map_err(|_| Invalid(DecodeReason::Scalar))?,
-                    );
+                if ty.representation().name() == "blst/field-array" {
+                    let elements =
+                        zkc_kernels::blst::bls12_381::ScalarVector::from_bytes(&bytes[6..])
+                            .map_err(|e| match e {
+                                zkc_kernels::blst::bls12_381::Error::InvalidEncoding => {
+                                    Invalid(DecodeReason::Scalar)
+                                }
+                                _ => NativeWireError::Backend(crate::operations::blst::failure(e)),
+                            })?;
+                    Value::FieldArray(
+                        crate::FieldArray::from_resident(ty.clone(), std::sync::Arc::new(elements))
+                            .map_err(NativeWireError::Backend)?,
+                    )
+                } else {
+                    let mut elements = Vec::new();
+                    elements.try_reserve_exact(count).map_err(|_| Limit)?;
+                    for element in bytes[6..].as_chunks::<32>().0 {
+                        elements.push(
+                            zkc_kernels::arkworks::bls12_381::decode_scalar(element)
+                                .map_err(|_| Invalid(DecodeReason::Scalar))?,
+                        );
+                    }
+                    Value::FieldArray(
+                        crate::FieldArray::new(ty.clone(), elements.into())
+                            .map_err(NativeWireError::Backend)?,
+                    )
                 }
-                Value::FieldArray(
-                    crate::FieldArray::new(ty.logical(), elements.into())
-                        .map_err(NativeWireError::Backend)?,
-                )
             }
             31 => Value::Index(u64::from_le_bytes(
                 bytes[6..14].try_into().expect("checked index width"),

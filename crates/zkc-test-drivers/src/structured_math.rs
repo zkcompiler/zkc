@@ -21,6 +21,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &std::fs::read(directory.join(format!("{name}.bundle"))).unwrap(),
         &backend("Solo", "admission", "main"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap()
@@ -28,7 +29,10 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
 fn array(values: &[Scalar]) -> Value {
     Value::FieldArray(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            )
+            .unwrap(),
             values.into(),
         )
         .unwrap(),
@@ -38,7 +42,7 @@ fn elements(value: &Value) -> &[Scalar] {
     let Value::FieldArray(array) = value else {
         panic!("expected field array");
     };
-    array.elements()
+    array.ark_elements().unwrap()
 }
 fn scalar(value: &Value) -> Scalar {
     let Value::Field(value) = value else {
@@ -362,6 +366,7 @@ fn sumcheck(directory: &Path, suffix: &str) {
         Bundle::admit(
             value["bundle"].as_str().unwrap().as_bytes(),
             &backend("Solo", "admission", "main"),
+            zkc_native::native_contracts(),
             BundleLimits::default(),
         )
         .unwrap()
@@ -505,6 +510,7 @@ fn permuted_handoff(directory: &Path) {
         Bundle::admit(
             value["bundle"].as_str().unwrap().as_bytes(),
             &backend("Solo", "admission", "main"),
+            zkc_native::native_contracts(),
             BundleLimits::default(),
         )
         .unwrap()

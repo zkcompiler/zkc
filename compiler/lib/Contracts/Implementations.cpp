@@ -2,7 +2,9 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Numerical.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/ResourceUnit.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -378,13 +380,29 @@ Expected<ImplementationCatalog> ImplementationCatalog::create(
       return error("implementation-catalog-entry");
     if (auto e = checkImplementationScope(entry, logical->signature.scope))
       return e;
-    std::set<std::tuple<std::string, std::optional<unsigned>, bool>> overrides;
+    if (entry.family != ImplementationDescriptor::Family::Exact) {
+      StringRef prefix =
+          entry.family == ImplementationDescriptor::Family::Sequence
+              ? "sequence."
+          : entry.family == ImplementationDescriptor::Family::FieldArray
+              ? "field_array."
+              : "fixed_vector.";
+      bool applicable =
+          entry.family == ImplementationDescriptor::Family::Observation
+              ? entry.contract == "transcript.native.indexed.observe.data"
+              : StringRef(entry.contract).starts_with(prefix);
+      if (!applicable || !entry.representations.empty())
+        return error("implementation-catalog-entry");
+    }
+    std::set<
+        std::tuple<std::string, std::string, std::optional<unsigned>, bool>>
+        overrides;
     for (const auto &rep : entry.representations) {
       if (!installedDomains().representation(rep.kind, rep.domain,
                                              rep.identity))
         return error("implementation-catalog-representation");
       if (!implementationProviderSupports(entry.provider, rep.domain) ||
-          !overrides.emplace(rep.kind, rep.port, rep.output).second)
+          !overrides.emplace(rep.kind, rep.domain, rep.port, rep.output).second)
         return error("implementation-catalog-representation");
       if (rep.port) {
         const auto &ports =
@@ -574,11 +592,192 @@ Error applyImplementationRepresentations(const ImplementationDescriptor &entry,
     } else {
       for (auto *ports : {&operation.inputs, &operation.outputs})
         for (auto &port : *ports)
-          if (port.kind == rep.kind)
+          if (port.kind == rep.kind && port.identity == rep.domain)
             if (auto e = replace(port))
               return e;
     }
   }
+  return Error::success();
+}
+
+Expected<std::vector<std::string>>
+defaultPhysicalArguments(const BindingApplication &binding) {
+  auto descriptor =
+      installedImplementations().find(binding.contract, binding.implementation);
+  if (!descriptor ||
+      descriptor->family == ImplementationDescriptor::Family::Exact)
+    return std::vector<std::string>{};
+  auto logical = resolveLogicalBinding(binding);
+  if (!logical)
+    return logical.takeError();
+  if (descriptor->family == ImplementationDescriptor::Family::Observation) {
+    auto payload =
+        operationContracts(binding.contract)->observation->payloadInput;
+    auto selected = defaultRepresentation(logical->inputs[payload]);
+    if (!selected)
+      return selected.takeError();
+    return std::vector<std::string>{selected->spelling()};
+  }
+  StringRef kind =
+      descriptor->family == ImplementationDescriptor::Family::Sequence
+          ? "sequence"
+      : descriptor->family == ImplementationDescriptor::Family::FieldArray
+          ? "field_array"
+          : "fixed_vector";
+  const BoundType *container = nullptr;
+  for (const auto *ports : {&logical->inputs, &logical->outputs})
+    for (const auto &port : *ports)
+      if (!container && port.kind == kind)
+        container = &port;
+  if (!container)
+    return error("binding-representation");
+  if (descriptor->provider == "blst")
+    return std::vector<std::string>{
+        container->spelling() + "@blst/" +
+        (kind == "field_array" ? "field-array" : "fixed-vector") + "[blst/fr]"};
+  auto physical = defaultRepresentation(*container);
+  if (!physical)
+    return physical.takeError();
+  return std::vector<std::string>{physical->spelling()};
+}
+
+Error applyImplementationFamily(const ImplementationDescriptor &entry,
+                                const BindingApplication &binding,
+                                BoundOperation &operation) {
+  using Family = ImplementationDescriptor::Family;
+  if (entry.family == Family::Observation) {
+    if (binding.physicalArguments.size() > 1)
+      return error("binding-representation");
+    auto payload =
+        operationContracts(binding.contract)->observation->payloadInput;
+    auto selected =
+        binding.physicalArguments.empty()
+            ? defaultRepresentation(operation.inputs[payload])
+            : parseBoundType(binding.physicalArguments.front(), true);
+    if (!selected)
+      return selected.takeError();
+    if (!(erasePhysicalType(*selected) == operation.inputs[payload]))
+      return error("binding-representation");
+    if (!nativeMessageData(*selected))
+      return error("native-proof-wire-type");
+    for (auto *ports : {&operation.inputs, &operation.outputs})
+      for (auto [index, port] : enumerate(*ports)) {
+        if (ports == &operation.inputs && index == payload) {
+          port = *selected;
+          continue;
+        }
+        auto physical = defaultRepresentation(port);
+        if (!physical)
+          return physical.takeError();
+        port = std::move(*physical);
+      }
+    return Error::success();
+  }
+  if (entry.family == Family::Exact) {
+    if (!binding.physicalArguments.empty())
+      return error("binding-representation");
+    for (auto *ports : {&operation.inputs, &operation.outputs})
+      for (auto &port : *ports) {
+        auto physical = defaultRepresentation(port);
+        if (!physical)
+          return physical.takeError();
+        port = std::move(*physical);
+      }
+    return applyImplementationRepresentations(entry, operation);
+  }
+  Expected<std::vector<std::string>> parameters = binding.physicalArguments;
+  if (binding.physicalArguments.empty()) {
+    // Empty parameters mean the one installed default layout, independently
+    // of the selected implementation's storage. No provider fallback.
+    StringRef kind = entry.family == Family::Sequence     ? "sequence"
+                     : entry.family == Family::FieldArray ? "field_array"
+                                                          : "fixed_vector";
+    const BoundType *container = nullptr;
+    for (const auto *ports : {&operation.inputs, &operation.outputs})
+      for (const auto &port : *ports)
+        if (!container && port.kind == kind)
+          container = &port;
+    if (!container)
+      return error("binding-representation");
+    auto selected = defaultRepresentation(*container);
+    if (!selected)
+      return selected.takeError();
+    parameters = std::vector<std::string>{selected->spelling()};
+  }
+  if (!parameters)
+    return parameters.takeError();
+  if (parameters->size() != 1)
+    return error("binding-representation");
+  auto selected = parseBoundType(parameters->front(), true);
+  if (!selected)
+    return selected.takeError();
+  StringRef kind = entry.family == Family::Sequence     ? "sequence"
+                   : entry.family == Family::FieldArray ? "field_array"
+                                                        : "fixed_vector";
+  if (selected->kind != kind || !selected->physicalChildren ||
+      selected->physicalChildren->size() != 1)
+    return error("binding-representation");
+  auto logical = erasePhysicalType(*selected);
+  // The first container port is the family's schema. A sequence element may
+  // itself be a sequence, with a different logical schema and child layout.
+  const BoundType *container = nullptr;
+  for (const auto *ports : {&operation.inputs, &operation.outputs})
+    for (const auto &port : *ports)
+      if (!container && port.kind == kind)
+        container = &port;
+  if (!container || !(*container == logical))
+    return error("binding-representation");
+  const auto &element = selected->physicalChildren->front();
+  if (entry.family != Family::Sequence) {
+    StringRef expected =
+        entry.provider == "blst"
+            ? (kind == "field_array" ? "blst/field-array" : "blst/fixed-vector")
+        : entry.provider == "arkworks" ? "arkworks.field-array/0"
+                                       : "plonky3.fixed-vector/0";
+    if (selected->representation != expected)
+      return error("binding-representation");
+  }
+  auto select = [&](BoundType &port, bool output, unsigned index) -> Error {
+    if (port == logical) {
+      port = *selected;
+      return Error::success();
+    }
+    bool elementPort =
+        entry.family == Family::Sequence
+            ? ((binding.contract == "sequence.append" && !output &&
+                index == 1) ||
+               (binding.contract == "sequence.at" && output && index == 0))
+            : port.kind == "field";
+    if (elementPort) {
+      if (!(port == erasePhysicalType(element)))
+        return error("binding-representation");
+      port = element;
+      return Error::success();
+    }
+    if (entry.family != Family::Sequence && port.kind == "vector") {
+      auto physical = parseBoundType(port.spelling() + "@" +
+                                         (entry.provider == "blst" ? "blst/fr"
+                                          : entry.provider == "arkworks"
+                                              ? "arkworks.fr-vector/0"
+                                              : "plonky3.koala-bear-vector/0"),
+                                     true);
+      if (!physical)
+        return physical.takeError();
+      port = std::move(*physical);
+      return Error::success();
+    }
+    auto physical = defaultRepresentation(port);
+    if (!physical)
+      return physical.takeError();
+    port = std::move(*physical);
+    return Error::success();
+  };
+  for (auto [i, port] : enumerate(operation.inputs))
+    if (auto e = select(port, false, i))
+      return e;
+  for (auto [i, port] : enumerate(operation.outputs))
+    if (auto e = select(port, true, i))
+      return e;
   return Error::success();
 }
 
@@ -631,18 +830,77 @@ const ImplementationCatalog &installedImplementations() {
         install(row, domain);
     }
     // Algorithm and layout alternatives do not add a default preference.
-    for (StringRef contract :
-         {"curve.scale", "curve.scale_each", "curve.vector_scale", "curve.msm"})
+    // Resident alternatives have exact ports and deliberately no preference.
+    for (StringRef contract : {"field.constant",
+                               "field.from_index",
+                               "field.add",
+                               "field.sub",
+                               "field.neg",
+                               "field.mul",
+                               "field.inverse",
+                               "field.equal",
+                               "vector.empty",
+                               "vector.append",
+                               "vector.at",
+                               "vector.get",
+                               "vector.length",
+                               "vector.length_check",
+                               "vector.add",
+                               "vector.sub",
+                               "vector.mul",
+                               "vector.dot",
+                               "vector.scale",
+                               "vector.sum",
+                               "vector.product",
+                               "vector.split",
+                               "vector.concat",
+                               "vector.slice",
+                               "vector.equal",
+                               "vector.splat",
+                               "vector.powers",
+                               "vector.bit_reverse",
+                               "vector.bit_reverse_rows",
+                               "vector.constant",
+                               "vector.fill",
+                               "vector.find_last",
+                               "vector.gather",
+                               "vector.geometric",
+                               "vector.interleave",
+                               "vector.inverse",
+                               "vector.kronecker",
+                               "vector.matvec",
+                               "vector.prefix_product",
+                               "vector.prefix_sum",
+                               "vector.rotate",
+                               "vector.scatter_sum",
+                               "vector.transpose"})
       entries.push_back({contract.str(),
-                         ("blst/" + contract).str(),
+                         ("blst/resident/" + contract).str(),
                          "blst",
                          Compatibility::Nominal,
-                         {"bls12-381.g1", "bls12-381.g2"}});
-    entries.push_back({"pairing.check",
-                       "blst/pairing.check",
-                       "blst",
-                       Compatibility::Nominal,
-                       {"bls12-381.fr"}});
+                         {"bls12-381.fr"},
+                         {{"field", "bls12-381.fr", "blst/fr"},
+                          {"vector", "bls12-381.fr", "blst/fr"}}});
+    for (StringRef contract :
+         {"curve.generator", "curve.identity", "curve.add", "curve.neg",
+          "curve.equal", "curve.nonidentity", "curve.scale", "curve.empty",
+          "curve.append", "curve.at", "curve.get", "curve.length",
+          "curve.vector_add", "curve.scale_each", "curve.vector_scale",
+          "curve.split", "curve.concat", "curve.msm", "pairing.check"})
+      entries.push_back(
+          {contract.str(),
+           ("blst/resident/" + contract).str(),
+           "blst",
+           Compatibility::Nominal,
+           contract == "pairing.check"
+               ? std::vector<std::string>{"bls12-381.fr"}
+               : std::vector<std::string>{"bls12-381.g1", "bls12-381.g2"},
+           {{"field", "bls12-381.fr", "blst/fr"},
+            {"vector", "bls12-381.fr", "blst/fr"},
+            {"group", "bls12-381.g1", "blst/g1"},
+            {"groups", "bls12-381.g1", "blst/g1"},
+            {"group", "bls12-381.g2", "blst/g2"},
+            {"groups", "bls12-381.g2", "blst/g2"}}});
     entries.push_back({"vector.dot",
                        "arkworks-pairwise/vector.dot",
                        "arkworks",
@@ -687,6 +945,26 @@ const ImplementationCatalog &installedImplementations() {
          Compatibility::Nominal,
          {"ristretto255.group"},
          {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/0", 1}}});
+    for (StringRef contract : {"field_array.from_vector", "field_array.at",
+                               "field_array.get", "fixed_vector.from_vector",
+                               "fixed_vector.to_vector", "fixed_vector.dot"})
+      entries.push_back({contract.str(),
+                         ("blst/resident/" + contract).str(),
+                         "blst",
+                         Compatibility::Nominal,
+                         {"bls12-381.fr"}});
+    for (auto &entry : entries) {
+      if (entry.contract == "curve.msm" && entry.provider == "blst")
+        entry.requiresExplicitSelection = true;
+      if (entry.contract == "transcript.native.indexed.observe.data")
+        entry.family = ImplementationDescriptor::Family::Observation;
+      if (StringRef(entry.contract).starts_with("sequence."))
+        entry.family = ImplementationDescriptor::Family::Sequence;
+      if (StringRef(entry.contract).starts_with("field_array."))
+        entry.family = ImplementationDescriptor::Family::FieldArray;
+      if (StringRef(entry.contract).starts_with("fixed_vector."))
+        entry.family = ImplementationDescriptor::Family::FixedVector;
+    }
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));
     if (!result)

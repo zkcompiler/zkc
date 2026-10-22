@@ -11,10 +11,11 @@ struct TypeArgument;
 class ImplementationCatalog;
 /// Closed nominal type. Atomic constructors retain the compact identity slot;
 /// an applied constructor instead owns kinded arguments and has no atomic
-/// identity. Representation belongs only to the outer physical value.
+/// identity. Physical children are separate from logical static arguments.
 struct BoundType {
   std::string kind, identity, representation;
   std::vector<TypeArgument> arguments = {};
+  std::shared_ptr<const std::vector<BoundType>> physicalChildren = {};
   bool operator==(const BoundType &other) const;
   std::string spelling() const;
 };
@@ -35,6 +36,13 @@ struct TypeArgument {
 /// Shared across structural arguments and variant payloads during admission.
 struct TypeParseBudget {
   size_t remaining = 200000;
+  size_t metadataRemaining = 64 * 1024 * 1024;
+  bool charge(size_t bytes) {
+    if (bytes > metadataRemaining)
+      return false;
+    metadataRemaining -= bytes;
+    return true;
+  }
   bool consume() {
     if (!remaining)
       return false;
@@ -57,6 +65,13 @@ llvm::Expected<TypeApplication> splitTypeApplication(llvm::StringRef spelling);
 llvm::Expected<BoundType> applyBoundType(llvm::StringRef constructor,
                                          llvm::ArrayRef<std::string> arguments);
 llvm::Expected<BoundType> defaultRepresentation(const BoundType &logical);
+
+inline constexpr size_t PhysicalSpellingBytes = 1024 * 1024;
+BoundType erasePhysicalType(const BoundType &);
+llvm::Expected<std::vector<BoundType>> logicalChildren(const BoundType &);
+llvm::Expected<BoundType> physicalType(const BoundType &logical,
+                                       llvm::StringRef representation,
+                                       std::vector<BoundType> children);
 
 struct BoundOperation {
   std::vector<BoundType> inputs, outputs;

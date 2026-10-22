@@ -13,7 +13,7 @@ using namespace llvm;
 using namespace zkc::protocol;
 
 namespace {
-constexpr size_t lineLimit = 16384;
+constexpr size_t lineLimit = 4 * PhysicalSpellingBytes;
 json::Object refused() { return json::Object{{"accepted", false}}; }
 
 using Resolver = Expected<BoundOperation> (*)(const BindingApplication &, bool);
@@ -88,6 +88,18 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
                         {"discovery", "physical-catalog"},
                         {"implementations", std::move(entries)}};
   }
+  if (request->size() == 1 && request->getString("physical_properties")) {
+    auto type =
+        parseBoundType(*request->getString("physical_properties"), true);
+    if (!type) {
+      consumeError(type.takeError());
+      return refused();
+    }
+    return json::Object{{"accepted", true},
+                        {"copy", duplicable(*type)},
+                        {"drop", discardable(*type)},
+                        {"native_message", nativeMessageData(*type)}};
+  }
   if (request->size() == 1 && request->getString("physical_type")) {
     auto type = parseBoundType(*request->getString("physical_type"), true);
     if (!type) {
@@ -137,8 +149,8 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
   const bool facetQuery =
       request->size() == 2 && request->getString("facets").has_value();
   const bool attributeQuery =
-      request->size() == 5 && request->getArray("attributes");
-  if (!facetQuery && !attributeQuery && request->size() != 4)
+      request->size() == 6 && request->getArray("attributes");
+  if (!facetQuery && !attributeQuery && request->size() != 5)
     return refused();
   auto contract = request->getString(facetQuery ? "facets" : "contract");
   auto implementation = facetQuery ? std::optional<StringRef>("")
@@ -155,6 +167,17 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
     if (!value)
       return refused();
     binding.arguments.push_back(value->str());
+  }
+  if (!facetQuery) {
+    auto parameters = request->getArray("physical_arguments");
+    if (!parameters || parameters->size() > 2)
+      return refused();
+    for (const auto &parameter : *parameters) {
+      auto value = parameter.getAsString();
+      if (!value)
+        return refused();
+      binding.physicalArguments.push_back(value->str());
+    }
   }
   auto signature = resolve(binding, *physical);
   if (!signature) {

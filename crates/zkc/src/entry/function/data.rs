@@ -233,8 +233,7 @@ pub(super) fn pack(
             v.flatten(&mut payload)?;
         }
         let native = Native::Variant(
-            zkc_native::Variant::new(descriptor.clone(), index, payload)
-                .map_err(|e| e.to_string())?,
+            zkc_native::Variant::new(physical, index, payload).map_err(|e| e.to_string())?,
         );
         return Ok(TypedValue {
             schema: host.schema(s),
@@ -621,12 +620,10 @@ pub(super) fn from_output(
                 for value in &values {
                     value.flatten(&mut payload)?;
                 }
-                let descriptor = host.types[&s.leaves[0]]
-                    .variant_descriptor()
-                    .expect("checked variant")
-                    .clone();
+                let physical = PhysicalType::default_for(host.types[&s.leaves[0]].clone())
+                    .map_err(|e| e.to_string())?;
                 let native = Native::Variant(
-                    zkc_native::Variant::new(descriptor, index, payload)
+                    zkc_native::Variant::new(physical, index, payload)
                         .map_err(|e| e.to_string())?,
                 );
                 Payload::Alternative {

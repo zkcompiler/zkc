@@ -43,7 +43,8 @@ class Realizer {
       for (const auto &arg : arguments)
         args.push_back(builder.getStringAttr(arg));
       local::OperationBindingOp::create(builder, loc, name, contract,
-                                        builder.getArrayAttr(args), "");
+                                        builder.getArrayAttr(args), "",
+                                        mlir::ArrayAttr{});
       found = bindings.emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);

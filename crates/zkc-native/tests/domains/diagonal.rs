@@ -117,12 +117,15 @@ fn dead_internal_views_release_after_all_consumers_without_requiring_a_codec() {
         let release = body.remove(3);
         body.insert(2, release);
         assert!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&released).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&backend(Policy::default()))?;
-                    Ok(program)
-                })
-                .is_err()
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&released).unwrap(),
+                zkc_native::native_contracts()
+            )
+            .and_then(|program| {
+                program.check_installation(&backend(Policy::default()))?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
 }
@@ -159,12 +162,15 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         let (base, _) = fixture(d, true);
         let check = |j: Json| {
             assert!(
-                zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
-                    .and_then(|program| {
-                        program.check_installation(&backend(Policy::default()))?;
-                        Ok(program)
-                    })
-                    .is_err(),
+                zkc_runtime::vm::Program::decode(
+                    &serde_json::to_vec(&j).unwrap(),
+                    zkc_native::native_contracts()
+                )
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .is_err(),
                 "{j}"
             )
         };

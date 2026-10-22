@@ -76,8 +76,13 @@ llvm::ArrayRef<AppliedTypeRepresentation> appliedTypeRepresentations() {
   static const TypeArgumentPattern fieldArray[] = {
       {TypeArgument::Kind::Domain, "bls12-381.fr", 0},
       {TypeArgument::Kind::Nat, {}, 1048576, 0}};
+  static const TypeArgumentPattern blsVector[] = {
+      {TypeArgument::Kind::Type, "field:bls12-381.fr", 0},
+      {TypeArgument::Kind::Nat, {}, 1048576}};
   static const AppliedTypeRepresentation values[] = {
       {"field_array", fieldArray, "arkworks.field-array/0", true},
+      {"field_array", fieldArray, "blst/field-array", false},
+      {"fixed_vector", blsVector, "blst/fixed-vector", false},
       {"fixed_vector", koalaBearVector, "plonky3.fixed-vector/0", true}};
   static const bool validated = [] {
     if (auto e = validateAppliedTypeRepresentations(values))

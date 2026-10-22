@@ -651,7 +651,7 @@ fn check_context_data(
                 .map(|s| keys[&s.name].clone());
             let id = match input {
                 InputValue::ProverKey(material) => {
-                    admission.add(Input::Ready(material.operand(
+                    admission.add(Input::ready(material.operand(
                         &ty,
                         selected.as_deref().ok_or("entry-setup-material")?,
                         &backend,

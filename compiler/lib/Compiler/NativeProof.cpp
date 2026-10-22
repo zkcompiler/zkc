@@ -767,7 +767,8 @@ class Emitter {
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&module.getBody().front());
     auto operation = local::OperationBindingOp::create(
-        builder, module.getLoc(), fresh(), contract, parameters, "");
+        builder, module.getLoc(), fresh(), contract, parameters, "",
+        mlir::ArrayAttr{});
     symbols.insert(operation);
     auto ref = FlatSymbolRefAttr::get(operation);
     bindings.try_emplace(key, ref);

@@ -344,9 +344,9 @@ int main() {
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(
         &m.getBody()->front().getRegion(0).front());
-    local::OperationBindingOp::create(builder, m.getLoc(), "extra",
-                                      "control.require",
-                                      builder.getArrayAttr({}), "");
+    local::OperationBindingOp::create(
+        builder, m.getLoc(), "extra", "control.require",
+        builder.getArrayAttr({}), "", mlir::ArrayAttr{});
   });
   cases.run("retained call mutation", [&] {
     auto candidate = copy(*retained);

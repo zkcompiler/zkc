@@ -182,3 +182,81 @@ fn pairing_batches_remove_all_unit_factors_and_preserve_equations() {
         assert!(pairing_check(&vec![G1::identity(); n], &vec![G2::identity(); n]).unwrap());
     }
 }
+
+#[test]
+fn resident_calls_do_not_rebuild_managed_input_vectors() {
+    let scalars = ScalarVector::from_slice(&[Scalar::ONE, Scalar::from(2)]).unwrap();
+    let g1 = G1Vector::filled(2, G1::generator()).unwrap();
+    let g2 = G2Vector::filled(2, G2::generator()).unwrap();
+    let mut scalar_output = ScalarVector::filled(2, Scalar::ZERO).unwrap();
+    let mut g1_output = G1Vector::filled(2, G1::identity()).unwrap();
+    let mut g2_output = G2Vector::filled(2, G2::identity()).unwrap();
+    let _failure = crate::allocation::failure::after(0);
+    // This detects any new adapter-owned reservation on a resident path. It
+    // deliberately does not claim to intercept upstream hidden allocations.
+    for _ in 0..2 {
+        assert_eq!(
+            g1.msm(&scalars).unwrap(),
+            G1::generator().scale(Scalar::from(3))
+        );
+        assert_eq!(
+            g2.msm(&scalars).unwrap(),
+            G2::generator().scale(Scalar::from(3))
+        );
+        scalars.add_into(&scalars, &mut scalar_output).unwrap();
+        scalars.inverse_into(&mut scalar_output).unwrap();
+        g1.scale_each_into(&scalars, &mut g1_output).unwrap();
+        g2.scale_into(Scalar::from(3), &mut g2_output).unwrap();
+        assert!(!pairing_check_bulk(&g1, &g2).unwrap());
+    }
+    // The injection is still pending: none of those paths reserved a buffer.
+    assert_eq!(ScalarVector::filled(1, Scalar::ONE), Err(Error::Allocation));
+}
+
+#[test]
+fn resident_construction_failures_and_empty_cases_are_explicit() {
+    for fail_after in [0, 1] {
+        let _failure = crate::allocation::failure::after(fail_after);
+        assert_eq!(
+            G1::msm(&[Scalar::ONE], &[G1::generator()]),
+            Err(Error::Allocation)
+        );
+    }
+    macro_rules! refusal {
+        ($bulk:ident, $element:expr) => {{
+            let _failure = crate::allocation::failure::after(0);
+            let empty = $bulk::filled(0, $element).unwrap();
+            assert!(empty.is_empty());
+            assert_eq!(empty.storage_bytes(), 0);
+            assert_eq!($bulk::filled(1, $element), Err(Error::Allocation));
+            assert_eq!(
+                $bulk::filled(usize::MAX, $element),
+                Err(Error::CapacityOverflow)
+            );
+            assert_eq!(
+                $bulk::try_from_fn(2, |_| Err(Error::InvalidEncoding)),
+                Err(Error::InvalidEncoding)
+            );
+        }};
+    }
+    refusal!(ScalarVector, Scalar::ZERO);
+    refusal!(G1Vector, G1::identity());
+    refusal!(G2Vector, G2::identity());
+}
+
+#[test]
+fn failed_resident_freeze_releases_numerical_reservations() {
+    let call = crate::numerical::Call::new(crate::numerical::Limits {
+        work: 0,
+        memory: 128,
+        outputs: 64,
+    });
+    let output = call.output(2, Scalar::ZERO, 64).unwrap();
+    let _failure = crate::allocation::failure::after(0);
+    assert_eq!(
+        output.finish(|values| ScalarVector::from_slice(&values)),
+        Err(Error::Allocation)
+    );
+    assert_eq!(call.usage().memory, 0);
+    assert_eq!(call.usage().outputs, 0);
+}

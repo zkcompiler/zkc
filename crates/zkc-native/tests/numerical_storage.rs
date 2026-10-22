@@ -20,6 +20,7 @@ fn binding(domain: domains::NativeDomain, operation: &str) -> OperationBinding {
         contract: operation.into(),
         arguments: vec![domain.field.name().into()],
         implementation: format!("{}/{operation}", domain.provider),
+        physical_arguments: vec![],
     }
 }
 
@@ -414,7 +415,10 @@ fn construction_keeps_element_ceilings_before_output_work_and_memory() {
                     &signature.outputs,
                     &["out".into()],
                 );
-                let error = zkc_runtime::vm::Program::decode(&bytes).err().unwrap();
+                let error =
+                    zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+                        .err()
+                        .unwrap();
                 assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Attributes);
                 assert_eq!(error.detail, "interactive-kernel-parameters");
                 continue;

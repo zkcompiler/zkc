@@ -17,6 +17,7 @@ fn binding(name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![],
         implementation: format!("native/{name}"),
+        physical_arguments: vec![],
     }
 }
 
@@ -104,7 +105,7 @@ fn run<B: Backend<Value = Value>>(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (Result<Vec<Value>, Stop>, Usage, B) {
-    let admitted = Program::decode(bytes).unwrap();
+    let admitted = Program::decode(bytes, zkc_native::native_contracts()).unwrap();
     admitted.check_installation(&caller).unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted, "main", "P", "session", caller, args, values, work,

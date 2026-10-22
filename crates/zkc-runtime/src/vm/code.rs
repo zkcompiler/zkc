@@ -68,7 +68,7 @@ struct Preparation {
 }
 impl Preparation {
     fn binding(&mut self, binding: &Arc<ResolvedBinding>) -> Binding {
-        // ResolvedBinding::explicit derives all facts from this full declaration;
+        // Contracts::resolve derives all facts from this full declaration;
         // neither carrier text nor a caller can supply an independent signature.
         let index = *self
             .indices
@@ -276,14 +276,18 @@ impl Preparation {
                     let arms: Vec<_> = arms
                         .iter()
                         .zip(descriptor.alternatives())
-                        .map(|(arm, declaration)| {
+                        .enumerate()
+                        .map(|(alternative, (arm, _declaration))| {
                             let ports: Ports = arm
                                 .payload
                                 .iter()
                                 .cloned()
-                                .zip(declaration.payload().iter().cloned().map(|t| {
-                                    PhysicalType::default_for(t).expect("admitted payload")
-                                }))
+                                .zip(
+                                    ty.variant_payload(alternative)
+                                        .expect("admitted physical payload")
+                                        .iter()
+                                        .cloned(),
+                                )
                                 .collect();
                             let ports = FrameInputs::with_captures(ports, capture_ports.clone());
                             let (body, outputs) = self.region(&arm.body, ports);

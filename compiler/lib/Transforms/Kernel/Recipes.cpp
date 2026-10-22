@@ -90,9 +90,9 @@ public:
       SmallVector<Attribute> arguments;
       for (auto &argument : application.arguments)
         arguments.push_back(builder.getStringAttr(argument));
-      local::OperationBindingOp::create(builder, location, name,
-                                        application.contract,
-                                        builder.getArrayAttr(arguments), "");
+      local::OperationBindingOp::create(
+          builder, location, name, application.contract,
+          builder.getArrayAttr(arguments), "", mlir::ArrayAttr{});
       found = bindings.emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);

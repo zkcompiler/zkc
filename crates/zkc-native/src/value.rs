@@ -151,6 +151,13 @@ value_inventory! {
     Variant(crate::variant::Variant),
     /// Zero payload; nominal identity and live ownership stay in authenticated metadata.
     ResourceUnit(crate::resource::LogicalUnit),
+    BlstField(zkc_kernels::blst::bls12_381::Scalar),
+    BlstVector(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
+    BlstG1(zkc_kernels::blst::bls12_381::G1),
+    BlstG1Vector(Arc<zkc_kernels::blst::bls12_381::G1Vector>),
+    /// Shared projective G2 keeps cloning inert and the universal slot bounded.
+    BlstG2(Arc<zkc_kernels::blst::bls12_381::G2>),
+    BlstG2Vector(Arc<zkc_kernels::blst::bls12_381::G2Vector>),
     Bn254Field(crate::Bn254Scalar),
     Bn254Vector(Arc<[crate::Bn254Scalar]>),
     Bn254Polynomial(Arc<[crate::Bn254Scalar]>),
@@ -266,6 +273,15 @@ impl Value {
         }
     }
 
+    fn ty_resident_kind(&self) -> Type {
+        match self {
+            Self::BlstField(_) => Type::Field,
+            Self::BlstVector(_) => Type::Vector,
+            Self::BlstG1(_) | Self::BlstG2(_) => Type::Group,
+            Self::BlstG1Vector(_) | Self::BlstG2Vector(_) => Type::Groups,
+            _ => unreachable!("resident kind projection"),
+        }
+    }
     pub fn ty(&self) -> Type {
         self.type_identity().0
     }
@@ -285,6 +301,48 @@ impl Value {
                 Type::ResourceUnit,
                 Identity::None,
                 Representation::ResourceUnit,
+            ),
+            Self::BlstField(_) => (
+                Type::Field,
+                Identity::Bls12381Fr,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381Fr)
+                    .expect("installed resident representation")
+                    .representation(),
+            ),
+            Self::BlstVector(_) => (
+                Type::Vector,
+                Identity::Bls12381Fr,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381Fr)
+                    .expect("installed resident representation")
+                    .representation(),
+            ),
+            Self::BlstG1(_) => (
+                Type::Group,
+                Identity::Bls12381G1,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G1)
+                    .expect("installed resident representation")
+                    .representation(),
+            ),
+            Self::BlstG1Vector(_) => (
+                Type::Groups,
+                Identity::Bls12381G1,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G1)
+                    .expect("installed resident representation")
+                    .representation(),
+            ),
+            Self::BlstG2(_) => (
+                Type::Group,
+                Identity::Bls12381G2,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G2)
+                    .expect("installed resident representation")
+                    .representation(),
+            ),
+            Self::BlstG2Vector(_) => (
+                Type::Groups,
+                Identity::Bls12381G2,
+                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G2)
+                    .expect("installed resident representation")
+                    .representation(),
             ),
             Self::Bn254Field(_) => (Type::Field, Identity::Bn254Fr, Representation::Bn254Fr),
             Self::Bn254Vector(_) => (
@@ -664,8 +722,25 @@ impl Value {
         wire_len: usize,
         policy: &Policy,
     ) -> Result<usize> {
-        if !ty.is_serializable() {
+        if !ty.is_serializable() && !crate::operations::blst::is_resident(&ty) {
             return Err(refused("nonserializable"));
+        }
+        if crate::operations::blst::is_resident(&ty) {
+            policy.wire(wire_len)?;
+            let (wire, memory) = match ty.kind() {
+                Type::Vector => (32, 32),
+                Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
+                    (48, std::mem::size_of::<zkc_kernels::blst::bls12_381::G1>())
+                }
+                Type::Groups => (96, std::mem::size_of::<zkc_kernels::blst::bls12_381::G2>()),
+                _ => {
+                    policy.output(512, usize::MAX)?;
+                    return Ok(512);
+                }
+            };
+            let bytes = size(wire_len / wire, memory)?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
         }
         if ty.kind() == Type::Group && ty.logical().identity() == Identity::Bls12381Gt {
             // Twelve 48-byte coefficients exceed the 512-byte fixed leaf charge.
@@ -782,6 +857,10 @@ impl Value {
             Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
             Self::Binary64Matrix(m) => m.backing().ok()?,
             Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
+            Self::BlstVector(v) => Backing::of(v, bytes),
+            Self::BlstG1Vector(v) => Backing::of(v, bytes),
+            Self::BlstG2Vector(v) => Backing::of(v, bytes),
+            Self::BlstG2(v) => Backing::of(v, bytes),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
@@ -820,6 +899,8 @@ impl Value {
             | Self::OracleStates(..)
             | Self::MerkleTrees(..)
             | Self::ResourceUnit(_)
+            | Self::BlstField(_)
+            | Self::BlstG1(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
@@ -859,6 +940,12 @@ impl Value {
             Self::Variant(_) | Self::Sequence(_) => None,
             Self::FieldArray(..)
             | Self::FixedVector(..)
+            | Self::BlstField(..)
+            | Self::BlstVector(..)
+            | Self::BlstG1(..)
+            | Self::BlstG1Vector(..)
+            | Self::BlstG2(..)
+            | Self::BlstG2Vector(..)
             | Self::Bn254Field(..)
             | Self::Bn254Vector(..)
             | Self::Bn254Polynomial(..)
@@ -970,15 +1057,60 @@ impl Value {
 }
 impl RuntimeValue for Value {
     fn preparation_output(&self) -> bool {
-        // Serializable native data owns all of its immutable backing. Private
-        // capabilities, keys, opening and oracle states have nonserializable types.
-        self.physical_type().is_serializable()
+        fn eligible_type(ty: &PhysicalType) -> bool {
+            if !ty.is_duplicable() || !ty.is_discardable() {
+                return false;
+            }
+            match ty.kind() {
+                Type::Sequence | Type::Variant => {
+                    let representation = if ty.kind() == Type::Sequence {
+                        Representation::Sequence
+                    } else {
+                        Representation::Variant
+                    };
+                    ty.representation() == representation
+                        && ty
+                            .children()
+                            .is_some_and(|children| children.iter().all(eligible_type))
+                }
+                Type::FieldArray => crate::field_array::supports_type(ty),
+                Type::FixedVector => crate::fixed_vector::supports_type(ty),
+                Type::Bool
+                | Type::Index
+                | Type::Field
+                | Type::Group
+                | Type::Vector
+                | Type::Groups
+                | Type::Indices
+                | Type::Bytes
+                | Type::Table
+                | Type::Point
+                | Type::Polynomial
+                | Type::Round
+                | Type::Matrix
+                | Type::Commitment
+                | Type::Proof => {
+                    PhysicalType::default_for(ty.logical()).is_ok_and(|expected| expected == *ty)
+                        || crate::operations::blst::is_resident(ty)
+                }
+                _ => false,
+            }
+        }
+        let ty = self.physical_type();
+        eligible_type(&ty)
+            && self.is_resource_free()
+            && match self {
+                Self::Sequence(v) => v.iter().all(RuntimeValue::preparation_output),
+                Self::Variant(v) => v.payload().iter().all(RuntimeValue::preparation_output),
+                _ => true,
+            }
     }
     fn preparation_parameter(&self) -> Option<Vec<u8>> {
         match self {
             Self::Bool(value) => Some(vec![u8::from(*value)]),
             Self::Index(value) => Some(value.to_le_bytes().to_vec()),
             Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
+            Self::BlstField(value) => Some(value.to_bytes_le().to_vec()),
             Self::Field(value) => zkc_kernels::arkworks::bls12_381::encode_scalar(value)
                 .ok()
                 .map(|v| v.to_vec()),
@@ -1004,25 +1136,37 @@ impl RuntimeValue for Value {
         }
     }
 
-    fn pack_variant(
-        descriptor: Arc<zkc_runtime::vm::VariantDescriptor>,
-        alternative: usize,
-        payload: Vec<Self>,
-    ) -> Result<Self> {
+    fn pack_variant(ty: PhysicalType, alternative: usize, payload: Vec<Self>) -> Result<Self> {
         Ok(Self::Variant(crate::variant::Variant::new(
-            descriptor,
+            ty,
             alternative,
             payload,
         )?))
     }
-    fn unpack_variant(
-        &self,
-    ) -> Result<(Arc<zkc_runtime::vm::VariantDescriptor>, usize, Vec<Self>)> {
+    fn variant_allocation_bound<'a>(
+        ty: &PhysicalType,
+        mut payload: impl ExactSizeIterator<Item = &'a Self>,
+    ) -> usize
+    where
+        Self: 'a,
+    {
+        let length = payload.len();
+        payload
+            .try_fold(0usize, |n, v| n.checked_add(v.retained_bytes()))
+            .and_then(|bytes| crate::variant::Variant::storage_bytes(ty, length, bytes))
+            .and_then(|bytes| {
+                length
+                    .checked_mul(512)
+                    .and_then(|overlap| bytes.checked_add(overlap))
+            })
+            .unwrap_or(usize::MAX)
+    }
+    fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>)> {
         match self {
             Self::Variant(v) => {
                 v.validate()?;
                 Ok((
-                    v.descriptor().clone(),
+                    v.physical_type().clone(),
                     v.alternative(),
                     v.payload().to_vec(),
                 ))
@@ -1056,7 +1200,13 @@ impl RuntimeValue for Value {
             Self::FieldArray(v) => v.physical_type() == expected,
             Self::FixedVector(v) => v.physical_type() == expected,
             Self::Variant(v) => v.physical_type() == expected,
-            Self::Bn254Field(..)
+            Self::BlstField(..)
+            | Self::BlstVector(..)
+            | Self::BlstG1(..)
+            | Self::BlstG1Vector(..)
+            | Self::BlstG2(..)
+            | Self::BlstG2Vector(..)
+            | Self::Bn254Field(..)
             | Self::Bn254Vector(..)
             | Self::Bn254Polynomial(..)
             | Self::Bn254Round(..)
@@ -1169,11 +1319,17 @@ impl RuntimeValue for Value {
         }
         let (kind, identity, representation) = self.type_identity();
         let logical = LogicalType::new(kind, identity).expect("intrinsic payload type");
+        if matches!(representation, Representation::Extension(_)) {
+            return crate::operations::blst::physical(kind, identity)
+                .expect("intrinsic resident leaf value");
+        }
         PhysicalType::new(logical, representation).expect("intrinsic represented leaf value")
     }
 
     fn validate_serializable(&self) -> Result<()> {
-        if !self.physical_type().is_serializable() {
+        if !self.physical_type().is_serializable()
+            && !crate::operations::blst::is_resident(&self.physical_type())
+        {
             return Err(refused("nonserializable"));
         }
         Ok(())
@@ -1198,6 +1354,18 @@ impl RuntimeValue for Value {
             }
             Self::MerkleTree(t) => t.retained_bytes(),
             Self::MerkleTrees(_, trees) => crate::merkle::states_bytes(trees),
+            Self::BlstVector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::BlstG1Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::BlstG2Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
             Self::Bn254Matrix(m) => m.retained_bytes(),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => size(v.len(), 32),
             Self::Bn254G1Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G1>()),
@@ -1236,7 +1404,10 @@ impl RuntimeValue for Value {
             Self::Proof(p) => payload_bytes(Type::Proof, p.metadata().arity()),
             Self::ProverKey(k) => prover_key_bytes(k.metadata().arity()),
             Self::VerifierKey(k) => payload_bytes(Type::VerifierKey, k.metadata().arity()),
-            Self::Bn254Field(_)
+            Self::BlstField(_)
+            | Self::BlstG1(_)
+            | Self::BlstG2(_)
+            | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
             | Self::Bn254Gt(_)
@@ -1276,11 +1447,11 @@ impl RuntimeValue for Value {
             Self::Variant(v) => Ok(v.retained_parts(shared)),
             Self::FieldArray(v) => v.backing().map(|backing| {
                 shared(backing);
-                crate::field_array::owned_bytes()
+                v.owned_bytes()
             }),
             Self::FixedVector(v) => v.backing().map(|backing| {
                 shared(backing);
-                crate::fixed_vector::owned_bytes()
+                v.owned_bytes()
             }),
             Self::FrDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
             Self::RistrettoDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
@@ -1470,7 +1641,12 @@ mod custody_traversal_tests {
             json!([["inactive", []], ["active", types]]),
         ))
         .unwrap();
-        Value::pack_variant(logical.variant_descriptor().unwrap().clone(), 1, values).unwrap()
+        Value::pack_variant(
+            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            1,
+            values,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -1491,7 +1667,11 @@ mod custody_traversal_tests {
         let token = rng.capability().unwrap().clone();
         let sequence = Value::Sequence(
             crate::Sequence::new(
-                LogicalType::parse("index").unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("index").unwrap())
+                        .unwrap(),
+                )
+                .unwrap(),
                 vec![Value::Index(1), Value::Index(2)],
                 &Policy::default(),
             )
@@ -1567,11 +1747,26 @@ mod retained_parts_tests {
             json!([["inactive", []], ["active", types]]),
         ))
         .unwrap();
-        Value::pack_variant(logical.variant_descriptor().unwrap().clone(), 1, values).unwrap()
+        Value::pack_variant(
+            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            1,
+            values,
+        )
+        .unwrap()
     }
     fn sequence(values: Vec<Value>) -> Value {
         let element = values[0].physical_type().logical().clone();
-        Value::Sequence(crate::Sequence::new(element, values, &Policy::default()).unwrap())
+        Value::Sequence(
+            crate::Sequence::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(element).unwrap(),
+                )
+                .unwrap(),
+                values,
+                &Policy::default(),
+            )
+            .unwrap(),
+        )
     }
 
     #[test]
@@ -1590,7 +1785,10 @@ mod retained_parts_tests {
         ));
         let array = Value::FieldArray(
             crate::FieldArray::new(
-                LogicalType::field_array(Identity::Bls12381Fr, 8).unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    LogicalType::field_array(Identity::Bls12381Fr, 8).unwrap(),
+                )
+                .unwrap(),
                 scalars.clone(),
             )
             .unwrap(),
@@ -1676,7 +1874,7 @@ mod retained_parts_tests {
         );
         // Sequences cannot hold capabilities at all.
         let element = resourced.physical_type().logical().clone();
-        assert!(crate::Sequence::new(element, vec![resourced], &Policy::default()).is_err());
+        assert!(LogicalType::sequence(element).is_err());
         assert_eq!(Value::Index(1).validation_backing(), None);
         let vector = Value::KoalaBearVector(vec![crate::KoalaBear::new(1); 4].into());
         assert_eq!(vector.validation_backing(), Some(parts(&vector).1[0]));

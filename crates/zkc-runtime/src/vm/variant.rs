@@ -198,7 +198,6 @@ pub struct VariantDescriptor {
     discardable: bool,
     native_message_data: bool,
     program_port: bool,
-    default_representation: Result<()>,
 }
 impl VariantDescriptor {
     pub fn spelling(&self) -> &str {
@@ -237,9 +236,6 @@ impl VariantDescriptor {
     }
     pub(super) fn is_program_port(&self) -> bool {
         self.program_port
-    }
-    pub(super) fn default_representation(&self) -> Result<()> {
-        self.default_representation.clone()
     }
     fn compute_retained_bytes(&self) -> usize {
         const {
@@ -360,10 +356,6 @@ impl VariantDescriptor {
                 .iter()
                 .flat_map(|a| &a.payload)
                 .all(|t| t.is_duplicable() && t.is_program_port()),
-            default_representation: alternatives
-                .iter()
-                .flat_map(|a| &a.payload)
-                .try_for_each(|t| super::PhysicalType::default_for(t.clone()).map(|_| ())),
             alternatives: alternatives.into_boxed_slice(),
             retained_bytes: 0,
         };

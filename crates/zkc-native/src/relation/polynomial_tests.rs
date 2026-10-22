@@ -959,6 +959,7 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
                 contract: contract.into(),
                 arguments: vec![field.into(), table.into()],
                 implementation: format!("plonky3/{contract}"),
+                physical_arguments: vec![],
             };
             let got = signature(&binding);
             assert_eq!(got.is_some(), accepted);
@@ -981,6 +982,7 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
                 contract: contract.into(),
                 arguments: vec![field.into(), "0".into()],
                 implementation: format!("plonky3/{contract}"),
+                physical_arguments: vec![],
             };
             let got = signature(&binding).unwrap();
             assert_eq!((got.inputs.len(), got.outputs.len()), (inputs, 1));

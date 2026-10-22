@@ -492,10 +492,14 @@ fn check_index_range(function: &Function, bound: u64) -> Result<()> {
     Ok(())
 }
 
-fn verifier_function(function: &Function) -> Result<()> {
-    construction_function(function, &[])
+fn verifier_function(function: &Function, contracts: &super::Contracts) -> Result<()> {
+    construction_function(function, &[], contracts)
 }
-fn source_transcript_function(function: &Function, state: Option<&PhysicalType>) -> Result<()> {
+fn source_transcript_function(
+    function: &Function,
+    state: Option<&PhysicalType>,
+    contracts: &super::Contracts,
+) -> Result<()> {
     let mut managed = function
         .inputs
         .iter()
@@ -521,12 +525,20 @@ fn source_transcript_function(function: &Function, state: Option<&PhysicalType>)
         }
     }
     if managed {
-        construction_function(function, state.map(std::slice::from_ref).unwrap_or(&[]))?;
+        construction_function(
+            function,
+            state.map(std::slice::from_ref).unwrap_or(&[]),
+            contracts,
+        )?;
     }
     Ok(())
 }
-fn construction_function(function: &Function, state: &[PhysicalType]) -> Result<()> {
-    let permitted = |t: &PhysicalType| verifier_data(t) || state.contains(t);
+fn construction_function(
+    function: &Function,
+    state: &[PhysicalType],
+    contracts: &super::Contracts,
+) -> Result<()> {
+    let permitted = |t: &PhysicalType| verifier_data(t, contracts) || state.contains(t);
     if function.inputs.iter().any(|(_, t)| !permitted(t))
         || function.outputs.iter().any(|t| !permitted(t))
     {
@@ -548,14 +560,19 @@ fn construction_function(function: &Function, state: &[PhysicalType]) -> Result<
     Ok(())
 }
 
-fn verifier_data(ty: &PhysicalType) -> bool {
+fn verifier_data(ty: &PhysicalType, contracts: &super::Contracts) -> bool {
+    // Selected storage, including every aggregate child, needs its own exact
+    // permission. Logical default children cannot authorize selected storage.
+    if PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty) {
+        return contracts.permits_wire(ty, super::WireCodec::Native);
+    }
     // Private copyable snapshots are local computation data. Wire admission
     // remains a separate boundary; a verifier can initialize its own snapshot.
     if ty.kind() == Type::Shake128State {
         return true;
     }
     let local = |logical: &super::LogicalType| {
-        PhysicalType::default_for(logical.clone()).is_ok_and(|t| verifier_data(&t))
+        PhysicalType::default_for(logical.clone()).is_ok_and(|t| verifier_data(&t, contracts))
     };
     if let Some(element) = ty.logical().sequence_element() {
         return local(element);
@@ -567,7 +584,8 @@ fn verifier_data(ty: &PhysicalType) -> bool {
             .flat_map(|a| a.payload())
             .all(local);
     }
-    ty.is_serializable()
+    contracts.permits_wire(ty, super::WireCodec::Native)
+        || ty.is_serializable()
         || ty.has_native_array_frame()
         || verifier_key(ty)
         || ty.has_native_data_frame()
@@ -705,7 +723,10 @@ impl ProofWalk<'_> {
                     } else {
                         self.ordinary(inputs)?;
                         if self.validating {
-                            verifier_function(&self.admitted.program.functions[function])?;
+                            verifier_function(
+                                &self.admitted.program.functions[function],
+                                self.admitted.contracts(),
+                            )?;
                         }
                     }
                 }
@@ -956,7 +977,7 @@ impl NativeProofEntry {
                 // Ordinary source definitions may remain after adapter cloning.
                 // They can use checked managed methods, never generated origins.
                 // Only planned adapter/start calls may consume the live chain.
-                source_transcript_function(function, transcript.as_ref())?;
+                source_transcript_function(function, transcript.as_ref(), admitted.contracts())?;
                 continue;
             }
             if let Some(checked) = helper(function, transcript.as_ref(), entry, validator)? {
@@ -999,7 +1020,7 @@ impl NativeProofEntry {
                         .get(&adapter.symbol)
                         .ok_or_else(|| refuse("native-proof-construction-helper"))?;
                     let helper = custom_helper(function, &plan.state, group, entry, validator)?;
-                    construction_function(function, &plan.state)?;
+                    construction_function(function, &plan.state, admitted.contracts())?;
                     helpers.insert(adapter.symbol.clone(), helper);
                 }
             }
@@ -1069,7 +1090,9 @@ impl NativeProofEntry {
                 } = action
                 {
                     if !ty.logical().is_native_message_data()
-                        || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty)
+                        || !admitted
+                            .contracts()
+                            .permits_wire(ty, super::WireCodec::Native)
                     {
                         return Err(refuse("native-proof-wire-type"));
                     }
@@ -1188,7 +1211,11 @@ impl NativeProofEntry {
                     }
                     // These are shared construction roots even in a producer-only
                     // deployment; the absent verifier cannot supply this check.
-                    construction_function(&admitted.program.functions[function], &plan.state)?;
+                    construction_function(
+                        &admitted.program.functions[function],
+                        &plan.state,
+                        admitted.contracts(),
+                    )?;
                     root_definitions.extend(outputs.iter().cloned());
                     body = &body[1..];
                     Ok(outputs.clone())
@@ -1299,13 +1326,13 @@ impl NativeProofEntry {
                     !validating,
                 )?;
             }
-            if participant.inputs[..ordinary_inputs]
-                .iter()
-                .any(|(_, t)| t.kind() == Type::Transcript || validating && !verifier_data(t))
-                || participant.outputs[..ordinary_outputs]
-                    .iter()
-                    .any(|t| t.kind() == Type::Transcript || validating && !verifier_data(t))
-            {
+            if participant.inputs[..ordinary_inputs].iter().any(|(_, t)| {
+                t.kind() == Type::Transcript
+                    || validating && !verifier_data(t, admitted.contracts())
+            }) || participant.outputs[..ordinary_outputs].iter().any(|t| {
+                t.kind() == Type::Transcript
+                    || validating && !verifier_data(t, admitted.contracts())
+            }) {
                 return Err(refuse("native-proof-state-ports"));
             }
             let mut walk = ProofWalk {

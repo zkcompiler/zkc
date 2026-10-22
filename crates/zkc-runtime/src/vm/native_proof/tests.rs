@@ -82,7 +82,11 @@ impl Fixture {
         public: &[usize],
         acceptance: usize,
     ) -> Result<NativeProofEntry> {
-        let program = Program::decode(self.program.to_string().as_bytes()).unwrap();
+        let program = Program::decode(
+            self.program.to_string().as_bytes(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .unwrap();
         let construction = ProofConstruction {
             suite: self.suite,
             events: &self.events,
@@ -123,24 +127,27 @@ impl Fixture {
         f.events = vec![observe.clone(), query.clone(), delivery.clone()];
         f.suite = Some(SUITE);
         f.program[1] = json!([
-            ["empty", "indices.empty", [], "native/indices.empty"],
+            ["empty", "indices.empty", [], "native/indices.empty", []],
             [
                 "op_observe",
                 observe.contract,
                 [SUITE, "bool"],
-                "arkworks/transcript.native.indexed.observe.data"
+                "arkworks/transcript.native.indexed.observe.data",
+                []
             ],
             [
                 "op_challenge",
                 query.contract,
                 [SUITE],
-                "arkworks/transcript.native.indexed.challenge"
+                "arkworks/transcript.native.indexed.challenge",
+                []
             ],
             [
                 "op_delivery",
                 delivery.contract,
                 [SUITE, "field:bls12-381.fr"],
-                "arkworks/transcript.native.indexed.observe.data"
+                "arkworks/transcript.native.indexed.observe.data",
+                []
             ]
         ]);
         f.program[2] = json!([
@@ -310,9 +317,9 @@ impl Fixture {
         let bytes = "bytes@native.bytes/0";
         let index = "index@native.index/0";
         f.program[1] = json!([
-            ["empty", "bytes.empty", [], "native/bytes.empty"],
-            ["slice_bytes", "bytes.slice", [], "native/bytes.slice"],
-            ["zero", "index.constant", [], "native/index.constant"]
+            ["empty", "bytes.empty", [], "native/bytes.empty", []],
+            ["slice_bytes", "bytes.slice", [], "native/bytes.slice", []],
+            ["zero", "index.constant", [], "native/index.constant", []]
         ]);
         let functions = f.program[2].as_array_mut().unwrap();
         functions.extend([
@@ -812,7 +819,11 @@ fn wrong_operation_endpoint_inventory_and_acceptance_refuse() {
     ] {
         let f = Fixture::authored().selected(operation);
         let maps = f.maps();
-        let program = Program::decode(f.program.to_string().as_bytes()).unwrap();
+        let program = Program::decode(
+            f.program.to_string().as_bytes(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .unwrap();
         assert_eq!(
             NativeProofEntry::new_for_operation(
                 program,
@@ -902,7 +913,13 @@ fn selected_event_order_origin_state_and_wire_correspondence_refuse() {
         let mut f = Fixture::native().selected(operation);
         f.program[3][0][6][2][3] = json!(["t"]);
         // General SSA admission refuses the consumed affine predecessor.
-        assert!(Program::decode(f.program.to_string().as_bytes()).is_err());
+        assert!(
+            Program::decode(
+                f.program.to_string().as_bytes(),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .is_err()
+        );
         let mut f = Fixture::authored().selected(operation);
         f.program[3][0][6][0][3] = json!("Other");
         assert_eq!(
@@ -977,7 +994,8 @@ fn verifier_executes_without_opposite_runtime_dependencies_and_checks_all_reache
         "constant",
         "field.constant",
         ["bls12-381.fr"],
-        "arkworks/field.constant"
+        "arkworks/field.constant",
+        []
     ]]);
     f.program[2] = json!([
         [

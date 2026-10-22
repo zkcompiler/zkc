@@ -465,6 +465,7 @@ impl ProofEntry {
             &self.interface,
             role,
             &public,
+            self.native.public_types(),
             request.private.inputs,
             capacity,
         )?;

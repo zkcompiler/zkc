@@ -15,11 +15,23 @@ pub(super) fn mul(a: usize, b: usize) -> Result<usize> {
 pub(super) fn invalid(reason: DecodeReason) -> Error {
     Error::Invalid(reason)
 }
-fn physical(ty: &zkc_runtime::vm::LogicalType) -> Result<PhysicalType> {
-    PhysicalType::default_for(ty.clone()).map_err(|_| unsupported())
-}
 pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
-    if !ty.has_native_data_frame() {
+    if !ty.logical().is_native_message_data() {
+        return None;
+    }
+    if matches!(ty.kind(), Type::Sequence | Type::Variant) {
+        let storage = match ty.kind() {
+            Type::Sequence => zkc_runtime::vm::Representation::Sequence,
+            _ => zkc_runtime::vm::Representation::Variant,
+        };
+        if ty.representation() != storage
+            || !ty
+                .children()
+                .is_some_and(|children| children.iter().all(super::has_native_wire))
+        {
+            return None;
+        }
+    } else if !ty.has_native_data_frame() {
         return None;
     }
     match ty.kind() {
@@ -65,24 +77,20 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
         counts.admit(policy)?;
         match value {
             Value::Sequence(v) => {
-                let logical = ty.logical();
-                let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
+                let element = ty.sequence_element().ok_or_else(unsupported)?;
                 for child in v.iter() {
-                    visit(&element, child, policy, counts)?;
+                    visit(element, child, policy, counts)?;
                 }
             }
             Value::Variant(v) => {
-                let logical = ty.logical();
-                let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
-                let arm = descriptor
-                    .alternatives()
-                    .get(v.alternative())
+                let arm = ty
+                    .variant_payload(v.alternative())
                     .ok_or_else(unsupported)?;
-                if arm.payload().len() != v.payload().len() {
+                if arm.len() != v.payload().len() {
                     return Err(unsupported());
                 }
-                for (leaf, child) in arm.payload().iter().zip(v.payload()) {
-                    visit(&physical(leaf)?, child, policy, counts)?;
+                for (leaf, child) in arm.iter().zip(v.payload()) {
+                    visit(leaf, child, policy, counts)?;
                 }
             }
             Value::Indices(v) => counts.add(v.len(), 0)?,
@@ -134,8 +142,8 @@ fn internal_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
         Value::KoalaBearExt8Polynomial(v) => (v.len(), 0),
         Value::Binary64Polynomial(v) => (v.len(), 0),
         Value::Binary64Ext3Polynomial(v) => (v.len(), 0),
-        Value::FieldArray(v) => (v.elements().len(), 0),
-        Value::FixedVector(v) => (v.elements().len(), 0),
+        Value::FieldArray(v) => (v.len(), 0),
+        Value::FixedVector(v) => (v.len(), 0),
         Value::Round(_)
         | Value::Bn254Round(_)
         | Value::RistrettoRound(_)
@@ -347,17 +355,16 @@ pub(super) fn scan(
             if n > (bytes.len() - 10) / 4 {
                 return Err(invalid(DecodeReason::Length));
             }
-            let logical = ty.logical();
-            let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
+            let element = ty.sequence_element().ok_or_else(unsupported)?;
             let mut total = add(
-                add(add(256, logical.descriptor_bytes())?, mul(n, 512)?)?,
+                add(add(256, ty.descriptor_bytes())?, mul(n, 512)?)?,
                 crate::sequence::tree_overhead(n).map_err(|_| Error::Limit)?,
             )?;
             let mut rest = &bytes[10..];
             for _ in 0..n {
                 total = add(
                     total,
-                    scan(&element, child(&mut rest)?, policy, key, counts)?,
+                    scan(element, child(&mut rest)?, policy, key, counts)?,
                 )?;
             }
             if !rest.is_empty() {
@@ -367,22 +374,13 @@ pub(super) fn scan(
             return Ok(total);
         }
         if tag == 65 {
-            let logical = ty.logical();
-            let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
-            let arm = descriptor
-                .alternatives()
-                .get(n)
+            let arm = ty
+                .variant_payload(n)
                 .ok_or_else(|| invalid(DecodeReason::Header))?;
-            let mut total = add(
-                descriptor.retained_bytes(),
-                add(256, mul(arm.payload().len(), 512)?)?,
-            )?;
+            let mut total = add(ty.descriptor_bytes(), add(256, mul(arm.len(), 512)?)?)?;
             let mut rest = &bytes[10..];
-            for leaf in arm.payload() {
-                total = add(
-                    total,
-                    scan(&physical(leaf)?, child(&mut rest)?, policy, key, counts)?,
-                )?;
+            for leaf in arm {
+                total = add(total, scan(leaf, child(&mut rest)?, policy, key, counts)?)?;
             }
             if !rest.is_empty() {
                 return Err(invalid(DecodeReason::Length));
@@ -439,7 +437,10 @@ pub(super) fn scan(
     let charge = add(512, mul(bytes.len(), 4)?)?;
     if let Some((_, length)) = ty.logical().field_array_parts() {
         // Empty/small arrays retain the complete physical-type wrapper too.
-        Ok(charge.max(crate::field_array::bytes(length as usize).map_err(|_| Error::Limit)?))
+        Ok(charge.max(add(
+            crate::field_array::bytes(length as usize).map_err(|_| Error::Limit)?,
+            ty.descriptor_bytes(),
+        )?))
     } else {
         Ok(charge)
     }
@@ -450,32 +451,28 @@ fn read(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Result<Valu
     };
     let n = header(bytes, tag)?;
     if tag == 69 {
-        let logical = ty.logical();
-        let element = logical.sequence_element().ok_or_else(unsupported)?;
-        let physical = physical(element)?;
+        let physical = ty.sequence_element().ok_or_else(unsupported)?;
         let mut values = Vec::new();
         values.try_reserve_exact(n).map_err(|_| Error::Limit)?;
         let mut rest = &bytes[10..];
         for _ in 0..n {
-            values.push(read(backend, &physical, child(&mut rest)?)?);
+            values.push(read(backend, physical, child(&mut rest)?)?);
         }
-        return crate::Sequence::new(element.clone(), values, backend.policy())
+        return crate::Sequence::new(ty.clone(), values, backend.policy())
             .map(Value::Sequence)
             .map_err(Error::Backend);
     }
     if tag == 65 {
-        let logical = ty.logical();
-        let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
-        let arm = &descriptor.alternatives()[n];
+        let arm = ty.variant_payload(n).ok_or_else(unsupported)?;
         let mut payload = Vec::new();
         payload
-            .try_reserve_exact(arm.payload().len())
+            .try_reserve_exact(arm.len())
             .map_err(|_| Error::Limit)?;
         let mut rest = &bytes[10..];
-        for leaf in arm.payload() {
-            payload.push(read(backend, &physical(leaf)?, child(&mut rest)?)?);
+        for leaf in arm {
+            payload.push(read(backend, leaf, child(&mut rest)?)?);
         }
-        return crate::Variant::new(descriptor.clone(), n, payload)
+        return crate::Variant::new(ty.clone(), n, payload)
             .map(Value::Variant)
             .map_err(Error::Backend);
     }

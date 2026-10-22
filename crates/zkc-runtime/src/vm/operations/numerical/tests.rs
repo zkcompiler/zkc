@@ -4,6 +4,7 @@ use serde_json::{Value as Json, json};
 
 fn binding(field: &str, provider: &str, mode: &str, mask: &str) -> OperationBinding {
     OperationBinding {
+        physical_arguments: vec![],
         contract: format!("numerical.{mode}"),
         arguments: vec![field.into(), mask.into()],
         implementation: format!("{provider}/numerical.{mode}"),
@@ -53,6 +54,7 @@ fn numerical_logical_ports_preserve_positional_zeroes_and_exact_fields() {
                 for wrong in ["arkworks", "dalek", "plonky3", "missing"] {
                     assert_eq!(
                         OperationBinding {
+                            physical_arguments: vec![],
                             implementation: format!("{wrong}/numerical.{mode}"),
                             ..binding.clone()
                         }
@@ -67,6 +69,7 @@ fn numerical_logical_ports_preserve_positional_zeroes_and_exact_fields() {
     let valid = binding("koala-bear", "plonky3", "map", "");
     assert_eq!(
         OperationBinding {
+            physical_arguments: vec![],
             arguments: vec!["koala-bear".into(), "0".repeat(1023)],
             ..valid.clone()
         }
@@ -133,7 +136,8 @@ fn program(binding: &OperationBinding, parameters: &[String], dormant: bool) -> 
             "expr",
             binding.contract,
             binding.arguments,
-            binding.implementation
+            binding.implementation,
+            binding.physical_arguments
         ]],
         [[
             "function",
@@ -166,7 +170,13 @@ fn admission_checks_the_actual_body_and_dormant_branches() {
     let binding = binding("koala-bear", "plonky3", "map", "1");
     let valid = json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string();
     for dormant in [false, true] {
-        assert!(Program::decode(&program(&binding, std::slice::from_ref(&valid), dormant)).is_ok());
+        assert!(
+            Program::decode(
+                &program(&binding, std::slice::from_ref(&valid), dormant),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .is_ok()
+        );
         for parameters in [
             vec![],
             vec![valid.clone(), valid.clone()],
@@ -188,9 +198,12 @@ fn admission_checks_the_actual_body_and_dormant_branches() {
             vec!["not a Ring body".into()],
         ] {
             assert_eq!(
-                Program::decode(&program(&binding, &parameters, dormant))
-                    .unwrap_err()
-                    .code,
+                Program::decode(
+                    &program(&binding, &parameters, dormant),
+                    &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+                )
+                .unwrap_err()
+                .code,
                 ErrorCode::Attributes
             );
         }
@@ -232,7 +245,13 @@ fn canonical_body_byte_boundary_is_exact() {
     let binding = binding("bls12-381.fr", "arkworks", "map", "");
     let exact = body_with_bytes(4096);
     assert_eq!(exact.len(), 4096);
-    assert!(Program::decode(&program(&binding, &[exact], false)).is_ok());
+    assert!(
+        Program::decode(
+            &program(&binding, &[exact], false),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .is_ok()
+    );
     let over = body_with_bytes(4097);
     assert!(Expression::parse(&over).is_ok());
     assert_eq!(

@@ -132,6 +132,14 @@ and setup authority independently of candidate proof bytes and producer witness.
 require independently pinned registry/key material. Generated types describe
 data shape and do not grant authority.
 
+Public data uses the complete physical types selected by the admitted Program,
+including inactive variant children. Producer and validator occurrences of a
+shared public source port must select the same physical type. Named and
+positional calls decode wire data into that selection and require Native and
+Prepared values to match it exactly; source constructor and custody checks still
+apply. Public binding uses the canonical native bytes for the logical value.
+This admission requires an installed native wire codec for the complete type.
+
 The default `BindingPolicy::TranscriptRequired` requires compiler-derived
 transcript binding. The example's `AllowAuthored` opts into the protocol author's
 binding policy and Host header checks. It does not establish cryptographic
@@ -153,6 +161,19 @@ Changing the independent statement refuses with `proof-header`; it cannot be
 used to reinterpret a candidate. A source `Core::verify` call instead returns its
 source `Accepted` or `Rejected` variant when verification completes, so a
 `Rejected` value can be the successful result of the outer function.
+
+## Independently installed backends
+
+`entry::BackendRun` binds an authenticated run package to an explicit immutable
+`zkc_runtime::vm::Contracts` context and an independently installed
+`WireBackend`. It checks the source interface and logical participant ABI, then
+reuses the Runtime joint Host. Calls supply typed backend values in that ABI's
+order. Each executing backend is linked independently before frame entry.
+
+This small adapter supports data-only run packages. Setup assets, services and
+proof packages require their owning adapters and refuse here. Typed values do
+not bypass source constructor or custody restrictions. Native applications keep
+the named, schema-driven `RunEntry` and `FunctionEntry` APIs described above.
 
 ## Files and optional compiler service
 

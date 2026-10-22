@@ -343,7 +343,7 @@ pub(super) fn prepare<'a>(
     // The authorized registry retains even receive-only keys, independently
     // of whether an entry operand uses them. Charge that material once.
     for key in keys.values() {
-        admission.add(Input::Ready(Value::VerifierKey(key.clone())))?;
+        admission.add(Input::ready(Value::VerifierKey(key.clone())))?;
     }
     for (row, role) in request.roles.iter().zip(host.bundle.roles()) {
         let mut ports = BTreeMap::new();
@@ -412,9 +412,9 @@ pub(super) fn prepare<'a>(
                     if value.physical_type() != *ty {
                         return Err("bundle-input-type".into());
                     }
-                    admission.add(Input::Ready(value))?
+                    admission.add(Input::ready(value))?
                 }
-                InputValue::ProverKey(material) => admission.add(Input::Ready(
+                InputValue::ProverKey(material) => admission.add(Input::ready(
                     material.operand(ty, selected.ok_or("bundle-setup-input")?, &backend)?,
                 ))?,
                 InputValue::ProverKeyInput { file, fingerprint } => admission.add(Input::Key {

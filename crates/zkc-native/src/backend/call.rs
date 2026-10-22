@@ -69,7 +69,17 @@ impl NativeCall {
             .ok_or_else(|| refused("kernel-operands"))?
             .logical()
             .identity();
-        let value = crate::operations::field::decode_literal(field, attributes)?;
+        let value = if signature
+            .outputs
+            .first()
+            .is_some_and(crate::operations::blst::is_resident)
+        {
+            crate::operations::field::literal::<zkc_kernels::blst::bls12_381::ScalarElement>(
+                attributes,
+            )?
+        } else {
+            crate::operations::field::decode_literal(field, attributes)?
+        };
         // Failed decoding must neither publish a partial replacement nor use
         // the previous successful scalar for this invocation.
         *slot = Some(Self {
@@ -327,6 +337,7 @@ mod tests {
 
     fn expression_binding(field: &str, provider: &str) -> Arc<CallBinding> {
         let declaration = zkc_runtime::vm::OperationBinding {
+            physical_arguments: vec![],
             contract: "numerical.map".into(),
             arguments: vec![field.into(), "1".into()],
             implementation: format!("{provider}/numerical.map"),

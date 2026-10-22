@@ -53,16 +53,31 @@ impl Core {
             }
             Value::FieldArray(value) => {
                 value.validate()?;
-                self.policy.vector(value.elements().len())?;
+                self.policy.vector(value.len())?;
                 None
             }
             Value::FixedVector(value) => {
                 value.validate()?;
-                self.policy.vector_width(value.elements().len(), 4)?;
+                self.policy
+                    .vector_width(value.len(), value.element_width())?;
                 None
             }
             Value::Bn254Matrix(m) => {
                 m.policy(&self.policy)?;
+                None
+            }
+            Value::BlstVector(v) => {
+                self.policy.vector(v.len())?;
+                None
+            }
+            Value::BlstG1Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::blst::bls12_381::G1>(v.len())?;
+                None
+            }
+            Value::BlstG2Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::blst::bls12_381::G2>(v.len())?;
                 None
             }
             Value::Bn254Vector(v) => {
@@ -274,6 +289,9 @@ impl Core {
             | Value::Bn254G1(..)
             | Value::Bn254Gt(..)
             | Value::Bn254G2(..)
+            | Value::BlstField(..)
+            | Value::BlstG1(..)
+            | Value::BlstG2(..)
             | Value::Bls12381G2(..)
             | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)

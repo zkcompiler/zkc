@@ -28,11 +28,19 @@ The complete logical message grammar is:
 - `sequence<T>` with `T` recursively in this grammar. The
   [nested-data profile](../ir/data.md) defines its storage and framing.
 
-Only each type's installed default physical representation is admitted.
+Transport requires the admitted `Contracts` context's positive permission for
+both the complete physical layout and the selected codec, plus independently
+checked support from the actual backend. Native contributes the default layouts
+and resident blst Fr, G1 and G2 scalar/vector layouts. Standard sequence and
+variant storage accepts selected children only when every stored child layout,
+including inactive alternatives, has that permission. A contributed aggregate
+storage owner must separately authorize its frame family; Native does this for
+resident BLS field arrays. Fixed vectors remain local-only.
+
 One-alternative variants are records. Existing variant formation, descriptor
 identity, nesting and expansion bounds apply. Peer bytes supply no type
 descriptor. A local copy permission, registered leaf codec or inactive payload
-does not admit a container outside this grammar. Tables, arbitrary providers,
+does not admit a container outside this grammar. Tables, uninstalled providers,
 keys and affine resources cannot be nested as
 messages. Existing standalone private table and key input constructors retain
 their distinct contracts.
@@ -232,7 +240,7 @@ transcript.native.indexed.observe.data<Suite, CompleteLogicalType>
 
 Its static arguments are the suite and canonical complete logical type. The
 installed implementation requires an installed native challenge suite, the closed
-message grammar and exact default physical representations. The suites are the
+message grammar and complete physical layouts with positive codec permission. The suites are the
 existing BLS Merlin/Spongefish suites, Ristretto Merlin
 `merlin3.ristretto255.scalar64le/0`, KoalaBear ext8 Merlin
 `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and the

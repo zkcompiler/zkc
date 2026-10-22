@@ -602,6 +602,8 @@ providers and retains every request and result.
 shared Arkworks representation. `installed_operation_call` executes the selected
 binding through the VM and Native, including resource admission and output
 publication; program admission and Runner construction occur before the timer.
+For blst, this boundary has Arkworks entry and output ports and explicit
+`native/representation.convert` calls around `blst/resident` arithmetic.
 `provider_import` measures point and scalar import, while `provider_export`
 measures point export. These conversion-only cases contain no arithmetic. Never
 add their isolated medians to estimate a complete call; measure that boundary
@@ -609,3 +611,37 @@ directly. Every result is compared with Arkworks outside the timer, including
 warmups; input generation, JSON I/O, checking and returned-result destruction are
 excluded. blst's worker pool is disabled, and MSM is variable-time. These are
 operation controls, not protocol throughput or security measurements.
+
+Cases with `resident-chain` and `converted-chain` measure the same four-operation
+computation at the direct kernel boundary (conversion once around the chain in
+the latter). `resident_installed_chain` repeats the selected operation four times on Native
+resident values. `wire_decode_resident_execute_wire_encode` additionally times
+selected wire decoding, Runner construction, output encoding and Runner teardown.
+Both include Runner teardown; both admit programs and generate/check mathematical
+oracle values outside timing. Backend construction is excluded from the wire boundary.
+These are selected entry codec controls; no protocol message transport, transcript
+or whole-protocol execution is measured.
+Select these cases with names containing `resident-installed-chain` or
+`wire-resident-chain`. Scalar field/vector, G1/G2 and pairing cases cover small
+and large inputs. Scaling and scalar products feed each result into the next
+operation; MSM chains accumulate repeated MSM outputs with resident curve addition;
+pairing chains return every Boolean for checking. No intermediate representation
+conversion is inserted in resident chains.
+
+Worker diagnostics retain the admitted straight-line program, exact physical
+ports, chain length, arithmetic calls, explicit conversion directions/counts,
+elements and canonical payload bytes (excluding framing), and native wire byte
+counts. Conversion counts describe reached program occurrences, not allocator
+instrumentation. Native selected codecs construct resident values through
+`decode_native_value`; direct wire paths need no Arkworks value construction
+inside timing. MSM requires explicit trusted variable-time authorization.
+Provider workspace admission bounds (where available) are declared limits rather
+than observed allocation peaks. Managed input retained-payload charges and terminal Runner usage are reported
+separately from process lifetime peak RSS. Public APIs currently expose no
+retained/scratch high-water counters, so those fields are null; cumulative fresh
+payload is not a peak, and provider-hidden allocation is not allocator-traced.
+
+For exploratory resident measurements use `--processes=3`, bounded build workers
+(`cargo build --release --locked --jobs=2 -p zkc-benchmarks`) and the existing
+scheduler without `--exclusive`. Preserve each process's samples and variability;
+these operation/control measurements do not establish protocol throughput.

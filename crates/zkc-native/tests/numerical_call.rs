@@ -27,6 +27,7 @@ fn fold_binding(msb: bool) -> OperationBinding {
             "{}/poly.fold",
             if msb { "arkworks-msb" } else { "arkworks" }
         ),
+        physical_arguments: vec![],
     }
 }
 
@@ -266,6 +267,7 @@ fn quotient_binding(field: Identity) -> OperationBinding {
         contract: "poly.opening_quotient".into(),
         arguments: vec![field.name().into()],
         implementation: "plonky3/poly.opening_quotient".into(),
+        physical_arguments: vec![],
     }
 }
 
@@ -280,6 +282,7 @@ fn domain_points_checks<E: ExtensionField<KoalaBear>>(identity: Identity, field:
         contract: name.into(),
         arguments: vec![identity.name().into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     };
     let (scalar_tag, vector_tag) = match identity {
         Identity::KoalaBear => (19, 20),

@@ -32,10 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       [["participant","prover","demo","P",[["pk","prover_key:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0"],["t","table:bls12-381.fr@arkworks.mle-lsb/0"],["rng","rng:bls12-381.fr@host.resource/0"]],["commitment:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0","opening_state:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0","field:bls12-381.fr@arkworks.fr/0","rng:bls12-381.fr@host.resource/0"],
         [["local","local_commit","commit_one",["pk","t","rng"],["C","state","r","next"]],["return",["C","state","r","next"]]], []]],
       [["entry","main",[["P","prover"]]]]]"#;
-    let admitted = zkc_runtime::vm::Program::decode(artifact).and_then(|program| {
-        program.check_installation(&backend)?;
-        Ok(program)
-    })?;
+    let admitted = zkc_runtime::vm::Program::decode(artifact, zkc_native::native_contracts())
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })?;
     let table = Value::table(
         &[zkc_native::Scalar::from(2), zkc_native::Scalar::from(3)],
         &policy,

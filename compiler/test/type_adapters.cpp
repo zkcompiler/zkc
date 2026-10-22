@@ -311,7 +311,8 @@ int main() {
     });
   }
   auto logical = zkc::algebra::FieldType::get(&context, field);
-  auto physical = zkc::plan::DataType::get(&context, logical, "arkworks.fr/0");
+  auto physical =
+      zkc::plan::DataType::get(&context, logical, "arkworks.fr/0", {});
   cases.run("field-array domain and length identity", [&] {
     auto empty = zkc::algebra::FieldArrayType::get(&context, field, 0);
     auto array = zkc::algebra::FieldArrayType::get(&context, field, 4);
@@ -359,33 +360,33 @@ int main() {
             "binding-logical-type-at-physical-stage");
   });
   cases.run("nested physical wrapper", [&] {
-    refuses(encodeBoundType(
-                zkc::plan::DataType::get(&context, physical, "arkworks.fr/0"),
-                true),
+    refuses(encodeBoundType(zkc::plan::DataType::get(&context, physical,
+                                                     "arkworks.fr/0", {}),
+                            true),
             "binding-type");
   });
   cases.run("wrapped noncanonical tensor", [&] {
     auto tensor = RankedTensorType::get({2}, logical);
-    refuses(encodeBoundType(zkc::plan::DataType::get(&context, tensor,
-                                                     "arkworks.fr-vector/0"),
+    refuses(encodeBoundType(zkc::plan::DataType::get(
+                                &context, tensor, "arkworks.fr-vector/0", {}),
                             true),
             "binding-type");
   });
   for (StringRef representation : {"", "uninstalled", "arkworks.g1/0"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {
-      refuses(encodeBoundType(
-                  zkc::plan::DataType::get(&context, logical, representation),
-                  true),
+      refuses(encodeBoundType(zkc::plan::DataType::get(&context, logical,
+                                                       representation, {}),
+                              true),
               "binding-representation");
     });
   cases.run("wrapped wrong commitment carrier", [&] {
     auto object = zkc::pcs::ObjectType::get(&context, oracle, "proof");
     auto representation = take(defaultRepresentation({"proof", oracle, {}}));
-    refuses(
-        encodeBoundType(zkc::plan::DataType::get(&context, object,
-                                                 representation.representation),
-                        true),
-        "binding-type");
+    refuses(encodeBoundType(
+                zkc::plan::DataType::get(&context, object,
+                                         representation.representation, {}),
+                true),
+            "binding-type");
   });
   cases.run("checked native construction and assembly preserve formation", [&] {
     ScopedDiagnosticHandler diagnostics(&context,

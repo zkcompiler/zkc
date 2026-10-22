@@ -83,7 +83,8 @@ int main() {
     auto loc = outer->getLoc();
     auto declare = [&] {
       local::OperationBindingOp::create(builder, loc, "combine", "bool.and",
-                                        builder.getArrayAttr({}), "");
+                                        builder.getArrayAttr({}), "",
+                                        mlir::ArrayAttr{});
     };
     declare();
     auto inner = mlir::ModuleOp::create(loc, "schedule");
@@ -151,7 +152,7 @@ int main() {
         "pairing.check"}) {
     for (StringRef domain : {"bls12-381.g1", "bls12-381.g2", "bls12-381.fr"}) {
       BindingApplication alternative{
-          contract.str(), {domain.str()}, ("blst/" + contract).str()};
+          contract.str(), {domain.str()}, ("blst/resident/" + contract).str()};
       bool eligible =
           (contract == "pairing.check") == (domain == "bls12-381.fr");
       auto signature = resolveBinding(alternative, true);
@@ -163,9 +164,19 @@ int main() {
       original.implementation = ("arkworks/" + contract).str();
       auto expected = accept(resolveBinding(original, true));
       auto actual = accept(std::move(signature));
+      for (auto *ports : {&actual.inputs, &actual.outputs})
+        for (auto &port : *ports) {
+          if (port.kind == "bool")
+            continue;
+          require(StringRef(port.representation).starts_with("blst/"),
+                  "resident provider lost exact resident ports");
+          port.representation = accept(defaultRepresentation(BoundType{
+                                           port.kind, port.identity, ""}))
+                                    .representation;
+        }
       require(actual.inputs == expected.inputs &&
                   actual.outputs == expected.outputs,
-              "foreign provider changed the shared physical ports");
+              "resident provider changed logical ports");
     }
   }
   protocol::OperationBinding opening{

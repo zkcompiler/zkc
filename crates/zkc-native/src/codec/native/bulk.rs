@@ -10,6 +10,17 @@ type Result<T> = std::result::Result<T, Error>;
 // Tag, scalar/point wire width, retained element width. Matrix entries add two
 // u32 coordinates. Existing BLS native vector tags intentionally remain 66/67.
 pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
+    if crate::operations::blst::is_resident(ty) {
+        use zkc_kernels::blst::bls12_381 as kernel;
+        return match ty.kind() {
+            Type::Vector => Some((66, 32, std::mem::size_of::<kernel::Scalar>())),
+            Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
+                Some((67, 48, std::mem::size_of::<kernel::G1>()))
+            }
+            Type::Groups => Some((52, 96, std::mem::size_of::<kernel::G2>())),
+            _ => Option::None,
+        };
+    }
     if PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty) {
         return Option::None;
     }
@@ -77,6 +88,9 @@ fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result
 }
 fn count(value: &Value) -> Result<usize> {
     Ok(match value {
+        Value::BlstVector(v) => v.len(),
+        Value::BlstG1Vector(v) => v.len(),
+        Value::BlstG2Vector(v) => v.len(),
         Value::Vector(v) => v.len(),
         Value::Bn254Vector(v) => v.len(),
         Value::RistrettoVector(v) => v.len(),
@@ -191,6 +205,37 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     let width = width(value, policy)?;
     policy.wire(width).map_err(|_| Error::Limit)?;
     peak(policy, value.retained_bytes(), width)?;
+    if crate::operations::blst::is_resident(&value.physical_type()) {
+        let (tag, _, _) = format(&value.physical_type()).ok_or_else(unsupported)?;
+        let mut out = Vec::new();
+        out.try_reserve_exact(width).map_err(|_| Error::Limit)?;
+        out.extend_from_slice(super::super::MAGIC);
+        out.push(tag);
+        out.extend_from_slice(
+            &u32::try_from(count(value)?)
+                .map_err(|_| Error::Limit)?
+                .to_le_bytes(),
+        );
+        match value {
+            Value::BlstVector(v) => {
+                for s in v.iter() {
+                    out.extend_from_slice(&s.to_bytes_le());
+                }
+            }
+            Value::BlstG1Vector(v) => {
+                for p in v.iter() {
+                    out.extend_from_slice(&p.to_bytes());
+                }
+            }
+            Value::BlstG2Vector(v) => {
+                for p in v.iter() {
+                    out.extend_from_slice(&p.to_bytes());
+                }
+            }
+            _ => return Err(unsupported()),
+        }
+        return Ok(out);
+    }
     // Type-owned encoders produce complete canonical frames. Validate their
     // framing against the expected physical type without rewriting it.
     let bytes = crate::matrix::encode(value, policy)
@@ -320,6 +365,27 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             Ok(Value::$variant(v.into()))
         }};
     }
+    if crate::operations::blst::is_resident(ty) {
+        use zkc_kernels::blst::bls12_381 as kernel;
+        return match tag {
+            66 => kernel::ScalarVector::try_from_fn((bytes.len() - 10) / 32, |i| {
+                kernel::decode_scalar(&bytes[10 + i * 32..10 + (i + 1) * 32])
+            })
+            .map(|v| Value::BlstVector(std::sync::Arc::new(v)))
+            .map_err(|e| resident_decode_error(e, DecodeReason::Scalar)),
+            67 => kernel::G1Vector::try_from_fn((bytes.len() - 10) / 48, |i| {
+                kernel::G1::from_bytes(&bytes[10 + i * 48..10 + (i + 1) * 48])
+            })
+            .map(|v| Value::BlstG1Vector(std::sync::Arc::new(v)))
+            .map_err(|e| resident_decode_error(e, DecodeReason::Group)),
+            52 => kernel::G2Vector::try_from_fn((bytes.len() - 10) / 96, |i| {
+                kernel::G2::from_bytes(&bytes[10 + i * 96..10 + (i + 1) * 96])
+            })
+            .map(|v| Value::BlstG2Vector(std::sync::Arc::new(v)))
+            .map_err(|e| resident_decode_error(e, DecodeReason::Group)),
+            _ => Err(unsupported()),
+        };
+    }
     match tag {
         66 => values!(
             32,
@@ -392,5 +458,16 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             Group
         ),
         _ => Err(unsupported()),
+    }
+}
+
+fn resident_decode_error(
+    error: zkc_kernels::blst::bls12_381::Error,
+    reason: DecodeReason,
+) -> Error {
+    use zkc_kernels::blst::bls12_381::Error as E;
+    match error {
+        E::Allocation | E::CapacityOverflow => Error::Limit,
+        _ => invalid(reason),
     }
 }

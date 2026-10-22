@@ -22,6 +22,7 @@ fn bundle(fixtures: &Fixtures, name: &str) -> Bundle {
     Bundle::admit(
         &bytes,
         &backend("Alice", "admission", "main"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap_or_else(|error| panic!("bundle {name}: {error}"))
@@ -229,17 +230,12 @@ fn data_values(directory: &Fixtures) {
     let Value::FieldArray(empty) = &output[3] else {
         panic!("empty array")
     };
-    assert!(empty.elements().is_empty());
+    assert!(empty.ark_elements().unwrap().is_empty());
 }
 
 fn traces(directory: &Fixtures) {
     let b = bundle(directory, "traces");
-    let descriptor = b.roles()[0].entry.inputs[0]
-        .1
-        .logical()
-        .variant_descriptor()
-        .unwrap()
-        .clone();
+    let physical = b.roles()[0].entry.inputs[0].1.clone();
     for (a, bshape) in [
         (None, None),
         (Some((0, 3)), None),
@@ -252,7 +248,7 @@ fn traces(directory: &Fixtures) {
                     vec![Value::matrix(rows, cols, &[], &Policy::default()).unwrap()]
                 })
                 .unwrap_or_default();
-            Value::pack_variant(descriptor.clone(), usize::from(shape.is_some()), values).unwrap()
+            Value::pack_variant(physical.clone(), usize::from(shape.is_some()), values).unwrap()
         };
         let registry = ServiceRegistry::new(Policy::default());
         let mut audit = Audit::new(&registry, BTreeMap::new());
@@ -356,7 +352,7 @@ fn sumcheck(directory: &Fixtures) {
                     .unwrap();
                     let arr = Value::FieldArray(
                         zkc_native::FieldArray::new(
-                            ty,
+                            zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
                             coefficients
                                 .into_iter()
                                 .map(Scalar::from)

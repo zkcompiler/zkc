@@ -113,8 +113,14 @@ impl RunHost {
         authority: SetupAuthority,
     ) -> Result<Self> {
         let backend = Self::admission_backend(limits)?;
-        let bundle = Bundle::admit_pinned(bytes, expected_sha256, &backend, limits.bundle)
-            .map_err(|e| e.to_string())?;
+        let bundle = Bundle::admit_pinned(
+            bytes,
+            expected_sha256,
+            &backend,
+            zkc_native::native_contracts(),
+            limits.bundle,
+        )
+        .map_err(|e| e.to_string())?;
         Self::from_bundle(bundle, expected_sha256, limits, authority)
     }
     pub(crate) fn admit_artifact(
@@ -123,8 +129,13 @@ impl RunHost {
         authority: SetupAuthority,
     ) -> Result<Self> {
         let backend = Self::admission_backend(limits)?;
-        let bundle =
-            Bundle::admit(artifact.bytes(), &backend, limits.bundle).map_err(|e| e.to_string())?;
+        let bundle = Bundle::admit(
+            artifact.bytes(),
+            &backend,
+            zkc_native::native_contracts(),
+            limits.bundle,
+        )
+        .map_err(|e| e.to_string())?;
         Self::from_bundle(bundle, artifact.identity(), limits, authority)
     }
     fn admission_backend(limits: HostLimits) -> Result<NativeBackend> {
