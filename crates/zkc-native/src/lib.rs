@@ -21,8 +21,11 @@ mod value;
 
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
-pub use zkc_kernels::plonky3::binary::{Binary64, Binary64Ext3};
-pub use zkc_kernels::plonky3::{KoalaBear, KoalaBearExt4, KoalaBearExt8};
+pub use zkc_kernels::plonky3::KoalaBear;
+pub use zkc_kernels::plonky3::KoalaBearExt4;
+pub use zkc_kernels::plonky3::KoalaBearExt8;
+pub use zkc_kernels::plonky3::binary::Binary64;
+pub use zkc_kernels::plonky3::binary::Binary64Ext3;
 
 pub use backend::{
     ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeOperation, PortConstraint,
@@ -34,7 +37,8 @@ pub use codec::{
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
-pub use zkc_kernels::{GroupPoint, Scalar};
+pub use zkc_kernels::arkworks::bls12_381::G1;
+pub use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_runtime::vm::BackendError;
 
 pub(crate) type Result<T> = std::result::Result<T, BackendError>;
@@ -44,8 +48,8 @@ pub(crate) fn refused(reason: &str) -> BackendError {
 pub(crate) fn exhausted(reason: &str) -> BackendError {
     BackendError::new(format!("exhausted:{reason}"))
 }
-pub(crate) fn ark(error: zkc_kernels::Error) -> BackendError {
-    use zkc_kernels::Error::*;
+pub(crate) fn ark(error: zkc_kernels::arkworks::Error) -> BackendError {
+    use zkc_kernels::arkworks::Error::*;
     match error {
         ArityLimit | ElementLimit | ByteLimit | SetupLimit | CapacityOverflow | Allocation
         | EntropyUnavailable => exhausted(error.code()),
@@ -72,12 +76,15 @@ pub fn classify_error(error: &BackendError) -> ErrorClass {
 
 pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use diagonal::Diagonal;
-pub use zkc_kernels::edwards::EdwardsPrime;
+pub use zkc_kernels::dalek::edwards25519::EdwardsPrime;
 
-pub use zkc_kernels::bls12_381::{G2 as Bls12381G2, Gt as Bls12381Gt};
+pub use zkc_kernels::arkworks::bls12_381::G2 as Bls12381G2;
+pub use zkc_kernels::arkworks::bls12_381::Gt as Bls12381Gt;
+pub use zkc_kernels::arkworks::bn254::G1 as Bn254G1;
+pub use zkc_kernels::arkworks::bn254::G2 as Bn254G2;
 /// BN254 scalar field and checked subgroup points.
-pub use zkc_kernels::bn254::Gt as Bn254Gt;
-pub use zkc_kernels::bn254::{G1 as Bn254G1, G2 as Bn254G2, Scalar as Bn254Scalar};
+pub use zkc_kernels::arkworks::bn254::Gt as Bn254Gt;
+pub use zkc_kernels::arkworks::bn254::Scalar as Bn254Scalar;
 
 mod variant;
 pub use variant::Variant;
@@ -93,7 +100,7 @@ mod test_tape;
 #[cfg(feature = "test-utils")]
 pub use test_tape::TestTape;
 
-pub(crate) fn field_error(error: zkc_kernels::fields::Error) -> BackendError {
+pub(crate) fn field_error(error: zkc_kernels::field::Error) -> BackendError {
     refused(error.code())
 }
 

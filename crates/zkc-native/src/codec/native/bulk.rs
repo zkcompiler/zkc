@@ -321,8 +321,18 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
         }};
     }
     match tag {
-        66 => values!(32, zkc_kernels::decode_scalar, Vector, Scalar),
-        41 => values!(32, zkc_kernels::bn254::decode_scalar, Bn254Vector, Scalar),
+        66 => values!(
+            32,
+            zkc_kernels::arkworks::bls12_381::decode_scalar,
+            Vector,
+            Scalar
+        ),
+        41 => values!(
+            32,
+            zkc_kernels::arkworks::bn254::decode_scalar,
+            Bn254Vector,
+            Scalar
+        ),
         20 => values!(
             4,
             zkc_kernels::plonky3::decode_scalar,
@@ -362,7 +372,7 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             RistrettoVector,
             Scalar
         ),
-        67 => values!(48, crate::GroupPoint::from_bytes, Groups, Group),
+        67 => values!(48, crate::G1::from_bytes, Groups, Group),
         47 => values!(32, crate::Bn254G1::from_bytes, Bn254G1Vector, Group),
         49 => values!(64, crate::Bn254G2::from_bytes, Bn254G2Vector, Group),
         52 => values!(96, crate::Bls12381G2::from_bytes, Bls12381G2Vector, Group),

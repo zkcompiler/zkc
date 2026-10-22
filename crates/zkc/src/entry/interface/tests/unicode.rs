@@ -383,8 +383,11 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     let (mut doc, artifact) = run_fixture(&ty, &["受信者"], &["role00000000"]);
     doc["setups"] = json!([{"name":"鍵₂","inputs":[{"port":0,"path":[]}]}]);
     let capacity = crate::execution::Capacity::default();
-    let keys =
-        zkc_kernels::Keys::setup_for_development(1, &capacity.backend().ark_bounds()).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+        1,
+        &capacity.backend().ark_bounds(),
+    )
+    .unwrap();
     let key = keys.verifier_key();
     let bytes = key.to_bytes(&capacity.backend().ark_bounds()).unwrap();
     let authority = SetupAuthority {
@@ -476,8 +479,8 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     let capacity = crate::execution::Capacity::default();
     let bounds = capacity.backend().ark_bounds();
     let keys = [
-        zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap(),
-        zkc_kernels::Keys::setup_for_development(2, &bounds).unwrap(),
+        zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap(),
+        zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(2, &bounds).unwrap(),
     ];
     let identities = keys
         .each_ref()
@@ -790,9 +793,11 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
-    let keys =
-        zkc_kernels::Keys::setup_for_development(1, &options.capacity.backend().ark_bounds())
-            .unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+        1,
+        &options.capacity.backend().ark_bounds(),
+    )
+    .unwrap();
     let bytes = keys
         .verifier_key()
         .to_bytes(&options.capacity.backend().ark_bounds())

@@ -247,10 +247,10 @@ impl Wire for crate::Bn254Scalar {
     const WIDTH: usize = 32;
     const TAG: u8 = 45;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_kernels::bn254::decode_scalar(bytes).map_err(crate::ark)
+        zkc_kernels::arkworks::bn254::decode_scalar(bytes).map_err(crate::ark)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_kernels::bn254::encode_scalar(&self).map_err(crate::ark)?);
+        out.extend(zkc_kernels::arkworks::bn254::encode_scalar(&self).map_err(crate::ark)?);
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -261,10 +261,10 @@ impl Wire for crate::Scalar {
     const WIDTH: usize = 32;
     const TAG: u8 = 23;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_kernels::decode_scalar(bytes).map_err(crate::ark)
+        zkc_kernels::arkworks::bls12_381::decode_scalar(bytes).map_err(crate::ark)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_kernels::encode_scalar(&self).map_err(crate::ark)?);
+        out.extend(zkc_kernels::arkworks::bls12_381::encode_scalar(&self).map_err(crate::ark)?);
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {

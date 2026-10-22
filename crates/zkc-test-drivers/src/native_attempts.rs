@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::execution::{Capacity, InputValue};
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
@@ -36,11 +36,7 @@ fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
                 Value::Field(Scalar::from(if fold && port == 1 { 5 } else { 3 }))
             }
             "group:bls12-381.g1" => {
-                Value::Curve(GroupPoint::generator().scale(Scalar::from(if port == 0 {
-                    1
-                } else {
-                    3
-                })))
+                Value::Curve(G1::generator().scale(Scalar::from(if port == 0 { 1 } else { 3 })))
             }
             _ => panic!("unexpected wire input"),
         };

@@ -1,10 +1,9 @@
 //! Native installation of the width-16 KoalaBear Poseidon2 permutation.
 //! Admission, output allocation and persistent work charging precede evaluation.
 use crate::{Policy, Result, Value, refused, value::size};
-use zkc_kernels::plonky3::{
-    KoalaBear,
-    poseidon2::{self, Error},
-};
+use zkc_kernels::plonky3::KoalaBear;
+use zkc_kernels::plonky3::poseidon2;
+use zkc_kernels::plonky3::poseidon2::Error;
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,

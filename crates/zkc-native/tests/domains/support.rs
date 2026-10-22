@@ -52,7 +52,7 @@ pub fn groups(d: bool, n: &[u64]) -> Value {
     } else {
         Value::groups(
             &n.iter()
-                .map(|n| zkc_native::GroupPoint::generator().scale(Scalar::from(*n)))
+                .map(|n| zkc_native::G1::generator().scale(Scalar::from(*n)))
                 .collect::<Vec<_>>(),
             &Policy::default(),
         )

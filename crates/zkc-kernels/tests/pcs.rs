@@ -3,7 +3,14 @@ mod common;
 use ark_ff::Field;
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 use common::{bounds, keys, scalars};
-use zkc_kernels::{Bounds, Error, Keys, RandomSource, Scalar, Table, VerifierKey, parse_decimal};
+use zkc_kernels::arkworks::Error;
+use zkc_kernels::arkworks::bls12_381::Bounds;
+use zkc_kernels::arkworks::bls12_381::Keys;
+use zkc_kernels::arkworks::bls12_381::RandomSource;
+use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::Table;
+use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::bls12_381::parse_decimal;
 
 #[test]
 fn two_originals_shared_keys_delayed_open_and_table_free_verifier() {
@@ -198,7 +205,7 @@ fn deterministic_randomness_is_explicit_and_failed_admission_does_not_draw() {
 #[test]
 fn aliases_remain_live_across_threads_and_owner_drops() {
     fn send_sync<T: Send + Sync>() {}
-    send_sync::<zkc_kernels::CommittedTable>();
+    send_sync::<zkc_kernels::arkworks::bls12_381::CommittedTable>();
     let k = keys(3, 9);
     let t = Table::from_logical(&scalars(&[1, 2, 3, 5, 8, 13, 21, 34]), &bounds()).unwrap();
     let c = k.prover_key().commit(&t).unwrap();

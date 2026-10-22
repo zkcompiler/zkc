@@ -1,6 +1,6 @@
 //! BN254 polynomial transforms and interpolation with caller-owned storage.
 use super::Scalar as F;
-use crate::fields::{Error, Result};
+use crate::field::{Error, Result};
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 

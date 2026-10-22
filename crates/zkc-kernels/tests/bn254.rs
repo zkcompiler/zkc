@@ -3,7 +3,9 @@ use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projecti
 use ark_ec::{AffineRepr, CurveGroup, pairing::Pairing};
 use ark_ff::{One, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
-use zkc_kernels::bn254::{self, G1, G2};
+use zkc_kernels::arkworks::bn254;
+use zkc_kernels::arkworks::bn254::G1;
+use zkc_kernels::arkworks::bn254::G2;
 #[test]
 fn independent_library_group_arithmetic_and_pairing() {
     let s = [3u64, 7, 0, 19].map(Fr::from);
@@ -104,7 +106,8 @@ fn canonical_scalar_curve_subgroup_and_infinity_refusals() {
 #[test]
 fn target_group_bilinearity_and_checked_canonical_representation() {
     use ark_bn254::Fq12;
-    use zkc_kernels::bn254::{Gt, pairing};
+    use zkc_kernels::arkworks::bn254::Gt;
+    use zkc_kernels::arkworks::bn254::pairing;
     let a = Fr::from(7);
     let b = Fr::from(13);
     let target = pairing(&G1::generator().scale(a), &G2::generator().scale(b));

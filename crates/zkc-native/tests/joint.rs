@@ -659,7 +659,7 @@ fn native_standalone_group_messages_do_not_consume_collection_capacity() {
         )
         .unwrap()
     };
-    let point = Value::Curve(zkc_native::GroupPoint::generator());
+    let point = Value::Curve(zkc_native::G1::generator());
     let bundle = Bundle::admit(
         message_bundle(&point.physical_type().spelling())
             .to_string()
@@ -1512,7 +1512,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
 
 #[test]
 fn structured_bundles_transfer_dynamic_and_nested_messages() {
-    use zkc_native::{GroupPoint, Scalar, Sequence, Variant};
+    use zkc_native::{G1, Scalar, Sequence, Variant};
     use zkc_runtime::vm::LogicalType;
     use zkc_test_support::variants::logical;
     let optional = logical("Optional", json!([["none", []], ["some", ["indices"]]]));
@@ -1557,7 +1557,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
         let fields = Value::Vector(vec![Scalar::from(9); n].into());
         values.extend([
             fields.clone(),
-            Value::Groups(vec![GroupPoint::generator(); n].into()),
+            Value::Groups(vec![G1::generator(); n].into()),
             Value::Indices(vec![u64::MAX; n].into()),
         ]);
         for tag in 0..2 {

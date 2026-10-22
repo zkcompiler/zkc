@@ -2,7 +2,7 @@
 //! Provider packing is a physical implementation detail; scalar tails preserve
 //! exact field arithmetic. Destinations have checked exact extents; callers own
 //! their storage reservations.
-use crate::fields::{Coefficient, Error, Result};
+use crate::field::{Coefficient, Error, Result};
 use p3_field::{Field, PackedValue};
 use std::ops::{Add, Mul, Neg, Sub};
 

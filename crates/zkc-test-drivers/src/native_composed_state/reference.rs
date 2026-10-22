@@ -9,16 +9,17 @@ use ark_ff::Field;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use transcript::{Transcript, scalar_wire, tree};
-use zkc_kernels::{GroupPoint, Scalar};
+use zkc_kernels::arkworks::bls12_381::G1;
+use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_test_support::hex;
 
-pub fn msm(a: &[Scalar], g: &[GroupPoint]) -> GroupPoint {
+pub fn msm(a: &[Scalar], g: &[G1]) -> G1 {
     assert_eq!(a.len(), g.len());
     a.iter()
         .zip(g)
-        .fold(GroupPoint::identity(), |sum, (a, g)| sum.add(&g.scale(*a)))
+        .fold(G1::identity(), |sum, (a, g)| sum.add(&g.scale(*a)))
 }
-fn group_wire(g: &GroupPoint) -> Vec<u8> {
+fn group_wire(g: &G1) -> Vec<u8> {
     [b"ZKCV\x00\x09".as_slice(), &g.to_bytes().unwrap()].concat()
 }
 fn vector(a: &[Scalar]) -> Vec<u8> {
@@ -29,7 +30,7 @@ fn vector(a: &[Scalar]) -> Vec<u8> {
     }
     bytes
 }
-fn groups(g: &[GroupPoint]) -> Vec<u8> {
+fn groups(g: &[G1]) -> Vec<u8> {
     let mut bytes = b"ZKCV\x00\x43".to_vec();
     bytes.extend_from_slice(&(g.len() as u32).to_le_bytes());
     for x in g {
@@ -113,7 +114,7 @@ pub fn proof(
     input: &Json,
     n: u64,
     coefficients: &[Scalar],
-    bases: &[GroupPoint],
+    bases: &[G1],
     salt: Scalar,
 ) -> Vec<u8> {
     let root = transcript::root(envelope, input);
@@ -166,8 +167,8 @@ pub fn proof(
         a = Vec::new();
         let original_g = g;
         g = Vec::new();
-        let mut sum = GroupPoint::identity();
-        claim = GroupPoint::identity();
+        let mut sum = G1::identity();
+        claim = G1::identity();
         for round in 0..n {
             let i = round as usize;
             let term = original_g[i].scale(original[i]);

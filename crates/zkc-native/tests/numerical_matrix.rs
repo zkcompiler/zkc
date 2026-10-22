@@ -117,7 +117,8 @@ fn dense_views_preserve_all_eight_field_families() {
         KoalaBearExt8::from(KoalaBear::new(0)),
         |v| Value::KoalaBearExt8Vector(v.into()),
     );
-    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::ext3_from_bits;
+    use zkc_kernels::plonky3::binary::from_bits;
     matrix(
         domains::BINARY64,
         [1, 2, 3, 5, 8, 1 << 63].map(from_bits),

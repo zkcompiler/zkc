@@ -181,7 +181,7 @@ fn finish_local(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
     values
 }
 fn custody_boundaries(directory: &str) {
-    use zkc_native::GroupPoint;
+    use zkc_native::G1;
     use zkc_runtime::vm::{Packet, Value as RuntimeValue};
     // The host deliberately supplies a reply different from the earlier send.
     // This also ensures the calculation uses the actual received component.
@@ -209,7 +209,7 @@ fn custody_boundaries(directory: &str) {
                     };
                     observed = Some(handle.clone());
                     vec![
-                        Value::Groups(vec![GroupPoint::generator()].into()),
+                        Value::Groups(vec![G1::generator()].into()),
                         nonce,
                         field(3),
                         Value::Bool(go),
@@ -244,7 +244,7 @@ fn custody_boundaries(directory: &str) {
             };
             if name == "mixed-nonce" {
                 assert!(
-                    matches!(&send.payload, Value::Groups(v) if v.len() == 1 && v[0] == GroupPoint::generator().scale(Scalar::from(5u64)))
+                    matches!(&send.payload, Value::Groups(v) if v.len() == 1 && v[0] == G1::generator().scale(Scalar::from(5u64)))
                 );
             } else {
                 assert!(matches!(&send.payload, Value::Field(v) if *v == Scalar::from(9u64)));

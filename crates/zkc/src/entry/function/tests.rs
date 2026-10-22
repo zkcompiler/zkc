@@ -1677,7 +1677,7 @@ fn host_variant_pack_and_owned_outputs_enforce_complete_active_counts() {
                 vector.clone()
             };
             let native = if group {
-                zkc_native::Value::Groups(vec![zkc_native::GroupPoint::generator(); 3].into())
+                zkc_native::Value::Groups(vec![zkc_native::G1::generator(); 3].into())
             } else {
                 zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 3].into())
             };
@@ -1858,7 +1858,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
-    let native = zkc_native::Value::Curve(zkc_native::GroupPoint::generator());
+    let native = zkc_native::Value::Curve(zkc_native::G1::generator());
     let capacity = Capacity {
         groups: 0,
         ..Capacity::default()

@@ -3,7 +3,7 @@ mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::{
@@ -687,7 +687,11 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
     let mut data = Vec::with_capacity(4096);
     data.extend([2u64, 3].map(Scalar::from));
     let t = Value::Table(Arc::new(
-        zkc_kernels::Table::from_logical_vec(data, &Policy::default().ark_bounds()).unwrap(),
+        zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
+            data,
+            &Policy::default().ark_bounds(),
+        )
+        .unwrap(),
     ));
     let state = private_state(&k, &t);
     let pk = Value::ProverKey(Arc::new(k.prover_key().clone()));

@@ -1,7 +1,8 @@
 //! Only validated immutable key material crosses invocation boundaries.
 use super::inputs::Result;
 use std::sync::Arc;
-use zkc_kernels::{ProverKey, VerifierKey};
+use zkc_kernels::arkworks::bls12_381::ProverKey;
+use zkc_kernels::arkworks::bls12_381::VerifierKey;
 use zkc_native::Value;
 use zkc_runtime::vm::Value as RuntimeValue;
 
@@ -97,8 +98,10 @@ mod tests {
         send_sync::<ProverMaterial>();
         let capacity = Capacity::default();
         let bounds = capacity.backend().ark_bounds();
-        let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
-        let other = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
+        let keys =
+            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
+        let other =
+            zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
         let bytes = keys.prover_key().to_bytes(&bounds).unwrap();
         let pin = keys.prover_key().material_fingerprint();
         let vk = keys.verifier_key();
@@ -107,7 +110,7 @@ mod tests {
         assert!(Arc::ptr_eq(&material.key, &material.clone().key));
         let mut wrong = pin;
         wrong[0] ^= 1;
-        let mismatch = zkc_kernels::Error::KeyMismatch.to_string();
+        let mismatch = zkc_kernels::arkworks::Error::KeyMismatch.to_string();
         assert_eq!(
             ProverMaterial::from_bytes(&bytes, wrong, vk, capacity).unwrap_err(),
             mismatch

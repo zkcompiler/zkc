@@ -4,7 +4,7 @@
 //! `models/short_weierstrass/group.rs::normalize_batch` and ark-ff 0.6.0
 //! `fields/mod.rs::serial_batch_inversion_and_mul`. The prefix buffer is
 //! fallible and reused here instead of allocating inside each provider call.
-use crate::Error;
+use crate::arkworks::Error;
 use ark_ec::{
     AffineRepr, CurveGroup,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
@@ -12,10 +12,10 @@ use ark_ec::{
 use ark_ff::{Field, One, PrimeField, Zero};
 
 /// Bound temporary payload independently of the complete input length.
-pub const SCALING_CHUNK_CAP: usize = 256;
+pub const CHUNK_CAP: usize = 256;
 
 pub(crate) fn workspace_bytes<P: SWCurveConfig>(len: usize) -> Option<usize> {
-    if len > SCALING_CHUNK_CAP {
+    if len > CHUNK_CAP {
         return None;
     }
     let width = size_of::<P::BaseField>()
@@ -34,9 +34,9 @@ struct Scratch<P: SWCurveConfig> {
 impl<P: SWCurveConfig> Scratch<P> {
     fn new(len: usize) -> Result<Self, Error> {
         Ok(Self {
-            projectives: crate::bounds::vector(len)?,
-            zs: crate::bounds::vector(len)?,
-            prefixes: crate::bounds::vector(len)?,
+            projectives: crate::arkworks::allocation::vector(len)?,
+            zs: crate::arkworks::allocation::vector(len)?,
+            prefixes: crate::arkworks::allocation::vector(len)?,
         })
     }
 
@@ -86,7 +86,7 @@ pub(crate) fn scale_into<P: SWCurveConfig, W: Copy>(
     if points.len() != destination.len() {
         return Err(Error::InvalidEncoding);
     }
-    let chunk_len = chunk_len.min(points.len()).min(SCALING_CHUNK_CAP);
+    let chunk_len = chunk_len.min(points.len()).min(CHUNK_CAP);
     // Optional workspace failure must not add an allocation refusal to a call
     // that previously needed only its output allocation. Allocate before writes.
     let scratch = if chunk_len >= 2 {
@@ -124,7 +124,7 @@ macro_rules! impl_scaling {
             /// Returns None above the conservative batch cap or on size overflow.
             /// Output storage and hidden provider/allocator overhead are excluded.
             pub fn scaling_workspace_bytes(chunk_len: usize) -> Option<usize> {
-                $crate::scaling::workspace_bytes::<$config>(chunk_len)
+                $crate::arkworks::scaling::workspace_bytes::<$config>(chunk_len)
             }
 
             /// Scale checked bases into an equally sized initialized private slice.
@@ -136,10 +136,10 @@ macro_rules! impl_scaling {
                 scalar: <$config as ark_ec::CurveConfig>::ScalarField,
                 destination: &mut [Self],
                 chunk_len: usize,
-            ) -> Result<(), $crate::Error> {
+            ) -> Result<(), $crate::arkworks::Error> {
                 use ark_ff::PrimeField;
                 let scalar = scalar.into_bigint();
-                $crate::scaling::scale_into::<$config, Self>(
+                $crate::arkworks::scaling::scale_into::<$config, Self>(
                     points,
                     destination,
                     chunk_len,
@@ -157,12 +157,12 @@ macro_rules! impl_scaling {
                 points: &[Self],
                 destination: &mut [Self],
                 chunk_len: usize,
-            ) -> Result<(), $crate::Error> {
+            ) -> Result<(), $crate::arkworks::Error> {
                 use ark_ff::PrimeField;
                 if scalars.len() != points.len() {
-                    return Err($crate::Error::InvalidEncoding);
+                    return Err($crate::arkworks::Error::InvalidEncoding);
                 }
-                $crate::scaling::scale_into::<$config, Self>(
+                $crate::arkworks::scaling::scale_into::<$config, Self>(
                     points,
                     destination,
                     chunk_len,
@@ -212,13 +212,13 @@ mod tests {
 
     #[test]
     fn each_optional_allocation_failure_falls_back_before_writing() {
-        use crate::GroupPoint;
-        let g = GroupPoint::generator();
-        let choices = [g, GroupPoint::identity(), g.neg(), g.add(&g)];
+        use crate::arkworks::bls12_381::G1;
+        let g = G1::generator();
+        let choices = [g, G1::identity(), g.neg(), g.add(&g)];
         let points: Vec<_> = (0..513).map(|i| choices[i % choices.len()]).collect();
         let saved = points.clone();
         let scalars: Vec<_> = (0..points.len())
-            .map(|i| crate::Scalar::from((i % 5) as u64))
+            .map(|i| crate::arkworks::bls12_381::Scalar::from((i % 5) as u64))
             .collect();
         for common in [false, true] {
             let expected: Vec<_> = points
@@ -226,28 +226,33 @@ mod tests {
                 .enumerate()
                 .map(|(i, p)| {
                     p.scale(if common {
-                        crate::Scalar::from(3)
+                        crate::arkworks::bls12_381::Scalar::from(3)
                     } else {
                         scalars[i]
                     })
                 })
                 .collect();
             for failure in 0..3 {
-                let mut output = vec![GroupPoint::identity(); points.len()];
-                crate::bounds::VECTOR_REQUESTS.with(|count| count.set(0));
-                crate::bounds::VECTOR_FAILURE.with(|count| count.set(Some(failure)));
+                let mut output = vec![G1::identity(); points.len()];
+                crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
+                crate::arkworks::allocation::VECTOR_FAILURE.with(|count| count.set(Some(failure)));
                 let result = if common {
-                    GroupPoint::scale_many_into(&points, crate::Scalar::from(3), &mut output, 256)
+                    G1::scale_many_into(
+                        &points,
+                        crate::arkworks::bls12_381::Scalar::from(3),
+                        &mut output,
+                        256,
+                    )
                 } else {
-                    GroupPoint::scale_each_into(&scalars, &points, &mut output, 256)
+                    G1::scale_each_into(&scalars, &points, &mut output, 256)
                 };
                 assert!(
-                    crate::bounds::VECTOR_FAILURE
+                    crate::arkworks::allocation::VECTOR_FAILURE
                         .with(|count| count.get())
                         .is_none()
                 );
                 assert_eq!(
-                    crate::bounds::VECTOR_REQUESTS.with(|count| count.get()),
+                    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.get()),
                     failure + 1
                 );
                 result.unwrap();

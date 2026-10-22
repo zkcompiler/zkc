@@ -1,10 +1,16 @@
 //! Kernel APIs are independently usable without native values or VM policy.
-use zkc_kernels::{
-    Binary64, Binary64Ext3, Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar,
-    Scalar,
-    fields::{Coefficient, Error},
-    matrix, vector,
-};
+use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bn254::Scalar as Bn254Scalar;
+use zkc_kernels::dalek::ristretto255::Scalar as RistrettoScalar;
+use zkc_kernels::field::Coefficient;
+use zkc_kernels::field::Error;
+use zkc_kernels::matrix;
+use zkc_kernels::plonky3::KoalaBear;
+use zkc_kernels::plonky3::KoalaBearExt4;
+use zkc_kernels::plonky3::KoalaBearExt8;
+use zkc_kernels::plonky3::binary::Binary64;
+use zkc_kernels::plonky3::binary::Binary64Ext3;
+use zkc_kernels::vector;
 
 fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
     // Cover empty, packed blocks and suffixes without assuming a machine width.

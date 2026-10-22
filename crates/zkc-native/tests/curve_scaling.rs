@@ -180,7 +180,7 @@ macro_rules! ark_scaling_tests {
 
 ark_scaling_tests!(
     bls_g1,
-    zkc_native::GroupPoint,
+    zkc_native::G1,
     zkc_native::Scalar,
     "bls12-381.g1",
     Groups,

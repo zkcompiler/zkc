@@ -2,7 +2,7 @@
 //! Kernel choice does not establish a whole-runtime timing guarantee.
 use crate::operations::arithmetic::{equal_len, natural, reserve, split_len};
 use crate::{
-    GroupPoint, Policy, Result, RistrettoPoint, RistrettoScalar, Scalar, Value, exhausted, refused,
+    G1, Policy, Result, RistrettoPoint, RistrettoScalar, Scalar, Value, exhausted, refused,
     value::size,
 };
 use curve25519_dalek::{
@@ -95,7 +95,7 @@ fn with_scaling_workspace<G: Group>(
     let chunk_len = G::scaling_workspace_bytes(1)
         .filter(|bytes| *bytes != 0)
         .map(|bytes| {
-            len.min(zkc_kernels::SCALING_CHUNK_CAP)
+            len.min(zkc_kernels::arkworks::scaling::CHUNK_CAP)
                 .min(policy.max_numerical_bytes / bytes)
         })
         .unwrap_or(0);
@@ -142,7 +142,7 @@ mod scaling_workspace_tests {
 
     #[test]
     fn public_length_group_and_scratch_allowance_select_bounded_chunks() {
-        check::<GroupPoint>();
+        check::<G1>();
         check::<crate::Bls12381G2>();
         check::<crate::Bn254G1>();
         check::<crate::Bn254G2>();
@@ -164,7 +164,7 @@ mod scaling_workspace_tests {
         }
     }
 }
-impl Group for GroupPoint {
+impl Group for G1 {
     type Scalar = Scalar;
     ark_scaling!();
     fn generator() -> Self {
@@ -491,11 +491,11 @@ pub(crate) fn apply(
         // Bound pairing preparation scratch independently of the GT result.
         p.output(32768, usize::MAX)?;
         return match args {
-            [Value::Bn254G1(a), Value::Bn254G2(b)] => {
-                Ok(vec![Value::Bn254Gt(zkc_kernels::bn254::pairing(a, b))])
-            }
+            [Value::Bn254G1(a), Value::Bn254G2(b)] => Ok(vec![Value::Bn254Gt(
+                zkc_kernels::arkworks::bn254::pairing(a, b),
+            )]),
             [Value::Curve(a), Value::Bls12381G2(b)] => Ok(vec![Value::Bls12381Gt(Arc::new(
-                zkc_kernels::bls12_381::pairing(a, b),
+                zkc_kernels::arkworks::bls12_381::pairing(a, b),
             ))]),
             _ => Err(refused("kernel-operands")),
         };
@@ -510,7 +510,7 @@ pub(crate) fn apply(
                 // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
                 // plus G1 preparation and multi-Miller loop working vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
-                zkc_kernels::bn254::pairing_check(a, b)
+                zkc_kernels::arkworks::bn254::pairing_check(a, b)
             }
             [Value::Groups(a), Value::Bls12381G2Vector(b)] => {
                 equal_len(a.len(), b.len())?;
@@ -520,7 +520,7 @@ pub(crate) fn apply(
                 // BLS12-381 G2 preparations retain 68 line coefficients (three
                 // Fq2 each), plus G1 preparation and multi-Miller loop vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
-                zkc_kernels::bls12_381::pairing_check(a, b)
+                zkc_kernels::arkworks::bls12_381::pairing_check(a, b)
             }
             _ => return Err(refused("kernel-operands")),
         };
@@ -537,7 +537,7 @@ pub(crate) fn apply(
         .first()
         .and_then(|name| Identity::parse(name).ok());
     match group {
-        Some(Identity::Bls12381G1) => dense::<GroupPoint>(name, args, i, p),
+        Some(Identity::Bls12381G1) => dense::<G1>(name, args, i, p),
         Some(Identity::Bn254G1) => dense::<crate::Bn254G1>(name, args, i, p),
         Some(Identity::Bn254G2) => dense::<crate::Bn254G2>(name, args, i, p),
         Some(Identity::Bn254Gt) => target::<crate::Bn254Gt>(name, args, i, p),

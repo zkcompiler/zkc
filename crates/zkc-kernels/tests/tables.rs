@@ -6,7 +6,13 @@ use ark_std::{
     rand::{SeedableRng, rngs::StdRng},
 };
 use common::{bounds, scalars};
-use zkc_kernels::{Bounds, Error, Scalar, Table, decode_scalar, encode_scalar, parse_decimal};
+use zkc_kernels::arkworks::Error;
+use zkc_kernels::arkworks::bls12_381::Bounds;
+use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::Table;
+use zkc_kernels::arkworks::bls12_381::decode_scalar;
+use zkc_kernels::arkworks::bls12_381::encode_scalar;
+use zkc_kernels::arkworks::bls12_381::parse_decimal;
 
 // Independent maintained high-half semantics: split logical halves recursively,
 // rather than using bit reversal or the adapter's adjacent-pair loop.
@@ -36,7 +42,8 @@ fn table_diagnostics_expose_shape_without_evaluations() {
         |values: &[Scalar]| {
             format!(
                 "{:?}",
-                zkc_kernels::MsbTable::from_logical(values, &bounds()).unwrap()
+                zkc_kernels::arkworks::bls12_381::MsbTable::from_logical(values, &bounds())
+                    .unwrap()
             )
         },
     ] {

@@ -4,7 +4,7 @@
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
 use std::sync::Arc;
-pub(crate) use zkc_kernels::fields::Coefficient;
+pub(crate) use zkc_kernels::field::Coefficient;
 
 pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
@@ -82,10 +82,10 @@ family!(
     Bn254Matrix,
     Bn254Polynomial,
     Bn254Round,
-    |s| zkc_kernels::bn254::parse_decimal(s).map_err(crate::ark)
+    |s| zkc_kernels::arkworks::bn254::parse_decimal(s).map_err(crate::ark)
 );
 family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
-    zkc_kernels::parse_decimal(s).map_err(crate::ark)
+    zkc_kernels::arkworks::bls12_381::parse_decimal(s).map_err(crate::ark)
 });
 family!(
     RistrettoScalar,
@@ -94,7 +94,7 @@ family!(
     RistrettoMatrix,
     RistrettoPolynomial,
     RistrettoRound,
-    |s| zkc_kernels::fields::parse_ristretto_decimal(s).map_err(crate::field_error)
+    |s| zkc_kernels::dalek::ristretto255::parse_decimal(s).map_err(crate::field_error)
 );
 
 family!(

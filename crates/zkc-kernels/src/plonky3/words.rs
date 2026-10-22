@@ -82,7 +82,7 @@ pub fn valid_elements<E: BasedVectorSpace<KoalaBear>>(bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::KoalaBearExt8;
+    use crate::plonky3::KoalaBearExt8;
     use p3_field::{Field, PrimeCharacteristicRing};
 
     #[test]

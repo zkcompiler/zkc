@@ -7,7 +7,8 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 pub use transcript::root;
 use transcript::*;
-use zkc_kernels::{GroupPoint, Scalar};
+use zkc_kernels::arkworks::bls12_381::G1;
+use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_test_support::hex;
 
 struct Oracle<'a> {
@@ -173,7 +174,7 @@ pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: u64)
                     let commitment = group(&oracle.message(&path, &[i, j], "step", "commitment"));
                     let challenge = oracle.challenge(&path, &[i, j], "step", "draw_challenge");
                     let response = scalar(&oracle.message(&path, &[i, j], "step", "response"));
-                    let base = GroupPoint::generator();
+                    let base = G1::generator();
                     assert_eq!(commitment, base.scale(Scalar::from(7)));
                     assert_eq!(response, Scalar::from(7) + challenge * Scalar::from(3));
                     assert_eq!(

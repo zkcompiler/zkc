@@ -1,6 +1,6 @@
 # External construction primitives
 
-`zkc_kernels::external` supplies typed primitives and an explicit wire/event
+`zkc_kernels::interop` supplies typed primitives and an explicit wire/event
 boundary. It adds no zkc prefix. Artifact-bound Merlin/Spongefish providers are
 separate and unchanged by this module. Protocol code owns item grouping, event
 order, guards, initialization, attempts, and proof encoding.
@@ -66,7 +66,7 @@ Monero hash and reduction use RustCrypto sha3 0.12.0 (`Keccak256`, **not**
 `Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` in the replay
 fixtures comes from the pinned upstream harness. The [source Bulletproofs+
 library](../../../../libraries/arguments/bulletproofs/README.md) derives this initial value
-with the separate [Edwards point map](../edwards.rs); its BSD source notice is
+with the separate [Edwards point map](../dalek/edwards25519.rs); its BSD source notice is
 retained in [UPSTREAM-LICENSE-BSD](UPSTREAM-LICENSE-BSD). Independent
 [map vectors](../../tests/fixtures/README.md) cover that primitive. Six additional
 hash vectors use the retained pinned native `cn_fast_hash` shared library and

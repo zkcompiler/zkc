@@ -1,9 +1,10 @@
-use crate::{Bounds, Error, RandomSource, Scalar, Table};
-use crate::{
-    bounds::vector,
-    codec::{self, G1_BYTES, G2_BYTES, HEADER, Kind},
-    error::same_arity,
-};
+use super::codec::{self, G1_BYTES, G2_BYTES, HEADER, Kind};
+use crate::arkworks::Error;
+use crate::arkworks::bls12_381::Bounds;
+use crate::arkworks::bls12_381::RandomSource;
+use crate::arkworks::bls12_381::Scalar;
+use crate::arkworks::bls12_381::Table;
+use crate::arkworks::{allocation::vector, error::same_arity};
 use ark_bls12_381::Bls12_381;
 use ark_ec::AffineRepr;
 use ark_poly_commit::multilinear_pc::{MultilinearPC, data_structures as upstream};

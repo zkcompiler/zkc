@@ -7,7 +7,13 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 use common::{bounds, keys};
 use sha2::{Digest, Sha256};
-use zkc_kernels::{Bounds, Error, PROFILE, ProverKey, Scalar, Table, VerifierKey};
+use zkc_kernels::arkworks::Error;
+use zkc_kernels::arkworks::bls12_381::Bounds;
+use zkc_kernels::arkworks::bls12_381::PROFILE;
+use zkc_kernels::arkworks::bls12_381::ProverKey;
+use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::Table;
+use zkc_kernels::arkworks::bls12_381::VerifierKey;
 
 const HEADER: usize = 81;
 

@@ -5,7 +5,7 @@ mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::*;
 
 #[test]
@@ -119,7 +119,7 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .verifier_key()
         .to_bytes(&Policy::default().ark_bounds())
         .unwrap();
-    let key = zkc_kernels::VerifierKey::from_bytes(
+    let key = zkc_kernels::arkworks::bls12_381::VerifierKey::from_bytes(
         &vkbytes,
         keys.verifier_key().metadata().key_id(),
         &Policy::default().ark_bounds(),

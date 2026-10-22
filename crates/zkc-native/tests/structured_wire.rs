@@ -3,9 +3,7 @@
 use zkc_runtime::interpreter::Runner;
 mod common;
 use serde_json::json;
-use zkc_native::{
-    GroupPoint, NativeBackend, NativeWireError as Error, Policy, Scalar, Value, Variant,
-};
+use zkc_native::{G1, NativeBackend, NativeWireError as Error, Policy, Scalar, Value, Variant};
 use zkc_runtime::vm::{DecodeReason, LogicalType, Value as RuntimeValue};
 use zkc_test_support::variants::logical;
 fn variant(ty: &str, tag: usize, values: Vec<Value>) -> Value {
@@ -87,7 +85,7 @@ fn complete_expected_types_frame_records_alternatives_and_dynamic_data() {
                             .collect::<Vec<_>>()
                             .into(),
                     ),
-                    Value::Groups(vec![GroupPoint::generator(); n].into()),
+                    Value::Groups(vec![G1::generator(); n].into()),
                     Value::Indices(vec![u64::MAX; n].into()),
                 ],
             );
@@ -97,7 +95,7 @@ fn complete_expected_types_frame_records_alternatives_and_dynamic_data() {
     }
     for value in [
         Value::Vector(vec![Scalar::from(3)].into()),
-        Value::Groups(vec![GroupPoint::identity()].into()),
+        Value::Groups(vec![G1::identity()].into()),
         Value::Indices(vec![7].into()),
     ] {
         roundtrip(&value);
@@ -165,7 +163,7 @@ fn malformed_tags_lengths_and_scalars_keep_typed_errors() {
     );
     for value in [
         Value::Vector(vec![Scalar::from(1)].into()),
-        Value::Groups(vec![GroupPoint::generator()].into()),
+        Value::Groups(vec![G1::generator()].into()),
         Value::Indices(vec![1].into()),
     ] {
         let mut bad = backend.encode_native_value(&value).unwrap();
@@ -261,12 +259,15 @@ fn aggregate_preflight_refuses_before_payload_construction_and_production_agrees
 fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
     use std::sync::Arc;
     let bounds = Policy::default().ark_bounds();
-    let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
     let state = keys
         .prover_key()
         .commit(
-            &zkc_kernels::Table::from_logical_vec(vec![Scalar::from(2), Scalar::from(5)], &bounds)
-                .unwrap(),
+            &zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
+                vec![Scalar::from(2), Scalar::from(5)],
+                &bounds,
+            )
+            .unwrap(),
         )
         .unwrap();
     let (x, proof) = state.open(&[Scalar::from(7)]).unwrap();
@@ -300,7 +301,7 @@ fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
         common::ark_backend(None).decode_native_value(&value.physical_type(), &bytes),
         Err(Error::Backend(_))
     ));
-    let other = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
+    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(1, &bounds).unwrap();
     let wrong = common::backend()
         .verifier(other.verifier_key().clone())
         .build();
@@ -329,7 +330,7 @@ fn collection_limits_accumulate_across_record_children() {
         ),
         (
             "groups:bls12-381.g1",
-            Value::Groups(vec![GroupPoint::generator(); 2].into()),
+            Value::Groups(vec![G1::generator(); 2].into()),
             Policy {
                 max_groups: 3,
                 ..Policy::default()
@@ -415,7 +416,7 @@ fn formed_type_depth_and_leaf_preflight_define_the_boundary() {
             .unwrap_err(),
         Error::Invalid(DecodeReason::Length)
     );
-    let groups = Value::Groups(vec![GroupPoint::generator()].into());
+    let groups = Value::Groups(vec![G1::generator()].into());
     let mut bytes = roundtrip(&groups);
     bytes[10..].fill(255);
     assert_eq!(
@@ -424,7 +425,7 @@ fn formed_type_depth_and_leaf_preflight_define_the_boundary() {
             .unwrap_err(),
         Error::Invalid(DecodeReason::Group)
     );
-    assert!(std::mem::size_of::<GroupPoint>() <= 128);
+    assert!(std::mem::size_of::<G1>() <= 128);
 }
 
 #[test]
@@ -504,9 +505,12 @@ fn nested_fixed_arrays_keep_empty_shape_and_full_retained_charge() {
 fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     use std::sync::Arc;
     use zkc_runtime::{logical as encoding, vm::Identity};
-    let keys =
-        zkc_kernels::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
-    let table = zkc_kernels::Table::from_logical_vec(
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(
+        1,
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
+    let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
         vec![Scalar::from(2), Scalar::from(5)],
         &Policy::default().ark_bounds(),
     )
@@ -638,7 +642,7 @@ fn typed_variant_payloads_preserve_aggregate_group_limits() {
     let value = variant(
         &ty,
         0,
-        vec![Value::Groups(vec![GroupPoint::generator(); 3].into()); 2],
+        vec![Value::Groups(vec![G1::generator(); 3].into()); 2],
     );
     let bytes = bounded(Policy::default())
         .encode_native_value(&value)
@@ -674,7 +678,7 @@ fn native_and_wire_collection_admission_agree_across_nested_shapes() {
         )
     }
     let vector = Value::Vector(vec![Scalar::from(3); 3].into());
-    let groups = Value::Groups(vec![GroupPoint::generator(); 2].into());
+    let groups = Value::Groups(vec![G1::generator(); 2].into());
     let mixed = logical(
         "Mixed",
         json!([["payload", ["indices", "vector:bls12-381.fr"]]]),
@@ -909,11 +913,9 @@ fn runtime_owned_handle_collections_count_handles_and_keep_backing_limits() {
     let (_, state) =
         tree::commit(vec![KoalaBear::default(); 8], shape, policy.max_value_bytes).unwrap();
     let state = oracle::State::Base(Arc::new(state));
-    let (_, merkle) = zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(
-        vec![KoalaBear::default(); 8],
-        shape,
-        policy.max_value_bytes,
-    )
+    let (_, merkle) = zkc_kernels::plonky3::merkle::commit::<
+        zkc_kernels::plonky3::merkle::poseidon2::Base,
+    >(vec![KoalaBear::default(); 8], shape, policy.max_value_bytes)
     .unwrap();
     let merkle = merkle::State::Poseidon2KoalaBear(Arc::new(merkle));
     let collections = [
@@ -998,10 +1000,14 @@ fn singular_pcs_handles_do_not_invent_backing_element_collection_counts() {
         max_table_elements: 8,
         ..Policy::default()
     };
-    let keys = zkc_kernels::Keys::setup_for_development(3, &policy.ark_bounds()).unwrap();
-    let table =
-        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(7); 8], &policy.ark_bounds())
+    let keys =
+        zkc_kernels::arkworks::bls12_381::Keys::setup_for_development(3, &policy.ark_bounds())
             .unwrap();
+    let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
+        vec![Scalar::from(7); 8],
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let backend = common::backend()
         .policy(policy)

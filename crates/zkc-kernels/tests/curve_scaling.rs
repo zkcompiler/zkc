@@ -7,7 +7,8 @@ macro_rules! scaling_tests {
             use ark_ec::{AffineRepr, CurveGroup};
             use ark_ff::{One, PrimeField};
             use ark_serialize::CanonicalSerialize;
-            use zkc_kernels::{Error, SCALING_CHUNK_CAP};
+            use zkc_kernels::arkworks::Error;
+            use zkc_kernels::arkworks::scaling::CHUNK_CAP as SCALING_CHUNK_CAP;
             type Point = $point;
             type Scalar = $scalar;
 
@@ -194,25 +195,25 @@ macro_rules! scaling_tests {
 
 scaling_tests!(
     bls_g1,
-    zkc_kernels::GroupPoint,
+    zkc_kernels::arkworks::bls12_381::G1,
     ark_bls12_381::G1Affine,
     ark_bls12_381::Fr
 );
 scaling_tests!(
     bls_g2,
-    zkc_kernels::bls12_381::G2,
+    zkc_kernels::arkworks::bls12_381::G2,
     ark_bls12_381::G2Affine,
     ark_bls12_381::Fr
 );
 scaling_tests!(
     bn_g1,
-    zkc_kernels::bn254::G1,
+    zkc_kernels::arkworks::bn254::G1,
     ark_bn254::G1Affine,
     ark_bn254::Fr
 );
 scaling_tests!(
     bn_g2,
-    zkc_kernels::bn254::G2,
+    zkc_kernels::arkworks::bn254::G2,
     ark_bn254::G2Affine,
     ark_bn254::Fr
 );

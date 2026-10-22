@@ -57,7 +57,7 @@ permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
 external-work permutation per state before computing. `zkc-kernels::plonky3::words` owns the
 canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
 Bit reversal of vectors and table rows is a positional kernel of every field
-family. `merkle` installs row commitments backed by `zkc-kernels::merkle`: an `Instance` names a
+family. `merkle` installs row commitments backed by `zkc-kernels::plonky3::merkle`: an `Instance` names a
 leaf hash, compression, element type and canonical digest encoding over a
 Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
 Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
@@ -175,7 +175,7 @@ Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
-[their source pins and construction details](../zkc-kernels/src/external/README.md).
+[their source pins and construction details](../zkc-kernels/src/interop/README.md).
 
 ## Validation
 

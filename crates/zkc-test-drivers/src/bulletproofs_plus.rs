@@ -34,7 +34,7 @@ fn main() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| zkc_kernels::fields::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
+        .map(|v| zkc_kernels::dalek::ristretto255::parse_decimal(v.as_str().unwrap()).unwrap())
         .collect();
     let commitments = unhex(case["commitments"].as_str().unwrap());
     let rounds = 6 + amounts.len().next_power_of_two().trailing_zeros() as u64;
@@ -79,7 +79,7 @@ fn main() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| zkc_kernels::fields::parse_ristretto_decimal(v.as_str().unwrap()).unwrap())
+        .map(|v| zkc_kernels::dalek::ristretto255::parse_decimal(v.as_str().unwrap()).unwrap())
         .collect();
     let expected_draws = coins.len();
     let port = role[4][0][0].as_str().unwrap().parse().unwrap();

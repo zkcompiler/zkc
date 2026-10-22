@@ -1,5 +1,5 @@
 //! Immutable canonical sparse COO and typed contractions, without VM policy.
-use crate::fields::Coefficient;
+use crate::field::Coefficient;
 use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {

@@ -1,4 +1,7 @@
-use crate::{Bounds, Error, Scalar, bounds::vector};
+use crate::arkworks::Error;
+use crate::arkworks::allocation::vector;
+use crate::arkworks::bls12_381::Bounds;
+use crate::arkworks::bls12_381::Scalar;
 use ark_std::{
     UniformRand,
     rand::{
@@ -38,8 +41,8 @@ impl RandomSource {
     }
 
     /// Draw a uniformly sampled BN254 scalar from this advancing OS-seeded source.
-    pub fn bn254_scalar(&mut self) -> crate::bn254::Scalar {
-        crate::bn254::Scalar::rand(&mut self.rng)
+    pub fn bn254_scalar(&mut self) -> crate::arkworks::bn254::Scalar {
+        crate::arkworks::bn254::Scalar::rand(&mut self.rng)
     }
 
     /// Draw a point after checking admission and reserving its vector storage.
@@ -48,7 +51,7 @@ impl RandomSource {
     pub fn point(&mut self, n: usize, bounds: &Bounds) -> Result<Vec<Scalar>, Error> {
         bounds.arity(n)?;
         let bytes = n
-            .checked_mul(crate::SCALAR_BYTES)
+            .checked_mul(crate::arkworks::bls12_381::SCALAR_BYTES)
             .ok_or(Error::CapacityOverflow)?;
         bounds.bytes(bytes)?;
         let mut point = vector(n)?;

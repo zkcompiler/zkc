@@ -9,7 +9,7 @@
 //! pattern of the right width is a distinct element, so decoding never
 //! reduces. Plonky3's integer constructors such as `from_u64` cast through
 //! GF(2) and keep only the parity; values here are built from bit patterns.
-use crate::fields::{Error, Result};
+use crate::field::{Error, Result};
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 
 /// `GF(2)[x]/(x^64 + x^4 + x^3 + x + 1)` in the polynomial basis.

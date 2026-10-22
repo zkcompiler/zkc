@@ -6,7 +6,7 @@ use std::path::Path;
 use zkc::execution::InputValue;
 use zkc::run::{HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority};
 use zkc_native::services::{ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::host::joint::{Bundle, BundleLimits};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
@@ -695,7 +695,7 @@ fn main() {
         let mut prover = runner(
             &group,
             "role00000000",
-            vec![Value::Curve(GroupPoint::generator()), field(3)],
+            vec![Value::Curve(G1::generator()), field(3)],
         );
         let mut verifier = runner(&group, "role00000001", vec![]);
         let point = send(&mut prover);
@@ -703,7 +703,7 @@ fn main() {
         assert!(returned(&mut prover).is_empty());
         let result = returned(&mut verifier);
         assert!(matches!(&result[0], Value::Curve(point)
-            if *point == GroupPoint::generator().scale(Scalar::from(3u64))));
+            if *point == G1::generator().scale(Scalar::from(3u64))));
         assert!(matches!(result[1], Value::Bool(true)));
 
         let sumcheck = load(&format!("relation_sumcheck-Demo-{optimized}.bundle"));
@@ -867,12 +867,12 @@ fn main() {
         let mut prover = runner(
             &bundle("group"),
             "role00000000",
-            vec![Value::Curve(GroupPoint::generator()), field(3)],
+            vec![Value::Curve(G1::generator()), field(3)],
         );
         let mut verifier = runner(&bundle("group"), "role00000001", vec![]);
         receive(&mut verifier, send(&mut prover));
         assert!(matches!(&returned(&mut verifier)[0], Value::Curve(point)
-            if *point == GroupPoint::generator().scale(Scalar::from(4u64))));
+            if *point == G1::generator().scale(Scalar::from(4u64))));
         assert!(returned(&mut prover).is_empty());
         for (a, b, expected) in [
             (true, false, 3),

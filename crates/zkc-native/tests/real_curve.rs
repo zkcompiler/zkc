@@ -4,7 +4,7 @@ use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::*;
 use zkc_runtime::vm::{Backend, ErrorCode};
 fn real() -> NativeBackend {
@@ -13,7 +13,7 @@ fn real() -> NativeBackend {
 fn groups(n: &[u64]) -> Value {
     Value::groups(
         &n.iter()
-            .map(|n| GroupPoint::generator().scale(Scalar::from(*n)))
+            .map(|n| G1::generator().scale(Scalar::from(*n)))
             .collect::<Vec<_>>(),
         &Policy::default(),
     )
@@ -113,7 +113,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
     let (out, _) = run(&bytes, real(), vec![f(7)]);
     let out = out.unwrap();
     let Value::Curve(p) = out[0] else { panic!() };
-    assert_eq!(p, GroupPoint::generator().scale(Scalar::from(8)));
+    assert_eq!(p, G1::generator().scale(Scalar::from(8)));
     assert!(matches!(out[2], Value::Bool(true)));
     let bad = prog(
         &[("points", "groups")],
@@ -178,7 +178,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
             &run(
                 &b,
                 backend,
-                vec![groups(&[1]), Value::Curve(GroupPoint::identity())]
+                vec![groups(&[1]), Value::Curve(G1::identity())]
             )
             .0
             .unwrap_err()
@@ -189,14 +189,15 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
 #[test]
 fn public_codecs_are_exact_and_nominally_typed() {
     let b = real();
-    let g = Value::Curve(GroupPoint::generator());
+    let g = Value::Curve(G1::generator());
     let wire = b.encode_native_value(&g).unwrap();
     assert_eq!(&wire[..6], b"ZKCV\x00\x09");
     assert_eq!(wire.len(), 54);
     // A scalar-sized payload is malformed for G1; never map the
     // exposed discrete logarithm onto a curve generator.
     let mut malformed_group = b"ZKCV\x00\x09".to_vec();
-    malformed_group.extend(zkc_kernels::encode_scalar(&Scalar::from(1)).unwrap());
+    malformed_group
+        .extend(zkc_kernels::arkworks::bls12_381::encode_scalar(&Scalar::from(1)).unwrap());
     assert!(
         b.decode_native_value(&g.physical_type(), &malformed_group)
             .is_err()
@@ -204,7 +205,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
     assert!(b.decode_native_value(&f(1).physical_type(), &wire).is_err());
     for value in [
         g,
-        Value::Curve(GroupPoint::identity()),
+        Value::Curve(G1::identity()),
         groups(&[]),
         groups(&[0, 1, 7]),
     ] {
@@ -312,7 +313,7 @@ fn multibase_nonce_stages_zero_and_reuse() {
             let Value::Groups(rs) = &out[0] else { panic!() };
             assert_eq!(rs.len(), bases.len());
             for (r, base) in rs.iter().zip(&bases) {
-                assert_eq!(*r, GroupPoint::generator().scale(Scalar::from(base * k)));
+                assert_eq!(*r, G1::generator().scale(Scalar::from(base * k)));
             }
             assert_eq!(scalar(&out[1]), Scalar::from(k + 13 * 7));
             let state = backend.observe(token(&old)).unwrap();
@@ -418,7 +419,7 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
     let foreign = Keys::setup_for_development(1, &p.ark_bounds()).unwrap();
     let other_arity = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
     let zero = |key: &Keys| {
-        let table = zkc_kernels::Table::from_logical_vec(
+        let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
             vec![Scalar::from(0); 1 << key.verifier_key().metadata().arity()],
             &p.ark_bounds(),
         )

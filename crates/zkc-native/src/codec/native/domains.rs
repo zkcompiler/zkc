@@ -66,7 +66,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             }
             Value::Vector(values) => {
                 for x in values.iter() {
-                    out.extend(zkc_kernels::encode_scalar(x).map_err(ark)?);
+                    out.extend(zkc_kernels::arkworks::bls12_381::encode_scalar(x).map_err(ark)?);
                 }
             }
             Value::RistrettoVector(values) => {

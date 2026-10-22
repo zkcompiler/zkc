@@ -4,8 +4,11 @@ use ark_bls12_381::{Bls12_381, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2
 use ark_ec::{AffineRepr, CurveGroup, pairing::Pairing};
 use ark_ff::{One, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
-use zkc_kernels::GroupPoint as G1;
-use zkc_kernels::bls12_381::{self, G2, Gt, pairing};
+use zkc_kernels::arkworks::bls12_381;
+use zkc_kernels::arkworks::bls12_381::G1;
+use zkc_kernels::arkworks::bls12_381::G2;
+use zkc_kernels::arkworks::bls12_381::Gt;
+use zkc_kernels::arkworks::bls12_381::pairing;
 
 fn hex(text: &str) -> Vec<u8> {
     (0..text.len())

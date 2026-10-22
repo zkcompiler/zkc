@@ -4,7 +4,8 @@ mod transcript;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 pub use transcript::*;
-use zkc_kernels::{GroupPoint, Scalar};
+use zkc_kernels::arkworks::bls12_381::G1;
+use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_test_support::hex;
 pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: Option<Scalar>) {
     let root = root(envelope, input);
@@ -130,7 +131,7 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
             t.absorb(b"value", payload);
         }
         for (i, commitment) in commitments.into_iter().enumerate() {
-            let base = GroupPoint::generator().scale(Scalar::from(if i == 0 { 1 } else { 7 }));
+            let base = G1::generator().scale(Scalar::from(if i == 0 { 1 } else { 7 }));
             let public = base.scale(Scalar::from(3));
             if let Some(k) = nonce {
                 assert_eq!(commitment, base.scale(k));

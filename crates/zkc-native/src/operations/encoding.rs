@@ -1,11 +1,12 @@
 //! Exact mathematical encodings, separate from native transport and observation.
 use crate::{
-    Binary64, Binary64Ext3, GroupPoint, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result,
-    Scalar, Value, ark, refused, value::size,
+    Binary64, Binary64Ext3, G1, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Scalar,
+    Value, ark, refused, value::size,
 };
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
-use zkc_kernels::plonky3::words::{self, Form};
+use zkc_kernels::plonky3::words;
+use zkc_kernels::plonky3::words::Form;
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
@@ -95,7 +96,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
 }
 
 fn field_be(value: &Scalar) -> Result<[u8; 32]> {
-    let mut bytes = zkc_kernels::encode_scalar(value).map_err(ark)?;
+    let mut bytes = zkc_kernels::arkworks::bls12_381::encode_scalar(value).map_err(ark)?;
     bytes.reverse();
     Ok(bytes)
 }
@@ -526,7 +527,7 @@ pub(crate) fn apply(
             for chunk in bytes.as_chunks::<32>().0.iter().take(count) {
                 let mut little = *chunk;
                 little.reverse();
-                match zkc_kernels::decode_scalar(&little) {
+                match zkc_kernels::arkworks::bls12_381::decode_scalar(&little) {
                     Ok(value) => values.push(value),
                     Err(_) => {
                         valid = false;
@@ -543,7 +544,7 @@ pub(crate) fn apply(
             policy.output(1024, available)?;
             let value = if let Ok(mut bytes) = <[u8; 32]>::try_from(bytes.as_ref()) {
                 bytes.reverse();
-                zkc_kernels::decode_scalar(&bytes).ok()
+                zkc_kernels::arkworks::bls12_381::decode_scalar(&bytes).ok()
             } else {
                 None
             };
@@ -625,7 +626,8 @@ pub(crate) fn apply(
                 .map_err(|_| refused("encoding-width"))?;
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(
-                zkc_kernels::edwards::map(input).ok_or_else(|| refused("edwards-map"))?,
+                zkc_kernels::dalek::edwards25519::map(input)
+                    .ok_or_else(|| refused("edwards-map"))?,
             )])
         }
         ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
@@ -656,10 +658,10 @@ pub(crate) fn apply(
             policy.output(1024, available)?;
             // Exact width, subgroup validation and canonical re-encoding are
             // owned by the checked group adapter; no transcript state is touched.
-            let point = GroupPoint::from_bytes(bytes).ok();
+            let point = G1::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::Curve(point.unwrap_or_else(GroupPoint::identity)),
+                Value::Curve(point.unwrap_or_else(G1::identity)),
             ])
         }
         _ => Err(refused("encoding-operands")),
@@ -918,11 +920,8 @@ mod tests {
                 "encoding.groups_compressed",
                 "encoding.group_compressed",
                 Identity::Bls12381G1,
-                Value::Groups(vec![GroupPoint::identity(), GroupPoint::generator()].into()),
-                vec![
-                    Value::Curve(GroupPoint::identity()),
-                    Value::Curve(GroupPoint::generator()),
-                ],
+                Value::Groups(vec![G1::identity(), G1::generator()].into()),
+                vec![Value::Curve(G1::identity()), Value::Curve(G1::generator())],
             ),
             (
                 "encoding.groups_compressed",
@@ -1213,7 +1212,7 @@ mod tests {
         let wide = [0x5a; 64];
         assert!(
             matches!(run("encoding.field_reduce_be", &[bytes(&wide)]).as_slice(),
-            [Value::Field(v)] if *v == zkc_kernels::scalar_from_wide_be(&wide))
+            [Value::Field(v)] if *v == zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&wide))
         );
     }
     #[test]
@@ -1252,20 +1251,16 @@ mod tests {
     }
     #[test]
     fn group_decoder_rejects_malformed_encodings_without_failing_the_kernel() {
-        for value in [
-            GroupPoint::generator(),
-            GroupPoint::identity(),
-            GroupPoint::generator().neg(),
-        ] {
+        for value in [G1::generator(), G1::identity(), G1::generator().neg()] {
             let encoded = run("encoding.group_compressed", &[Value::Curve(value)]);
             assert!(
                 matches!(run("encoding.group_from_compressed", &encoded).as_slice(),
                 [Value::Bool(true), Value::Curve(p)] if *p == value)
             );
         }
-        let mut bad_infinity = GroupPoint::identity().to_bytes().unwrap();
+        let mut bad_infinity = G1::identity().to_bytes().unwrap();
         bad_infinity[47] = 1;
-        let mut bad_flags = GroupPoint::identity().to_bytes().unwrap();
+        let mut bad_flags = G1::identity().to_bytes().unwrap();
         bad_flags[0] |= 0x20;
         // x=0 has y=2 on the curve, but is not in the prime-order subgroup.
         let mut torsion = vec![0; 48];
@@ -1292,7 +1287,7 @@ mod tests {
         ] {
             assert!(
                 matches!(run("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
-                [Value::Bool(false), Value::Curve(p)] if *p == GroupPoint::identity())
+                [Value::Bool(false), Value::Curve(p)] if *p == G1::identity())
             );
         }
         assert!(
@@ -1343,7 +1338,7 @@ mod tests {
             vec![255; 96],
             signed_infinity.to_vec(),
             uncompressed.to_vec(),
-            GroupPoint::generator().to_bytes().unwrap().to_vec(),
+            G1::generator().to_bytes().unwrap().to_vec(),
         ] {
             assert!(
                 matches!(g2("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),

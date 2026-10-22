@@ -67,7 +67,7 @@ impl std::ops::Neg for EdwardsPrime {
 // 4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5, src/crypto/crypto-ops.c.
 // Its sign test and Edwards y coordinate suffice: dalek reconstructs x.
 // This is the legacy field-element map, not an RFC 9380 hash-to-curve suite.
-// See external/UPSTREAM-LICENSE-BSD. The implementation is variable-time; use it for public generator inputs.
+// See interop/UPSTREAM-LICENSE-BSD. The implementation is variable-time; use it for public generator inputs.
 #[derive(ark_ff::MontConfig)]
 #[modulus = "57896044618658097711785492504343953926634992332820282019728792003956564819949"]
 #[generator = "2"]
@@ -113,7 +113,7 @@ mod tests {
     fn legacy_map_matches_pinned_monero() {
         // Monero 4f92268d, ge_fromfe_frombytes_vartime followed by ge_mul8.
         let vectors: Vec<(String, String)> =
-            serde_json::from_str(include_str!("../tests/fixtures/edwards-map.json")).unwrap();
+            serde_json::from_str(include_str!("../../tests/fixtures/edwards-map.json")).unwrap();
         for (input, expected) in vectors {
             assert_eq!(
                 map(bytes(&input)).unwrap().to_bytes(),

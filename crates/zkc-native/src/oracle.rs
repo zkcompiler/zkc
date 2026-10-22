@@ -3,7 +3,10 @@
 //! and query scheduling.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_kernels::plonky3::oracle::{self as tree, Digest, Error, Shape};
+use zkc_kernels::plonky3::oracle as tree;
+use zkc_kernels::plonky3::oracle::Digest;
+use zkc_kernels::plonky3::oracle::Error;
+use zkc_kernels::plonky3::oracle::Shape;
 use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
     OperationSignature, PhysicalType, Type,

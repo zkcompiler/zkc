@@ -2,9 +2,7 @@
 #[path = "domains/support.rs"]
 mod support;
 use curve25519_dalek::traits::Identity as _;
-use zkc_native::{
-    Bls12381G2, Bls12381Gt, Bn254G1, Bn254G2, Bn254Gt, GroupPoint, Policy, Scalar, Value,
-};
+use zkc_native::{Bls12381G2, Bls12381Gt, Bn254G1, Bn254G2, Bn254Gt, G1, Policy, Scalar, Value};
 use zkc_runtime::vm::{Backend, OperationBinding, Value as RuntimeValue};
 
 fn binding(group: &str, contract: &str) -> OperationBinding {
@@ -174,7 +172,7 @@ fn edwards_native_frames_preserve_subgroup_and_vector_boundaries() {
 fn bls_g1_identity() {
     check(
         "bls12-381.g1",
-        Value::Curve(GroupPoint::identity()),
+        Value::Curve(G1::identity()),
         support::field(false, 0),
         support::field(false, 7),
         Some((support::vector(false, &[]), support::groups(false, &[]))),

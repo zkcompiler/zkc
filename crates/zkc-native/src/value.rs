@@ -1,8 +1,13 @@
 use crate::{Capability, Result, exhausted, refused};
 use std::sync::Arc;
-use zkc_kernels::{
-    Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
-};
+use zkc_kernels::arkworks::bls12_381::Bounds;
+use zkc_kernels::arkworks::bls12_381::Commitment;
+use zkc_kernels::arkworks::bls12_381::CommittedTable;
+use zkc_kernels::arkworks::bls12_381::OpeningProof;
+use zkc_kernels::arkworks::bls12_381::ProverKey;
+use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::Table;
+use zkc_kernels::arkworks::bls12_381::VerifierKey;
 use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
@@ -225,7 +230,7 @@ value_inventory! {
     ),
     Field(Scalar),
     Table(Arc<Table>),
-    TableMsb(Arc<zkc_kernels::MsbTable>),
+    TableMsb(Arc<zkc_kernels::arkworks::bls12_381::MsbTable>),
     Point(Arc<[Scalar]>),
     Round([Scalar; 3]),
     Bool(bool),
@@ -239,8 +244,8 @@ value_inventory! {
     VerifierKey(Arc<VerifierKey>),
     Nonce(Capability),
     Transcript(Capability),
-    Curve(zkc_kernels::GroupPoint),
-    Groups(Arc<[zkc_kernels::GroupPoint]>),
+    Curve(zkc_kernels::arkworks::bls12_381::G1),
+    Groups(Arc<[zkc_kernels::arkworks::bls12_381::G1]>),
 }
 
 impl Value {
@@ -941,7 +946,10 @@ impl Value {
         }
     }
     /// Bounded host constructor for real G1 public vectors.
-    pub fn groups(values: &[zkc_kernels::GroupPoint], policy: &Policy) -> Result<Self> {
+    pub fn groups(
+        values: &[zkc_kernels::arkworks::bls12_381::G1],
+        policy: &Policy,
+    ) -> Result<Self> {
         policy.groups(values.len())?;
         let mut points = Vec::new();
         points
@@ -976,8 +984,10 @@ impl RuntimeValue for Value {
             Self::Bool(value) => Some(vec![u8::from(*value)]),
             Self::Index(value) => Some(value.to_le_bytes().to_vec()),
             Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
-            Self::Field(value) => zkc_kernels::encode_scalar(value).ok().map(|v| v.to_vec()),
-            Self::Bn254Field(value) => zkc_kernels::bn254::encode_scalar(value)
+            Self::Field(value) => zkc_kernels::arkworks::bls12_381::encode_scalar(value)
+                .ok()
+                .map(|v| v.to_vec()),
+            Self::Bn254Field(value) => zkc_kernels::arkworks::bn254::encode_scalar(value)
                 .ok()
                 .map(|v| v.to_vec()),
             Self::KoalaBearField(value) => {
@@ -1363,7 +1373,7 @@ pub(crate) fn opening_state_bytes(original: &Table, arity: usize) -> Result<usiz
 mod admission_size_tests {
     use super::*;
     use crate::{Domain, EntryPolicy, NativeBackend};
-    use zkc_kernels::Keys;
+    use zkc_kernels::arkworks::bls12_381::Keys;
 
     #[test]
     fn key_estimates_equal_imported_runtime_charges_at_small_ranks() {
@@ -1411,14 +1421,13 @@ mod admission_size_tests {
         let mut values = vec![
             Value::Field(Scalar::from(1)),
             Value::Bool(true),
-            Value::Curve(crate::GroupPoint::generator()),
+            Value::Curve(crate::G1::generator()),
             Value::Round([Scalar::from(1); 3]),
         ];
         for rank in 0..=3 {
             values.push(Value::table(&vec![Scalar::from(1); 1 << rank], &policy).unwrap());
             values.push(Value::point(vec![Scalar::from(1); rank], &policy).unwrap());
-            values
-                .push(Value::groups(&vec![crate::GroupPoint::generator(); rank], &policy).unwrap());
+            values.push(Value::groups(&vec![crate::G1::generator(); rank], &policy).unwrap());
         }
         let t = Value::table(&[Scalar::from(1); 4], &policy).unwrap();
         let Value::Table(t) = t else { unreachable!() };

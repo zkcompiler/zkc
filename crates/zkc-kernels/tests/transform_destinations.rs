@@ -1,8 +1,9 @@
 //! Public transform destinations must retain their exact shape and all coefficients.
-use zkc_kernels::{
-    KoalaBear as F,
-    plonky3::polynomial::{CoefficientBatch, Domain, Error, Kernels},
-};
+use zkc_kernels::plonky3::KoalaBear as F;
+use zkc_kernels::plonky3::polynomial::CoefficientBatch;
+use zkc_kernels::plonky3::polynomial::Domain;
+use zkc_kernels::plonky3::polynomial::Error;
+use zkc_kernels::plonky3::polynomial::Kernels;
 #[test]
 fn coefficient_batch_does_not_silently_truncate_a_nonzero_tail() {
     let domain = Domain::new(2, F::new(3), 8).unwrap();
@@ -86,11 +87,10 @@ fn coefficient_batches_allow_empty_columns_and_zero_polynomials() {
 }
 #[test]
 fn bn254_interpolation_checks_full_shape_before_writing() {
-    use zkc_kernels::{
-        Bn254Scalar as B,
-        bn254::polynomial::{Domain, coset_evaluate_at_into},
-        fields,
-    };
+    use zkc_kernels::arkworks::bn254::Scalar as B;
+    use zkc_kernels::arkworks::bn254::polynomial::Domain;
+    use zkc_kernels::arkworks::bn254::polynomial::coset_evaluate_at_into;
+    use zkc_kernels::field as fields;
     let domain = Domain::new(4, B::from(1u64)).unwrap();
     assert!(Domain::new(3, B::from(1u64)).is_none());
     assert!(Domain::new(4, B::from(0u64)).is_none());

@@ -142,7 +142,7 @@ pub(super) fn check_pinned_material(
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
     imports: &mut crate::host::setups::VerifierKeys,
-) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::VerifierKey>>> {
+) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>> {
     check(interface, authority)?;
     material_bytes(interface, material, capacity)?;
     interface

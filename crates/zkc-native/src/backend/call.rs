@@ -200,17 +200,17 @@ impl NativeCall {
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
             AttributeRule::Bn254Decimals => {
                 for literal in attributes {
-                    zkc_kernels::bn254::parse_decimal(literal).map_err(ark)?;
+                    zkc_kernels::arkworks::bn254::parse_decimal(literal).map_err(ark)?;
                 }
             }
             AttributeRule::FieldDecimals => {
                 for literal in attributes {
-                    zkc_kernels::parse_decimal(literal).map_err(ark)?;
+                    zkc_kernels::arkworks::bls12_381::parse_decimal(literal).map_err(ark)?;
                 }
             }
             AttributeRule::RistrettoDecimals => {
                 for literal in attributes {
-                    zkc_kernels::fields::parse_ristretto_decimal(literal)
+                    zkc_kernels::dalek::ristretto255::parse_decimal(literal)
                         .map_err(crate::field_error)?;
                 }
             }
