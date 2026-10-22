@@ -1133,6 +1133,12 @@ def scope_reasons(source, scope, proof_entry=None):
     if any((item.get("request", {}).get("subject") or {}).get("entry") not in entries
            for item in source.get("claims", [])):
         reasons.append("source request Entry is outside the selected scope")
+    if scope.get("selection") == "explicit":
+        populated = {(item.get("request", {}).get("subject") or {}).get("entry")
+                     for item in source.get("claims", [])}
+        for entry in entries:
+            if entry not in populated:
+                reasons.append(f"requested Entry has no matching source claims: {entry}")
     return reasons
 
 
@@ -1219,6 +1225,7 @@ def build(manifest_path, records, ledger=None, evidence_directory=None, reused_r
     return {"format": FORMAT, "subject": manifest["name"], **selected,
             "product": "certified_verifier", "scope": "ir-relative", "native_closure": "open",
             "source_claim_scope": scope, "source_claim_trials": trials,
+            "source_claim_inventory": (evidence or {}).get("source_claim_inventory", []),
             "manifest": {"path": relative, "sha256": sha256(manifest_path),
                 "schema": manifest.get("schema"), "entries": manifest.get("entries") or {}},
             "artifacts": {"attached": modules, "connected": connected}, "checker": environment,

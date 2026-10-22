@@ -27,24 +27,31 @@ def check(selected, lake):
     import hashlib
     toolchain = (ROOT / 'lean-toolchain').read_text()
     for directory, families in packages:
-        assert (directory / 'lean-toolchain').read_text() == toolchain, f'{directory}: toolchain mismatch'
+        if not ((directory / 'lean-toolchain').read_text() == toolchain):
+            raise AssertionError(f'{directory}: toolchain mismatch')
         manifest = json.loads((directory / 'lake-manifest.json').read_text())
         names = set()
         for dep in manifest['packages']:
-            assert dep['name'] not in names, f'duplicate dependency: {dep["name"]}'
+            if not (dep['name'] not in names):
+                raise AssertionError(f'duplicate dependency: {dep["name"]}')
             names.add(dep['name'])
             if dep['type'] == 'path':
-                assert any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])
+                if not (any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])):
+                    raise AssertionError("checks/check_library.py:37: any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])")
                 continue
-            assert dep['type'] == 'git' and re.fullmatch('[0-9a-f]{40}', dep['rev']), dep
+            if not (dep['type'] == 'git' and re.fullmatch('[0-9a-f]{40}', dep['rev'])):
+                raise AssertionError(dep)
             value = (dep['url'].removesuffix('.git'), dep['rev'])
-            assert dep['name'] not in pins or pins[dep['name']] == value, f'conflicting pin: {dep["name"]}'
+            if not (dep['name'] not in pins or pins[dep['name']] == value):
+                raise AssertionError(f'conflicting pin: {dep["name"]}')
             pins[dep['name']] = value
         if directory == ROOT:
-            assert not names.intersection({'Arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly'})
+            if not (not names.intersection({'Arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly'})):
+                raise AssertionError("checks/check_library.py:44: not names.intersection({'Arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly'})")
         config = tomllib.loads((directory / 'lakefile.toml').read_text())
         targets = {entry['name'] for kind in ('lean_lib', 'lean_exe') for entry in config.get(kind, [])}
-        assert set(config['defaultTargets']) == targets, f'{directory}: default targets omit maintained code'
+        if not (set(config['defaultTargets']) == targets):
+            raise AssertionError(f'{directory}: default targets omit maintained code')
         files = [p for family in families for p in (directory / family).rglob('*.lean')]
         files += [directory / (family + '.lean') for family in families if (directory / (family + '.lean')).is_file()]
         with HeaderParser(root=directory, lake=lake) as headers:
@@ -54,7 +61,8 @@ def check(selected, lake):
                 graph[owner] = headers.imports(source, path)
                 source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
                 if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcArkLib.')):
-                    assert source.startswith('module\n'), f'{path}: expected module-system source'
+                    if not (source.startswith('module\n')):
+                        raise AssertionError(f'{path}: expected module-system source')
     ownership = []
     for directory, families in packages:
         config = tomllib.loads((directory / 'lakefile.toml').read_text())
@@ -68,11 +76,13 @@ def check(selected, lake):
             if owner == other:
                 continue
             overlap = prefix == target or broad and target.startswith(prefix + '.') or other_broad and prefix.startswith(target + '.')
-            assert not overlap, f'overlapping Lake ownership: {owner}:{prefix} and {other}:{target}'
+            if not (not overlap):
+                raise AssertionError(f'overlapping Lake ownership: {owner}:{prefix} and {other}:{target}')
     for owner, imports in graph.items():
         for dep in imports:
             if dep.startswith(('ZkcSecurity.', 'ZkcArkLib.')):
-                assert dep in graph, f'unselected or missing owned import: {owner} -> {dep}'
+                if dep not in graph:
+                    raise AssertionError(f'unselected or missing owned import: {owner} -> {dep}')
     dependencies = audit_graph(graph, [family for _, families in packages for family in families])
     return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
             'modules': len(graph), 'dependencies': dependencies, 'pins': pins, 'source_sha256': source_hashes}

@@ -430,7 +430,7 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
         receipt['toolchain'] = (environment / 'lean-toolchain').read_text().strip()
         receipt['dependency_manifest_sha256'] = hashlib.sha256(
             (environment / 'lake-manifest.json').read_bytes()).hexdigest()
-        with subprocess.Popen([lake, 'env', 'lean', str(path.resolve())], cwd=environment,
+        with subprocess.Popen([lake, 'lean', str(path.resolve())], cwd=environment,
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               start_new_session=True) as child:
             try:

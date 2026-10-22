@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/BoundedStream.h"
@@ -504,6 +505,57 @@ Error detail::checkClosedSourceClaims(const ClosedEntry &entry, Work &work) {
           *imported, {decl.specifications.front().span});
   }
   return Error::success();
+}
+
+Expected<std::string> inspectSourceClaimInventory(const CheckedProject &project,
+                                                  const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  if (project.checkedWork() > limits.work ||
+      project.checkedDeclarations() > limits.declarations ||
+      project.checkedOperations() > limits.operations)
+    return detail::failure("source.limit",
+                           "checked claims exceed inspection limits");
+  detail::Work work{limits};
+  json::Array inventory;
+  for (const auto &owner : project.declarations()) {
+    if (auto e = work.charge(1, owner.span))
+      return std::move(e);
+    for (unsigned b = 0; b < owner.sourceClaims.size(); ++b) {
+      const auto &block = owner.sourceClaims[b];
+      const auto &subject = project.declarations()[block.subject->index];
+      const auto &module = project.declarations()[owner.module.index];
+      for (unsigned c = 0; c < block.claims.size(); ++c) {
+        const auto &claim = block.claims[c];
+        if (auto e = work.charge(1, claim.span))
+          return std::move(e);
+        json::Array arguments;
+        for (const auto &argument : block.arguments)
+          arguments.push_back(formatType(argument));
+        inventory.push_back(json::Object{
+            {"node", json::Object{{"kind", "source-claim"},
+                                  {"owner", owner.qualifiedName},
+                                  {"block", b},
+                                  {"claim", c}}},
+            {"declaration", module.qualifiedName + "::" + block.name},
+            {"label", claim.label},
+            {"subject",
+             json::Object{{"kind", subject.kind == Declaration::Kind::Protocol
+                                       ? "protocol"
+                                       : "proof"},
+                          {"declaration", subject.qualifiedName},
+                          {"arguments", std::move(arguments)}}},
+            {"source", sourceNode(project, claim.span)}});
+      }
+    }
+  }
+  std::string bytes;
+  BoundedStream out(bytes, limits.interfaceBytes);
+  out << json::Value(std::move(inventory));
+  if (out.overflow())
+    return detail::failure("source.limit",
+                           "source claim inventory byte limit exceeded");
+  return bytes;
 }
 
 Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,

@@ -19,7 +19,7 @@ from support.migration import capture_records, compare, name_key, read_records  
 
 
 def run(package, *args):
-    return subprocess.run(['lake', 'env', 'lean', *map(str, args)], cwd=package,
+    return subprocess.run(['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true', *map(str, args)], cwd=package,
                           stdin=subprocess.DEVNULL, check=True, capture_output=True, text=True)
 
 

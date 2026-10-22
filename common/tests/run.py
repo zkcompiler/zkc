@@ -200,13 +200,15 @@ def execute(scope, args):
         output = reports / "lean/clean-air-control.json"
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w") as stream:
-            run(["lake", "env", "lean", "--run", "TestsClean/Control.lean"], cwd=directory, stdout=stream)
+            run(["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
+                 "--run", "TestsClean/Control.lean"], cwd=directory, stdout=stream)
         control = ROOT / "common/tests/fixtures/clean/air-control.json"
         if output.read_bytes() != control.read_bytes():
             raise ValueError(f"{control.relative_to(ROOT)} is not the current Clean export; "
                              f"review {output} and replace the fixture with it")
         source = reports / "lean/clean-sources"
-        run(["lake", "env", "lean", "--run", "CleanExamples.lean", source], cwd=directory)
+        run(["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
+             "--run", "CleanExamples.lean", source], cwd=directory)
         run([sys.executable, ROOT / "compiler/adapters/clean/regenerate.py", "check", source,
              ROOT / "compiler/adapters/clean/fixtures"])
     elif scope == "lean-native":

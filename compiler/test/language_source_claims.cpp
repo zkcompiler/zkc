@@ -887,6 +887,28 @@ int main() {
         auto a = take(json::parse(take(inspectSourceClaims(first))));
         auto b = take(json::parse(take(inspectSourceClaims(same))));
         auto c = take(json::parse(take(inspectSourceClaims(other))));
+        auto inventory =
+            take(json::parse(take(inspectSourceClaimInventory(project))));
+        require(inventory.getAsArray()->size() == 1,
+                "unselected claim disappeared from the project inventory");
+        auto *item = inventory.getAsArray()->front().getAsObject();
+        require(item->getObject("subject")->getString("declaration") ==
+                        "claims::Run" &&
+                    item->getObject("subject")->getString("kind") ==
+                        "protocol" &&
+                    *item->getObject("subject")->getArray("arguments") ==
+                        json::Array{"field<bls12-381.fr>"},
+                "inventory lost the normalized closed subject");
+        require(*item->getObject("node") == *a.getAsObject()
+                                                 ->getArray("claims")
+                                                 ->front()
+                                                 .getAsObject()
+                                                 ->getObject("attachment")
+                                                 ->getObject("node"),
+                "inventory does not identify the exported claim");
+        Limits small;
+        small.interfaceBytes = 1;
+        refuses(inspectSourceClaimInventory(project, small), "source.limit");
         require(a.getAsObject()->getArray("claims")->size() == 1 &&
                     request(a) == request(b),
                 "equivalent closed arguments changed the claim");

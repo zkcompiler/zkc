@@ -28,13 +28,16 @@ def check_contract_forms(suite, root, execute, originals):
                      f'--module={module}=lean/bridges/common/fixtures/{family.lower()}-forms.zkc',
                      f'--subject={module}::{form}Protocol']
             text, interface_text, interface = native_subject(execute, suite.args.compiler, flags)
-            assert interface['original'] == hashlib.sha256(text.encode()).hexdigest()
+            if not (interface['original'] == hashlib.sha256(text.encode()).hexdigest()):
+                raise AssertionError("bridges/common/contracts.py:31: interface['original'] == hashlib.sha256(text.encode()).hexdigest()")
             symbol = interface['protocol']
             data = suite.exercise(text, symbol)
             fixture = root / f'lean/ZkcExamples/NativePrograms/fixtures/{family.lower()}-{form.lower()}.json'
-            assert data == json.loads(fixture.read_text()), f'{family}/{form}: source correspondence drift'
+            if not (data == json.loads(fixture.read_text())):
+                raise AssertionError(f'{family}/{form}: source correspondence drift')
             constructor = fixture.parent.parent / 'Variants' / f'{family}{form}Data.lean'
-            assert render(data, f'ZkcExamples.NativePrograms.Variants.{family}{form}Data') == constructor.read_text()
+            if not (render(data, f'ZkcExamples.NativePrograms.Variants.{family}{form}Data') == constructor.read_text()):
+                raise AssertionError("bridges/common/contracts.py:37: render(data, f'ZkcExamples.NativePrograms.Variants.{family}{form}Data') == constructor.read_text()")
             sources[family, form] = text, symbol
             fixtures.append({'family': family, 'form': form, 'source': data[1]})
             if family == 'Sumcheck' and form != 'WrongResidual':
@@ -62,7 +65,8 @@ def check_contract_forms(suite, root, execute, originals):
         outcomes = [replay(sources['Schnorr', form], [base, key, None, None, 7],
                            lambda action: values[action[1]])
                     for form in ('Original', 'Helpers', 'Reordered')]
-        assert outcomes[0] == outcomes[1] == outcomes[2]
+        if not (outcomes[0] == outcomes[1] == outcomes[2]):
+            raise AssertionError('bridges/common/contracts.py:65: outcomes[0] == outcomes[1] == outcomes[2]')
         comparisons += 2
 
         coefficients = [suite.rng.randrange(97) for _ in range(9)]
@@ -82,7 +86,8 @@ def check_contract_forms(suite, root, execute, originals):
         outcomes = [replay(sources['Sumcheck', form], [*coefficients, claim, 7],
                            lambda action: values[action[1]])
                     for form in ('Original', 'Helpers', 'Horner')]
-        assert outcomes[0] == outcomes[1] == outcomes[2]
+        if not (outcomes[0] == outcomes[1] == outcomes[2]):
+            raise AssertionError('bridges/common/contracts.py:85: outcomes[0] == outcomes[1] == outcomes[2]')
         comparisons += 2
 
     first_actions = []
@@ -90,9 +95,11 @@ def check_contract_forms(suite, root, execute, originals):
         text, symbol = sources['Schnorr', form]
         native, exported, _ = suite.export(text, symbol)
         result = suite.compare(native, exported, symbol, ['zkc.common-run/0', 1, [1, 1, None, None, 7], []])
-        assert result[1] == ['stopped', 'incomplete']
+        if not (result[1] == ['stopped', 'incomplete']):
+            raise AssertionError("bridges/common/contracts.py:93: result[1] == ['stopped', 'incomplete']")
         first_actions.append(result[3][0][0])
-    assert first_actions[0][0] == 'receive' and first_actions[1][0] == 'draw'
+    if not (first_actions[0][0] == 'receive' and first_actions[1][0] == 'draw'):
+        raise AssertionError("bridges/common/contracts.py:95: first_actions[0][0] == 'receive' and first_actions[1][0] == 'draw'")
 
     values = {label(f'first{i}'): v for i, v in enumerate([0, 2, 0])}
     values.update({label(f'second{i}'): v for i, v in enumerate([1, 0, 0])})
@@ -100,8 +107,10 @@ def check_contract_forms(suite, root, execute, originals):
     residual = [replay(sources['Sumcheck', form], [0, 0, 0, 1, 0, 0, 0, 0, 0, 2, 7],
                        lambda action: values[action[1]])
                 for form in ('Original', 'WrongResidual')]
-    assert residual[0][1] == ['returned', True]
-    assert residual[1][1] == ['stopped', 'reject']
+    if not (residual[0][1] == ['returned', True]):
+        raise AssertionError("bridges/common/contracts.py:103: residual[0][1] == ['returned', True]")
+    if not (residual[1][1] == ['stopped', 'reject']):
+        raise AssertionError("bridges/common/contracts.py:104: residual[1][1] == ['stopped', 'reject']")
     return {'fixtures': fixtures, 'verifier_execution_equalities': comparisons,
             'early_challenge_first_actions': first_actions,
             'wrong_residual_outcomes': [result[1] for result in residual],

@@ -91,13 +91,26 @@ Digest and source-site attribution remain frontend links, with explicit
 `source.correspondence` and IR-relative scope. Interpreted program-byte proofs
 remain distinct from native runtime/provider correspondence.
 
-Reports select whole compiled Entries. The default scope is the proof Entry;
-`--claim-entry example::Interactive --subject schnorr` runs the genuine
+Reports select whole compiled subjects. The default scope is the proof Entry;
+`--claim-entry 'sigma::Schnorr<example::G>' --subject schnorr` runs the genuine
 interactive trial independently. Both runs generate the same declarations.
 Requests and actual declaration associations for other compiled Entries remain
 visible in `source_claim_trials`. Schnorr's interactive completeness and special
 soundness meanings are registered incomplete; their separate report remains
 incomplete while the supported proof Entry has its own report.
+
+`source_claim_inventory` lists every source claim node in the checked project,
+including claims on subjects that this run did not select. Its `selection` is
+`selected` or `unselected-subject`; it is diagnostic inventory, not a request or
+proof. Structured-only subjects retain the inventory too. Explicitly selecting
+an Entry without matching source claims leaves the report unresolved, even when
+another selected Entry has a valid receipt.
+
+Physical Lean file checks use `lake lean`, which applies package options and
+builds imported modules. No-build exporters and the already-built Clean control
+use `lake env lean` with the same `autoImplicit=false` and `warningAsError=true`
+options explicitly. Generated proof-view checks retain the module header and
+public exposure used by the installed generated modules.
 
 ### Optional extensions
 

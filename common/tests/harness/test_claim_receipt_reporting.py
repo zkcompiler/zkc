@@ -465,15 +465,28 @@ def scoped_report(api, receipt_case, tmp_path, monkeypatch):
 
 def test_public_report_keeps_selected_scope_and_incomplete_trial(api, scoped_report):
     manifest, records, evidence = scoped_report
+    evidence["source_claim_inventory"] = [{"declaration": "library::Unused",
+                                           "selection": "unselected-subject"}]
     report = api.build(manifest, records)
     assert report["status"] == "certified", (report["reasons"], report["claims"])
     assert report["source_claim_scope"] == evidence["source_claim_scope"]
+    assert report["source_claim_inventory"] == evidence["source_claim_inventory"]
     trial = report["source_claim_trials"][0]
     assert trial["status"] == "incomplete"
     assert trial["audit_status"] == "checked"
     assert trial["bound_claims"] == evidence["source_claim_trials"][0]["claims"]
     assert trial["claim_receipts"] == evidence["source_claim_trials"][0]["claim_receipts"]
     assert trial["claims"][0]["attempts"] == [{"result": "timeout", "partial": True}]
+
+
+def test_explicit_empty_entry_cannot_be_hidden_by_another_certified_entry(api, scoped_report):
+    manifest, records, evidence = scoped_report
+    evidence["source_claim_scope"] = {"entries": ["demo::Proof", "demo::WrongSpecialization"],
+                                      "selection": "explicit"}
+    evidence["source_claims"]["entries"] = evidence["source_claim_scope"]["entries"]
+    report = api.build(manifest, records)
+    assert report["outcome"] == "unresolved"
+    assert "requested Entry has no matching source claims: demo::WrongSpecialization" in report["reasons"]
 
 
 def test_trial_without_emitted_records_is_visible_unaudited_open(api, scoped_report):

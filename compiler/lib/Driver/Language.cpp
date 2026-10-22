@@ -325,6 +325,10 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!inventory)
       return refuse(inventory.takeError());
     checked["entries"] = cantFail(json::parse(*inventory));
+    auto claims = inspectSourceClaimInventory(*project, limits);
+    if (!claims)
+      return refuse(claims.takeError());
+    checked["source_claim_inventory"] = cantFail(json::parse(*claims));
   }
   if (declarations) {
     auto report = inspectDeclarations(*project, limits);

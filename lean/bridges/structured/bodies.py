@@ -173,7 +173,7 @@ def printed(output, name):
 
 def elaborate(runner, path, lake="lake"):
     """Elaborate a scratch module; on failure, show Lean's diagnostics."""
-    result = runner.run([lake, "env", "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
+    result = runner.run([lake, "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
     if result.returncode != 0:
         raise CheckFailed(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
     return printer_build.messages(result.stdout)

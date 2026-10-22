@@ -56,6 +56,7 @@ from bridges.common.lean_render import (  # noqa: E402
 from bridges.construction import render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
+from bridges.pipeline.source_claims import canonical  # noqa: E402
 from bridges.structured import bodies as printer, snapshot as structured  # noqa: E402
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
@@ -66,7 +67,6 @@ NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
 # compiled program; the record keeps the original-side ones, and none may name
 # a compiled meaning.
 ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
-IMPORT = re.compile(r"^import\s+(\S+)\s*$", re.M)
 COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
     "Zkc.Executable.execute", "Zkc.Executable.validate", "Zkc.Executable.metered",
@@ -131,11 +131,9 @@ class Driver(Runner):
             self.built.update((str(cwd), module) for module in wanted)
 
     def evaluate(self, path, source, *, cwd, name, expect=0):
-        """Evaluate a generated Lean file after building every module it imports, so
-        that no result it reads, a charge or a hand proof, comes from a stale build."""
+        """Lake builds the file's imports and applies its owning package options."""
         path.write_text(source, encoding="utf-8")
-        self.build(*IMPORT.findall(source), cwd=cwd)
-        return self.lake("env", "lean", path, cwd=cwd, name=name, expect=expect)
+        return self.lake("lean", path, cwd=cwd, name=name, expect=expect)
 
     def lean(self, subject, name, source, cwd=LEAN, expect=0):
         return self.evaluate(self.directory(subject) / name, source, cwd=cwd, name=f"{subject.name}:{name}",
@@ -785,6 +783,21 @@ class Driver(Runner):
 
     # The claim's generated modules in the security integration.
 
+    def claim_inventory(self, record, exports, selected_claims=()):
+        """Inventory all source nodes independently of receipt generation."""
+        inventory = {}
+        for export in exports:
+            for item in export["source_claim_inventory"]:
+                key = canonical(item["node"])
+                require(key not in inventory or inventory[key] == item,
+                        "conflicting source claim inventory")
+                inventory[key] = item
+        selected_nodes = {canonical(claim["attachment"]["node"]) for claim in selected_claims}
+        require(selected_nodes <= inventory.keys(), "selected claim absent from source inventory")
+        record["source_claim_inventory"] = [dict(item, selection=(
+            "selected" if key in selected_nodes else "unselected-subject"))
+            for key, item in inventory.items()]
+
     def claims(self, subject, artifacts, entry, record, interactive=None):
         """Fresh source requests, typed resolution/evaluation and genuine proofs."""
         bound = copy.deepcopy(artifacts["source_claims"])
@@ -797,6 +810,8 @@ class Driver(Runner):
         selected = getattr(self.args, "claim_entry", None) or [bound.get("entry")]
         require(all(name in groups for name in selected), "claim Entry was not compiled for this subject")
         selected_claims = [claim for name in selected for claim in groups[name]]
+        self.claim_inventory(record, [artifacts, *([interactive] if interactive is not None else [])],
+                             selected_claims)
         record["source_claims"] = dict(bound, entries=selected, claims=selected_claims)
         record["source_claim_scope"] = dict(entries=selected,
                                             selection="explicit" if getattr(self.args, "claim_entry", None)
@@ -891,6 +906,7 @@ class Driver(Runner):
         interactive = None
         if subject.profile("structured"):
             interactive = self.interactive(subject, record)
+            self.claim_inventory(record, [interactive])
         run = None
         if subject.profile("construction"):
             artifacts, entry = self.proof(subject, record)

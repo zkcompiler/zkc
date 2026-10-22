@@ -307,6 +307,16 @@ semantic dependency identity must be checked before reuse. Until source
 correspondence is proved separately, receipts remain IR-relative and retain
 `source.correspondence`.
 
+## Informational inventory
+
+`language-check` includes `source_claim_inventory` for all claim blocks in the
+checked project, independently of the selected subject. Each item carries its
+source node, block declaration, label, source location and resolved subject
+(kind, declaration and normalized type arguments). This bounded diagnostic
+export does not change the request wire format or authorize a receipt. The
+subject/report pipeline records which nodes belong to its selected requests;
+unselected nodes remain visible without becoming claims of that report.
+
 ## Diagnostics and limits
 
 | Identifier | Refusal |
@@ -316,7 +326,7 @@ correspondence is proved separately, receipts remain IR-relative and retain
 | `source.claim.field` | Unknown/missing envelope field, ambiguous quantity or malformed charge/capability shape |
 | `source.claim.duplicate-field` | Duplicate named argument |
 | `source.claim.duplicate-label` | Duplicate block or claim label |
-| `source.claim.subject` | Missing subject or a subject that is not an Entry |
+| `source.claim.subject` | Missing subject or a subject that is neither an Entry nor a closed protocol/proof application |
 | `source.claim.target` | Missing/different retained target, arbitrary relation application, malformed imported-language wrapper, imported language on a run Entry, or any retained clause in the imported subject's closed unit |
 | `source.claim.accept` | Missing, non-Boolean or different acceptance selector |
 | `source.claim.domain` | Malformed unversioned `cardinality`, missing/private/non-domain type reference, or a resolved domain that cannot close under the selected Entry's bindings |

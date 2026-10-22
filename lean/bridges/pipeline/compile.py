@@ -42,7 +42,8 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     interface = json.loads(interface_text)
     claim_text = run("language-check", *common, "--source-claims", name="source-claims")
     (directory / "source-claims.json").write_text(claim_text)
-    claim_export = source_claims.decode(claim_text)["source_claims"]
+    claim_report = source_claims.decode(claim_text)
+    claim_export = claim_report["source_claims"]
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source))
     deployment_text = run("language-bundle", *common, name="bundle").rstrip("\n")
     (directory / "deployment.json").write_text(deployment_text)
@@ -51,6 +52,7 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     policy = deployment[2][1]
     (directory / "policy.json").write_text(json.dumps(policy))
     artifacts = dict(source=source, interface=interface, deployment=deployment,
+                     source_claim_inventory=claim_report["source_claim_inventory"],
                      deployment_text=deployment_text, policy=policy)
     if executable:
         package_text = run("language-package", *common, name="package")
@@ -113,10 +115,12 @@ def interactive_entry(runner, subject, compiler, directory):
     claim_text = runner.run([compiler, "language-check", *common, "--source-claims"],
                             name=f"{prefix}:source-claims").stdout
     (directory / "source-claims.json").write_text(claim_text)
-    bound = source_claims.bind_export(source_claims.decode(claim_text)["source_claims"], entry=interface["entry"],
+    claim_report = source_claims.decode(claim_text)
+    bound = source_claims.bind_export(claim_report["source_claims"], entry=interface["entry"],
         source=source.encode(), interface_text=interface_text, original_text=exported)
     (directory / "bound-source-claims.json").write_text(json.dumps(bound, indent=2) + "\n")
-    return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot, source_claims=bound)
+    return dict(source=source, interface=interface, export_text=exported, snapshot=snapshot, source_claims=bound,
+                source_claim_inventory=claim_report["source_claim_inventory"])
 
 
 def relative(path):

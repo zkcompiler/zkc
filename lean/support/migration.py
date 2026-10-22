@@ -67,7 +67,7 @@ def capture_records(package, modules, output):
             for module in sorted(modules):
                 path = temporary / 'module.jsonl'
                 path.unlink(missing_ok=True)
-                subprocess.run(['lake', 'env', 'lean', '--run', str(emitter), str(path), module],
+                subprocess.run(['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true', '--run', str(emitter), str(path), module],
                                cwd=package, env=os.environ | {'LEAN_NUM_THREADS': os.environ.get('LEAN_NUM_THREADS', '2')},
                                stdin=subprocess.DEVNULL, check=True)
                 # Validate coverage and all identities before combining records.

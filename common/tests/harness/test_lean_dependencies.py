@@ -55,8 +55,8 @@ def test_hard_guard_applies_through_an_otherwise_allowed_layer():
                                    'ZkcSecurity.FiatShamir.Soundness',
                                    'ZkcSecurity.FiatShamir.Composition'])
 def test_generic_certificates_refuse_transitive_uniform_dependencies(uniform):
-    graph = {'ZkcSecurity.FiatShamir.Reduction': ['ZkcSecurity.FiatShamir.Lifting'],
-             'ZkcSecurity.FiatShamir.Lifting': [uniform]}
+    graph = {'ZkcSecurity.FiatShamir.Reduction': ['ZkcSecurity.FiatShamir.Intermediate'],
+             'ZkcSecurity.FiatShamir.Intermediate': [uniform]}
     with pytest.raises(ValueError, match='generic-certificates'):
         policy().audit_graph(graph, ['ZkcSecurity'])
 

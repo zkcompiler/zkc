@@ -28,21 +28,15 @@ def recording(driver_module, tmp_path, outputs=None, write=False):
     return driver, calls
 
 
-def test_evaluation_builds_its_imports_first(driver_module, tmp_path):
+def test_evaluation_uses_lake_package_options_and_import_builds(driver_module, tmp_path):
     driver, calls = recording(driver_module, tmp_path)
     path = tmp_path / "Fresh.lean"
-    driver.evaluate(path, "import Example.Charges\nimport Example.Glue\n\n#eval 1\n", cwd=tmp_path, name="fresh")
-    assert calls == [(["lake", "build", "Example.Charges", "Example.Glue"], str(tmp_path)),
-                     (["lake", "env", "lean", str(path)], str(tmp_path))]
-    # Built modules are not rebuilt by a later evaluation in the same package, but
-    # are in another package.
-    calls.clear()
-    driver.evaluate(path, "import Example.Glue\n", cwd=tmp_path, name="again")
+    driver.evaluate(path, "import Example.Charges\nimport Example.Glue\n\n#eval 1\n",
+                    cwd=tmp_path, name="fresh")
+    assert calls == [(["lake", "lean", str(path)], str(tmp_path))]
     other = tmp_path / "integration"
     driver.evaluate(path, "import Example.Glue\n", cwd=other, name="elsewhere")
-    assert calls == [(["lake", "env", "lean", str(path)], str(tmp_path)),
-                     (["lake", "build", "Example.Glue"], str(other)),
-                     (["lake", "env", "lean", str(path)], str(other))]
+    assert calls[-1] == (["lake", "lean", str(path)], str(other))
 
 
 def test_rewritten_module_invalidates_builds(driver_module, tmp_path, monkeypatch):
@@ -60,7 +54,7 @@ def test_rewritten_module_invalidates_builds(driver_module, tmp_path, monkeypatc
     driver.generated(subject, "program", "changed\n", record)
     driver.evaluate(tmp_path / "Fresh.lean", "import Example.Proof\n", cwd=tmp_path, name="third")
     builds = [arguments for arguments, _ in calls if arguments[:2] == ["lake", "build"]]
-    assert builds == [["lake", "build", "Example.Proof"]] * 2
+    assert not builds  # lake lean owns import rebuilding, including rewritten imports.
     assert module.read_text() == "changed\n"
 
 
@@ -91,12 +85,11 @@ def test_threshold_is_evaluated_after_the_generated_facts(driver_module, tmp_pat
                               write=True)
     monkeypatch.setattr(driver, "lowering_rule", lowering_rule)
     facts = driver.executable(subject, {"deployment": None}, entry, record)
-    commands = [arguments[1:] if arguments[1] == "build" else arguments[1:3] + [arguments[3].rsplit("/", 1)[-1]]
+    commands = [arguments[1:] if arguments[1] == "build" else [arguments[1], arguments[2].rsplit("/", 1)[-1]]
                 for arguments, _ in calls]
-    assert commands == [["build", "Example.Program"],
-                        ["build", "Example.Glue"], ["env", "lean", "FreshLowering.lean"],
+    assert commands == [["build", "Example.Program"], ["lean", "FreshLowering.lean"],
                         ["build", "Example.Facts"],
-                        ["build", "Example.Completeness"], ["env", "lean", "FreshCharge.lean"]]
+                        ["lean", "FreshCharge.lean"]]
     assert facts["threshold"] == record["kernel"]["lowering"]["threshold"] == 186
 
 
@@ -120,6 +113,9 @@ def test_claim_records_preserve_semantic_status_and_every_source_node(
                            "request_digest": "interactive"}]
     artifacts = {"source_claims": {"entry": "example::Proof", "claims": claims}}
     interactive = {"source_claims": {"entry": "example::Interactive", "claims": interactive_claims}}
+    inventory = [{"node": claim["attachment"]["node"]} for claim in claims + interactive_claims]
+    artifacts["source_claim_inventory"] = inventory
+    interactive["source_claim_inventory"] = inventory
     resolution = {"status": status, "definitions": definitions, "diagnostic": "automation or resolver detail"}
     messages = [dict(request="Example.request0Data", receipt="Example.request0Receipt", attempts=[]),
                 dict(request="Example.request1Data", receipt=None, resolution=resolution, attempts=attempts)]
@@ -134,6 +130,8 @@ def test_claim_records_preserve_semantic_status_and_every_source_node(
     driver.claims(subject, artifacts, None, record, interactive)
     expected_entries = ["example::Proof", "example::Interactive"] if explicit_entries else ["example::Proof"]
     assert record["source_claims"]["entries"] == expected_entries
+    assert [row["selection"] for row in record["source_claim_inventory"]] == [
+        "selected", "selected" if explicit_entries else "unselected-subject"]
     if explicit_entries:
         assert len(record["claim_receipts"]) == 2
         failed = record["claim_receipts"][1]
@@ -171,7 +169,8 @@ def test_missing_physical_configuration_retains_open_source_requests(driver_modu
     subject = SimpleNamespace(get=lambda *args: None)
     claim = {"attachment": {"node": {"owner": "entry", "claim": 0}}, "request_digest": "source"}
     record = {}
-    driver.claims(subject, {"source_claims": {"claims": [claim]}}, None, record)
+    driver.claims(subject, {"source_claims": {"claims": [claim]},
+                            "source_claim_inventory": [{"node": claim["attachment"]["node"]}]}, None, record)
     assert not calls
     row, = record["claim_receipts"]
     assert row["node"] == claim["attachment"]["node"]
@@ -180,3 +179,21 @@ def test_missing_physical_configuration_retains_open_source_requests(driver_modu
     assert row["resolution"]["status"] == "open"
     assert row["resolution"]["definitions"] == []
     assert row["attempts"][0]["status"] == "unsupported"
+
+
+def test_structured_only_subject_preserves_unselected_claim_inventory(driver_module, tmp_path, monkeypatch):
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    manifest = tmp_path / "subject.toml"
+    manifest.write_text("source fixture")
+    subject = SimpleNamespace(
+        name="structured", path=manifest, modules={},
+        profile=lambda name: name == "structured", table=lambda name: {},
+        get=lambda table, key, default=None: default)
+    inventory = [{"node": {"kind": "source-claim", "owner": "library::Run", "block": 0, "claim": 0}}]
+    driver, _ = recording(driver_module, tmp_path)
+    monkeypatch.setattr(driver, "interactive", lambda subject, record:
+                        {"source_claim_inventory": inventory})
+    driver.subject(subject)
+    record = json.loads(driver.write_evidence(subject.name).read_text())
+    assert record["source_claim_inventory"] == [dict(inventory[0], selection="unselected-subject")]
+    assert "claim_receipts" not in record

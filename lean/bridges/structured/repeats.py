@@ -29,7 +29,8 @@ def source_modules(path):
     if path.suffix == ".toml":
         manifests = []
         modules, assets = project_inputs(path, manifests=manifests)
-        assert not assets
+        if not (not assets):
+            raise AssertionError('lean/bridges/structured/repeats.py: not assets')
         return dict(sorted(modules.items())), manifests
     return {"sample": path}, []
 
@@ -102,7 +103,8 @@ class RepeatSuite(OpenSuite):
         output = self.command(label + ":export", [self.tools["compiler"], "protocol-structured",
                                                 original, "--symbol=" + symbol])
         data = json.loads(output)
-        assert data[:4] == ["zkc.structured-source/0", "original", "sha256:" + digest(original), symbol]
+        if not (data[:4] == ["zkc.structured-source/0", "original", "sha256:" + digest(original), symbol]):
+            raise AssertionError('lean/bridges/structured/repeats.py: data[:4] == ["zkc.structured-source/0", "original", "sha256:" + digest(original), symbol]')
         path.write_text(output, encoding="utf-8")
         self.sources.append({"name": label, "source": str(original), "sha256": digest(original),
                              "snapshot": str(path), "snapshotSha256": digest(path),
@@ -117,7 +119,8 @@ class RepeatSuite(OpenSuite):
         write_json(request, ["zkc.structured-open-request/0", role, inputs, replies, 1000000])
         native = json.loads(self.command(label + ":ssa", [self.tools["reference"], "open",
                                                          original, data[3], request]))
-        assert native == expected, {"reference": native, "expected": expected}
+        if not (native == expected):
+            raise AssertionError({"reference": native, "expected": expected})
 
 
 def observe(suite, subject, label, role, inputs, replies, expected):
@@ -153,8 +156,10 @@ def complete_sources(suite):
         modules, _ = source_modules(ROOT / source)
         subject = suite.authored(stem, entry, modules, (stem, namespace))
         interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
-        assert interface["original"] == subject[2][2].removeprefix("sha256:")
-        assert interface["protocol"] == subject[2][3]
+        if not (interface["original"] == subject[2][2].removeprefix("sha256:")):
+            raise AssertionError('lean/bridges/structured/repeats.py: interface["original"] == subject[2][2].removeprefix("sha256:")')
+        if not (interface["protocol"] == subject[2][3]):
+            raise AssertionError('lean/bridges/structured/repeats.py: interface["protocol"] == subject[2][3]')
         suite.case(stem + "-complete-fixture-bytes", lambda: None)
         result[stem] = subject
     return result
@@ -190,10 +195,12 @@ def repeat_cases(suite, subject):
     failure_prefixes(suite, subject, "repeat-P", p, ["2", "10", None, None, None], receives, (1,))
     # Preserve all declarations and names. Reachable arithmetic must be read.
     source = subject[0].read_text(encoding="utf-8")
-    assert source.count('"algebra.field_add"') == 2
+    if not (source.count('"algebra.field_add"') == 2):
+        raise AssertionError('lean/bridges/structured/repeats.py: source.count(\'"algebra.field_add"\') == 2')
     changed = suite.export("repeat-same-name-arithmetic", source.replace('"algebra.field_add"',
                            '"algebra.field_multiply"'), subject[2][3])
-    assert changed[2][2] != subject[2][2]
+    if not (changed[2][2] != subject[2][2]):
+        raise AssertionError('lean/bridges/structured/repeats.py: changed[2][2] != subject[2][2]')
     observe(suite, changed, "repeat-same-name-arithmetic-P", p, ["2", "10", None, None, None], receives,
             returned(["350", None], receives))
     observe(suite, changed, "repeat-same-name-arithmetic-V", v, ["2", None, "100", True, "9"], sends,
@@ -218,10 +225,13 @@ def nested_cases(suite, subject):
     _, _, selected_subject, source = SUBJECTS[1]
     original = ROOT / source
     changed = suite.directory / "changed-repeat-nested.zkc"
-    text = original.read_text(encoding="utf-8"); assert "result = result + x" in text
+    text = original.read_text(encoding="utf-8")
+    if "result = result + x" not in text:
+        raise AssertionError('lean/bridges/structured/repeats.py: "result = result + x" in text')
     changed.write_text(text.replace("result = result + x", "result = result * x"), encoding="utf-8")
     variant = suite.authored("nested-same-name-source", selected_subject, {"sample": changed})
-    assert variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]
+    if not (variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]):
+        raise AssertionError('lean/bridges/structured/repeats.py: variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]')
     observe(suite, variant, "nested-same-name-source-result", p, ["2", "2", "3"], [], returned(["243"]))
 
 
@@ -244,7 +254,8 @@ def service_cases(suite, subject, nested):
     if nested:
         owner, outside, receiver = roles(subject)
         [outer] = select(current, "protocol_apply")
-        assert outer[0][2] == [receiver, owner]
+        if not (outer[0][2] == [receiver, owner]):
+            raise AssertionError('lean/bridges/structured/repeats.py: outer[0][2] == [receiver, owner]')
         prefix = outer[4]
         current = definition(subject[2], outer[0][1])[9]
     else:
@@ -281,7 +292,8 @@ def service_cases(suite, subject, nested):
             responses.append(reply(["send", delivery, owner, receiver, FIELD_TYPE, str(value)]))
             total += value
         total += draw(post, handles[0])
-        assert counters == ({11: 6, 17: 0} if alias else {11: 4, 17: 2})
+        if not (counters == ({11: 6, 17: 0} if alias else {11: 4, 17: 2})):
+            raise AssertionError('lean/bridges/structured/repeats.py: counters == ({11: 6, 17: 0} if alias else {11: 4, 17: 2})')
         observe(suite, subject, label + ("-alias" if alias else "-distinct"), owner,
                 inputs("2", *map(str, handles)), responses, returned(outputs(str(total)), responses))
         if alias:
@@ -311,7 +323,8 @@ def msb_rounds(values, challenges):
     """Ordered contiguous halves; values/challenges are independent test inputs."""
     current = list(values); pairs = []
     for challenge in challenges:
-        assert len(current) >= 2 and len(current) % 2 == 0
+        if not (len(current) >= 2 and len(current) % 2 == 0):
+            raise AssertionError('lean/bridges/structured/repeats.py: len(current) >= 2 and len(current) % 2 == 0')
         half = len(current) // 2
         low, high = current[:half], current[half:]
         pairs.append((sum(low) % MODULUS, sum(high) % MODULUS))
@@ -570,7 +583,8 @@ def closed_boundary(suite, subject):
     # Native closed execution requires a single-role entry. Keep the complete
     # handwritten original and change only that interface roster.
     source = subject[0].read_text(encoding="utf-8")
-    assert 'roles=["P", "Q"]' in source
+    if 'roles=["P", "Q"]' not in source:
+        raise AssertionError('lean/bridges/structured/repeats.py: \'roles=["P", "Q"]\' in source')
     subject = suite.export("closed-repeat-profile", source.replace('roles=["P", "Q"]', 'roles=["P"]'))
 
     def check():
@@ -578,10 +592,12 @@ def closed_boundary(suite, subject):
         request = snapshot.parent / "closed.inputs.json"
         write_json(request, ["2", "7", "9"])
         native = json.loads(suite.command("repeat-native-closed", [suite.tools["reference"], original, "main", request]))
-        assert native == ["returned", ["7"]], native
+        if not (native == ["returned", ["7"]]):
+            raise AssertionError(native)
         write_json(request, [["index", 2], ["field", FIELD, "7"], ["field", FIELD, "9"]])
         refusal = json.loads(suite.command("repeat-formal-closed", [suite.tools["lean"], "run", snapshot, request], success=False))
-        assert refusal["status"] == "refused" and refusal["code"] == "structured-protocol-region", refusal
+        if not (refusal["status"] == "refused" and refusal["code"] == "structured-protocol-region"):
+            raise AssertionError(refusal)
     suite.case("intentional-closed-repeat-boundary", check)
 
 

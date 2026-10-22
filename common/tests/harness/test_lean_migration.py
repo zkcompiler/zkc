@@ -274,7 +274,8 @@ def test_capture_runs_modules_independently_and_keeps_an_existing_result_on_fail
     assert module.capture_records(tmp_path, ['Old', 'New'], output) == 4
     assert module.read_records([output]).modules == {'Old', 'New'}
     assert [command[-1] for command, _ in calls] == ['New', 'Old']
-    assert all(command[:4] == ['lake', 'env', 'lean', '--run'] for command, _ in calls)
+    assert all(command[:6] == ['lake', 'env', 'lean', '-DautoImplicit=false',
+                              '-DwarningAsError=true', '--run'] for command, _ in calls)
     previous = output.read_bytes()
     fail = True
     with pytest.raises(module.subprocess.CalledProcessError):

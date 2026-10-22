@@ -164,7 +164,8 @@ def checked_build(lake, directory, log_path, env, required):
 def clean_control(lake, directory, expected, log_path, env):
     """The fresh Clean producer must print exactly the maintained control."""
     with log_path.open('w') as log:
-        result = subprocess.run([lake, 'env', 'lean', '--run', 'TestsClean/Control.lean'],
+        result = subprocess.run([lake, 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
+                                 '--run', 'TestsClean/Control.lean'],
                                 cwd=directory, env=env, stdout=subprocess.PIPE, stderr=log)
     produced = hashlib.sha256(result.stdout).hexdigest()
     return {'status': 'pass' if result.returncode == 0 and result.stdout == expected.read_bytes() else 'fail',

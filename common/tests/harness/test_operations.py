@@ -76,12 +76,14 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
     assert calls[1:4] == [([sys.executable, str(tmp_path / f"lean/checks/{name}"),
                             "--integration", "clean"], None)
                           for name in ("check_package_ownership.py", "audit_imports.py", "check_records.py")]
-    assert calls[4] == (["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
+    assert calls[4] == (["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
+                         "--run", "TestsClean/Control.lean"],
                         tmp_path / "lean/integrations/clean")
     if current:
-        assert calls[5][0][:5] == ["lake", "env", "lean", "--run", "CleanExamples.lean"]
+        assert calls[5][0][:7] == ["lake", "env", "lean", "-DautoImplicit=false",
+                                   "-DwarningAsError=true", "--run", "CleanExamples.lean"]
         assert calls[6][0][1:3] == [str(tmp_path / "compiler/adapters/clean/regenerate.py"), "check"]
-        assert calls[5][0][5] == calls[6][0][3]
+        assert calls[5][0][7] == calls[6][0][3]
     assert len(calls) == (7 if current else 5)
     root, = (tmp_path / "reports/runs").iterdir()
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")

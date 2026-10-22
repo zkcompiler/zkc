@@ -7,6 +7,11 @@ namespace zkc::language {
 /// sorted by name.
 llvm::Expected<std::string> inspectEntries(const CheckedProject &,
                                            const Limits & = {});
+/// All authored claims, including claims for unselected subjects. Normalized
+/// subject arguments and source nodes identify each declaration; this inventory
+/// neither resolves requests nor certifies claims.
+llvm::Expected<std::string> inspectSourceClaimInventory(const CheckedProject &,
+                                                        const Limits & = {});
 /// JSON array of public modules, interfaces, callables and constructions,
 /// sorted by canonical declaration path, excluding import alias routes.
 /// Includes definition kind, source origin, inferred usage bounds and derived
