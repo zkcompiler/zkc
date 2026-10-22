@@ -5,6 +5,8 @@ use std::ops::{Add, Mul, Neg, Sub};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     LengthMismatch,
+    CapacityOverflow,
+    PackingUnavailable,
     NoncanonicalScalar,
     WireLength,
     ZeroInverse,
@@ -13,6 +15,8 @@ impl Error {
     pub const fn code(self) -> &'static str {
         match self {
             Self::LengthMismatch => "length-mismatch",
+            Self::CapacityOverflow => "capacity-overflow",
+            Self::PackingUnavailable => "packing-unavailable",
             Self::NoncanonicalScalar => "noncanonical-scalar",
             Self::WireLength => "wire-length",
             Self::ZeroInverse => "zero-inverse",

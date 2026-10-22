@@ -41,81 +41,173 @@ impl<S: Coefficient> Packing<S> for Scalar {
 
 type Packed<S> = <<S as Coefficient>::Packing as Packing<S>>::Value;
 
-#[inline]
-fn binary<S: Coefficient>(
-    a: &[S],
-    b: &[S],
-    out: &mut [S],
-    scalar: impl Fn(S, S) -> S,
-    packed: impl Fn(Packed<S>, Packed<S>) -> Packed<S>,
-) -> Result<()> {
-    equal_len(a.len(), b.len())?;
-    equal_len(a.len(), out.len())?;
-    let width = S::Packing::WIDTH;
-    let end = if width > 1 {
-        a.len() / width * width
-    } else {
-        0
-    };
-    for ((a, b), out) in a[..end]
-        .chunks_exact(width)
-        .zip(b[..end].chunks_exact(width))
-        .zip(out[..end].chunks_exact_mut(width))
-    {
-        S::Packing::store(packed(S::Packing::load(a), S::Packing::load(b)), out);
-    }
-    for ((a, b), out) in a[end..].iter().zip(&b[end..]).zip(&mut out[end..]) {
-        *out = scalar(*a, *b);
-    }
-    Ok(())
+/// Existing destination algorithms over one native scalar representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Algorithm {
+    Scalar,
+    /// Native independent lanes, with the same scalar-order tail and no conversion.
+    Packed,
 }
 
-#[inline]
-fn unary<S: Coefficient>(
-    a: &[S],
-    out: &mut [S],
-    scalar: impl Fn(S) -> S,
-    packed: impl Fn(Packed<S>) -> Packed<S>,
-) -> Result<()> {
-    equal_len(a.len(), out.len())?;
-    let width = S::Packing::WIDTH;
-    let end = if width > 1 {
-        a.len() / width * width
-    } else {
-        0
-    };
-    for (a, out) in a[..end]
-        .chunks_exact(width)
-        .zip(out[..end].chunks_exact_mut(width))
-    {
-        S::Packing::store(packed(S::Packing::load(a)), out);
-    }
-    for (a, out) in a[end..].iter().zip(&mut out[end..]) {
-        *out = scalar(*a);
-    }
-    Ok(())
+/// A shape-bound choice, made without inspecting operand values. No scratch is
+/// needed. Reuse requires the same scalar type and exact number of elements.
+/// Providers retain their timing behavior; choosing lanes grants no new timing
+/// or representation permission to a VM binding.
+#[derive(Clone, Copy, Debug)]
+pub struct Plan<S> {
+    len: usize,
+    algorithm: Algorithm,
+    output_bytes: usize,
+    scalar: std::marker::PhantomData<S>,
 }
 
+impl<S: Coefficient> Plan<S> {
+    /// Make a fixed choice. Unavailable native packing is a refusal, never an
+    /// implicit scalar fallback or a conversion to base-coordinate storage.
+    pub fn new(len: usize, algorithm: Algorithm) -> Result<Self> {
+        let output_bytes = len
+            .checked_mul(size_of::<S>())
+            .filter(|bytes| *bytes <= isize::MAX as usize)
+            .ok_or(Error::CapacityOverflow)?;
+        if algorithm == Algorithm::Packed && S::Packing::WIDTH <= 1 {
+            return Err(Error::PackingUnavailable);
+        }
+        Ok(Self {
+            len,
+            algorithm,
+            output_bytes,
+            scalar: std::marker::PhantomData,
+        })
+    }
+
+    /// Use the provider's compile-time native packing only when at least one
+    /// full block fits. Portable builds and scalar-only extensions stay scalar.
+    pub fn select(len: usize) -> Result<Self> {
+        Self::new(
+            len,
+            if S::Packing::WIDTH > 1 && len >= S::Packing::WIDTH {
+                Algorithm::Packed
+            } else {
+                Algorithm::Scalar
+            },
+        )
+    }
+    pub fn algorithm(&self) -> Algorithm {
+        self.algorithm
+    }
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    pub fn output_bytes(&self) -> usize {
+        self.output_bytes
+    }
+    pub fn workspace_bytes(&self) -> usize {
+        0
+    }
+
+    #[inline]
+    fn packed_end(&self) -> usize {
+        match self.algorithm {
+            Algorithm::Scalar => 0,
+            Algorithm::Packed => self.len / S::Packing::WIDTH * S::Packing::WIDTH,
+        }
+    }
+
+    #[inline]
+    fn binary(
+        &self,
+        a: &[S],
+        b: &[S],
+        out: &mut [S],
+        scalar: impl Fn(S, S) -> S,
+        packed: impl Fn(Packed<S>, Packed<S>) -> Packed<S>,
+    ) -> Result<()> {
+        equal_len(self.len, a.len())?;
+        equal_len(self.len, b.len())?;
+        equal_len(self.len, out.len())?;
+        let end = self.packed_end();
+        let width = S::Packing::WIDTH;
+        for ((a, b), out) in a[..end]
+            .chunks_exact(width)
+            .zip(b[..end].chunks_exact(width))
+            .zip(out[..end].chunks_exact_mut(width))
+        {
+            S::Packing::store(packed(S::Packing::load(a), S::Packing::load(b)), out);
+        }
+        for ((a, b), out) in a[end..].iter().zip(&b[end..]).zip(&mut out[end..]) {
+            *out = scalar(*a, *b);
+        }
+        Ok(())
+    }
+    #[inline]
+    fn unary(
+        &self,
+        a: &[S],
+        out: &mut [S],
+        scalar: impl Fn(S) -> S,
+        packed: impl Fn(Packed<S>) -> Packed<S>,
+    ) -> Result<()> {
+        equal_len(self.len, a.len())?;
+        equal_len(self.len, out.len())?;
+        let end = self.packed_end();
+        let width = S::Packing::WIDTH;
+        for (a, out) in a[..end]
+            .chunks_exact(width)
+            .zip(out[..end].chunks_exact_mut(width))
+        {
+            S::Packing::store(packed(S::Packing::load(a)), out);
+        }
+        for (a, out) in a[end..].iter().zip(&mut out[end..]) {
+            *out = scalar(*a);
+        }
+        Ok(())
+    }
+    #[inline]
+    pub fn add(&self, a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
+        self.binary(a, b, out, |a, b| a + b, |a, b| a + b)
+    }
+    #[inline]
+    pub fn sub(&self, a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
+        self.binary(a, b, out, |a, b| a - b, |a, b| a - b)
+    }
+    #[inline]
+    pub fn mul(&self, a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
+        self.binary(a, b, out, |a, b| a * b, |a, b| a * b)
+    }
+    #[inline]
+    pub fn neg(&self, a: &[S], out: &mut [S]) -> Result<()> {
+        self.unary(a, out, |a| -a, |a| -a)
+    }
+    #[inline]
+    pub fn scale(&self, a: &[S], scalar: S, out: &mut [S]) -> Result<()> {
+        let packed = S::Packing::broadcast(scalar);
+        self.unary(a, out, |a| a * scalar, |a| a * packed)
+    }
+}
+
+// The slice API and reusable plans share one implementation.
 #[inline]
 pub fn add<S: Coefficient>(a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
-    binary::<S>(a, b, out, |a, b| a + b, |a, b| a + b)
+    Plan::select(a.len())?.add(a, b, out)
 }
 #[inline]
 pub fn sub<S: Coefficient>(a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
-    binary::<S>(a, b, out, |a, b| a - b, |a, b| a - b)
+    Plan::select(a.len())?.sub(a, b, out)
 }
 #[inline]
 pub fn mul<S: Coefficient>(a: &[S], b: &[S], out: &mut [S]) -> Result<()> {
-    binary::<S>(a, b, out, |a, b| a * b, |a, b| a * b)
+    Plan::select(a.len())?.mul(a, b, out)
 }
 #[inline]
 pub fn neg<S: Coefficient>(a: &[S], out: &mut [S]) -> Result<()> {
-    unary::<S>(a, out, |a| -a, |a| -a)
+    Plan::select(a.len())?.neg(a, out)
 }
 #[inline]
 pub fn scale<S: Coefficient>(a: &[S], scalar: S, out: &mut [S]) -> Result<()> {
-    let packed = S::Packing::broadcast(scalar);
-    unary::<S>(a, out, |a| a * scalar, |a| a * packed)
+    Plan::select(a.len())?.scale(a, scalar, out)
 }
 
 /// Exact extents; no prefix truncation on a shape mismatch.

@@ -67,8 +67,16 @@ macro_rules! ark_scaling {
             output: &mut Vec<Self>,
             chunk_len: usize,
         ) -> Result<()> {
+            let bytes = Self::scaling_workspace_bytes(chunk_len).unwrap_or(0);
+            let mut plan = Self::scaling_plan(
+                points.len(),
+                zkc_kernels::arkworks::scaling::Selection::Automatic {
+                    max_workspace: bytes,
+                },
+            )
+            .map_err(crate::ark)?;
             output.resize(points.len(), Self::identity());
-            Self::scale_many_into(points, scalar, output, chunk_len).map_err(crate::ark)
+            Self::scale_many_into(points, scalar, output, &mut plan).map_err(crate::ark)
         }
         fn scale_each(
             scalars: &[Self::Scalar],
@@ -76,8 +84,16 @@ macro_rules! ark_scaling {
             output: &mut Vec<Self>,
             chunk_len: usize,
         ) -> Result<()> {
+            let bytes = Self::scaling_workspace_bytes(chunk_len).unwrap_or(0);
+            let mut plan = Self::scaling_plan(
+                points.len(),
+                zkc_kernels::arkworks::scaling::Selection::Automatic {
+                    max_workspace: bytes,
+                },
+            )
+            .map_err(crate::ark)?;
             output.resize(points.len(), Self::identity());
-            Self::scale_each_into(scalars, points, output, chunk_len).map_err(crate::ark)
+            Self::scale_each_into(scalars, points, output, &mut plan).map_err(crate::ark)
         }
     };
 }

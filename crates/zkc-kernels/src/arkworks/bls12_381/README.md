@@ -280,15 +280,21 @@ codec validates subgroup membership, requires exact consumption, and rejects
 noncanonical exceptional encodings. Identity and zero scalar arithmetic are
 allowed. Raw upstream coordinates cannot construct this wrapper.
 
-The BLS12-381 and BN254 G1/G2 wrappers also provide `scale_many_into`,
-`scale_each_into` and `scaling_workspace_bytes`. They check exact slice lengths
-before writing a caller-owned initialized private destination. Multiplication
-retains affine-base `mul_bigint` dispatch; projective results are batch-normalized
-in chunks capped at `arkworks::scaling::CHUNK_CAP` (256). Projective, Z and inversion-prefix
-scratch is fallibly reserved once and reused. A chunk below two or scratch
-allocation failure uses the scalar loop. Callers account for the reported
-workspace payload separately from output storage. Inputs remain immutable and
-Arkworks retains its variable-time arithmetic behavior.
+The BLS12-381 and BN254 G1/G2 wrappers provide `scaling_plan`,
+`scale_many_into` and `scale_each_into`. A plan binds the curve and exact input
+length, prepares bounded projective/Z/prefix storage and reports the selected
+algorithm and workspace payload. `Selection::Fixed` preserves the requested
+algorithm or refuses preparation. `Selection::Automatic` uses public shape and
+an explicit workspace allowance; optional allocation failure selects direct
+scaling during preparation. Execution checks exact extents before writes and
+never reselects. Scratch is reused within the owned plan, without a global cache.
+
+Both algorithms retain affine-base `mul_bigint` dispatch and Arkworks' variable-
+time arithmetic. Batches are capped at `arkworks::scaling::CHUNK_CAP` (256).
+Callers account for the plan's workspace until it is dropped, separately from
+output and provider-private storage. Inputs remain immutable. Plans do not
+change canonical encodings, select physical representations or grant runtime
+permissions.
 
 `scalar_from_wide_be(&[u8; 64])` is the named transcript sampler adapter: an
 existing arkworks big-endian integer reduction modulo Fr, including zero. It is

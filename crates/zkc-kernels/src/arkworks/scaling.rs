@@ -75,97 +75,198 @@ impl<P: SWCurveConfig> Scratch<P> {
     }
 }
 
-pub(crate) fn scale_into<P: SWCurveConfig, W: Copy>(
-    points: &[W],
-    destination: &mut [W],
-    chunk_len: usize,
-    scalar_at: impl Fn(usize) -> <P::ScalarField as PrimeField>::BigInt,
-    affine: impl Fn(W) -> Affine<P>,
-    wrap: impl Fn(Affine<P>) -> W,
-) -> Result<(), Error> {
-    if points.len() != destination.len() {
-        return Err(Error::InvalidEncoding);
-    }
-    let chunk_len = chunk_len.min(points.len()).min(CHUNK_CAP);
-    // Optional workspace failure must not add an allocation refusal to a call
-    // that previously needed only its output allocation. Allocate before writes.
-    let scratch = if chunk_len >= 2 {
-        Scratch::<P>::new(chunk_len).ok()
-    } else {
-        None
-    };
-    if let Some(mut scratch) = scratch {
-        for (chunk_index, (inputs, outputs)) in points
-            .chunks(chunk_len)
-            .zip(destination.chunks_mut(chunk_len))
-            .enumerate()
-        {
-            scratch.projectives.clear();
-            scratch
-                .projectives
-                .extend(inputs.iter().enumerate().map(|(index, point)| {
-                    // Preserve affine mul_bigint dispatch; projective GLV is separate.
-                    affine(*point).mul_bigint(scalar_at(chunk_index * chunk_len + index))
-                }));
-            scratch.normalize(outputs, &wrap);
+/// Arithmetic choices within the same checked affine representation. Both
+/// retain Arkworks' variable-time behavior; neither grants timing permission.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Algorithm {
+    Direct,
+    Batched { chunk_len: usize },
+}
+
+/// A fixed choice refuses unavailable workspace. Automatic preparation may use
+/// the direct algorithm when optional scratch cannot be allocated, before any
+/// destination write. Execution never changes the prepared choice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Selection {
+    Fixed(Algorithm),
+    Automatic { max_workspace: usize },
+}
+
+/// Per-call prepared scaling with owned, bounded, unpublished scratch. The
+/// private scalar type/curve and exact length bind applicability. Reuse changes
+/// neither the selected algorithm nor the resource requirement. Scratch is not
+/// zeroized; callers retain their normal custody obligations for private data.
+pub struct Plan<P: SWCurveConfig> {
+    len: usize,
+    execution: Execution<P>,
+}
+
+enum Execution<P: SWCurveConfig> {
+    Direct,
+    Batched {
+        chunk_len: usize,
+        scratch: Scratch<P>,
+    },
+}
+
+impl<P: SWCurveConfig> Plan<P> {
+    /// Maximum optional managed scratch for this public shape and allowance.
+    /// Output, allocator metadata and provider-private allocations are excluded.
+    pub fn workspace_bound(len: usize, max_workspace: usize) -> usize {
+        let width = workspace_bytes::<P>(1).expect("one curve workspace element fits");
+        let chunk = len.min(CHUNK_CAP).min(max_workspace / width);
+        if chunk >= 2 {
+            workspace_bytes::<P>(chunk).expect("bounded workspace")
+        } else {
+            0
         }
-    } else {
-        for (index, (point, output)) in points.iter().zip(destination).enumerate() {
-            *output = wrap(affine(*point).mul_bigint(scalar_at(index)).into_affine());
+    }
+
+    pub fn new(len: usize, selection: Selection) -> Result<Self, Error> {
+        len.checked_mul(size_of::<Affine<P>>())
+            .filter(|bytes| *bytes <= isize::MAX as usize)
+            .ok_or(Error::CapacityOverflow)?;
+        let (algorithm, optional) = match selection {
+            Selection::Fixed(algorithm) => (algorithm, false),
+            Selection::Automatic { max_workspace } => {
+                let bytes = Self::workspace_bound(len, max_workspace);
+                let width = workspace_bytes::<P>(1).expect("one curve workspace element fits");
+                (
+                    if bytes == 0 {
+                        Algorithm::Direct
+                    } else {
+                        Algorithm::Batched {
+                            chunk_len: bytes / width,
+                        }
+                    },
+                    true,
+                )
+            }
+        };
+        let execution = match algorithm {
+            Algorithm::Direct => Execution::Direct,
+            Algorithm::Batched { chunk_len } => {
+                if chunk_len < 2 || chunk_len > CHUNK_CAP || chunk_len > len {
+                    return Err(Error::InvalidEncoding);
+                }
+                match Scratch::new(chunk_len) {
+                    Ok(scratch) => Execution::Batched { chunk_len, scratch },
+                    Err(Error::Allocation) if optional => Execution::Direct,
+                    Err(error) => return Err(error),
+                }
+            }
+        };
+        Ok(Self { len, execution })
+    }
+    pub fn algorithm(&self) -> Algorithm {
+        match &self.execution {
+            Execution::Direct => Algorithm::Direct,
+            Execution::Batched { chunk_len, .. } => Algorithm::Batched {
+                chunk_len: *chunk_len,
+            },
         }
     }
-    Ok(())
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    pub fn workspace_bytes(&self) -> usize {
+        match self.algorithm() {
+            Algorithm::Direct => 0,
+            Algorithm::Batched { chunk_len } => {
+                workspace_bytes::<P>(chunk_len).expect("prepared workspace")
+            }
+        }
+    }
+    pub fn output_bytes(&self) -> usize {
+        self.len * size_of::<Affine<P>>()
+    }
+
+    pub(crate) fn scale_into<W: Copy>(
+        &mut self,
+        points: &[W],
+        destination: &mut [W],
+        scalar_at: impl Fn(usize) -> <P::ScalarField as PrimeField>::BigInt,
+        affine: impl Fn(W) -> Affine<P>,
+        wrap: impl Fn(Affine<P>) -> W,
+    ) -> Result<(), Error> {
+        if points.len() != self.len || destination.len() != self.len {
+            return Err(Error::InvalidEncoding);
+        }
+        match &mut self.execution {
+            Execution::Batched { chunk_len, scratch } => {
+                for (chunk_index, (inputs, outputs)) in points
+                    .chunks(*chunk_len)
+                    .zip(destination.chunks_mut(*chunk_len))
+                    .enumerate()
+                {
+                    scratch.projectives.clear();
+                    scratch
+                        .projectives
+                        .extend(inputs.iter().enumerate().map(|(index, point)| {
+                            // Preserve affine mul_bigint dispatch, including the provider's GLV choice.
+                            affine(*point).mul_bigint(scalar_at(chunk_index * *chunk_len + index))
+                        }));
+                    scratch.normalize(outputs, &wrap);
+                }
+            }
+            Execution::Direct => {
+                for (index, (point, output)) in points.iter().zip(destination).enumerate() {
+                    *output = wrap(affine(*point).mul_bigint(scalar_at(index)).into_affine());
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 macro_rules! impl_scaling {
     ($wrapper:ty, $config:ty) => {
         impl $wrapper {
-            /// Requested projective, Z and prefix payload for this batch length.
-            /// Returns None above the conservative batch cap or on size overflow.
-            /// Output storage and hidden provider/allocator overhead are excluded.
+            /// Projective, Z and prefix payload for a batch, excluding output.
+            /// Returns None above the conservative batch cap or on overflow.
             pub fn scaling_workspace_bytes(chunk_len: usize) -> Option<usize> {
                 $crate::arkworks::scaling::workspace_bytes::<$config>(chunk_len)
             }
-
-            /// Scale checked bases into an equally sized initialized private slice.
-            /// The caller accounts for scaling_workspace_bytes(chunk_len) while
-            /// this runs. A chunk below two or failed scratch allocation uses the
-            /// scalar loop. All length checks precede destination writes.
+            /// Optional workspace bound for this public length and allowance.
+            pub fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
+                $crate::arkworks::scaling::Plan::<$config>::workspace_bound(len, max_workspace)
+            }
+            /// Freeze the algorithm and prepare all optional scratch before writes.
+            pub fn scaling_plan(
+                len: usize,
+                selection: $crate::arkworks::scaling::Selection,
+            ) -> Result<$crate::arkworks::scaling::Plan<$config>, $crate::arkworks::Error> {
+                $crate::arkworks::scaling::Plan::new(len, selection)
+            }
+            /// Exact checked affine destinations. The caller accounts for and
+            /// retains plan.workspace_bytes() until the prepared plan is dropped.
             pub fn scale_many_into(
                 points: &[Self],
                 scalar: <$config as ark_ec::CurveConfig>::ScalarField,
                 destination: &mut [Self],
-                chunk_len: usize,
+                plan: &mut $crate::arkworks::scaling::Plan<$config>,
             ) -> Result<(), $crate::arkworks::Error> {
                 use ark_ff::PrimeField;
                 let scalar = scalar.into_bigint();
-                $crate::arkworks::scaling::scale_into::<$config, Self>(
-                    points,
-                    destination,
-                    chunk_len,
-                    |_| scalar,
-                    |point| point.0,
-                    Self,
-                )
+                plan.scale_into(points, destination, |_| scalar, |point| point.0, Self)
             }
-
-            /// Scale each checked base by its corresponding scalar into an
-            /// equally sized initialized private slice. Workspace and fallback
-            /// follow scale_many_into; all lengths are checked before writes.
+            /// Corresponding per-point scalars, with every shape check before writes.
             pub fn scale_each_into(
                 scalars: &[<$config as ark_ec::CurveConfig>::ScalarField],
                 points: &[Self],
                 destination: &mut [Self],
-                chunk_len: usize,
+                plan: &mut $crate::arkworks::scaling::Plan<$config>,
             ) -> Result<(), $crate::arkworks::Error> {
                 use ark_ff::PrimeField;
                 if scalars.len() != points.len() {
                     return Err($crate::arkworks::Error::InvalidEncoding);
                 }
-                $crate::arkworks::scaling::scale_into::<$config, Self>(
+                plan.scale_into(
                     points,
                     destination,
-                    chunk_len,
                     |index| scalars[index].into_bigint(),
                     |point| point.0,
                     Self,
@@ -236,15 +337,24 @@ mod tests {
                 let mut output = vec![G1::identity(); points.len()];
                 crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
                 crate::arkworks::allocation::VECTOR_FAILURE.with(|count| count.set(Some(failure)));
+                let mut plan = G1::scaling_plan(
+                    points.len(),
+                    Selection::Automatic {
+                        max_workspace: G1::scaling_workspace_bytes(256).unwrap(),
+                    },
+                )
+                .unwrap();
+                assert_eq!(plan.algorithm(), Algorithm::Direct);
+                assert_eq!(plan.workspace_bytes(), 0);
                 let result = if common {
                     G1::scale_many_into(
                         &points,
                         crate::arkworks::bls12_381::Scalar::from(3),
                         &mut output,
-                        256,
+                        &mut plan,
                     )
                 } else {
-                    G1::scale_each_into(&scalars, &points, &mut output, 256)
+                    G1::scale_each_into(&scalars, &points, &mut output, &mut plan)
                 };
                 assert!(
                     crate::arkworks::allocation::VECTOR_FAILURE
@@ -260,6 +370,38 @@ mod tests {
                 assert_eq!(points, saved);
             }
         }
+    }
+
+    #[test]
+    fn fixed_preparation_refuses_allocation_and_execution_never_reselects() {
+        use crate::arkworks::bls12_381::{G1, Scalar};
+        for failure in 0..3 {
+            crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.set(Some(failure)));
+            assert!(matches!(
+                G1::scaling_plan(17, Selection::Fixed(Algorithm::Batched { chunk_len: 7 })),
+                Err(Error::Allocation)
+            ));
+        }
+        let mut plan =
+            G1::scaling_plan(17, Selection::Fixed(Algorithm::Batched { chunk_len: 7 })).unwrap();
+        let points = vec![G1::generator(); 17];
+        let mut out = points.clone();
+        crate::arkworks::allocation::VECTOR_REQUESTS.with(|value| value.set(0));
+        crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.set(Some(0)));
+        G1::scale_many_into(&points, Scalar::from(3), &mut out, &mut plan).unwrap();
+        assert_eq!(plan.algorithm(), Algorithm::Batched { chunk_len: 7 });
+        assert_eq!(
+            crate::arkworks::allocation::VECTOR_REQUESTS.with(|value| value.get()),
+            0
+        );
+        assert_eq!(
+            crate::arkworks::allocation::VECTOR_FAILURE.with(|value| value.replace(None)),
+            Some(0)
+        );
+        assert!(
+            out.iter()
+                .all(|point| *point == G1::generator().scale(Scalar::from(3)))
+        );
     }
 
     #[test]

@@ -12,6 +12,19 @@ macro_rules! scaling_tests {
             type Point = $point;
             type Scalar = $scalar;
 
+            fn plan(
+                len: usize,
+                chunk: usize,
+            ) -> zkc_kernels::arkworks::scaling::Plan<<$affine as AffineRepr>::Config> {
+                Point::scaling_plan(
+                    len,
+                    zkc_kernels::arkworks::scaling::Selection::Automatic {
+                        max_workspace: Point::scaling_workspace_bytes(chunk).unwrap(),
+                    },
+                )
+                .unwrap()
+            }
+
             fn repeated_add(point: Point, scalar: usize) -> Point {
                 (0..scalar).fold(Point::identity(), |sum, _| sum.add(&point))
             }
@@ -43,14 +56,20 @@ macro_rules! scaling_tests {
                         .collect();
                     for chunk in [0, 2, 17, SCALING_CHUNK_CAP] {
                         let mut output = vec![Point::generator(); len];
-                        Point::scale_each_into(&scalars, &points, &mut output, chunk).unwrap();
+                        Point::scale_each_into(
+                            &scalars,
+                            &points,
+                            &mut output,
+                            &mut plan(points.len(), chunk),
+                        )
+                        .unwrap();
                         assert_eq!(output, expected, "per-point len={len}, chunk={chunk}");
                         for scalar in [0, 1, 3] {
                             Point::scale_many_into(
                                 &points,
                                 Scalar::from(scalar as u64),
                                 &mut output,
-                                chunk,
+                                &mut plan(points.len(), chunk),
                             )
                             .unwrap();
                             let expected: Vec<_> = points
@@ -67,7 +86,7 @@ macro_rules! scaling_tests {
                     &vec![Point::identity(); 257],
                     -Scalar::one(),
                     &mut output,
-                    SCALING_CHUNK_CAP,
+                    &mut plan((&vec![Point::identity(); 257]).len(), SCALING_CHUNK_CAP),
                 )
                 .unwrap();
                 assert_eq!(output, vec![Point::identity(); 257]);
@@ -129,13 +148,25 @@ macro_rules! scaling_tests {
                     .collect();
                 for chunk in [0, 17, SCALING_CHUNK_CAP] {
                     let mut output = vec![Point::identity(); points.len()];
-                    Point::scale_each_into(&scalars, &points, &mut output, chunk).unwrap();
+                    Point::scale_each_into(
+                        &scalars,
+                        &points,
+                        &mut output,
+                        &mut plan(points.len(), chunk),
+                    )
+                    .unwrap();
                     for (actual, expected) in output.iter().zip(&expected) {
                         assert_eq!(actual.to_bytes().unwrap().as_slice(), expected);
                         assert_eq!(Point::from_bytes(expected).unwrap(), *actual);
                     }
                     let scalar = samples[4];
-                    Point::scale_many_into(&points, scalar, &mut output, chunk).unwrap();
+                    Point::scale_many_into(
+                        &points,
+                        scalar,
+                        &mut output,
+                        &mut plan(points.len(), chunk),
+                    )
+                    .unwrap();
                     for (index, actual) in output.iter().enumerate() {
                         let mut bytes = Vec::new();
                         raw[index % raw.len()]
@@ -151,7 +182,8 @@ macro_rules! scaling_tests {
                 for scalar in samples {
                     let short = &points[..5];
                     let mut output = vec![Point::identity(); short.len()];
-                    Point::scale_many_into(short, scalar, &mut output, 2).unwrap();
+                    Point::scale_many_into(short, scalar, &mut output, &mut plan(short.len(), 2))
+                        .unwrap();
                     for (index, actual) in output.iter().enumerate() {
                         let mut expected = Vec::new();
                         raw[index % raw.len()]
@@ -165,24 +197,118 @@ macro_rules! scaling_tests {
             }
 
             #[test]
+            fn fixed_and_automatic_choices_report_shape_and_workspace() {
+                use zkc_kernels::arkworks::scaling::{Algorithm, Selection};
+                let points = bases(17);
+                let unit = Point::scaling_workspace_bytes(1).unwrap();
+                for budget in [0, 2 * unit - 1, 2 * unit, 7 * unit, usize::MAX] {
+                    let mut selected = Point::scaling_plan(
+                        17,
+                        Selection::Automatic {
+                            max_workspace: budget,
+                        },
+                    )
+                    .unwrap();
+                    let expected_bytes = Point::scaling_workspace_bound(17, budget);
+                    assert_eq!(selected.len(), 17);
+                    assert_eq!(selected.output_bytes(), 17 * size_of::<Point>());
+                    assert_eq!(selected.workspace_bytes(), expected_bytes);
+                    assert_eq!(
+                        selected.algorithm(),
+                        if expected_bytes == 0 {
+                            Algorithm::Direct
+                        } else {
+                            Algorithm::Batched {
+                                chunk_len: expected_bytes / unit,
+                            }
+                        }
+                    );
+                    let algorithm = selected.algorithm();
+                    let mut out = vec![Point::identity(); 17];
+                    for scalar in [Scalar::from(0), Scalar::from(3), -Scalar::one()] {
+                        Point::scale_many_into(&points, scalar, &mut out, &mut selected).unwrap();
+                        assert!(
+                            out.iter()
+                                .zip(&points)
+                                .all(|(out, point)| *out == point.scale(scalar))
+                        );
+                        assert_eq!(selected.algorithm(), algorithm);
+                        assert_eq!(selected.workspace_bytes(), expected_bytes);
+                    }
+                    let saved = out.clone();
+                    assert_eq!(
+                        Point::scale_many_into(
+                            &points[..16],
+                            Scalar::one(),
+                            &mut out,
+                            &mut selected
+                        ),
+                        Err(Error::InvalidEncoding)
+                    );
+                    assert_eq!(out, saved);
+                }
+                for (len, chunk) in [
+                    (0, 2),
+                    (1, 2),
+                    (17, 0),
+                    (17, 1),
+                    (17, 18),
+                    (257, SCALING_CHUNK_CAP + 1),
+                ] {
+                    assert!(matches!(
+                        Point::scaling_plan(
+                            len,
+                            Selection::Fixed(Algorithm::Batched { chunk_len: chunk })
+                        ),
+                        Err(Error::InvalidEncoding)
+                    ));
+                }
+                assert!(matches!(
+                    Point::scaling_plan(usize::MAX, Selection::Fixed(Algorithm::Direct)),
+                    Err(Error::CapacityOverflow)
+                ));
+                let mut fixed =
+                    Point::scaling_plan(17, Selection::Fixed(Algorithm::Batched { chunk_len: 7 }))
+                        .unwrap();
+                let mut out = vec![Point::identity(); 17];
+                Point::scale_many_into(&points, Scalar::from(3), &mut out, &mut fixed).unwrap();
+                assert_eq!(fixed.algorithm(), Algorithm::Batched { chunk_len: 7 });
+            }
+
+            #[test]
             fn lengths_are_checked_before_destination_writes() {
                 let points = bases(3);
                 let saved = [Point::generator(); 2];
                 let mut output = saved;
                 assert_eq!(
-                    Point::scale_many_into(&points, Scalar::one(), &mut output, 2),
+                    Point::scale_many_into(
+                        &points,
+                        Scalar::one(),
+                        &mut output,
+                        &mut plan(points.len(), 2)
+                    ),
                     Err(Error::InvalidEncoding)
                 );
                 assert_eq!(output, saved);
                 assert_eq!(
-                    Point::scale_each_into(&[Scalar::one(); 3], &points, &mut output, 2),
+                    Point::scale_each_into(
+                        &[Scalar::one(); 3],
+                        &points,
+                        &mut output,
+                        &mut plan(points.len(), 2)
+                    ),
                     Err(Error::InvalidEncoding)
                 );
                 assert_eq!(output, saved);
                 let mut output = [Point::generator(); 3];
                 let saved = output;
                 assert_eq!(
-                    Point::scale_each_into(&[Scalar::one(); 2], &points, &mut output, 2),
+                    Point::scale_each_into(
+                        &[Scalar::one(); 2],
+                        &points,
+                        &mut output,
+                        &mut plan(points.len(), 2)
+                    ),
                     Err(Error::InvalidEncoding)
                 );
                 assert_eq!(output, saved);

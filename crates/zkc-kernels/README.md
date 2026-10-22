@@ -37,3 +37,20 @@ Scratch remains unpublished; finished outputs retain their charge until the
 call ends. Caller-owned destinations must have exact extents and stay private
 until successful completion. Providers do not install operations or infer Host
 permissions by implementing a mathematical trait.
+
+## Choosing an existing implementation
+
+`vector::Plan<S>` binds an exact length and chooses scalar or native packed
+lanes over the same element representation. `select` uses the provider's
+compile-time packing width and public length. A fixed unavailable packed choice
+refuses; it never introduces a coordinate conversion. Slice convenience methods
+use the same implementation. Plans report exact managed output and workspace
+payloads; native work charges remain with the operation adapter.
+
+`arkworks::scaling::Plan<P>` owns bounded curve scratch. Fixed direct and batched
+choices are explicit; automatic preparation may fall back to direct scaling if
+optional scratch allocation fails. The prepared choice stays fixed during
+execution. Vector and curve plans preserve provider timing behavior and grant
+no new timing or authority permission. Existing compiler physical plans and
+installed backend bindings remain responsible for representation and contract
+selection.
