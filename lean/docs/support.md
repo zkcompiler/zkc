@@ -922,8 +922,8 @@ chain model, with the byte hash as a random oracle
 named for the duplex suites; that the compiled transcript handlers and the
 installed Keccak-256 kernels implement the chain model remains an obligation. `zkc-compile language-emit` on the project
 `examples/projects/sumcheck/zkc.toml` with `--entry=example::Proof` and with
-`--entry=example::Interactive` gives byte-identical original-stage exports
-(`sha256:2b935a82be29b83007c44c878ae03535b2da6dd707c7d8a9899e1a2a16c36c6c`, entry
+`--subject=sumcheck::Sumcheck<example::Fr,2>` gives byte-identical original-stage exports
+(`sha256:f4609c05db74ba30cca03242479a9d5a879b580ba9dd9d2db3af6cf512375769`, entry
 `zkl_ba110e6c…`), the export of `SumcheckSourceData.snapshot` and the structured
 bridge fixture. The construction bridge pins this for `example::Proof`: its
 `sumcheck` subject requires the Entry's fresh original export to render to the

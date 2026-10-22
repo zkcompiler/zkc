@@ -43,6 +43,11 @@ for fixture in ("schnorr", "sumcheck", "nested", "guess", "cardinality"):
             [compiler, "language-check", *arguments, "--source-claims"]
         )
         claims = json.loads(result)["source_claims"]
+        subject_arguments = [arg.replace("--entry=", "--subject=", 1) for arg in arguments]
+        selected = json.loads(commands.run(
+            [compiler, "language-check", *subject_arguments, "--source-claims"]
+        ))
+        assert selected["scope"] == "subject" and selected["source_claims"] == claims
         domains = list(cardinality_domains(claims["claims"]))
         assert domains and set(domains) == {"bls12-381.fr"}
         emitted = commands.run([compiler, "language-emit", *arguments])

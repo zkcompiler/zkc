@@ -33,7 +33,7 @@ def main():
         (directory / 'library.zkc').write_text(source)
         command = [sys.executable, str(HERE / 'verify.py'), '--spec', str(directory / 'spec.json'),
             '--module=example=' + str(ROOT / 'examples/projects/schnorr/main.zkc'),
-            '--module=schnorr=' + str(directory / 'library.zkc'), '--entry=example::Interactive',
+            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>',
             '--compiler', str(compiler), '--output', str(directory)]
         run = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
         (directory / 'driver.log').write_text(run.stdout)
