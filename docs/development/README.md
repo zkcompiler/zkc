@@ -66,8 +66,12 @@ The mixed build disables manual allocator poisoning to avoid incompatible LLVM
 arena annotations. This does not validate upstream allocator internals.
 LeakSanitizer also requires an environment that permits thread inspection.
 
-Install checks use fresh prefixes and independently built CMake consumers.
-Every installed SDK component requires the exact LLVM version used to build it.
+C++ install checks use fresh prefixes and independently built CMake consumers.
+The separate `nix build .#checks.x86_64-linux.rust-consumer` check stages the Rust
+SDK and Unicode inputs, prepares packages and bindings separately, then builds
+and runs a normal-feature Rust consumer outside the checkout. Its execution
+phase has no compiler or CLI available.
+Every installed C++ SDK component requires the exact LLVM version used to build it.
 Support, Contracts, Program, Relation and Language discover and link without MLIR;
 IR and its dependent components additionally require MLIR and installed contribution
 dependencies. The SDK does not bundle these external dependencies. Static and

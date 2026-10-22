@@ -2,7 +2,7 @@
 //! Takes the directory of JSON candidates produced by compiler/test/mathematical.py.
 //! Supplied admission checks the carrier, without claiming source correspondence.
 use std::path::Path;
-use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, Origin, Packet, PathElement, Stop, StopKind, Value as RuntimeValue};
 

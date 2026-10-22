@@ -12,11 +12,11 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use zkc_runtime::vm::StopKind;
-use zkc_tools::entry::{
+use zkc::entry::{
     BindingPolicy, NamedValues, Package, ProofEntry, ProofOperation, ProofOptions, ProofRequest,
     inputs::Decoder,
 };
+use zkc_runtime::vm::StopKind;
 
 fn rejection(error: Option<&str>, stop: Option<&StopKind>) -> Option<&'static str> {
     if matches!(stop, None | Some(StopKind::Cancelled)) {

@@ -1,5 +1,4 @@
-# This root environment owns development drivers and checks. The Python SDK in
-# python/ is a separately installable standard-library adapter to the common Host.
+# This root environment owns Python development drivers and checks.
 #
 # One interpreter runs everything: the one already on the machine. The compiler
 # build finds it through CMake and the checkers are invoked as `python3`, so uv
@@ -31,7 +30,7 @@ python-preference = "only-system"
 
 [tool.pytest.ini_options]
 testpaths = ["common/tests"]
-pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts", "python/src"]
+pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts"]
 addopts = "--strict-markers --strict-config"
 # A hung tool is a failure with a stack, not a suite that never returns.
 timeout = 900

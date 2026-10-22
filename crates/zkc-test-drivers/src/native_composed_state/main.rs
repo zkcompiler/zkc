@@ -4,13 +4,13 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
 };
 use zkc_test_support::hex;
-use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
 
 fn data(len: usize) -> (Vec<Scalar>, Vec<GroupPoint>) {
     (
@@ -118,12 +118,8 @@ fn clean(r: &NativeProofReport) {
     ));
 }
 fn rejected(d: &NativeDeployment, input: &Json, proof: &[u8]) -> String {
-    let report = zkc_test_drivers::execute(
-        d,
-        input,
-        zkc_tools::proof::Invocation::one_shot(Some(proof)),
-    )
-    .unwrap();
+    let report =
+        zkc_test_drivers::execute(d, input, zkc::proof::Invocation::one_shot(Some(proof))).unwrap();
     clean(&report);
     report.outcome.expect_err("altered proof accepted")
 }
@@ -167,7 +163,7 @@ fn run(directory: &Path, case: &Json) {
         let report = zkc_test_drivers::execute_test(
             &d,
             &p,
-            zkc_tools::proof::Invocation::Attempts(&policy()),
+            zkc::proof::Invocation::Attempts(&policy()),
             tape(&[0, 3], n),
         )
         .unwrap();
@@ -203,14 +199,14 @@ fn run(directory: &Path, case: &Json) {
             "{name}/{n}"
         );
         let validator =
-            zkc_test_drivers::execute(&d, &v, zkc_tools::proof::Invocation::one_shot(Some(proof)))
+            zkc_test_drivers::execute(&d, &v, zkc::proof::Invocation::one_shot(Some(proof)))
                 .unwrap();
         clean(&validator);
         assert!(validator.outcome.is_ok(), "{name}: {:?}", validator.outcome);
         let first = zkc_test_drivers::execute_test(
             &d,
             &p,
-            zkc_tools::proof::Invocation::Attempts(&policy()),
+            zkc::proof::Invocation::Attempts(&policy()),
             tape(&[3], n),
         )
         .unwrap();
@@ -256,7 +252,7 @@ fn run(directory: &Path, case: &Json) {
         let r = zkc_test_drivers::execute_test(
             &d,
             &p,
-            zkc_tools::proof::Invocation::Attempts(&policy()),
+            zkc::proof::Invocation::Attempts(&policy()),
             tape(&[3], n),
         )
         .unwrap();
@@ -282,7 +278,7 @@ fn adversarial(
     let exhausted = zkc_test_drivers::execute_test(
         d,
         p,
-        zkc_tools::proof::Invocation::Attempts(&policy()),
+        zkc::proof::Invocation::Attempts(&policy()),
         tape(&[0, 0, 0, 0], n),
     )
     .unwrap();
@@ -303,7 +299,7 @@ fn adversarial(
         let r = zkc_test_drivers::execute_test(
             d,
             p,
-            zkc_tools::proof::Invocation::Attempts(&limited),
+            zkc::proof::Invocation::Attempts(&limited),
             tape(&[0, 3], n),
         )
         .unwrap();
@@ -331,7 +327,7 @@ fn adversarial(
     let wrong = zkc_test_drivers::execute_test(
         d,
         &dishonest,
-        zkc_tools::proof::Invocation::Attempts(&policy()),
+        zkc::proof::Invocation::Attempts(&policy()),
         tape(&[3], n),
     )
     .unwrap();
@@ -368,8 +364,8 @@ fn adversarial(
     shorter[offset..offset + 8].copy_from_slice(&((length - 48) as u64).to_le_bytes());
     shorter[offset + 14..offset + 18].copy_from_slice(&(count - 1).to_le_bytes());
     shorter.drain(offset + 8 + length - 48..offset + 8 + length);
-    let r = zkc_test_drivers::execute(d, v, zkc_tools::proof::Invocation::one_shot(Some(&shorter)))
-        .unwrap();
+    let r =
+        zkc_test_drivers::execute(d, v, zkc::proof::Invocation::one_shot(Some(&shorter))).unwrap();
     clean(&r);
     assert_eq!(
         r.outcome.unwrap_err(),

@@ -55,6 +55,7 @@ def test_generated_native_execution(toolchain, directory, monkeypatch, generator
     journal.run([sys.executable, ROOT / f'compiler/test/{generator}.py'])
     artifacts = list((reports / 'tests/compiler-test').iterdir())
     assert len(artifacts) == 1, artifacts
+    monkeypatch.setenv('ZKC_NATIVE_BIN', str(toolchain.runtime.parent))
     journal.run([toolchain.driver(example), artifacts[0]])
     if example == 'language_native':
         check_source_setup_commands(toolchain, journal, artifacts[0])

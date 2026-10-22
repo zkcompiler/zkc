@@ -25,8 +25,25 @@ checks live custody and policy at each invocation.
 
 `vm::ProgramRole` exposes a static layout and `ProgramState` exposes
 non-advancing observations. The application host chooses scheduling and transport.
-`NativeProofEntry` checks the restrictions of the current native proof policy;
-proof framing and application acceptance belong to `zkc-tools`.
+`NativeProofEntry` checks the restrictions of the current native proof policy.
+`host::joint` owns bundle admission, ordered scheduling and bounded reports;
+`host::proof` owns producer/validator execution and cancellation; `host::wire`
+owns bounded framing and the `WireBackend`/`ProofBackend` contracts. These consume
+Runner actions without changing VM or interpreter semantics.
+
+A trusted adapter supplies complete-type wire support, size bounds, encode/decode,
+raw byte access and Boolean projection. Missing measurement refuses before
+decoding. Invalid receives complete with Decode; capacity and adapter failures
+remain Host failures. Native implements the closed native profile in its own
+crate. Runtime depends on neither native nor kernels. Application Hosts in
+`zkc` retain package/deployment identity, setup and public-input authority,
+acceptance selectors, prepared computation policy and publication.
+
+Shared-ledger reports retain live storage guards. `Produced::into_parts()`
+transfers proof bytes, outputs and proof-buffer reservations to the application;
+keep the reservations while retaining the buffer. Runner output custody still
+uses `into_retained_outputs()`. Dropping guards releases only live capacity,
+never cumulative work or allocation charges.
 
 Protocol algorithms are source libraries; field arithmetic and cryptographic
 operations are supplied by installed backends. The runtime hashes canonical
@@ -47,5 +64,7 @@ General helpers retain separate owners:
   and bounded reference evaluation through caller-supplied field arithmetic.
   These are library APIs; they are not Runner instructions or proof checkers.
 
-Run the crate's tests with `cargo test -p zkc-runtime`. Backend and host tests
-exercise the same interfaces with actual native values and cryptographic kernels.
+Run the crate's tests with `cargo test -p zkc-runtime`. The runtime-only
+`tests/host.rs` consumer exercises both drivers with an independent backend,
+Value and wire implementation. Native integration tests exercise the same
+interfaces with native values and cryptographic kernels.

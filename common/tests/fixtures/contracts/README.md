@@ -42,7 +42,7 @@ an Entry builtin schema. Custody permits single-role metadata without conferring
 Copy or multi-role placement. A deliberate native participant-policy drift must disagree with
 the unchanged Entry reader.
 
-The Rust example lives in zkc-tools solely to access the existing Entry admission
+The Rust example lives in zkc solely to access the existing Entry admission
 API; no test-only validator is exposed as a production API. Its inert authenticated
 package establishes metadata admission only. Source correspondence, actual input
 decoding, setup authority and runtime value/capability checks are outside this

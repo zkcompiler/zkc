@@ -5,12 +5,10 @@ use p3_challenger_043::{CanObserve, CanSample, DuplexChallenger};
 use p3_field_043::{PrimeCharacteristicRing, PrimeField32};
 use serde_json::Value as Json;
 use sha2::Digest;
-use zkc_backends::{
-    Policy, Sequence, Value,
-    external::{monero, openvm},
-};
+use zkc::proof::NativeDeployment;
+use zkc_kernels::external::{monero, openvm};
+use zkc_native::{Policy, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
-use zkc_tools::proof::NativeDeployment;
 fn packed(state: &openvm::Duplex) -> Value {
     let s = state.snapshot();
     words(
@@ -230,7 +228,7 @@ pub(super) fn archived_answers(deployment: &NativeDeployment, envelope: &Json, f
     let produced = zkc_test_drivers::execute(
         deployment,
         &inputs(envelope, &values, true),
-        zkc_tools::proof::Invocation::one_shot(None),
+        zkc::proof::Invocation::one_shot(None),
     )
     .unwrap()
     .outcome
@@ -243,7 +241,7 @@ pub(super) fn archived_answers(deployment: &NativeDeployment, envelope: &Json, f
     zkc_test_drivers::execute(
         deployment,
         &inputs(envelope, &values, false),
-        zkc_tools::proof::Invocation::one_shot(Some(&produced)),
+        zkc::proof::Invocation::one_shot(Some(&produced)),
     )
     .unwrap()
     .outcome

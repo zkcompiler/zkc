@@ -1,0 +1,30 @@
+[package]
+name = "zkc"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+[dependencies]
+toml.workspace = true
+rand.workspace = true
+serde = { workspace = true, features = ["derive"] }
+zkc-runtime.workspace = true
+zkc-native.workspace = true
+zkc-kernels.workspace = true
+sha2.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+unicode-normalization.workspace = true
+[build-dependencies]
+sha2.workspace = true
+serde_json.workspace = true
+[lints]
+workspace = true
+[dev-dependencies]
+zkc-test-support.workspace = true
+[features]
+execution-counts = ["zkc-runtime/execution-counts"]
+test-utils = ["zkc-native/test-utils"]
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+rustix.workspace = true

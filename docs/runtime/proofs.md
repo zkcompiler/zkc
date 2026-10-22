@@ -10,7 +10,7 @@ rules; [deployment and transport](../spec/formats/proof.md) own exact formats.
 
 Source applications use `entry::ProofEntry` with named values. The
 [Entry guide](entries.md) covers commands and optional generated Rust bindings.
-Lower-level applications use `zkc_tools::proof::NativeDeployment`; the
+Lower-level applications use `zkc::proof::NativeDeployment`; the
 [bundle walkthrough](bundles.md#separate-producer-and-validator) is executable.
 `ProofEntry` requires transcript binding by default and exposes an explicit
 authored-policy option. `NativeDeployment` executes the trusted pinned
@@ -27,7 +27,7 @@ comes from trusted checked compilation.
 provider/key declarations. `Invocation` selects `Prove`, `Verify(&proof)` or
 `Attempts(&policy)`. `ProofInputs::decode` adapts positional records to the same
 typed inputs. Shared `InputValue`, `Capacity` and `ProverMaterial` live in
-`zkc_tools::execution`.
+`zkc::execution`.
 Managed native transcripts canonically bind public values and Host context.
 An authored transcript binds only what its source observes. In particular, raw
 proof transport adds no header or context bytes. Its report fingerprint identifies

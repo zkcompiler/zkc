@@ -4,18 +4,18 @@ mod typed;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::Keys;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc::proof::NativeDeployment;
+use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 
-fn authority(keys: &Keys, authored: bool) -> zkc_tools::proof::SetupAuthority {
+fn authority(keys: &Keys, authored: bool) -> zkc::proof::SetupAuthority {
     let (vk, ports) = if authored {
         (2, vec![1, 3])
     } else {
         (6, vec![5, 7, 8])
     };
-    zkc_tools::proof::SetupAuthority {
+    zkc::proof::SetupAuthority {
         keys: BTreeMap::from([(vk, keys.verifier_key().metadata().key_id())]),
         inputs: ports.into_iter().map(|p| (p, vk)).collect(),
     }
@@ -41,9 +41,9 @@ fn backend(keys: &Keys) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
-        zkc_backends::SetupRegistry::new(
+        zkc_native::SetupRegistry::new(
             vec![keys.verifier_key().clone()],
-            &zkc_backends::Policy::default(),
+            &zkc_native::Policy::default(),
         )
         .unwrap(),
     )
@@ -64,7 +64,7 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
     let (a, b) = tables(n);
     let policy = Policy::default();
     let table = |v: &[Scalar]| {
-        zkc_arkworks::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds()).unwrap()
+        zkc_kernels::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds()).unwrap()
     };
     let root_a = keys
         .prover_key()
@@ -170,18 +170,15 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
     ])
 }
 fn accepted(deployment: &NativeDeployment, input: &Json, proof: Option<&[u8]>) -> Vec<u8> {
-    let report = zkc_test_drivers::execute(
-        deployment,
-        input,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    )
-    .unwrap();
+    let report =
+        zkc_test_drivers::execute(deployment, input, zkc::proof::Invocation::one_shot(proof))
+            .unwrap();
     assert!(!report.cancelled);
     report.outcome.unwrap()
 }
 fn key_attempts(directory: &Path, keys: &Keys) {
+    use zkc::proof::AttemptPolicy;
     use zkc_runtime::attempt::Limits;
-    use zkc_tools::proof::AttemptPolicy;
 
     let path = directory.join("1.pk");
     for complete in [true, false] {
@@ -211,12 +208,12 @@ fn key_attempts(directory: &Path, keys: &Keys) {
         let first = zkc_test_drivers::execute(
             &deployment,
             &producer,
-            zkc_tools::proof::Invocation::Attempts(&policy),
+            zkc::proof::Invocation::Attempts(&policy),
         )
         .unwrap();
         let typed = typed::material_request(&producer, keys);
         let reused = deployment
-            .execute(&typed, zkc_tools::proof::Invocation::Attempts(&policy))
+            .execute(&typed, zkc::proof::Invocation::Attempts(&policy))
             .unwrap();
         assert_eq!(reused.outcome, first.outcome);
         assert_eq!(reused.binding, first.binding);
@@ -242,7 +239,7 @@ fn key_attempts(directory: &Path, keys: &Keys) {
             let repeated = zkc_test_drivers::execute(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::Attempts(&policy),
+                zkc::proof::Invocation::Attempts(&policy),
             )
             .unwrap();
             assert_eq!(repeated.outcome.unwrap_err(), "native-attempt-limit");
@@ -263,7 +260,7 @@ fn key_attempts(directory: &Path, keys: &Keys) {
             let exhausted = zkc_test_drivers::execute(
                 &deployment,
                 &producer,
-                zkc_tools::proof::Invocation::Attempts(&policy),
+                zkc::proof::Invocation::Attempts(&policy),
             )
             .unwrap();
             assert_eq!(exhausted.outcome.unwrap_err(), "Limit");
@@ -289,7 +286,7 @@ fn main() {
     let bounds = Policy::default().ark_bounds();
     assert_eq!(
         Keys::setup_for_development(0, &bounds).unwrap_err(),
-        zkc_arkworks::Error::PositiveArityRequired
+        zkc_kernels::Error::PositiveArityRequired
     );
     let keys: BTreeMap<_, _> = [1, 2, 3, 8]
         .into_iter()
@@ -396,7 +393,7 @@ fn structured_mutations(deployment: &NativeDeployment, input: &Json, proof: &[u8
         zkc_test_drivers::execute(
             deployment,
             input,
-            zkc_tools::proof::Invocation::one_shot(Some(&absent))
+            zkc::proof::Invocation::one_shot(Some(&absent))
         )
         .unwrap()
         .outcome
@@ -410,7 +407,7 @@ fn structured_mutations(deployment: &NativeDeployment, input: &Json, proof: &[u8
         zkc_test_drivers::execute(
             deployment,
             input,
-            zkc_tools::proof::Invocation::one_shot(Some(&altered))
+            zkc::proof::Invocation::one_shot(Some(&altered))
         )
         .unwrap()
         .outcome

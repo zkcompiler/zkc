@@ -10,7 +10,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 pub use transcript::root;
 use transcript::*;
-use zkc_backends::Scalar;
+use zkc_native::Scalar;
 use zkc_test_support::hex;
 
 struct Oracle<'a> {

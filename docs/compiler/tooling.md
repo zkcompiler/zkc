@@ -95,7 +95,7 @@ identifies its source capture; it is not a self-contained source archive.
 
 ## Observe execution
 
-Build the CLI with `cargo build -p zkc-tools --features execution-counts`, then use
+Build the CLI with `cargo build -p zkc-cli --features execution-counts`, then use
 `run`, `prove` or `verify` with `--instrument=counts`. Unsupported builds refuse the
 instrument instead of returning empty measurements. Ordinary builds retain no
 counter storage or collection work.

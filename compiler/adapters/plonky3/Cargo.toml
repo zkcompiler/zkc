@@ -11,7 +11,7 @@ license = "Apache-2.0"
 
 [workspace.dependencies]
 # Plonky3 0.8.0 is upstream commit a21e3ed42905040ad49c519e402f018381c12d0c.
-# It is the family the native KoalaBear provider pins in crates/zkc-backends.
+# It is the family the native KoalaBear provider pins in crates/zkc-kernels.
 p3-air = "=0.8.0"
 p3-commit = "=0.8.0"
 p3-field = "=0.8.0"
@@ -23,7 +23,8 @@ zkc-plonky3-air = { path = "exporter" }
 zkc-plonky3-air-client = { path = "client" }
 # Native admission and evaluation are optional consumers of exported assets.
 zkc-runtime = { path = "../../../crates/zkc-runtime" }
-zkc-backends = { path = "../../../crates/zkc-backends" }
+zkc-kernels = { path = "../../../crates/zkc-kernels" }
+zkc-native = { path = "../../../crates/zkc-native" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

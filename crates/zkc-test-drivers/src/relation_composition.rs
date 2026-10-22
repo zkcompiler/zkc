@@ -2,10 +2,10 @@
 //! an independent finite-field evaluator, including explicitly accepted bad events.
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::services::ServiceRegistry;
-use zkc_backends::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_native::services::ServiceRegistry;
+use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
-use zkc_tools::run::*;
 
 #[derive(Deserialize)]
 struct Experiment {
@@ -31,7 +31,7 @@ struct Exact {
     satisfied: bool,
 }
 fn scalar(value: &str) -> Scalar {
-    zkc_arkworks::parse_decimal(value).unwrap()
+    zkc_kernels::parse_decimal(value).unwrap()
 }
 fn scalars(values: &[String]) -> Vec<Scalar> {
     values.iter().map(|v| scalar(v)).collect()

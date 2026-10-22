@@ -3,17 +3,14 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use zkc_backends::services::{ServiceReference, ServiceRegistry};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value,
-};
+use zkc::execution::InputValue;
+use zkc::run::{HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority};
+use zkc_native::services::{ServiceReference, ServiceRegistry};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc_runtime::host::joint::{Bundle, BundleLimits};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, LogicalType, Packet, PathElement, ProgramState, StopKind, Value as RuntimeValue,
-};
-use zkc_tools::execution::InputValue;
-use zkc_tools::run::{
-    Bundle, BundleLimits, HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority,
 };
 
 #[path = "language_native/attempts.rs"]
@@ -203,7 +200,7 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         .prepare(inputs.to_string().as_bytes())
         .unwrap()
         .execute();
-    let result = report.json();
+    let result = report.diagnostics();
     assert_eq!(result["outcome"], json!(["completed"]));
     assert!(report.cleanup_errors.is_empty());
     let verifier = &report.execution.as_ref().unwrap().roles[1];
@@ -228,7 +225,10 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         ],
         setups: Default::default(),
     };
-    assert_eq!(host.prepare_typed(&typed).unwrap().execute().json(), result);
+    assert_eq!(
+        host.prepare_typed(&typed).unwrap().execute().diagnostics(),
+        result
+    );
 }
 fn service_backend(
     bundle: &serde_json::Value,
@@ -578,13 +578,13 @@ fn main() {
             continue;
         }
         let bytes = std::fs::read(&path).unwrap();
-        let package = zkc_tools::entry::Package::capture(
+        let package = zkc::entry::Package::capture(
             &bytes,
             &Sha256::digest(&bytes).into(),
-            zkc_tools::entry::Package::MAX_BYTES,
+            zkc::entry::Package::MAX_BYTES,
         )
         .unwrap();
-        let interface = zkc_tools::entry::BoundInterface::read(&package)
+        let interface = zkc::entry::BoundInterface::read(&package)
             .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         if !interface.is_proof() && interface.setup_names().len() == 0 {
             let artifact = package.artifact().as_bytes();

@@ -133,3 +133,21 @@ Select affected checks from the [test guide](../../common/tests/README.md#select
 Installed-header/component changes need installed consumers; codec and Host
 changes need actual execution and refusal cases. Broaden validation when failures
 or unresolved concerns justify it, and report the scope actually run.
+
+## Rust kernel and backend ownership
+
+Add typed arithmetic to `zkc-kernels` when it can run without VM values or
+resource authority. Keep provider details in that crate and test mathematical
+shapes and canonical encodings there. Numerical scratch and destinations use
+explicit caller limits; provider-private storage remains documented separately.
+When validation scans mathematical inputs, retain an immutable checked borrow
+before admitting workspace, as with `CoefficientBatch` and `OpeningQuotient`.
+Execution then checks the supplied destination extent without repeating the
+input scan. Native adapters retain policy checks and their refusal order.
+
+Add installed operations, concrete representations, codec adaptation and
+services to `zkc-native`. Its adapters select policy, borrow typed operands,
+invoke kernels and publish complete results. Keep independent installed
+signatures and VM admission checks. A new external mathematics library usually
+extends kernels; a new backend requires a complete VM backend implementation,
+not a crate named for each upstream library.

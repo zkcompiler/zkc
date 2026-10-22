@@ -123,6 +123,8 @@ An empty `Q` refuses with `oracle-positions` rather than accepting vacuously;
 a position at or above `h`, a zero width, or a shape over the element ceiling
 refuses as an invalid verifier request. A wrong row count, digest count,
 noncanonical digest, inconsistent duplicate or mismatching root returns false.
+Failure to allocate decoding storage is execution exhaustion, rather than a
+false authentication result.
 `oracle.check` is `oracle.check_many` with one position. The verifier makes
 exactly `|S|` leaf-hash computations and one compression per parent node
 visited; these are the hash calls an extraction argument over this scheme

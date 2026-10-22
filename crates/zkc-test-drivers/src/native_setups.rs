@@ -2,10 +2,10 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::Keys;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc::proof::{NativeDeployment, SetupAuthority};
+use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
-use zkc_tools::proof::{NativeDeployment, SetupAuthority};
 fn inputs(
     envelope: &Json,
     keys: &[Keys],
@@ -48,9 +48,9 @@ fn inputs(
         let codec = NativeBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "test", "main", None), None),
-            zkc_backends::SetupRegistry::new(
+            zkc_native::SetupRegistry::new(
                 vec![k.verifier_key().clone()],
-                &zkc_backends::Policy::default(),
+                &zkc_native::Policy::default(),
             )
             .unwrap(),
         )
@@ -100,7 +100,7 @@ fn inputs(
     ])
 }
 fn run(d: &NativeDeployment, i: &Json, p: Option<&[u8]>) -> Result<Vec<u8>, String> {
-    let r = zkc_test_drivers::execute(d, i, zkc_tools::proof::Invocation::one_shot(p))?;
+    let r = zkc_test_drivers::execute(d, i, zkc::proof::Invocation::one_shot(p))?;
     assert!(r.cleanup_errors.is_empty());
     r.outcome
 }
@@ -188,20 +188,16 @@ fn main() {
         let p = inputs(&envelope, &keys, &paths, true, 7);
         let v = inputs(&envelope, &keys, &paths, false, 7);
         let produced =
-            zkc_test_drivers::execute(&d, &p, zkc_tools::proof::Invocation::one_shot(None))
-                .unwrap();
+            zkc_test_drivers::execute(&d, &p, zkc::proof::Invocation::one_shot(None)).unwrap();
         assert!(produced.cleanup_errors.is_empty());
         let proof = produced.outcome.unwrap();
         if case["early"] == true {
             // Only the first setup's two openings ran. The second setup still
             // participates in input authorization and the public binding root.
             assert_eq!(produced.messages, 4);
-            let validated = zkc_test_drivers::execute(
-                &d,
-                &v,
-                zkc_tools::proof::Invocation::one_shot(Some(&proof)),
-            )
-            .unwrap();
+            let validated =
+                zkc_test_drivers::execute(&d, &v, zkc::proof::Invocation::one_shot(Some(&proof)))
+                    .unwrap();
             assert_eq!(
                 validated.outcome,
                 if case["refusal"].is_string() {
@@ -221,12 +217,9 @@ fn main() {
             // live. Recompute the second public evaluation at a distinct point.
             let continued_p = inputs(&envelope, &keys, &paths, true, 8);
             let continued_v = inputs(&envelope, &keys, &paths, false, 8);
-            let continued = zkc_test_drivers::execute(
-                &d,
-                &continued_p,
-                zkc_tools::proof::Invocation::one_shot(None),
-            )
-            .unwrap();
+            let continued =
+                zkc_test_drivers::execute(&d, &continued_p, zkc::proof::Invocation::one_shot(None))
+                    .unwrap();
             assert!(continued.return_at.is_none());
             assert_eq!(continued.messages, 8);
             assert!(continued.cleanup_errors.is_empty());
@@ -234,7 +227,7 @@ fn main() {
             let checked = zkc_test_drivers::execute(
                 &d,
                 &continued_v,
-                zkc_tools::proof::Invocation::one_shot(Some(&complete_proof)),
+                zkc::proof::Invocation::one_shot(Some(&complete_proof)),
             )
             .unwrap();
             assert_eq!(checked.outcome, Ok(Vec::new()));

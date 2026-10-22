@@ -9,9 +9,9 @@ use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
-use zkc_backends::plonky3::PACKING_WIDTH;
-use zkc_backends::ring::{self, Budget, Registry};
-use zkc_backends::{KoalaBear, KoalaBearExt8, Policy};
+use zkc_kernels::plonky3::PACKING_WIDTH;
+use zkc_native::ring::{self, Budget, Registry};
+use zkc_native::{KoalaBear, KoalaBearExt8, Policy};
 use zkc_plonky3_air::field::{Ext8, F, generator};
 use zkc_plonky3_air::reference::{
     open_table, point_residuals, row_residuals, upstream_accepts, upstream_failures,

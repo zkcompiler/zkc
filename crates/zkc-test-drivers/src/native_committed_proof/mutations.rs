@@ -3,11 +3,7 @@
 use super::*;
 use zkc_runtime::vm::Value as RuntimeValue;
 fn error(deployment: &NativeDeployment, input: &Json, proof: Option<&[u8]>) -> String {
-    match zkc_test_drivers::execute(
-        deployment,
-        input,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    ) {
+    match zkc_test_drivers::execute(deployment, input, zkc::proof::Invocation::one_shot(proof)) {
         Err(e) => e,
         Ok(report) => {
             let error = report.outcome.expect_err("mutation accepted");
@@ -191,7 +187,7 @@ pub fn check(
         );
     }
     let other =
-        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(11), Scalar::from(17)], &bounds)
+        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(11), Scalar::from(17)], &bounds)
             .unwrap();
     let other = keys.prover_key().commit(&other).unwrap();
     let changed = public(
@@ -305,7 +301,7 @@ pub fn check(
     }
     // Original backing survives restriction and repeated opening through aliases.
     let table =
-        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(1), Scalar::from(2)], &bounds)
+        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(1), Scalar::from(2)], &bounds)
             .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let alias = state.clone();
@@ -318,7 +314,7 @@ pub fn check(
         state.original().logical_values().unwrap(),
         vec![Scalar::from(1), Scalar::from(2)]
     );
-    assert!(!zkc_backends::has_native_wire(
+    assert!(!zkc_native::has_native_wire(
         &Value::OpeningState(Arc::new(state)).physical_type()
     ));
 }

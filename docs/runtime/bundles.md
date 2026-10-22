@@ -60,7 +60,7 @@ from trusted compilation/distribution, not from rehashing an unknown received fi
 ## Programmatic use
 
 ```rust,ignore
-use zkc_tools::run::{HostLimits, RunHost, SetupAuthority};
+use zkc::run::{HostLimits, RunHost, SetupAuthority};
 
 let host = RunHost::admit(&bundle_bytes, &authorized_digest,
                          HostLimits::default(), SetupAuthority::default())?;

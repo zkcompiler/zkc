@@ -1,7 +1,7 @@
 //! Cross-language admission controls for the authenticated source/native link.
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use zkc_tools::entry::{BoundInterface, InterfaceError, Package, PackageError};
+use zkc::entry::{BoundInterface, InterfaceError, Package, PackageError};
 
 pub(super) fn alter(package: &Package, change: impl FnOnce(&mut Json, &mut Json)) -> Package {
     let mut frame: Json = serde_json::from_slice(package.bytes()).unwrap();
@@ -50,7 +50,7 @@ pub(super) fn controls(
                 interface["protocol"] = json!("other_protocol");
             }
         });
-        let view = zkc_tools::entry::BoundInterface::read(&changed).unwrap();
+        let view = zkc::entry::BoundInterface::read(&changed).unwrap();
         assert_eq!(check(&view), Err(InterfaceError::NativeBinding));
     }
 }

@@ -2,11 +2,11 @@
 use super::{data, reference};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
+use zkc_native::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value,
     services::ServiceRegistry,
 };
-use zkc_tools::run::*;
+use zkc_runtime::host::joint::*;
 fn backend(role: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
@@ -178,7 +178,8 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
         if scenario == Scenario::WireLimit {
             limits.wire_bytes = 54;
         }
-        let report = zkc_tools::run::run(&b, "composed", inputs, limits, &mut audit).unwrap();
+        let report =
+            zkc_runtime::host::joint::run(&b, "composed", inputs, limits, &mut audit).unwrap();
         let observed = registry.observe(&coins).unwrap();
         assert!(!observed.leased);
         if scenario == Scenario::WireLimit {

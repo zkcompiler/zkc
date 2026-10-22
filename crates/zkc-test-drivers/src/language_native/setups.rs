@@ -2,9 +2,7 @@
 use super::interface::alter;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::{Keys, Table};
-use zkc_backends::{Policy, Scalar, Value as Native};
-use zkc_tools::{
+use zkc::{
     entry::{
         AttemptOptions, BindingPolicy, NamedValues, Package, ProofEntry, ProofOptions,
         ProofRequest, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value,
@@ -12,6 +10,8 @@ use zkc_tools::{
     execution::{Capacity, InputValue, ProverMaterial},
     run::HostLimits,
 };
+use zkc_kernels::{Keys, Table};
+use zkc_native::{Policy, Scalar, Value as Native};
 fn package(directory: &Path, entry: &str) -> Package {
     let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()

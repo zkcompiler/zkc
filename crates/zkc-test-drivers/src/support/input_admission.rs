@@ -1,7 +1,7 @@
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
-use zkc_tools::proof::{AttemptPolicy, NativeDeployment};
+use zkc::proof::{AttemptPolicy, NativeDeployment};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 
 // An empty test provider distinguishes refusal before issuance from reaching
 // the issuance phase. The expected byte total is computed from public codec
@@ -82,14 +82,14 @@ pub fn private_input_admission_boundary(
             zkc_test_drivers::execute_test(
                 &deployment,
                 input,
-                zkc_tools::proof::Invocation::Attempts(&policy),
+                zkc::proof::Invocation::Attempts(&policy),
                 BTreeMap::new(),
             )
         } else {
             zkc_test_drivers::execute_test(
                 &deployment,
                 input,
-                zkc_tools::proof::Invocation::one_shot(None),
+                zkc::proof::Invocation::one_shot(None),
                 BTreeMap::new(),
             )
         }

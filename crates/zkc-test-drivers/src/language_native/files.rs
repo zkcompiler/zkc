@@ -2,14 +2,14 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_tools::{
+use zkc::{
     entry::{self, FunctionInterface, NamedValues, Package, ProofRequest, SetupAuthority},
     execution::Capacity,
 };
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-fn named(values: &NamedValues, registry: &zkc_backends::SetupRegistry) -> Json {
+fn named(values: &NamedValues, registry: &zkc_native::SetupRegistry) -> Json {
     let bytes = entry::files::proof_outputs(values, Capacity::default(), registry.clone()).unwrap();
     serde_json::from_slice::<Json>(&bytes).unwrap()["values"].take()
 }
@@ -78,9 +78,9 @@ pub(super) fn setups(
     ]);
     let mut verifying = common;
     verifying.push(format!("--proof={}", proof.display()));
-    let produced = zkc_tools::cli::run("prove", &proving);
+    let produced = cli_run("prove", &proving);
     assert_eq!(produced["status"], "produced", "{produced}");
-    let checked = zkc_tools::cli::run("verify", &verifying);
+    let checked = cli_run("verify", &verifying);
     assert_eq!(checked["status"], "accepted", "{checked}");
 
     // Output setup preparation precedes private-key loading when exporting results.
@@ -96,7 +96,7 @@ pub(super) fn setups(
     let mut checked_args = proving.clone();
     checked_args.push(format!("--results={}", results.display()));
     for code in ["invalid-encoding", "key-mismatch"] {
-        let refused = zkc_tools::cli::run("prove", &checked_args);
+        let refused = cli_run("prove", &checked_args);
         assert_eq!(refused["code"], code, "{refused}");
         assert_eq!(refused["phase"], "inputs");
         assert_eq!(std::fs::read(&proof).unwrap(), previous_proof);
@@ -104,7 +104,7 @@ pub(super) fn setups(
         std::fs::write(&vk, &valid_vk).unwrap();
     }
     save(directory, "cli-witness.json", &producer_values);
-    let repaired = zkc_tools::cli::run("prove", &checked_args);
+    let repaired = cli_run("prove", &checked_args);
     assert_eq!(repaired["status"], "produced", "{repaired}");
     assert_eq!(
         repaired["publication"]["published"],
@@ -176,13 +176,28 @@ pub(super) fn setups(
         format!("--invocations={context_file}"),
         "--no-results".into(),
     ]);
-    let result = zkc_tools::cli::run("run", &running);
+    let result = cli_run("run", &running);
     assert_eq!(result["status"], "executed", "{result}");
     let mut wrong: Json = serde_json::from_slice(&std::fs::read(&authority_file).unwrap()).unwrap();
     wrong["keys"]["first"] = json!("00".repeat(32));
     std::fs::write(&authority_file, wrong.to_string()).unwrap();
-    let refused = zkc_tools::cli::run("verify", &verifying);
+    let refused = cli_run("verify", &verifying);
     assert_eq!(refused["code"], "key-mismatch", "{refused}");
     wrong["keys"]["first"] = json!(hex(&authority.keys["first"]));
     std::fs::write(&authority_file, wrong.to_string()).unwrap();
+}
+
+fn cli_run(command: &str, arguments: &[String]) -> Json {
+    let executable = std::path::PathBuf::from(
+        std::env::var_os("ZKC_NATIVE_BIN").expect("explicit CLI directory ZKC_NATIVE_BIN"),
+    )
+    .join("zkc");
+    let output = std::process::Command::new(executable)
+        .arg("--json")
+        .args(command.split_whitespace())
+        .args(arguments)
+        .output()
+        .expect("explicit CLI execution");
+    serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|_| panic!("CLI report: {}", String::from_utf8_lossy(&output.stderr)))
 }

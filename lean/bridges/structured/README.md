@@ -30,7 +30,7 @@ from the fresh ones.
 To add production execution comparisons, build `zkc` and supply it explicitly:
 
 ```sh
-cargo build --release --locked -p zkc-tools --bin zkc
+cargo build --release --locked -p zkc-cli --bin zkc
 python3 lean/bridges/structured/check.py \
   --runtime target/release/zkc \
   --report build/experiments/structured-source-runner/report.json

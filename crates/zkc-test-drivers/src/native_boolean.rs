@@ -1,6 +1,6 @@
 //! Execute compiler-generated Boolean recipes with the installed native backend.
 use std::path::Path;
-use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Action;
 

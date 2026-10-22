@@ -5,14 +5,14 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
-use zkc_arkworks::Keys;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc::proof::NativeDeployment;
+use zkc_kernels::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
-use zkc_tools::proof::NativeDeployment;
 
-fn authority(keys: &Keys) -> zkc_tools::proof::SetupAuthority {
-    zkc_tools::proof::SetupAuthority {
+fn authority(keys: &Keys) -> zkc::proof::SetupAuthority {
+    zkc::proof::SetupAuthority {
         keys: std::collections::BTreeMap::from([(2, keys.verifier_key().metadata().key_id())]),
         inputs: std::collections::BTreeMap::from([(1, 2), (3, 2)]),
     }
@@ -21,9 +21,9 @@ fn backend(keys: &Keys) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "nested", "main", None), None),
-        zkc_backends::SetupRegistry::new(
+        zkc_native::SetupRegistry::new(
             vec![keys.verifier_key().clone()],
-            &zkc_backends::Policy::default(),
+            &zkc_native::Policy::default(),
         )
         .unwrap(),
     )
@@ -56,7 +56,7 @@ fn data(family: &str, count: usize, keys: &Keys) -> Vec<Option<Value>> {
             Some(Value::Index(count as u64 + 1)),
         ]
     } else if family == "batched-openings" {
-        let table = zkc_arkworks::Table::from_logical_vec(
+        let table = zkc_kernels::Table::from_logical_vec(
             vec![Scalar::from(3), Scalar::from(11)],
             &Policy::default().ark_bounds(),
         )
@@ -182,12 +182,9 @@ fn checked(
     deployment: &NativeDeployment,
     inputs: &Json,
     proof: Option<&[u8]>,
-) -> Result<zkc_tools::proof::NativeProofReport, String> {
-    let report = zkc_test_drivers::execute(
-        deployment,
-        inputs,
-        zkc_tools::proof::Invocation::one_shot(proof),
-    )?;
+) -> Result<zkc::proof::NativeProofReport, String> {
+    let report =
+        zkc_test_drivers::execute(deployment, inputs, zkc::proof::Invocation::one_shot(proof))?;
     if report.outcome.is_ok() {
         assert!(!report.cancelled);
     }
@@ -419,7 +416,7 @@ fn main() {
 }
 
 fn checked_indexing(directory: &Path, keys: &Keys) {
-    use zkc_tools::run::*;
+    use zkc_runtime::host::joint::*;
     for suffix in ["", "_plain", "_release"] {
         let bytes = std::fs::read(directory.join(format!("checked{suffix}.bundle"))).unwrap();
         let bundle = Bundle::admit(&bytes, &backend(keys), BundleLimits::default()).unwrap();

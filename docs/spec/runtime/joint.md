@@ -105,6 +105,27 @@ that such a supplied reorder can consume a second draw before another role's
 failed guard. Bundle admission never grants `checked_source`, a statement proof,
 or a source-correspondence certificate.
 
+## Host implementation boundary
+
+`zkc-runtime::host::joint` owns bundle structure, scheduling and bounded driver
+reports. The sibling `host::wire` defines trusted backend transport contracts.
+Complete-type support, exact fixed widths, encoding allocation bounds, decoding
+measurements and codecs come from the independently installed backend.
+Unsupported measurement refuses closed before decoding, with or without an
+invocation-wide ledger. Invalid measurement is still an accepted Decode
+completion; capacity or trusted adapter failure leaves the pending receive
+unaccepted. Before constructing any runner, the driver rechecks each role's
+message types against that role's actual execution backend, independently of
+the backend used for bundle admission. A missing profile refuses setup with
+`role-wire-type` and returns all original inputs and backend custody. These
+contracts do not allow artifacts to install codecs.
+
+`zkc-native` implements this boundary for its closed native profile. Application
+`RunHost` admission, independently supplied pins, setup and invocation authority,
+input preparation and publication remain in `zkc`. The driver consumes
+existing Runner cuts and control methods. Reports retain pending bytes and live
+output reservations through their existing ownership lifetimes.
+
 ## Message admission
 
 `zkc.run/0` embeds exactly `zkc.program/0` and uses the compact schedule
@@ -193,7 +214,8 @@ group parsing checks canonical compression, curve membership and subgroup
 membership. Boolean payloads are exactly zero or one.
 
 Typed decoding checks exact type, length/header/tag, policy limits and canonical
-parsing in that order. `NativeWireError::Invalid` carries one closed reason:
+parsing in that order. Native maps `NativeWireError::Invalid` to
+`host::wire::WireError::Invalid`, carrying one closed reason:
 Length, Header, Boolean, Scalar or Group. Limit and Backend describe failures
 before accepting a receive. No backend error text is parsed to recover this
 classification.

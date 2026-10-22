@@ -56,3 +56,9 @@ pub mod interpreter;
 
 /// Canonical construction trees and session-independent logical occurrences.
 pub mod logical;
+
+/// Provider-independent joint/proof drivers and transport contracts.
+pub mod host;
+
+#[cfg(test)]
+extern crate self as zkc_runtime;

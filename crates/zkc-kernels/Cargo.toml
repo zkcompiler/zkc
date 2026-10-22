@@ -1,0 +1,45 @@
+[package]
+name = "zkc-kernels"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "VM-independent typed mathematical kernels for zkc"
+
+[features]
+test-utils = []
+
+[dependencies]
+ark-bn254.workspace = true
+ark-bls12-381.workspace = true
+ark-ec.workspace = true
+ark-ff.workspace = true
+ark-poly.workspace = true
+ark-poly-commit.workspace = true
+ark-serialize.workspace = true
+ark-std = { workspace = true, features = ["getrandom"] }
+sha2.workspace = true
+
+curve25519-dalek = { workspace = true, features = ["rand_core"] }
+p3-binary-field.workspace = true
+p3-field.workspace = true
+p3-koala-bear.workspace = true
+p3-dft.workspace = true
+p3-commit.workspace = true
+p3-matrix.workspace = true
+p3-merkle-tree.workspace = true
+p3-keccak.workspace = true
+p3-symmetric.workspace = true
+p3-baby-bear-043.workspace = true
+p3-field-043.workspace = true
+p3-symmetric-043.workspace = true
+sha3.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+p3-challenger-043.workspace = true
+p3-poseidon2.workspace = true
+zkc-test-support.workspace = true

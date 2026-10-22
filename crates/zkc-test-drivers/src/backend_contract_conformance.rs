@@ -1,6 +1,6 @@
 //! Observe the executing backend's own registry and physical signatures.
 use serde_json::{Value, json};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::vm::{
     AttributeRule, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding,
     PhysicalType,

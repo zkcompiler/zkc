@@ -27,6 +27,7 @@ production correctness theorem.
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
 | Documentation | `just test-docs` | Links, fragments and reachability |
+| Installed Rust SDK | `nix build .#checks.x86_64-linux.rust-consumer` | Staged SDK and Unicode sources, independent normal-feature Rust consumer; prepared execution outside checkout without compiler or CLI |
 | Installed CLI | `nix build .#checks.x86_64-linux.application` | Check source, compile, inspect, prove and verify outside the checkout |
 | Formatting and lint | `just lint` | C++, Rust and Nix formatting; Clippy, Ruff, Just and workflow syntax |
 | Broad native integration | `just test` | Harness, SDK, compiler, Rust, integration, installation, docs and lint |
@@ -63,7 +64,7 @@ The [native validation map](native.md) connects compiler boundaries to
 representative controls and states their evidence limits.
 
 - `protocol/` covers compiler-generated mathematical programs, native proofs,
-  Entry Host commands, generated bindings, public `.zkc` projects, CLI discovery
+  Entry Host commands, [generated Rust SDK calls](protocol/test_rust_sdk.py), public `.zkc` projects, CLI discovery
   and executable documentation. Native generators run into fresh directories;
   a previous CTest run cannot satisfy their inputs.
   Contract conformance compares C++ Contracts, Rust admission and native backend
@@ -79,7 +80,11 @@ representative controls and states their evidence limits.
   concurrent report allocation, installation isolation and command wiring.
 - `support/` provides tool resolution, journals, the Entry helper and direct
   integer reference arithmetic. The compiler and Lean fixture generators share `variant_codec.py`; independent production readers keep their own implementations.
-- `consumer/` owns SDK discovery fixtures and the separately configured installed C++ consumers. Small fixtures cover package selection and refusal cases; real installed consumers cover upstream LLVM/MLIR variables, linkage and public headers.
+- `consumer/` also owns the Rust consumer source used by `check_rust_sdk.py`; the
+  `rust-consumer` Nix check provides the pinned Cargo toolchain and dependency closure.
+  Preparation builds `Twice`, `Echo`, `Core`, `Checked` and `Withhold` packages
+  for numerical, joint, proof, execution-failure and withheld-result controls.
+  `consumer/` owns SDK discovery fixtures and the separately configured installed C++ consumers. Small fixtures cover package selection and refusal cases; real installed consumers cover upstream LLVM/MLIR variables, linkage and public headers.
 - `fixtures/` contains independently retained reference vectors; its README
   identifies their owners.
 

@@ -2,14 +2,14 @@
 use super::*;
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_test_support::hex;
-use zkc_tools::entry::SetupAuthority as ProofSetups;
-use zkc_tools::entry::{
+use zkc::entry::SetupAuthority as ProofSetups;
+use zkc::entry::{
     BindingPolicy, BindingScope, NamedValues, Package, ProofEntry, ProofOptions, ProofRequest,
     RoleInputs as NamedRoleInputs, Value as LogicalValue,
 };
-use zkc_tools::proof::NativeDeployment;
-use zkc_tools::proof::ProofInputs;
+use zkc::proof::NativeDeployment;
+use zkc::proof::ProofInputs;
+use zkc_test_support::hex;
 
 pub(super) fn run(directory: &Path) {
     authored(directory);
@@ -41,7 +41,7 @@ pub(super) fn run(directory: &Path) {
                 );
                 assert_eq!(package.options().simplify, simplified == 1);
                 assert_eq!(package.options().release_storage, released == 1);
-                let checked = zkc_tools::entry::BoundInterface::read(&package).unwrap();
+                let checked = zkc::entry::BoundInterface::read(&package).unwrap();
                 assert!(checked.is_proof());
                 assert_eq!(checked.entry(), "sample::Demo");
                 let interface: Json = serde_json::from_str(package.interface()).unwrap();
@@ -89,10 +89,10 @@ pub(super) fn run(directory: &Path) {
                         }
                     });
                     assert_eq!(
-                        zkc_tools::entry::BoundInterface::read(&altered)
+                        zkc::entry::BoundInterface::read(&altered)
                             .unwrap()
                             .check_proof(&deployment),
-                        Err(zkc_tools::entry::InterfaceError::NativeBinding)
+                        Err(zkc::entry::InterfaceError::NativeBinding)
                     );
                 }
 
@@ -149,14 +149,14 @@ pub(super) fn run(directory: &Path) {
                 let encoded = zkc_test_drivers::execute_test(
                     &deployment,
                     &input(true, 3),
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                     tape(),
                 )
                 .unwrap();
                 let in_process = deployment
                     .execute_test(
                         &typed(true, 3),
-                        zkc_tools::proof::Invocation::one_shot(None),
+                        zkc::proof::Invocation::one_shot(None),
                         tape(),
                     )
                     .unwrap();
@@ -168,7 +168,7 @@ pub(super) fn run(directory: &Path) {
                     deployment
                         .execute(
                             &typed(false, 0),
-                            zkc_tools::proof::Invocation::one_shot(Some(&typed_proof))
+                            zkc::proof::Invocation::one_shot(Some(&typed_proof))
                         )
                         .unwrap()
                         .outcome
@@ -178,7 +178,7 @@ pub(super) fn run(directory: &Path) {
                 mismatch.inputs[1] = Value::Curve(GroupPoint::generator()).into();
                 assert_eq!(
                     deployment
-                        .execute(&mismatch, zkc_tools::proof::Invocation::one_shot(None))
+                        .execute(&mismatch, zkc::proof::Invocation::one_shot(None))
                         .err()
                         .unwrap()
                         .to_string(),
@@ -188,7 +188,7 @@ pub(super) fn run(directory: &Path) {
                 mismatch.public[0] = InputValue::Resource { budget: 1 };
                 assert_eq!(
                     deployment
-                        .execute(&mismatch, zkc_tools::proof::Invocation::one_shot(None))
+                        .execute(&mismatch, zkc::proof::Invocation::one_shot(None))
                         .err()
                         .unwrap()
                         .to_string(),
@@ -198,7 +198,7 @@ pub(super) fn run(directory: &Path) {
                 mismatch.inputs[2] = InputValue::Resource { budget: 1 };
                 assert_eq!(
                     deployment
-                        .execute(&mismatch, zkc_tools::proof::Invocation::one_shot(None))
+                        .execute(&mismatch, zkc::proof::Invocation::one_shot(None))
                         .err()
                         .unwrap()
                         .to_string(),
@@ -227,7 +227,7 @@ pub(super) fn run(directory: &Path) {
                     }
                     assert_eq!(
                         deployment
-                            .execute(&request, zkc_tools::proof::Invocation::one_shot(None))
+                            .execute(&request, zkc::proof::Invocation::one_shot(None))
                             .err()
                             .unwrap()
                             .to_string(),
@@ -319,7 +319,7 @@ pub(super) fn run(directory: &Path) {
                 let produced = zkc_test_drivers::execute(
                     &deployment,
                     &input(true, 3),
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                 )
                 .unwrap();
                 assert!(produced.cleanup_errors.is_empty());
@@ -337,7 +337,7 @@ pub(super) fn run(directory: &Path) {
                 let validated = zkc_test_drivers::execute(
                     &verifier,
                     &input(false, 0),
-                    zkc_tools::proof::Invocation::one_shot(Some(&proof)),
+                    zkc::proof::Invocation::one_shot(Some(&proof)),
                 )
                 .unwrap();
                 assert!(validated.cleanup_errors.is_empty());
@@ -349,14 +349,14 @@ pub(super) fn run(directory: &Path) {
                 let invalid = zkc_test_drivers::execute(
                     &deployment,
                     &input(true, 5),
-                    zkc_tools::proof::Invocation::one_shot(None),
+                    zkc::proof::Invocation::one_shot(None),
                 )
                 .unwrap();
                 assert!(invalid.cleanup_errors.is_empty());
                 let rejected = zkc_test_drivers::execute(
                     &verifier,
                     &input(false, 0),
-                    zkc_tools::proof::Invocation::one_shot(Some(&invalid.outcome.unwrap())),
+                    zkc::proof::Invocation::one_shot(Some(&invalid.outcome.unwrap())),
                 )
                 .unwrap();
                 assert!(rejected.cleanup_errors.is_empty());
@@ -368,7 +368,7 @@ pub(super) fn run(directory: &Path) {
                     zkc_test_drivers::execute(
                         &verifier,
                         &wrong_context,
-                        zkc_tools::proof::Invocation::one_shot(Some(&proof))
+                        zkc::proof::Invocation::one_shot(Some(&proof))
                     )
                     .unwrap()
                     .outcome
@@ -462,7 +462,7 @@ fn authored(directory: &Path) {
         let mut bad = request();
         bad.public.remove("empty");
         let error = prover.prove(bad).err().unwrap();
-        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Request);
+        assert_eq!(error.phase, zkc::entry::EntryPhase::Request);
         assert_eq!(error.code(), "entry-input-names");
         bad = request();
         bad.private
@@ -475,7 +475,7 @@ fn authored(directory: &Path) {
         bad = request();
         bad.transcript_budget = Some(1);
         let error = prover.prove(bad).err().unwrap();
-        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Preparation);
+        assert_eq!(error.phase, zkc::entry::EntryPhase::Preparation);
         assert_eq!(error.code(), "native-proof-unselected-transcript");
         bad = request();
         bad.context.push(4);
@@ -485,7 +485,7 @@ fn authored(directory: &Path) {
         bad = request();
         bad.private.inputs.insert("payload".into(), payload(true));
         let error = prover.prove(bad).err().unwrap();
-        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Request);
+        assert_eq!(error.phase, zkc::entry::EntryPhase::Request);
         assert_eq!(error.code(), "entry-input-names");
         // The SDK accepts canonical wires as the single public supply as well.
         let mut wired = request();

@@ -223,6 +223,6 @@ pub fn check_g2_ingress() {
     let ty = Value::Bn254G2(Bn254G2::generator()).physical_type();
     assert_eq!(
         codec().decode_native_value(&ty, &wire).unwrap_err(),
-        zkc_backends::NativeWireError::Invalid(zkc_runtime::vm::DecodeReason::Group)
+        zkc_native::NativeWireError::Invalid(zkc_runtime::vm::DecodeReason::Group)
     );
 }

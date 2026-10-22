@@ -5,7 +5,7 @@ use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
 };
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     interpreter::LocalRunner,
     vm::{

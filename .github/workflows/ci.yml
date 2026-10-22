@@ -83,6 +83,7 @@ jobs:
             .#checks.x86_64-linux.rust \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
+            .#checks.x86_64-linux.rust-consumer \
             .#checks.x86_64-linux.sdk \
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \

@@ -17,7 +17,6 @@ let
     "uv.lock"
     "common/tests/conftest.py"
     "common/tests/support"
-    "python/src"
   ];
   compiler = [
     "compiler/CMakeLists.txt"
@@ -68,6 +67,10 @@ let
       paths = [ "common/tests/consumer" ];
       exclude = [ "common/tests/consumer/test_discovery.py" ];
     };
+    rustConsumer.paths = rust ++ [
+      "common/tests/check_rust_sdk.py"
+      "common/tests/consumer/rust"
+    ];
     rust.paths = rust;
     rustTests.paths = rust ++ runner ++ rustFixtures ++ projects;
     application.paths = [

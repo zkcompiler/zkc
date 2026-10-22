@@ -65,5 +65,5 @@ snapshot or adjusts a backing reference count.
 
 The [VM contract](../../../../docs/spec/runtime/vm.md) defines execution and
 failure obligations. [Capacity](../../../../docs/spec/runtime/capacity.md) owns
-metering and retained storage. The [backend guide](../../../zkc-backends/README.md)
+metering and retained storage. The [backend guide](../../../zkc-native/README.md)
 owns native providers and their trust boundary.

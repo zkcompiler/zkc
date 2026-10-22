@@ -2,7 +2,9 @@
 
 from input_files import input_files, invocation_file
 
+import hashlib
 import json
+from pathlib import Path
 
 
 def joint_package(package):
@@ -95,3 +97,15 @@ class Entry:
         assert document['format'] == 'zkc.entry-outputs/0'
         assert document.keys() == {'format', 'value'}
         return document['value']
+
+
+def compile_named_entry(toolchain, journal, directory, entry, source):
+    package = directory / f'{entry}.zkpkg'
+    args = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+            f'--module=sample={source}',
+            f'sample::{entry}', f'--output={package}']
+    report = json.loads(journal.run(args))
+    assert report['status'] == 'compiled'
+    assert Path(report['compiler']).is_absolute() and len(report['toolchain']) == 64
+    assert report['package_sha256'] == hashlib.sha256(package.read_bytes()).hexdigest()
+    return package, report['package_sha256']
