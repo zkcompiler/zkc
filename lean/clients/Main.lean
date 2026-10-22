@@ -182,3 +182,7 @@ noncomputable def originalSumcheckPlainCheck :=
 
 noncomputable def originalSumcheckOptionalWidth :=
   @ZkcExamples.Structured.SumcheckSourceContracts.width_components
+
+-- The public process interface supports ordinary Lean monadic notation.
+example {I : PIR.Signature} (process : PIR.Process I Nat) :
+    (do let value ← process; pure value) = process := by simp

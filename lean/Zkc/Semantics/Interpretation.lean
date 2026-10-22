@@ -23,28 +23,6 @@ abbrev OperationInterpretation (I J : Signature) :=
 
 namespace Process
 
-theorem bind_assoc (source : Process I A) (next : A → Process I B)
-    (last : B → Process I C) :
-    (source.bind next).bind last = source.bind (fun value => (next value).bind last) := by
-  induction source with
-  | done value => rfl
-  | halt why => rfl
-  | call op tail ih =>
-    simp only [bind]
-    congr 1
-    funext reply
-    exact ih reply
-
-@[simp] theorem bind_done (source : Process I A) : source.bind .done = source := by
-  induction source with
-  | done value => rfl
-  | halt why => rfl
-  | call op tail ih =>
-    simp only [bind]
-    congr 1
-    funext reply
-    exact ih reply
-
 def interpret (operations : OperationInterpretation I J) : Process I A → Process J A
   | .done value => .done value
   | .halt why => .halt why

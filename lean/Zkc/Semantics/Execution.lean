@@ -81,6 +81,42 @@ def Process.bind (p : Process I A) (k : A → Process I B) : Process I B :=
   | .halt why => .halt why
   | .call o next => .call o (fun a => (next a).bind k)
 
+namespace Process
+
+theorem bind_assoc {C : Type} (source : Process I A) (next : A → Process I B)
+    (last : B → Process I C) :
+    (source.bind next).bind last = source.bind (fun value => (next value).bind last) := by
+  induction source with
+  | done value => rfl
+  | halt why => rfl
+  | call op tail ih =>
+    simp only [bind]
+    congr 1
+    funext reply
+    exact ih reply
+
+@[simp] theorem bind_done (source : Process I A) : source.bind .done = source := by
+  induction source with
+  | done value => rfl
+  | halt why => rfl
+  | call op tail ih =>
+    simp only [bind]
+    congr 1
+    funext reply
+    exact ih reply
+
+/-- Standard `do` notation uses the same effect tree and stopping behavior. -/
+instance : Monad (Process I) where
+  pure := .done
+  bind := Process.bind
+
+instance : LawfulMonad (Process I) := LawfulMonad.mk' _
+  (fun process => bind_done process)
+  (fun _ _ => rfl)
+  (fun process next last => bind_assoc process next last)
+
+end Process
+
 theorem follow_assoc {C : Type} (r : Execution S E A)
     (f : A → S → Execution S E B) (g : B → S → Execution S E C) :
     (r.follow f).follow g = r.follow (fun a s => (f a s).follow g) := by

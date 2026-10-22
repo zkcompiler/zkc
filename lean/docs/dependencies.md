@@ -15,8 +15,10 @@ their external requirements and override shared transitive pins consistently.
 | CompPoly | `df591bb8c6745126d1d72f5243faae3022b0432a` |
 | PolyFun | `3710d71b28404a151b8d1f0ce080ea448778dec0` |
 
-At selection, Lean 4.35.0 was stable but Mathlib's latest stable was 4.34.1.
-The tested coherent stable baseline is therefore 4.34.1. VCVio main at
+The maintained, tested dependency closure is 4.34.1. Lean and Mathlib 4.35.0
+are both released; retaining this baseline does not mean that a newer Mathlib
+release is unavailable. An upgrade must validate the joint closure and actual
+consumers described below. VCVio main at
 `afa6593f15e1e79ecb3cf22fc56191cecb452bb0` removes `SampleableType.NativeMeasure`
 and `QueryTracking.LoggingOracle`, which the selected ArkLib still imports.
 Use ArkLib's tested VCVio pin until an upstream migration or maintained adapter

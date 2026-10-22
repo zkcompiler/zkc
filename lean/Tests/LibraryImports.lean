@@ -254,6 +254,7 @@ import Tests.Machine
 import Tests.MultilinearListRestriction
 import Tests.MultilinearSumcheck
 import Tests.ParticipantInterface
+import Tests.ProcessNotation
 import Tests.ProjectionControls
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
