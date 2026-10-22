@@ -1,12 +1,16 @@
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
+bool isFormalType(Type type) {
+  return isa<poly::PolynomialType, algebra::QuotientType>(type);
+}
 std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
-  if (isa<poly::PolynomialType>(type))
+  if (isFormalType(type))
     return NativeTypePolicy{true, false, false, false, false, false};
   auto logical = protocol::encodeBoundType(type, false);
   if (!logical) {
@@ -16,7 +20,7 @@ std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
   return protocol::nativeTypePolicy(*logical);
 }
 std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
-  if (isa<poly::PolynomialType>(type))
+  if (isFormalType(type))
     return NativeTypePolicy{true, false, false, false, false, false};
   if (auto found = cache.find(type); found != cache.end())
     return found->second;

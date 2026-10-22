@@ -12,6 +12,45 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
   const auto *intrinsic = mathematicalIntrinsic(name);
   using K = Type::Kind;
   if (intrinsic &&
+      intrinsic->domain == MathematicalIntrinsic::Domain::Quotient) {
+    if (arguments.size() != 2 || !parameters.empty() ||
+        !all_of(arguments,
+                [](const Type &t) { return t.kind == K::Natural; })) {
+      fail("source.intrinsic", "quotient requires static modulus and degree",
+           span);
+      return {};
+    }
+    for (unsigned i = 0; i < 2; ++i) {
+      if (!chargeType(arguments[i], span))
+        return {};
+      auto minimum = Natural::constant(i == 0 ? 2 : 1);
+      if (scope) {
+        if (!assumptions(*scope, {minimum, arguments[i].dimension, span}, {},
+                         span))
+          return {};
+      } else if (!arguments[i].dimension.isClosed() ||
+                 arguments[i].dimension.closedValue() < (i == 0 ? 2u : 1u)) {
+        fail("source.bound", "quotient requires 2 <= modulus and 1 <= degree",
+             span);
+        return {};
+      }
+    }
+    auto quotient = formalType("quotient", arguments);
+    auto coefficients = builtinType("indices", {});
+    if (!quotient || !coefficients) {
+      if (!quotient)
+        accept(quotient.takeError(), span);
+      if (!coefficients)
+        accept(coefficients.takeError(), span);
+      return {};
+    }
+    if (intrinsic->identity == MathematicalIdentity::QuotientProject)
+      return CallSignature{{*coefficients}, {*quotient}};
+    if (intrinsic->identity == MathematicalIdentity::QuotientCoefficients)
+      return CallSignature{{*quotient}, {*coefficients}};
+    return CallSignature{{*quotient, *quotient}, {*quotient}};
+  }
+  if (intrinsic &&
       intrinsic->domain == MathematicalIntrinsic::Domain::Collection) {
     bool matrix = intrinsic->identity == MathematicalIdentity::MatrixAt;
     auto element = arguments.size() == 1

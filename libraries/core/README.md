@@ -8,7 +8,7 @@ your source uses directly; public facades retain concise source names.
 |---|---|
 | [Primitive collections](primitives/collections/zkc.toml) | `primitives::{vector,indices,bytes}`, `sequence`, `matrix`, `field_array` |
 | [Primitive algebra](primitives/algebra/zkc.toml) | `primitives::{curve,scalar}`, `pairing` |
-| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic` |
+| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic`, `quotient_math` |
 | [Primitive cryptography](primitives/cryptography/zkc.toml) | `primitives::hash`, `encoding`, `oracle`, `permutation`, `shake128`, `transcript` |
 | [Traversal](traversal/zkc.toml) | `accumulation`, `finite_domain`, `finite`, `finite_math` |
 | [Collections](collections/zkc.toml) | `vector`, `indices` |
@@ -145,6 +145,14 @@ admission. The [lattice library](../relations/lattice/README.md) composes these
 operations into a short-preimage predicate. The
 [rationale](../../docs/rationale/quotient-rings.md) explains the coefficient and
 external-dialect boundary.
+
+`zkc::quotient_math::Element<Q,N>` exposes total formal quotient calculations
+inside `math fn`. `project` reduces arbitrary unsigned sequences, `add`,
+`subtract`, and `multiply` compose elements of the same ring, and `coefficients`
+observes their canonical representatives. The operators are `+`, `-`, and `*`.
+These formal values have no native ingress or message encoding. They currently
+realize through the managed coefficient operations; automatic external transform
+selection remains separate integration work.
 
 The raw `zkc::primitives::quotient` module also exposes explicit `project`,
 `ntt`, `intt` and `pointwise` operations. Projection reduces arbitrary finite

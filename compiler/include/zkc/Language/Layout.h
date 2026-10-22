@@ -12,23 +12,34 @@ struct PolynomialLayout {
   std::string field;
   uint64_t arity;
 };
-/// One mathematical SSA leaf: executable native data or a formal polynomial.
-/// The variant makes it impossible to pass a formal type as a BoundType string.
+struct QuotientLayout {
+  uint64_t modulus;
+  uint64_t degree;
+};
+/// One mathematical SSA leaf: executable native data or a formal algebraic
+/// value. The variant makes it impossible to pass a formal type as a BoundType
+/// string.
 class LayoutLeaf {
 public:
   LayoutLeaf(std::string data) : value(std::move(data)) {}
   LayoutLeaf(const char *data) : value(std::string(data)) {}
   LayoutLeaf(PolynomialLayout polynomial) : value(std::move(polynomial)) {}
+  LayoutLeaf(QuotientLayout quotient) : value(quotient) {}
   const std::string *data() const { return std::get_if<std::string>(&value); }
   const PolynomialLayout *polynomial() const {
     return std::get_if<PolynomialLayout>(&value);
   }
+  const QuotientLayout *quotient() const {
+    return std::get_if<QuotientLayout>(&value);
+  }
   uint64_t cost() const {
-    return data() ? data()->size() + 1 : polynomial()->field.size() + 2;
+    return data()         ? data()->size() + 1
+           : polynomial() ? polynomial()->field.size() + 2
+                          : 3;
   }
 
 private:
-  std::variant<std::string, PolynomialLayout> value;
+  std::variant<std::string, PolynomialLayout, QuotientLayout> value;
 };
 struct Layout;
 struct LayoutField {

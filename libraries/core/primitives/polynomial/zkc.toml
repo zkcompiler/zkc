@@ -6,5 +6,7 @@
 "zkc::primitives::coset" = "coset.zkc"
 "zkc::primitives::quotient" = "quotient.zkc"
 
+"zkc::quotient_math" = "quotient_math.zkc"
+
 ["dependencies"]
 "primitive-collections" = "../collections"

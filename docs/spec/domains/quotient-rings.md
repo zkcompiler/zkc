@@ -117,6 +117,45 @@ validate actual coefficient arrays. A serialized native program cannot assert
 the source invariant merely by naming a record. No evaluation-form or NTT
 representation crosses this API.
 
+## Formal calculations
+
+`formal("quotient",Q,N)` denotes an element of `R(Q,N)`, where `2 <= Q` and
+`1 <= N`. Parameters are unsigned 64-bit static naturals, including moduli
+above the native binding-natural limit. This is mathematical data with Copy
+and Drop, without an executable port or wire encoding. Formal-value boundary
+rules from the [language](../language/definitions.md#formal-mathematics) apply.
+
+The `zkc::quotient_math` library exposes `Element<Q,N>`, total `project`,
+`add`, `subtract`, `multiply`, and `coefficients`, with `+`, `-`, and `*`
+notation. All binary operands and results have identical modulus and degree.
+Projection has the reduction meaning above. Coefficient observation returns
+exactly `N` canonical unsigned residues in ascending order. Mathematical
+functions can compose these values internally and return observed `Indices`.
+
+The intrinsic spellings are `quotient.value.project`,
+`quotient.value.coefficients`, `quotient.value.add`,
+`quotient.value.subtract`, and `quotient.value.multiply`. Each takes the two
+static natural roots `Q,N` and no literal parameters. These names are distinct
+from the partial executable primitive identities. Generic declarations must
+establish both parameter bounds; closed types reject invalid parameters.
+
+Protocol IR uses `!algebra.quotient<Q,N>` and the closed mathematical operations
+`algebra.quotient_project`, `algebra.quotient_coefficients`,
+`algebra.quotient_add`, `algebra.quotient_subtract`, and
+`algebra.quotient_multiply`. They denote quotient elements, without selecting
+coefficient or evaluation storage, transform roots, or an external backend.
+No field-inverse or cancellation law follows from this type.
+
+The coefficient realization emits managed `quotient.project`, `quotient.add`,
+`quotient.subtract`, and `quotient.multiply` calls with explicit exact modulus
+constants, and an exact degree constant at projection. Observation aliases
+the realized canonical coefficient value. A separate recipe reader checks
+actual calls, operands, constants, bindings, sites and returned values against
+the retained source. The source-to-IR comparison separately binds static ring
+parameters and mathematical operation identities. Formal values never survive
+in the executable output. Resource admission still applies to the selected
+realization; mathematical totality is not a promise of unlimited execution.
+
 ## Execution and scope
 
 The implementation borrows immutable operands and constructs a private exact

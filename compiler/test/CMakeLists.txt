@@ -187,6 +187,8 @@ add_test(NAME unicode-sdk
     --c-compiler "${CMAKE_C_COMPILER}" --cxx-compiler "${CMAKE_CXX_COMPILER}")
 set_tests_properties(unicode-sdk PROPERTIES LABELS native)
 add_zkc_test(language_power Compiler language-power)
+add_zkc_test(quotient_calculations Compiler quotient-calculations)
+mlir_target_link_libraries(zkc-quotient_calculations-test PRIVATE MLIRParser)
 add_zkc_test(language_polynomial Compiler)
 mlir_target_link_libraries(zkc-language_polynomial-test PRIVATE MLIRParser)
 add_test(NAME language-polynomial COMMAND zkc-language_polynomial-test

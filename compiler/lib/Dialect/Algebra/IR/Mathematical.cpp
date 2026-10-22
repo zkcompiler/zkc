@@ -239,3 +239,57 @@ SmallVector<unsigned> PairingOp::getOperandDependencies(unsigned result) {
   return {0, 1};
 }
 } // namespace zkc::algebra
+
+namespace zkc::algebra {
+namespace {
+LogicalResult quotientBinary(Operation *op) {
+  if (op->getOperand(0).getType() != op->getOperand(1).getType() ||
+      op->getOperand(0).getType() != op->getResult(0).getType())
+    return diagnostics::emit(
+        op->emitOpError(), "mathematical-formation",
+        "quotient operands and result must share modulus and degree");
+  return success();
+}
+} // namespace
+std::optional<MathematicalIdentity>
+ProjectQuotientOp::getMathematicalIdentity() {
+  return MathematicalIdentity::QuotientProject;
+}
+SmallVector<unsigned>
+ProjectQuotientOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity>
+ObserveQuotientOp::getMathematicalIdentity() {
+  return MathematicalIdentity::QuotientCoefficients;
+}
+SmallVector<unsigned>
+ObserveQuotientOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0} : SmallVector<unsigned>{};
+}
+LogicalResult AddQuotientOp::verify() { return quotientBinary(*this); }
+std::optional<MathematicalIdentity> AddQuotientOp::getMathematicalIdentity() {
+  return MathematicalIdentity::QuotientAdd;
+}
+SmallVector<unsigned> AddQuotientOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+LogicalResult SubtractQuotientOp::verify() { return quotientBinary(*this); }
+std::optional<MathematicalIdentity>
+SubtractQuotientOp::getMathematicalIdentity() {
+  return MathematicalIdentity::QuotientSubtract;
+}
+SmallVector<unsigned>
+SubtractQuotientOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+LogicalResult MultiplyQuotientOp::verify() { return quotientBinary(*this); }
+std::optional<MathematicalIdentity>
+MultiplyQuotientOp::getMathematicalIdentity() {
+  return MathematicalIdentity::QuotientMultiply;
+}
+SmallVector<unsigned>
+MultiplyQuotientOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+} // namespace zkc::algebra

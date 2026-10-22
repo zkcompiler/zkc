@@ -19,6 +19,25 @@ class TotalMathOp<Dialect dialect, string mnemonic, Type lhs, Type rhs,
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` functional-type(operands, results)";
 }
 
+def ProjectQuotientOp : Op<AlgebraDialect, "quotient_project",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins Indices:$coefficients);
+  let results = (outs Quotient:$value);
+  let assemblyFormat = "$coefficients attr-dict `:` functional-type(operands, results)";
+}
+def ObserveQuotientOp : Op<AlgebraDialect, "quotient_coefficients",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins Quotient:$value);
+  let results = (outs Indices:$coefficients);
+  let assemblyFormat = "$value attr-dict `:` functional-type(operands, results)";
+}
+def AddQuotientOp : TotalMathOp<AlgebraDialect, "quotient_add", Quotient,
+    Quotient, Quotient, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+def SubtractQuotientOp : TotalMathOp<AlgebraDialect, "quotient_subtract", Quotient,
+    Quotient, Quotient, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+def MultiplyQuotientOp : TotalMathOp<AlgebraDialect, "quotient_multiply", Quotient,
+    Quotient, Quotient, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+
 def FieldCompareOp : BoundOp<AlgebraDialect, "exec.field_equal", [OpFieldEqual]>;
 
 def FieldConstantOp : BoundOp<AlgebraDialect, "exec.field_constant", [OpFieldConstant]>;

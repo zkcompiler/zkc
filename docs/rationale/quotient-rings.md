@@ -49,6 +49,13 @@ arithmetic regions. The source facade and enclosing zkc contracts provide the
 boundary; a second dialect mirroring every external operation would duplicate
 maintenance. An owned operation is appropriate when it adds a distinct meaning,
 such as an exact integer observation or a representation unsupported upstream.
+The source-level quotient type in `algebra` records backend-independent
+mathematical values and total projection from arbitrary finite coefficient
+sequences. It has no evaluation-form type, NTT operation or placement solver.
+This small source vocabulary keeps partial canonical validation distinct from
+total mathematics, and supports general moduli even outside the qualified HEIR
+transform profile. HEIR remains the selected owner of structured representation
+changes inside an admitted arithmetic region.
 Integration must retain compound regions rather than lower each product into
 an isolated external function.
 

@@ -70,3 +70,8 @@ ZKC_MATH_OPERATION(algebra::FiniteFoldOp, Total, Context::Protocol | Context::Pa
 ZKC_MATH_OPERATION(algebra::FiniteCollectOp, Total, Context::Protocol | Context::Participant | Context::Helper, "domain", "body", "predicate")
 ZKC_MATH_OPERATION(data::BoundedAtOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(data::BoundedMatrixAtOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::ProjectQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::ObserveQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::AddQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::SubtractQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::MultiplyQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)

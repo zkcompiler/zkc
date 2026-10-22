@@ -33,6 +33,23 @@ compact installed kernels inside local bodies. Unknown bounds refuse the
 selected lowering. [Compiler limits](../spec/ir/limits.md) and recipe-specific
 bounds remain separate from runtime capacity.
 
+## Quotient-ring calculations
+
+`!algebra.quotient<Q,N>` preserves the mathematical value of a negacyclic quotient
+inside total calculations. Source `zkc::quotient_math` exposes projection,
+arithmetic and canonical coefficient observation. Unlike checked canonical
+construction, projection reduces arbitrary finite unsigned sequences and is
+total for valid fixed parameters. The compiler can retain shared inputs and
+compound expressions without assigning a transform basis to the source value.
+
+The current fallback emits managed coefficient operations and independently
+checks their actual constants, operands and returned values. This path supports
+composite and full-word moduli. The selected HEIR integration will operate on
+qualified arithmetic regions; its standalone placement checker does not yet
+establish this source-to-native edge. See the
+[contract](../spec/domains/quotient-rings.md#formal-calculations) and
+[adoption rationale](../rationale/quotient-rings.md).
+
 ## Containers and changing shapes
 
 Nominal Algebra types carry field/group vectors, indices, field matrices and
