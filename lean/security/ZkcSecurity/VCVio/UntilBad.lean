@@ -17,7 +17,7 @@ way (`relTriple_simulateQ_run`), and an event of the first simulation's output
 has at most the second's probability plus the probability that the first ends
 bad (`prEvent_le_add_bad`).
 
-VCVio's `tvDist_simulateQ_le_probEvent_bad` states this for one shared state
+VCVio's `measureETVDist_simulateQ_run'_le_prEvent_bad` states this for one shared state
 type, with agreement as an equality of step distributions. Here the states
 differ, as they do between a random oracle on primitive inputs and a simulator
 holding a history oracle, so agreement is a coupling of each step.
@@ -28,20 +28,22 @@ set_option autoImplicit false
 namespace ZkcSecurity.VCVio.UntilBad
 open OracleComp OracleSpec OracleComp.ProgramLogic.Relational
 
+-- Uniform answer laws imply finite response types; keep this fact local rather
+-- than adding a global instance or an extra premise to the coupling theorems.
+local instance {ι : Type} {spec : OracleSpec ι} [UniformAnswerMeasure spec] :
+    ∀ t, Finite (spec.Range t) := UniformAnswerMeasure.finite_range
+
 section Couplings
 variable {ι₁ ι₂ : Type} {spec₁ : OracleSpec ι₁} {spec₂ : OracleSpec ι₂}
-  [spec₁.IsUniformSpec] [spec₂.IsUniformSpec]
+  [UniformAnswerMeasure spec₁] [UniformAnswerMeasure spec₂]
 
 /-- A postcondition that holds for every left output in the support, against
 every right output, relates the two computations. -/
 theorem relTriple_of_left {α β : Type} {oa : OracleComp spec₁ α} {ob : OracleComp spec₂ β}
     {R : RelPost α β} (holds : ∀ a ∈ support oa, ∀ b, R a b) : RelTriple oa ob R := by
-  obtain ⟨coupling, -⟩ := relTriple_iff_relWP.1 (relTriple_true oa ob)
-  refine relTriple_iff_relWP.2 ⟨coupling, fun pair member => holds pair.1 ?_ pair.2⟩
-  have marginal : pair.1 ∈ (Prod.fst <$> coupling.1).support :=
-    (spmf_support_map coupling.1 Prod.fst).symm ▸ ⟨pair, member, rfl⟩
-  rw [coupling.2.map_fst] at marginal
-  exact (mem_support_iff_evalSPMF_apply_ne_zero oa pair.1).2 ((SPMF.mem_support_iff _ _).1 marginal)
+  exact relTriple_post_mono
+    (relTriple_prod (P := fun a => ∀ b, R a b) (Q := fun _ => True) holds (fun _ _ => trivial))
+    (fun {a b} h => h.1 b)
 
 /-- A left step whose every outcome relates its continuation to the right
 computation relates the composition. -/
@@ -53,15 +55,13 @@ theorem relTriple_bind_left {α γ δ : Type} {oa : OracleComp spec₁ α}
     fun a _ member => holds a member
   simpa only [pure_bind] using composed
 
-set_option linter.deprecated false in
 /-- A coupling whose related outputs carry an event implication bounds the
 event's probability. -/
 theorem prEvent_le_of_relTriple {α β : Type} {oa : ProbComp α} {ob : ProbComp β}
     {R : RelPost α β} (coupled : RelTriple oa ob R) {event : α → Prop} {target : β → Prop}
     (implies : ∀ a b, R a b → event a → target b) :
     Pr{let result ← oa}[event result] ≤ Pr{let result ← ob}[target result] := by
-  rw [probOutput_true_eq_probEvent oa event, probOutput_true_eq_probEvent ob target]
-  exact probEvent_le_of_relTriple coupled implies
+  exact OracleComp.ProgramLogic.Relational.prEvent_le_of_relTriple coupled implies
 
 end Couplings
 
@@ -90,7 +90,7 @@ theorem support_bad (impl₁ : QueryImpl spec (StateT σ₁ (OracleComp spec₁)
 
 /-- The coupling of each step, from related states that are not bad, extends to
 the whole simulations of any computation. -/
-theorem relTriple_simulateQ_run [spec₁.IsUniformSpec] [spec₂.IsUniformSpec]
+theorem relTriple_simulateQ_run [UniformAnswerMeasure spec₁] [UniformAnswerMeasure spec₂]
     (impl₁ : QueryImpl spec (StateT σ₁ (OracleComp spec₁)))
     (impl₂ : QueryImpl spec (StateT σ₂ (OracleComp spec₂))) (bad : σ₁ → Prop)
     (related : σ₁ → σ₂ → Prop)
@@ -124,7 +124,6 @@ theorem relTriple_simulateQ_run [spec₁.IsUniformSpec] [spec₂.IsUniformSpec]
         · rw [← same]
           exact ih one.1 one.2 two.2 (Or.inr stillRelated)
 
-set_option linter.deprecated false in
 /-- An event of the first output has at most the probability of the matching
 event of the second plus the probability that the first ends bad. -/
 theorem prEvent_le_add_bad {α β γ : Type}
@@ -134,19 +133,16 @@ theorem prEvent_le_add_bad {α β γ : Type}
     {event : α → Prop} {target : β → Prop} (implies : ∀ a b, R a b → event a → target b) :
     Pr{let result ← first}[event result.1] ≤
       Pr{let result ← second}[target result] + Pr{let result ← first}[bad result.2] := by
-  rw [probOutput_true_eq_probEvent first (fun result => event result.1),
-    probOutput_true_eq_probEvent second target,
-    probOutput_true_eq_probEvent first (fun result => bad result.2)]
-  calc Pr[fun result => event result.1 | first]
-      ≤ Pr[fun result => (event result.1 ∧ ¬ bad result.2) ∨ bad result.2 | first] :=
-        probEvent_mono fun result _ holds => by
+  calc Pr{let result ← first}[event result.1]
+      ≤ Pr{let result ← first}[(event result.1 ∧ ¬ bad result.2) ∨ bad result.2] :=
+        prEvent_mono _ _ _ fun result holds => by
           by_cases isBad : bad result.2
           · exact Or.inr isBad
           · exact Or.inl ⟨holds, isBad⟩
-    _ ≤ Pr[fun result => event result.1 ∧ ¬ bad result.2 | first] +
-          Pr[fun result => bad result.2 | first] := probEvent_or_le _ _ _
-    _ ≤ Pr[target | second] + Pr[fun result => bad result.2 | first] := by
-        refine add_le_add_left (probEvent_le_of_relTriple coupled ?_) _
+    _ ≤ Pr{let result ← first}[event result.1 ∧ ¬ bad result.2] +
+          Pr{let result ← first}[bad result.2] := prEvent_or_le _ _ _
+    _ ≤ Pr{let x ← second}[target x] + Pr{let result ← first}[bad result.2] := by
+        refine add_le_add_left (prEvent_le_of_relTriple coupled ?_) _
         rintro one two (isBad | relatedOutputs) ⟨holds, notBad⟩
         · exact absurd isBad notBad
         · exact implies _ _ relatedOutputs holds

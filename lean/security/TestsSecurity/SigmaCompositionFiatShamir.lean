@@ -1,3 +1,4 @@
+import ZkcSecurity.VCVio.UniformChallenge
 import ZkcSecurity.Examples.SchnorrAndSigma
 import ZkcSecurity.Examples.ChaumPedersenSigma
 import Mathlib.Data.ZMod.Basic
@@ -10,6 +11,8 @@ satisfiable, each honest prover is accepted with probability one, and each
 conclusion is a strictly positive extraction bound. The imported decisions
 accept honest responses and reject a changed one. -/
 
+open scoped ZkcSecurity.VCVio.UniformChallenge
+
 namespace TestsSecurity.SigmaCompositionFiatShamir
 open OracleComp OracleSpec
 
@@ -18,13 +21,6 @@ instance : Fact (Nat.Prime 5) := ⟨by decide⟩
 abbrev Scalar := ZMod 5
 
 def message : String := "example-context"
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec Scalar) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-! ### Schnorr AND: keys `2` and `3` at base `1` -/
 

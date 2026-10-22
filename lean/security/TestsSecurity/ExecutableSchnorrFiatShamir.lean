@@ -1,3 +1,4 @@
+import ZkcSecurity.VCVio.UniformChallenge
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import TestsSecurity.CompiledSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
@@ -12,6 +13,8 @@ query-bound premise is satisfiable, the honest byte prover decodes to the
 honest typed prover of `CompiledSchnorrFiatShamir`'s controls, and its
 acceptance and the conclusion are those of that prover: a strictly positive
 extraction bound. -/
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 namespace TestsSecurity.ExecutableSchnorrFiatShamir
 open OracleComp OracleSpec
@@ -111,13 +114,6 @@ theorem honest_run : runBytes decodeToy 25 binding honestBytes application base 
   unfold runBytes ZkcSecurity.Examples.CompiledSchnorrFiatShamir.run honestBytes TestsSecurity.CompiledSchnorrFiatShamir.honest
     challengeHistory TestsSecurity.CompiledSchnorrFiatShamir.challengeHistory
   simp only [bind_assoc, pure_bind, honest_validated]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec Scalar) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-- The executable accepts the honest byte prover with probability one. -/
 theorem honest_acceptance : acceptanceBytes decodeToy 25 binding honestBytes application base key = 1 := by

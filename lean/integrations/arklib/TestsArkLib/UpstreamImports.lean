@@ -169,7 +169,7 @@ theorem guess_accepted (guess : Fin 4) :
   rw [experiment_guess, answer, simulateQ_bind, simulateQ_spec_query, StateT.run'_eq,
     StateT.run_bind, map_bind, randomOracle.run_eq]
   simp only [Accepted, Accepts, QueryCache.empty_apply, simulateQ_pure, StateT.run_pure, map_pure,
-    bind_assoc, pure_bind, Set.mem_singleton_iff, decide_eq_true_iff]
+    prEvent_norm, Set.mem_singleton_iff, decide_eq_true_iff]
   have singleton := SampleableType.prEvent_uniformSample_eq_singleton (α := Fin 4) guess
   rw [Fintype.card_fin, Nat.cast_ofNat] at singleton
   exact singleton
@@ -377,8 +377,9 @@ theorem either_accepted (first second : Fin 4) :
     (fun z => Accepted (Accepts (Set.univ : Set Unit)) (PIR.Outcome.returned
       (if decide (parity z.1 = parity first ∨ z.2 = second) = true then some () else none)))
     (fun z holds => by simp [Accepted, Accepts, holds.1])
-  simp only [bind_assoc, pure_bind] at lower
+  simp only [prEvent_norm] at lower
   rw [product] at lower
+  simp only [prEvent_norm]
   exact lower
 
 end TestsSecurity.UpstreamImports

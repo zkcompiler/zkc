@@ -183,7 +183,7 @@ theorem ExactWithRefusal.realized {decode : B → Option R} (exact : ExactWithRe
     Realized decode 1 0 := by
   intro event
   rw [exact event, add_zero]
-  exact mul_le_mul' (prEvent_le_one _ _) le_rfl
+  exact mul_le_mul' (prEvent_le_one _) le_rfl
 
 end Laws
 

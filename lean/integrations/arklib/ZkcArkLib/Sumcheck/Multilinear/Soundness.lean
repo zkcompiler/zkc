@@ -64,7 +64,7 @@ theorem soundness (table : Table F n) (claim : F)
     ((MultivariateRound.polynomialFamily F n 1).behaviorOfRealizations
       (fun _ => oracleStatement table)) prover
     (fun point => statement_evaluate table point) falseClaim
-  simpa only [experiment, bind_assoc, pure_bind] using bound
+  simpa only [experiment, prEvent_norm] using bound
 
 /-- The same bound for the actual checked raw-vector observation. Shape and
 all-point oracle agreement are explicit; malformed vectors cannot pass check. -/
@@ -82,13 +82,10 @@ theorem publicTable_soundness_of_oracle (table : Table F n) (values : List F)
       (n : ENNReal) / Fintype.card F := by
   have bound := soundness_of_oracle table claim A original impl prover answers
     (by rwa [booleanSum_ofList? values table decoded])
-  change 𝒟[do let result ← Native.Core.execute F n 1 (Message F) evaluate unifSpec ($ᵗ F)
-                booleanDomain n 0 (Nat.zero_add n) A original ⟨claim, Fin.elim0⟩ impl prover
-              return result.map (fun (output : ClosedClaim (Native.FinalStatement F n)
-                (MultivariateRound.polynomialFamily F n 1)) =>
-                check values output.stmt.challenges output.stmt.target) = some true] {True} ≤ _
-  rw [← publicTable_observation unifSpec table values decoded ($ᵗ F)
-    n 0 (Nat.zero_add n) A original ⟨claim, Fin.elim0⟩ impl prover answers]
+  have same := congrArg prEvent (publicTable_observation unifSpec table values decoded ($ᵗ F)
+    n 0 (Nat.zero_add n) A original ⟨claim, Fin.elim0⟩ impl prover answers)
+  simp only [prEvent_norm] at same
+  rw [← same]
   exact bound
 
 /-- Public-table checking with the canonical table oracle. The caller supplies

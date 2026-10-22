@@ -86,6 +86,6 @@ theorem residual_perfectCompleteness (table : Table F (remaining + count)) :
     ((MultivariateRound.polynomialFamily F count 1).behaviorOfRealizations
       (fun _ => oracleStatement marginal))
     (fun point => statement_evaluate marginal point)
-  simpa only [experiment, bind_assoc, pure_bind] using complete
+  simpa only [experiment, prEvent_norm] using complete
 
 end ZkcSecurity.ArkLib.Sumcheck.Multilinear

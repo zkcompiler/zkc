@@ -60,13 +60,14 @@ theorem soundness {wiring : Wiring} {program : Verifier F}
     (nativeProver (strategy prover)) (oracleStatement coefficients)
     (statementOracle_realized coefficients)
     (fun h => falseClaim ((closed_statement coefficients claim).mp h).symm)
-  change 𝒟[do let result ← execution program coefficients claim service prover
-               return result.outcome = PIR.Outcome.returned (some true)] {True} ≤ _
-  rw [execution_game certificate]
-  rw [← native_game (booleanDomain (F := F)) noAccess (statementOracle coefficients)
-    noImplementation coefficients claim prover booleanDomain_sum (statementOracle_answers coefficients)]
   have roundBound : (2 : ENNReal) * 2 = 4 := by norm_num
-  simpa only [nativeAcceptance, booleanDomain, Nat.cast_ofNat, roundBound] using bound
+  have nativeBound : prEvent (nativeAcceptance booleanDomain noAccess (statementOracle coefficients)
+      noImplementation claim prover) ≤ 4 / (Fintype.card F : ENNReal) := by
+    simpa only [nativeAcceptance, prEvent_norm, booleanDomain, Nat.cast_ofNat, roundBound] using bound
+  rw [native_game (booleanDomain (F := F)) noAccess (statementOracle coefficients)
+    noImplementation coefficients claim prover booleanDomain_sum (statementOracle_answers coefficients),
+    ← execution_game certificate coefficients claim service prover] at nativeBound
+  simpa only [prEvent_norm] using nativeBound
 
 /-- Arbitrary private probabilistic choice of a causal strategy, made without
 access to the verifier's fresh challenge draws. `ProbComp` supplies a normalized

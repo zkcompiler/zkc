@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Sampling
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
 

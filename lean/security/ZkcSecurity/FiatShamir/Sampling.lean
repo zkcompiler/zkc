@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Typed
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 public import CompPoly.Fields.KoalaBear.Basic
 public import CompPoly.Fields.BLS12_381.Basic
 

@@ -286,7 +286,7 @@ theorem draws_total :
     (fun _ => True) (fun _ => True)
   have inner := prEvent_bind_bind_and ($ᵗ (Fin 6)) ($ᵗ (Scalar × Scalar))
     (fun _ => True) (fun _ => True)
-  simp only [bind_assoc, pure_bind, and_self] at outer inner
+  simp only [prEvent_norm, and_self] at outer inner
   rw [outer, inner, (SampleableType.prEvent_uniformSample_eq_one_iff fun _ : Scalar => True).mpr
       fun _ => trivial,
     (SampleableType.prEvent_uniformSample_eq_one_iff fun _ : Fin 6 => True).mpr fun _ => trivial,
@@ -302,7 +302,7 @@ theorem draws_miss :
     (fun challenge => ¬ challenge = 0) (fun drawn => ¬ modulo 3 drawn.1 = 0 ∧ ¬ drawn.2.1 = drawn.2.2)
   have inner := prEvent_bind_bind_and ($ᵗ (Fin 6)) ($ᵗ (Scalar × Scalar))
     (fun raw => ¬ modulo 3 raw = 0) (fun pair : Scalar × Scalar => ¬ pair.1 = pair.2)
-  simp only [bind_assoc, pure_bind] at outer inner
+  simp only [prEvent_norm] at outer inner
   have challenges : (Finset.univ.filter fun challenge : Scalar => ¬ challenge = 0).card = 4 := by
     decide
   have raws : (Finset.univ.filter fun raw : Fin 6 => ¬ modulo 3 raw = 0).card = 4 := by
@@ -319,12 +319,12 @@ theorem cheater_acceptance :
     Pr{let result ← (simulateQ randomOracle (fixedExperiment absorb validator [] cheater)).run'
         ∅}[Accepted accepts result.1] = 43 / 75 := by
   rw [fixedExperiment, cheater, pure_bind, cheater_run]
-  simp only [bind_assoc, pure_bind, Accepted, accepts, verdict, decide_eq_true_eq]
+  simp only [prEvent_norm, Accepted, accepts, verdict, decide_eq_true_eq]
   have total := prEvent_add_prEvent_not_eq_prEvent_true
     (do let challenge ← $ᵗ Scalar; let raw ← $ᵗ (Fin 6); let pair ← $ᵗ (Scalar × Scalar)
         pure (challenge, raw, pair))
     fun drawn => drawn.1 = 0 ∨ modulo 3 drawn.2.1 = 0 ∨ drawn.2.2.1 = drawn.2.2.2
-  simp only [bind_assoc, pure_bind, not_or] at total
+  simp only [prEvent_norm, not_or] at total
   rw [draws_total, draws_miss] at total
   rw [← ENNReal.add_left_inj (show (32 / 75 : ENNReal) ≠ ⊤ by finiteness), total,
     ← ENNReal.toReal_eq_toReal_iff' (by finiteness) (by finiteness),

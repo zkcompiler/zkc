@@ -2,10 +2,9 @@ module
 
 public import TestsArkLib.CausalSumcheck.Phases
 public import Mathlib.Algebra.Field.ZMod
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
-
 
 namespace TestsSecurity.CausalSumcheck.Handlers
 
@@ -111,7 +110,6 @@ theorem uniform_high_execution : (participant 1).runM uniformHighHandler 0 = (do
     PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM, uniformHighHandler, names, tail,
     lowAction, queryAction, sendAction, boundary, evaluate]
 
-
 def acceptedGame (h : PIR.MonadHandler ProbComp Actual F String) : ProbComp Prop := do
   let e ← (participant 1).runM h 0
   pure (accepts (tableTerminal zeroTable) e)
@@ -135,7 +133,8 @@ theorem constant_challenge_exceeds_bound :
 theorem uniform_high_handler_mass : mass (acceptedGame uniformHighHandler) = (1 : ENNReal)/2 := by
   simp only [acceptedGame, uniform_high_execution, bind_assoc, pure_bind, accepts]
   simp_rw [propext (tableTerminal_zero _ _)]
-  change Pr{let r ← ($ᵗ F)}[r = 0] = _
+  rw [mass, ← prEvent_def]
+  simp only [prEvent_norm]
   rw [SampleableType.prEvent_uniformSample_eq_singleton]
   norm_num [F]
 
@@ -171,9 +170,8 @@ theorem honest_participant_mass :
     PIR.Process.runM, PIR.Process.bind, PIR.Execution.followM, honestHandler, names, tail,
     lowAction, queryAction, sendAction, boundary, evaluate, accepts,
     mass]
-  change ∀ r : F, tableTerminal zeroTable [r] 0
+  apply (SampleableType.prEvent_uniformSample_eq_one_iff _).mpr
   intro r
   exact (tableTerminal_zero r 0).mpr rfl
-
 
 end TestsSecurity.CausalSumcheck.Handlers

@@ -1,3 +1,4 @@
+import ZkcSecurity.VCVio.UniformChallenge
 import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
@@ -7,6 +8,8 @@ verifier. A finite instance uses `ZMod 5` as scalar field and additive group,
 with no hardness claim: the query-bound premise is satisfiable, the honest
 prover is accepted with probability one, and the conclusion is a strictly
 positive extraction bound. -/
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 namespace TestsSecurity.StructuredSchnorrFiatShamir
 open OracleComp OracleSpec
@@ -55,13 +58,6 @@ theorem honest_run : _root_.FiatShamir.knowledgeVerifyRun
   simp [honest, _root_.FiatShamir, _root_.Schnorr.sigma, HasQuery.query,
     QueryImpl.simulateQ_add_liftM_query_right, _root_.FiatShamir.Fork.roImpl,
     StateT.run'_eq, monad_norm, key, base]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec Scalar) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 theorem honest_acceptance : _root_.FiatShamir.knowledgeAcceptance
     (ZkcSecurity.Examples.StructuredSchnorrSigma.sigma (F := Scalar) base base 0 0)

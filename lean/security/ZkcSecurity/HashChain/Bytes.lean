@@ -276,7 +276,6 @@ theorem byteExperiment_coupling {width' : ℕ}
       one.2 two.2 agree) fun first second related => ?_)
   simp only [EqRel, related.1]
 
-set_option linter.deprecated false in
 /-- The byte-hash experiment and the classified experiment give every event the
 same probability. -/
 theorem byteExperiment_eq {width' : ℕ}
@@ -290,7 +289,7 @@ theorem byteExperiment_eq {width' : ℕ}
         initial adversary)).run' ∅}[event result] =
       Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial
         (classify stateBytes eventBytes adversary))).run' ∅}[event result] :=
-  ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq (evalSPMF_eq_of_relTriple_eqRel
+  ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq (evalDistEq_of_relTriple_eqRel
     (byteExperiment_coupling stateBytes eventBytes stateLength stateInjective eventInjective small
       absorb validator initial adversary)) event
 

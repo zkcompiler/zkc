@@ -9,12 +9,12 @@ warningAsError = true
 [[require]]
 name = "Arklib"
 git = "https://github.com/Verified-zkEVM/ArkLib.git"
-rev = "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8"
+rev = "a93ee1ebbbf7b6b939ba3dd1c6115d33c92a4253"
 
 [[require]]
 name = "VCVio"
 git = "https://github.com/Verified-zkEVM/VCVio"
-rev = "d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0"
+rev = "afa6593f15e1e79ecb3cf22fc56191cecb452bb0"
 
 [[require]]
 name = "CompPoly"

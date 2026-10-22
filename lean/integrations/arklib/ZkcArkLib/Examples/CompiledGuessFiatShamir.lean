@@ -246,7 +246,7 @@ theorem guess_accepted (offset guess : F) (initial : History F G) :
   rw [pure_bind, compiledVerifier_guess, historyQuery, simulateQ_bind, simulateQ_spec_query,
     StateT.run'_eq, StateT.run_bind, map_bind, randomOracle.run_eq]
   simp only [Accepted, QueryCache.empty_apply, simulateQ_pure, StateT.run_pure, map_pure,
-    bind_assoc, pure_bind, Option.some.injEq, decide_eq_true_eq]
+    prEvent_norm, Option.some.injEq, decide_eq_true_eq]
   exact (prEvent_congr _ _ (fun challenge : F => challenge = guess + offset)
     fun _ => eq_comm).trans (SampleableType.prEvent_uniformSample_eq_singleton (α := F) _)
 

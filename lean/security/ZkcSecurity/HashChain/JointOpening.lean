@@ -41,7 +41,6 @@ separation is checked from bytes (`keccak_tagsSeparated`).
 -/
 
 set_option autoImplicit false
-set_option linter.deprecated false
 
 namespace ZkcSecurity.HashChain.Joint
 open OracleComp OracleSpec ZkcSecurity.FiatShamir ZkcSecurity.Commitment
@@ -347,12 +346,15 @@ theorem keccakIndex_uniform (depth : ℕ) (fits : depth ≤ 256) :
   have bijective : Function.Bijective pair :=
     ((Equiv.funUnique (Fin 1) KeccakDigest).trans ((finCongr (by rw [← pow_add,
       Nat.sub_add_cancel fits])).trans (finProdFinEquiv.symm.trans (Equiv.prodComm _ _)))).bijective
-  have law : 𝒮[keccakIndex depth fits <$> ($ᵗ (Fin 1 → KeccakDigest))] =
-      𝒮[$ᵗ (Fin (2 ^ depth))] := by
+  have law : (keccakIndex depth fits <$> ($ᵗ (Fin 1 → KeccakDigest))) =ᵈ ($ᵗ (Fin (2 ^ depth))) := by
     have factored : keccakIndex depth fits = Prod.fst ∘ pair := rfl
     rw [factored, comp_map]
-    exact (evalSPMF_map_eq_of_evalSPMF_eq (evalSPMF_map_bijective_uniform_cross
-      (α := Fin 1 → KeccakDigest) pair bijective) Prod.fst).trans evalSPMF_map_fst_uniformSample_prod
+    refine ((SampleableType.map_uniformSample_evalDistEq_of_bijective bijective).map Prod.fst).trans ?_
+    rw [SampleableType.uniformSample_prod_eq_bind]
+    simp only [map_bind, map_pure]
+    simpa only [bind_pure] using
+      (EvalDistEq.bind_right ($ᵗ (Fin (2 ^ depth))) fun index =>
+        OracleComp.EvalDistEq.bind_const ($ᵗ (Fin (2 ^ (256 - depth)))) (pure index))
   have same := ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq law predicate
   rw [prEvent_map] at same
   exact same

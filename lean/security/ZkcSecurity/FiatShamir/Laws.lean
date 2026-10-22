@@ -95,9 +95,9 @@ theorem Dominated.exactLaw {decode : Raw → Value} (dominated : Dominated decod
   have uniformTotal := prEvent_add_prEvent_not_eq_prEvent_true ($ᵗ Value) event
   rw [prEvent_true_eq_one] at decodedTotal uniformTotal
   have decodedFinite : Pr{let raw ← $ᵗ Raw}[¬ event (decode raw)] ≠ ⊤ :=
-    ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _ _)
+    ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _)
   have uniformFinite : Pr{let value ← $ᵗ Value}[¬ event value] ≠ ⊤ :=
-    ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _ _)
+    ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _)
   refine le_antisymm below ?_
   calc Pr{let value ← $ᵗ Value}[event value]
       = 1 - Pr{let value ← $ᵗ Value}[¬ event value] :=
@@ -131,8 +131,9 @@ theorem PointRatio.realized [Fintype Value] {decode : Raw → Option Value} {fac
         Finset.sum_le_sum fun value _ => bounded value
     _ = factor * Pr{let value ← $ᵗ Value}[event value] := by
         rw [← Finset.mul_sum]
-        simp only [SampleableType.prEvent_uniformSample_eq_singleton, Finset.sum_const,
-          nsmul_eq_mul, SampleableType.prEvent_uniformSample, div_eq_mul_inv]
+        simp_rw [SampleableType.prEvent_uniformSample_eq_singleton]
+        simp only [Finset.sum_const, nsmul_eq_mul, SampleableType.prEvent_uniformSample,
+          div_eq_mul_inv]
     _ = factor * Pr{let value ← $ᵗ Value}[event value] + 0 := (add_zero _).symm
 
 omit [SampleableType Value] in
@@ -399,7 +400,7 @@ noncomputable def LawRecord.koalaBearQueryPhase (gateBits indexBits s : ℕ)
     (gateSmall : gateBits ≤ 24) (indexSmall : indexBits ≤ 24) :
     LawRecord (ZMod koalaBear × (Fin s → ZMod koalaBear)) (Fin s → Fin (2 ^ indexBits)) :=
   LawRecord.gated (lowBits koalaBear gateBits) 0 (koalaBear_lowBits_pointBound gateBits gateSmall 0)
-    (prEvent_le_one _ _) (LawRecord.koalaBearCompound indexBits s indexSmall)
+    (prEvent_le_one _) (LawRecord.koalaBearCompound indexBits s indexSmall)
 
 /-- The gated query phase record has the factor and slack of
 `koalaBear_queryPhase_realized`. -/

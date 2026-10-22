@@ -41,9 +41,9 @@ theorem prEvent_randomOracle_two {D R α : Type} [Fintype D] [DecidableEq D] [Fi
     Pr{let result ← (simulateQ randomOracle computation).run' ∅}[event result] =
       Pr{let pair ← $ᵗ (R × R)}[reading pair] := by
   let : MeasurableSpace α := ⊤
-  rw [prEvent_congr_of_evalDist_eq _ _
-    (evalDist_simulateQ_randomOracle_run'_empty_eq_uniformTable computation) event]
-  simp only [bind_assoc, pure_bind]
+  rw [(EvalDistEq.of_evalDist_eq
+    (evalDist_simulateQ_randomOracle_run'_empty_eq_uniformTable computation)).prEvent_eq event]
+  simp only [prEvent_norm]
   rw [prEvent_congr _ _ (fun table : D → R => reading (table first, table second)) reads]
   exact prEvent_roles_gate first second distinct reading
 
@@ -56,9 +56,9 @@ theorem prEvent_randomOracle_table {D R α : Type} [Fintype D] [DecidableEq D]
     Pr{let result ← (simulateQ randomOracle computation).run' ∅}[event result] =
       Pr{let table ← $ᵗ (D → R)}[event (evalWithAnswerFn (QueryImpl.ofFn table) computation)] := by
   let : MeasurableSpace α := ⊤
-  rw [prEvent_congr_of_evalDist_eq _ _
-    (evalDist_simulateQ_randomOracle_run'_empty_eq_uniformTable computation) event]
-  simp only [bind_assoc, pure_bind]
+  rw [(EvalDistEq.of_evalDist_eq
+    (evalDist_simulateQ_randomOracle_run'_empty_eq_uniformTable computation)).prEvent_eq event]
+  simp only [prEvent_norm]
 
 /-- With every attempt's answer uniform and independent, at least one of `n`
 attempts hits an event of probability `1 - miss` with probability
@@ -76,7 +76,7 @@ theorem prEvent_exists_uniform {B : Type} [SampleableType B] [Fintype B] (n : �
   rw [none] at total
   have finite : miss ^ n ≠ ⊤ := by
     rw [← none]
-    exact ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _ _)
+    exact ne_top_of_le_ne_top ENNReal.one_ne_top (prEvent_le_one _)
   exact ENNReal.eq_sub_of_add_eq finite total
 
 /-- One coordinate of a uniform tuple is uniform. -/

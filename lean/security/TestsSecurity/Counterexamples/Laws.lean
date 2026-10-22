@@ -91,7 +91,7 @@ theorem correlated_acceptance :
         ∅}[Accepted (· = true) result.1] = 3 / 4 := by
   rw [Typed.fixedExperiment, cheater, pure_bind, correlated_transform, simulateQ_map]
   simp only [Typed.answer, simulateQ_spec_query, StateT.run'_eq, StateT.run_map,
-    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure, bind_assoc, pure_bind]
+    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure]
   change Pr{let raw ← $ᵗ (Fin 4)}[Accepted (· = true)
     (PIR.Outcome.returned (decide (Good fun _ => raw)))] = 3 / 4
   rw [prEvent_congr _ _ (fun raw : Fin 4 => raw ≠ 3) fun raw => by simp [Accepted, Good],

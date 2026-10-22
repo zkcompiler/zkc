@@ -1,10 +1,13 @@
 module
 
+public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcSecurity.Endpoint.Soundness
 public import ZkcSecurity.Endpoint.Sigma
 public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 /-! # Knowledge soundness endpoints
 
@@ -170,8 +173,8 @@ theorem KnowledgeEvidence.knowledge [DecidableEq Commit] [SampleableType F] [Fin
   have bridge := evidence.family.shape.knowledge_soundness (evidence.family.sigma statement)
     (evidence.family.generable statement) (evidence.family.sound statement) prover
     (evidence.family.key statement) initial (evidence.corresponds statement initial) budget bounded
-  simp only [KnowledgeEvidence.acceptance, evidence.relation]
-  exact bridge
+  refine bridge.trans_eq ?_
+  exact prEvent_congr _ _ _ fun witness => (evidence.relation statement witness).symm
 
 section Typed
 
@@ -199,13 +202,6 @@ def typedRun (prover : TypedProver F G Stmt) (statement : art.Statement F G) (in
 
 section Probability
 variable [SampleableType F]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-- The probability that the compiled verifier accepts the prover's typed proof. -/
 noncomputable def typedAcceptance (prover : TypedProver F G Stmt) (statement : art.Statement F G)
@@ -299,13 +295,6 @@ def bytesRun (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Pay
 
 section Probability
 variable [SampleableType F]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-- The probability that host validation accepts the prover's proof bytes. -/
 noncomputable def bytesAcceptance (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G))

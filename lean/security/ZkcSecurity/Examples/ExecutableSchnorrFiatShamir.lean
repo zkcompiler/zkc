@@ -1,10 +1,13 @@
 module
 
+public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 public import ZkcExamples.Executable.SchnorrProof
 public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 /-! Knowledge soundness of the executable Schnorr verifier.
 
@@ -247,13 +250,6 @@ def runBytes (decode : PhysicalType → List UInt8 → Option (Payload F G)) (bu
   StateT.run' (simulateQ (forwardUniform (F := F) (G := G) + historyOracle (F := F) (G := G)) (do
     let bytes ← prover key (initial application base key)
     verifyBytes decode budget binding application base key bytes)) (∅ : Cache F G)
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-- Probability that host validation accepts the prover's proof bytes. -/
 noncomputable def acceptanceBytes (decode : PhysicalType → List UInt8 → Option (Payload F G))

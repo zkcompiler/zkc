@@ -153,6 +153,7 @@ theorem knowledge_soundness (Message : Type) [DecidableEq Message] (firstBase se
   have upstream := _root_.FiatShamir.knowledgeExtractor_success
     (sigma (F := F) firstBase secondBase service) (generable firstBase secondBase) Message
     (speciallySound firstBase secondBase service) prover keys message budget bounded
-  simpa only [relation_eq] using upstream
+  refine upstream.trans_eq ?_
+  exact prEvent_congr _ _ _ fun witness => (relation_eq firstBase keys.1 secondBase keys.2 witness).symm
 
 end ZkcSecurity.Examples.ChaumPedersenSigma

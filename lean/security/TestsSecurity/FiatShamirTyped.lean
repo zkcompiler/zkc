@@ -163,7 +163,7 @@ theorem cheater_acceptance :
         ∅}[Accepted accepts result.1] = 1 / 10 := by
   rw [fixedExperiment, cheater, pure_bind, cheater_transform, simulateQ_map]
   simp only [answer, simulateQ_spec_query, StateT.run'_eq, StateT.run_map,
-    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure, bind_assoc, pure_bind]
+    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure]
   change Pr{let raw ← $ᵗ (Fin 2 × Scalar)}[Accepted accepts
     (if raw.1 = 0 then (PIR.Outcome.returned (decide (raw.2 = 2)), ([] : List (Fin 4)))
       else (.stopped .reject, [])).1] = 1 / 10

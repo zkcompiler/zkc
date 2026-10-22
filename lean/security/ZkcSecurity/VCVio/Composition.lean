@@ -21,16 +21,17 @@ theorem acceptance_bind_le {I : PIR.Signature} {S E A B : Type}
       returnedSatisfies accepted e → residual a) :
     mass (acceptance h (p.bind next) s accepted) ≤
       mass (acceptance h p s residual) := by
-  unfold acceptance mass
-  rw [PIR.runM_bind]
-  apply prEvent_bind_le_prEvent_of_support
-  intro prior _ notResidual
-  cases prior with | mk outcome state events =>
-    cases outcome with
-    | stopped why => simp [PIR.Execution.followM, returnedSatisfies]
-    | returned a =>
-      simp only [PIR.Execution.followM, bind_assoc, pure_bind]
-      exact OracleComp.prEvent_eq_zero_of_forall_mem_support ((next a).runM h state)
-        (returnedSatisfies accepted) fun e he ha => notResidual (terminal a state e he ha)
+  have bound := prEvent_bind_le_prEvent_of_support (p.runM h s)
+    (fun prior => prior.followM fun a state => (next a).runM h state)
+    (returnedSatisfies residual) (returnedSatisfies accepted) (fun prior _ notResidual => by
+      cases prior with | mk outcome state events =>
+        cases outcome with
+        | stopped why => simp [PIR.Execution.followM, returnedSatisfies]
+        | returned a =>
+          simp only [PIR.Execution.followM, prEvent_norm]
+          exact prEvent_eq_zero_of_forall_mem_support ((next a).runM h state)
+            (returnedSatisfies accepted) fun e he ha => notResidual (terminal a state e he ha))
+  simpa only [mass, acceptance, PIR.runM_bind, prEvent_def, map_eq_bind_pure_comp,
+    Function.comp_def] using bound
 
 end ZkcSecurity.VCVio.Composition

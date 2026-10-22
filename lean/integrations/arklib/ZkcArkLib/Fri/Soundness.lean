@@ -142,7 +142,7 @@ theorem commit_escape_le (t : ℕ) (θ : ℝ) {m R : ℕ} (strategy : Strategy F
   | @last m final =>
       intro D error hescapes word
       obtain ⟨head, _⟩ := hescapes
-      simp only [commit, bind_assoc, pure_bind, toTrace, FoldTrace.Safe, and_true, not_not,
+      simp only [commit, prEvent_norm, toTrace, FoldTrace.Safe, and_true, not_not,
         Finset.sum_range_one]
       exact head word
   | @fold m R next rest ih =>
@@ -153,7 +153,7 @@ theorem commit_escape_le (t : ℕ) (θ : ℝ) {m R : ℕ} (strategy : Strategy F
         (fun beta => FoldingAgreementFailure D word 1 (degreeBound (R + 1) (2 ^ t)) θ beta) _
         (ε := ∑ round ∈ Finset.range (R + 1), error (round + 1))
         fun beta hgood => ?_).trans ?_
-      · simp only [bind_assoc, pure_bind, toTrace, FoldTrace.Safe, hgood, not_false_eq_true,
+      · simp only [prEvent_norm, toTrace, FoldTrace.Safe, hgood, not_false_eq_true,
           true_and]
         exact ih beta (D.subdomain 1) _ tail (next beta)
       · calc _ ≤ error 0 + ∑ round ∈ Finset.range (R + 1), error (round + 1) :=
@@ -178,8 +178,12 @@ theorem RoundByRound.soundness {roots : ℕ → F} {t : ℕ} {shift : F} {n R : 
     (ε := queryError) fun layers hsafe => ?_).trans
       (add_le_add (commit_escape_le t θ _ D foldError certificate.fold _) le_rfl)
   simp only [not_not] at hsafe
-  simp only [bind_assoc, pure_bind]
-  rw [prEvent_positions]
+  simp only [prEvent_norm]
+  have positions := prEvent_positions n s (fun positions =>
+    verify roots t shift layers positions = true ∧
+      Far D (degreeBound R (2 ^ t)) δ (toTrace t D layers).initial)
+  rw [prEvent_map] at positions
+  rw [positions]
   by_cases hfar : Far D (degreeBound R (2 ^ t)) δ (toTrace t D layers).initial
   · simp only [hfar, and_true]
     exact certificate.query layers hsafe hfar

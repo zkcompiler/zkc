@@ -2,7 +2,7 @@ module
 
 public import Zkc.Protocols.Schnorr.Common
 public import Zkc.Specification
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
 

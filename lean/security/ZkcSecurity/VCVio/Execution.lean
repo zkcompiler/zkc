@@ -2,10 +2,9 @@ module
 
 public import Zkc.Semantics.MonadExecution
 public import VCVio.OracleComp.EvalDist.Measure
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
-
 
 namespace ZkcSecurity.VCVio.Execution
 
@@ -261,7 +260,6 @@ theorem reaches_follow {S E A B : Type}
     subst e
     exact preserves a p.state (reachable p hp a pout) q hq b out
 
-
 /-- Stops are nonaccepting; returned values are observed without normalization. -/
 def returnedSatisfies {S E A : Type} (predicate : A → Prop) (e : PIR.Execution S E A) : Prop :=
   match e.outcome with
@@ -307,12 +305,14 @@ theorem acceptance_mono (h : PIR.MonadHandler ProbComp I S E)
     (p : PIR.Process I A) (s : S) (left right : A → Prop)
     (implies : ∀ a, left a → right a) :
     mass (acceptance h p s left) ≤ mass (acceptance h p s right) := by
-  apply OracleComp.prEvent_mono_of_support
-  intro e _
-  cases e with | mk out state events =>
-    cases out with
-    | stopped why => simp [returnedSatisfies]
-    | returned a => exact implies a
+  have bound := prEvent_mono_of_support (p.runM h s)
+    (returnedSatisfies left) (returnedSatisfies right) (fun e _ => by
+      cases e with | mk out state events =>
+        cases out with
+        | stopped why => simp [returnedSatisfies]
+        | returned a => exact implies a)
+  simpa only [mass, acceptance, prEvent_def, map_eq_bind_pure_comp,
+    Function.comp_def] using bound
 
 /-- Conservative trusted checkers need acceptance implication, not equality. -/
 theorem checked_le (h : PIR.MonadHandler ProbComp I S E) (p : PIR.Process I A)

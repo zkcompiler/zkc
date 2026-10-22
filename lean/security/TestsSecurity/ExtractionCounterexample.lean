@@ -3,10 +3,9 @@ import Mathlib.Data.ZMod.Basic
 open OracleComp OracleSpec ZkcSecurity.Endpoint.Extraction
 
 /-! A total-relation control for the actual generic replay implementation.
-This is an operational fixture, not a generated compiled Subject. The pinned
-VCVio support lemmas below still use its legacy probability API. -/
+This is an operational fixture, not a generated compiled Subject. The bounds
+use the same native event probabilities as the endpoint. -/
 
-set_option linter.deprecated false
 set_option autoImplicit false
 set_option maxRecDepth 2048
 namespace TestsSecurity.ExtractionCounterexample
@@ -72,12 +71,12 @@ theorem fork_zero {t₁ t₂ : FiatShamir.Fork.Trace Unit F F Unit}
   exact ⟨h₁ ▸ output_zero path, h₂ ▸ output_zero second.path⟩
 
 theorem fallback_prob (y : F) :
-    probEvent (simulateQ handler
-      (liftComp ($ᵗ F) (FiatShamir.Fork.wrappedSpec F))) (· = y) =
+    Pr{let x ← (simulateQ handler
+      (liftComp ($ᵗ F) (FiatShamir.Fork.wrappedSpec F)))}[x = y] =
       1 / 7 := by
   rw [handler, QueryImpl.simulateQ_add_liftComp_left,
     simulateQ_ofLift_eq_self]
-  rw [probEvent_eq_eq_probOutput, probOutput_uniformSample]
+  rw [SampleableType.prEvent_uniformSample_eq_singleton]
   norm_num [F, ZMod.card]
 
 theorem branch_bound
@@ -85,8 +84,8 @@ theorem branch_bound
       FiatShamir.Fork.Trace Unit F F Unit))
     (zero : ∀ a b, pair = some (a,b) →
       a.forgery.2.2 = 0 ∧ b.forgery.2.2 = 0) :
-    probEvent (simulateQ handler (recoverFork difference pair))
-      (· = (1 : F)) ≤ 1 / 7 := by
+    Pr{let x ← simulateQ handler (recoverFork difference pair)}[
+      x = (1 : F)] ≤ 1 / 7 := by
   cases pair with
   | none => exact (fallback_prob 1).le
   | some pair =>
@@ -105,11 +104,11 @@ theorem branch_bound
     · exact (fallback_prob 1).le
 
 theorem extraction_bound :
-    probEvent (replay verify difference prover () 0)
-      (· = (1 : F)) ≤ 1 / 7 := by
+    Pr{let x ← replay verify difference prover () 0}[
+      x = (1 : F)] ≤ 1 / 7 := by
   unfold replay
   rw [simulateQ_bind]
-  apply probEvent_bind_le_of_forall_le
+  apply prEvent_bind_le_of_forall_le_of_support
   intro pair hp
   apply branch_bound
   intro a b hab
@@ -131,10 +130,7 @@ theorem acceptance_one :
 
 theorem extraction_bound_current_notation :
     Pr{let w ← replay verify difference prover () 0}[w = (1 : F)] ≤
-      1 / 7 := by
-  let : MeasurableSpace F := ⊤
-  rw [prEvent_eq_evalDist_of_discrete, evalDist_apply_setOf]
-  exact extraction_bound
+      1 / 7 := extraction_bound
 
 def relation (publicValue witness : F) : Bool :=
   decide (witness = publicValue)

@@ -72,7 +72,7 @@ theorem constantOnSuccess_not_exact : ¬ Obligations.ExactWithRefusal constantOn
 
 theorem lowBitsRejecting_factor_le (p bits : ℕ) [NeZero p] :
     (LawRecord.lowBitsRejecting p bits).factor ≤ 1 :=
-  prEvent_le_one _ _
+  prEvent_le_one _
 
 /-! ### A validator with an exact challenge and a gated block -/
 
@@ -113,7 +113,7 @@ gate's accepted-value decoder. -/
 noncomputable def laws : LawInterface signature Event Unit Raw
   | .fold => .query .fold inferInstance (LawRecord.identity (Fin 5))
   | .positions => .query .positions inferInstance
-      (LawRecord.gated (Bits := Fin 2) id 0 gate_passes (prEvent_le_one _ _)
+      (LawRecord.gated (Bits := Fin 2) id 0 gate_passes (prEvent_le_one _)
         (LawRecord.identity (Fin 2 → Fin 4)))
 
 /-- After the challenge `beta`: draw the block and accept when `beta` or the first

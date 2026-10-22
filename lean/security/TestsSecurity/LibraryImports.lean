@@ -140,6 +140,7 @@ import ZkcSecurity.VCVio.Schnorr
 import ZkcSecurity.VCVio.SigmaAnd
 import ZkcSecurity.VCVio.SigmaAndSchnorr
 import ZkcSecurity.VCVio.StructuredUniform
+import ZkcSecurity.VCVio.UniformChallenge
 import ZkcSecurity.VCVio.UntilBad
 import TestsSecurity.BindingCodecs
 import TestsSecurity.CallComposition

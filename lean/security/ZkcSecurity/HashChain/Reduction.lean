@@ -1,7 +1,8 @@
 module
 
 public import ZkcSecurity.HashChain.Steps
-public import VCVio.ProgramLogic.Relational.SimulateQ.Basic
+public import VCVio.ProgramLogic.Relational.SimulateQ.Coupling
+public import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 
 @[expose] public section
 

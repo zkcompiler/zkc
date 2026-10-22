@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.HashChain.Reduction
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 public import ZkcSecurity.FiatShamir.Budget
 
 @[expose] public section

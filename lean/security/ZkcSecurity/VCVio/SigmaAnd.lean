@@ -2,6 +2,7 @@ module
 
 public import VCVio.CryptoFoundations.SigmaProtocol.ChallengeRestriction
 public import VCVio.OracleComp.EvalDist.Measure
+public import VCVio.OracleComp.EvalDist.Sum
 
 @[expose] public section
 
@@ -43,16 +44,15 @@ def honestAt (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) 
   let response ← σ.respond statement witness state challenge
   pure (commitment, response)
 
-set_option linter.deprecated false in
 /-- Special honest-verifier zero knowledge: for every valid statement and
 witness and every challenge, the honest commitment and response have exactly
 the distribution of `simulate statement challenge`, which receives no witness.
-Like VCVio's `PerfectHVZK`, it compares the executable `SPMF` semantics, which
-VCVio is retiring; using the same semantics lets the two be converted. -/
+Like VCVio's `PerfectHVZK`, it uses native equality in distribution (`=ᵈ`),
+which compares the probabilities of every event. -/
 def SpecialHVZK (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel)
     (simulate : Stmt → Chal → ProbComp (Commit × Resp)) : Prop :=
   ∀ statement witness, rel statement witness = true → ∀ challenge,
-    𝒮[honestAt σ statement witness challenge] = 𝒮[simulate statement challenge]
+    honestAt σ statement witness challenge =ᵈ simulate statement challenge
 
 /-- The full transcript simulator that draws a uniform challenge first. -/
 def challengeFirst [SampleableType Chal] (simulate : Stmt → Chal → ProbComp (Commit × Resp))
@@ -78,48 +78,46 @@ theorem challengeFirst_eq [SampleableType Chal] (simulate : Stmt → Chal → Pr
   unfold challengeFirst withChallenge
   simp [monad_norm]
 
-set_option linter.deprecated false in
 /-- The honest commitment is drawn independently of the uniform challenge that
 follows it, so the real transcript can draw the challenge first. -/
 theorem evalSPMF_realTranscript [SampleableType Chal]
     (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
     (witness : Wit) :
-    𝒮[σ.realTranscript statement witness] =
-      𝒮[($ᵗ Chal) >>= fun challenge =>
-        withChallenge challenge <$> honestAt σ statement witness challenge] := by
+    σ.realTranscript statement witness =ᵈ (($ᵗ Chal) >>= fun challenge =>
+        withChallenge challenge <$> honestAt σ statement witness challenge) := by
   unfold ChallengeVerifyProtocol.realTranscript honestAt withChallenge
-  rw [evalSPMF_bind_bind_swap]
-  simp [monad_norm]
+  simpa only [monad_norm, Function.comp_def] using OracleComp.EvalDistEq.bind_bind_swap
+    (σ.commit statement witness) ($ᵗ Chal) (fun committed challenge => do
+      let response ← σ.respond statement witness committed.2 challenge
+      pure (committed.1, challenge, response))
 
-set_option linter.deprecated false in
 /-- Special HVZK gives VCVio's perfect HVZK with the challenge-first simulator. -/
 theorem SpecialHVZK.perfectHVZK [SampleableType Chal]
     {σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel}
     {simulate : Stmt → Chal → ProbComp (Commit × Resp)} (special : SpecialHVZK σ simulate) :
     σ.PerfectHVZK (challengeFirst simulate) := by
   intro statement witness valid
-  rw [evalSPMF_realTranscript, challengeFirst_eq]
-  refine evalSPMF_bind_congr' _ fun challenge => ?_
-  exact evalSPMF_map_eq_of_evalSPMF_eq (special statement witness valid challenge) _
+  rw [challengeFirst_eq]
+  refine (evalSPMF_realTranscript σ statement witness).trans ?_
+  refine EvalDistEq.bind_right _ fun challenge => ?_
+  exact EvalDistEq.map (special statement witness valid challenge) _
 
-set_option linter.deprecated false in
 /-- Over a finite challenge space, a challenge-first transcript assigns each
 transcript with challenge `challenge` the uniform weight of that challenge times
 the per-challenge probability of its commitment and response. -/
 theorem probOutput_challengeFirst [SampleableType Chal] [Fintype Chal]
     (computation : Chal → ProbComp (Commit × Resp)) (challenge : Chal) (result : Commit × Resp) :
-    Pr[= withChallenge challenge result | ($ᵗ Chal) >>= fun drawn =>
-        withChallenge drawn <$> computation drawn] =
-      (Fintype.card Chal : ENNReal)⁻¹ * Pr[= result | computation challenge] := by
+    Pr{let x ← (($ᵗ Chal) >>= fun drawn =>
+        withChallenge drawn <$> computation drawn)}[x = withChallenge challenge result] =
+      (Fintype.card Chal : ENNReal)⁻¹ * Pr{let x ← computation challenge}[x = result] := by
   classical
-  rw [probOutput_bind_eq_tsum, tsum_eq_single challenge]
-  · rw [probOutput_uniformSample, probOutput_map_injective _ (withChallenge_injective challenge)]
+  rw [OracleComp.prEvent_bind_eq_tsum, tsum_eq_single challenge]
+  · rw [SampleableType.prEvent_uniformSample_eq_singleton,
+      prEvent_map_injective _ (withChallenge_injective challenge)]
   · intro other different
-    rw [probOutput_map_eq_tsum_ite]
-    simp only [withChallenge, Prod.mk.injEq]
-    simp [Ne.symm different]
+    rw [prEvent_map]
+    simp [withChallenge, different]
 
-set_option linter.deprecated false in
 /-- Conversely, over a finite challenge space, perfect HVZK with a
 challenge-first simulator gives special HVZK: conditioning on each challenge,
 which has positive uniform weight, separates the two transcript distributions. -/
@@ -128,12 +126,26 @@ theorem SpecialHVZK.of_perfectHVZK [SampleableType Chal] [Fintype Chal]
     {simulate : Stmt → Chal → ProbComp (Commit × Resp)}
     (perfect : σ.PerfectHVZK (challengeFirst simulate)) : SpecialHVZK σ simulate := by
   intro statement witness valid challenge
-  have total := perfect statement witness valid
-  rw [evalSPMF_realTranscript, challengeFirst_eq] at total
-  apply evalSPMF_ext
-  intro result
-  have weighted := evalSPMF_ext_iff.mp total (withChallenge challenge result)
-  rw [probOutput_challengeFirst, probOutput_challengeFirst] at weighted
+  classical
+  have total := (evalSPMF_realTranscript σ statement witness).symm.trans
+    (perfect statement witness valid)
+  rw [challengeFirst_eq] at total
+  apply EvalDistEq.of_forall_prEvent_eq
+  intro event
+  have weighted := total.prEvent_eq (fun transcript =>
+    transcript.2.1 = challenge ∧ event (transcript.1, transcript.2.2))
+  have conditioned (computation : Chal → ProbComp (Commit × Resp)) :
+      Pr{let transcript ← (($ᵗ Chal) >>= fun drawn =>
+          withChallenge drawn <$> computation drawn)}[
+        transcript.2.1 = challenge ∧ event (transcript.1, transcript.2.2)] =
+        (Fintype.card Chal : ENNReal)⁻¹ * Pr{let result ← computation challenge}[event result] := by
+    rw [OracleComp.prEvent_bind_eq_tsum, tsum_eq_single challenge]
+    · rw [SampleableType.prEvent_uniformSample_eq_singleton, prEvent_map]
+      simp only [withChallenge, true_and]
+    · intro other different
+      rw [prEvent_map]
+      simp [withChallenge, different]
+  rw [conditioned, conditioned] at weighted
   have positive : (Fintype.card Chal : ENNReal)⁻¹ ≠ 0 := ENNReal.inv_ne_zero.mpr (ENNReal.natCast_ne_top _)
   have finite : (Fintype.card Chal : ENNReal)⁻¹ ≠ ⊤ := by
     simp [Fintype.card_ne_zero]
@@ -231,7 +243,6 @@ theorem speciallySound (sound₁ : first.SpeciallySound) (sound₂ : second.Spec
     sound₂ statement.2 commitment.2 challenge₁ challenge₂ response₁.2 response₂.2 distinct
       accepted₁.2 accepted₂.2 witness₂ extracted₂⟩
 
-set_option linter.deprecated false in
 /-- Special HVZK composes under one shared challenge: the second component's
 commitment is drawn independently of the first component's response. -/
 theorem specialHVZK {simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × Resp₁)}
@@ -241,19 +252,16 @@ theorem specialHVZK {simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × R
     SpecialHVZK (and first second).toChallengeVerifyProtocol (simulateAnd simulate₁ simulate₂) := by
   intro statement witness valid challenge
   simp only [andRelation, Bool.and_eq_true] at valid
-  have separated : 𝒮[honestAt (and first second).toChallengeVerifyProtocol statement witness challenge] =
-      𝒮[honestAt first.toChallengeVerifyProtocol statement.1 witness.1 challenge >>= fun result₁ =>
+  have separated : honestAt (and first second).toChallengeVerifyProtocol statement witness challenge =ᵈ (honestAt first.toChallengeVerifyProtocol statement.1 witness.1 challenge >>= fun result₁ =>
         honestAt second.toChallengeVerifyProtocol statement.2 witness.2 challenge >>= fun result₂ =>
-          pure ((result₁.1, result₂.1), (result₁.2, result₂.2))] := by
+          pure ((result₁.1, result₂.1), (result₁.2, result₂.2))) := by
     unfold honestAt and
     simp only [bind_assoc, pure_bind]
-    refine evalSPMF_bind_congr' _ fun committed₁ => ?_
-    rw [evalSPMF_bind_bind_swap]
-  rw [separated, evalSPMF_bind, special₁ statement.1 witness.1 valid.1 challenge]
+    refine EvalDistEq.bind_right _ fun committed₁ => ?_
+    exact OracleComp.EvalDistEq.bind_bind_swap _ _ _
+  refine separated.trans ?_
   unfold simulateAnd
-  rw [evalSPMF_bind]
-  congr 1
-  funext result₁
-  rw [evalSPMF_bind, special₂ statement.2 witness.2 valid.2 challenge, ← evalSPMF_bind]
+  exact (special₁ statement.1 witness.1 valid.1 challenge).bind fun result₁ =>
+    (special₂ statement.2 witness.2 valid.2 challenge).bind fun result₂ => .rfl
 
 end ZkcSecurity.VCVio.SigmaAnd

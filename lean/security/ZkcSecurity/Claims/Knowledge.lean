@@ -1,9 +1,12 @@
 module
 
+public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcSecurity.Claims.Soundness
 public import ZkcSecurity.Claims.EndpointHypotheses
 
 @[expose] public section
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 /-! Knowledge meaning is the concrete registered extraction experiment against
 the actual verifier and public-input adversary interface. Sigma families and
@@ -64,11 +67,6 @@ def typedRun (_request : KnowledgeRequest subject) (statement : art.Statement F 
   StateT.run' (simulateQ (Sigma.forwardUniform (F := F) (G := G) + Sigma.historyOracle (F := F) (G := G)) (do
     let proof ← prover statement initial
     verdict <$> subject.compiled.verifier Sigma.historyChallenge statement initial proof)) (∅ : Sigma.Cache F G)
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) := fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) := fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 noncomputable def typedAcceptance (request : KnowledgeRequest subject) (statement : art.Statement F G) (initial : History F G)
     (prover : TypedProver F G (art.Statement F G)) : ENNReal :=

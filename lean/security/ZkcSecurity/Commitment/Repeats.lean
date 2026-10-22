@@ -28,7 +28,6 @@ Hence the bridge's event is at most as likely for a prover as for its memoized v
 -/
 
 set_option autoImplicit false
-set_option linter.deprecated false
 
 namespace ZkcSecurity.Commitment
 open OracleComp OracleSpec ZkcSecurity.FiatShamir ZkcSecurity.VCVio.Memo
@@ -185,8 +184,8 @@ theorem falseAcceptance_le_memo {P A : Type} (absorb : Typed.Interface J E P Raw
     unfold experiment
     simp only [map_eq_bind_pure_comp, Function.comp_def]
     rfl
-  rw [shape, shape, probOutput_true_eq_probEvent, probOutput_true_eq_probEvent]
-  refine probEvent_le_of_relTriple (experiment_coupling prover continuation assemble) ?_
+  rw [shape, shape]
+  refine prEvent_le_of_relTriple (experiment_coupling prover continuation assemble) ?_
   rintro direct memo ⟨claim, log, rest, cache, rfl, rfl, agree⟩ holds
   exact (falseAcceptance_unseen words scheme statementRoots firstMatch falseStatement accepts
     (assemble claim log rest) cache agree).mpr holds

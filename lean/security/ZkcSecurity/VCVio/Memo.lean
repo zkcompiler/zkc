@@ -1,8 +1,9 @@
 module
 
-public import VCVio.ProgramLogic.Relational.SimulateQ.Basic
+public import VCVio.ProgramLogic.Relational.SimulateQ.Coupling
+public import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 public import VCVio.OracleComp.QueryTracking.RandomOracle.Basic
-public import VCVio.OracleComp.QueryTracking.LoggingOracle
+public import VCVio.OracleComp.QueryTracking.LoggingOracle.Core
 public import ZkcSecurity.VCVio.Deferral
 
 @[expose] public section
@@ -19,7 +20,6 @@ repeated key carries the answer of its first occurrence.
 -/
 
 set_option autoImplicit false
-set_option linter.deprecated false
 
 namespace ZkcSecurity.VCVio.Memo
 open OracleComp OracleSpec OracleComp.ProgramLogic.Relational
@@ -205,9 +205,9 @@ theorem find?_unseen_append (match? : ((key : D) × R key) → Bool)
         have skipped : match? entry = false := by
           have := unmatched entry.1 answer recorded
           rwa [same] at this
-        rw [if_pos seen, List.cons_append, List.find?_cons, skipped]
+        rw [ite_eq_left seen, List.cons_append, List.find?_cons, skipped]
         exact find?_unseen_append match? cache rest tail record unmatched grows tailAgree
-      · rw [if_neg seen, List.cons_append, List.cons_append, List.find?_cons, List.find?_cons]
+      · rw [ite_eq_right seen, List.cons_append, List.cons_append, List.find?_cons, List.find?_cons]
         cases matched : match? entry with
         | true => rfl
         | false =>

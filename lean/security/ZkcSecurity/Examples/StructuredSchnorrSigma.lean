@@ -4,7 +4,7 @@ public import ZkcExamples.Structured.SchnorrContract
 public import ZkcExamples.Structured.SchnorrCheckpoints
 public import ZkcSecurity.VCVio.Schnorr
 public import Examples.Schnorr.SigmaProtocol
-public import VCVio.OracleComp.Constructions.SampleableType.MeasureCompatibility
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
 
@@ -170,11 +170,9 @@ theorem fresh_challenge_hvzk [Finite F] (base proverKey key : G) (witness : F)
     𝒟[publicView base key challengeService <$>
       (sigma (F := F) base proverKey nonceService challengeService).realTranscript key witness] =
     𝒟[publicView base key challengeService <$> _root_.Schnorr.simTranscript F G base key] := by
-  let _ : MeasurableSpace (G × F × F) := ⊤
   rw [sigma_eq]
   have upstream := _root_.Schnorr.sigma_hvzk F G base key witness
     ((relation_eq base key witness).mp valid)
-  rw [evalDist_map_of_discrete, evalDist_map_of_discrete,
-    evalDist_eq_of_evalSPMF_eq _ _ upstream]
+  exact (upstream.map (publicView base key challengeService)).evalDist_eq
 
 end ZkcSecurity.Examples.StructuredSchnorrSigma

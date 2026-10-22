@@ -106,9 +106,7 @@ noncomputable def simulation (positive : 0 < width) (absorb : Typed.Interface I 
     have same := ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq
       (simulatedExperiment_eq_translated positive absorb validator initial queryBounded adversary
         total) event
-    simp only [bind_assoc] at same
-    simp only [idealEvent, bind_assoc, pure_bind]
-    exact same
+    simpa only [idealEvent, prEvent_norm] using same
 
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S] [SampleableType S]
   [Fintype S] in

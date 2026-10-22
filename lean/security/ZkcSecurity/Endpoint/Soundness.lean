@@ -354,7 +354,8 @@ noncomputable def fixedDecoding (statement : art.Statement F G) (initial : Histo
           (evidence.lowered.decoded codec statement bytes)) =
           (evidence.lowered.decoded codec statement <$> prover) >>= evidence.verify statement initial :=
         (bind_map_left _ _ _).symm
-      exact le_of_eq (congrArg (fun computation => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
+      exact le_of_eq (congrArg (fun (computation : OracleComp (Oracle F G regime.Answer)
+          (PIR.Outcome (Option Bool) × Proof F G)) => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
         Zkc.Transcript.Accepted (· = some true) result.1]) same)
 
 /-- The pruning stage: host validation prunes the complete acceptance of the
@@ -450,7 +451,8 @@ noncomputable def adaptiveDecoding :
           (claimed.1, evidence.lowered.decoded codec claimed.1 claimed.2)) prover
           fun claimed => (fun result => (claimed.1, result)) <$>
             evidence.verify claimed.1 (evidence.codec.encode claimed.1) claimed.2).symm
-      exact le_of_eq (congrArg (fun computation => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
+      exact le_of_eq (congrArg (fun (computation : OracleComp (Oracle F G regime.Answer)
+          (art.Statement F G × (PIR.Outcome (Option Bool) × Proof F G))) => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
         ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1]) same)
 
 /-- The adaptive pruning stage. -/

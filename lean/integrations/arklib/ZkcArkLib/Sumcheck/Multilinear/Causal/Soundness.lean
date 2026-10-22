@@ -188,15 +188,17 @@ theorem malformed_raw_zero (n : Nat) (values : List F)
     (wrong : values.length ≠ 2 ^ n)
     (executions : ProbComp (PIR.Execution S E (List F × F))) :
     mass (do let e ← executions; pure (accepts (rawTerminal n values) e)) = 0 := by
-  apply OracleComp.prEvent_eq_zero_of_forall_mem_support
-  intro e _
-  cases e with | mk out state events =>
-    cases out with
-    | stopped why => simp [accepts]
-    | returned pc =>
-      rintro ⟨coordinates, _, checked⟩
-      rw [check_wrong_shape values coordinates pc.2 wrong] at checked
-      contradiction
+  have zero : Pr{let e ← executions}[accepts (rawTerminal n values) e] = 0 := by
+    apply prEvent_eq_zero_of_forall_mem_support
+    intro e _
+    cases e with | mk out state events =>
+      cases out with
+      | stopped why => simp [accepts]
+      | returned pc =>
+        rintro ⟨coordinates, _, checked⟩
+        rw [check_wrong_shape values coordinates pc.2 wrong] at checked
+        contradiction
+  simpa only [mass, prEvent_def, map_eq_bind_pure_comp, Function.comp_def] using zero
 
 
 /-- Residual truth refers to the original table at precisely the challenged

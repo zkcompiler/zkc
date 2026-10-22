@@ -1,7 +1,8 @@
 module
 
 public import ZkcSecurity.FiatShamir.Grinding
-public import VCVio.OracleComp.Constructions.SampleableType.MeasureCompatibility
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
+public import VCVio.EvalDist.Monad.UniformTable
 
 @[expose] public section
 
@@ -37,17 +38,11 @@ theorem prEvent_roles {X Y Role : Type} [Finite X] [Finite Role] [Finite Y] [Non
     (injective : Function.Injective roles) (event : (Role → Y) → Prop) :
     Pr{let table ← $ᵗ (X → Y)}[event (fun role => table (roles role))] =
       Pr{let values ← $ᵗ (Role → Y)}[event values] := by
-  let : MeasurableSpace (Role → Y) := ⊤
-  have law := evalSPMF_uniformSample_map_comp_injective (R := Y) injective
-  have measures := evalDist_eq_of_evalSPMF_eq (α := Role → Y) (mx := do
-      let table ← $ᵗ (X → Y)
-      pure (table ∘ roles)) (my := $ᵗ (Role → Y)) law
-  calc Pr{let table ← $ᵗ (X → Y)}[event (fun role => table (roles role))]
-      = Pr{let values ← (do let table ← $ᵗ (X → Y); pure (table ∘ roles))}[event values] := by
-        simp only [bind_assoc, pure_bind]
-        rfl
-    _ = Pr{let values ← $ᵗ (Role → Y)}[event values] :=
-        prEvent_congr_of_evalDist_eq _ _ measures event
+  let : MeasurableSpace Y := ⊤
+  have law := EvalDistEq.of_evalDist_eq (evalDist_map_table_comp_injective
+    ($ᵗ (Role → Y)) ($ᵗ (X → Y)) SampleableType.evalDist_uniformSample
+    SampleableType.evalDist_uniformSample injective)
+  simpa only [prEvent_map, Function.comp_def] using law.prEvent_eq event
 
 /-- A gate read from two distinct inputs of a uniformly random function, the
 test at `test` and the challenge at `challenge`, has the law of a uniform pair:

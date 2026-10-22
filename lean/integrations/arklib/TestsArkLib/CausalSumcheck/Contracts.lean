@@ -126,7 +126,8 @@ theorem bad_state_not_fresh :
       pure (e.outcome = .returned (0 : F))) = (1 : ENNReal)/2 := by
     simp only [freshQuery, noOp, result, afterQuery, PIR.Execution.followM,
       bind_assoc, pure_bind, List.nil_append, List.append_nil, PIR.Outcome.returned.injEq]
-    change Pr{let r ← ($ᵗ F)}[r = 0] = _
+    rw [mass, ← prEvent_def]
+    simp only [prEvent_norm]
     rw [SampleableType.prEvent_uniformSample_eq_singleton]
     norm_num [F]
   dsimp only [services] at *

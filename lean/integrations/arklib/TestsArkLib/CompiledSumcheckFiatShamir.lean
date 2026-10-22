@@ -94,7 +94,7 @@ theorem cheater_acceptance :
       Accepted (· = some true) result.1] = 1 / 5 := by
   rw [TestsSecurity.SumcheckFiatShamir.cheater, pure_bind, cheat_compiled, simulateQ_map]
   simp only [historyQuery, simulateQ_spec_query, StateT.run'_eq, StateT.run_map,
-    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure, bind_assoc, pure_bind]
+    randomOracle.run_eq, QueryCache.empty_apply, map_bind, map_pure]
   change Pr{let answer ← $ᵗ Scalar}[Accepted (· = some true) (cheatDecision answer).1] = 1 / 5
   rw [prEvent_congr _ _ (fun answer => answer = 2) cheatDecision_accepted,
     SampleableType.prEvent_uniformSample_eq_singleton, ZMod.card, Nat.cast_ofNat, one_div]

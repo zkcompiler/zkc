@@ -88,6 +88,7 @@ theorem knowledge_soundness (Message : Type) [DecidableEq Message] (base proverK
   have upstream := _root_.FiatShamir.knowledgeExtractor_success
     (sigma (F := F) base proverKey nonceService challengeService) (generable base) Message
     (speciallySound base proverKey nonceService challengeService) prover key message budget bounded
-  simpa only [relation_eq] using upstream
+  refine upstream.trans_eq ?_
+  exact prEvent_congr _ _ _ fun witness => (relation_eq base key witness).symm
 
 end ZkcSecurity.Examples.StructuredSchnorrFiatShamir

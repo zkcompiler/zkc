@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcSecurity.Oracle.Encoding
 public import VCVio.CryptoFoundations.FiatShamir.Sigma.KnowledgeExtraction
@@ -8,6 +9,8 @@ public import VCVio.OracleComp.SimSemantics.QueryImpl.Compose
 public import VCVio.OracleComp.QueryTracking.QueryBound.Simulation
 
 @[expose] public section
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 /-! # The generic Sigma bridge
 
@@ -142,13 +145,6 @@ def run (prover : Prover F G Stmt Commit Resp) (verify : Commit × Resp → Orac
   StateT.run' (simulateQ (forwardUniform (F := F) (G := G) + historyOracle (F := F) (G := G)) (do
     let proof ← prover statement initial
     verify proof)) (∅ : Cache F G)
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 /-- The probability that the verifier accepts the prover's output. -/
 noncomputable def acceptance (prover : Prover F G Stmt Commit Resp)

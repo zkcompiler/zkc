@@ -224,8 +224,10 @@ theorem prEvent_positions (n s : ℕ) (event : (Fin s → Fin (2 ^ n)) → Prop)
       Pr{let positions ← $ᵗ (Fin s → Fin (2 ^ n))}[event positions] := by
   rw [show ($ᵗ (Fin s → Fin (2 ^ n))) = positionAt <$> SampleableType.vector (Fin (2 ^ n)) s from rfl,
     prEvent_map, prEvent_map]
-  exact prEvent_congr_of_evalDist_eq _ _
-    (by rw [evalDist_drawPositions, SampleableType.evalDist_vector]) _
+  let : MeasurableSpace (Vector (Fin (2 ^ n)) s) := ⊤
+  have same : drawPositions n s =ᵈ SampleableType.vector (Fin (2 ^ n)) s :=
+    EvalDistEq.of_evalDist_eq (by rw [evalDist_drawPositions, SampleableType.evalDist_vector])
+  exact same.prEvent_eq _
 
 end ZkcSecurity.ArkLib.Fri
 

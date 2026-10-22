@@ -29,7 +29,6 @@ cell of a uniform table with an independent uniform value keeps it uniform:
 -/
 
 set_option autoImplicit false
-set_option linter.deprecated false
 
 namespace ZkcSecurity.HashChain
 open OracleComp OracleSpec ZkcSecurity.FiatShamir ZkcSecurity.VCVio.Deferral
@@ -40,22 +39,20 @@ section Uniform
 theorem evalSPMF_uniform_update_row {S α : Type} [SampleableType S] {slots width : ℕ}
     (slot : Fin slots) (block : Fin width)
     (continuation : (Fin slots → Fin width → S) → ProbComp α) :
-    𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-        continuation (Function.update rows slot (Function.update (rows slot) block value))] =
-      𝒮[($ᵗ (Fin slots → Fin width → S)) >>= continuation] := by
+    (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+        continuation (Function.update rows slot (Function.update (rows slot) block value))) =ᵈ (($ᵗ (Fin slots → Fin width → S)) >>= continuation) := by
   have expand : ∀ value : S,
-      𝒮[($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-          continuation (Function.update rows slot (Function.update (rows slot) block value))] =
-        𝒮[($ᵗ (Fin width → S)) >>= fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-          continuation (Function.update rows slot (Function.update row block value))] := by
+      (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+          continuation (Function.update rows slot (Function.update (rows slot) block value))) =ᵈ (($ᵗ (Fin width → S)) >>= fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+          continuation (Function.update rows slot (Function.update row block value))) := by
     intro value
-    rw [← evalSPMF_uniform_update slot fun rows =>
-      continuation (Function.update rows slot (Function.update (rows slot) block value))]
-    simp only [Function.update_idem, Function.update_self]
-  rw [evalSPMF_bind, funext fun value => expand value, ← evalSPMF_bind,
-    evalSPMF_uniform_update block fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-      continuation (Function.update rows slot row),
-    evalSPMF_uniform_update slot continuation]
+    simpa only [Function.update_idem, Function.update_self] using
+      (evalSPMF_uniform_update slot fun rows =>
+        continuation (Function.update rows slot (Function.update (rows slot) block value))).symm
+  exact (EvalDistEq.bind_right ($ᵗ S) expand).trans
+    ((evalSPMF_uniform_update block fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+      continuation (Function.update rows slot row)).trans
+        (evalSPMF_uniform_update slot continuation))
 
 end Uniform
 
@@ -106,14 +103,14 @@ theorem completed_recordHistory_touched {tables : Simulated E S X width} {key : 
         (Function.update (rows ⟨_, below⟩) block value)) := by
   apply QueryCache.ext
   intro other
-  simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, if_pos touched]
+  simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, ite_eq_left touched]
   split_ifs with member
   · congr 1
     funext other_block
     rw [rowAt_update]
     by_cases same : other = key
     · subst same
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
       by_cases sameBlock : other_block = block
       · subst sameBlock
         simp [fresh]
@@ -121,7 +118,7 @@ theorem completed_recordHistory_touched {tables : Simulated E S X width} {key : 
         simp [rowAt, below]
     · have slots_differ : tables.touched.idxOf other ≠ tables.touched.idxOf key :=
         fun equal => same ((List.idxOf_inj member).mp equal)
-      rw [if_neg slots_differ, Function.update_of_ne (by simp [same])]
+      rw [ite_eq_right slots_differ, Function.update_of_ne (by simp [same])]
   · rfl
 
 omit [DecidableEq S] [DecidableEq X] in
@@ -142,8 +139,8 @@ theorem completed_recordHistory_untouched {tables : Simulated E S X width}
   intro other
   by_cases same : other = key
   · subst same
-    simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, if_neg untouched,
-      QueryCache.cacheQuery_self, List.mem_append, List.mem_singleton, or_true, if_true,
+    simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, ite_eq_right untouched,
+      QueryCache.cacheQuery_self, List.mem_append, List.mem_singleton, or_true, ite_true,
       List.idxOf_append_of_notMem untouched]
     congr 1
     funext other_block
@@ -154,7 +151,7 @@ theorem completed_recordHistory_untouched {tables : Simulated E S X width}
         noCells]
       simp [rowAt, below]
   · rw [QueryCache.cacheQuery_of_ne _ _ same]
-    simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, if_neg untouched,
+    simp only [completed, QueryCache.ofFn_apply, Simulated.recordHistory, ite_eq_right untouched,
       List.mem_append, List.mem_singleton, same, or_false]
     split_ifs with member
     · congr 1
@@ -174,7 +171,7 @@ theorem completed_update_unused (tables : Simulated E S X width) {slots : ℕ}
   split_ifs with member
   · congr 1
     funext other_block
-    rw [rowAt_update, if_neg (Nat.ne_of_lt (List.idxOf_lt_length_of_mem member))]
+    rw [rowAt_update, ite_eq_right (Nat.ne_of_lt (List.idxOf_lt_length_of_mem member))]
   · rfl
 
 end Fill
@@ -190,17 +187,13 @@ theorem touched_law {tables : Simulated E S X width} {key : List E}
     (touched : key ∈ tables.touched) {block : Fin width}
     (fresh : tables.history (key, block) = none) (below : tables.touched.idxOf key < slots)
     (continuation : S → (OracleSpec.ofFn (Answer E S width)).QueryCache → ProbComp α) :
-    𝒮[($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-        continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)] =
-      𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-        continuation value (completed (tables.recordHistory width key block value) rows)] := by
-  rw [← evalSPMF_uniform_update_row ⟨_, below⟩ block fun rows =>
-    continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)]
-  congr 2
-  funext value
-  congr 1
-  funext rows
-  rw [completed_recordHistory_touched touched fresh below, rowAt_update, if_pos rfl,
+    (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+        continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)) =ᵈ (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+        continuation value (completed (tables.recordHistory width key block value) rows)) := by
+  refine (evalSPMF_uniform_update_row ⟨_, below⟩ block fun rows =>
+    continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)).symm.trans ?_
+  refine EvalDistEq.bind_right _ fun value => EvalDistEq.bind_right _ fun rows => ?_
+  rw [completed_recordHistory_touched touched fresh below, rowAt_update, ite_eq_left rfl,
     Function.update_self]
 
 omit [DecidableEq S] [DecidableEq X] in
@@ -210,29 +203,22 @@ theorem untouched_law {tables : Simulated E S X width} (organized : Organized ta
     {key : List E} (untouched : key ∉ tables.touched) {block : Fin width}
     (below : tables.touched.length < slots)
     (continuation : S → (OracleSpec.ofFn (Answer E S width)).QueryCache → ProbComp α) :
-    𝒮[($ᵗ (Fin slots → Fin width → S)) >>= fun rows => ($ᵗ (Fin width → S)) >>= fun answer =>
-        continuation (answer block) ((completed tables rows).cacheQuery key answer)] =
-      𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-        continuation value (completed (tables.recordHistory width key block value) rows)] := by
+    (($ᵗ (Fin slots → Fin width → S)) >>= fun rows => ($ᵗ (Fin width → S)) >>= fun answer =>
+        continuation (answer block) ((completed tables rows).cacheQuery key answer)) =ᵈ (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+        continuation value (completed (tables.recordHistory width key block value) rows)) := by
   let slot : Fin slots := ⟨_, below⟩
   let reading : (Fin slots → Fin width → S) → ProbComp α := fun rows =>
     continuation (rows slot block) ((completed tables rows).cacheQuery key (rows slot))
-  have right : 𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
-        continuation value (completed (tables.recordHistory width key block value) rows)] =
-      𝒮[($ᵗ (Fin slots → Fin width → S)) >>= reading] := by
-    rw [← evalSPMF_uniform_update_row slot block reading]
-    congr 2
-    funext value
-    congr 1
-    funext rows
+  have right : (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+        continuation value (completed (tables.recordHistory width key block value) rows)) =ᵈ (($ᵗ (Fin slots → Fin width → S)) >>= reading) := by
+    refine EvalDistEq.trans ?_ (evalSPMF_uniform_update_row slot block reading)
+    refine EvalDistEq.bind_right _ fun value => EvalDistEq.bind_right _ fun rows => ?_
     simp only [reading, Function.update_self,
       completed_recordHistory_untouched organized untouched below]
     rw [completed_update_unused tables below]
-  rw [right, evalSPMF_uniform_swap, ← evalSPMF_uniform_update slot reading]
-  congr 2
-  funext answer
-  congr 1
-  funext rows
+  refine (evalSPMF_uniform_swap _).trans
+    (EvalDistEq.trans ?_ ((evalSPMF_uniform_update slot reading).trans right.symm))
+  refine EvalDistEq.bind_right _ fun answer => EvalDistEq.bind_right _ fun rows => ?_
   simp only [reading, Function.update_self]
   rw [completed_update_unused tables below]
 
@@ -396,9 +382,8 @@ theorem block_commute {slots : ℕ} (key : List E) (block : Fin width)
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : key ∉ tables.touched → tables.touched.length < slots)
     (slotRoom : key ∈ tables.touched → tables.touched.idxOf key < slots) :
-    𝒮[fillHistory slots tables >>= fun cache => (oracleBlock key block).run cache] =
-      𝒮[(historyBlock width key block).run tables >>= fun step =>
-        (fun cache => (step.1, cache)) <$> fillHistory slots step.2] := by
+    (fillHistory slots tables >>= fun cache => (oracleBlock key block).run cache) =ᵈ ((historyBlock width key block).run tables >>= fun step =>
+        (fun cache => (step.1, cache)) <$> fillHistory slots step.2) := by
   simp only [fillHistory, oracleBlock, StateT.run_map, randomOracle.run_eq, bind_assoc, pure_bind]
   cases cell : tables.history (key, block) with
   | some value =>
@@ -406,6 +391,7 @@ theorem block_commute {slots : ℕ} (key : List E) (block : Fin width)
       rw [historyBlock_run_some cell]
       simp only [completed_apply_touched touched, cell, Option.getD_some, map_pure, pure_bind,
         map_bind]
+      rfl
   | none =>
       rw [historyBlock_run_none cell]
       by_cases touched : key ∈ tables.touched
@@ -460,10 +446,9 @@ has the law of reading the lazy cells then filling. -/
 theorem answer_commute (positive : 0 < width) {slots : ℕ} (key : List E)
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : tables.touched.length < slots) :
-    𝒮[fillHistory slots tables >>= fun cache =>
-        (randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key).run cache] =
-      𝒮[(historyAnswer width key).run tables >>= fun step =>
-        (fun cache => (step.1, cache)) <$> fillHistory slots step.2] := by
+    (fillHistory slots tables >>= fun cache =>
+        (randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key).run cache) =ᵈ ((historyAnswer width key).run tables >>= fun step =>
+        (fun cache => (step.1, cache)) <$> fillHistory slots step.2) := by
   let Inv : ℕ → Simulated E S X width → Prop := fun _ current =>
     Organized current ∧ (key ∉ current.touched → current.touched.length < slots) ∧
       (key ∈ current.touched → current.touched.idxOf key < slots)
@@ -534,7 +519,7 @@ omit [DecidableEq S] [DecidableEq X] in
 /-- Filling, then dropping the fill, is the identity in law. -/
 theorem fillHistory_drop {slots : ℕ} (tables : Simulated E S X width) {α : Type}
     (computation : ProbComp α) :
-    𝒮[fillHistory slots tables >>= fun _ => computation] = 𝒮[computation] := by
+    (fillHistory slots tables >>= fun _ => computation) =ᵈ computation := by
   simp only [fillHistory, bind_assoc, pure_bind]
   exact evalSPMF_uniform_drop computation
 
@@ -548,10 +533,9 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
     (bounded : Typed.QueryBound absorb process queries) {slots : ℕ}
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : tables.touched.length + queries ≤ slots) :
-    𝒮[fillHistory slots tables >>= fun cache =>
+    (fillHistory slots tables >>= fun cache =>
         (simulateQ randomOracle (Typed.transform absorb Typed.ask process history proof)).run'
-          cache] =
-      𝒮[(Typed.transform absorb (historyAsk width) process history proof).run' tables] := by
+          cache) =ᵈ ((Typed.transform absorb (historyAsk width) process history proof).run' tables) := by
   let Inv : ℕ → Simulated E S X width → Prop := fun remaining current =>
     Organized current ∧ current.touched.length + remaining ≤ slots
   have filled := evalSPMF_simulateQ_fill (spec := OracleSpec.ofFn (Answer E S width))
@@ -576,13 +560,14 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
     exact id_map _
   rw [asked] at filled
   simp only [StateT.run'_eq, map_eq_bind_pure_comp, Function.comp_def]
-  rw [← bind_assoc, evalSPMF_bind, filled, ← evalSPMF_bind, bind_assoc]
-  refine evalSPMF_bind_congr fun step _ => ?_
+  rw [← bind_assoc]
+  refine (filled.bind_left (fun step => pure step.1)).trans ?_
+  rw [bind_assoc]
+  refine EvalDistEq.bind_right _ fun step => ?_
   simp only [map_eq_bind_pure_comp, Function.comp_def, bind_assoc, pure_bind]
   exact fillHistory_drop step.2 _
 
 end VerifierPhase
-
 
 section AdversaryPhase
 variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S]
@@ -723,10 +708,9 @@ simulator has the law of running the lazy simulator then filling. -/
 theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulated E S X width)
     (organized : Organized tables) (tapeRoom : tables.consumed.length < length)
     (slotRoom : tables.touched.length < slots) :
-    𝒮[fillAll (length := length) slots tables >>= fun filled =>
-        (flatSimulator width length input).run filled] =
-      𝒮[(simulator width input).run tables >>= fun step =>
-        (fun filled => (step.1, filled)) <$> fillAll slots step.2] := by
+    (fillAll (length := length) slots tables >>= fun filled =>
+        (flatSimulator width length input).run filled) =ᵈ ((simulator width input).run tables >>= fun step =>
+        (fun filled => (step.1, filled)) <$> fillAll slots step.2) := by
   by_cases routed : ∃ state event block history, input = .request state event block ∧
       tables.reached state = some history ∧ block < width
   · obtain ⟨state, event, block, history, rfl, recorded, below⟩ := routed
@@ -741,8 +725,7 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
         have touched := organized (history ++ [event]) ⟨block, below⟩ (by rw [cell]; simp)
         rw [historyBlock_run_some cell, pure_bind]
         simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
-        congr 1
-        refine bind_congr fun rows => bind_congr fun suffix => ?_
+        refine EvalDistEq.bind_right _ fun rows => EvalDistEq.bind_right _ fun suffix => ?_
         rw [flat_run_recorded (belongs _ _)
           (show (completedWith tables suffix (completed tables rows)).recorded (history ++ [event]) =
             _ from completed_apply_touched touched rows)]
@@ -783,12 +766,12 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
             refine bind_congr fun answer => ?_
             rw [completedWith_cacheQuery]
           simp only [lhs]
-          rw [evalSPMF_bind, funext fun rows => evalSPMF_uniform_swap fun suffix answer =>
+          refine (EvalDistEq.bind_right _ fun rows => evalSPMF_uniform_swap fun suffix answer =>
             (pure (answer ⟨block, below⟩,
               (completedWith tables suffix ((completed tables rows).cacheQuery
                 (history ++ [event]) answer),
                 (completed tables rows).cacheQuery (history ++ [event]) answer)) :
-              ProbComp _), ← evalSPMF_bind]
+              ProbComp _)).trans ?_
           exact untouched_law organized touched slotRoom
             fun value cache => ($ᵗ (Fin length → S)) >>= fun suffix =>
               pure (value, (completedWith tables suffix cache, cache))
@@ -816,8 +799,7 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
     | some value =>
         rw [auxCell_run_some cachedAux, pure_bind]
         simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
-        congr 1
-        refine bind_congr fun rows => bind_congr fun suffix => ?_
+        refine EvalDistEq.bind_right _ fun rows => EvalDistEq.bind_right _ fun suffix => ?_
         rw [flat_run_private (outside _ _)]
         simp [ChainState.respond, completedWith, cachedAux]
     | none =>
@@ -835,12 +817,13 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
             completed (tables.recordAux width input value) rows = completed tables rows :=
           fun _ _ => rfl
         simp only [recordAuxCompleted, completedWith_recordAux tables input tapeRoom]
-        rw [evalSPMF_uniform_swap (A := S)]
-        refine evalSPMF_bind_congr' _ fun rows => ?_
-        rw [← evalSPMF_uniform_update ⟨_, tapeRoom⟩ fun suffix =>
-          (pure (suffix ⟨_, tapeRoom⟩, (afterPrivate tables input suffix (completed tables rows)
-            (suffix ⟨_, tapeRoom⟩), completed tables rows)) : ProbComp _)]
-        simp only [Function.update_self]
+        symm
+        refine (evalSPMF_uniform_swap (A := S) _).trans ?_
+        refine EvalDistEq.bind_right _ fun rows => ?_
+        simpa only [Function.update_self] using
+          (evalSPMF_uniform_update ⟨_, tapeRoom⟩ fun suffix =>
+            (pure (suffix ⟨_, tapeRoom⟩, (afterPrivate tables input suffix (completed tables rows)
+              (suffix ⟨_, tapeRoom⟩), completed tables rows)) : ProbComp _))
 
 omit [Inhabited S] in
 theorem auxCell_support (input : Input E S X) (tables : Simulated E S X width) :
@@ -895,10 +878,9 @@ theorem adversary_eq {slots : ℕ} {α : Type} (adversary : OracleComp (Primitiv
     {calls : ℕ} (bounded : IsTotalQueryBound adversary calls) (tables : Simulated E S X width)
     (organized : Organized tables) (tapeRoom : tables.consumed.length + calls ≤ length)
     (slotRoom : tables.touched.length + calls ≤ slots) :
-    𝒮[fillAll (length := length) slots tables >>= fun filled =>
-        (simulateQ (flatSimulator width length) adversary).run filled] =
-      𝒮[(simulateQ (simulator width) adversary).run tables >>= fun result =>
-        (fun filled => (result.1, filled)) <$> fillAll slots result.2] :=
+    (fillAll (length := length) slots tables >>= fun filled =>
+        (simulateQ (flatSimulator width length) adversary).run filled) =ᵈ ((simulateQ (simulator width) adversary).run tables >>= fun result =>
+        (fun filled => (result.1, filled)) <$> fillAll slots result.2) :=
   evalSPMF_simulateQ_fill (simulator width) (flatSimulator width length) (fillAll slots)
     (fun remaining current => Organized current ∧ current.consumed.length + remaining ≤ length ∧
       current.touched.length + remaining ≤ slots)
@@ -938,10 +920,9 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
     (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {calls : ℕ}
     (bounded : IsTotalQueryBound adversary calls) :
-    𝒮[simulatedExperiment width absorb validator initial adversary] =
-      𝒮[($ᵗ (Fin calls → S)) >>= fun tape =>
+    simulatedExperiment width absorb validator initial adversary =ᵈ (($ᵗ (Fin calls → S)) >>= fun tape =>
         (simulateQ randomOracle (Typed.experiment absorb validator initial
-          ((chainSimulator width calls).translate adversary tape))).run' ∅] := by
+          ((chainSimulator width calls).translate adversary tape))).run' ∅) := by
   have right : ∀ tape : Fin calls → S,
       (simulateQ randomOracle (Typed.experiment absorb validator initial
           ((chainSimulator width calls).translate adversary tape))).run' ∅ =
@@ -961,19 +942,19 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
     fun result => (fun outcome => (result.1.1, outcome)) <$>
       (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator result.1.1)
         (initial result.1.1) result.1.2)).run' result.2.2
-  have filled : 𝒮[($ᵗ (Fin calls → S)) >>= fun tape =>
+  have filled : (($ᵗ (Fin calls → S)) >>= fun tape =>
         (simulateQ randomOracle (Typed.experiment absorb validator initial
-          ((chainSimulator width calls).translate adversary tape))).run' ∅] =
-      𝒮[(fillAll (length := calls) slots (Simulated.empty width : Simulated E S X width) >>=
-          fun state => (simulateQ (flatSimulator width calls) adversary).run state) >>= finish] := by
+          ((chainSimulator width calls).translate adversary tape))).run' ∅) =ᵈ ((fillAll (length := calls) slots (Simulated.empty width : Simulated E S X width) >>=
+          fun state => (simulateQ (flatSimulator width calls) adversary).run state) >>= finish) := by
     simp only [right, fillAll, completed_empty, completedWith_empty, bind_assoc, pure_bind]
     exact (evalSPMF_uniform_drop _).symm
-  rw [filled, evalSPMF_bind, adversary_eq adversary bounded (Simulated.empty width)
+  symm
+  refine filled.trans (((adversary_eq adversary bounded (Simulated.empty width)
     (fun _ _ absent => absurd rfl absent) (by simp [Simulated.empty])
-    (by simp [Simulated.empty, slots]),
-    ← evalSPMF_bind, bind_assoc]
+    (by simp [Simulated.empty, slots])).bind_left finish).trans ?_)
+  rw [bind_assoc]
   simp only [simulatedExperiment]
-  refine evalSPMF_bind_congr fun started member => ?_
+  refine OracleComp.EvalDistEq.bind_congr_of_support _ fun started member => ?_
   obtain ⟨left, -, organized, room⟩ := support_simulateQ_invariant (simulator width)
     (fun remaining current => Organized current ∧ current.touched.length + remaining ≤ calls)
     (fun remaining input current inv step stepMember => by
@@ -986,7 +967,7 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
     started.1.2 (queryBounded started.1.1) started.2 organized
     (show started.2.touched.length + queries ≤ slots by omega)
   simp only [map_bind, finish, fillAll, bind_assoc, map_pure, pure_bind]
-  rw [evalSPMF_bind_congr' _ fun rows => evalSPMF_uniform_drop _]
+  refine (EvalDistEq.bind_right _ fun rows => evalSPMF_uniform_drop _).trans ?_
   have regroup : (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
       (fun outcome => (started.1.1, outcome)) <$>
         (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator started.1.1)
@@ -995,8 +976,9 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
         (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator started.1.1)
           (initial started.1.1) started.1.2)).run' cache) := by
     simp only [fillHistory, bind_assoc, pure_bind, map_bind]
-  rw [regroup, evalSPMF_map, verified, ← evalSPMF_map, map_eq_bind_pure_comp]
-  rfl
+  rw [regroup]
+  simpa only [map_eq_bind_pure_comp, Function.comp_def] using
+    verified.map (fun outcome => (started.1.1, outcome))
 
 end Experiments
 

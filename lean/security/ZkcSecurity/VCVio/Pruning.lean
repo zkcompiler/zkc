@@ -3,7 +3,7 @@ module
 public import Zkc.Executable.Pruning
 public import VCVio.EvalDist.ProbabilityNotation
 public import VCVio.OracleComp.SimSemantics.SimulateQ
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 public import ToMathlib.Control.StateT
 
 @[expose] public section

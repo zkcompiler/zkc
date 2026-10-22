@@ -1,3 +1,4 @@
+import ZkcSecurity.VCVio.UniformChallenge
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
@@ -11,6 +12,8 @@ These controls exercise the model's own initial history (`initial`); that the
 deployed host absorbs the same binding is an assumption. The query-bound
 premise is satisfiable, the honest prover is accepted with probability one, and
 the conclusion gives a strictly positive extraction bound. -/
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 namespace TestsSecurity.CompiledSchnorrFiatShamir
 open OracleComp OracleSpec
@@ -122,13 +125,6 @@ theorem honest_run : run honest application base key = (do
   simp [_root_.FiatShamir, _root_.Schnorr.sigma, HasQuery.query,
     QueryImpl.simulateQ_add_liftM_query_right, _root_.FiatShamir.Fork.roImpl,
     StateT.run'_eq, monad_norm, key, base]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec Scalar).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec Scalar) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 theorem honest_acceptance : acceptance honest application base key = 1 := by
   unfold acceptance

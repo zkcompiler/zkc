@@ -174,7 +174,7 @@ realized law. -/
 def blockLaw (block : Block b s) (logSize count : ℕ) :
     LawRecord block.Raw (Fin count → Fin (2 ^ logSize)) :=
   LawRecord.dominated (decodeBlock block logSize count) block.factor block.slack
-    (decodeBlock_realized block logSize count) 1 (prEvent_le_one _ _)
+    (decodeBlock_realized block logSize count) 1 (prEvent_le_one _)
 
 omit [Field F] [DecidableEq F] in
 /-- The law interface of the verifier: folding challenges read the field answer exactly, and the

@@ -487,7 +487,7 @@ theorem oracleMixture_mixes (experiment : OracleComp (OracleSpec.ofFn R) α →
     fun prover member => le_trans (le_of_eq (by simp only [oracleMixture, pure_bind]))
       (le_iSup₂ (f := fun prover (_ : prover ∈ support provers) =>
         oracleMixture experiment event (pure prover)) prover member)
-  simpa only [oracleMixture, bind_assoc] using bound
+  simpa only [oracleMixture, prEvent_norm] using bound
 
 /-- With the ideal failure of an oracle experiment's mixtures, the frame's simulation is a
 provider stage from the oracle game of that experiment, at one execution bound. -/

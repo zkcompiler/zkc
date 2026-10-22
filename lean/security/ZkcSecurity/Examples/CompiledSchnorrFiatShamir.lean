@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcExamples.Construction.SchnorrProof
 public import ZkcExamples.Construction.SchnorrProofBinding
 public import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
@@ -10,6 +11,8 @@ public import VCVio.OracleComp.SimSemantics.QueryImpl.Compose
 public import VCVio.OracleComp.QueryTracking.QueryBound.Simulation
 
 @[expose] public section
+
+open scoped ZkcSecurity.VCVio.UniformChallenge
 
 /-! Knowledge soundness of the compiled non-interactive Schnorr verifier.
 
@@ -333,13 +336,6 @@ theorem run_eq (prover : Prover F G) (application : String) (base key : G) :
             rw [_root_.FiatShamir.Fork.roImpl_run_none _ _ _ _ hit, QueryImpl.add_apply_inr,
               historyOracle, QueryImpl.withCaching_run_none _ viewed]
             simp [map_eq_bind_pure_comp, view_cacheQuery route route_injective]
-
-local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => ⊤
-local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
-  fun _ => inferInstance
-noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
-  IsUniformMeasureSpec.ofFiniteNonempty _
 
 omit [DecidableEq F] in
 /-- The commitment events and challenge occurrence of the Schnorr family's

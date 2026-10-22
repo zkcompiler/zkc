@@ -3,8 +3,9 @@ module
 public import ZkcSecurity.FiatShamir.Interface
 public import ZkcSecurity.VCVio.Deferral
 public import ZkcSecurity.Commitment.TableLog
-public import VCVio.ProgramLogic.Relational.SimulateQ.Basic
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.ProgramLogic.Relational.SimulateQ.Coupling
+public import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
 
@@ -269,17 +270,15 @@ theorem tableQueryLog_translate (keys : Renaming R R') (table : (target : D') �
 
 end Tables
 
-
 section Law
 variable [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
   [∀ target, SampleableType (R' target)]
 
 omit [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
   [∀ target, SampleableType (R' target)] in
-set_option linter.deprecated false in
 /-- A uniform sample read through an equivalence is a uniform sample. -/
 theorem evalSPMF_uniform_equiv {X Y : Type} [SampleableType X] [SampleableType Y] (read : X ≃ Y) :
-    𝒮[read <$> ($ᵗ X : ProbComp X)] = 𝒮[($ᵗ Y : ProbComp Y)] := by
+    (read <$> ($ᵗ X : ProbComp X)) =ᵈ ($ᵗ Y : ProbComp Y) := by
   let : MeasurableSpace X := ⊤
   let : MeasurableSpace Y := ⊤
   refine ZkcSecurity.VCVio.Deferral.evalSPMF_eq_of_evalDist_eq ?_
@@ -338,7 +337,6 @@ theorem related_cacheQuery_local (keys : Renaming R R') {source : (OracleSpec.of
   rw [QueryCache.cacheQuery_of_ne _ _ here]
   exact agree key' cell' hit'
 
-set_option linter.deprecated false in
 /-- One query through the renaming is coupled with the source query: equal
 answers and caches that stay related. -/
 theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R).QueryCache)
@@ -360,20 +358,16 @@ theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R
           rw [cached] at known
           rw [known]
           simp only [map_bind, map_pure]
-          refine relTriple_of_evalSPMF_eq_right
+          refine relTriple_of_evalDistEq_right
             (ob := ($ᵗ R key : ProbComp (R key)) >>= fun answer =>
               pure (answer, target.cacheQuery cell ((keys.read key cell hit).symm answer))) ?_ ?_
-          · change 𝒮[($ᵗ R key : ProbComp (R key)) >>= fun answer =>
-                pure (answer, target.cacheQuery cell ((keys.read key cell hit).symm answer))] =
-              𝒮[($ᵗ R' cell : ProbComp (R' cell)) >>= fun value =>
-                pure (keys.read key cell hit value, target.cacheQuery cell value)]
-            calc 𝒮[($ᵗ R key : ProbComp (R key)) >>= fun answer =>
-                  pure (answer, target.cacheQuery cell ((keys.read key cell hit).symm answer))]
-                = 𝒮[((keys.read key cell hit).symm <$> ($ᵗ R key : ProbComp (R key))) >>= fun value =>
-                    pure (keys.read key cell hit value, target.cacheQuery cell value)] := by
+          · calc (($ᵗ R key : ProbComp (R key)) >>= fun answer =>
+                  pure (answer, target.cacheQuery cell ((keys.read key cell hit).symm answer)))
+                =ᵈ (((keys.read key cell hit).symm <$> ($ᵗ R key : ProbComp (R key))) >>= fun value =>
+                    pure (keys.read key cell hit value, target.cacheQuery cell value)) := by
                   rw [bind_map_left]
-                  simp only [Equiv.apply_symm_apply]
-              _ = _ := by rw [evalSPMF_bind, evalSPMF_bind, evalSPMF_uniform_equiv]
+                  simp only [Equiv.apply_symm_apply]; rfl
+              _ =ᵈ _ := (evalSPMF_uniform_equiv (keys.read key cell hit).symm).bind_left _
           · refine relTriple_bind relTriple_uniformSample_refl fun answer other same => ?_
             cases same
             have stays := related_cacheQuery keys related hit ((keys.read key cell hit).symm answer)
@@ -394,19 +388,17 @@ theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R
           refine relTriple_bind (relTriple_true _ _) fun answer _ _ => ?_
           exact relTriple_pure_pure ⟨single answer, related_cacheQuery_local keys related hit answer⟩
 
-set_option linter.deprecated false in
 /-- The lazily sampled execution of a translated adversary from the empty cache
 has the law of the source adversary's. -/
 theorem evalSPMF_translate (keys : Renaming R R') (adversary : OracleComp (OracleSpec.ofFn R) α) :
-    𝒮[(simulateQ randomOracle (keys.translate adversary)).run' ∅] =
-      𝒮[(simulateQ randomOracle adversary).run' ∅] := by
+    ((simulateQ randomOracle (keys.translate adversary)).run' ∅) =ᵈ ((simulateQ randomOracle adversary).run' ∅) := by
   have coupled := relTriple_simulateQ_run randomOracle
     (fun key => simulateQ randomOracle (keys.ask key)) keys.Related adversary
     (fun key source target related => keys.query_step key source target related) ∅ ∅
     keys.related_empty
   rw [translate, simulateQ_simulateQ]
   symm
-  refine evalSPMF_eq_of_relTriple_eqRel ?_
+  refine evalDistEq_of_relTriple_eqRel ?_
   simp only [StateT.run'_eq]
   exact relTriple_map (relTriple_post_mono coupled fun first second related => related.1)
 

@@ -3,7 +3,7 @@ module
 public import ZkcSecurity.Examples.CommittedOpening
 public import ZkcSecurity.Commitment.HashedLeaves
 public import ZkcSecurity.Commitment.Experiment
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section
 

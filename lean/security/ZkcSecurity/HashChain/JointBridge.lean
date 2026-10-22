@@ -39,7 +39,6 @@ consumes.
 -/
 
 set_option autoImplicit false
-set_option linter.deprecated false
 
 namespace ZkcSecurity.HashChain.Joint
 open OracleComp OracleSpec OracleComp.ProgramLogic.Relational ZkcSecurity.FiatShamir
@@ -77,10 +76,9 @@ theorem chain_commute {bytes : Bytes} {input : Input (Absorbed E Shape S) S Byte
     (tables : Simulated (Absorbed E Shape S) S Bytes width) (rows : Query → Option S)
     (organized : Organized tables) (tapeRoom : tables.consumed.length < length)
     (slotRoom : tables.touched.length < slots) :
-    𝒮[fillJoint width length slots (tables, rows) >>= fun filled =>
-        (flatJoint encoding width length bytes).run filled] =
-      𝒮[(splitSimulator encoding width bytes).run (tables, rows) >>= fun step =>
-        (fun filled => (step.1, filled)) <$> fillJoint width length slots step.2] := by
+    (fillJoint width length slots (tables, rows) >>= fun filled =>
+        (flatJoint encoding width length bytes).run filled) =ᵈ ((splitSimulator encoding width bytes).run (tables, rows) >>= fun step =>
+        (fun filled => (step.1, filled)) <$> fillJoint width length slots step.2) := by
   have lifted : (fillJoint width length slots (tables, rows) >>= fun filled =>
       (flatJoint encoding width length bytes).run filled) =
       (fun step => (step.1, ((⟨step.2.1, rows⟩ : JointState E Shape S Query width length),
@@ -90,20 +88,20 @@ theorem chain_commute {bytes : Bytes} {input : Input (Absorbed E Shape S) S Byte
     simp only [fillJoint, bind_map_left, map_bind]
     refine bind_congr fun filled => ?_
     exact flatJoint_run_chain encoding width length classified filled.1 rows filled.2
-  rw [lifted, evalSPMF_map_eq_of_evalSPMF_eq
-    (adversary_commute input tables organized tapeRoom slotRoom) _]
+  rw [lifted]
+  refine ((adversary_commute input tables organized tapeRoom slotRoom).map _).trans ?_
   rw [splitSimulator_inr encoding width classified, onFirst_run]
   simp only [map_bind, bind_map_left, Functor.map_map, fillJoint]
+  rfl
 
 /-- A hash call: filling then running the joint simulator has the law of running the lazy
 simulator then filling, since a fresh answer is one uniform sample drawn independently of the
 fill. -/
 theorem hash_commute (call : Query) (tables : Simulated (Absorbed E Shape S) S Bytes width)
     (rows : Query → Option S) :
-    𝒮[fillJoint width length slots (tables, rows) >>= fun filled =>
-        (flatJoint encoding width length (encoding.callBytes call)).run filled] =
-      𝒮[(splitSimulator encoding width (encoding.callBytes call)).run (tables, rows) >>= fun step =>
-        (fun filled => (step.1, filled)) <$> fillJoint width length slots step.2] := by
+    (fillJoint width length slots (tables, rows) >>= fun filled =>
+        (flatJoint encoding width length (encoding.callBytes call)).run filled) =ᵈ ((splitSimulator encoding width (encoding.callBytes call)).run (tables, rows) >>= fun step =>
+        (fun filled => (step.1, filled)) <$> fillJoint width length slots step.2) := by
   have step : ∀ filled : ChainState (Absorbed E Shape S) S Bytes width length ×
       (OracleSpec.ofFn (Answer (Absorbed E Shape S) S width)).QueryCache,
       (flatJoint encoding width length (encoding.callBytes call)).run
@@ -125,7 +123,7 @@ theorem hash_commute (call : Query) (tables : Simulated (Absorbed E Shape S) S B
   | none =>
       rw [lazy_none recorded]
       simp only [bind_assoc, pure_bind, map_eq_bind_pure_comp, Function.comp_def]
-      exact evalSPMF_bind_bind_swap _ _ _
+      exact OracleComp.EvalDistEq.bind_bind_swap _ _ _
 
 omit [Inhabited S] in
 theorem splitSimulator_support (bytes : Bytes) (tables : Simulated (Absorbed E Shape S) S Bytes width)
@@ -151,10 +149,9 @@ theorem adversary_eq {α : Type} (adversary : OracleComp (ByteHash S) α) {calls
     (state : Simulated (Absorbed E Shape S) S Bytes width × (Query → Option S))
     (organized : Organized state.1) (tapeRoom : state.1.consumed.length + calls ≤ length)
     (slotRoom : state.1.touched.length + calls ≤ slots) :
-    𝒮[fillJoint width length slots state >>= fun filled =>
-        (simulateQ (flatJoint encoding width length) adversary).run filled] =
-      𝒮[(simulateQ (splitSimulator encoding width) adversary).run state >>= fun result =>
-        (fun filled => (result.1, filled)) <$> fillJoint width length slots result.2] :=
+    (fillJoint width length slots state >>= fun filled =>
+        (simulateQ (flatJoint encoding width length) adversary).run filled) =ᵈ ((simulateQ (splitSimulator encoding width) adversary).run state >>= fun result =>
+        (fun filled => (result.1, filled)) <$> fillJoint width length slots result.2) :=
   evalSPMF_simulateQ_fill (splitSimulator encoding width) (flatJoint encoding width length)
     (fillJoint width length slots)
     (fun remaining current => Organized current.1 ∧ current.1.consumed.length + remaining ≤ length ∧
@@ -183,10 +180,9 @@ cells of its chain history then filling. -/
 theorem transcript_commute (positive : 0 < width) (key : TranscriptKey E Shape S)
     (tables : Simulated (Absorbed E Shape S) S Bytes width) (rows : Query → Option S)
     (organized : Organized tables) (room : tables.touched.length < slots) :
-    𝒮[fillCache width slots (tables, rows) >>= fun cache =>
-        (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inl key)).run cache] =
-      𝒮[(lazyJoint width (.inl key)).run (tables, rows) >>= fun step =>
-        (fun cache => (step.1, cache)) <$> fillCache width slots step.2] := by
+    (fillCache width slots (tables, rows) >>= fun cache =>
+        (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inl key)).run cache) =ᵈ ((lazyJoint width (.inl key)).run (tables, rows) >>= fun step =>
+        (fun cache => (step.1, cache)) <$> fillCache width slots step.2) := by
   have lifted : (fillCache width slots (tables, rows) >>= fun cache =>
       (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inl key)).run cache) =
       (fun step => (step.1, combine width step.2 rows)) <$>
@@ -197,40 +193,41 @@ theorem transcript_commute (positive : 0 < width) (key : TranscriptKey E Shape S
     refine bind_congr fun cache => ?_
     exact randomOracle_combine width cache rows key
   rw [lifted]
-  refine (evalSPMF_map_eq_of_evalSPMF_eq
+  refine (EvalDistEq.map
     (answer_commute positive (chainKey key) tables organized room) _).trans ?_
-  congr 1
-  show _ = ((fun result => (result.1, (result.2, rows))) <$>
+  change _ =ᵈ ((fun result => (result.1, (result.2, rows))) <$>
       (historyAnswer width (chainKey key)).run tables) >>=
     fun (step : (Fin width → S) × (Simulated (Absorbed E Shape S) S Bytes width × (Query → Option S))) =>
       (fun cache => (step.1, cache)) <$> fillCache width slots step.2
-  simp only [bind_map_left, fillCache]
-  refine (map_bind _ _ _).trans (bind_congr fun step => ?_)
-  refine Eq.trans (comp_map _ _ _).symm (Eq.trans ?_ (comp_map _ _ _))
+  change ((fun (step : (Fin width → S) ×
+      (OracleSpec.ofFn (Answer (Absorbed E Shape S) S width)).QueryCache) =>
+      (step.1, combine width step.2 rows)) <$>
+    ((historyAnswer width (chainKey key)).run tables >>= fun step =>
+      (fun cache => (step.1, cache)) <$> fillHistory slots step.2)) =ᵈ _
+  simp only [bind_map_left, fillCache, map_bind, Functor.map_map]
   rfl
 
 /-- A hash call: filling then asking the joint oracle has the law of reading the lazy table of
 hash calls then filling. -/
 theorem hashCell_commute (call : Query) (tables : Simulated (Absorbed E Shape S) S Bytes width)
     (rows : Query → Option S) :
-    𝒮[fillCache width slots (tables, rows) >>= fun cache =>
-        (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inr call)).run cache] =
-      𝒮[(lazyJoint width (.inr call)).run (tables, rows) >>= fun step =>
-        (fun cache => (step.1, cache)) <$> fillCache width slots step.2] := by
-  show 𝒮[fillCache width slots (tables, rows) >>= fun cache =>
-      (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inr call)).run cache] =
-    𝒮[((fun result => (result.1, (tables, result.2))) <$> lazy rows call) >>=
+    (fillCache width slots (tables, rows) >>= fun cache =>
+        (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inr call)).run cache) =ᵈ ((lazyJoint width (.inr call)).run (tables, rows) >>= fun step =>
+        (fun cache => (step.1, cache)) <$> fillCache width slots step.2) := by
+  change (fillCache width slots (tables, rows) >>= fun cache =>
+      (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inr call)).run cache) =ᵈ
+    (((fun result => (result.1, (tables, result.2))) <$> lazy rows call) >>=
       fun (step : S × (Simulated (Absorbed E Shape S) S Bytes width × (Query → Option S))) =>
-        (fun cache => (step.1, cache)) <$> fillCache width slots step.2]
+        (fun cache => (step.1, cache)) <$> fillCache width slots step.2)
   simp only [fillCache, bind_map_left, randomOracle_combine_hash]
   simp only [map_eq_bind_pure_comp, Function.comp_def, bind_assoc, pure_bind]
-  exact evalSPMF_bind_bind_swap _ _ _
+  exact OracleComp.EvalDistEq.bind_bind_swap _ _ _
 
 omit [DecidableEq Query] in
 /-- Filling the cache, then dropping it, is the identity in law. -/
 theorem fillCache_drop (state : Simulated (Absorbed E Shape S) S Bytes width × (Query → Option S)) {α : Type}
     (computation : ProbComp α) :
-    𝒮[fillCache width slots state >>= fun _ => computation] = 𝒮[computation] := by
+    (fillCache width slots state >>= fun _ => computation) =ᵈ computation := by
   simp only [fillCache, bind_map_left]
   exact fillHistory_drop state.1 computation
 
@@ -241,8 +238,7 @@ theorem verifier_eq (positive : 0 < width) {β : Type}
     (bounded : IsTotalQueryBound reading queries) (tables : Simulated (Absorbed E Shape S) S Bytes width)
     (rows : Query → Option S) (organized : Organized tables)
     (room : tables.touched.length + queries ≤ slots) :
-    𝒮[fillCache width slots (tables, rows) >>= fun cache => (simulateQ randomOracle reading).run' cache] =
-      𝒮[(simulateQ (lazyJoint width) reading).run' (tables, rows)] := by
+    (fillCache width slots (tables, rows) >>= fun cache => (simulateQ randomOracle reading).run' cache) =ᵈ ((simulateQ (lazyJoint width) reading).run' (tables, rows)) := by
   have filled := evalSPMF_simulateQ_fill (lazyJoint width) randomOracle (fillCache width slots)
     (fun remaining current => Organized current.1 ∧ current.1.touched.length + remaining ≤ slots)
     (fun _ key current inv => by
@@ -269,8 +265,10 @@ theorem verifier_eq (positive : 0 < width) {β : Type}
           exact ⟨organized', by omega⟩)
     reading queries (tables, rows) bounded ⟨organized, room⟩
   simp only [StateT.run'_eq, map_eq_bind_pure_comp, Function.comp_def]
-  rw [← bind_assoc, evalSPMF_bind, filled, ← evalSPMF_bind, bind_assoc]
-  refine evalSPMF_bind_congr fun step _ => ?_
+  rw [← bind_assoc]
+  refine (filled.bind_left (fun step => pure step.1)).trans ?_
+  rw [bind_assoc]
+  refine EvalDistEq.bind_right _ fun step => ?_
   simp only [map_eq_bind_pure_comp, Function.comp_def, bind_assoc, pure_bind]
   exact fillCache_drop width slots step.2 _
 
@@ -310,9 +308,8 @@ theorem lazy_eq_translated (positive : 0 < width)
     (bounded : IsTotalQueryBound adversary calls) {queries : ℕ}
     (queryBounded : ∀ statement proof, IsTotalQueryBound
       (jointReading width absorb scheme verifier initial statementRoots statement proof) queries) :
-    𝒮[lazyExperiment encoding width absorb scheme verifier initial statementRoots adversary] =
-      𝒮[translatedExperiment encoding width absorb scheme verifier initial statementRoots calls
-        adversary] := by
+    lazyExperiment encoding width absorb scheme verifier initial statementRoots adversary =ᵈ translatedExperiment encoding width absorb scheme verifier initial statementRoots calls
+        adversary := by
   have logged : IsTotalQueryBound adversary.withQueryLog calls :=
     (isTotalQueryBound_withQueryLog_iff _ _).mpr bounded
   let slots := calls + queries
@@ -337,18 +334,19 @@ theorem lazy_eq_translated (positive : 0 < width)
     rw [simulateQ_flatten]
     simp only [flatJoint, finish, map_bind, bind_map_left, Functor.map_map, StateT.run'_eq,
       bind_pure_comp]
-  have filled : 𝒮[translatedExperiment encoding width absorb scheme verifier initial statementRoots
-        calls adversary] =
-      𝒮[(fillJoint width calls slots (Simulated.empty width, fun _ => none) >>= fun state =>
-        (simulateQ (flatJoint encoding width calls) adversary.withQueryLog).run state) >>= finish] := by
+  have filled : translatedExperiment encoding width absorb scheme verifier initial statementRoots
+        calls adversary =ᵈ ((fillJoint width calls slots (Simulated.empty width, fun _ => none) >>= fun state =>
+        (simulateQ (flatJoint encoding width calls) adversary.withQueryLog).run state) >>= finish) := by
     simp only [translatedExperiment, right, fillJoint, fillAll, completed_empty, completedWith_empty,
       combine_empty, map_bind, map_pure, bind_assoc, pure_bind]
     exact (evalSPMF_uniform_drop _).symm
-  rw [filled, evalSPMF_bind, adversary_eq encoding width calls slots adversary.withQueryLog logged
+  symm
+  refine filled.trans (((adversary_eq encoding width calls slots adversary.withQueryLog logged
     (Simulated.empty width, fun _ => none) (fun _ _ absent => absurd rfl absent)
-    (by simp [Simulated.empty]) (by simp [Simulated.empty, slots]), ← evalSPMF_bind, bind_assoc]
+    (by simp [Simulated.empty]) (by simp [Simulated.empty, slots])).bind_left finish).trans ?_)
+  rw [bind_assoc]
   simp only [lazyExperiment]
-  refine evalSPMF_bind_congr fun started member => ?_
+  refine OracleComp.EvalDistEq.bind_congr_of_support _ fun started member => ?_
   obtain ⟨left, -, organized, room⟩ := support_simulateQ_invariant (splitSimulator encoding width)
     (fun remaining current => Organized current.1 ∧ current.1.touched.length + remaining ≤ calls)
     (fun remaining bytes current inv step stepMember => by
@@ -360,16 +358,16 @@ theorem lazy_eq_translated (positive : 0 < width)
   have verified := verifier_eq width slots positive (jointReading width absorb scheme verifier initial
     statementRoots started.1.1.1 started.1.1.2) (queryBounded _ _) started.2.1 started.2.2
     organized (show started.2.1.touched.length + queries ≤ slots by omega)
-  have dropped : 𝒮[(fun filled => (started.1, filled)) <$> fillJoint width calls slots started.2 >>=
-        finish] =
-      𝒮[assemble encoding width started.1 <$> (fillCache width slots (started.2.1, started.2.2) >>=
+  have dropped : ((fun filled => (started.1, filled)) <$> fillJoint width calls slots started.2 >>=
+        finish) =ᵈ (assemble encoding width started.1 <$> (fillCache width slots (started.2.1, started.2.2) >>=
         fun cache => (simulateQ randomOracle (jointReading width absorb scheme verifier initial
-          statementRoots started.1.1.1 started.1.1.2)).run' cache)] := by
+          statementRoots started.1.1.1 started.1.1.2)).run' cache)) := by
     simp only [bind_map_left, finish, fillJoint, fillAll, fillCache, fillHistory, bind_assoc, pure_bind,
       map_bind]
-    refine evalSPMF_bind_congr' _ fun rowsTable => ?_
+    refine EvalDistEq.bind_right _ fun rowsTable => ?_
     exact evalSPMF_uniform_drop _
-  rw [dropped, evalSPMF_map_eq_of_evalSPMF_eq verified, bind_pure_comp]
+  simpa only [bind_pure_comp] using
+    dropped.trans (verified.map (assemble encoding width started.1))
 
 end Experiments
 
@@ -636,7 +634,7 @@ theorem translated_eq_ideal (words : Words J Shape Value) (calls : ℕ)
         (assemble encoding width claim.1 verifierRun) rfl rfl rfl skeletons).mp holds
   have composed := prEvent_bind_congr (m := ProbComp) ($ᵗ (Fin calls → S)) _ _ _ _ pointwise
   unfold Stage.Joint.oracleMixture translatedExperiment
-  simpa only [bind_assoc, pure_bind] using composed
+  simpa only [prEvent_norm] using composed
 
 end Ideal
 
