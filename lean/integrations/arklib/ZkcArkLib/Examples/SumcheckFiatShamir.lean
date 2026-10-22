@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Decoding
+public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcArkLib.Examples.CausalSumcheck.SourceVerifier
 public import ZkcArkLib.Sumcheck.Multilinear.Protocol
 public import ArkLib.ProofSystem.Sumcheck.Interaction.ProtocolSoundness
