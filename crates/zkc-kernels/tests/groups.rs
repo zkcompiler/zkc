@@ -3,10 +3,7 @@ use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
-use zkc_kernels::arkworks::bls12_381::G1;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::encode_scalar;
-use zkc_kernels::arkworks::bls12_381::scalar_from_wide_be;
+use zkc_kernels::arkworks::bls12_381::{G1, Scalar, encode_scalar, scalar_from_wide_be};
 fn direct(p: G1Affine) -> Vec<u8> {
     let mut b = Vec::new();
     p.serialize_compressed(&mut b).unwrap();

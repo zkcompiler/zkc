@@ -5,9 +5,10 @@ use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_kernels::polynomial::boundary;
-use zkc_kernels::polynomial::evaluate;
-use zkc_kernels::vector::Plan;
+use zkc_kernels::{
+    polynomial::{boundary, evaluate},
+    vector::Plan,
+};
 use zkc_runtime::vm::{Identity, Invocation, Value as _};
 
 /// Montgomery batch inversion. The caller supplies the checked allocation;

@@ -339,3 +339,42 @@ fn nominal_and_physical_operand_checks_precede_output_preflight() {
         }
     }
 }
+
+#[test]
+fn optional_scratch_allocation_failure_preserves_the_installed_result() {
+    use zkc_kernels::{
+        allocation::failure,
+        arkworks::bls12_381::{G1, Scalar},
+    };
+    let g = G1::generator();
+    let input = Value::Groups(vec![g, G1::identity(), g.neg()].into());
+    let saved = input.clone();
+    let expected =
+        Value::Groups(vec![g.add(&g).add(&g), G1::identity(), g.add(&g).add(&g).neg()].into());
+    // The destination is mandatory; each of the following three scratch buffers
+    // is optional. Failed preparation must discard partial scratch before using
+    // the direct algorithm, preserving the installed operation and input aliases.
+    for successful in 0..=3 {
+        let driver = Controlled::new(backend(Policy {
+            max_numerical_work: 0,
+            ..Policy::default()
+        }));
+        let guard = failure::after(successful);
+        let (result, driver) = one(
+            driver,
+            binding("curve.vector_scale", "bls12-381.g1", "arkworks"),
+            &[],
+            vec![input.clone(), Value::Field(Scalar::from(3))],
+        );
+        drop(guard);
+        if successful == 0 {
+            assert_eq!(result.unwrap_err(), "exhausted:allocation");
+            assert!(driver.outputs.is_empty());
+        } else {
+            assert_value(&result.unwrap()[0], &expected);
+            assert_eq!(driver.outputs.len(), 1);
+        }
+        assert_eq!(driver.inner.active_frames(), 0);
+        assert_value(&input, &saved);
+    }
+}

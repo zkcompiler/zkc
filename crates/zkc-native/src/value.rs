@@ -1,13 +1,8 @@
 use crate::{Capability, Result, exhausted, refused};
 use std::sync::Arc;
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Commitment;
-use zkc_kernels::arkworks::bls12_381::CommittedTable;
-use zkc_kernels::arkworks::bls12_381::OpeningProof;
-use zkc_kernels::arkworks::bls12_381::ProverKey;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::bls12_381::{
+    Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
+};
 use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };

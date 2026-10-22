@@ -2,15 +2,12 @@
 //! Local config files are trusted setup outputs, never candidate-supplied pins.
 //! This is a PCS custody/transport example, not a protocol or Fiat-Shamir proof.
 use std::{fs, io::Read, path::Path, time::Instant};
-use zkc_kernels::arkworks::Error;
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_kernels::arkworks::bls12_381::ProverKey;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
-use zkc_kernels::arkworks::bls12_381::decode_scalar;
-use zkc_kernels::arkworks::bls12_381::encode_scalar;
+use zkc_kernels::arkworks::{
+    Error,
+    bls12_381::{
+        Bounds, Keys, ProverKey, Scalar, Table, VerifierKey, decode_scalar, encode_scalar,
+    },
+};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

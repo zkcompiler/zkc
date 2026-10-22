@@ -1,8 +1,7 @@
 //! Only validated immutable key material crosses invocation boundaries.
 use super::inputs::Result;
 use std::sync::Arc;
-use zkc_kernels::arkworks::bls12_381::ProverKey;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
 use zkc_native::Value;
 use zkc_runtime::vm::Value as RuntimeValue;
 

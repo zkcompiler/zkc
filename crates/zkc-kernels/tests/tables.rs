@@ -6,13 +6,10 @@ use ark_std::{
     rand::{SeedableRng, rngs::StdRng},
 };
 use common::{bounds, scalars};
-use zkc_kernels::arkworks::Error;
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::decode_scalar;
-use zkc_kernels::arkworks::bls12_381::encode_scalar;
-use zkc_kernels::arkworks::bls12_381::parse_decimal;
+use zkc_kernels::arkworks::{
+    Error,
+    bls12_381::{Bounds, Scalar, Table, decode_scalar, encode_scalar, parse_decimal},
+};
 
 // Independent maintained high-half semantics: split logical halves recursively,
 // rather than using bit reversal or the adapter's adjacent-pair loop.

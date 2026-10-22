@@ -93,7 +93,7 @@ pub enum Selection {
 }
 
 /// Per-call prepared scaling with owned, bounded, unpublished scratch. The
-/// private scalar type/curve and exact length bind applicability. Reuse changes
+/// curve type and exact length bind applicability. Reuse changes
 /// neither the selected algorithm nor the resource requirement. Scratch is not
 /// zeroized; callers retain their normal custody obligations for private data.
 pub struct Plan<P: SWCurveConfig> {
@@ -146,7 +146,7 @@ impl<P: SWCurveConfig> Plan<P> {
         let execution = match algorithm {
             Algorithm::Direct => Execution::Direct,
             Algorithm::Batched { chunk_len } => {
-                if chunk_len < 2 || chunk_len > CHUNK_CAP || chunk_len > len {
+                if !(2..=CHUNK_CAP).contains(&chunk_len) || chunk_len > len {
                     return Err(Error::InvalidEncoding);
                 }
                 match Scratch::new(chunk_len) {

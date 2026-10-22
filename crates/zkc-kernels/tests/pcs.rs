@@ -3,13 +3,10 @@ mod common;
 use ark_ff::Field;
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 use common::{bounds, keys, scalars};
-use zkc_kernels::arkworks::Error;
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
-use zkc_kernels::arkworks::bls12_381::parse_decimal;
+use zkc_kernels::arkworks::{
+    Error,
+    bls12_381::{Bounds, Keys, Scalar, Table, VerifierKey, parse_decimal},
+};
 
 #[test]
 fn two_originals_shared_keys_delayed_open_and_table_free_verifier() {

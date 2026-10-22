@@ -1,10 +1,6 @@
 //! Single-run cost diagnostics, not a benchmark or compiled protocol.
 use std::{hint::black_box, time::Instant};
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::bls12_381::{Bounds, Keys, Scalar, Table, VerifierKey};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let n: usize = std::env::args()

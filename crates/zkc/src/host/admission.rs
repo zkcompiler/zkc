@@ -4,8 +4,7 @@ use super::inputs::{Result, read_regular};
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_kernels::arkworks::bls12_381::ProverKey;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
 use zkc_native::{NativeBackend, Policy, Value};
 use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 

@@ -3,9 +3,7 @@ use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projecti
 use ark_ec::{AffineRepr, CurveGroup, pairing::Pairing};
 use ark_ff::{One, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
-use zkc_kernels::arkworks::bn254;
-use zkc_kernels::arkworks::bn254::G1;
-use zkc_kernels::arkworks::bn254::G2;
+use zkc_kernels::arkworks::bn254::{self, G1, G2};
 #[test]
 fn independent_library_group_arithmetic_and_pairing() {
     let s = [3u64, 7, 0, 19].map(Fr::from);

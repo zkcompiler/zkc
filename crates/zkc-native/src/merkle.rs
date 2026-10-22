@@ -4,15 +4,10 @@
 //! trees, hash instances and canonical digest codecs belong to `zkc_kernels`.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_kernels::plonky3::merkle::Error;
-use zkc_kernels::plonky3::merkle::Instance;
-use zkc_kernels::plonky3::merkle::Tree;
-use zkc_kernels::plonky3::merkle::commit;
-use zkc_kernels::plonky3::merkle::open;
-use zkc_kernels::plonky3::merkle::poseidon2;
-use zkc_kernels::plonky3::merkle::retained_bytes;
-use zkc_kernels::plonky3::merkle::verify;
-use zkc_kernels::plonky3::oracle::Shape;
+use zkc_kernels::plonky3::{
+    merkle::{Error, Instance, Tree, commit, open, poseidon2, retained_bytes, verify},
+    oracle::Shape,
+};
 use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
     OperationSignature, PhysicalType, Type,

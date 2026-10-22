@@ -4,11 +4,10 @@ use ark_bls12_381::{Fq, Fq2, G1Affine, G2Affine};
 use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use common::{bounds, keys, scalars};
-use zkc_kernels::arkworks::Error;
-use zkc_kernels::arkworks::bls12_381::Bounds;
-use zkc_kernels::arkworks::bls12_381::Scalar;
-use zkc_kernels::arkworks::bls12_381::Table;
-use zkc_kernels::arkworks::bls12_381::VerifierKey;
+use zkc_kernels::arkworks::{
+    Error,
+    bls12_381::{Bounds, Scalar, Table, VerifierKey},
+};
 
 const HEADER: usize = 81;
 fn encoded<T: CanonicalSerialize>(point: &T) -> Vec<u8> {

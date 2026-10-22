@@ -22,11 +22,6 @@ mod value;
 
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
-pub use zkc_kernels::plonky3::KoalaBear;
-pub use zkc_kernels::plonky3::KoalaBearExt4;
-pub use zkc_kernels::plonky3::KoalaBearExt8;
-pub use zkc_kernels::plonky3::binary::Binary64;
-pub use zkc_kernels::plonky3::binary::Binary64Ext3;
 
 pub use backend::{
     ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeOperation, PortConstraint,
@@ -35,11 +30,21 @@ pub use codec::{
     NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
     requires_setup,
 };
+pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
-pub use zkc_kernels::arkworks::bls12_381::G1;
-pub use zkc_kernels::arkworks::bls12_381::Scalar;
+pub use zkc_kernels::{
+    arkworks::{
+        bls12_381::{G1, G2 as Bls12381G2, Gt as Bls12381Gt, Scalar},
+        bn254::{G1 as Bn254G1, G2 as Bn254G2, Gt as Bn254Gt, Scalar as Bn254Scalar},
+    },
+    dalek::edwards25519::EdwardsPrime,
+    plonky3::{
+        KoalaBear, KoalaBearExt4, KoalaBearExt8,
+        binary::{Binary64, Binary64Ext3},
+    },
+};
 use zkc_runtime::vm::BackendError;
 
 pub(crate) type Result<T> = std::result::Result<T, BackendError>;
@@ -76,17 +81,7 @@ pub fn classify_error(error: &BackendError) -> ErrorClass {
     }
 }
 
-pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use diagonal::Diagonal;
-pub use zkc_kernels::dalek::edwards25519::EdwardsPrime;
-
-pub use zkc_kernels::arkworks::bls12_381::G2 as Bls12381G2;
-pub use zkc_kernels::arkworks::bls12_381::Gt as Bls12381Gt;
-pub use zkc_kernels::arkworks::bn254::G1 as Bn254G1;
-pub use zkc_kernels::arkworks::bn254::G2 as Bn254G2;
-/// BN254 scalar field and checked subgroup points.
-pub use zkc_kernels::arkworks::bn254::Gt as Bn254Gt;
-pub use zkc_kernels::arkworks::bn254::Scalar as Bn254Scalar;
 
 mod variant;
 pub use variant::Variant;

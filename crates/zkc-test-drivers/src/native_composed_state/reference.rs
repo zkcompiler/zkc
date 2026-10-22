@@ -9,8 +9,7 @@ use ark_ff::Field;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use transcript::{Transcript, scalar_wire, tree};
-use zkc_kernels::arkworks::bls12_381::G1;
-use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::{G1, Scalar};
 use zkc_test_support::hex;
 
 pub fn msm(a: &[Scalar], g: &[G1]) -> G1 {

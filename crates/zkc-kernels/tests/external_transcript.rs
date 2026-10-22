@@ -4,13 +4,11 @@ use p3_challenger_043::{CanObserve, CanSample, DuplexChallenger};
 use p3_field_043::{PrimeCharacteristicRing, PrimeField32};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
-use zkc_kernels::interop::Error;
-use zkc_kernels::interop::Work;
-use zkc_kernels::interop::monero;
-use zkc_kernels::interop::monero::BP_PLUS_INITIAL;
-use zkc_kernels::interop::monero::HashChain;
-use zkc_kernels::interop::openvm;
-use zkc_kernels::interop::openvm::Duplex;
+use zkc_kernels::interop::{
+    Error, Work,
+    monero::{self, BP_PLUS_INITIAL, HashChain},
+    openvm::{self, Duplex},
+};
 
 fn fixture(name: &str) -> PathBuf {
     zkc_test_support::source(&format!("external-transcript/{name}"))

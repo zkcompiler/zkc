@@ -2,9 +2,7 @@
 //! docs/spec/realization/external-constructions.md. These are not affine internal
 //! transcript resources, and do not advertise automatic Fiat-Shamir rules.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use zkc_kernels::interop::Work;
-use zkc_kernels::interop::monero;
-use zkc_kernels::interop::openvm;
+use zkc_kernels::interop::{Work, monero, openvm};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,

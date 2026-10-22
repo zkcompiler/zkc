@@ -5,8 +5,7 @@ use crate::{
 };
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
-use zkc_kernels::plonky3::words;
-use zkc_kernels::plonky3::words::Form;
+use zkc_kernels::plonky3::words::{self, Form};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,

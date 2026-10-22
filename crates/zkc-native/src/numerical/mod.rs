@@ -4,8 +4,7 @@ pub(crate) mod expression;
 pub(crate) mod opening;
 use crate::Value;
 use crate::{Policy, Result, exhausted};
-use zkc_kernels::numerical;
-use zkc_kernels::numerical::Scratch;
+use zkc_kernels::numerical::{self, Scratch};
 
 /// The native adapter selects the numerical limits; no backend authority enters
 /// the scope. Value constructors run while staging and result charges overlap.

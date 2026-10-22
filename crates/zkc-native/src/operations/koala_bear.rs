@@ -7,11 +7,7 @@ use crate::{
     refused, value::size,
 };
 use p3_field::ExtensionField;
-use zkc_kernels::plonky3::polynomial;
-use zkc_kernels::plonky3::polynomial::CoefficientBatch;
-use zkc_kernels::plonky3::polynomial::Domain;
-use zkc_kernels::plonky3::polynomial::Error;
-use zkc_kernels::plonky3::polynomial::Kernels;
+use zkc_kernels::plonky3::polynomial::{self, CoefficientBatch, Domain, Error, Kernels};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]

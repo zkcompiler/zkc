@@ -9,12 +9,10 @@ use crate::{
 };
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::EvaluationDomain;
-use zkc_kernels::arkworks::bn254::polynomial::BatchError;
-use zkc_kernels::arkworks::bn254::polynomial::CoefficientBatch;
-use zkc_kernels::arkworks::bn254::polynomial::Domain;
-use zkc_kernels::arkworks::bn254::polynomial::coset_evaluate_at_into;
-use zkc_kernels::arkworks::bn254::polynomial::coset_extend_into;
-use zkc_kernels::arkworks::bn254::polynomial::serial_batch_inverse_into;
+use zkc_kernels::arkworks::bn254::polynomial::{
+    BatchError, CoefficientBatch, Domain, coset_evaluate_at_into, coset_extend_into,
+    serial_batch_inverse_into,
+};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]

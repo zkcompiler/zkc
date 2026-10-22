@@ -5,8 +5,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use serde_json::{Value as Json, json};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
-use zkc_kernels::arkworks::bls12_381::G1;
-use zkc_kernels::arkworks::bls12_381::Scalar;
+use zkc_kernels::arkworks::bls12_381::{G1, Scalar};
 
 pub fn tree(v: &Json) -> Vec<u8> {
     match v {

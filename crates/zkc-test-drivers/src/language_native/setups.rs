@@ -10,8 +10,7 @@ use zkc::{
     execution::{Capacity, InputValue, ProverMaterial},
     run::HostLimits,
 };
-use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_kernels::arkworks::bls12_381::Table;
+use zkc_kernels::arkworks::bls12_381::{Keys, Table};
 use zkc_native::{Policy, Scalar, Value as Native};
 fn package(directory: &Path, entry: &str) -> Package {
     let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.zkpkg"))).unwrap();

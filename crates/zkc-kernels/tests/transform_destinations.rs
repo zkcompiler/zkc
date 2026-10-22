@@ -1,9 +1,8 @@
 //! Public transform destinations must retain their exact shape and all coefficients.
-use zkc_kernels::plonky3::KoalaBear as F;
-use zkc_kernels::plonky3::polynomial::CoefficientBatch;
-use zkc_kernels::plonky3::polynomial::Domain;
-use zkc_kernels::plonky3::polynomial::Error;
-use zkc_kernels::plonky3::polynomial::Kernels;
+use zkc_kernels::plonky3::{
+    KoalaBear as F,
+    polynomial::{CoefficientBatch, Domain, Error, Kernels},
+};
 #[test]
 fn coefficient_batch_does_not_silently_truncate_a_nonzero_tail() {
     let domain = Domain::new(2, F::new(3), 8).unwrap();

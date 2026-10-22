@@ -30,11 +30,7 @@ pub(crate) fn vector<T>(len: usize) -> Result<Vec<T>, Error> {
         }
     }
     allocation_size::<T>(len)?;
-    let mut values = Vec::new();
-    values
-        .try_reserve_exact(len)
-        .map_err(|_| Error::Allocation)?;
-    Ok(values)
+    crate::allocation::reserve(len).map_err(|_| Error::Allocation)
 }
 
 #[cfg(test)]
