@@ -57,9 +57,22 @@ def validate_backend(backend, ingress=None, boundary=None):
     require(isinstance(backend, dict),
             'missing preparation request' if boundary == 'admitted_entry_call' else 'invalid matrix backend')
     kind = backend.get('kind')
-    require(kind in ('host', 'run', 'schnorr', 'sumcheck', 'monero'), 'invalid matrix backend kind')
+    require(kind in ('host', 'run', 'schnorr', 'sumcheck', 'monero', 'kernel'), 'invalid matrix backend kind')
     required, optional = {'kind'}, set()
-    if kind in ('host', 'run'):
+    if kind == 'kernel':
+        from .providers import BOUNDARIES
+        required |= {'provider', 'group', 'kernel', 'boundary', 'elements'}
+        require(backend.get('provider') in ('arkworks', 'blst')
+                and backend.get('group') in ('g1', 'g2', 'pairing')
+                and backend.get('kernel') in ('scale', 'scale_each', 'vector_scale', 'msm', 'pairing_check')
+                and backend.get('boundary') in BOUNDARIES, 'invalid kernel control')
+        require(boundary is None or boundary == BOUNDARIES[backend['boundary']], 'invalid kernel boundary')
+        require(type(backend.get('elements')) is int and 1 <= backend['elements'] <= 4096, 'invalid kernel length')
+        require((backend['group'] == 'pairing') == (backend['kernel'] == 'pairing_check')
+                and (backend['kernel'] != 'scale' or backend['elements'] == 1)
+                and (backend['boundary'] not in ('import', 'export')
+                     or backend['provider'] == 'blst' and backend['group'] != 'pairing'), 'unsupported kernel control')
+    elif kind in ('host', 'run'):
         required |= {'ingress', 'package', 'sha256'}
         require(boundary is None or boundary == ('admitted_entry_call' if kind == 'host' else 'admitted_function_call'),
                 'invalid ingress boundary')

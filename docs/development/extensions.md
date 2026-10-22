@@ -137,7 +137,7 @@ or unresolved concerns justify it, and report the scope actually run.
 ## Rust kernel and backend ownership
 
 Add typed arithmetic to `zkc-kernels` when it can run without VM values or
-resource authority. Put provider-specific types under `arkworks`, `plonky3` or
+resource authority. Put provider-specific types under `arkworks`, `blst`, `plonky3` or
 `dalek`; shared mathematical modules contain no concrete provider implementations.
 Keep exact pinned external constructions under `interop`. Test mathematical
 shapes and canonical encodings with the provider. Numerical scratch and destinations use

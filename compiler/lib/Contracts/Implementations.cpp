@@ -24,6 +24,9 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bls12-381.g1"},
     {"arkworks", "bls12-381.g2"},
     {"arkworks", "bls12-381.gt"},
+    {"blst", "bls12-381.fr"},
+    {"blst", "bls12-381.g1"},
+    {"blst", "bls12-381.g2"},
     {"arkworks", "bn254.fr"},
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
@@ -628,6 +631,18 @@ const ImplementationCatalog &installedImplementations() {
         install(row, domain);
     }
     // Algorithm and layout alternatives do not add a default preference.
+    for (StringRef contract :
+         {"curve.scale", "curve.scale_each", "curve.vector_scale", "curve.msm"})
+      entries.push_back({contract.str(),
+                         ("blst/" + contract).str(),
+                         "blst",
+                         Compatibility::Nominal,
+                         {"bls12-381.g1", "bls12-381.g2"}});
+    entries.push_back({"pairing.check",
+                       "blst/pairing.check",
+                       "blst",
+                       Compatibility::Nominal,
+                       {"bls12-381.fr"}});
     entries.push_back({"vector.dot",
                        "arkworks-pairwise/vector.dot",
                        "arkworks",

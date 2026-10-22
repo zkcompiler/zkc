@@ -131,7 +131,7 @@ fn with_alternative(
     let alternatives = Box::leak(Box::new([Alternative {
         implementation: "independent/test",
         contract: name,
-        primary,
+        domains: Box::leak(Box::new([primary])),
         ports: super::super::domain_bindings::PortTransform::Default,
     }]));
     let aliases = Box::leak(Box::new(Contribution {
@@ -150,7 +150,7 @@ fn fixed_owners_refuse_alternative_installation() {
             &super::super::fixed_vector::CONTRIBUTION,
             "fixed_vector.dot",
         ),
-        (&curve::CONTRIBUTION, "pairing.check"),
+        (&curve::CONTRIBUTION, "pairing.apply"),
         (&field::CONTRIBUTION, "field.embed"),
         (&vector::CONTRIBUTION, "vector.embed"),
         (&control::CONTRIBUTION, "bool.and"),
@@ -237,7 +237,7 @@ fn registry_dispatch_enforces_fixed_contracts() {
     static ROW: Alternative = Alternative {
         implementation: "independent/embedding",
         contract: "field.embed",
-        primary: Identity::KoalaBearExt8,
+        domains: &[Identity::KoalaBearExt8],
         ports: super::super::domain_bindings::PortTransform::Default,
     };
     // Deliberately bypass completed assembly to test the dispatch guard itself.
@@ -252,7 +252,7 @@ fn registry_dispatch_enforces_fixed_contracts() {
     let binding = OperationBinding {
         contract: ROW.contract.into(),
         implementation: ROW.implementation.into(),
-        arguments: vec![ROW.primary.name().into()],
+        arguments: vec![ROW.domains[0].name().into()],
     };
     assert_eq!(
         registry
@@ -284,6 +284,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
         curve.split curve.generator curve.identity curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
+        pairing.check
         pcs.commit pcs.open pcs.check pcs.equal
         transcript.native.indexed.observe.data
     ".split_whitespace().collect::<BTreeSet<_>>();
@@ -325,7 +326,7 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
         alternatives: &[Alternative {
             implementation: "separate/field.mul",
             contract: "field.mul",
-            primary: Identity::Bls12381Fr,
+            domains: &[Identity::Bls12381Fr],
             ports: super::super::domain_bindings::PortTransform::Default,
         }],
     };
@@ -342,7 +343,7 @@ fn exact_same_port_provider_does_not_depend_on_default_provider() {
     static ROW: Alternative = Alternative {
         implementation: "independent/field.mul",
         contract: "field.mul",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: super::super::domain_bindings::PortTransform::Default,
     };
     let mut registry = Registry::assemble(&[&field::CONTRIBUTION]).unwrap();

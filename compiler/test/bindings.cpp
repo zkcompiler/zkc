@@ -144,6 +144,30 @@ int main() {
   refuse(resolveBinding(fold.application, true), "binding-implementation");
   fold.application.implementation.clear();
   refuse(resolveBinding(fold.application, true), "binding-stage");
+  // Alternative providers retain exact physical ports, and never broaden their
+  // mathematical domains or replace the installed default preference.
+  for (StringRef contract :
+       {"curve.scale", "curve.scale_each", "curve.vector_scale", "curve.msm",
+        "pairing.check"}) {
+    for (StringRef domain : {"bls12-381.g1", "bls12-381.g2", "bls12-381.fr"}) {
+      BindingApplication alternative{
+          contract.str(), {domain.str()}, ("blst/" + contract).str()};
+      bool eligible =
+          (contract == "pairing.check") == (domain == "bls12-381.fr");
+      auto signature = resolveBinding(alternative, true);
+      if (!eligible) {
+        refuse(std::move(signature), "binding-static-identity");
+        continue;
+      }
+      auto original = alternative;
+      original.implementation = ("arkworks/" + contract).str();
+      auto expected = accept(resolveBinding(original, true));
+      auto actual = accept(std::move(signature));
+      require(actual.inputs == expected.inputs &&
+                  actual.outputs == expected.outputs,
+              "foreign provider changed the shared physical ports");
+    }
+  }
   protocol::OperationBinding opening{
       "open", {"pcs.open", {"multilinear.kzg.bls12-381/0"}, ""}};
   protocol::OperationBinding challenge{"draw",

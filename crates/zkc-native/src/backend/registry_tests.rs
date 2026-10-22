@@ -103,7 +103,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["return", ["out"]]
         ]);
     }
-    if binding.contract == "curve.scale_each" {
+    if binding.contract == "curve.scale_each" && binding.arguments == ["ristretto255.group"] {
         let msm = if binding.implementation.starts_with("dalek-diagonal/") {
             "dalek-diagonal/curve.msm"
         } else {
@@ -997,7 +997,7 @@ fn independent_same_port_provider_and_missing_owner_are_checked() {
     let mut row = Alternative {
         identity: "independent/field.mul",
         original: "arkworks/field.mul",
-        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        domains: &[zkc_runtime::vm::Identity::Bls12381Fr],
         ports: crate::bindings::PortTransform::Default,
         handler: Some(arithmetic),
         deterministic: true,
@@ -1052,7 +1052,7 @@ fn fixed_implementations_reject_alternative_registration() {
     for original in [
         "arkworks/table.relayout",
         "plonky3/fixed_vector.dot",
-        "arkworks/pairing.check",
+        "arkworks/pairing.apply",
         "plonky3/field.embed",
         "plonky3/vector.embed",
         "arkworks/bool.and",
@@ -1065,7 +1065,7 @@ fn fixed_implementations_reject_alternative_registration() {
                 .alternative(&Alternative {
                     identity: "independent/fixed",
                     original,
-                    primary: Identity::Bls12381Fr,
+                    domains: &[Identity::Bls12381Fr],
                     ports: crate::bindings::PortTransform::Default,
                     handler: None,
                     deterministic: true,
@@ -1085,7 +1085,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
         .alternative(&Alternative {
             identity: "independent/observation",
             original: "arkworks/transcript.native.indexed.observe.data",
-            primary: Identity::Merlin3Fr64Be,
+            domains: &[Identity::Merlin3Fr64Be],
             ports: crate::bindings::PortTransform::Default,
             handler: None,
             deterministic: true,
@@ -1123,7 +1123,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
             .alternative(&Alternative {
                 identity: "independent/second",
                 original: "independent/observation",
-                primary: Identity::Merlin3Fr64Be,
+                domains: &[Identity::Merlin3Fr64Be],
                 ports: crate::bindings::PortTransform::Default,
                 handler: None,
                 deterministic: false,
@@ -1141,7 +1141,7 @@ fn curve_alternative_requires_the_exact_group() {
         .alternative(&Alternative {
             identity: "independent/bn254-add",
             original: "arkworks/curve.add",
-            primary: Identity::Bn254G1,
+            domains: &[Identity::Bn254G1],
             ports: crate::bindings::PortTransform::Default,
             handler: None,
             deterministic: true,
@@ -1184,7 +1184,7 @@ fn transcript_alternative_refuses_unsupported_table_payload() {
         .alternative(&Alternative {
             identity: "independent/msb-observation",
             original: "arkworks/transcript.native.indexed.observe.data",
-            primary: Identity::Merlin3Fr64Be,
+            domains: &[Identity::Merlin3Fr64Be],
             ports: crate::bindings::PortTransform::Msb,
             handler: None,
             deterministic: true,
@@ -1283,6 +1283,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "matrix.dimension",
         "matrix.get",
         "matrix.identity_check",
+        "pairing.check",
         "matrix.mul_vector",
         "matrix.row_dot",
         "matrix.shape_check",
@@ -1401,6 +1402,10 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         .unwrap()
     };
     for row in alternatives() {
+        if row.identity.starts_with("blst/") {
+            check_blst_alternative(row);
+            continue;
+        }
         let contract = installed().unwrap().get(row.identity).unwrap().contract;
         let primary = if contract.starts_with("curve.") {
             "ristretto255.group"
@@ -1620,4 +1625,124 @@ fn nested_transcript_observation_keeps_its_own_work_contract() {
     assert!(!native.prepare_binding(&observe).unwrap().sequence);
     let join = binding("bytes.join", &[], "native/bytes.join");
     assert!(native.prepare_binding(&join).unwrap().sequence);
+}
+
+fn blst_inputs(contract: &str, domain: Identity) -> Vec<Value> {
+    let factors = [Scalar::from(0), -Scalar::from(1), Scalar::from(11)];
+    let g1: Vec<_> = factors
+        .iter()
+        .map(|&s| crate::G1::generator().scale(s))
+        .collect();
+    let g2: Vec<_> = factors
+        .iter()
+        .map(|&s| crate::Bls12381G2::generator().scale(s))
+        .collect();
+    if contract == "pairing.check" {
+        return vec![Value::Groups(g1.into()), Value::Bls12381G2Vector(g2.into())];
+    }
+    let (point, points) = match domain {
+        Identity::Bls12381G1 => (Value::Curve(g1[2]), Value::Groups(g1.into())),
+        Identity::Bls12381G2 => (Value::Bls12381G2(g2[2]), Value::Bls12381G2Vector(g2.into())),
+        _ => panic!("unexpected blst curve domain"),
+    };
+    match contract {
+        "curve.scale" => vec![point, Value::Field(factors[1])],
+        "curve.vector_scale" => vec![points, Value::Field(factors[1])],
+        "curve.scale_each" | "curve.msm" => vec![Value::Vector(factors.into()), points],
+        _ => panic!("missing blst fixture: {contract}"),
+    }
+}
+fn check_blst_alternative(row: &Alternative) {
+    let contract = installed().unwrap().get(row.identity).unwrap().contract;
+    for &domain in row.domains {
+        let identity = domain;
+        let domain = domain.name();
+        let original = binding(contract, &[domain], row.original);
+        let alternate = binding(contract, &[domain], row.identity);
+        let inputs = blst_inputs(contract, identity);
+        let expected = run(backend(), &original, &[], inputs.clone()).0.unwrap();
+        let actual = run(backend(), &alternate, &[], inputs).0.unwrap();
+        let encode = |v: Value| backend().encode_native_value(&v).unwrap();
+        assert_eq!(
+            actual.into_iter().map(encode).collect::<Vec<_>>(),
+            expected.into_iter().map(encode).collect::<Vec<_>>(),
+            "{} {domain}",
+            row.identity
+        );
+    }
+}
+
+#[test]
+fn blst_calls_admit_resources_and_leave_shared_inputs_unchanged_on_failure() {
+    for row in alternatives().filter(|r| r.identity.starts_with("blst/")) {
+        let contract = installed().unwrap().get(row.identity).unwrap().contract;
+        for &domain in row.domains {
+            let call = binding(contract, &[domain.name()], row.identity);
+            let inputs = blst_inputs(contract, domain);
+            let originals: Vec<_> = inputs
+                .iter()
+                .map(|v| backend().encode_native_value(v).unwrap())
+                .collect();
+            for (policy, expected) in [
+                (
+                    Policy {
+                        max_numerical_work: 0,
+                        ..Policy::default()
+                    },
+                    "exhausted:numerical-work",
+                ),
+                (
+                    Policy {
+                        max_numerical_bytes: 0,
+                        ..Policy::default()
+                    },
+                    "exhausted:numerical-bytes",
+                ),
+            ] {
+                let mut native = backend();
+                native.core.policy = policy;
+                assert_eq!(
+                    run(native, &call, &[], inputs.clone()).0.unwrap_err(),
+                    expected,
+                    "{}",
+                    row.identity
+                );
+            }
+            let failure = zkc_kernels::allocation::failure::after(0);
+            let result = run(backend(), &call, &[], inputs.clone()).0;
+            drop(failure);
+            // A scalar multiply has no fallible heap scratch; all vector calls do.
+            if contract != "curve.scale" {
+                assert_eq!(
+                    result.unwrap_err(),
+                    "exhausted:allocation",
+                    "{}",
+                    row.identity
+                );
+            }
+            let after: Vec<_> = inputs
+                .iter()
+                .map(|v| backend().encode_native_value(v).unwrap())
+                .collect();
+            assert_eq!(after, originals);
+            assert!(run(backend(), &call, &[], inputs).0.is_ok());
+        }
+    }
+}
+
+#[test]
+fn blst_selection_rejects_unrelated_domains_and_contracts() {
+    for (contract, domain, implementation) in [
+        ("curve.msm", "bn254.g1", "blst/curve.msm"),
+        ("curve.msm", "bls12-381.gt", "blst/curve.msm"),
+        ("curve.msm", "ristretto255.group", "blst/curve.msm"),
+        ("pairing.check", "bn254.fr", "blst/pairing.check"),
+        ("pairing.apply", "bls12-381.fr", "blst/pairing.check"),
+    ] {
+        assert!(
+            binding(contract, &[domain], implementation)
+                .signature()
+                .is_err()
+        );
+    }
 }

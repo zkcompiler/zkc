@@ -37,6 +37,10 @@ ark-poly = "=0.6.0"
 ark-poly-commit = "=0.6.0"
 ark-serialize = "=0.6.0"
 ark-std = "=0.6.0"
+# Safe BLS12-381 arithmetic wrapper; keep foreign kernels on the caller thread.
+blst = { version = "=0.3.17", features = ["no-threads"] }
+blstrs = { version = "=0.7.1", default-features = false }
+group = "=0.13.0"
 curve25519-dalek = "=5.0.0"
 merlin = "=3.0.0"
 p3-binary-field = "=0.8.0"

@@ -18,6 +18,9 @@ ark-poly.workspace = true
 ark-poly-commit.workspace = true
 ark-serialize.workspace = true
 ark-std.workspace = true
+blst.workspace = true
+blstrs.workspace = true
+group.workspace = true
 sha2.workspace = true
 
 curve25519-dalek = { workspace = true, features = ["rand_core"] }

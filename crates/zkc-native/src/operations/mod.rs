@@ -11,6 +11,7 @@ pub(crate) mod resources;
 
 pub(crate) mod encoding;
 
+pub(crate) mod blst;
 pub(crate) mod external;
 pub(crate) mod koala_bear;
 pub(crate) mod poseidon2;

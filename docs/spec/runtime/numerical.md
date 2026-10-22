@@ -100,6 +100,18 @@ numerical work or mandatory memory floor. Both paths retain affine-base scalar
 multiplication and private complete-output publication. Dalek scaling keeps its
 existing constant-time provider calls and does not use this scratch.
 
+Explicit `blst` alternatives for BLS12-381 G1/G2 scaling and MSM, and
+`pairing.check`, use the existing Arkworks physical ports. Canonical bridges,
+subgroup validation and arithmetic occur inside one call; foreign values do
+not escape into the VM. Shape and fresh-output checks precede mandatory work
+and workspace admission. G1 and G2 curve calls charge 8,192 and 16,384 work
+units per point; pairing checks charge `32,768 * (pairs + 1)`. These weights
+are conservative admission scores. Caller-owned conversion arrays and
+conservative provider scratch are reserved through output freezing. Input
+aliases remain immutable and any refusal publishes no result. Provider-internal
+allocation failure can still abort the process. Selection does not establish
+a constant-time guarantee; MSM is variable-time. Arkworks remains the default.
+
 `poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
 quartic/octic extensions. Shape and domain checks precede numerical admission;
 the whole input/output vectors must fit the element policy. Work admission

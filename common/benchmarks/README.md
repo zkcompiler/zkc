@@ -589,3 +589,23 @@ package policy. Compilation is outside runtime samples; its observation-enabled
 wall time is labelled and must not be compared with uninstrumented compilation
 as if the measurement boundaries were equal. Runtime counts remain a separate
 observation mode, with the existing restrictions on timing comparisons.
+
+## Provider and conversion controls
+
+The `bls_provider` suite compares Arkworks and blst G1/G2 scaling, MSM and
+pairing-product checks on deterministic full-width inputs. Use `list` to choose
+cases or select `--suite=bls_provider`. The existing process scheduler alternates
+providers and retains every request and result.
+
+`resident_kernel_call` starts with each provider's resident values.
+`converted_kernel_call` directly times import, arithmetic and export from the
+shared Arkworks representation. `installed_operation_call` executes the selected
+binding through the VM and Native, including resource admission and output
+publication; program admission and Runner construction occur before the timer.
+`provider_import` measures point and scalar import, while `provider_export`
+measures point export. These conversion-only cases contain no arithmetic. Never
+add their isolated medians to estimate a complete call; measure that boundary
+directly. Every result is compared with Arkworks outside the timer, including
+warmups; input generation, JSON I/O, checking and returned-result destruction are
+excluded. blst's worker pool is disabled, and MSM is variable-time. These are
+operation controls, not protocol throughput or security measurements.

@@ -14,6 +14,13 @@ enum Signature {
     Custom(fn(&OperationBinding) -> Option<BoundSignature>),
 }
 pub(crate) type Handler = fn(&mut NativeBackend, &Invocation<'_>, &[Value]) -> Result<Vec<Value>>;
+pub(crate) fn blst(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::blst::apply(&i.binding.declaration().contract, i, args, &b.core.policy)
+}
 pub(super) type PreparedHandler =
     fn(&mut NativeBackend, &Invocation<'_>, &[Value], &super::NativeCall) -> Result<Vec<Value>>;
 #[derive(Clone, Copy)]
@@ -31,8 +38,10 @@ impl Implementation {
         }
         match self.signature {
             Signature::Shaped(row, policy) => {
-                if let crate::bindings::Selection::Alternative { primary, .. } = policy
-                    && binding.arguments.first().map(String::as_str) != Some(primary.name())
+                if let crate::bindings::Selection::Alternative { domains, .. } = policy
+                    && !domains.iter().any(|domain| {
+                        binding.arguments.first().map(String::as_str) == Some(domain.name())
+                    })
                 {
                     return None;
                 }
@@ -162,7 +171,7 @@ impl Registry {
         entry.signature = Signature::Shaped(
             shape,
             crate::bindings::Selection::Alternative {
-                primary: row.primary,
+                domains: row.domains,
                 ports: row.ports,
             },
         );
@@ -187,8 +196,8 @@ impl Registry {
 pub(crate) struct Alternative {
     pub(crate) identity: &'static str,
     pub(crate) original: &'static str,
-    /// Exact first domain argument: field, group, scheme or transcript suite.
-    pub(crate) primary: Identity,
+    /// Admitted first domain arguments: fields, groups, schemes or transcript suites.
+    pub(crate) domains: &'static [Identity],
     pub(crate) ports: crate::bindings::PortTransform,
     /// Omit for a layout-only alternative to retain the original algorithm.
     pub(crate) handler: Option<Handler>,
@@ -200,6 +209,7 @@ pub(super) fn alternatives() -> impl Iterator<Item = &'static Alternative> {
         crate::operations::conversions::ALTERNATIVES,
         crate::diagonal::ALTERNATIVES,
         crate::operations::pairwise::ALTERNATIVES,
+        crate::operations::blst::ALTERNATIVES,
     ]
     .into_iter()
     .flatten()

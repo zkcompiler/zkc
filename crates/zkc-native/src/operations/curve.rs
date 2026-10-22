@@ -11,7 +11,7 @@ use curve25519_dalek::{
 };
 use std::sync::Arc;
 use zkc_runtime::vm::Invocation;
-trait Group: Copy + PartialEq {
+pub(super) trait Group: Copy + PartialEq {
     type Scalar: Copy;
     fn generator() -> Self;
     fn identity() -> Self;
@@ -798,7 +798,8 @@ pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
         &[zkc_runtime::vm::Type::Bool],
         zkc_runtime::vm::AttributeRule::None,
     )
-    .implemented_by(&["arkworks/pairing.check"]),
+    .implemented_by(&["arkworks/pairing.check"])
+    .selectable(),
 ];
 
 /// Prime-order pairing targets: individual values only, no target vectors.

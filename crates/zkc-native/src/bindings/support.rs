@@ -22,7 +22,7 @@ pub(super) fn ports(
         Selection::Default => (binding.implementation
             == format!("{provider}/{}", binding.contract))
         .then_some(PortTransform::Default),
-        // Exact primary identity is checked by registry dispatch before the
+        // Exact domain applicability is checked by registry dispatch before the
         // family resolver; the owner still validates domain applicability.
         Selection::Alternative { ports, .. } => Some(ports),
     }

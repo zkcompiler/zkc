@@ -1,6 +1,7 @@
 //! Development-only benchmark client. Production execution stays in the Host.
 mod host;
 mod ingress;
+mod kernel;
 mod measure;
 mod observation;
 mod run_entry;
@@ -75,6 +76,13 @@ enum Backend {
         sha256: String,
         arguments: PathBuf,
         accept_role: String,
+    },
+    Kernel {
+        provider: kernel::Provider,
+        group: kernel::Group,
+        kernel: kernel::Kernel,
+        boundary: kernel::Boundary,
+        elements: usize,
     },
     Schnorr {
         public: PathBuf,
@@ -211,6 +219,13 @@ fn run() -> Result<Report> {
             arguments,
             accept_role,
         } => run_entry::run(&request, package, sha256, arguments, accept_role),
+        Backend::Kernel {
+            provider,
+            group,
+            kernel,
+            boundary,
+            elements,
+        } => kernel::run(&request, *provider, *group, *kernel, *boundary, *elements),
         Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
             schnorr::run(&request, public, witness.as_deref())
         }

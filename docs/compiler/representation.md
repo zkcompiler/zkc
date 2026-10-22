@@ -119,3 +119,16 @@ not imply equal exhaustion or allocation behavior at arbitrary runtime caps.
 The current [formal semantics](../../lean/docs/spec/semantics.md) proves selected
 open-process and observation laws. Native physical lowering remains a separate
 implementation boundary; these laws do not establish its correctness.
+
+### Foreign providers on shared ports
+
+An implementation can keep the installed physical ports while internally
+staging another library's values. BLS12-381 `blst/curve.scale`,
+`blst/curve.scale_each`, `blst/curve.vector_scale`, `blst/curve.msm` and
+`blst/pairing.check` follow this model. An explicit `local.binding` implementation
+is retained by physical planning. Ordinary `.zkc` kernel calls retain the current
+Arkworks defaults; installing this provider does not add a frontend selector.
+Native owns the checked imports, arithmetic, exports and their resource admission
+as one operation. The foreign staging representation never crosses a VM port.
+The [kernel guide](../../crates/zkc-kernels/README.md#alternative-bls12-381-provider)
+states supported domains, variable-time behavior and the GT limitation.

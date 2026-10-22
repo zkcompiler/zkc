@@ -6,6 +6,7 @@
 //! VM values, authority, resource admission and output publication.
 pub mod allocation;
 pub mod arkworks;
+pub mod blst;
 pub mod dalek;
 pub mod field;
 pub mod interop;

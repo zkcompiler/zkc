@@ -95,7 +95,7 @@ impl Contract {
 pub(super) struct Alternative {
     pub(super) implementation: &'static str,
     pub(super) contract: &'static str,
-    pub(super) primary: Identity,
+    pub(super) domains: &'static [Identity],
     pub(super) ports: super::domain_bindings::PortTransform,
 }
 #[derive(Clone, Copy)]
@@ -308,7 +308,9 @@ impl Registry {
         let (contract, owner) = self.logical.get(contract).ok_or_else(fail)?;
         if let Selection::Alternative(row) = select
             && (!contract.alternatives
-                || binding.arguments.first().map(String::as_str) != Some(row.primary.name()))
+                || !row.domains.iter().any(|domain| {
+                    binding.arguments.first().map(String::as_str) == Some(domain.name())
+                }))
         {
             return Err(fail());
         }

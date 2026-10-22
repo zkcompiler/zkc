@@ -465,9 +465,9 @@ def test_alternative_eligibility_boundaries(inventory, drivers, physical_drivers
             requests.append({**request, "implementation": implementation + "/unknown"})
             requests.append({**request, "contract": contract + ".unknown"})
             requests.append({**request, "arguments": ["unknown.domain", *request["arguments"][1:]]})
-    # The reviewed coefficient-batch and ordered-search contracts expand the
-    # closed-domain cross product to 50,130 probes; retain an explicit bound.
-    assert len(requests) < 60000, "review alternative negative probe growth"
+    # The five blst alternatives expand the reviewed closed-domain cross
+    # product to 66,864 probes; retain an explicit bounded-growth check.
+    assert len(requests) < 75000, "review alternative negative probe growth"
     actual = query(drivers, requests, directory)
     failures = [{"consumer": consumer, "request": request, "unexpected_acceptance": response}
                 for consumer, rows in actual.items() for request, response in zip(requests, rows)

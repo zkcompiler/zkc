@@ -17,6 +17,7 @@ spongefish-074 = { workspace = true, features = ["sha3", "ark-ec", "std"] }
 zkc.workspace = true
 zkc-runtime.workspace = true
 zkc-native.workspace = true
+zkc-kernels.workspace = true
 
 [lints]
 workspace = true

@@ -10,10 +10,11 @@ from .runner import CONTROL, Job, execute_job, refuse
 from .projects import freeze_project
 from .workloads import Protocol, catalog as protocol_catalog
 from .coverage import catalog as execution_catalog, SMOKE
+from .providers import Case as ProviderCase, catalog as provider_catalog
 
 
 def catalog():
-    return protocol_catalog() + execution_catalog()
+    return protocol_catalog() + execution_catalog() + provider_catalog()
 
 
 class ProofChecks:
@@ -37,12 +38,12 @@ def prepare(args, output, capture, manifest):
     if args.preset == 'smoke':
         selected = [c for c in selected if c[0] in SMOKE]
     elif args.preset == 'execution':
-        selected = [c for c in selected if not isinstance(c[1], Protocol)]
+        selected = [c for c in selected if not isinstance(c[1], (Protocol, ProviderCase))]
     elif args.preset == 'stark':
         selected = [c for c in selected if c[1].name in ('air', 'stark', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
     if args.execution_counts:
-        require(all(not isinstance(c[1], Protocol) for c in selected), 'execution counts require source workloads')
+        require(all(not isinstance(c[1], (Protocol, ProviderCase)) for c in selected), 'execution counts require source workloads')
     controls = [c for c in selected if not isinstance(c[1], Protocol)]
     selected = [c for c in selected if isinstance(c[1], Protocol)]
     suites = {c[1].name: c[1] for c in selected}
@@ -56,8 +57,10 @@ def prepare(args, output, capture, manifest):
 
     execution_checks = {}
     from .execution import prepare_case as prepare_execution
+    from .providers import prepare_case as prepare_provider
     for name, case, _ in controls:
-        jobs, gate = prepare_execution(args, output, capture, manifest, case)
+        prepare_control = prepare_provider if isinstance(case, ProviderCase) else prepare_execution
+        jobs, gate = prepare_control(args, output, capture, manifest, case)
         all_jobs.extend(jobs)
         execution_checks[name] = gate
 
@@ -93,6 +96,14 @@ def capture_sources(args, output, capture, manifest, suites):
         return Path(record['stdout']).read_text().strip()
     for name, tree in (('source', root), ('harness', ROOT)):
         manifest[name] = {'revision': git(tree, 'rev-parse', 'HEAD'), 'status': git(tree, 'status', '--short')}
+        # Record the actual dirty source, including newly added provider files.
+        # A base revision and status listing cannot reconstruct those contents.
+        changes = git(tree, 'diff', 'HEAD', '--name-only', '--diff-filter=ACMRT', '-z')
+        untracked = git(tree, 'ls-files', '--others', '--exclude-standard', '-z')
+        for relative in sorted(set((changes + '\0' + untracked).split('\0')) - {''}):
+            path = tree / relative
+            if path.is_file():
+                capture.add(path, Path(name) / relative)
     for protocol in suites.values():
         tool = getattr(args, protocol.reference_tool)
         require(tool is not None, f'{protocol.name} requires --{protocol.reference_tool}')
