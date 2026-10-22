@@ -85,6 +85,21 @@ checks and installed consumers enforce this direction.
 
 ## Runtime and application authority
 
+The Rust boundaries separate application policy, machine execution and
+mathematical computation. Hosts own package and setup authorization, input
+assembly, publication and transport outcomes. The VM owns frames, installed
+call contracts, resource custody and execution budgets; the interpreter walks
+its admitted instructions. The native backend owns concrete values, exact
+physical ports, codecs and effectful services. Mathematical kernels receive
+typed operands and explicit computation limits, without VM values, resource
+stores, transcript sessions or Host authority. Independent kernel code and the
+VM do not depend on each other; native adapters connect them.
+
+The joint Host's `WireBackend` contract reports Host-owned `WireError` outcomes.
+Invalid received bytes are an accepted stopping completion, while capacity or
+backend failure occurs before that completion is accepted. This boundary retains
+the admitted native message profile; it does not install arbitrary codecs.
+
 An Entry package retains the source interface, original checked IR,
 compilation choices and selected artifact. Local source commands trust the
 selected project and compiler and capture the returned package bytes. Deployed

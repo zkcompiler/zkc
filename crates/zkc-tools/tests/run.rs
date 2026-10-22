@@ -1,6 +1,6 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, Value};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Value as RuntimeValue;
 use zkc_runtime::vm::{
@@ -88,21 +88,24 @@ impl Backend for Host {
     }
 }
 impl WireBackend for Host {
-    fn encode_native(&self, value: &Value) -> Result<Vec<u8>, NativeWireError> {
+    fn encode_native(&self, value: &Value) -> Result<Vec<u8>, WireError> {
         if self.bad_width {
             return Ok(vec![0; 6]);
         }
         if self.encode_failure {
-            Err(NativeWireError::Limit)
+            Err(WireError::Limit)
         } else {
-            self.codec.encode_native_value(value)
+            self.codec.encode_native_value(value).map_err(Into::into)
         }
     }
-    fn decode_native(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Value, NativeWireError> {
+    fn decode_native(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Value, WireError> {
         match self.decode {
-            Decode::Normal => self.codec.decode_native_value(ty, bytes),
-            Decode::Limit => Err(NativeWireError::Limit),
-            Decode::Backend => Err(NativeWireError::Backend(BackendError::new("codec"))),
+            Decode::Normal => self
+                .codec
+                .decode_native_value(ty, bytes)
+                .map_err(Into::into),
+            Decode::Limit => Err(WireError::Limit),
+            Decode::Backend => Err(WireError::Backend(BackendError::new("codec"))),
             Decode::WrongType => Ok(Value::Field(zkc_backends::Scalar::from(1))),
         }
     }

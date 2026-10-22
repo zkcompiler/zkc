@@ -1,42 +1,12 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
-use zkc_backends::{NativeBackend, NativeWireError, native_wire_size};
+use super::{WireBackend, WireError};
+use zkc_backends::native_wire_size;
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
     ValueBudget, WorkBudget,
 };
 
-/// The closed native wire profile selected by `zkc.run/0` bundle admission.
-/// Implementations preserve its exact physical identities and canonical framing;
-/// this trait is not a codec extension point. Invalid is a receive outcome;
-/// Limit and Backend are failures before accepting the receive completion.
-pub trait WireBackend: Backend {
-    fn decoding_bound(&self, _ty: &PhysicalType, _bytes: &[u8]) -> Result<usize, NativeWireError> {
-        Err(NativeWireError::Limit)
-    }
-    fn encode_native(&self, value: &Self::Value) -> Result<Vec<u8>, NativeWireError>;
-    fn decode_native(
-        &self,
-        ty: &PhysicalType,
-        bytes: &[u8],
-    ) -> Result<Self::Value, NativeWireError>;
-}
-impl WireBackend for NativeBackend {
-    fn decoding_bound(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<usize, NativeWireError> {
-        self.measure_native_wire(ty, bytes)
-            .map(|s| s.retained_bytes())
-    }
-    fn encode_native(&self, value: &Self::Value) -> Result<Vec<u8>, NativeWireError> {
-        self.encode_native_value(value)
-    }
-    fn decode_native(
-        &self,
-        ty: &PhysicalType,
-        bytes: &[u8],
-    ) -> Result<Self::Value, NativeWireError> {
-        self.decode_native_value(ty, bytes)
-    }
-}
 /// Hooks are trusted host policy. They cannot access runners or select a peer.
 /// Observers must be read-only, bounded, and release resource locks before return.
 /// Returned diagnostic/observation strings are copied with a 4096-byte bound.
@@ -185,11 +155,11 @@ fn contract(detail: &str) -> Failure {
 fn limit() -> Failure {
     Failure::new(FailureKind::Limit, "joint-limit")
 }
-fn codec(error: NativeWireError) -> Failure {
+fn codec(error: WireError) -> Failure {
     match error {
-        NativeWireError::Limit => limit(),
-        NativeWireError::Backend(e) => Failure::new(FailureKind::Codec, &e.code),
-        NativeWireError::Invalid(_) => contract("encoder-returned-invalid"),
+        WireError::Limit => limit(),
+        WireError::Backend(e) => Failure::new(FailureKind::Codec, &e.code),
+        WireError::Invalid(_) => contract("encoder-returned-invalid"),
     }
 }
 /// Run one admitted bundle. Only its next selected owner is polled. Every
@@ -834,7 +804,7 @@ impl<B: WireBackend> Execution<B> {
                                 .map_err(|_| limit())?,
                             None,
                         ),
-                        Err(NativeWireError::Invalid(reason)) => (None, Some(reason)),
+                        Err(WireError::Invalid(reason)) => (None, Some(reason)),
                         Err(error) => return Err(codec(error)),
                     }
                 } else {
@@ -844,7 +814,7 @@ impl<B: WireBackend> Execution<B> {
                     Some(reason) => Err(reason),
                     None => match runner.backend().decode_native(ty, &pending.bytes) {
                         Ok(value) => Ok(value),
-                        Err(NativeWireError::Invalid(reason)) => Err(reason),
+                        Err(WireError::Invalid(reason)) => Err(reason),
                         Err(error) => return Err(codec(error)),
                     },
                 };
@@ -934,7 +904,7 @@ fn observe<B: Backend, H: Hooks<B>>(hooks: &mut H, slot: &Slot<B>, phase: Phase)
 mod contract_tests {
     use super::*;
     use serde_json::json;
-    use zkc_backends::{Domain, EntryPolicy, Policy};
+    use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
 
     fn backend() -> NativeBackend {
         NativeBackend::new(
