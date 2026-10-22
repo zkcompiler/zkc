@@ -619,8 +619,8 @@ mod tests {
     #[test]
     fn opening_sums_match_scalar_divisions_in_every_coordinate() {
         opening_sum_scalar_checks::<KoalaBear>();
-        opening_sum_scalar_checks::<crate::KoalaBearExt4>();
-        opening_sum_scalar_checks::<crate::KoalaBearExt8>();
+        opening_sum_scalar_checks::<crate::plonky3::KoalaBearExt4>();
+        opening_sum_scalar_checks::<crate::plonky3::KoalaBearExt8>();
     }
 
     #[test]
@@ -752,8 +752,8 @@ mod tests {
     #[test]
     fn base_subgroup_action_preserves_non_base_cosets() {
         base_action_matches_embedding::<KoalaBear>();
-        base_action_matches_embedding::<crate::KoalaBearExt4>();
-        base_action_matches_embedding::<crate::KoalaBearExt8>();
+        base_action_matches_embedding::<crate::plonky3::KoalaBearExt4>();
+        base_action_matches_embedding::<crate::plonky3::KoalaBearExt8>();
     }
 
     fn batch_extension_matches_independent_columns<F: ExtensionField<KoalaBear>>() {
@@ -816,8 +816,8 @@ mod tests {
     #[test]
     fn batch_extension_retains_every_extension_coordinate() {
         batch_extension_matches_independent_columns::<KoalaBear>();
-        batch_extension_matches_independent_columns::<crate::KoalaBearExt4>();
-        batch_extension_matches_independent_columns::<crate::KoalaBearExt8>();
+        batch_extension_matches_independent_columns::<crate::plonky3::KoalaBearExt4>();
+        batch_extension_matches_independent_columns::<crate::plonky3::KoalaBearExt8>();
     }
 
     #[test]

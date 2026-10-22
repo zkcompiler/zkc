@@ -5,7 +5,10 @@ use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_kernels::polynomial::{boundary, evaluate};
+use zkc_kernels::{
+    polynomial::{boundary, evaluate},
+    vector::Plan,
+};
 use zkc_runtime::vm::{Identity, Invocation, Value as _};
 
 /// Montgomery batch inversion. The caller supplies the checked allocation;
@@ -519,7 +522,8 @@ fn dense<S: Family>(
             let x = f(1)?;
             // Load, multiply, initialize/write the destination, then freeze it.
             let mut out = destination(a.len(), S::zero(), 5)?;
-            zkc_kernels::vector::scale::<S>(a, x, out.as_mut_slice())
+            let plan = Plan::select(a.len()).map_err(crate::field_error)?;
+            plan.scale(a, x, out.as_mut_slice())
                 .map_err(crate::field_error)?;
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,
@@ -556,13 +560,15 @@ fn dense<S: Family>(
             equal_len(a.len(), b.len())?;
             // Two loads, arithmetic, initialized write, and freezing copy.
             let mut out = destination(a.len(), S::zero(), 6)?;
+            let plan = Plan::select(a.len()).map_err(crate::field_error)?;
             if name == "vector.mul" {
-                S::product(a, b, out.as_mut_slice())?;
+                plan.mul(a, b, out.as_mut_slice())
+                    .map_err(crate::field_error)?;
             } else if name == "vector.add" {
-                zkc_kernels::vector::add::<S>(a, b, out.as_mut_slice())
+                plan.add(a, b, out.as_mut_slice())
                     .map_err(crate::field_error)?;
             } else {
-                zkc_kernels::vector::sub::<S>(a, b, out.as_mut_slice())
+                plan.sub(a, b, out.as_mut_slice())
                     .map_err(crate::field_error)?;
             }
             Ok(vec![
@@ -605,7 +611,7 @@ fn dense<S: Family>(
             }
             rows.checked_mul(cols)
                 .ok_or_else(|| exhausted("size-overflow"))?;
-            let matrix = zkc_kernels::numerical::RowMajor::new(a, rows, cols)
+            let matrix = zkc_kernels::matrix::RowMajor::new(a, rows, cols)
                 .ok_or_else(|| refused("length-mismatch"))?;
             let (inner, outer) = if transpose == 0 {
                 (matrix.cols(), matrix.rows())

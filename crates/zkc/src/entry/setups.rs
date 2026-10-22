@@ -142,7 +142,7 @@ pub(super) fn check_pinned_material(
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
     imports: &mut crate::host::setups::VerifierKeys,
-) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::VerifierKey>>> {
+) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>> {
     check(interface, authority)?;
     material_bytes(interface, material, capacity)?;
     interface
@@ -151,11 +151,7 @@ pub(super) fn check_pinned_material(
         .map(|slot| {
             Ok((
                 slot.name.clone(),
-                imports.import(
-                    &material[&slot.name],
-                    authority.keys[&slot.name],
-                    "entry-setup-canonical",
-                )?,
+                imports.import(&material[&slot.name], authority.keys[&slot.name])?,
             ))
         })
         .collect()

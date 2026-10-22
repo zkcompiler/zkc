@@ -98,10 +98,8 @@ pub(super) fn run(directory: &Path) {
 
                 let codec = backend(&json!({"entry":envelope[2][1][1]}), "role00000000");
                 let wire = |value: Value| hex(&codec.encode_native_value(&value).unwrap());
-                let base = wire(Value::Curve(GroupPoint::generator()));
-                let point = wire(Value::Curve(
-                    GroupPoint::generator().scale(Scalar::from(3u64)),
-                ));
+                let base = wire(Value::Curve(G1::generator()));
+                let point = wire(Value::Curve(G1::generator().scale(Scalar::from(3u64))));
                 let input = |prover: bool, witness: u64| {
                     let data = if prover {
                         json!([
@@ -129,8 +127,8 @@ pub(super) fn run(directory: &Path) {
                 let typed = |prover: bool, witness: u64| {
                     let common = || {
                         vec![
-                            Value::Curve(GroupPoint::generator()).into(),
-                            Value::Curve(GroupPoint::generator().scale(Scalar::from(3u64))).into(),
+                            Value::Curve(G1::generator()).into(),
+                            Value::Curve(G1::generator().scale(Scalar::from(3u64))).into(),
                         ]
                     };
                     let mut inputs = common();
@@ -175,7 +173,7 @@ pub(super) fn run(directory: &Path) {
                         .is_ok()
                 );
                 let mut mismatch = typed(true, 3);
-                mismatch.inputs[1] = Value::Curve(GroupPoint::generator()).into();
+                mismatch.inputs[1] = Value::Curve(G1::generator()).into();
                 assert_eq!(
                     deployment
                         .execute(&mismatch, zkc::proof::Invocation::one_shot(None))
@@ -244,11 +242,10 @@ pub(super) fn run(directory: &Path) {
                 let named_request = |prover: bool, witness: u64| {
                     let common = || {
                         NamedValues::from([
-                            ("base".into(), Value::Curve(GroupPoint::generator()).into()),
+                            ("base".into(), Value::Curve(G1::generator()).into()),
                             (
                                 "point".into(),
-                                Value::Curve(GroupPoint::generator().scale(Scalar::from(3u64)))
-                                    .into(),
+                                Value::Curve(G1::generator().scale(Scalar::from(3u64))).into(),
                             ),
                         ])
                     };

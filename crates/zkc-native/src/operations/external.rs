@@ -2,7 +2,7 @@
 //! docs/spec/realization/external-constructions.md. These are not affine internal
 //! transcript resources, and do not advertise automatic Fiat-Shamir rules.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use zkc_kernels::external::{Work, monero, openvm};
+use zkc_kernels::interop::{Work, monero, openvm};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
@@ -140,11 +140,11 @@ fn packed(d: &openvm::Duplex) -> Value {
             .chain([s.absorb_index as u64, s.sample_index as u64]),
     )
 }
-fn primitive(e: zkc_kernels::external::Error) -> zkc_runtime::vm::BackendError {
+fn primitive(e: zkc_kernels::interop::Error) -> zkc_runtime::vm::BackendError {
     let code = e.code().replacen("external:", "external-", 1);
     // A size past u64 exhausts the work that could be done; it is one form
     // wherever it arises, as the runtime's own size overflows are.
-    if e == zkc_kernels::external::Error::SizeOverflow {
+    if e == zkc_kernels::interop::Error::SizeOverflow {
         exhausted(&code)
     } else {
         refused(&code)
@@ -436,7 +436,7 @@ mod tests {
             "exhausted:external-size-overflow"
         );
         assert_eq!(
-            primitive(zkc_kernels::external::Error::SizeOverflow).code,
+            primitive(zkc_kernels::interop::Error::SizeOverflow).code,
             "exhausted:external-size-overflow"
         );
         assert_eq!(budget.spent, 0);

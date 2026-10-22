@@ -7,6 +7,7 @@ use crate::{
     value::{opening_state_bytes, size},
 };
 use std::sync::Arc;
+use zkc_kernels::arkworks::{Error as KernelError, bls12_381};
 use zkc_runtime::vm::Invocation;
 
 impl NativeBackend {
@@ -33,7 +34,7 @@ impl NativeBackend {
             ("table.relayout", [Table(t)]) => {
                 p.output(size(t.len(), 32)?, i.max_output_bytes)?;
                 vec![TableMsb(Arc::new(
-                    zkc_kernels::MsbTable::from_lsb(t, &p.ark_bounds()).map_err(ark)?,
+                    bls12_381::MsbTable::from_lsb(t, &p.ark_bounds()).map_err(ark)?,
                 ))]
             }
             ("table.relayout", [TableMsb(t)]) => {
@@ -51,7 +52,7 @@ impl NativeBackend {
                 let retained = size(len, 32)?;
                 p.output(retained, i.max_output_bytes)?;
                 if t.arity() == 0 {
-                    return Err(ark(zkc_kernels::Error::PositiveArityRequired));
+                    return Err(ark(KernelError::PositiveArityRequired));
                 }
                 let call = Call::new(&p, i.max_output_bytes);
                 call.work(fold_work(len)?)?;
@@ -60,7 +61,7 @@ impl NativeBackend {
                     .map_err(ark)?;
                 vec![output.finish(|values| {
                     Ok(TableMsb(Arc::new(
-                        zkc_kernels::MsbTable::from_physical_vec(values, &p.ark_bounds())
+                        bls12_381::MsbTable::from_physical_vec(values, &p.ark_bounds())
                             .map_err(ark)?,
                     )))
                 })?]
@@ -81,7 +82,7 @@ impl NativeBackend {
                 let retained = size(len, 32)?;
                 p.output(retained, i.max_output_bytes)?;
                 if t.arity() == 0 {
-                    return Err(ark(zkc_kernels::Error::PositiveArityRequired));
+                    return Err(ark(KernelError::PositiveArityRequired));
                 }
                 let call = Call::new(&p, i.max_output_bytes);
                 call.work(fold_work(len)?)?;
@@ -90,7 +91,7 @@ impl NativeBackend {
                     .map_err(ark)?;
                 vec![output.finish(|values| {
                     Ok(Table(Arc::new(
-                        zkc_kernels::Table::from_physical_vec(values, &p.ark_bounds())
+                        bls12_381::Table::from_physical_vec(values, &p.ark_bounds())
                             .map_err(ark)?,
                     )))
                 })?]

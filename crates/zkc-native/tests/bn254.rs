@@ -366,7 +366,7 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
     for name in ["field.constant", "vector.constant"] {
         let b = binding(name, "bn254.fr");
         let sig = b.signature().unwrap();
-        for literal in ["01", "-1", zkc_kernels::bn254::MODULUS] {
+        for literal in ["01", "-1", zkc_kernels::arkworks::bn254::MODULUS] {
             let program = support::program(
                 std::slice::from_ref(&b),
                 &[],
@@ -410,7 +410,7 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
     );
     assert_eq!(
         <F as ark_ff::FftField>::TWO_ADIC_ROOT_OF_UNITY,
-        zkc_kernels::bn254::parse_decimal(
+        zkc_kernels::arkworks::bn254::parse_decimal(
             "19103219067921713944291392827692070036145651957329286315305642004821462161904"
         )
         .unwrap()

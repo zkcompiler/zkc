@@ -276,7 +276,8 @@ fn all_eight_fields_use_exact_arithmetic_and_immutable_inputs() {
         Value::KoalaBearExt8Field,
         |v| Value::KoalaBearExt8Vector(v.into()),
     );
-    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::ext3_from_bits;
+    use zkc_kernels::plonky3::binary::from_bits;
     exercise(
         domains::BINARY64,
         [2, 3, 0x8100_0000_0000_0005, 7].map(from_bits),
@@ -738,7 +739,8 @@ fn reached_direct_and_prepared_callers_enforce_canonical_body_byte_boundary() {
 
 #[test]
 fn binary_ring_constants_refuse_two_and_hexadecimal_bit_patterns() {
-    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::ext3_from_bits;
+    use zkc_kernels::plonky3::binary::from_bits;
 
     for domain in [domains::BINARY64, domains::BINARY64_EXT3] {
         let valid = body(

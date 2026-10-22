@@ -5,7 +5,7 @@ mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::*;
 
 #[test]
@@ -69,7 +69,7 @@ fn every_field_polynomial_kernel_matches_hand_calculation() {
 
 fn committed_fixture() -> (NativeBackend, Keys, Value, Vec<Value>) {
     let p = Policy::default();
-    let keys = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &p.ark_bounds()).unwrap();
     let t = table(&[2, 3, 5, 7]);
     let bytes = program(
         &[
@@ -119,7 +119,7 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .verifier_key()
         .to_bytes(&Policy::default().ark_bounds())
         .unwrap();
-    let key = zkc_kernels::VerifierKey::from_bytes(
+    let key = zkc_kernels::arkworks::bls12_381::VerifierKey::from_bytes(
         &vkbytes,
         keys.verifier_key().metadata().key_id(),
         &Policy::default().ark_bounds(),
@@ -264,7 +264,12 @@ fn hostile_key_aware_codec_and_exact_length() {
         .unwrap(),
     )
     .unwrap();
-    let other = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
+    let other = Keys::setup_with_rng(
+        2,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     let wrong = NativeBackend::new(
         Policy::default(),
         entry(Some(2)),
@@ -275,7 +280,12 @@ fn hostile_key_aware_codec_and_exact_length() {
         .unwrap(),
     )
     .unwrap();
-    let different_arity = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let different_arity = Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     let wrong_n = NativeBackend::new(
         Policy::default(),
         entry(Some(1)),
@@ -372,8 +382,18 @@ fn hostile_key_aware_codec_and_exact_length() {
 }
 #[test]
 fn entry_shape_setup_and_public_correspondence_policy() {
-    let keys = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
-    let other = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(
+        2,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
+    let other = Keys::setup_with_rng(
+        2,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     let bytes = program(
         &[
             ("pk", "prover_key"),
@@ -529,7 +549,12 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
 
 #[test]
 fn keys_must_match_entry_arity_and_opening_must_match_point() {
-    let keys = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     for ty in ["prover_key", "verifier_key"] {
         let bytes = program(&[("key", ty)], vec![], &[], &[]);
         let b = backend()

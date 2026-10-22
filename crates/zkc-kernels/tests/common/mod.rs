@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use ark_std::rand::{SeedableRng, rngs::StdRng};
-use zkc_kernels::{Bounds, Keys, Scalar};
+use zkc_kernels::arkworks::bls12_381::{Bounds, Keys, Scalar};
 
 pub fn bounds() -> Bounds {
     Bounds::new(10, 1024, 1 << 20, 10 * 1024)

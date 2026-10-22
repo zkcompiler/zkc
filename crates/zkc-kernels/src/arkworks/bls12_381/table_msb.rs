@@ -1,4 +1,9 @@
-use crate::{Bounds, Error, Scalar, Table, bounds::vector, error::same_arity};
+use crate::arkworks::Error;
+use crate::arkworks::allocation::vector;
+use crate::arkworks::bls12_381::Bounds;
+use crate::arkworks::bls12_381::Scalar;
+use crate::arkworks::bls12_381::Table;
+use crate::arkworks::error::same_arity;
 use ark_ff::{AdditiveGroup, Field};
 use std::{fmt, sync::Arc};
 

@@ -276,8 +276,18 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
 #[test]
 fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     let policy = zkc_native::Policy::default();
-    let first = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-    let other = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let first = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
+    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let logical = LogicalType::parse("commitment:multilinear.kzg.bls12-381/0").unwrap();
     let seq = LogicalType::sequence(logical.clone()).unwrap();
     let (raw, _) = fixture(&seq.spelling());
@@ -298,7 +308,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
         authority.clone(),
     )
     .unwrap();
-    let table = zkc_kernels::Table::from_logical(
+    let table = zkc_kernels::arkworks::bls12_381::Table::from_logical(
         &[zkc_native::Scalar::from(1), zkc_native::Scalar::from(2)],
         &policy.ark_bounds(),
     )
@@ -524,7 +534,12 @@ fn typed_wire_work_is_reserved_before_scanning() {
 #[test]
 fn typed_key_imports_use_explicit_authorized_constructors() {
     let policy = zkc_native::Policy::default();
-    let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let authority = SetupAuthority {
         keys: BTreeMap::from([("setup".into(), keys.verifier_key().metadata().key_id())]),
         inputs: BTreeMap::from([
@@ -718,8 +733,18 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
 fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
     let capacity = Capacity::default();
     let bounds = capacity.backend().ark_bounds();
-    let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
-    let other = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
+    let other = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("material.pk");
     std::fs::write(&path, keys.prover_key().to_bytes(&bounds).unwrap()).unwrap();

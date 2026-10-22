@@ -5,7 +5,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use serde_json::{Value as Json, json};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
-use zkc_kernels::{GroupPoint, Scalar};
+use zkc_kernels::arkworks::bls12_381::{G1, Scalar};
 
 pub fn tree(v: &Json) -> Vec<u8> {
     match v {
@@ -34,9 +34,9 @@ pub fn scalar(bytes: &[u8]) -> Scalar {
     assert_eq!(bytes.len(), 38);
     Scalar::deserialize_compressed(&bytes[6..]).unwrap()
 }
-pub fn group(bytes: &[u8]) -> GroupPoint {
+pub fn group(bytes: &[u8]) -> G1 {
     assert_eq!(&bytes[..6], b"ZKCV\x00\x09");
-    GroupPoint::from_bytes(&bytes[6..]).unwrap()
+    G1::from_bytes(&bytes[6..]).unwrap()
 }
 pub enum Transcript {
     Merlin(Box<merlin::Transcript>),

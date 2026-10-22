@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::NativeDeployment;
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value, Variant};
 use zkc_runtime::vm::{LogicalType, Value as RuntimeValue};
 use zkc_test_support::hex;
 use zkc_test_support::variants::logical;
@@ -55,9 +55,9 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
     let value = |port: &Json| {
         let port: usize = port.as_str().unwrap().parse().unwrap();
         let value = match port {
-            0 => Value::Curve(GroupPoint::generator()),
+            0 => Value::Curve(G1::generator()),
             1 => Value::Field(Scalar::from(3)),
-            2 => Value::Curve(GroupPoint::generator().scale(Scalar::from(3))),
+            2 => Value::Curve(G1::generator().scale(Scalar::from(3))),
             5 => batch(tag, count),
             6 => Value::Index(count as u64),
             7 => Value::Field(Scalar::from(
@@ -368,8 +368,8 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
     transcript.absorb(b"value", response);
     assert_eq!(scalar, Scalar::from(5) + challenge * Scalar::from(3));
     assert_eq!(
-        GroupPoint::generator().scale(scalar),
-        commitment.add(&GroupPoint::generator().scale(Scalar::from(3) * challenge))
+        G1::generator().scale(scalar),
+        commitment.add(&G1::generator().scale(Scalar::from(3) * challenge))
     );
     assert_eq!(position, proof.len());
     assert_eq!(event, 4);
@@ -385,9 +385,9 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
             reference::scalar_wire(Scalar::from(7))[6..].to_vec(),
         ),
         "groups" => (
-            Value::Groups(vec![GroupPoint::generator()].into()),
+            Value::Groups(vec![G1::generator()].into()),
             67,
-            GroupPoint::generator().to_bytes().unwrap().to_vec(),
+            G1::generator().to_bytes().unwrap().to_vec(),
         ),
         "indices" => (
             Value::Indices(vec![u64::MAX].into()),

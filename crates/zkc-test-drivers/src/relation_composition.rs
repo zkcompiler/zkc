@@ -31,7 +31,7 @@ struct Exact {
     satisfied: bool,
 }
 fn scalar(value: &str) -> Scalar {
-    zkc_kernels::parse_decimal(value).unwrap()
+    zkc_kernels::arkworks::bls12_381::parse_decimal(value).unwrap()
 }
 fn scalars(values: &[String]) -> Vec<Scalar> {
     values.iter().map(|v| scalar(v)).collect()

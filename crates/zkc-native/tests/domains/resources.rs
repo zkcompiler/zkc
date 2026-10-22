@@ -84,7 +84,7 @@ fn canonical_transcript_observations_match_direct_merlin_and_suite_reduction() {
             let expected = if d {
                 Value::RistrettoField(RistrettoScalar::from_bytes_mod_order_wide(&wide))
             } else {
-                Value::Field(zkc_kernels::scalar_from_wide_be(&wide))
+                Value::Field(zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&wide))
             };
             let (result, b) = run_program(b, &bytes, vec![transcript, value]);
             let result = result.unwrap();

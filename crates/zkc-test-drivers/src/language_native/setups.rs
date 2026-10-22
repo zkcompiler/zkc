@@ -10,7 +10,7 @@ use zkc::{
     execution::{Capacity, InputValue, ProverMaterial},
     run::HostLimits,
 };
-use zkc_kernels::{Keys, Table};
+use zkc_kernels::arkworks::bls12_381::{Keys, Table};
 use zkc_native::{Policy, Scalar, Value as Native};
 fn package(directory: &Path, entry: &str) -> Package {
     let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.zkpkg"))).unwrap();
@@ -44,7 +44,7 @@ fn accepted(values: &NamedValues) {
 pub(super) fn run(directory: &Path) {
     let bounds = Policy::default().ark_bounds();
     let keys: Vec<_> = (0..2)
-        .map(|_| Keys::setup_for_development(1, &bounds).unwrap())
+        .map(|_| Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap())
         .collect();
     let material: Vec<_> = keys
         .iter()

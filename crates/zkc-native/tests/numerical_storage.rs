@@ -271,7 +271,8 @@ fn general_storage_preserves_all_eight_fields_at_exact_and_one_short_limits() {
         Value::KoalaBearExt8Field,
         |values| Value::KoalaBearExt8Vector(values.into()),
     );
-    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::ext3_from_bits;
+    use zkc_kernels::plonky3::binary::from_bits;
     storage(
         domains::BINARY64,
         [2, 5, 1 << 63].map(from_bits),

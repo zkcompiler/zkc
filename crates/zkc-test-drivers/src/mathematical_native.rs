@@ -2,7 +2,7 @@
 //! Takes the directory of JSON candidates produced by compiler/test/mathematical.py.
 //! Supplied admission checks the carrier, without claiming source correspondence.
 use std::path::Path;
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, Origin, Packet, PathElement, Stop, StopKind, Value as RuntimeValue};
 
@@ -20,7 +20,7 @@ fn field(value: u64) -> Value {
 }
 
 fn group(value: u64) -> Value {
-    Value::Curve(GroupPoint::generator().scale(Scalar::from(value)))
+    Value::Curve(G1::generator().scale(Scalar::from(value)))
 }
 
 fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
@@ -127,7 +127,7 @@ fn main() {
         vec![group(1), field(13), group(13), field(17)],
     );
     assert!(
-        matches!(send(&mut prover), Value::Curve(p) if p == GroupPoint::generator().scale(Scalar::from(17u64)))
+        matches!(send(&mut prover), Value::Curve(p) if p == G1::generator().scale(Scalar::from(17u64)))
     );
     receive(&mut prover, field(19));
     expect_field(send(&mut prover), 264);

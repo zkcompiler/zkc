@@ -1,5 +1,5 @@
 use crate::{Policy, Result, Value, exhausted, refused};
-use zkc_kernels::{Metadata, VerifierKey};
+use zkc_kernels::arkworks::bls12_381::{Metadata, VerifierKey};
 use zkc_runtime::vm::Value as RuntimeValue;
 
 /// Host-authorized public verifier material. Registering keys is an explicit

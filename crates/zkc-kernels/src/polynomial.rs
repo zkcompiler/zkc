@@ -1,5 +1,5 @@
 //! Dense coefficient polynomial arithmetic, independent of physical values.
-use crate::fields::Coefficient;
+use crate::field::Coefficient;
 /// Evaluate coefficients in ascending degree order with Horner's rule.
 pub fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
     coefficients.iter().rev().fold(S::zero(), |a, c| a * x + *c)

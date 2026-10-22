@@ -3,7 +3,10 @@ mod common;
 use ark_ff::Field;
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 use common::{bounds, keys, scalars};
-use zkc_kernels::{Bounds, Error, Keys, RandomSource, Scalar, Table, VerifierKey, parse_decimal};
+use zkc_kernels::arkworks::{
+    Error,
+    bls12_381::{Bounds, Keys, Scalar, Table, VerifierKey, parse_decimal},
+};
 
 #[test]
 fn two_originals_shared_keys_delayed_open_and_table_free_verifier() {
@@ -163,42 +166,25 @@ fn canonical_infinity_is_valid_for_zero_polynomials_and_quotients() {
 }
 
 #[test]
-fn os_entropy_setup_and_challenges_execute_real_upstream() {
-    let k = Keys::setup_for_development(2, &bounds()).unwrap();
-    let mut source = RandomSource::from_os().unwrap();
-    let p = source.point(2, &bounds()).unwrap();
+fn caller_supplied_randomness_executes_real_upstream() {
+    use ark_std::{UniformRand, rand::thread_rng};
+    let mut source = thread_rng();
+    let k = Keys::setup_with_rng(2, &mut source, &bounds()).unwrap();
+    let point = [Scalar::rand(&mut source), Scalar::rand(&mut source)];
     let t = Table::from_logical(&scalars(&[1, 2, 3, 5]), &bounds()).unwrap();
     let c = k.prover_key().commit(&t).unwrap();
-    let (v, proof) = c.open(&p).unwrap();
+    let (value, proof) = c.open(&point).unwrap();
     assert!(
         k.verifier_key()
-            .check(c.commitment(), &p, v, &proof)
+            .check(c.commitment(), &point, value, &proof)
             .unwrap()
     );
-    assert_eq!(source.point(0, &bounds()).unwrap().len(), 0);
-    assert_eq!(source.point(11, &bounds()).unwrap_err(), Error::ArityLimit);
-    assert_eq!(
-        source.point(2, &Bounds::new(2, 4, 63, 10)).unwrap_err(),
-        Error::ByteLimit
-    );
-}
-
-#[cfg(feature = "test-utils")]
-#[test]
-fn deterministic_randomness_is_explicit_and_failed_admission_does_not_draw() {
-    let mut a = RandomSource::for_testing([47; 32]);
-    let mut b = RandomSource::for_testing([47; 32]);
-    assert!(a.point(11, &bounds()).is_err());
-    assert!(a.point(2, &Bounds::new(2, 4, 63, 10)).is_err());
-    for _ in 0..32 {
-        assert_eq!(a.scalar(), b.scalar());
-    }
 }
 
 #[test]
 fn aliases_remain_live_across_threads_and_owner_drops() {
     fn send_sync<T: Send + Sync>() {}
-    send_sync::<zkc_kernels::CommittedTable>();
+    send_sync::<zkc_kernels::arkworks::bls12_381::CommittedTable>();
     let k = keys(3, 9);
     let t = Table::from_logical(&scalars(&[1, 2, 3, 5, 8, 13, 21, 34]), &bounds()).unwrap();
     let c = k.prover_key().commit(&t).unwrap();

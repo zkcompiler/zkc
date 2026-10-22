@@ -1,6 +1,8 @@
 //! Immutable canonical sparse COO and typed contractions, without VM policy.
-use crate::fields::Coefficient;
+mod views;
+use crate::field::Coefficient;
 use std::sync::Arc;
+pub use views::RowMajor;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Index,

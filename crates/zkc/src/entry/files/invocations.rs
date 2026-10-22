@@ -590,8 +590,13 @@ mod tests {
         let mut materials = Vec::new();
         let mut commitments = Vec::new();
         for (arity, id) in [(1, "first"), (2, "second")] {
-            let keys = zkc_kernels::Keys::setup_for_development(arity, &bounds).unwrap();
-            let table = zkc_kernels::Table::from_logical_vec(
+            let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+                arity,
+                &mut ark_std::rand::thread_rng(),
+                &bounds,
+            )
+            .unwrap();
+            let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
                 vec![zkc_native::Scalar::from(1); 1 << arity],
                 &bounds,
             )

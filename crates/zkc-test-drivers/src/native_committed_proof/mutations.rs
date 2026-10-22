@@ -186,9 +186,11 @@ pub fn check(
             "Explicit(\"reject\")",
         );
     }
-    let other =
-        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(11), Scalar::from(17)], &bounds)
-            .unwrap();
+    let other = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
+        vec![Scalar::from(11), Scalar::from(17)],
+        &bounds,
+    )
+    .unwrap();
     let other = keys.prover_key().commit(&other).unwrap();
     let changed = public(
         v,
@@ -203,7 +205,7 @@ pub fn check(
         Some(&rebind(envelope, &changed, proof)),
         "Explicit(\"reject\")",
     );
-    let stale = Keys::setup_for_development(1, &bounds).unwrap();
+    let stale = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let changed = public(v, vk_port, &stale.verifier_key().to_bytes(&bounds).unwrap());
     refuse(
         deployment,
@@ -300,9 +302,11 @@ pub fn check(
         refuse(deployment, &wrong_n, Some(proof), "positive-arity-required");
     }
     // Original backing survives restriction and repeated opening through aliases.
-    let table =
-        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(1), Scalar::from(2)], &bounds)
-            .unwrap();
+    let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
+        vec![Scalar::from(1), Scalar::from(2)],
+        &bounds,
+    )
+    .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let alias = state.clone();
     let _scratch = table.restrict_first(Scalar::from(7)).unwrap();

@@ -36,7 +36,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         Some((5, 7))
     } else if *ty == Value::Field(crate::Scalar::from(0)).physical_type() {
         Some((1, 38))
-    } else if *ty == Value::Curve(crate::GroupPoint::identity()).physical_type() {
+    } else if *ty == Value::Curve(crate::G1::identity()).physical_type() {
         Some((9, 54))
     } else if *ty == Value::Index(0).physical_type() {
         Some((31, 14))
@@ -181,18 +181,19 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::FieldArray(array) => {
             array.validate().map_err(NativeWireError::Backend)?;
             for element in array.elements() {
-                bytes.extend_from_slice(&zkc_kernels::encode_scalar(element).map_err(encoding)?);
+                bytes.extend_from_slice(
+                    &zkc_kernels::arkworks::bls12_381::encode_scalar(element).map_err(encoding)?,
+                );
             }
         }
         Value::Index(v) => bytes.extend_from_slice(&v.to_le_bytes()),
         Value::Bool(v) => bytes.push(u8::from(*v)),
-        Value::Field(v) => {
-            bytes.extend_from_slice(&zkc_kernels::encode_scalar(v).map_err(encoding)?)
-        }
+        Value::Field(v) => bytes.extend_from_slice(
+            &zkc_kernels::arkworks::bls12_381::encode_scalar(v).map_err(encoding)?,
+        ),
         Value::Curve(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
-        Value::Bn254Field(v) => {
-            bytes.extend_from_slice(&zkc_kernels::bn254::encode_scalar(v).map_err(encoding)?)
-        }
+        Value::Bn254Field(v) => bytes
+            .extend_from_slice(&zkc_kernels::arkworks::bn254::encode_scalar(v).map_err(encoding)?),
         Value::Bn254G1(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
@@ -343,7 +344,7 @@ impl NativeBackend {
                 elements.try_reserve_exact(count).map_err(|_| Limit)?;
                 for element in bytes[6..].as_chunks::<32>().0 {
                     elements.push(
-                        zkc_kernels::decode_scalar(element)
+                        zkc_kernels::arkworks::bls12_381::decode_scalar(element)
                             .map_err(|_| Invalid(DecodeReason::Scalar))?,
                     );
                 }
@@ -359,19 +360,18 @@ impl NativeBackend {
             // These checked helpers already normalize upstream decoding and
             // canonical re-encoding errors. No lost provenance is reconstructed.
             1 => Value::Field(
-                zkc_kernels::decode_scalar(&bytes[6..])
+                zkc_kernels::arkworks::bls12_381::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             9 => Value::Curve(
-                crate::GroupPoint::from_bytes(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Group))?,
+                crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?,
             ),
             50 => Value::Bn254Gt(
                 crate::Bn254Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
             40 => Value::Bn254Field(
-                zkc_kernels::bn254::decode_scalar(&bytes[6..])
+                zkc_kernels::arkworks::bn254::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             46 => Value::Bn254G1(
@@ -471,11 +471,14 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
     let mut values = Vec::new();
     values.try_reserve_exact(count).map_err(|_| Limit)?;
     for element in bytes[10..].as_chunks::<32>().0 {
-        values
-            .push(zkc_kernels::decode_scalar(element).map_err(|_| Invalid(DecodeReason::Scalar))?);
+        values.push(
+            zkc_kernels::arkworks::bls12_381::decode_scalar(element)
+                .map_err(|_| Invalid(DecodeReason::Scalar))?,
+        );
     }
-    let table = zkc_kernels::Table::from_logical_vec(values, &policy.ark_bounds())
-        .map_err(|e| NativeWireError::Backend(crate::ark(e)))?;
+    let table =
+        zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(values, &policy.ark_bounds())
+            .map_err(|e| NativeWireError::Backend(crate::ark(e)))?;
     let value = Value::Table(std::sync::Arc::new(table));
     policy
         .output(value.retained_bytes(), usize::MAX)

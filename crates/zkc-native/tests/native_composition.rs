@@ -66,7 +66,7 @@ fn installed_bulk_domains_and_oracle_leaves_use_canonical_bytes() {
     for n in [0, 1, 3, 64] {
         for v in [
             Value::Vector(vec![zkc_native::Scalar::from(7); n].into()),
-            Value::Groups(vec![zkc_native::GroupPoint::generator(); n].into()),
+            Value::Groups(vec![zkc_native::G1::generator(); n].into()),
             Value::Bn254Vector(vec![F::from(7); n].into()),
             Value::Bn254G1Vector(vec![Bn254G1::generator(); n].into()),
             Value::Bn254G2Vector(vec![Bn254G2::generator(); n].into()),

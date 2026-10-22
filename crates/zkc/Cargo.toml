@@ -20,6 +20,7 @@ serde_json.workspace = true
 [lints]
 workspace = true
 [dev-dependencies]
+ark-std = { workspace = true, features = ["getrandom"] }
 zkc-test-support.workspace = true
 [features]
 execution-counts = ["zkc-runtime/execution-counts"]

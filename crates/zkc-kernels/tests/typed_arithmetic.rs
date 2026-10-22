@@ -1,9 +1,14 @@
 //! Kernel APIs are independently usable without native values or VM policy.
 use zkc_kernels::{
-    Binary64, Binary64Ext3, Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar,
-    Scalar,
-    fields::{Coefficient, Error},
-    matrix, vector,
+    arkworks::{bls12_381::Scalar, bn254::Scalar as Bn254Scalar},
+    dalek::ristretto255::Scalar as RistrettoScalar,
+    field::{Coefficient, Error},
+    matrix,
+    plonky3::{
+        KoalaBear, KoalaBearExt4, KoalaBearExt8,
+        binary::{Binary64, Binary64Ext3},
+    },
+    vector,
 };
 
 fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
@@ -33,6 +38,67 @@ fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
         assert!(out.iter().zip(&a).all(|(x, a)| *x == -*a));
         vector::scale(&a, element(11), &mut out).unwrap();
         assert!(out.iter().zip(&a).all(|(x, a)| *x == *a * element(11)));
+        // A fixed choice and automatic selection share the same native layout.
+        use vector::{Algorithm, Packing, Plan};
+        let width = S::Packing::WIDTH;
+        let automatic = Plan::<S>::select(n).unwrap();
+        assert_eq!(
+            automatic.algorithm(),
+            if width > 1 && n >= width {
+                Algorithm::Packed
+            } else {
+                Algorithm::Scalar
+            }
+        );
+        assert_eq!(automatic.output_bytes(), n * size_of::<S>());
+        assert_eq!(automatic.workspace_bytes(), 0);
+        for algorithm in [Algorithm::Scalar, Algorithm::Packed] {
+            if algorithm == Algorithm::Packed && width <= 1 {
+                assert!(matches!(
+                    Plan::<S>::new(n, algorithm),
+                    Err(Error::PackingUnavailable)
+                ));
+                continue;
+            }
+            let plan = Plan::<S>::new(n, algorithm).unwrap();
+            assert_eq!(plan.algorithm(), algorithm);
+            for (apply, expected) in [
+                (
+                    Plan::<S>::add as fn(&Plan<S>, &[S], &[S], &mut [S]) -> _,
+                    a.iter().zip(&b).map(|(a, b)| *a + *b).collect::<Vec<_>>(),
+                ),
+                (
+                    Plan::<S>::sub,
+                    a.iter().zip(&b).map(|(a, b)| *a - *b).collect(),
+                ),
+                (
+                    Plan::<S>::mul,
+                    a.iter().zip(&b).map(|(a, b)| *a * *b).collect(),
+                ),
+            ] {
+                apply(&plan, &a, &b, &mut out).unwrap();
+                assert!(out == expected);
+                let before = out.clone();
+                assert_eq!(
+                    apply(&plan, &a, &vec![S::one(); n + 1], &mut out),
+                    Err(Error::LengthMismatch)
+                );
+                assert!(out == before);
+            }
+            plan.neg(&a, &mut out).unwrap();
+            assert!(out.iter().zip(&a).all(|(x, a)| *x == -*a));
+            plan.scale(&a, element(11), &mut out).unwrap();
+            assert!(out.iter().zip(&a).all(|(x, a)| *x == *a * element(11)));
+            let before = out.clone();
+            let stale = Plan::<S>::new(n + 1, algorithm).unwrap();
+            assert_eq!(stale.neg(&a, &mut out), Err(Error::LengthMismatch));
+            assert_eq!(
+                stale.scale(&a, element(11), &mut out),
+                Err(Error::LengthMismatch)
+            );
+            assert!(out == before);
+            assert_eq!(plan.algorithm(), algorithm);
+        }
         let expected = a
             .iter()
             .zip(&b)
@@ -45,6 +111,10 @@ fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
         );
         assert!(out == before);
     }
+    assert!(matches!(
+        vector::Plan::<S>::new(usize::MAX, vector::Algorithm::Scalar),
+        Err(Error::CapacityOverflow)
+    ));
     let values = [S::one(), S::one() + S::one(), -S::one()];
     let nonzero: Vec<_> = values.into_iter().filter(|x| *x != S::zero()).collect();
     let mut inverse = vec![S::zero(); nonzero.len()];

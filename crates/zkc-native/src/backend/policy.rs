@@ -1,7 +1,7 @@
 //! Explicit host-selected entry constraints.
 use crate::Domain;
 use std::collections::BTreeMap;
-use zkc_kernels::Metadata;
+use zkc_kernels::arkworks::bls12_381::Metadata;
 
 #[derive(Clone, Debug)]
 pub struct PortConstraint {

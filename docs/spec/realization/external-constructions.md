@@ -26,7 +26,7 @@ Monero is pinned to revision `4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5`;
 OpenVM v2.0.2 is pinned to `59a69b8b0cbee7011ac978e4cc07707ee3681944`, with
 stark-backend v2.0.1 at `362c7ad8c6b042b320471a137e3eadec7ec69a44`.
 Source provenance and primitive adapter boundaries are maintained in
-[`external/provenance.json`](../../../crates/zkc-kernels/src/external/provenance.json).
+[`interop/provenance.json`](../../../crates/zkc-kernels/src/interop/provenance.json).
 
 Every transition validates the full state envelope. Byte indices must be below
 256. Field words must be below 2013265921; absorb cursor is below 8 and sample
@@ -308,7 +308,7 @@ interface, whose replies are bound to exact inputs and call origins. Such a
 provider assumption alone establishes neither primitive correctness nor a
 complete native correspondence. Current APIs and evidence are recorded in the
 [authored native guide](../../compiler/construction.md)
-and [backend adapter](../../../crates/zkc-kernels/src/external/README.md).
+and [backend adapter](../../../crates/zkc-kernels/src/interop/README.md).
 
 ## Authored native deployment
 

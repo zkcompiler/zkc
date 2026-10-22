@@ -518,7 +518,12 @@ fn child_setup_inputs_use_confined_key_initializers_and_independent_authority() 
     let dir = tempfile::tempdir().unwrap();
     let options = pinned(dir.path(), &joint_setup_package());
     let bounds = zkc_native::Policy::default().ark_bounds();
-    let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &bounds,
+    )
+    .unwrap();
     let verifier = keys.verifier_key();
     let prover = keys.prover_key();
     std::fs::write(

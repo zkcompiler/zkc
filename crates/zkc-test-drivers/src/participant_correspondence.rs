@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, fs};
 use zkc_native::services::{ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, NativeWireError, Policy, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, NativeWireError, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, BackendError, BoundSignature, CallContext, Cut, Frame, FrameExit, Invocation,
@@ -196,13 +196,13 @@ fn value(ty: &Json, v: &Json) -> Result<Value> {
     }
     if *ty == json!(["field", "bls12-381.fr"]) {
         return Ok(Value::Field(
-            zkc_kernels::parse_decimal(string(v)?).map_err(harness)?,
+            zkc_kernels::arkworks::bls12_381::parse_decimal(string(v)?).map_err(harness)?,
         ));
     }
     if *ty == json!(["group", "bls12-381.g1"]) {
-        return Ok(Value::Curve(
-            GroupPoint::generator().scale(zkc_kernels::parse_decimal(string(v)?).map_err(harness)?),
-        ));
+        return Ok(Value::Curve(G1::generator().scale(
+            zkc_kernels::arkworks::bls12_381::parse_decimal(string(v)?).map_err(harness)?,
+        )));
     }
     Err(unsupported(
         "value relation supports bool, BLS12-381 Fr and G1 labels",
@@ -567,7 +567,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         let tape = p
             .tape
             .iter()
-            .map(|v| zkc_kernels::parse_decimal(v).map_err(harness))
+            .map(|v| zkc_kernels::arkworks::bls12_381::parse_decimal(v).map_err(harness))
             .collect::<Result<Vec<_>>>()?;
         references.insert(
             p.handle.clone(),
@@ -860,7 +860,8 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
                             }
                             "modulus" | "complete-modulus" => {
                                 let n = num_bigint::BigUint::parse_bytes(
-                                    zkc_kernels::SCALAR_MODULUS_DECIMAL.as_bytes(),
+                                    zkc_kernels::arkworks::bls12_381::SCALAR_MODULUS_DECIMAL
+                                        .as_bytes(),
                                     10,
                                 )
                                 .unwrap();

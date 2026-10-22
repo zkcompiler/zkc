@@ -48,9 +48,9 @@ pub(super) fn encoded_width(
     }
     width(tag, metadata.arity())
 }
-fn error(error: zkc_kernels::Error) -> NativeWireError {
+fn error(error: zkc_kernels::arkworks::Error) -> NativeWireError {
     use NativeWireError::{Invalid, Limit};
-    use zkc_kernels::Error::*;
+    use zkc_kernels::arkworks::Error::*;
     match error {
         InvalidHeader | KeyMismatch | ArityMismatch { .. } | PositiveArityRequired | InvalidKey => {
             Invalid(DecodeReason::Header)
@@ -104,7 +104,7 @@ pub(super) fn preflight<'a>(
     setups: &'a crate::SetupRegistry,
     tag: u8,
     bytes: &[u8],
-) -> Result<&'a zkc_kernels::VerifierKey, NativeWireError> {
+) -> Result<&'a zkc_kernels::arkworks::bls12_381::VerifierKey, NativeWireError> {
     use NativeWireError::Invalid;
     if setups.is_empty() {
         return Err(NativeWireError::Backend(

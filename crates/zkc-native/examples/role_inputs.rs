@@ -1,7 +1,11 @@
 //! Small runnable host input boundary; not a complete protocol CLI.
+use ark_std::rand::{
+    SeedableRng,
+    rngs::{OsRng, StdRng},
+};
 use std::sync::Arc;
-use zkc_kernels::Keys;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_kernels::arkworks::bls12_381::Keys;
+use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Action;
 use zkc_runtime::vm::Identity;
@@ -10,12 +14,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = Policy::default();
     // Development-only setup. A production application must establish its setup
     // provenance and authenticate the verifier fingerprint independently.
-    let keys = Keys::setup_for_development(1, &policy.ark_bounds())?;
+    let mut rng = StdRng::from_rng(OsRng)?;
+    let keys = Keys::setup_with_rng(1, &mut rng, &policy.ark_bounds())?;
     let domain = Domain::new("P", "demo-session", "main", Some("demo"));
     let mut backend = NativeBackend::new(
         policy,
         EntryPolicy::new(domain.clone(), Some(1)),
-        Default::default(),
+        SetupRegistry::new(vec![keys.verifier_key().clone()], &policy)?,
     )?;
     let key = Value::ProverKey(Arc::new(keys.prover_key().clone()));
     let rng = backend.issue_rng_for(Identity::Bls12381Fr, domain, 1)?;

@@ -3,9 +3,7 @@
 #[path = "domains/support.rs"]
 mod support;
 use std::sync::Arc;
-use zkc_native::{
-    Bls12381G2 as G2, Bls12381Gt as Gt, GroupPoint as G1, Policy, Scalar as F, Value,
-};
+use zkc_native::{Bls12381G2 as G2, Bls12381Gt as Gt, G1, Policy, Scalar as F, Value};
 use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };

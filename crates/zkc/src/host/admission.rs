@@ -4,7 +4,7 @@ use super::inputs::{Result, read_regular};
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_kernels::{ProverKey, VerifierKey};
+use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
 use zkc_native::{NativeBackend, Policy, Value};
 use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
@@ -499,14 +499,16 @@ thread_local! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_kernels::Keys;
+    use zkc_kernels::arkworks::bls12_381::Keys;
     use zkc_native::{Domain, EntryPolicy};
 
     #[test]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {
         let policy = Policy::default();
-        let first = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-        let other = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+        let first = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
+        let other = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("key.pk");
         std::fs::write(

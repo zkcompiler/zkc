@@ -1,5 +1,6 @@
 //! BN254 arithmetic primitives. No proof system or trusted-setup validation.
-use crate::Error;
+mod field;
+use crate::arkworks::Error;
 /// BN254 scalar field.
 pub use ark_bn254::Fr as Scalar;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM, pairing::Pairing};
@@ -31,7 +32,7 @@ pub fn encode_scalar(s: &Scalar) -> Result<[u8; 32], Error> {
 }
 /// Exact canonical scalar decoding, without modular reduction.
 pub fn decode_scalar(b: &[u8]) -> Result<Scalar, Error> {
-    crate::codec::read_field(b)
+    crate::arkworks::codec::read_field(b)
 }
 macro_rules! group {
     ($name:ident,$affine:ty,$projective:ty,$width:expr) => {
@@ -66,7 +67,7 @@ macro_rules! group {
                 if s.len() != p.len() {
                     return Err(Error::InvalidEncoding);
                 }
-                let mut bases = crate::bounds::vector(p.len())?;
+                let mut bases = crate::arkworks::allocation::vector(p.len())?;
                 bases.extend(p.iter().map(|p| p.0));
                 Ok(Self(
                     <$projective>::msm(&bases, s)
@@ -88,7 +89,7 @@ macro_rules! group {
                     return Err(Error::InvalidEncoding);
                 }
                 let mut input = b;
-                Ok(Self(crate::codec::read(&mut input, $width)?))
+                Ok(Self(crate::arkworks::codec::read(&mut input, $width)?))
             }
             /// Validate affine coordinates supplied by a format adapter.
             pub fn from_affine(point: $affine) -> Result<Self, Error> {
@@ -107,8 +108,8 @@ macro_rules! group {
 }
 group!(G1, ark_bn254::G1Affine, ark_bn254::G1Projective, 32);
 group!(G2, ark_bn254::G2Affine, ark_bn254::G2Projective, 64);
-crate::scaling::impl_scaling!(G1, ark_bn254::g1::Config);
-crate::scaling::impl_scaling!(G2, ark_bn254::g2::Config);
+crate::arkworks::scaling::impl_scaling!(G1, ark_bn254::g1::Config);
+crate::arkworks::scaling::impl_scaling!(G2, ark_bn254::g2::Config);
 /// Product of pairings equals one. Empty product is one; lengths must match.
 /// The caller bounds workload and preparation memory before entering arkworks.
 pub fn pairing_check(a: &[G1], b: &[G2]) -> Result<bool, Error> {
@@ -160,7 +161,7 @@ impl Gt {
             return Err(Error::InvalidEncoding);
         }
         let mut input = bytes;
-        Ok(Self(crate::codec::read(&mut input, Self::BYTES)?))
+        Ok(Self(crate::arkworks::codec::read(&mut input, Self::BYTES)?))
     }
 }
 /// Total bilinear map into the prime-order target, including final exponentiation.

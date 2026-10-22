@@ -5,9 +5,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{NativeDeployment, NativeProofReport};
-use zkc_native::{
-    Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, Scalar, Value,
-};
+use zkc_native::{Domain, EntryPolicy, FieldArray, G1, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::vm::{Identity, LogicalType};
 use zkc_test_support::hex;
 fn backend() -> NativeBackend {
@@ -64,9 +62,9 @@ fn inputs(envelope: &Json, family: &str, n: u64, producing: bool) -> Json {
         let v = if family == "nested" {
             match p {
                 0 => Value::Index(n),
-                1 => Value::Curve(GroupPoint::generator()),
+                1 => Value::Curve(G1::generator()),
                 2 => Value::Field(Scalar::from(3)),
-                3 => Value::Curve(GroupPoint::generator().scale(Scalar::from(3))),
+                3 => Value::Curve(G1::generator().scale(Scalar::from(3))),
                 _ => panic!("port"),
             }
         } else {

@@ -125,7 +125,12 @@ pub(super) fn material_parity(
     expected: &[u8],
 ) {
     let typed = material_request(input, keys);
-    let other = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let other = Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     let wrong = material_request(input, &other);
     assert_eq!(
         deployment

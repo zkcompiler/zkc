@@ -95,9 +95,9 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
     let Value::Curve(commitment) = out[1] else {
         panic!()
     };
-    assert_eq!(public, GroupPoint::generator().scale(Scalar::from(7u64)));
+    assert_eq!(public, G1::generator().scale(Scalar::from(7u64)));
     assert_eq!(
-        GroupPoint::generator().scale(scalar(&out[2])),
+        G1::generator().scale(scalar(&out[2])),
         commitment.add(&public.scale(Scalar::from(11u64)))
     );
     assert!(p.validate_value(&nonce).is_err());
@@ -243,8 +243,6 @@ fn explicit_test_nonce_has_known_bls_response() {
     let nonce = p.issue_test_nonce(domain(), 2, Scalar::from(5u64)).unwrap();
     let (out, _) = run(&prover_program(), p, vec![f(7), f(11), nonce]);
     let out = out.unwrap();
-    assert!(
-        matches!(out[1], Value::Curve(p) if p == GroupPoint::generator().scale(Scalar::from(5u64)))
-    );
+    assert!(matches!(out[1], Value::Curve(p) if p == G1::generator().scale(Scalar::from(5u64))));
     assert_eq!(scalar(&out[2]), Scalar::from(82u64));
 }
