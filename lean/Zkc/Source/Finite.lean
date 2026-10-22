@@ -262,7 +262,7 @@ theorem execute_replace_on {I : Signature} {A S B : Type}
         same items admitted]
 
 /-- Embed a closed stopping computation into the existing open process model. -/
-def toProc {I : Signature} {A : Type} : Outcome A → Process I A
+def toProcess {I : Signature} {A : Type} : Outcome A → Process I A
   | .returned value => .done value
   | .stopped reason => .halt reason
 
@@ -274,15 +274,15 @@ def foldChecked {A S : Type} (step : S → A → Outcome S) : List A → S → O
 /-- Closed Local folds are a specialization of open folds, without assuming totality. -/
 theorem fold_checked {I : Signature} {A S : Type} (step : S → A → Outcome S)
     (items : List A) (initial : S) :
-    fold (fun state item => toProc (I := I) (step state item)) items initial =
-      toProc (foldChecked step items initial) := by
+    fold (fun state item => toProcess (I := I) (step state item)) items initial =
+      toProcess (foldChecked step items initial) := by
   induction items generalizing initial with
   | nil => rfl
   | cons item rest ih =>
       cases h : step initial item with
-      | stopped reason => simp only [fold, foldChecked, h, toProc, continueWith, Process.bind]
+      | stopped reason => simp only [fold, foldChecked, h, toProcess, continueWith, Process.bind]
       | returned state =>
-          simp only [fold, foldChecked, h, toProc, continueWith, Process.bind]
+          simp only [fold, foldChecked, h, toProcess, continueWith, Process.bind]
           exact ih state
 
 /-- Concatenation preserves sequencing, including replies and early stops. -/
