@@ -43,13 +43,53 @@ theorem unresolved_is_local (table : Meanings F G) (a b : F) :
   fail_if_success solve | derive_region using (fail "unsupported operation")
   derive_region using (exact add_comm_law _ _ _ _)
 
-/-- A local rule cannot silently change the client's requested result. -/
-example (table : Meanings F G) (a b : F) : True := by
-  fail_if_success
-    have : Region.Derivation (meaning F G table) (fun op => .call op .done) addition
-        (Values.cons a (.cons b .nil)).get (.halt .abort) := by
-      derive_region using (exact add_comm_law _ _ _ _)
-  trivial
+-- A local rule cannot silently change the client's requested result.
+/-- error: derive_region: generated target does not match the requested target -/
+#guard_msgs in
+example (table : Meanings F G) (a b : F) :
+    Region.Derivation (meaning F G table) (fun op => .call op .done) addition
+      (Values.cons a (.cons b .nil)).get (.halt .abort) := by
+  derive_region using (exact add_comm_law _ _ _ _)
+
+-- Test the fallback at the operation-law boundary, independent of how long
+-- normal elaboration takes on a particular machine.
+elab "kernel_timeout_control" : tactic =>
+  Lean.throwKernelException .deterministicTimeout
+elab "interrupt_control" : tactic => Lean.throwInterruptException
+elab "heartbeat_control" : tactic =>
+  Lean.Core.throwMaxHeartbeat `control `maxHeartbeats 1000
+
+/-- error: (kernel) deterministic timeout -/
+#guard_msgs in
+example (table : Meanings F G) (a b : F) :
+    Region.Derivation (meaning F G table) (fun op => .call op .done) addition
+      (Values.cons a (.cons b .nil)).get (.done (.cons (b + a) .nil)) := by
+  derive_region using (kernel_timeout_control)
+
+-- Interrupts have no diagnostic for guard_msgs. Catch outside derive_region
+-- and check the exception kind; success or an unrelated error is a failure.
+elab "check_resource_propagation" : tactic => do
+  for solver in [← `(tacticSeq| interrupt_control), ← `(tacticSeq| heartbeat_control)] do
+    let saved ← Lean.Elab.Tactic.saveState
+    let failure ← try
+      Zkc.Source.DeriveRegion.run solver
+      pure none
+    catch error => pure (some error)
+    saved.restore
+    match failure with
+    | some error =>
+      unless error.isInterrupt || error.isRuntime do
+        throwError "unexpected failure: {error.toMessageData}"
+    | none => throwError "derive_region swallowed a resource failure"
+
+-- The probe restores its tactic state, including the linter's usage trace.
+set_option linter.unusedTactic false in
+set_option linter.unreachableTactic false in
+theorem resources_propagate (table : Meanings F G) (a b : F) :
+    Region.Derivation (meaning F G table) (fun op => .call op .done) addition
+      (Values.cons a (.cons b .nil)).get (.done (.cons (b + a) .nil)) := by
+  check_resource_propagation
+  derive_region using (exact add_comm_law _ _ _ _)
 
 /-- Conditional mathematics is left as a real Lean obligation. -/
 theorem conditional_add (table : Meanings F G) (a b : F) (same : a = b) :

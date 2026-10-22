@@ -84,12 +84,11 @@ meta def dependencies (expression : Expr) : MetaM (Array FVarId) := do
     let proof ← kernelRflProof statement
     let levels := (collectLevelParams {} statement).params
     let lemmaLevels := (← Term.getLevelNames).reverse.filter levels.contains
-    let name ← try
-        withOptions (Elab.async.set · false) do
-          mkAuxLemma lemmaLevels statement proof
-      catch error =>
-        if error.isInterrupt || error.isRuntime then throw error
-        throwError "kernel_rfl: the kernel does not reduce both sides to the same value{indentExpr statement}"
+    -- Preserve the kernel's diagnostic. Its timeout/recursion exceptions are
+    -- ordinary messages, not the elaborator's tagged `Exception.isRuntime`.
+    -- Rewriting every failure as a false equation would misreport resource limits.
+    let name ← withOptions (Elab.async.set · false) do
+      mkAuxLemma lemmaLevels statement proof
     closed.assign (mkConst name (lemmaLevels.map .param))
   replaceMainGoal []
 

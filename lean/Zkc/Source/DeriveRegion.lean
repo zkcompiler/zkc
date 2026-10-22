@@ -22,7 +22,15 @@ private meta def localLaw (goal : MVarId) (solver : Syntax) : TacticM (List MVar
   let saved ← saveState
   try
     evalTacticAt solver goal
-  catch _ =>
+  catch error =>
+    if error.isInterrupt || error.isRuntime then throw error
+    -- Lean 4.34 converts kernel resource failures into untagged messages.
+    -- Compare with the upstream renderings until those failures carry a tag;
+    -- a spent resource budget is not an unsupported mathematical law.
+    let message ← error.toMessageData.toString
+    for failure in [Kernel.Exception.deterministicTimeout, .deepRecursion, .excessiveMemory] do
+      if message == (← (failure.toMessageData (← getOptions)).toString) then
+        throw error
     saved.restore
     pure [goal]
 
