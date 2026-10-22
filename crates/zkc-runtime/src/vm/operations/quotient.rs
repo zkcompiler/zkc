@@ -4,6 +4,26 @@ use Type::*;
 
 const CONTRACTS: &[Contract] = &[
     Contract::new(
+        "quotient.project",
+        (&[Indices, Index, Index], &[Indices], AttributeRule::None),
+    )
+    .implemented_by(&["native/quotient.project"]),
+    Contract::new(
+        "quotient.ntt",
+        (&[Indices, Index, Index], &[Indices], AttributeRule::None),
+    )
+    .implemented_by(&["native/quotient.ntt"]),
+    Contract::new(
+        "quotient.intt",
+        (&[Indices, Index, Index], &[Indices], AttributeRule::None),
+    )
+    .implemented_by(&["native/quotient.intt"]),
+    Contract::new(
+        "quotient.pointwise",
+        (&[Indices, Indices, Index], &[Indices], AttributeRule::None),
+    )
+    .implemented_by(&["native/quotient.pointwise"]),
+    Contract::new(
         "quotient.add",
         (&[Indices, Indices, Index], &[Indices], AttributeRule::None),
     )

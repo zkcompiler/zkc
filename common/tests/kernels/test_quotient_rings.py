@@ -75,10 +75,12 @@ def test_direct_native_admission_does_not_trust_source_wrappers(toolchain, journ
 
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
-@pytest.mark.parametrize('operation', ['add', 'subtract', 'multiply', 'norm_within'])
+@pytest.mark.parametrize('operation', ['add', 'subtract', 'multiply', 'norm_within', 'pointwise', 'ntt', 'intt', 'project'])
 def test_unused_partial_operations_remain_at_their_reached_branch(
         toolchain, journal, directory, flags, operation):
-    arguments = 'a,b,q,0' if operation == 'norm_within' else 'a,b,q'
+    arguments = ('a,b,q,0' if operation == 'norm_within' else
+                 'a,q,2' if operation in ('ntt', 'intt') else
+                 'a,q,0' if operation == 'project' else 'a,b,q')
     source = f'''module sample;
     use zkc::indices::{{Indices}}; use zkc::primitives::quotient as raw;
     fn evaluate(a:Indices,b:Indices,q:index,go:bool)->bool effects(stop) {{
@@ -89,10 +91,52 @@ def test_unused_partial_operations_remain_at_their_reached_branch(
     }} entry fn Demo(inputs:Run::Inputs){{return Run::run(inputs);}}
     '''
     entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
-    malformed = {'a': [17], 'b': [0], 'q': 17, 'go': False}
+    malformed = {'a': [17, 0, 0, 0], 'b': [0, 0, 0, 0], 'q': 17, 'go': False}
     assert entry.run('unreached', malformed)['reached'] is False
-    entry.run('unused-but-reached', malformed | {'go': True}, refuses='refused:quotient-residue')
-    assert entry.run('reached-and-valid', malformed | {'a': [0], 'go': True})['reached'] is True
+    diagnostic = 'quotient-degree' if operation == 'project' else 'quotient-residue'
+    entry.run('unused-but-reached', malformed | {'go': True}, refuses='refused:' + diagnostic)
+    if operation != 'project':
+        assert entry.run('reached-and-valid', malformed | {'a': [0]*4, 'go': True})['reached'] is True
+
+
+@pytest.mark.parametrize('q,n', [(17, 4), (12289, 512), (8380417, 256), (2013265921, 8)])
+def test_explicit_transform_coordinates_and_products(toolchain, journal, directory, q, n):
+    source = '''module sample;
+    use zkc::indices::{Indices}; use zkc::primitives::quotient as raw;
+    protocol Run roles(P)(a:Indices@P,b:Indices@P,q:index@P,r:index@P,ri:index@P)
+      ->(evaluations:Indices@P,restored:Indices@P,product:Indices@P){
+      let x=raw::ntt(a,q,r); let y=raw::ntt(b,q,r);
+      return(evaluations=x,restored=raw::intt(x,q,ri),product=raw::intt(raw::pointwise(x,y,q),q,ri));
+    } entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
+    '''
+    entry = Entry(toolchain, journal, directory, source, MODULES)
+    root = next(r for g in range(2, q) if pow(r := pow(g, (q-1)//(2*n), q), n, q) == q-1)
+    for case in range(2):
+        a = [q-1 if case == 0 else (i*i+3*i+1) % q for i in range(n)]
+        b = [q-1 if case == 0 else (5*i+7) % q for i in range(n)]
+        result = entry.run(str(case), {'a': a, 'b': b, 'q': q, 'r': root, 'ri': pow(root, -1, q)})
+        expected = [sum(c*pow(root, (2*k+1)*j, q) for j, c in enumerate(a)) % q for k in range(n)]
+        assert list(map(int, result['evaluations'])) == expected
+        assert list(map(int, result['restored'])) == a
+        assert list(map(int, result['product'])) == convolution(a, b, q)
+
+
+def test_projection_is_distinct_from_checked_coefficient_admission(toolchain, journal, directory):
+    source = '''module sample;
+    use zkc::indices::{Indices}; use zkc::primitives::quotient as raw;
+    protocol Run roles(P)(a:Indices@P,q:index@P,n:index@P)->(result:Indices@P){return raw::project(a,q,n);}
+    entry fn Demo(inputs:Run::Inputs){return Run::run(inputs);}
+    '''
+    entry = Entry(toolchain, journal, directory, source, MODULES)
+    for q in (2, 16, 17, 2**64-1):
+        for n in (1, 3, 4):
+            for case, a in enumerate(([], [2**64-1]*(4*n+1), [0, 1, 2, 3, 4, 5, 6])):
+                expected = [sum((-1)**(j//n)*c for j, c in enumerate(a) if j % n == k) % q for k in range(n)]
+                actual = entry.run(f'{q}-{n}-{case}', {'a': a, 'q': q, 'n': n})
+                assert list(map(int, actual['result'])) == expected
+    for args, diagnostic in [({'a': [], 'q': 1, 'n': 4}, 'quotient-modulus'),
+                             ({'a': [], 'q': 17, 'n': 0}, 'quotient-degree')]:
+        entry.run(diagnostic, args, refuses='refused:' + diagnostic)
 
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])

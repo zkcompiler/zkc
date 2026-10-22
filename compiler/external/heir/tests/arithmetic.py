@@ -102,7 +102,7 @@ func.call @printNewline() : () -> ()
                           '-entry-point-result=void', '-shared-libs=' + str(self.args.runner_utils)])
         return list(map(int, result.split()))
 
-    def matvec(self, q, n, rows, cols, name):
+    def matvec(self, q, n, rows, cols, name, subtract=False):
         ty = f'tensor<{n}xi32>'
         keys = [f'a{i}_{j}' for i in range(rows) for j in range(cols)] + [f'x{j}' for j in range(cols)]
         code = prefix(q, n) + f'func.func @compute({", ".join("%"+k+":"+ty for k in keys)}) -> ({", ".join([ty]*rows)}) {{\n'
@@ -115,7 +115,8 @@ func.call @printNewline() : () -> ()
                 product = f't{i}_{j}'
                 code += f'%{product}=polynomial.mul %pa{i}_{j}, %px{j} : !p\n'
                 if last:
-                    code += f'%s{i}_{j}=polynomial.add %{last}, %{product} : !p\n'
+                    operation = 'sub' if subtract else 'add'
+                    code += f'%s{i}_{j}=polynomial.{operation} %{last}, %{product} : !p\n'
                     last = f's{i}_{j}'
                 else:
                     last = product
@@ -131,7 +132,8 @@ func.call @printNewline() : () -> ()
             expected = []
             for i in range(rows):
                 terms = [convolution(inputs[f'a{i}_{j}'], inputs[f'x{j}'], q) for j in range(cols)]
-                expected += [sum(t[k] for t in terms) % q for k in range(n)]
+                expected += [(terms[0][k] - sum(t[k] for t in terms[1:]) if subtract
+                              else sum(t[k] for t in terms)) % q for k in range(n)]
             actual = self.execute(name + '-' + pattern, placed, inputs, n, rows)
             assert actual == expected, name
         return source, placed
@@ -216,6 +218,7 @@ def main():
     checks.mutations(source, placed)
     checks.matvec(8380417, 256, 4, 4, 'module-matvec')
     checks.matvec(12289, 512, 4, 1, 'falcon-ring-products')
+    checks.matvec(2013265921, 4, 1, 4, 'large-modulus-subtraction', subtract=True)
     checks.folding()
     print(f'Passed {len(checks.records)} tool invocations, including independent integer outputs and refusals.')
 

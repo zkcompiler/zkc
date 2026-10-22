@@ -27,6 +27,10 @@ use `index`. The nonempty degree is the common input length.
 | `quotient.subtract` | `a, b, q` | Canonical coefficients of `a-b` |
 | `quotient.multiply` | `a, b, q` | Canonical coefficients of `a*b` modulo `X^n+1` |
 | `quotient.norm_within` | `a, b, q, bound` | Boolean integer norm predicate below |
+| `quotient.project` | `a, q, n` | Reduction of the finite sequence as a polynomial into `R(q,n)` |
+| `quotient.ntt` | `a, q, r` | Natural-order evaluation at the odd powers of `r` |
+| `quotient.intt` | `a, q, s` | Inverse evaluation using inverse-root parameter `s` |
+| `quotient.pointwise` | `a, b, q` | Coordinate-wise modular products |
 
 For multiplication, the coefficient at `k` is the canonical residue modulo
 `q` of
@@ -58,6 +62,43 @@ refuse with `quotient-modulus`, `quotient-degree`, `quotient-shape` and
 `quotient-residue`, respectively. Operand-type or operation mismatches refuse
 with `quotient-operands`. Native admission independently checks these conditions
 at each reached invocation, including calls without the source library wrapper.
+
+## Projection and transform coordinates
+
+`quotient.project(a,q,n)` intentionally accepts any finite unsigned sequence,
+including empty input and coefficients greater than or equal to `q`. It returns
+the canonical coefficients of `sum_i a[i] X^i` in `R(q,n)`. Block `i/n` contributes
+with alternating sign to coefficient `i mod n`. This explicit reduction is
+distinct from validating an already canonical coefficient representation.
+Only `q >= 2` and `n > 0` are mathematical parameter preconditions; native size
+and allocation admission also apply.
+
+Transforms admit an odd prime `q < 2^31`, a power-of-two input length
+`2 <= n <= 65536`, and `2n` dividing `q-1`. The root parameter is a canonical
+residue with `r^n = -1 mod q`, giving exact order `2n` under these conditions.
+Unsupported ring parameters refuse with `quotient-transform-profile`; invalid
+root coordinates refuse with `quotient-transform-root`. Input residues remain
+canonical and are independently validated. Forward coordinates are
+
+```text
+E[k] = sum_j a[j] * r^((2k+1)*j) mod q.
+```
+
+`quotient.intt(E,q,s)` means
+`a[j] = n^-1 * s^j * sum_k E[k] * s^(2*k*j) mod q`.
+For inversion of a particular forward transform, `s` must equal `r^-1`.
+Each raw call validates its own root; it cannot infer the provenance of a raw
+input array or reject a different valid basis by examining its coefficients.
+Compiler correspondence must therefore bind the basis across operations.
+No bit reversal is visible at this interface. The inverse includes the `n^-1`
+normalization and inverse twist.
+
+`quotient.pointwise(a,b,q)` computes `a[i]*b[i] mod q`; it is not coefficient
+convolution. It accepts the same canonical, equal-length, nonempty inputs as
+`quotient.add`. Interpreting these values as evaluation coordinates requires a
+common basis established by the calling algorithm. These contracts match the
+[qualified external arithmetic profile](../realization/heir-arithmetic.md),
+while ML-KEM's quadratic representation remains outside the full scalar profile.
 
 ## Source views
 
@@ -99,6 +140,13 @@ reserves the existing Boolean retained-value charge, with no coefficient
 workspace. Element, output, work, managed-memory and allocation limits retain
 their existing exhaustion diagnostics. Scores are admission bounds, not timing
 measurements or promises to match a source loop's exhaustion behavior.
+
+Projection uses score `8*(input_length+n)+1`. Pointwise multiplication uses
+`8*n+1`. Radix-two transforms use one destination, `O(n log n)` arithmetic and
+score `8*n*log2(n)+16*n+65536`, including a conservative parameter-check allowance.
+Their retained and managed destination charges are the same as coefficient
+arithmetic. Input validation and bounded primality/root checks precede work
+admission. No persistent transform preparation or hidden scratch is allocated.
 
 The [lattice library](../../../libraries/relations/lattice/README.md) composes
 these operations into an arithmetic short-preimage predicate. Signature byte

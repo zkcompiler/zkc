@@ -15,8 +15,11 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     }
     // Authored independently of runtime admission and compiler declarations.
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
-        "quotient.add" | "quotient.subtract" | "quotient.multiply" => {
+        "quotient.add" | "quotient.subtract" | "quotient.multiply" | "quotient.pointwise" => {
             (&[Indices, Indices, Index], &[Indices])
+        }
+        "quotient.project" | "quotient.ntt" | "quotient.intt" => {
+            (&[Indices, Index, Index], &[Indices])
         }
         "quotient.norm_within" => (&[Indices, Indices, Index, Index], &[Bool]),
         _ => return None,
@@ -45,9 +48,12 @@ pub(crate) fn apply(
     available: usize,
 ) -> Result<Vec<Value>> {
     use Value::{Index, Indices};
+    if matches!(name, "quotient.project" | "quotient.ntt" | "quotient.intt") {
+        return apply_unary(name, args, policy, available);
+    }
     let (left, right, modulus, bound) = match (name, args) {
         (
-            "quotient.add" | "quotient.subtract" | "quotient.multiply",
+            "quotient.add" | "quotient.subtract" | "quotient.multiply" | "quotient.pointwise",
             [Indices(a), Indices(b), Index(q)],
         ) => (a, b, *q, None),
         ("quotient.norm_within", [Indices(a), Indices(b), Index(q), Index(bound)]) => {
@@ -87,6 +93,7 @@ pub(crate) fn apply(
             "quotient.add" => operands.add_into(output.as_mut_slice()),
             "quotient.subtract" => operands.subtract_into(output.as_mut_slice()),
             "quotient.multiply" => operands.multiply_into(output.as_mut_slice()),
+            "quotient.pointwise" => operands.pointwise_into(output.as_mut_slice()),
             _ => unreachable!("operation was admitted above"),
         }
         .map_err(failure)?;
@@ -95,11 +102,73 @@ pub(crate) fn apply(
     Ok(vec![result])
 }
 
+fn apply_unary(
+    name: &str,
+    args: &[Value],
+    policy: &Policy,
+    available: usize,
+) -> Result<Vec<Value>> {
+    let [
+        Value::Indices(input),
+        Value::Index(q),
+        Value::Index(parameter),
+    ] = args
+    else {
+        return Err(refused("quotient-operands"));
+    };
+    policy.vector_width(input.len(), 8)?;
+    let failure = |error: quotient::Error| refused(error.code());
+    let degree = if name == "quotient.project" {
+        usize::try_from(*parameter).map_err(|_| refused("quotient-degree"))?
+    } else {
+        input.len()
+    };
+    let ring = Ring::new(*q, degree).map_err(failure)?;
+    policy.vector_width(degree, 8)?;
+    let transform = if name != "quotient.project" {
+        Some(quotient::transform::Transform::new(ring, *parameter).map_err(failure)?)
+    } else {
+        None
+    };
+    // Projection deliberately accepts arbitrary residues and input lengths.
+    let canonical = if transform.is_some() {
+        Some(ring.polynomial(input).map_err(failure)?)
+    } else {
+        None
+    };
+    let work = if transform.is_some() {
+        quotient::transform::work(degree)
+    } else {
+        quotient::projection_work(input.len(), degree)
+    }
+    .ok_or_else(|| exhausted("numerical-work"))?;
+    let retained = size(degree, 8)?;
+    policy.output(retained, available)?;
+    let call = crate::numerical::Call::new(policy, available);
+    call.work(work)?;
+    let mut output = call.output(degree, 0u64, retained)?;
+    match (transform, canonical) {
+        (Some(plan), Some(input)) if name == "quotient.ntt" => {
+            plan.forward_into(input, output.as_mut_slice())
+        }
+        (Some(plan), Some(input)) => plan.inverse_into(input, output.as_mut_slice()),
+        _ => ring.project_into(input, output.as_mut_slice()),
+    }
+    .map_err(failure)?;
+    Ok(vec![
+        output.finish(|values| Ok(Value::Indices(values.into())))?,
+    ])
+}
+
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/quotient.add", "quotient.add"),
     ("native/quotient.subtract", "quotient.subtract"),
     ("native/quotient.multiply", "quotient.multiply"),
     ("native/quotient.norm_within", "quotient.norm_within"),
+    ("native/quotient.project", "quotient.project"),
+    ("native/quotient.ntt", "quotient.ntt"),
+    ("native/quotient.intt", "quotient.intt"),
+    ("native/quotient.pointwise", "quotient.pointwise"),
 ];
 
 #[cfg(test)]

@@ -540,6 +540,10 @@ def test_explicit_semantic_witnesses(drivers, directory):
         ("quotient.subtract", [], ["indices", "indices", "index"], ["indices"]),
         ("quotient.multiply", [], ["indices", "indices", "index"], ["indices"]),
         ("quotient.norm_within", [], ["indices", "indices", "index", "index"], ["bool"]),
+        ("quotient.project", [], ["indices", "index", "index"], ["indices"]),
+        ("quotient.ntt", [], ["indices", "index", "index"], ["indices"]),
+        ("quotient.intt", [], ["indices", "index", "index"], ["indices"]),
+        ("quotient.pointwise", [], ["indices", "indices", "index"], ["indices"]),
         *(("curve.identity", [group], [], [f"group:{group}"])
           for group in ("ristretto255.group", "bls12-381.g1", "bn254.g1", "bn254.g2", "bn254.gt")),
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),

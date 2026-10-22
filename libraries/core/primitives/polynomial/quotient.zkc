@@ -10,3 +10,15 @@ pub fn multiply(left: Indices, right: Indices, modulus: index) -> Indices
   = primitive("quotient.multiply");
 pub fn norm_within(left: Indices, right: Indices, modulus: index, bound: index) -> bool
   = primitive("quotient.norm_within");
+
+// Explicit quotient projection accepts any finite unsigned coefficient sequence.
+pub fn project(input: Indices, modulus: index, degree: index) -> Indices
+  = primitive("quotient.project");
+// Full scalar transform coordinates, in natural evaluation order. The inverse
+// takes the inverse primitive root. These raw calls validate each invocation.
+pub fn ntt(input: Indices, modulus: index, root: index) -> Indices
+  = primitive("quotient.ntt");
+pub fn intt(input: Indices, modulus: index, inverse_root: index) -> Indices
+  = primitive("quotient.intt");
+pub fn pointwise(left: Indices, right: Indices, modulus: index) -> Indices
+  = primitive("quotient.pointwise");

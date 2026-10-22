@@ -146,6 +146,15 @@ operations into a short-preimage predicate. The
 [rationale](../../docs/rationale/quotient-rings.md) explains the coefficient and
 external-dialect boundary.
 
+The raw `zkc::primitives::quotient` module also exposes explicit `project`,
+`ntt`, `intt` and `pointwise` operations. Projection reduces arbitrary finite
+unsigned coefficient sequences; it does not validate a claimed canonical
+representation. Transforms use natural-order odd-root coordinates, with the
+inverse root supplied to `intt`. Their full scalar profile covers the Falcon
+and ML-DSA ring parameters; matching bases remains the caller's responsibility.
+These ordered native calls are execution building blocks, not an automatic
+source-region optimization.
+
 ## Linear group expressions
 
 `linear::Combination<G>` stores ordered scalar/point terms in private fields.

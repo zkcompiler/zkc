@@ -120,6 +120,10 @@ def QuotientAddOp : BoundOp<AlgebraDialect, "exec.quotient_add", [OpQuotientAdd]
 def QuotientSubtractOp : BoundOp<AlgebraDialect, "exec.quotient_subtract", [OpQuotientSubtract]>;
 def QuotientMultiplyOp : BoundOp<AlgebraDialect, "exec.quotient_multiply", [OpQuotientMultiply]>;
 def QuotientNormWithinOp : BoundOp<AlgebraDialect, "exec.quotient_norm_within", [OpQuotientNormWithin]>;
+def QuotientProjectOp : BoundOp<AlgebraDialect, "exec.quotient_project", [OpQuotientProject]>;
+def QuotientNTTOp : BoundOp<AlgebraDialect, "exec.quotient_ntt", [OpQuotientNTT]>;
+def QuotientINTTOp : BoundOp<AlgebraDialect, "exec.quotient_intt", [OpQuotientINTT]>;
+def QuotientPointwiseOp : BoundOp<AlgebraDialect, "exec.quotient_pointwise", [OpQuotientPointwise]>;
 
 def FieldInverseOp : BoundOp<AlgebraDialect, "exec.field_inverse", [OpFieldInverse]>;
 

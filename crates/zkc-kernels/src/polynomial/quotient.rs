@@ -2,8 +2,11 @@
 //!
 //! These rings need not be fields. In particular, their elements do not implement
 //! `field::Coefficient`. Coefficients are in ascending degree order, including
-//! exactly `n` entries even when the leading coefficients are zero. No transform
-//! coordinates, Montgomery representation, or implicit reduction are accepted.
+//! exactly `n` entries even when the leading coefficients are zero. Projection
+//! and transforms have explicit, separate contracts; polynomial admission never
+//! performs implicit reduction or interprets Montgomery representations.
+
+pub mod transform;
 
 /// Invalid mathematical operands or caller-owned destination.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +17,8 @@ pub enum Error {
     Residue,
     RingMismatch,
     Destination,
+    TransformProfile,
+    TransformRoot,
 }
 impl Error {
     pub const fn code(self) -> &'static str {
@@ -24,6 +29,8 @@ impl Error {
             Self::Residue => "quotient-residue",
             Self::RingMismatch => "quotient-ring-mismatch",
             Self::Destination => "quotient-destination",
+            Self::TransformProfile => "quotient-transform-profile",
+            Self::TransformRoot => "quotient-transform-root",
         }
     }
 }
@@ -50,6 +57,27 @@ impl Ring {
     }
     pub const fn degree(self) -> usize {
         self.degree
+    }
+    /// Project an arbitrary finite sequence into the quotient. Unlike
+    /// `polynomial`, this operation intentionally reduces residues and degree.
+    /// It has no input-shape precondition, including for the empty sequence.
+    pub fn project_into(self, input: &[u64], output: &mut [u64]) -> Result<(), Error> {
+        if output.len() != self.degree {
+            return Err(Error::Destination);
+        }
+        output.fill(0);
+        let q = u128::from(self.modulus);
+        for (position, &coefficient) in input.iter().enumerate() {
+            let negative = !(position / self.degree).is_multiple_of(2);
+            let slot = &mut output[position % self.degree];
+            let term = u128::from(coefficient) % q;
+            *slot = if negative {
+                (u128::from(*slot) + q - term) % q
+            } else {
+                (u128::from(*slot) + term) % q
+            } as u64;
+        }
+        Ok(())
     }
     /// Validate the complete immutable input before any arithmetic or allocation.
     pub fn polynomial(self, coefficients: &[u64]) -> Result<Polynomial<'_>, Error> {
@@ -141,6 +169,21 @@ impl<'a> Operands<'a> {
         }
         Ok(())
     }
+    /// Coordinate-wise modular multiplication, NOT a quotient-ring product.
+    /// Interpretation as evaluation coordinates requires a separate common
+    /// transform basis supplied by the compiler or calling algorithm.
+    pub fn pointwise_into(self, output: &mut [u64]) -> Result<(), Error> {
+        self.destination(output)?;
+        let q = u128::from(self.ring().modulus);
+        for ((out, &a), &b) in output
+            .iter_mut()
+            .zip(self.left.coefficients)
+            .zip(self.right.coefficients)
+        {
+            *out = (u128::from(a) * u128::from(b) % q) as u64;
+        }
+        Ok(())
+    }
     /// Schoolbook negacyclic convolution. Each product fits in `u128`; reduction
     /// after each term prevents accumulation overflow even for `q = u64::MAX`.
     pub fn multiply_into(self, output: &mut [u64]) -> Result<(), Error> {
@@ -194,6 +237,14 @@ pub fn product_work(degree: usize) -> Option<u64> {
     n.checked_mul(n)?
         .checked_mul(8)?
         .checked_add(n.checked_mul(2)?)?
+        .checked_add(1)
+}
+
+pub fn projection_work(input: usize, degree: usize) -> Option<u64> {
+    u64::try_from(input)
+        .ok()?
+        .checked_add(u64::try_from(degree).ok()?)?
+        .checked_mul(8)?
         .checked_add(1)
 }
 
