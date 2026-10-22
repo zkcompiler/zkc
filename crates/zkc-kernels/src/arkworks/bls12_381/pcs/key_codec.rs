@@ -2,7 +2,7 @@
 //! creates n rows of lengths 2^n, ..., 2 in each group (multilinear_pc/mod.rs).
 //! Never deserialize an upstream CommitterKey or any vector from incoming bytes.
 use super::*;
-use crate::bounds::allocation_size;
+use crate::arkworks::allocation::allocation_size;
 use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 

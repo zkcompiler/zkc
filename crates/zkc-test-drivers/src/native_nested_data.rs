@@ -6,7 +6,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
 use zkc::proof::NativeDeployment;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
@@ -56,7 +56,7 @@ fn data(family: &str, count: usize, keys: &Keys) -> Vec<Option<Value>> {
             Some(Value::Index(count as u64 + 1)),
         ]
     } else if family == "batched-openings" {
-        let table = zkc_kernels::Table::from_logical_vec(
+        let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
             vec![Scalar::from(3), Scalar::from(11)],
             &Policy::default().ark_bounds(),
         )
@@ -211,7 +211,12 @@ fn replaced(proof: &[u8], payload: &[u8]) -> Vec<u8> {
 fn main() {
     let directory = std::env::args().nth(1).expect("generated directory");
     let directory = Path::new(&directory);
-    let keys = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let keys = Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &Policy::default().ark_bounds(),
+    )
+    .unwrap();
     std::fs::write(
         directory.join("nested.setups.json"),
         serde_json::to_vec(&json!([

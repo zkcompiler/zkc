@@ -2,7 +2,7 @@ use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::Value;
 use zkc_native::*;
 use zkc_runtime::vm::Identity;
@@ -120,7 +120,7 @@ fn direct(root: &[u8], paths: &[Json], value: u64) -> Scalar {
         m.append_message(b"origin", &origin(path.clone(), "challenge"));
         m.challenge_bytes(b"challenge", &mut raw);
     }
-    zkc_kernels::scalar_from_wide_be(&raw)
+    zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&raw)
 }
 #[test]
 fn exact_merlin_runner_match_and_session_role_invariance() {
@@ -657,7 +657,8 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
     // Compare current generated observation bytes with independent Merlin calls.
     // Local-only table, point and round representations cannot be observed.
     let policy = Policy::default();
-    let keys = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let keys =
+        Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds()).unwrap();
     let zkc_native::Value::Table(table_value) = table(&[1, 2]) else {
         panic!()
     };
@@ -684,8 +685,8 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         zkc_native::Value::Bool(false),
         zkc_native::Value::Commitment(std::sync::Arc::new(original.commitment().clone())),
         zkc_native::Value::Proof(std::sync::Arc::new(proof)),
-        zkc_native::Value::Curve(GroupPoint::identity()),
-        zkc_native::Value::groups(&[GroupPoint::generator()], &policy).unwrap(),
+        zkc_native::Value::Curve(G1::identity()),
+        zkc_native::Value::groups(&[G1::generator()], &policy).unwrap(),
     ];
     for value in values {
         let mut backend = NativeBackend::new(
@@ -720,7 +721,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let (out, _) = run(&bytes, backend, vec![tok, value]);
         assert_eq!(
             scalar(&out.unwrap()[0]),
-            zkc_kernels::scalar_from_wide_be(&raw)
+            zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&raw)
         );
     }
 }
@@ -759,7 +760,7 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
     reference.append_message(b"origin", &query);
     let mut wide = [0u8; 64];
     reference.challenge_bytes(b"challenge", &mut wide);
-    let expected = zkc_kernels::scalar_from_wide_be(&wide);
+    let expected = zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&wide);
     for role in ["P", "V"] {
         let d = Domain::new(role, "session", "main", None);
         let mut backend = NativeBackend::new(

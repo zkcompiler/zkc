@@ -1,11 +1,14 @@
 //! Typed KoalaBear arithmetic, canonical element encodings and provider primitives.
 pub mod binary;
+mod field;
+pub mod merkle;
 pub mod oracle;
+pub mod packing;
 pub mod polynomial;
 pub mod poseidon2;
 pub mod words;
 
-use crate::fields::{Error, Result};
+use crate::field::{Error, Result};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing, PrimeField32};
 
 use p3_field::BasedVectorSpace;

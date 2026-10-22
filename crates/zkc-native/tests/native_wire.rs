@@ -1,9 +1,7 @@
 //! Exact public bytes and typed refusal controls for the native joint profile.
 mod common;
 use common::ark_backend;
-use zkc_native::{
-    GroupPoint, NativeBackend, NativeWireError, Policy, Scalar, Value, native_wire_size,
-};
+use zkc_native::{G1, NativeBackend, NativeWireError, Policy, Scalar, Value, native_wire_size};
 use zkc_runtime::host::wire::{WireBackend, WireError};
 use zkc_runtime::vm::{DecodeReason, PhysicalType, Value as RuntimeValue};
 
@@ -19,7 +17,7 @@ fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
     )
     .unwrap();
     let ordinary = ark_backend(None);
-    let point = Value::Curve(GroupPoint::generator());
+    let point = Value::Curve(G1::generator());
     let ty = point.physical_type();
     let bytes = ordinary.encode_native_value(&point).unwrap();
     assert!(backend.decode_native_value(&ty, &bytes).is_ok());
@@ -125,7 +123,7 @@ fn standalone_table_measurement_uses_table_decoder_limits() {
 
 #[test]
 fn standalone_group_collection_measurement_ignores_numeric_element_ceiling() {
-    let value = Value::Groups(vec![GroupPoint::generator()].into());
+    let value = Value::Groups(vec![G1::generator()].into());
     let ty = value.physical_type();
     let bytes = ark_backend(None).encode_native_value(&value).unwrap();
     let policy = Policy {
@@ -184,7 +182,7 @@ fn standalone_group_collection_measurement_ignores_numeric_element_ceiling() {
 fn standalone_collection_counts_survive_later_variant_assembly() {
     for value in [
         Value::table(&[Scalar::from(1), Scalar::from(2)], &Policy::default()).unwrap(),
-        Value::Groups(vec![GroupPoint::generator(); 2].into()),
+        Value::Groups(vec![G1::generator(); 2].into()),
     ] {
         let ty = value.physical_type();
         let bytes = ark_backend(None).encode_native_value(&value).unwrap();
@@ -230,11 +228,8 @@ fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
         (Value::Bool(false), 7),
         (Value::Bool(true), 7),
         (Value::Field(Scalar::from(19)), 38),
-        (Value::Curve(GroupPoint::identity()), 54),
-        (
-            Value::Curve(GroupPoint::generator().scale(Scalar::from(17))),
-            54,
-        ),
+        (Value::Curve(G1::identity()), 54),
+        (Value::Curve(G1::generator().scale(Scalar::from(17))), 54),
     ] {
         let ty = value.physical_type();
         assert_eq!(native_wire_size(&ty), Some(width));
@@ -288,7 +283,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
             NativeWireError::Invalid(DecodeReason::Scalar)
         );
     }
-    let group = Value::Curve(GroupPoint::identity()).physical_type();
+    let group = Value::Curve(G1::identity()).physical_type();
     let mut nonsubgroup = vec![0; 48];
     nonsubgroup[0] = 0x80;
     let mut infinity = vec![0; 48];
@@ -493,14 +488,15 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
 #[test]
 fn pcs_frames_require_the_selected_setup_and_canonical_payloads() {
     use std::sync::Arc;
-    use zkc_kernels::{Keys, Table};
+    use zkc_kernels::arkworks::bls12_381::Keys;
+    use zkc_kernels::arkworks::bls12_381::Table;
     let policy = Policy::default();
     let bounds = policy.ark_bounds();
-    let keys = Keys::setup_for_development(2, &bounds).unwrap();
+    let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let backend = common::backend()
         .verifier(keys.verifier_key().clone())
         .build();
-    let other = Keys::setup_for_development(2, &bounds).unwrap();
+    let other = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &bounds).unwrap();
     let wrong = common::backend()
         .verifier(other.verifier_key().clone())
         .build();

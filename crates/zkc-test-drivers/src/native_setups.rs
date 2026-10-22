@@ -3,7 +3,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc::proof::{NativeDeployment, SetupAuthority};
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 fn inputs(
@@ -120,7 +120,7 @@ fn main() {
         };
         let keys: Vec<_> = [1, second_arity, 1]
             .into_iter()
-            .map(|n| Keys::setup_for_development(n, &bounds).unwrap())
+            .map(|n| Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds).unwrap())
             .collect();
         let paths: Vec<_> = (0..3)
             .map(|i| dir.join(format!("{name}.setup{i}.pk")))

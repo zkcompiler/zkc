@@ -13,15 +13,6 @@ pub enum Error {
     InvalidBitWidth,
     SizeOverflow,
     MalformedReplay,
-    UnknownMember,
-    DuplicateIdentity,
-    MissingItem,
-    WrongItemType,
-    UnmappedItem,
-    ConflictingMapping,
-    MissingGuard,
-    ExpectationMismatch,
-    ResourceLimit,
 }
 impl Error {
     pub fn code(self) -> &'static str {
@@ -30,15 +21,6 @@ impl Error {
             Self::InvalidBitWidth => "external:invalid-bit-width",
             Self::SizeOverflow => "external:size-overflow",
             Self::MalformedReplay => "external:malformed-replay",
-            Self::UnknownMember => "external:unknown-member",
-            Self::DuplicateIdentity => "external:duplicate-identity",
-            Self::MissingItem => "external:missing-item",
-            Self::WrongItemType => "external:wrong-item-type",
-            Self::UnmappedItem => "external:unmapped-item",
-            Self::ConflictingMapping => "external:conflicting-mapping",
-            Self::MissingGuard => "external:missing-guard",
-            Self::ExpectationMismatch => "external:expectation-mismatch",
-            Self::ResourceLimit => "external:resource-limit",
         }
     }
 }

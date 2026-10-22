@@ -1,5 +1,6 @@
 //! Validated BLS12-381 G1 points using the same arkworks library as PCS.
-use crate::{Error, Scalar};
+use crate::arkworks::Error;
+use crate::arkworks::bls12_381::Scalar;
 use ark_bls12_381::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::PrimeField;
@@ -10,9 +11,9 @@ pub const GROUP_BYTES: usize = 48;
 /// A subgroup point. Raw upstream coordinates cannot bypass checked decoding.
 /// Identity and zero scalar multiplication are legitimate group operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GroupPoint(pub(crate) G1Affine);
-crate::scaling::impl_scaling!(GroupPoint, ark_bls12_381::g1::Config);
-impl GroupPoint {
+pub struct G1(pub(crate) G1Affine);
+crate::arkworks::scaling::impl_scaling!(G1, ark_bls12_381::g1::Config);
+impl G1 {
     /// Standard arkworks G1 generator.
     pub fn generator() -> Self {
         Self(G1Affine::generator())
@@ -34,7 +35,7 @@ impl GroupPoint {
         if scalars.len() != points.len() {
             return Err(Error::InvalidEncoding);
         }
-        let mut bases = crate::bounds::vector(points.len())?;
+        let mut bases = crate::arkworks::allocation::vector(points.len())?;
         bases.extend(points.iter().map(|p| p.0));
         Ok(Self(
             ark_bls12_381::G1Projective::msm(&bases, scalars)
@@ -60,8 +61,8 @@ impl GroupPoint {
             return Err(Error::InvalidEncoding);
         }
         let mut input = bytes;
-        let point = crate::codec::read(&mut input, GROUP_BYTES)?;
-        crate::codec::finish(input)?;
+        let point = crate::arkworks::codec::read(&mut input, GROUP_BYTES)?;
+        crate::arkworks::codec::finish(input)?;
         Ok(Self(point))
     }
 }

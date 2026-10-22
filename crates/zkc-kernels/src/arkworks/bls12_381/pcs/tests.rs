@@ -141,27 +141,28 @@ fn malicious_prover_dimensions_are_rejected_without_vector_requests() {
     for n in [0u64, 1, 3, 40, 58, 59, 63, 64, u64::MAX] {
         let mut bad = bytes.clone();
         bad[9..17].copy_from_slice(&n.to_le_bytes());
-        crate::bounds::VECTOR_REQUESTS.with(|count| count.set(0));
+        crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
         assert!(ProverKey::from_bytes(&bad, pin, k.verifier_key(), &all).is_err());
-        crate::bounds::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 0, "rank {n}"));
+        crate::arkworks::allocation::VECTOR_REQUESTS
+            .with(|count| assert_eq!(count.get(), 0, "rank {n}"));
     }
     let too_small = Bounds::new(2, 4, bytes.len() - 1, 0);
-    crate::bounds::VECTOR_REQUESTS.with(|count| count.set(0));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
     assert_eq!(
         ProverKey::from_bytes(&bytes, pin, k.verifier_key(), &too_small).unwrap_err(),
         Error::ByteLimit
     );
-    crate::bounds::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 0));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 0));
     // A valid load makes precisely two outer plus 2*n row allocation requests.
-    crate::bounds::VECTOR_REQUESTS.with(|count| count.set(0));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
     let imported = ProverKey::from_bytes(&bytes, pin, k.verifier_key(), &all).unwrap();
-    crate::bounds::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 6));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 6));
     assert_eq!(imported.metadata(), k.prover_key().metadata());
 }
 
 #[test]
 fn prover_wire_size_arithmetic_is_checked_without_allocation() {
-    crate::bounds::VECTOR_REQUESTS.with(|count| count.set(0));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| count.set(0));
     assert_eq!(
         codec::size(Kind::Prover, 0),
         Err(Error::PositiveArityRequired)
@@ -176,5 +177,5 @@ fn prover_wire_size_arithmetic_is_checked_without_allocation() {
     }
     // The arithmetic decides the refusal; a rank of usize::MAX must not have
     // been reached by asking for the vector it describes.
-    crate::bounds::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 0));
+    crate::arkworks::allocation::VECTOR_REQUESTS.with(|count| assert_eq!(count.get(), 0));
 }

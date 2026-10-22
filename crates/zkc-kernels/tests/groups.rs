@@ -3,7 +3,7 @@ use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
-use zkc_kernels::{GroupPoint, Scalar, encode_scalar, scalar_from_wide_be};
+use zkc_kernels::arkworks::bls12_381::{G1, Scalar, encode_scalar, scalar_from_wide_be};
 fn direct(p: G1Affine) -> Vec<u8> {
     let mut b = Vec::new();
     p.serialize_compressed(&mut b).unwrap();
@@ -11,7 +11,7 @@ fn direct(p: G1Affine) -> Vec<u8> {
 }
 #[test]
 fn independent_generator_and_direct_full_width_arithmetic() {
-    let g = GroupPoint::generator();
+    let g = G1::generator();
     assert_eq!(
         g.to_bytes().unwrap().to_vec(),
         zkc_test_support::unhex(
@@ -33,35 +33,32 @@ fn independent_generator_and_direct_full_width_arithmetic() {
         );
         assert_eq!(g.add(&g.scale(scalar)), g.scale(scalar + Scalar::from(1)));
         assert_eq!(
-            GroupPoint::from_bytes(&g.scale(scalar).to_bytes().unwrap()).unwrap(),
+            G1::from_bytes(&g.scale(scalar).to_bytes().unwrap()).unwrap(),
             g.scale(scalar)
         );
     }
-    assert_eq!(g.scale(Scalar::from(0)), GroupPoint::identity());
-    assert_eq!(g.add(&GroupPoint::identity()), g);
+    assert_eq!(g.scale(Scalar::from(0)), G1::identity());
+    assert_eq!(g.add(&G1::identity()), g);
 }
 #[test]
 fn research_point_fixtures_and_exact_hostile_decode() {
     // Frozen prior probe: x=0 is on-curve but outside the prime subgroup.
     let mut subgroup = vec![0; 48];
     subgroup[0] = 0x80;
-    assert!(GroupPoint::from_bytes(&subgroup).is_err());
+    assert!(G1::from_bytes(&subgroup).is_err());
     let mut infinity = vec![0; 48];
     infinity[0] = 0xc0;
-    assert_eq!(
-        GroupPoint::from_bytes(&infinity).unwrap(),
-        GroupPoint::identity()
-    );
+    assert_eq!(G1::from_bytes(&infinity).unwrap(), G1::identity());
     infinity[47] = 1;
-    assert!(GroupPoint::from_bytes(&infinity).is_err());
-    let b = GroupPoint::generator().to_bytes().unwrap();
+    assert!(G1::from_bytes(&infinity).is_err());
+    let b = G1::generator().to_bytes().unwrap();
     for n in 0..48 {
-        assert!(GroupPoint::from_bytes(&b[..n]).is_err());
+        assert!(G1::from_bytes(&b[..n]).is_err());
     }
     let mut trailing = b.to_vec();
     trailing.push(0);
-    assert!(GroupPoint::from_bytes(&trailing).is_err());
-    assert!(GroupPoint::from_bytes(&[255; 48]).is_err());
+    assert!(G1::from_bytes(&trailing).is_err());
+    assert!(G1::from_bytes(&[255; 48]).is_err());
 }
 #[test]
 fn wide_big_endian_sampler_independent_integer_answers() {

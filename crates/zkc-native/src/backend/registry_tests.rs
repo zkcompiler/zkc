@@ -248,11 +248,12 @@ fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
         1 << 20,
     )
     .unwrap();
-    let (_, merkle_base) =
-        zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(base, shape, 1 << 20)
-            .unwrap();
+    let (_, merkle_base) = zkc_kernels::plonky3::merkle::commit::<
+        zkc_kernels::plonky3::merkle::poseidon2::Base,
+    >(base, shape, 1 << 20)
+    .unwrap();
     let (_, merkle_quartic) =
-        zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Quartic>(
+        zkc_kernels::plonky3::merkle::commit::<zkc_kernels::plonky3::merkle::poseidon2::Quartic>(
             vec![KoalaBearExt4::from(KoalaBear::new(3)); 2],
             shape,
             1 << 20,
@@ -575,13 +576,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             );
         }};
     }
-    group_family!(
-        crate::GroupPoint::generator(),
-        Bls12381G1,
-        Curve,
-        Groups,
-        128
-    );
+    group_family!(crate::G1::generator(), Bls12381G1, Curve, Groups, 128);
     group_family!(
         crate::EdwardsPrime::generator(),
         Edwards25519Prime,
@@ -639,8 +634,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         I::Bls12381Fr,
         320,
     );
-    let table =
-        zkc_kernels::Table::from_logical(&[Scalar::from(1); 2], &policy.ark_bounds()).unwrap();
+    let table = zkc_kernels::arkworks::bls12_381::Table::from_logical(
+        &[Scalar::from(1); 2],
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     check(
         Value::Table(Arc::new(table.clone())),
         Type::Table,
@@ -649,13 +647,19 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     );
     check(
         Value::TableMsb(Arc::new(
-            zkc_kernels::MsbTable::from_lsb(&table, &policy.ark_bounds()).unwrap(),
+            zkc_kernels::arkworks::bls12_381::MsbTable::from_lsb(&table, &policy.ark_bounds())
+                .unwrap(),
         )),
         Type::Table,
         I::Bls12381Fr,
         320,
     );
-    let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+        1,
+        &mut ark_std::rand::thread_rng(),
+        &policy.ark_bounds(),
+    )
+    .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let (_, proof) = state.open(&[Scalar::from(2)]).unwrap();
     check(
@@ -749,13 +753,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         616 + std::mem::size_of::<crate::oracle::State>(),
     );
     // Digest-generic carriers share one byte allocation per digest list.
-    let (root, tree) = zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(
-        vec![KoalaBear::new(1); 2],
-        shape,
-        4096,
-    )
+    let (root, tree) = zkc_kernels::plonky3::merkle::commit::<
+        zkc_kernels::plonky3::merkle::poseidon2::Base,
+    >(vec![KoalaBear::new(1); 2], shape, 4096)
     .unwrap();
-    let proof = zkc_kernels::merkle::open(&tree, &[0]).unwrap().1;
+    let proof = zkc_kernels::plonky3::merkle::open(&tree, &[0]).unwrap().1;
     let tree = crate::merkle::State::Poseidon2KoalaBear(Arc::new(tree));
     let scheme = crate::merkle::Scheme::Poseidon2KoalaBear;
     check(
@@ -1433,7 +1435,8 @@ fn every_alternative_executes_and_preserves_the_original_result() {
                 && let Value::Table(t) = value
             {
                 *value = Value::TableMsb(Arc::new(
-                    zkc_kernels::MsbTable::from_lsb(t, &policy.ark_bounds()).unwrap(),
+                    zkc_kernels::arkworks::bls12_381::MsbTable::from_lsb(t, &policy.ark_bounds())
+                        .unwrap(),
                 ));
             }
         }

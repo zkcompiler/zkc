@@ -201,7 +201,7 @@ fn run_validator(
 }
 #[test]
 fn standalone_runner_dleq_honest_false_statement_proof_and_context() {
-    let g = GroupPoint::generator();
+    let g = G1::generator();
     let bases = Value::groups(&[g, g.scale(Scalar::from(3))], &Policy::default()).unwrap();
     let publics = Value::groups(
         &[g.scale(Scalar::from(7)), g.scale(Scalar::from(21))],

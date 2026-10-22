@@ -257,7 +257,7 @@ pub(super) fn prepare(
             .keys
             .get(&port.original)
             .ok_or("native-proof-key-authority")?;
-        let key = imports.import(bytes, pin, "native-proof-canonical-key")?;
+        let key = imports.import(bytes, pin)?;
         let id = admission.add(Input::Ready(Value::VerifierKey(key.clone())))?;
         public_ids.insert(port.original, id);
         material

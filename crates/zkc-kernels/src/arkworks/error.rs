@@ -39,8 +39,6 @@ pub enum Error {
     KeyMismatch,
     /// Invalid key shape or a zero setup generator.
     InvalidKey,
-    /// OS entropy could not seed the random source.
-    EntropyUnavailable,
 }
 
 impl Error {
@@ -62,7 +60,6 @@ impl Error {
             Self::InvalidHeader => "invalid-header",
             Self::KeyMismatch => "key-mismatch",
             Self::InvalidKey => "invalid-key",
-            Self::EntropyUnavailable => "entropy-unavailable",
         }
     }
 }

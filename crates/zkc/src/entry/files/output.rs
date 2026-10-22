@@ -86,10 +86,12 @@ pub(crate) fn output_setups_with(
     for (name, bytes) in material {
         capacity.check_wire(bytes.len())?;
         let pin = *authority.keys.get(name).ok_or("entry-setup-authority")?;
-        let key = imports.import(bytes, pin, "entry-output-setup")?;
+        let key = imports.import(bytes, pin)?;
         if !keys
             .iter()
-            .any(|old: &zkc_kernels::VerifierKey| old.metadata() == key.metadata())
+            .any(|old: &zkc_kernels::arkworks::bls12_381::VerifierKey| {
+                old.metadata() == key.metadata()
+            })
         {
             keys.push((*key).clone());
         }
@@ -303,8 +305,13 @@ mod tests {
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
         let capacity = Capacity::default();
         let policy = capacity.backend();
-        let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-        let table = zkc_kernels::Table::from_logical_vec(
+        let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &policy.ark_bounds(),
+        )
+        .unwrap();
+        let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
             vec![zkc_native::Scalar::from(1); 2],
             &policy.ark_bounds(),
         )

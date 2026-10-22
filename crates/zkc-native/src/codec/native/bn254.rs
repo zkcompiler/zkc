@@ -1,6 +1,6 @@
 //! Canonical BN254 vector and group-vector payloads for the native wire codec.
 use crate::{Policy, Result, Value, ark, exhausted, operations::arithmetic::reserve};
-use zkc_kernels::bn254::{G1, G2, encode_scalar};
+use zkc_kernels::arkworks::bn254::{G1, G2, encode_scalar};
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {

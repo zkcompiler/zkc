@@ -1,6 +1,9 @@
 //! Independent payload accounting, publication and unwind boundaries.
 use std::panic::AssertUnwindSafe;
-use zkc_kernels::numerical::{Call, Error, Limits, RowMajor};
+use zkc_kernels::{
+    matrix::RowMajor,
+    numerical::{Call, Error, Limits},
+};
 
 #[test]
 fn work_and_storage_have_distinct_lifetimes() {

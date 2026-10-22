@@ -1,7 +1,7 @@
 //! Canonical scalar admission agrees with checked decode plus exact re-encoding.
 use ark_ff::{BigInteger, PrimeField};
 use ark_std::rand::{RngCore, SeedableRng, rngs::StdRng};
-use zkc_kernels::Error;
+use zkc_kernels::arkworks::Error;
 
 fn check<F: PrimeField>(decode: fn(&[u8]) -> Result<F, Error>) {
     let modulus = F::MODULUS.to_bytes_le();
@@ -57,6 +57,6 @@ fn check<F: PrimeField>(decode: fn(&[u8]) -> Result<F, Error>) {
 
 #[test]
 fn both_scalar_fields_preserve_exact_canonical_admission() {
-    check(zkc_kernels::decode_scalar);
-    check(zkc_kernels::bn254::decode_scalar);
+    check(zkc_kernels::arkworks::bls12_381::decode_scalar);
+    check(zkc_kernels::arkworks::bn254::decode_scalar);
 }

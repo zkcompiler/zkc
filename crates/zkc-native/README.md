@@ -29,7 +29,7 @@ authorized. There is no implicit receive-site setup selector.
 
 `resource.rs` owns fresh affine RNG, nonce and transcript capabilities, their
 bounded counters, domain separation, generations and retirement. Local frames
-receive explicit operand views. `services` binds the four registered random
+receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the four registered random
 sampling service contracts to Host-owned providers. It does not install arbitrary
 request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
@@ -57,7 +57,7 @@ permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
 external-work permutation per state before computing. `zkc-kernels::plonky3::words` owns the
 canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
 Bit reversal of vectors and table rows is a positional kernel of every field
-family. `merkle` installs row commitments backed by `zkc-kernels::merkle`: an `Instance` names a
+family. `merkle` installs row commitments backed by `zkc-kernels::plonky3::merkle`: an `Instance` names a
 leaf hash, compression, element type and canonical digest encoding over a
 Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
 Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
@@ -93,7 +93,7 @@ reuse still compares their complete content and exact attributes. Each VM
 instance owns its preparation, including when instances share an admitted program.
 
 `numerical` adapts policy and concrete result construction to the independent
-`zkc-kernels::numerical` scope and row-major views under the
+`zkc-kernels::numerical` scope and `matrix::RowMajor` views under the
 [native numerical-call contract](../../docs/spec/runtime/numerical.md).
 Private initialized destinations and scratch share checked memory and work
 limits. Exact field adapters and table storage owners supply interpretation;
@@ -115,8 +115,10 @@ features; portable builds remain supported.
 
 `curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
 results for BLS12-381 and BN254 G1/G2 while retaining affine-base `mul_bigint`.
-Public length and the numerical scratch allowance bound chunks to at most 256;
-insufficient scratch or failed scratch reservation selects the scalar loop.
+Native admits the kernel's workspace bound from public length and the numerical
+scratch allowance. The typed kernel plan prepares bounded scratch and freezes
+the algorithm before arithmetic; its reservation outlives the plan.
+Insufficient scratch or failed scratch preparation selects direct scaling.
 Existing output preflight and charges remain in place, with no added numerical
 work charge. Dalek multiplication paths and their timing properties are unchanged;
 Arkworks remains variable-time.
@@ -175,7 +177,7 @@ Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
-[their source pins and construction details](../zkc-kernels/src/external/README.md).
+[their source pins and construction details](../zkc-kernels/src/interop/README.md).
 
 ## Validation
 

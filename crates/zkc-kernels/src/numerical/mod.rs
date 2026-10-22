@@ -1,11 +1,9 @@
 //! Scoped numerical work and typed storage, independent of VM and native values.
 //! Limits describe requested managed payloads, not allocator overhead or RSS.
 mod memory;
-mod views;
 pub use memory::payload_bytes;
 use memory::{Buffer, Reservation};
 use std::cell::Cell;
-pub use views::RowMajor;
 
 /// Fixed work, managed payload and aggregate result ceilings for one call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

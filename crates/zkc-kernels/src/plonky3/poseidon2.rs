@@ -5,7 +5,7 @@
 //! permutes each consecutive 16-element state of one vector. See
 //! docs/spec/domains/permutations.md.
 use super::KoalaBear;
-use crate::external::Work;
+use crate::interop::Work;
 use p3_koala_bear::{Poseidon2KoalaBear, default_koalabear_poseidon2_16};
 use p3_symmetric::Permutation;
 use std::sync::OnceLock;

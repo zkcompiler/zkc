@@ -1,5 +1,11 @@
-use crate::{Bounds, Error, SCALAR_BYTES, Scalar, decode_scalar, encode_scalar};
-use crate::{bounds::vector, error::same_arity};
+use crate::arkworks::Error;
+use crate::arkworks::allocation::vector;
+use crate::arkworks::bls12_381::Bounds;
+use crate::arkworks::bls12_381::SCALAR_BYTES;
+use crate::arkworks::bls12_381::Scalar;
+use crate::arkworks::bls12_381::decode_scalar;
+use crate::arkworks::bls12_381::encode_scalar;
+use crate::arkworks::error::same_arity;
 use ark_ff::{AdditiveGroup, Field};
 use ark_poly::DenseMultilinearExtension;
 use std::{fmt, sync::Arc};

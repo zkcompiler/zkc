@@ -3,7 +3,7 @@
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::{collections::BTreeMap, path::Path};
 use zkc_native::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{CutKind, DecodeReason, ServiceContract};
 
@@ -159,7 +159,7 @@ fn draws(observation: &ServiceObservation, count: u64, budget: u64, poisoned: bo
     );
 }
 fn schnorr_inputs() -> Inputs {
-    let g = GroupPoint::generator();
+    let g = G1::generator();
     let y = g.scale(Scalar::from(3));
     BTreeMap::from([
         (
@@ -200,7 +200,7 @@ fn schnorr(directory: &Path) {
         );
         let codec = backend("Alice", "codec", "main");
         // Independent group equation: z=5+11*3=38 and g*z = g*5 + (g*3)*11.
-        let g = GroupPoint::generator();
+        let g = G1::generator();
         let z = Scalar::from(38);
         assert_eq!(
             g.scale(z),
@@ -222,7 +222,7 @@ fn schnorr(directory: &Path) {
     for (site, value) in [
         (
             "commitment",
-            Value::Curve(GroupPoint::generator().scale(Scalar::from(6))),
+            Value::Curve(G1::generator().scale(Scalar::from(6))),
         ),
         ("challenge", field(12)),
         ("response", field(39)),

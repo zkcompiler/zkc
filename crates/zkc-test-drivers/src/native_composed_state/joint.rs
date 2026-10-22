@@ -3,8 +3,7 @@ use super::{data, reference};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
 use zkc_native::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value,
-    services::ServiceRegistry,
+    Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value, services::ServiceRegistry,
 };
 use zkc_runtime::host::joint::*;
 fn backend(role: &str, entry: &str) -> NativeBackend {
@@ -55,7 +54,7 @@ impl Hooks<NativeBackend> for Audit {
             {
                 let mut changed = bytes.to_vec();
                 // Keep canonical length and type, replace a valid group element.
-                changed[10..58].copy_from_slice(&GroupPoint::identity().to_bytes().unwrap());
+                changed[10..58].copy_from_slice(&G1::identity().to_bytes().unwrap());
                 return Ok(Some(changed));
             }
         }

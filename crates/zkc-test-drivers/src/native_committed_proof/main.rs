@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc::proof::NativeDeployment;
-use zkc_kernels::Keys;
+use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 
@@ -64,7 +64,8 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
     let (a, b) = tables(n);
     let policy = Policy::default();
     let table = |v: &[Scalar]| {
-        zkc_kernels::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds()).unwrap()
+        zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds())
+            .unwrap()
     };
     let root_a = keys
         .prover_key()
@@ -285,12 +286,17 @@ fn main() {
         serde_json::from_slice(&std::fs::read(directory.join("manifest.json")).unwrap()).unwrap();
     let bounds = Policy::default().ark_bounds();
     assert_eq!(
-        Keys::setup_for_development(0, &bounds).unwrap_err(),
-        zkc_kernels::Error::PositiveArityRequired
+        Keys::setup_with_rng(0, &mut ark_std::rand::thread_rng(), &bounds).unwrap_err(),
+        zkc_kernels::arkworks::Error::PositiveArityRequired
     );
     let keys: BTreeMap<_, _> = [1, 2, 3, 8]
         .into_iter()
-        .map(|n| (n, Keys::setup_for_development(n, &bounds).unwrap()))
+        .map(|n| {
+            (
+                n,
+                Keys::setup_with_rng(n, &mut ark_std::rand::thread_rng(), &bounds).unwrap(),
+            )
+        })
         .collect();
     for (&n, key) in &keys {
         std::fs::write(

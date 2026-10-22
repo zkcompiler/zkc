@@ -1,7 +1,7 @@
 use super::*;
 use crate::{Value, refused};
 use std::{panic::AssertUnwindSafe, sync::Arc};
-use zkc_kernels::numerical::RowMajor;
+use zkc_kernels::matrix::RowMajor;
 
 fn policy(memory: usize) -> Policy {
     Policy {

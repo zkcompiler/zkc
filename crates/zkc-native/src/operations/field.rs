@@ -4,14 +4,11 @@
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
 use std::sync::Arc;
-pub(crate) use zkc_kernels::fields::Coefficient;
+pub(crate) use zkc_kernels::field::Coefficient;
 
 pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         Self::dot_product(a, b).map_err(crate::field_error)
-    }
-    fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
-        zkc_kernels::vector::mul::<Self>(a, b, out).map_err(crate::field_error)
     }
     fn field(v: &Value) -> Result<Self>;
     fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;
@@ -82,10 +79,10 @@ family!(
     Bn254Matrix,
     Bn254Polynomial,
     Bn254Round,
-    |s| zkc_kernels::bn254::parse_decimal(s).map_err(crate::ark)
+    |s| zkc_kernels::arkworks::bn254::parse_decimal(s).map_err(crate::ark)
 );
 family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
-    zkc_kernels::parse_decimal(s).map_err(crate::ark)
+    zkc_kernels::arkworks::bls12_381::parse_decimal(s).map_err(crate::ark)
 });
 family!(
     RistrettoScalar,
@@ -94,7 +91,7 @@ family!(
     RistrettoMatrix,
     RistrettoPolynomial,
     RistrettoRound,
-    |s| zkc_kernels::fields::parse_ristretto_decimal(s).map_err(crate::field_error)
+    |s| zkc_kernels::dalek::ristretto255::parse_decimal(s).map_err(crate::field_error)
 );
 
 family!(
@@ -218,32 +215,4 @@ pub(crate) fn publish_literal(
     // These are inline scalars: every result retains its ordinary fresh charge.
     policy.output(512, i.max_output_bytes)?;
     Ok(vec![value.clone()])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn destination_shapes<S: Family>() -> Result<()> {
-        let input = [S::one(); 3];
-        for (left, right, len) in [(&input[..2], &input[..], 3), (&input[..], &input[..], 2)] {
-            let mut output = vec![S::zero(); len];
-            assert_eq!(
-                S::product(left, right, &mut output).unwrap_err().code,
-                "refused:length-mismatch"
-            );
-            assert!(output.iter().all(|value| *value == S::zero()));
-        }
-        let mut output = [S::zero(); 3];
-        S::product(&input, &input, &mut output)?;
-        assert!(output.iter().all(|value| *value == S::one()));
-        Ok(())
-    }
-
-    #[test]
-    fn shared_product_adapter_checks_every_shape_before_writing() {
-        for domain in crate::domains::INSTALLED {
-            with_field!(domain.field, |S| destination_shapes::<S>()).unwrap();
-        }
-    }
 }

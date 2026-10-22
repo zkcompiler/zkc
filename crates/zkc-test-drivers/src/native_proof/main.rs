@@ -8,7 +8,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{NativeDeployment, NativeProofReport};
-use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 
 fn backend() -> NativeBackend {
@@ -39,7 +39,7 @@ fn inputs(envelope: &Json, case: &Json, producing: bool) -> Json {
             .unwrap_or(original as u64);
         let value = match ty.as_str().unwrap() {
             "group:bls12-381.g1" => {
-                Value::Curve(GroupPoint::generator().scale(Scalar::from(match index {
+                Value::Curve(G1::generator().scale(Scalar::from(match index {
                     0 => 1,
                     2 => 3,
                     5 => 7,
