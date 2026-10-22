@@ -238,22 +238,26 @@ fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
     use std::sync::Arc;
     use zkc_runtime::vm::{Backend, Program, RuntimeError, Usage, Value as RuntimeValue};
 
-    let shape = crate::plonky3::oracle::Shape::new(1, 2, 8).unwrap();
+    let shape = zkc_kernels::plonky3::oracle::Shape::new(1, 2, 8).unwrap();
     let base = vec![KoalaBear::new(3); 2];
-    let (_, base_tree) = crate::plonky3::oracle::commit(base.clone(), shape, 1 << 20).unwrap();
-    let (_, extension_tree) = crate::plonky3::oracle::commit(
+    let (_, base_tree) =
+        zkc_kernels::plonky3::oracle::commit(base.clone(), shape, 1 << 20).unwrap();
+    let (_, extension_tree) = zkc_kernels::plonky3::oracle::commit(
         vec![KoalaBearExt8::from(KoalaBear::new(3)); 2],
         shape,
         1 << 20,
     )
     .unwrap();
-    let (_, merkle_base) = merkle::commit::<merkle::poseidon2::Base>(base, shape, 1 << 20).unwrap();
-    let (_, merkle_quartic) = merkle::commit::<merkle::poseidon2::Quartic>(
-        vec![KoalaBearExt4::from(KoalaBear::new(3)); 2],
-        shape,
-        1 << 20,
-    )
-    .unwrap();
+    let (_, merkle_base) =
+        zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(base, shape, 1 << 20)
+            .unwrap();
+    let (_, merkle_quartic) =
+        zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Quartic>(
+            vec![KoalaBearExt4::from(KoalaBear::new(3)); 2],
+            shape,
+            1 << 20,
+        )
+        .unwrap();
     let keccak_base = oracle::State::Base(Arc::new(base_tree));
     let keccak_extension = oracle::State::Extension(Arc::new(extension_tree));
     let poseidon_base = merkle::State::Poseidon2KoalaBear(Arc::new(merkle_base));
@@ -540,7 +544,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         16
     );
     scalar_family!(
-        crate::plonky3::binary::from_bits(3),
+        zkc_kernels::plonky3::binary::from_bits(3),
         Binary64,
         Binary64Field,
         Binary64Vector,
@@ -550,7 +554,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         8
     );
     scalar_family!(
-        crate::plonky3::binary::ext3_from_bits([3, 1, 2]),
+        zkc_kernels::plonky3::binary::ext3_from_bits([3, 1, 2]),
         Binary64Ext3,
         Binary64Ext3Field,
         Binary64Ext3Vector,
@@ -636,7 +640,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         320,
     );
     let table =
-        zkc_arkworks::Table::from_logical(&[Scalar::from(1); 2], &policy.ark_bounds()).unwrap();
+        zkc_kernels::Table::from_logical(&[Scalar::from(1); 2], &policy.ark_bounds()).unwrap();
     check(
         Value::Table(Arc::new(table.clone())),
         Type::Table,
@@ -645,7 +649,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     );
     check(
         Value::TableMsb(Arc::new(
-            zkc_arkworks::MsbTable::from_lsb(&table, &policy.ark_bounds()).unwrap(),
+            zkc_kernels::MsbTable::from_lsb(&table, &policy.ark_bounds()).unwrap(),
         )),
         Type::Table,
         I::Bls12381Fr,
@@ -708,9 +712,9 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         I::Ristretto255Group,
         768 + 64 + 2 * std::mem::size_of::<crate::RistrettoPoint>(),
     );
-    let shape = crate::plonky3::oracle::Shape::new(1, 2, 2).unwrap();
+    let shape = zkc_kernels::plonky3::oracle::Shape::new(1, 2, 2).unwrap();
     let (root, state) =
-        crate::plonky3::oracle::commit(vec![KoalaBear::new(1); 2], shape, 4096).unwrap();
+        zkc_kernels::plonky3::oracle::commit(vec![KoalaBear::new(1); 2], shape, 4096).unwrap();
     let path = state.open(0).unwrap().1;
     let state = crate::oracle::State::Base(Arc::new(state));
     let domain = crate::oracle::Domain::Base;
@@ -745,13 +749,13 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         616 + std::mem::size_of::<crate::oracle::State>(),
     );
     // Digest-generic carriers share one byte allocation per digest list.
-    let (root, tree) = crate::merkle::commit::<crate::merkle::poseidon2::Base>(
+    let (root, tree) = zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(
         vec![KoalaBear::new(1); 2],
         shape,
         4096,
     )
     .unwrap();
-    let proof = crate::merkle::open(&tree, &[0]).unwrap().1;
+    let proof = zkc_kernels::merkle::open(&tree, &[0]).unwrap().1;
     let tree = crate::merkle::State::Poseidon2KoalaBear(Arc::new(tree));
     let scheme = crate::merkle::Scheme::Poseidon2KoalaBear;
     check(
@@ -1429,7 +1433,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
                 && let Value::Table(t) = value
             {
                 *value = Value::TableMsb(Arc::new(
-                    zkc_arkworks::MsbTable::from_lsb(t, &policy.ark_bounds()).unwrap(),
+                    zkc_kernels::MsbTable::from_lsb(t, &policy.ark_bounds()).unwrap(),
                 ));
             }
         }

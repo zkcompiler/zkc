@@ -129,7 +129,10 @@ pub(crate) fn apply(
             }
             policy.output(512, invocation.max_output_bytes)?;
             // Existing backend field operations own arithmetic and reduction.
-            Value::KoalaBearField(crate::plonky3::dot(a.elements(), b.elements())?)
+            Value::KoalaBearField(
+                zkc_kernels::plonky3::dot(a.elements(), b.elements())
+                    .map_err(crate::field_error)?,
+            )
         }
         _ => return Err(refused("kernel-operands")),
     };

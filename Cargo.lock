@@ -2483,22 +2483,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkc-arkworks"
-version = "0.0.0"
-dependencies = [
- "ark-bls12-381",
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-poly",
- "ark-poly-commit",
- "ark-serialize",
- "ark-std",
- "sha2 0.11.0",
- "zkc-test-support",
-]
-
-[[package]]
 name = "zkc-backends"
 version = "0.0.0"
 dependencies = [
@@ -2527,7 +2511,7 @@ dependencies = [
  "sha3 0.12.0",
  "shake",
  "spongefish 0.8.0",
- "zkc-arkworks",
+ "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",
 ]
@@ -2547,6 +2531,39 @@ dependencies = [
  "zkc-backends",
  "zkc-runtime",
  "zkc-tools",
+]
+
+[[package]]
+name = "zkc-kernels"
+version = "0.0.0"
+dependencies = [
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-poly-commit",
+ "ark-serialize",
+ "ark-std",
+ "curve25519-dalek",
+ "p3-baby-bear",
+ "p3-binary-field",
+ "p3-challenger 0.4.3",
+ "p3-commit",
+ "p3-dft 0.8.0",
+ "p3-field 0.4.3",
+ "p3-field 0.8.0",
+ "p3-keccak",
+ "p3-koala-bear 0.8.0",
+ "p3-matrix 0.8.0",
+ "p3-merkle-tree",
+ "p3-poseidon2 0.8.0",
+ "p3-symmetric 0.4.3",
+ "p3-symmetric 0.8.0",
+ "serde_json",
+ "sha2 0.11.0",
+ "sha3 0.12.0",
+ "zkc-test-support",
 ]
 
 [[package]]
@@ -2582,8 +2599,8 @@ dependencies = [
  "sha3 0.12.0",
  "spongefish 0.7.4",
  "spongefish 0.8.0",
- "zkc-arkworks",
  "zkc-backends",
+ "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",
  "zkc-tools",
@@ -2609,8 +2626,8 @@ dependencies = [
  "tempfile",
  "toml",
  "unicode-normalization",
- "zkc-arkworks",
  "zkc-backends",
+ "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",
 ]

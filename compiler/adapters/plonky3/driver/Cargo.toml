@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 # Differential checks against the native ring admission and KoalaBear provider.
-native = ["dep:zkc-runtime", "dep:zkc-backends"]
+native = ["dep:zkc-runtime", "dep:zkc-backends", "dep:zkc-kernels"]
 
 [dependencies]
 p3-air.workspace = true
@@ -25,6 +25,7 @@ zkc-plonky3-air.workspace = true
 zkc-plonky3-air-client.workspace = true
 zkc-runtime = { workspace = true, optional = true }
 zkc-backends = { workspace = true, optional = true }
+zkc-kernels = { workspace = true, optional = true }
 
 [dev-dependencies]
 # The upstream two-adic domain's Lagrange selectors, as the STARK uses them.

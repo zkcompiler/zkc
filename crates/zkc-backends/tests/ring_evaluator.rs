@@ -49,7 +49,7 @@ fn row_point_and_affine_substitutions_agree_with_independent_formulas() {
     let e = product();
     // Different residuals share the same admitted expression, including every
     // partial packed block length rather than only multiples of SIMD width.
-    for count in 0..=zkc_backends::plonky3::PACKING_WIDTH * 2 + 3 {
+    for count in 0..=zkc_kernels::plonky3::PACKING_WIDTH * 2 + 3 {
         let input: Vec<_> = (0..2 * count).map(|i| F::new(i as u32 + 7)).collect();
         let expected: Vec<_> = input
             .as_chunks::<2>()

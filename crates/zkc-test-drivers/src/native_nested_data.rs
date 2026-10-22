@@ -5,8 +5,8 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
-use zkc_arkworks::Keys;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc_kernels::Keys;
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
@@ -56,7 +56,7 @@ fn data(family: &str, count: usize, keys: &Keys) -> Vec<Option<Value>> {
             Some(Value::Index(count as u64 + 1)),
         ]
     } else if family == "batched-openings" {
-        let table = zkc_arkworks::Table::from_logical_vec(
+        let table = zkc_kernels::Table::from_logical_vec(
             vec![Scalar::from(3), Scalar::from(11)],
             &Policy::default().ark_bounds(),
         )

@@ -1,9 +1,9 @@
 //! Native installation of authenticated row access. A root authenticates a
 //! rectangular vector; authored mathematical programs define polynomial meaning
 //! and query scheduling.
-use crate::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
+use zkc_kernels::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
     OperationSignature, PhysicalType, Type,

@@ -51,7 +51,7 @@ pub(crate) fn apply(
             p.output(size(a.len(), 32)?, i.max_output_bytes)?;
             if i.binding.signature().outputs[0].representation() == Representation::TableMsb {
                 TableMsb(Arc::new(
-                    zkc_arkworks::MsbTable::from_logical(a, &p.ark_bounds()).map_err(ark)?,
+                    zkc_kernels::MsbTable::from_logical(a, &p.ark_bounds()).map_err(ark)?,
                 ))
             } else {
                 Value::table(a, p)?

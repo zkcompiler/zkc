@@ -4,8 +4,8 @@ mod typed;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::Keys;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_kernels::Keys;
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
 
@@ -64,7 +64,7 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
     let (a, b) = tables(n);
     let policy = Policy::default();
     let table = |v: &[Scalar]| {
-        zkc_arkworks::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds()).unwrap()
+        zkc_kernels::Table::from_logical_vec(v.to_vec(), &policy.ark_bounds()).unwrap()
     };
     let root_a = keys
         .prover_key()
@@ -289,7 +289,7 @@ fn main() {
     let bounds = Policy::default().ark_bounds();
     assert_eq!(
         Keys::setup_for_development(0, &bounds).unwrap_err(),
-        zkc_arkworks::Error::PositiveArityRequired
+        zkc_kernels::Error::PositiveArityRequired
     );
     let keys: BTreeMap<_, _> = [1, 2, 3, 8]
         .into_iter()

@@ -204,7 +204,7 @@ fn transcript_roots_and_extra_authority_are_refused() {
 #[test]
 fn key_files_are_authenticated_and_captured_before_execution() {
     let policy = zkc_backends::Policy::default();
-    let keys = zkc_arkworks::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+    let keys = zkc_kernels::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let directory = zkc_test_support::evidence(module_path!());
     let path = directory.path().join("prover.key");
     std::fs::write(
@@ -607,7 +607,7 @@ mod typed;
 fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quota() {
     let limits = HostLimits::default();
     let bounds = limits.capacity.backend().ark_bounds();
-    let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
     let bytes = keys.verifier_key().to_bytes(&bounds).unwrap();
     let pin = keys.verifier_key().metadata().key_id();
     let authority = SetupAuthority {

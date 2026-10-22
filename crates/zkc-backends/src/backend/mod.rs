@@ -14,7 +14,7 @@ use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
 pub use policy::{EntryPolicy, PortConstraint};
 use std::sync::Arc;
 use validation::Core;
-use zkc_arkworks::{Metadata, VerifierKey};
+use zkc_kernels::{Metadata, VerifierKey};
 use zkc_runtime::vm::{Backend, Frame, FrameExit, Invocation};
 
 // Immutable installed facts shared by reached typed call payloads. Arc equality

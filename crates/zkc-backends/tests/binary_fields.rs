@@ -11,8 +11,8 @@ use support::{assert_value, backend, one};
 use zkc_backends::{
     Binary64, Binary64Ext3, Policy, Value,
     domains::{BINARY64, BINARY64_EXT3},
-    plonky3::binary,
 };
+use zkc_kernels::plonky3::binary;
 use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };

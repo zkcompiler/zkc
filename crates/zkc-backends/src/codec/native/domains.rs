@@ -41,32 +41,32 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         match value {
             Value::KoalaBearVector(values) => {
                 for x in values.iter() {
-                    out.extend(crate::plonky3::encode_scalar(*x));
+                    out.extend(zkc_kernels::plonky3::encode_scalar(*x));
                 }
             }
             Value::KoalaBearExt8Vector(values) => {
                 for x in values.iter() {
-                    out.extend(crate::plonky3::encode_extension(*x));
+                    out.extend(zkc_kernels::plonky3::encode_extension(*x));
                 }
             }
             Value::KoalaBearExt4Vector(values) => {
                 for x in values.iter() {
-                    out.extend(crate::plonky3::encode_quartic(*x));
+                    out.extend(zkc_kernels::plonky3::encode_quartic(*x));
                 }
             }
             Value::Binary64Vector(values) => {
                 for x in values.iter() {
-                    out.extend(crate::plonky3::binary::encode(*x));
+                    out.extend(zkc_kernels::plonky3::binary::encode(*x));
                 }
             }
             Value::Binary64Ext3Vector(values) => {
                 for x in values.iter() {
-                    out.extend(crate::plonky3::binary::encode_ext3(*x));
+                    out.extend(zkc_kernels::plonky3::binary::encode_ext3(*x));
                 }
             }
             Value::Vector(values) => {
                 for x in values.iter() {
-                    out.extend(zkc_arkworks::encode_scalar(x).map_err(ark)?);
+                    out.extend(zkc_kernels::encode_scalar(x).map_err(ark)?);
                 }
             }
             Value::RistrettoVector(values) => {

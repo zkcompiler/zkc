@@ -95,7 +95,7 @@ fn natural(value: &Json) -> Result<u64> {
 /// zeros for the base field; for the cubic extension, three base elements in
 /// the basis `1, y, y^2`, or one base element, which embeds.
 fn binary(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
-    use crate::plonky3::binary;
+    use zkc_kernels::plonky3::binary;
     let base = |value: &Json| {
         value
             .as_str()
@@ -366,7 +366,7 @@ impl serde::Serialize for Scalar<'_> {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        use crate::plonky3::binary;
+        use zkc_kernels::plonky3::binary;
         let word = |b: &[u8; binary::WIDTH]| binary::readable(binary::Binary64::from_le_bytes(*b));
         if matches!(self.0, Identity::KoalaBearExt8 | Identity::KoalaBearExt4) {
             serializer.collect_seq(self.1.as_chunks::<4>().0.iter().map(|b| decimal_text(b)))
@@ -552,7 +552,7 @@ mod tests {
             Value::RistrettoField(crate::parse_ristretto_decimal("345678901234567890").unwrap()),
             Value::KoalaBearField(crate::parse_koala_bear_decimal("2130706432").unwrap()),
             Value::KoalaBearExt8Field(
-                crate::plonky3::decode_extension(&[
+                zkc_kernels::plonky3::decode_extension(&[
                     1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0,
                     0, 0, 8, 0, 0, 0,
                 ])
@@ -630,8 +630,9 @@ mod tests {
         ] {
             assert!(readable_wire(&ty, &bad, 38).is_err(), "{bad}");
         }
-        let ext = Value::KoalaBearExt8Field(crate::plonky3::parse_extension_decimal("0").unwrap())
-            .physical_type();
+        let ext =
+            Value::KoalaBearExt8Field(zkc_kernels::plonky3::parse_extension_decimal("0").unwrap())
+                .physical_type();
         assert_eq!(
             readable_wire(&ext, &json!("7"), 38).unwrap(),
             readable_wire(&ext, &json!(["7", "0", "0", "0", "0", "0", "0", "0"]), 38).unwrap()

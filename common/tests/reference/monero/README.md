@@ -20,7 +20,7 @@ python3 common/tests/reference/monero/reproduce.py \
   --reference build/experiments/monero-reference/monero-reference \
   --output build/experiments/monero-fixtures
 cmp build/experiments/monero-fixtures/corpus.json common/tests/fixtures/bulletproofs-plus/corpus.json
-cmp build/experiments/monero-fixtures/edwards-map.json crates/zkc-backends/tests/fixtures/edwards-map.json
+cmp build/experiments/monero-fixtures/edwards-map.json crates/zkc-kernels/tests/fixtures/edwards-map.json
 ```
 
 Set `CMAKE_PREFIX_PATH` and `PKG_CONFIG_PATH` when the dependencies are outside

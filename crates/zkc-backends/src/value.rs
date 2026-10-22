@@ -1,6 +1,6 @@
 use crate::{Capability, Result, exhausted, refused};
 use std::sync::Arc;
-use zkc_arkworks::{
+use zkc_kernels::{
     Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
 };
 use zkc_runtime::vm::{
@@ -166,10 +166,10 @@ value_inventory! {
     /// Boxed: twelve base-field coefficients would exceed the inline value bound.
     Bls12381Gt(Arc<crate::Bls12381Gt>),
 
-    OracleRoot(crate::oracle::Domain, crate::plonky3::oracle::Digest),
-    OraclePath(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
+    OracleRoot(crate::oracle::Domain, zkc_kernels::plonky3::oracle::Digest),
+    OraclePath(crate::oracle::Domain, Arc<[zkc_kernels::plonky3::oracle::Digest]>),
     OracleState(crate::oracle::State),
-    OracleRoots(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
+    OracleRoots(crate::oracle::Domain, Arc<[zkc_kernels::plonky3::oracle::Digest]>),
     OracleStates(crate::oracle::Domain, Arc<[crate::oracle::State]>),
     /// Digest-generic Merkle carriers: each digest is its scheme's fixed-width
     /// canonical byte encoding.
@@ -225,7 +225,7 @@ value_inventory! {
     ),
     Field(Scalar),
     Table(Arc<Table>),
-    TableMsb(Arc<zkc_arkworks::MsbTable>),
+    TableMsb(Arc<zkc_kernels::MsbTable>),
     Point(Arc<[Scalar]>),
     Round([Scalar; 3]),
     Bool(bool),
@@ -239,8 +239,8 @@ value_inventory! {
     VerifierKey(Arc<VerifierKey>),
     Nonce(Capability),
     Transcript(Capability),
-    Curve(zkc_arkworks::GroupPoint),
-    Groups(Arc<[zkc_arkworks::GroupPoint]>),
+    Curve(zkc_kernels::GroupPoint),
+    Groups(Arc<[zkc_kernels::GroupPoint]>),
 }
 
 impl Value {
@@ -941,7 +941,7 @@ impl Value {
         }
     }
     /// Bounded host constructor for real G1 public vectors.
-    pub fn groups(values: &[zkc_arkworks::GroupPoint], policy: &Policy) -> Result<Self> {
+    pub fn groups(values: &[zkc_kernels::GroupPoint], policy: &Policy) -> Result<Self> {
         policy.groups(values.len())?;
         let mut points = Vec::new();
         points
@@ -976,20 +976,24 @@ impl RuntimeValue for Value {
             Self::Bool(value) => Some(vec![u8::from(*value)]),
             Self::Index(value) => Some(value.to_le_bytes().to_vec()),
             Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
-            Self::Field(value) => zkc_arkworks::encode_scalar(value).ok().map(|v| v.to_vec()),
-            Self::Bn254Field(value) => zkc_arkworks::bn254::encode_scalar(value)
+            Self::Field(value) => zkc_kernels::encode_scalar(value).ok().map(|v| v.to_vec()),
+            Self::Bn254Field(value) => zkc_kernels::bn254::encode_scalar(value)
                 .ok()
                 .map(|v| v.to_vec()),
-            Self::KoalaBearField(value) => Some(crate::plonky3::encode_scalar(*value).to_vec()),
+            Self::KoalaBearField(value) => {
+                Some(zkc_kernels::plonky3::encode_scalar(*value).to_vec())
+            }
             Self::KoalaBearExt8Field(value) => {
-                Some(crate::plonky3::encode_extension(*value).to_vec())
+                Some(zkc_kernels::plonky3::encode_extension(*value).to_vec())
             }
             Self::KoalaBearExt4Field(value) => {
-                Some(crate::plonky3::encode_quartic(*value).to_vec())
+                Some(zkc_kernels::plonky3::encode_quartic(*value).to_vec())
             }
-            Self::Binary64Field(value) => Some(crate::plonky3::binary::encode(*value).to_vec()),
+            Self::Binary64Field(value) => {
+                Some(zkc_kernels::plonky3::binary::encode(*value).to_vec())
+            }
             Self::Binary64Ext3Field(value) => {
-                Some(crate::plonky3::binary::encode_ext3(*value).to_vec())
+                Some(zkc_kernels::plonky3::binary::encode_ext3(*value).to_vec())
             }
             _ => None,
         }
@@ -1359,7 +1363,7 @@ pub(crate) fn opening_state_bytes(original: &Table, arity: usize) -> Result<usiz
 mod admission_size_tests {
     use super::*;
     use crate::{Domain, EntryPolicy, NativeBackend};
-    use zkc_arkworks::Keys;
+    use zkc_kernels::Keys;
 
     #[test]
     fn key_estimates_equal_imported_runtime_charges_at_small_ranks() {
@@ -1584,8 +1588,8 @@ mod retained_parts_tests {
             )
             .unwrap(),
         );
-        let shape = crate::plonky3::oracle::Shape::new(2, 8, 1 << 20).unwrap();
-        let (_, tree) = crate::plonky3::oracle::commit(ext.to_vec(), shape, 1 << 26).unwrap();
+        let shape = zkc_kernels::plonky3::oracle::Shape::new(2, 8, 1 << 20).unwrap();
+        let (_, tree) = zkc_kernels::plonky3::oracle::commit(ext.to_vec(), shape, 1 << 26).unwrap();
         let state = crate::oracle::State::Extension(Arc::new(tree));
         let states = Value::OracleStates(
             crate::oracle::Domain::Extension,

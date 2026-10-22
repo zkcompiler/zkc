@@ -4,7 +4,8 @@ mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
-use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, domains::KOALA_BEAR_EXT8, plonky3};
+use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, domains::KOALA_BEAR_EXT8};
+use zkc_kernels::plonky3;
 use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };

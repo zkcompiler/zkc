@@ -190,7 +190,7 @@ fn binary_mul(a: u64, b: u64) -> u64 {
 
 #[test]
 fn characteristic_two_dense_contractions_include_high_bits_and_cubic_coordinates() {
-    use crate::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
     let sample = |n: i64| n.unsigned_abs().wrapping_mul(0x8000_0000_0000_001d);
     contractions(Oracle {
         zero: 0u64,

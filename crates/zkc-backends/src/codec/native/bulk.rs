@@ -321,25 +321,35 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
         }};
     }
     match tag {
-        66 => values!(32, zkc_arkworks::decode_scalar, Vector, Scalar),
-        41 => values!(32, zkc_arkworks::bn254::decode_scalar, Bn254Vector, Scalar),
-        20 => values!(4, crate::plonky3::decode_scalar, KoalaBearVector, Scalar),
+        66 => values!(32, zkc_kernels::decode_scalar, Vector, Scalar),
+        41 => values!(32, zkc_kernels::bn254::decode_scalar, Bn254Vector, Scalar),
+        20 => values!(
+            4,
+            zkc_kernels::plonky3::decode_scalar,
+            KoalaBearVector,
+            Scalar
+        ),
         27 => values!(
             32,
-            crate::plonky3::decode_extension,
+            zkc_kernels::plonky3::decode_extension,
             KoalaBearExt8Vector,
             Scalar
         ),
         22 => values!(
             16,
-            crate::plonky3::decode_quartic,
+            zkc_kernels::plonky3::decode_quartic,
             KoalaBearExt4Vector,
             Scalar
         ),
-        74 => values!(8, crate::plonky3::binary::decode, Binary64Vector, Scalar),
+        74 => values!(
+            8,
+            zkc_kernels::plonky3::binary::decode,
+            Binary64Vector,
+            Scalar
+        ),
         77 => values!(
             24,
-            crate::plonky3::binary::decode_ext3,
+            zkc_kernels::plonky3::binary::decode_ext3,
             Binary64Ext3Vector,
             Scalar
         ),

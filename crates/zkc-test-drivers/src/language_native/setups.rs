@@ -2,8 +2,8 @@
 use super::interface::alter;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::{Keys, Table};
 use zkc_backends::{Policy, Scalar, Value as Native};
+use zkc_kernels::{Keys, Table};
 use zkc_tools::{
     entry::{
         AttemptOptions, BindingPolicy, NamedValues, Package, ProofEntry, ProofOptions,

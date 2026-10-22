@@ -4,8 +4,8 @@ use super::inputs::{Result, read_regular};
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_arkworks::{ProverKey, VerifierKey};
 use zkc_backends::{NativeBackend, Policy, Value};
+use zkc_kernels::{ProverKey, VerifierKey};
 use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
@@ -499,8 +499,8 @@ thread_local! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_arkworks::Keys;
     use zkc_backends::{Domain, EntryPolicy};
+    use zkc_kernels::Keys;
 
     #[test]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {

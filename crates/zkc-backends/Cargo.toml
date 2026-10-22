@@ -6,7 +6,7 @@ license.workspace = true
 publish = false
 
 [features]
-test-utils = ["zkc-arkworks/test-utils"]
+test-utils = ["zkc-kernels/test-utils"]
 
 [dependencies]
 sha3.workspace = true
@@ -15,7 +15,7 @@ p3-baby-bear-043.workspace = true
 p3-field-043.workspace = true
 p3-symmetric-043.workspace = true
 zkc-runtime.workspace = true
-zkc-arkworks.workspace = true
+zkc-kernels.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 sha2.workspace = true
@@ -39,6 +39,7 @@ rand.workspace = true
 workspace = true
 
 [dev-dependencies]
+zkc-kernels = { workspace = true, features = ["test-utils"] }
 p3-challenger-043.workspace = true
 p3-poseidon2.workspace = true
 zkc-test-support.workspace = true

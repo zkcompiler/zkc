@@ -257,7 +257,7 @@ fn cases() -> Vec<FieldCase> {
             field: "bn254.fr",
             maximum: "21888242871839275222246405745257275088548364400416034343698204186575808495616",
             value: Value::Bn254Field(-crate::Bn254Scalar::from(1)),
-            overflow: zkc_arkworks::bn254::MODULUS,
+            overflow: zkc_kernels::bn254::MODULUS,
             error: "refused:noncanonical-encoding",
         },
         FieldCase {
@@ -291,14 +291,16 @@ fn cases() -> Vec<FieldCase> {
         FieldCase {
             field: "gf2-64.pentanomial-4-3-1",
             maximum: "0xffffffffffffffff",
-            value: Value::Binary64Field(crate::plonky3::binary::from_bits(u64::MAX)),
+            value: Value::Binary64Field(zkc_kernels::plonky3::binary::from_bits(u64::MAX)),
             overflow: "0x10000000000000000",
             error: "refused:noncanonical-scalar",
         },
         FieldCase {
             field: "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
             maximum: "0xffffffffffffffffffffffffffffffffffffffffffffffff",
-            value: Value::Binary64Ext3Field(crate::plonky3::binary::ext3_from_bits([u64::MAX; 3])),
+            value: Value::Binary64Ext3Field(zkc_kernels::plonky3::binary::ext3_from_bits(
+                [u64::MAX; 3],
+            )),
             overflow: "0x1000000000000000000000000000000000000000000000000",
             error: "refused:noncanonical-scalar",
         },
@@ -315,9 +317,11 @@ fn small(field: &str, one: bool) -> Value {
         "koala-bear" => Value::KoalaBearField(crate::KoalaBear::from_u64(n)),
         "koala-bear.ext4-binomial3" => Value::KoalaBearExt4Field(crate::KoalaBearExt4::from_u64(n)),
         "koala-bear.ext8-binomial3" => Value::KoalaBearExt8Field(crate::KoalaBearExt8::from_u64(n)),
-        "gf2-64.pentanomial-4-3-1" => Value::Binary64Field(crate::plonky3::binary::from_bits(n)),
+        "gf2-64.pentanomial-4-3-1" => {
+            Value::Binary64Field(zkc_kernels::plonky3::binary::from_bits(n))
+        }
         "gf2-64.pentanomial-4-3-1.ext3-trinomial1" => {
-            Value::Binary64Ext3Field(crate::plonky3::binary::ext3_from_bits([n, 0, 0]))
+            Value::Binary64Ext3Field(zkc_kernels::plonky3::binary::ext3_from_bits([n, 0, 0]))
         }
         _ => panic!("unexpected test field"),
     }
@@ -1106,6 +1110,28 @@ fn literal_failure_preserves_preceding_rng_effect_and_reverse_cleanup() {
                 );
                 assert_eq!(caller.inner.active_frames(), 0);
             }
+        }
+    }
+}
+
+#[test]
+fn binary_kernel_literals_match_independent_vm_admission() {
+    use zkc_kernels::plonky3::binary;
+    for width in [64, 192] {
+        let maximum = format!("0x{}", "f".repeat(width / 4));
+        let overflow = format!("0x1{}", "0".repeat(width / 4));
+        for text in [
+            "0", "1", "", "2", "00", "0x0", "0x1", "0x2", "0xff", "0x00", "0xFF", "-1", " 1",
+            &maximum, &overflow,
+        ] {
+            let admitted = matches!(text, "0" | "1")
+                || zkc_runtime::vm::bit_pattern_literal(text, width as u32).is_some();
+            let accepted = if width == 64 {
+                binary::parse_literal(text).is_ok()
+            } else {
+                binary::parse_ext3_literal(text).is_ok()
+            };
+            assert_eq!(admitted, accepted, "{text} in {width} bits");
         }
     }
 }

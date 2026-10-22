@@ -9,7 +9,7 @@ use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
-use zkc_backends::plonky3::PACKING_WIDTH;
+use zkc_kernels::plonky3::PACKING_WIDTH;
 use zkc_backends::ring::{self, Budget, Registry};
 use zkc_backends::{KoalaBear, KoalaBearExt8, Policy};
 use zkc_plonky3_air::field::{Ext8, F, generator};

@@ -4,135 +4,18 @@
 use super::arithmetic::equal_len;
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
-use ark_ff::Field;
-use std::{
-    ops::{Add, Mul, Neg, Sub},
-    sync::Arc,
-};
+use std::sync::Arc;
+pub(crate) use zkc_kernels::fields::Coefficient;
 
-pub(crate) trait Coefficient:
-    Copy + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Neg<Output = Self>
-{
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn inverse(self) -> Option<Self>;
-}
-impl Coefficient for crate::Bn254Scalar {
-    fn zero() -> Self {
-        Self::from(0)
-    }
-    fn one() -> Self {
-        Self::from(1)
-    }
-    fn inverse(self) -> Option<Self> {
-        Field::inverse(&self)
-    }
-}
-impl Coefficient for Scalar {
-    fn zero() -> Self {
-        Self::from(0)
-    }
-    fn one() -> Self {
-        Self::from(1)
-    }
-    fn inverse(self) -> Option<Self> {
-        Field::inverse(&self)
-    }
-}
-impl Coefficient for RistrettoScalar {
-    fn zero() -> Self {
-        Self::ZERO
-    }
-    fn one() -> Self {
-        Self::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        (self != Self::ZERO).then(|| self.invert())
-    }
-}
-pub fn parse_ristretto_decimal(s: &str) -> Result<RistrettoScalar> {
-    const MODULUS: &str = crate::RISTRETTO_SCALAR_MODULUS_DECIMAL;
-    if s.is_empty()
-        || !s.bytes().all(|b| b.is_ascii_digit())
-        || (s.len() > 1 && s.starts_with('0'))
-        || s.len() > MODULUS.len()
-        || (s.len() == MODULUS.len() && s >= MODULUS)
-    {
-        return Err(refused("noncanonical-scalar"));
-    }
-    Ok(s.bytes().fold(RistrettoScalar::ZERO, |a, b| {
-        a * RistrettoScalar::from(10u64) + RistrettoScalar::from(u64::from(b - b'0'))
-    }))
-}
-impl Coefficient for KoalaBear {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for KoalaBearExt8 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for KoalaBearExt4 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-// Binary fields: addition is exclusive or and every element is its own
-// negation. Inversion of zero is refused, as for every installed field.
-impl Coefficient for Binary64 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for Binary64Ext3 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
 pub(crate) trait Family: crate::matrix::IdentityCoefficient {
-    type Packing: super::vector::Packing<Self>;
-    /// Packed dot products also reduce their accumulator lanes, even at length zero.
-    const DOT_SETUP_WORK: u64 = 1;
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         equal_len(a.len(), b.len())?;
-        Ok(a.iter().zip(b).fold(Self::zero(), |s, (a, b)| s + *a * *b))
+        Self::dot_product(a, b).map_err(crate::field_error)
     }
     fn product(a: &[Self], b: &[Self], out: &mut [Self]) -> Result<()> {
         equal_len(a.len(), b.len())?;
         equal_len(a.len(), out.len())?;
-        super::vector::mul::<Self>(a, b, out);
+        zkc_kernels::vector::mul::<Self>(a, b, out).map_err(crate::field_error)?;
         Ok(())
     }
     fn field(v: &Value) -> Result<Self>;
@@ -146,9 +29,8 @@ pub(crate) trait Family: crate::matrix::IdentityCoefficient {
     fn decimal(s: &str) -> Result<Self>;
 }
 macro_rules! family {
-    ($s:ty, $packing:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
+    ($s:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
         impl Family for $s {
-            type Packing = $packing;
             $($extra)*
             fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> {
                 if let Value::$matrix(v) = v {Ok(v)} else {Err(refused("kernel-operands"))}
@@ -200,7 +82,6 @@ macro_rules! family {
 }
 family!(
     crate::Bn254Scalar,
-    super::vector::Scalar,
     Bn254Field,
     Bn254Vector,
     Bn254Matrix,
@@ -208,84 +89,67 @@ family!(
     Bn254Round,
     |s| crate::parse_bn254_decimal(s).map_err(crate::ark)
 );
-family!(
-    Scalar,
-    super::vector::Scalar,
-    Field,
-    Vector,
-    Matrix,
-    Polynomial,
-    Round,
-    |s| { zkc_arkworks::parse_decimal(s).map_err(crate::ark) }
-);
+family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
+    zkc_kernels::parse_decimal(s).map_err(crate::ark)
+});
 family!(
     RistrettoScalar,
-    super::vector::Scalar,
     RistrettoField,
     RistrettoVector,
     RistrettoMatrix,
     RistrettoPolynomial,
     RistrettoRound,
-    parse_ristretto_decimal
+    |s| zkc_kernels::fields::parse_ristretto_decimal(s).map_err(crate::field_error)
 );
 
 family!(
     KoalaBear,
-    super::vector::Plonky3,
     KoalaBearField,
     KoalaBearVector,
     KoalaBearMatrix,
     KoalaBearPolynomial,
     KoalaBearRound,
-    crate::plonky3::parse_decimal,
-    const DOT_SETUP_WORK: u64 = 1 + crate::plonky3::PACKING_WIDTH as u64;,
-    fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
-        crate::plonky3::dot(a, b)
-    }
+    |s| zkc_kernels::plonky3::parse_decimal(s).map_err(crate::field_error)
 );
 
 family!(
     KoalaBearExt8,
-    super::vector::Plonky3,
     KoalaBearExt8Field,
     KoalaBearExt8Vector,
     KoalaBearExt8Matrix,
     KoalaBearExt8Polynomial,
     KoalaBearExt8Round,
-    crate::plonky3::parse_extension_decimal
+    |s| zkc_kernels::plonky3::parse_extension_decimal(s).map_err(crate::field_error)
 );
 
 family!(
     KoalaBearExt4,
-    super::vector::Plonky3,
     KoalaBearExt4Field,
     KoalaBearExt4Vector,
     KoalaBearExt4Matrix,
     KoalaBearExt4Polynomial,
     KoalaBearExt4Round,
-    crate::plonky3::parse_quartic_decimal
+    |s| zkc_kernels::plonky3::parse_quartic_decimal(s).map_err(crate::field_error)
 );
 
 family!(
     Binary64,
-    super::vector::Plonky3,
     Binary64Field,
     Binary64Vector,
     Binary64Matrix,
     Binary64Polynomial,
     Binary64Round,
-    crate::plonky3::binary::parse_literal
+    |s| zkc_kernels::plonky3::binary::parse_literal(s).map_err(crate::field_error)
 );
 
 family!(
     Binary64Ext3,
-    super::vector::Plonky3,
     Binary64Ext3Field,
     Binary64Ext3Vector,
     Binary64Ext3Matrix,
     Binary64Ext3Polynomial,
     Binary64Ext3Round,
-    crate::plonky3::binary::parse_ext3_literal
+    |s| zkc_kernels::plonky3::binary::parse_ext3_literal(s).map_err(crate::field_error)
 );
 
 /// Dispatch once on the exact binding field, then execute over typed operands.

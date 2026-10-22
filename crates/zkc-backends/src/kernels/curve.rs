@@ -95,7 +95,7 @@ fn with_scaling_workspace<G: Group>(
     let chunk_len = G::scaling_workspace_bytes(1)
         .filter(|bytes| *bytes != 0)
         .map(|bytes| {
-            len.min(zkc_arkworks::SCALING_CHUNK_CAP)
+            len.min(zkc_kernels::SCALING_CHUNK_CAP)
                 .min(policy.max_numerical_bytes / bytes)
         })
         .unwrap_or(0);
@@ -307,7 +307,7 @@ impl Group for crate::EdwardsPrime {
     }
     fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
         equal_len(s.len(), p.len())?;
-        Ok(Self::msm(s, p))
+        Self::msm(s, p).ok_or_else(|| refused("length-mismatch"))
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::EdwardsGroup(v) = v {
@@ -492,10 +492,10 @@ pub(crate) fn apply(
         p.output(32768, usize::MAX)?;
         return match args {
             [Value::Bn254G1(a), Value::Bn254G2(b)] => {
-                Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))])
+                Ok(vec![Value::Bn254Gt(zkc_kernels::bn254::pairing(a, b))])
             }
             [Value::Curve(a), Value::Bls12381G2(b)] => Ok(vec![Value::Bls12381Gt(Arc::new(
-                zkc_arkworks::bls12_381::pairing(a, b),
+                zkc_kernels::bls12_381::pairing(a, b),
             ))]),
             _ => Err(refused("kernel-operands")),
         };
@@ -510,7 +510,7 @@ pub(crate) fn apply(
                 // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
                 // plus G1 preparation and multi-Miller loop working vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
-                zkc_arkworks::bn254::pairing_check(a, b)
+                zkc_kernels::bn254::pairing_check(a, b)
             }
             [Value::Groups(a), Value::Bls12381G2Vector(b)] => {
                 equal_len(a.len(), b.len())?;
@@ -520,7 +520,7 @@ pub(crate) fn apply(
                 // BLS12-381 G2 preparations retain 68 line coefficients (three
                 // Fq2 each), plus G1 preparation and multi-Miller loop vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
-                zkc_arkworks::bls12_381::pairing_check(a, b)
+                zkc_kernels::bls12_381::pairing_check(a, b)
             }
             _ => return Err(refused("kernel-operands")),
         };

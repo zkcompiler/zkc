@@ -23,6 +23,7 @@ zkc-plonky3-air = { path = "exporter" }
 zkc-plonky3-air-client = { path = "client" }
 # Native admission and evaluation are optional consumers of exported assets.
 zkc-runtime = { path = "../../../crates/zkc-runtime" }
+zkc-kernels = { path = "../../../crates/zkc-kernels" }
 zkc-backends = { path = "../../../crates/zkc-backends" }
 
 [workspace.lints.rust]

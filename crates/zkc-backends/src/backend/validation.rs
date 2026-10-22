@@ -10,7 +10,7 @@ pub(super) struct Core {
     pub(super) entry: EntryPolicy,
     pub(super) resources: Resources,
     pub(super) setups: SetupRegistry,
-    pub(super) polynomial: crate::plonky3::polynomial::Kernels,
+    pub(super) polynomial: zkc_kernels::plonky3::polynomial::Kernels,
 }
 impl Core {
     pub(super) fn new(policy: Policy, entry: EntryPolicy, setups: SetupRegistry) -> Self {
@@ -71,7 +71,7 @@ impl Core {
             }
             Value::Bn254Polynomial(v) => {
                 self.policy.vector(v.len())?;
-                if !crate::kernels::arithmetic::normalized(v) {
+                if !zkc_kernels::polynomial::normalized(v) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -118,7 +118,7 @@ impl Core {
             }
             Value::KoalaBearExt4Polynomial(a) => {
                 self.policy.vector_width(a.len(), 16)?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -133,7 +133,7 @@ impl Core {
             }
             Value::Binary64Polynomial(a) => {
                 self.policy.vector_width(a.len(), 8)?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -148,7 +148,7 @@ impl Core {
             }
             Value::Binary64Ext3Polynomial(a) => {
                 self.policy.vector_width(a.len(), 24)?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -159,7 +159,7 @@ impl Core {
             }
             Value::KoalaBearExt8Polynomial(a) => {
                 self.policy.vector_width(a.len(), 32)?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -174,7 +174,7 @@ impl Core {
             }
             Value::KoalaBearPolynomial(a) => {
                 self.policy.vector_width(a.len(), 4)?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
@@ -189,14 +189,14 @@ impl Core {
             }
             Value::Polynomial(a) => {
                 self.policy.vector(a.len())?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None
             }
             Value::RistrettoPolynomial(a) => {
                 self.policy.vector(a.len())?;
-                if !crate::kernels::arithmetic::normalized(a) {
+                if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
                 None

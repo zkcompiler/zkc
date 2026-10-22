@@ -7,7 +7,7 @@ pub(crate) fn needs_input_setup(ty: &LogicalType) -> bool {
 }
 // Apply a port's configured setup recursively. Copyable aggregates may contain
 // PCS leaves; neither aggregate construction nor unused entry data bypasses it.
-pub(crate) fn check_input(value: &Value, key: &zkc_arkworks::VerifierKey) -> Result<()> {
+pub(crate) fn check_input(value: &Value, key: &zkc_kernels::VerifierKey) -> Result<()> {
     let metadata = match value {
         Value::Commitment(v) => Some(v.metadata()),
         Value::Proof(v) => Some(v.metadata()),
@@ -38,17 +38,17 @@ pub(crate) fn check_input(value: &Value, key: &zkc_arkworks::VerifierKey) -> Res
 /// Canonical byte snapshots are owned: moving or mutating a source request cannot
 /// change an authenticated cache entry. This context ends with one invocation.
 pub(crate) struct VerifierKeys {
-    bounds: zkc_arkworks::Bounds,
+    bounds: zkc_kernels::Bounds,
     ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     retained: Vec<zkc_runtime::vm::LiveReservation>,
     keys: std::collections::BTreeMap<[u8; 32], Vec<ImportedVerifierKey>>,
 }
 struct ImportedVerifierKey {
     bytes: Vec<u8>,
-    key: std::sync::Arc<zkc_arkworks::VerifierKey>,
+    key: std::sync::Arc<zkc_kernels::VerifierKey>,
 }
 impl VerifierKeys {
-    pub fn new(bounds: zkc_arkworks::Bounds) -> Self {
+    pub fn new(bounds: zkc_kernels::Bounds) -> Self {
         Self {
             bounds,
             ledger: None,
@@ -59,7 +59,7 @@ impl VerifierKeys {
     pub(crate) fn set_ledger(&mut self, ledger: Option<zkc_runtime::vm::ExecutionLedger>) {
         self.ledger = ledger;
     }
-    pub(crate) fn check_bounds(&self, bounds: zkc_arkworks::Bounds) -> Result<()> {
+    pub(crate) fn check_bounds(&self, bounds: zkc_kernels::Bounds) -> Result<()> {
         if self.bounds != bounds {
             return Err("native-setup-capacity".into());
         }
@@ -70,7 +70,7 @@ impl VerifierKeys {
         bytes: &[u8],
         pin: [u8; 32],
         canonical_error: &str,
-    ) -> Result<std::sync::Arc<zkc_arkworks::VerifierKey>> {
+    ) -> Result<std::sync::Arc<zkc_kernels::VerifierKey>> {
         if let Some(imported) = self
             .keys
             .get(&pin)
@@ -87,7 +87,7 @@ impl VerifierKeys {
             .ok_or("native-setup-capacity")?;
         let guard = crate::host::shared::allocation(self.ledger.as_ref(), bound)?;
         self.retained.extend(guard);
-        let key = zkc_arkworks::VerifierKey::from_bytes(bytes, pin, &self.bounds)
+        let key = zkc_kernels::VerifierKey::from_bytes(bytes, pin, &self.bounds)
             .map_err(|e| e.to_string())?;
         if key.to_bytes(&self.bounds).map_err(|e| e.to_string())? != bytes {
             return Err(canonical_error.into());
@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn verifier_reuse_requires_identical_bytes_and_authority() {
         let bounds = zkc_backends::Policy::default().ark_bounds();
-        let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+        let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
         let key = keys.verifier_key();
         let bytes = key.to_bytes(&bounds).unwrap();
         let same_bytes = bytes.clone();
@@ -132,7 +132,7 @@ mod tests {
         ));
         assert!(
             imports
-                .check_bounds(zkc_arkworks::Bounds::new(0, 0, 0, 0))
+                .check_bounds(zkc_kernels::Bounds::new(0, 0, 0, 0))
                 .is_err()
         );
     }

@@ -74,7 +74,7 @@ fn evaluate(coefficients: &[Scalar], point: Scalar) -> Scalar {
 fn univariate(directory: &Path) {
     let bundle = bundle(directory, "univariate");
     let omega =
-        zkc_arkworks::parse_decimal("3465144826073652318776269530687742778270252468765361963008")
+        zkc_kernels::parse_decimal("3465144826073652318776269530687742778270252468765361963008")
             .unwrap();
     assert_eq!(omega * omega, -Scalar::from(1));
     let offset = Scalar::from(3);

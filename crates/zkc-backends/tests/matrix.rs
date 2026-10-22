@@ -664,7 +664,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
             let mut wide = [0; 64];
             direct.challenge_bytes(b"challenge", &mut wide);
             let expected = if d == 0 {
-                Value::Field(zkc_arkworks::scalar_from_wide_be(&wide))
+                Value::Field(zkc_kernels::scalar_from_wide_be(&wide))
             } else {
                 Value::RistrettoField(RistrettoScalar::from_bytes_mod_order_wide(&wide))
             };

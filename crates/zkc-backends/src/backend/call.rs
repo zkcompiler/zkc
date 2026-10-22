@@ -205,7 +205,7 @@ impl NativeCall {
             }
             AttributeRule::FieldDecimals => {
                 for literal in attributes {
-                    zkc_arkworks::parse_decimal(literal).map_err(ark)?;
+                    zkc_kernels::parse_decimal(literal).map_err(ark)?;
                 }
             }
             AttributeRule::RistrettoDecimals => {
@@ -215,7 +215,8 @@ impl NativeCall {
             }
             AttributeRule::KoalaBearDecimals => {
                 for literal in attributes {
-                    let _ = crate::plonky3::parse_decimal(literal)?;
+                    let _ =
+                        zkc_kernels::plonky3::parse_decimal(literal).map_err(crate::field_error)?;
                 }
             }
             AttributeRule::MatrixIdentity | AttributeRule::AssetIdentity
@@ -237,12 +238,14 @@ impl NativeCall {
                     && matches!(attributes[2].as_str(), "0" | "1") => {}
             AttributeRule::Binary64Literals => {
                 for literal in attributes {
-                    let _ = crate::plonky3::binary::parse_literal(literal)?;
+                    let _ = zkc_kernels::plonky3::binary::parse_literal(literal)
+                        .map_err(crate::field_error)?;
                 }
             }
             AttributeRule::Binary64Ext3Literals => {
                 for literal in attributes {
-                    let _ = crate::plonky3::binary::parse_ext3_literal(literal)?;
+                    let _ = zkc_kernels::plonky3::binary::parse_ext3_literal(literal)
+                        .map_err(crate::field_error)?;
                 }
             }
             AttributeRule::NativeMessageTemplate => {

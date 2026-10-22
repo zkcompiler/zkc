@@ -191,7 +191,7 @@ pub fn check(
         );
     }
     let other =
-        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(11), Scalar::from(17)], &bounds)
+        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(11), Scalar::from(17)], &bounds)
             .unwrap();
     let other = keys.prover_key().commit(&other).unwrap();
     let changed = public(
@@ -305,7 +305,7 @@ pub fn check(
     }
     // Original backing survives restriction and repeated opening through aliases.
     let table =
-        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(1), Scalar::from(2)], &bounds)
+        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(1), Scalar::from(2)], &bounds)
             .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let alias = state.clone();

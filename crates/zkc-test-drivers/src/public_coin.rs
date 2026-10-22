@@ -36,7 +36,7 @@ struct Draw {
     prefix_length: usize,
 }
 fn scalar(s: &str) -> Scalar {
-    zkc_arkworks::parse_decimal(s).unwrap()
+    zkc_kernels::parse_decimal(s).unwrap()
 }
 fn array(values: Vec<Scalar>) -> Value {
     Value::FieldArray(

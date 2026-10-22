@@ -236,7 +236,7 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
 #[test]
 fn pcs_frames_require_the_selected_setup_and_canonical_payloads() {
     use std::sync::Arc;
-    use zkc_arkworks::{Keys, Table};
+    use zkc_kernels::{Keys, Table};
     let policy = Policy::default();
     let bounds = policy.ark_bounds();
     let keys = Keys::setup_for_development(2, &bounds).unwrap();

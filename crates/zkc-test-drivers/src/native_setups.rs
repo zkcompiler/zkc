@@ -2,8 +2,8 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
-use zkc_arkworks::Keys;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_kernels::Keys;
 use zkc_test_support::hex;
 use zkc_tools::proof::{NativeDeployment, SetupAuthority};
 fn inputs(

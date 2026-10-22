@@ -9,7 +9,7 @@ rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 zkc-runtime.workspace = true
 zkc-backends.workspace = true
-zkc-arkworks.workspace = true
+zkc-kernels.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

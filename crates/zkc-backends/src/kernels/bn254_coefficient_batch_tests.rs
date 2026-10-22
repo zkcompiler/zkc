@@ -77,7 +77,7 @@ fn coefficient_batch_allocation_failures_publish_nothing_and_preserve_inputs() {
     let aliases = [arguments[0].clone(), arguments[0].clone()];
     // First the private destination, then the reusable FFT scratch vector.
     for successful in [0, 1] {
-        let failure = crate::allocation::failure::after(successful);
+        let failure = zkc_kernels::allocation::failure::after(successful);
         assert_eq!(
             run(&arguments, &policy, usize::MAX).unwrap_err().code,
             "exhausted:allocation"

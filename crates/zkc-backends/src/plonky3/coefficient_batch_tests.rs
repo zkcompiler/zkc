@@ -93,7 +93,7 @@ fn allocation_failure_checks<E: Family>() {
     let aliases = [arguments[0].clone(), arguments[0].clone()];
     // First the private destination, then the adapter's transform matrix.
     for successful in [0, 1] {
-        let failure = crate::allocation::failure::after(successful);
+        let failure = zkc_kernels::allocation::failure::after(successful);
         assert_eq!(
             run::<E>(&arguments, &policy, usize::MAX).unwrap_err().code,
             "exhausted:allocation"
@@ -108,7 +108,7 @@ fn allocation_failure_checks<E: Family>() {
     // the mandatory matrix reservation fails, before any transform work.
     let mut destination = vec![sample::<E>(99); 24];
     let before = destination.clone();
-    let failure = crate::allocation::failure::after(0);
+    let failure = zkc_kernels::allocation::failure::after(0);
     assert_eq!(
         Kernels::default().coset_evaluate_batch_into(
             &values,

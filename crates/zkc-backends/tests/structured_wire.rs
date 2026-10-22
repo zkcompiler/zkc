@@ -260,11 +260,11 @@ fn aggregate_preflight_refuses_before_payload_construction_and_production_agrees
 fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
     use std::sync::Arc;
     let bounds = Policy::default().ark_bounds();
-    let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let keys = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
     let state = keys
         .prover_key()
         .commit(
-            &zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(2), Scalar::from(5)], &bounds)
+            &zkc_kernels::Table::from_logical_vec(vec![Scalar::from(2), Scalar::from(5)], &bounds)
                 .unwrap(),
         )
         .unwrap();
@@ -301,7 +301,7 @@ fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
         common::ark_backend(None).decode_native_value(&value.physical_type(), &bytes),
         Err(Error::Backend(_))
     ));
-    let other = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let other = zkc_kernels::Keys::setup_for_development(1, &bounds).unwrap();
     let wrong = common::backend()
         .verifier(other.verifier_key().clone())
         .build();
@@ -506,8 +506,8 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     use std::sync::Arc;
     use zkc_runtime::{logical as encoding, vm::Identity};
     let keys =
-        zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
-    let table = zkc_arkworks::Table::from_logical_vec(
+        zkc_kernels::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let table = zkc_kernels::Table::from_logical_vec(
         vec![Scalar::from(2), Scalar::from(5)],
         &Policy::default().ark_bounds(),
     )
@@ -897,7 +897,8 @@ fn runtime_owned_measurements_preserve_nonwire_data_and_complete_counts() {
 #[test]
 fn runtime_owned_handle_collections_count_handles_and_keep_backing_limits() {
     use std::sync::Arc;
-    use zkc_backends::{KoalaBear, merkle, oracle, plonky3::oracle as tree};
+    use zkc_backends::{KoalaBear, merkle, oracle};
+    use zkc_kernels::plonky3::oracle as tree;
     use zkc_runtime::vm::{Backend, PhysicalType};
     let policy = Policy {
         max_table_elements: 8,
@@ -909,7 +910,7 @@ fn runtime_owned_handle_collections_count_handles_and_keep_backing_limits() {
     let (_, state) =
         tree::commit(vec![KoalaBear::default(); 8], shape, policy.max_value_bytes).unwrap();
     let state = oracle::State::Base(Arc::new(state));
-    let (_, merkle) = merkle::commit::<merkle::poseidon2::Base>(
+    let (_, merkle) = zkc_kernels::merkle::commit::<zkc_kernels::merkle::poseidon2::Base>(
         vec![KoalaBear::default(); 8],
         shape,
         policy.max_value_bytes,
@@ -998,9 +999,9 @@ fn singular_pcs_handles_do_not_invent_backing_element_collection_counts() {
         max_table_elements: 8,
         ..Policy::default()
     };
-    let keys = zkc_arkworks::Keys::setup_for_development(3, &policy.ark_bounds()).unwrap();
+    let keys = zkc_kernels::Keys::setup_for_development(3, &policy.ark_bounds()).unwrap();
     let table =
-        zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(7); 8], &policy.ark_bounds())
+        zkc_kernels::Table::from_logical_vec(vec![Scalar::from(7); 8], &policy.ark_bounds())
             .unwrap();
     let state = keys.prover_key().commit(&table).unwrap();
     let backend = common::backend()

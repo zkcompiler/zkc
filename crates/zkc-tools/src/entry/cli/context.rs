@@ -506,7 +506,7 @@ mod tests {
         let mut document = json!({"format":"zkc.entry-invocations/0","deployments":{}});
         let mut materials = Vec::new();
         for (arity, id) in [(1, "first"), (2, "second")] {
-            let keys = zkc_arkworks::Keys::setup_for_development(arity, &bounds).unwrap();
+            let keys = zkc_kernels::Keys::setup_for_development(arity, &bounds).unwrap();
             let key = keys.verifier_key();
             let bytes = key.to_bytes(&bounds).unwrap();
             let filename = format!("{id}.zkvk");

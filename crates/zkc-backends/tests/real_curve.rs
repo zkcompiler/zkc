@@ -195,7 +195,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
     // A scalar-sized payload is malformed for G1; never map the
     // exposed discrete logarithm onto a curve generator.
     let mut malformed_group = b"ZKCV\x00\x09".to_vec();
-    malformed_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
+    malformed_group.extend(zkc_kernels::encode_scalar(&Scalar::from(1)).unwrap());
     assert!(
         b.decode_native_value(&g.physical_type(), &malformed_group)
             .is_err()
@@ -417,7 +417,7 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
     let foreign = Keys::setup_for_development(1, &p.ark_bounds()).unwrap();
     let other_arity = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
     let zero = |key: &Keys| {
-        let table = zkc_arkworks::Table::from_logical_vec(
+        let table = zkc_kernels::Table::from_logical_vec(
             vec![Scalar::from(0); 1 << key.verifier_key().metadata().arity()],
             &p.ark_bounds(),
         )

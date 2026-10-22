@@ -1,7 +1,7 @@
 # Native backend adapters
 
 `zkc-backends` implements `zkc_runtime::vm::Backend` with independently
-installed operation signatures and native mathematical kernels. The runtime
+installed operation signatures and typed mathematical adapters. The runtime
 owns program admission and execution; this crate owns values, cryptographic
 operations, capability state and backend capacity checks.
 
@@ -43,7 +43,7 @@ that every domain has every group, transcript or PCS operation.
 
 `plonky3::poseidon2` installs the batched width-16 KoalaBear Poseidon2
 permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
-external-work permutation per state before computing. `plonky3::words` owns the
+external-work permutation per state before computing. `zkc-kernels::plonky3::words` owns the
 canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
 Bit reversal of vectors and table rows is a positional kernel of every field
 family. `merkle` installs digest-generic row commitments: an `Instance` names a
@@ -95,7 +95,7 @@ allocations retain their existing owners and limits.
 
 `numerical::expression` evaluates admitted Ring bodies in bounded chunks. Its
 node-major workspace stays local to the reached call; prepared plans retain no
-operand values. `kernels::vector` supplies destination-slice arithmetic shared
+operand values. `zkc-kernels::vector` supplies destination-slice arithmetic shared
 by these expressions and dense kernels, including provider-declared field packing
 and scalar tails. Chunking changes neither the Kernel/VM contract nor the
 minimum managed-memory allowance. CPU-specific packing follows build target
@@ -163,7 +163,7 @@ Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
-[their source pins and construction details](src/external/README.md).
+[their source pins and construction details](../zkc-kernels/src/external/README.md).
 
 ## Validation
 

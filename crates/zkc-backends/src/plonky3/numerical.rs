@@ -1,6 +1,5 @@
 //! Checked native installation of coset kernels. Each backend owns its DFT
 //! preparation; no protocol value or transcript state lives in this cache.
-use super::polynomial::{self, Domain, Error, Kernels};
 use crate::numerical::coset::CosetBatchShape;
 use crate::numerical::opening::OpeningQuotientSumShape;
 use crate::{
@@ -8,6 +7,7 @@ use crate::{
     refused, value::size,
 };
 use p3_field::ExtensionField;
+use zkc_kernels::plonky3::polynomial::{self, Domain, Error, Kernels};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]

@@ -49,7 +49,9 @@ refund spent work. All internal work must finish before returning.
 
 ## Managed construction
 
-`zkc-backends`' internal numerical scope reserves:
+`zkc-kernels::numerical` provides the VM-independent scope. Native adapters
+select its limits from invocation policy and map failures before publishing
+concrete values. The scope reserves:
 
 - The aggregate conservative charge of fresh results against the invocation's
   output allowance and the backend's complete-tuple `max_value_bytes` ceiling.

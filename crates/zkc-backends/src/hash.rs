@@ -79,7 +79,7 @@ pub(crate) fn apply(
         return Err(refused("hash-attributes"));
     }
     let charge = |n: usize, budget: &mut crate::external_kernels::Budget| {
-        budget.charge(crate::external::Work {
+        budget.charge(zkc_kernels::external::Work {
             hash_bytes: n as u64,
             // Covers the current partial block and finalization on first read.
             permutations: (n as u64).div_ceil(168) + 1,
@@ -93,7 +93,7 @@ pub(crate) fn apply(
             policy.bytes(bytes.len())?;
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
-            budget.charge(crate::external::Work {
+            budget.charge(zkc_kernels::external::Work {
                 hash_calls: 1,
                 hash_bytes: bytes.len() as u64,
                 ..Default::default()
@@ -105,7 +105,7 @@ pub(crate) fn apply(
             policy.bytes(bytes.len())?;
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
-            budget.charge(crate::external::Work {
+            budget.charge(zkc_kernels::external::Work {
                 hash_calls: 1,
                 hash_bytes: bytes.len() as u64,
                 ..Default::default()
@@ -362,12 +362,12 @@ mod tests {
             .absorb(&commitment.to_bytes().unwrap());
         let mut wide = [0u8; 64];
         let state = state.squeeze(&mut wide);
-        let challenge = zkc_arkworks::scalar_from_wide_be(&wide);
+        let challenge = zkc_kernels::scalar_from_wide_be(&wide);
         let response = crate::Scalar::from(11u64) + challenge * crate::Scalar::from(7u64);
         let response_bytes = response.into_bigint().to_bytes_be();
         let final_state = state.absorb(&response_bytes);
         final_state.squeeze(&mut wide);
-        let next_challenge = zkc_arkworks::scalar_from_wide_be(&wide);
+        let next_challenge = zkc_kernels::scalar_from_wide_be(&wide);
         let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
         assert_eq!(
             hex(&challenge.into_bigint().to_bytes_be()),

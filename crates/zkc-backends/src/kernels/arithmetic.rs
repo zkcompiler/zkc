@@ -1,11 +1,11 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
 pub(crate) use super::field::Coefficient;
-pub use super::field::parse_ristretto_decimal;
 use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use std::sync::Arc;
+use zkc_kernels::polynomial::{boundary, evaluate};
 use zkc_runtime::vm::{Identity, Invocation, Value as _};
 
 /// Montgomery batch inversion. The caller supplies the checked allocation;
@@ -15,33 +15,13 @@ fn invert_nonzero<S: Coefficient>(
     values: &[S],
     allocate: impl FnOnce() -> Result<Vec<S>>,
 ) -> Result<Vec<S>> {
-    if values.iter().any(|x| *x == S::zero()) {
-        return Err(refused("zero-inverse"));
-    }
+    let operation = zkc_kernels::vector::Inversion::new(values).map_err(crate::field_error)?;
     let mut out = allocate()?;
-    if values.is_empty() {
-        return Ok(out);
-    }
-    let mut product = S::one();
-    for x in values {
-        out.push(product);
-        product = product * *x;
-    }
-    let mut inverse = product.inverse().ok_or_else(|| refused("zero-inverse"))?;
-    for (x, prefix) in values.iter().zip(out.iter_mut()).rev() {
-        *prefix = *prefix * inverse;
-        inverse = inverse * *x;
-    }
+    out.resize(values.len(), S::zero());
+    operation.write_into(&mut out).map_err(crate::field_error)?;
     Ok(out)
 }
 
-pub(crate) fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {
-    coefficients.iter().rev().fold(S::zero(), |a, c| a * x + *c)
-}
-pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
-    coefficients.first().copied().unwrap_or_else(S::zero)
-        + coefficients.iter().fold(S::zero(), |a, c| a + *c)
-}
 fn find_last<S: Coefficient>(
     values: &[S],
     needle: S,
@@ -64,21 +44,9 @@ fn find_last<S: Coefficient>(
     let found = u64::try_from(found).map_err(|_| exhausted("size-overflow"))?;
     output.finish(|| Ok(Value::Index(found)))
 }
-pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
-    coefficients.last().is_none_or(|c| *c != S::zero())
-}
-/// The index of `position` with its `log2(count)` low bits reversed; `count`
-/// is a power of two.
-pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
-    let bits = count.trailing_zeros();
-    if bits == 0 {
-        0
-    } else {
-        position.reverse_bits() >> (usize::BITS - bits)
-    }
-}
+
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
-    crate::allocation::reserve(n).map_err(|_| exhausted("allocation"))
+    zkc_kernels::allocation::reserve(n).map_err(|_| exhausted("allocation"))
 }
 pub(crate) fn equal_len(a: usize, b: usize) -> Result<()> {
     if a != b {
@@ -444,7 +412,8 @@ fn dense<S: Family>(
             }
             let mut out = allocation(a.len())?;
             for row in 0..height {
-                let source = crate::kernels::arithmetic::reverse_bits(row, height);
+                let source = zkc_kernels::polynomial::reverse_bits(row, height)
+                    .ok_or_else(|| refused("vector-bit-reversal"))?;
                 out.extend_from_slice(&a[source * width..(source + 1) * width]);
             }
             Ok(vec![S::vector_value(out.into())])
@@ -550,7 +519,8 @@ fn dense<S: Family>(
             let x = f(1)?;
             // Load, multiply, initialize/write the destination, then freeze it.
             let mut out = destination(a.len(), S::zero(), 5)?;
-            super::vector::scale::<S>(a, x, out.as_mut_slice());
+            zkc_kernels::vector::scale::<S>(a, x, out.as_mut_slice())
+                .map_err(crate::field_error)?;
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,
             ])
@@ -589,9 +559,11 @@ fn dense<S: Family>(
             if name == "vector.mul" {
                 S::product(a, b, out.as_mut_slice())?;
             } else if name == "vector.add" {
-                super::vector::add::<S>(a, b, out.as_mut_slice());
+                zkc_kernels::vector::add::<S>(a, b, out.as_mut_slice())
+                    .map_err(crate::field_error)?;
             } else {
-                super::vector::sub::<S>(a, b, out.as_mut_slice());
+                zkc_kernels::vector::sub::<S>(a, b, out.as_mut_slice())
+                    .map_err(crate::field_error)?;
             }
             Ok(vec![
                 out.finish(|values| Ok(S::vector_value(values.into())))?,
@@ -633,7 +605,7 @@ fn dense<S: Family>(
             }
             rows.checked_mul(cols)
                 .ok_or_else(|| exhausted("size-overflow"))?;
-            let matrix = crate::numerical::RowMajor::new(a, rows, cols)
+            let matrix = zkc_kernels::numerical::RowMajor::new(a, rows, cols)
                 .ok_or_else(|| refused("length-mismatch"))?;
             let (inner, outer) = if transpose == 0 {
                 (matrix.cols(), matrix.rows())
@@ -1406,8 +1378,8 @@ mod batch_inversion_tests {
         check::<KoalaBearExt8>();
         check::<KoalaBearExt4>();
         // In characteristic two, one plus one is zero: use bit patterns instead.
-        check_values(|k| crate::plonky3::binary::from_bits(k as u64 + 2));
-        check_values(|k| crate::plonky3::binary::ext3_from_bits([3, k as u64, 5]));
+        check_values(|k| zkc_kernels::plonky3::binary::from_bits(k as u64 + 2));
+        check_values(|k| zkc_kernels::plonky3::binary::ext3_from_bits([3, k as u64, 5]));
     }
 }
 

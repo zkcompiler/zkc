@@ -1040,13 +1040,29 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a1a49f4d9c8b8cbdab61e25d9de1b78b3c8347dd2fb88b11d990b3efa8cdd3a"
 dependencies = [
- "p3-challenger",
+ "p3-challenger 0.4.3",
  "p3-field 0.4.3",
  "p3-mds 0.4.3",
  "p3-monty-31 0.4.3",
  "p3-poseidon2 0.4.3",
  "p3-symmetric 0.4.3",
  "rand 0.9.5",
+]
+
+[[package]]
+name = "p3-binary-field"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fae8d58121ed5478834484dc0371302c8a4684287c3e90781d9872580b92c88"
+dependencies = [
+ "num-bigint 0.5.1",
+ "p3-challenger 0.8.0",
+ "p3-field 0.8.0",
+ "p3-maybe-rayon 0.8.0",
+ "p3-symmetric 0.8.0",
+ "rand 0.10.3",
+ "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -1060,6 +1076,21 @@ dependencies = [
  "p3-monty-31 0.4.3",
  "p3-symmetric 0.4.3",
  "p3-util 0.4.3",
+ "tracing",
+]
+
+[[package]]
+name = "p3-challenger"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92cccaed1c107ad279e76dfd10aa71cff1c1898eb282f406288ad556e65e5a8f"
+dependencies = [
+ "p3-field 0.8.0",
+ "p3-keccak",
+ "p3-maybe-rayon 0.8.0",
+ "p3-symmetric 0.8.0",
+ "p3-util 0.8.0",
+ "thiserror",
  "tracing",
 ]
 
@@ -2157,21 +2188,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkc-arkworks"
-version = "0.0.0"
-dependencies = [
- "ark-bls12-381",
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-poly",
- "ark-poly-commit",
- "ark-serialize",
- "ark-std",
- "sha2 0.11.0",
-]
-
-[[package]]
 name = "zkc-backends"
 version = "0.0.0"
 dependencies = [
@@ -2180,6 +2196,7 @@ dependencies = [
  "curve25519-dalek",
  "merlin",
  "p3-baby-bear",
+ "p3-binary-field",
  "p3-commit",
  "p3-dft 0.8.0",
  "p3-field 0.4.3",
@@ -2197,8 +2214,37 @@ dependencies = [
  "sha3",
  "shake",
  "spongefish",
- "zkc-arkworks",
+ "zkc-kernels",
  "zkc-runtime",
+]
+
+[[package]]
+name = "zkc-kernels"
+version = "0.0.0"
+dependencies = [
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-poly-commit",
+ "ark-serialize",
+ "ark-std",
+ "curve25519-dalek",
+ "p3-baby-bear",
+ "p3-binary-field",
+ "p3-commit",
+ "p3-dft 0.8.0",
+ "p3-field 0.4.3",
+ "p3-field 0.8.0",
+ "p3-keccak",
+ "p3-koala-bear",
+ "p3-matrix 0.8.0",
+ "p3-merkle-tree",
+ "p3-symmetric 0.4.3",
+ "p3-symmetric 0.8.0",
+ "sha2 0.11.0",
+ "sha3",
 ]
 
 [[package]]
@@ -2234,6 +2280,7 @@ dependencies = [
  "p3-matrix 0.8.0",
  "serde_json",
  "zkc-backends",
+ "zkc-kernels",
  "zkc-plonky3-air",
  "zkc-plonky3-air-client",
  "zkc-runtime",

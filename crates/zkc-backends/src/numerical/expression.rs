@@ -2,10 +2,14 @@
 //! a reached NativeCall, never a process-wide cache or a Host Ring asset budget.
 #![forbid(unsafe_code)]
 
-use super::{Call, memory::payload_bytes};
-use crate::kernels::{field::Family, vector};
+use super::Call;
+fn payload_bytes<T>(len: usize) -> crate::Result<usize> {
+    zkc_kernels::numerical::payload_bytes::<T>(len).map_err(|e| crate::exhausted(e.code()))
+}
+use crate::kernels::field::Family;
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::mem::size_of;
+use zkc_kernels::vector;
 use zkc_runtime::ring::{Expression, Node};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
@@ -434,9 +438,13 @@ impl<S: Family> Plan<S> {
                     Operand::Scalar(value) => destination.fill(value),
                     Operand::Column(values) => destination.copy_from_slice(&values[row..row + len]),
                 },
-                Node::Add(a, b) => vector::add::<S>(source(a), source(b), destination),
-                Node::Mul(a, b) => vector::mul::<S>(source(a), source(b), destination),
-                Node::Neg(a) => vector::neg::<S>(source(a), destination),
+                Node::Add(a, b) => vector::add::<S>(source(a), source(b), destination)
+                    .map_err(crate::field_error)?,
+                Node::Mul(a, b) => vector::mul::<S>(source(a), source(b), destination)
+                    .map_err(crate::field_error)?,
+                Node::Neg(a) => {
+                    vector::neg::<S>(source(a), destination).map_err(crate::field_error)?
+                }
                 Node::Constant(..) => destination.fill(self.constants[index]),
                 Node::Embed(..) => return Err(refused("numerical-expression")),
             }

@@ -164,11 +164,11 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
     assert_eq!(zkc_test_support::hex(&second), vector["second"]);
     // Decimal remainders were computed independently with Python integers.
     assert_eq!(
-        zkc_arkworks::scalar_from_wide_be(&first).to_string(),
+        zkc_kernels::scalar_from_wide_be(&first).to_string(),
         vector["first_fr"].as_str().unwrap()
     );
     assert_eq!(
-        zkc_arkworks::scalar_from_wide_be(&second).to_string(),
+        zkc_kernels::scalar_from_wide_be(&second).to_string(),
         vector["second_fr"].as_str().unwrap()
     );
     let (_, second) = direct(&root(), &wire);
@@ -179,7 +179,7 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
         let (out, next) = run_program(b, &p, vec![t, value.clone()]);
         b = next;
         let out = out.unwrap();
-        assert_eq!(scalar(&out[0]), zkc_arkworks::scalar_from_wide_be(&second));
+        assert_eq!(scalar(&out[0]), zkc_kernels::scalar_from_wide_be(&second));
         assert_eq!(b.observe(&handle).unwrap().generation, 3);
     }
     let merlin = program_for(Identity::Merlin3Fr64Be, true);
@@ -189,7 +189,7 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
     let (out, _) = run_program(b, &merlin, vec![t, value]);
     assert_ne!(
         scalar(&out.unwrap()[0]),
-        zkc_arkworks::scalar_from_wide_be(&second)
+        zkc_kernels::scalar_from_wide_be(&second)
     );
 }
 #[test]

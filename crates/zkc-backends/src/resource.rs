@@ -4,7 +4,7 @@ use std::{
     fmt,
     sync::Arc,
 };
-use zkc_arkworks::{RandomSource, Scalar};
+use zkc_kernels::{RandomSource, Scalar};
 use zkc_runtime::vm::{Frame, FrameExit, FrameKind, Identity, Type, Value as RuntimeValue};
 
 /// Host-selected service authority scope. An instance restriction is exact:
@@ -388,7 +388,7 @@ impl Resources {
             Identity::Merlin3Fr64Be
             | Identity::Spongefish080KeccakFr64Be
             | Identity::HashChainKeccak256Fr64Be => {
-                Value::Field(zkc_arkworks::scalar_from_wide_be(&block()))
+                Value::Field(zkc_kernels::scalar_from_wide_be(&block()))
             }
             Identity::Merlin3Ristretto64Le => {
                 Value::RistrettoField(crate::RistrettoScalar::from_bytes_mod_order_wide(&block()))

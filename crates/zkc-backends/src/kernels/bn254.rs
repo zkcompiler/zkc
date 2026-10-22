@@ -8,17 +8,16 @@ use crate::{
     value::size,
 };
 use ark_ff::{FftField, Field, One, Zero};
-use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
+use ark_poly::EvaluationDomain;
+use zkc_kernels::bn254::polynomial::{Domain, coset_evaluate_at_into, serial_batch_inverse_into};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]
 #[path = "bn254_coefficient_batch_tests.rs"]
 mod coefficient_batch_tests;
-fn domain(n: usize, shift: F, p: &Policy) -> Result<Radix2EvaluationDomain<F>> {
+fn domain(n: usize, shift: F, p: &Policy) -> Result<Domain> {
     validate_domain(n, shift, p)?;
-    Radix2EvaluationDomain::<F>::new(n)
-        .and_then(|d| d.get_coset(shift))
-        .ok_or_else(|| refused("coset-size"))
+    Domain::new(n, shift).ok_or_else(|| refused("coset-size"))
 }
 fn validate_domain(n: usize, shift: F, p: &Policy) -> Result<()> {
     if !n.is_power_of_two() || n.trailing_zeros() > F::TWO_ADICITY {
@@ -193,7 +192,8 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
                     point,
                     weights.as_mut(),
                     output.as_mut_slice(),
-                );
+                )
+                .map_err(crate::field_error)?;
             }
             output.finish(|values| Ok(Value::Bn254Vector(values.into())))?
         }
@@ -347,6 +347,10 @@ fn opening_quotient_sum(args: &[Value], available: usize, policy: &Policy) -> Re
             }
             serial_batch_inverse_into(denominators.as_ref(), prefixes.as_mut(), |row, inverse| {
                 output.as_mut_slice()[row] += weights[j] * (selected[row] - claims[j]) * inverse;
+            })
+            .map_err(|error| match error {
+                zkc_kernels::fields::Error::ZeroInverse => refused("coset-opening-point"),
+                other => crate::field_error(other),
             })?;
             previous_point = Some(points[j]);
         }
@@ -354,65 +358,6 @@ fn opening_quotient_sum(args: &[Value], available: usize, policy: &Policy) -> Re
         output.as_mut_slice().copy_from_slice(initial);
     }
     output.finish(|values| Ok(Value::Bn254Vector(values.into())))
-}
-
-/// Serial Montgomery inversion with explicitly supplied prefix storage. Unlike
-/// Arkworks' allocating convenience routine, both arrays belong to Call and
-/// remain accounted for. No provider-private Vec or Rayon scratch is involved.
-fn serial_batch_inverse_into(
-    denominators: &[F],
-    prefixes: &mut [F],
-    mut finish: impl FnMut(usize, F),
-) -> Result<()> {
-    debug_assert_eq!(denominators.len(), prefixes.len());
-    let mut product = F::one();
-    for (prefix, denominator) in prefixes.iter_mut().zip(denominators) {
-        *prefix = product;
-        product *= denominator;
-    }
-    let mut inverse = product
-        .inverse()
-        .ok_or_else(|| refused("coset-opening-point"))?;
-    for (row, (prefix, denominator)) in prefixes.iter_mut().zip(denominators).enumerate().rev() {
-        let denominator_inverse = *prefix * inverse;
-        inverse *= denominator;
-        finish(row, denominator_inverse);
-        *prefix = denominator_inverse;
-    }
-    Ok(())
-}
-
-/// Provider arithmetic only; the native adapter has checked geometry and owns
-/// the admitted private destination and scoped weights. No transform is used.
-fn coset_evaluate_at_into(
-    values: &[F],
-    domain: Radix2EvaluationDomain<F>,
-    point: F,
-    weights: &mut [F],
-    destination: &mut [F],
-) {
-    for (row, (x, denominator)) in domain.elements().zip(weights.iter_mut()).enumerate() {
-        if point == x {
-            for (column, result) in values.chunks_exact(domain.size()).zip(destination) {
-                *result = column[row];
-            }
-            return;
-        }
-        *denominator = point - x;
-    }
-    ark_ff::serial_batch_inversion_and_mul(weights, &F::one());
-    let scale = domain.evaluate_vanishing_polynomial(point)
-        * domain.size_inv
-        * domain.offset_inv.pow([domain.size() as u64]);
-    for (inverse, x) in weights.iter_mut().zip(domain.elements()) {
-        *inverse *= scale * x;
-    }
-    for (column, result) in values.chunks_exact(domain.size()).zip(destination) {
-        *result = column
-            .iter()
-            .zip(weights.iter())
-            .fold(F::zero(), |sum, (value, weight)| sum + *value * *weight);
-    }
 }
 
 #[cfg(test)]

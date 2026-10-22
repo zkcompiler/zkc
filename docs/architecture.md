@@ -74,6 +74,7 @@ judgment.
 | Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
 | Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
+| Mathematical kernels | [zkc-kernels](../crates/zkc-kernels/README.md): typed arithmetic, transforms, commitments, curve operations and scoped numerical storage |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
 

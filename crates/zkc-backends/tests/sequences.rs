@@ -375,16 +375,16 @@ fn kernels_are_immutable_checked_and_charge_work_across_frames() {
 #[test]
 fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
     let keys =
-        zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+        zkc_kernels::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let other =
-        zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+        zkc_kernels::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let empty = sequence("prover_key:multilinear.kzg.bls12-381/0", vec![]);
     assert!(
         support::backend(Policy::default())
             .encode_native_value(&empty)
             .is_err()
     );
-    let table = zkc_arkworks::Table::from_logical_vec(
+    let table = zkc_kernels::Table::from_logical_vec(
         vec![Scalar::from(1), Scalar::from(2)],
         &Policy::default().ark_bounds(),
     )
@@ -412,7 +412,7 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
     )
     .unwrap();
     let different_arity =
-        zkc_arkworks::Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
+        zkc_kernels::Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
     let wrong_arity = NativeBackend::new(
         Policy::default(),
         support::entry(None),

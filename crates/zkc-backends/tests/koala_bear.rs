@@ -4,7 +4,8 @@ mod support;
 use p3_field::{Field, PrimeCharacteristicRing, PrimeField32};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program, run_program};
-use zkc_backends::{KoalaBear, Policy, Value, domains::KOALA_BEAR, plonky3};
+use zkc_backends::{KoalaBear, Policy, Value, domains::KOALA_BEAR};
+use zkc_kernels::plonky3;
 use zkc_runtime::vm::{
     Backend, ErrorCode, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
     Type, Value as RuntimeValue,
@@ -241,8 +242,8 @@ fn scalar_arithmetic_matches_integer_modular_reference_and_zero_inverse_refuses(
         "4294967295",
     ] {
         assert_eq!(
-            plonky3::parse_decimal(bad).unwrap_err().code,
-            "refused:noncanonical-scalar"
+            plonky3::parse_decimal(bad).unwrap_err().code(),
+            "noncanonical-scalar"
         );
         let bind = binding("field.constant");
         let sig = bind.signature().unwrap();
@@ -313,20 +314,20 @@ fn packed_product_and_dot_match_integer_reference_including_suffixes() {
     }
     let mut out = [KoalaBear::new(7)];
     assert_eq!(
-        plonky3::mul_into(&[], &[], &mut out).unwrap_err().code,
-        "refused:length-mismatch"
+        plonky3::mul_into(&[], &[], &mut out).unwrap_err().code(),
+        "length-mismatch"
     );
     assert_eq!(out[0].as_canonical_u32(), 7);
     assert_eq!(
         plonky3::mul_into(&[KoalaBear::ONE], &[], &mut out)
             .unwrap_err()
-            .code,
-        "refused:length-mismatch"
+            .code(),
+        "length-mismatch"
     );
     assert_eq!(out[0].as_canonical_u32(), 7);
     assert_eq!(
-        plonky3::dot(&[], &[KoalaBear::ONE]).unwrap_err().code,
-        "refused:length-mismatch"
+        plonky3::dot(&[], &[KoalaBear::ONE]).unwrap_err().code(),
+        "length-mismatch"
     );
 }
 

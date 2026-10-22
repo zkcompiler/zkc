@@ -119,7 +119,7 @@ fn direct(root: &[u8], paths: &[Json], value: u64) -> Scalar {
         m.append_message(b"origin", &origin(path.clone(), "challenge"));
         m.challenge_bytes(b"challenge", &mut raw);
     }
-    zkc_arkworks::scalar_from_wide_be(&raw)
+    zkc_kernels::scalar_from_wide_be(&raw)
 }
 #[test]
 fn exact_merlin_runner_match_and_session_role_invariance() {
@@ -719,7 +719,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let (out, _) = run(&bytes, backend, vec![tok, value]);
         assert_eq!(
             scalar(&out.unwrap()[0]),
-            zkc_arkworks::scalar_from_wide_be(&raw)
+            zkc_kernels::scalar_from_wide_be(&raw)
         );
     }
 }
@@ -758,7 +758,7 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
     reference.append_message(b"origin", &query);
     let mut wide = [0u8; 64];
     reference.challenge_bytes(b"challenge", &mut wide);
-    let expected = zkc_arkworks::scalar_from_wide_be(&wide);
+    let expected = zkc_kernels::scalar_from_wide_be(&wide);
     for role in ["P", "V"] {
         let d = Domain::new(role, "session", "main", None);
         let mut backend = NativeBackend::new(

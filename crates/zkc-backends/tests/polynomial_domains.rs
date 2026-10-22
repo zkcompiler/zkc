@@ -3,10 +3,8 @@
 mod support;
 use p3_field::{PrimeCharacteristicRing, TwoAdicField};
 use p3_koala_bear::KoalaBear;
-use zkc_backends::{
-    KoalaBearExt8, Policy, domains,
-    plonky3::polynomial::{Domain, Error},
-};
+use zkc_backends::{KoalaBearExt8, Policy, domains};
+use zkc_kernels::plonky3::polynomial::{Domain, Error};
 use zkc_runtime::vm::{Backend, Identity, OperationBinding};
 
 #[test]

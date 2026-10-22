@@ -2,7 +2,7 @@
 members = [
   "crates/zkc-runtime",
   "crates/zkc-tools",
-  "crates/zkc-arkworks",
+  "crates/zkc-kernels",
   "crates/zkc-backends",
   "crates/zkc-test-support",
   "crates/zkc-test-drivers",
@@ -66,7 +66,7 @@ p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 zkc-tools = { path = "crates/zkc-tools" }
 zkc-runtime = { path = "crates/zkc-runtime" }
 zkc-backends = { path = "crates/zkc-backends" }
-zkc-arkworks = { path = "crates/zkc-arkworks" }
+zkc-kernels = { path = "crates/zkc-kernels" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

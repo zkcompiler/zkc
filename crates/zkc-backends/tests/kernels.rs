@@ -118,7 +118,7 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .verifier_key()
         .to_bytes(&Policy::default().ark_bounds())
         .unwrap();
-    let key = zkc_arkworks::VerifierKey::from_bytes(
+    let key = zkc_kernels::VerifierKey::from_bytes(
         &vkbytes,
         keys.verifier_key().metadata().key_id(),
         &Policy::default().ark_bounds(),

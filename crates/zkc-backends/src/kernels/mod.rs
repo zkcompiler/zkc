@@ -8,6 +8,5 @@ pub(crate) mod field;
 pub(crate) mod indices;
 pub(crate) mod pairwise;
 pub(crate) mod resources;
-pub(crate) mod vector;
 
 pub(crate) mod encoding;

@@ -589,7 +589,7 @@ fn check_context_data(
     interface: &super::super::Interface,
     role: &super::super::interface::RolePorts,
     context: &super::super::RoleInputs,
-    keys: &BTreeMap<String, std::sync::Arc<zkc_arkworks::VerifierKey>>,
+    keys: &BTreeMap<String, std::sync::Arc<zkc_kernels::VerifierKey>>,
     capacity: crate::execution::Capacity,
     ledger: &zkc_runtime::vm::ExecutionLedger,
 ) -> std::result::Result<(), String> {

@@ -1,51 +1,19 @@
-//! The width-16 Poseidon2 permutation over KoalaBear with Plonky3 0.8.0's
-//! default parameters: `p3_koala_bear::default_koalabear_poseidon2_16`, with
-//! eight full rounds, twenty partial rounds, the cube S-box, the Grain-LFSR round
-//! constants and the internal diagonal pinned by that release. The kernel
-//! permutes each consecutive 16-element state of one vector. See
-//! docs/spec/domains/permutations.md.
-use super::KoalaBear;
-use crate::external::Work;
+//! Native installation of the width-16 KoalaBear Poseidon2 permutation.
+//! Admission, output allocation and persistent work charging precede evaluation.
 use crate::{Policy, Result, Value, refused, value::size};
-use p3_koala_bear::{Poseidon2KoalaBear, default_koalabear_poseidon2_16};
-use p3_symmetric::Permutation;
-use std::sync::OnceLock;
+use zkc_kernels::plonky3::{
+    KoalaBear,
+    poseidon2::{self, Error},
+};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
-/// Field elements in one permutation state.
-pub const WIDTH: usize = 16;
-
-/// The installed instance, constructed once from the pinned constants.
-pub fn permutation() -> &'static Poseidon2KoalaBear<WIDTH> {
-    static PERMUTATION: OnceLock<Poseidon2KoalaBear<WIDTH>> = OnceLock::new();
-    PERMUTATION.get_or_init(default_koalabear_poseidon2_16)
-}
-
-/// Logical work of permuting `elements` values: one unit per state.
-pub fn work(elements: usize) -> Result<Work> {
-    if !elements.is_multiple_of(WIDTH) {
-        return Err(refused("poseidon2-width"));
+fn failure(error: Error) -> zkc_runtime::vm::BackendError {
+    match error {
+        Error::Width => refused("poseidon2-width"),
     }
-    Ok(Work {
-        permutations: (elements / WIDTH) as u64,
-        ..Work::default()
-    })
-}
-
-/// Permute every consecutive state of `states` into `out`, in order.
-pub fn permute_states(states: &[KoalaBear], out: &mut Vec<KoalaBear>) -> Result<()> {
-    if !states.len().is_multiple_of(WIDTH) {
-        return Err(refused("poseidon2-width"));
-    }
-    for state in states.as_chunks::<WIDTH>().0 {
-        let mut state = *state;
-        permutation().permute_mut(&mut state);
-        out.extend_from_slice(&state);
-    }
-    Ok(())
 }
 
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
@@ -80,13 +48,13 @@ pub(crate) fn apply(
     let ("hash.poseidon2_16", [Value::KoalaBearVector(states)]) = (name, args) else {
         return Err(refused("poseidon2-operands"));
     };
-    let work = work(states.len())?;
+    let work = poseidon2::work(states.len()).map_err(failure)?;
     let element = std::mem::size_of::<KoalaBear>();
     policy.vector_width(states.len(), element)?;
     policy.output(size(states.len(), element)?, available)?;
     budget.charge(work)?;
     let mut out = crate::kernels::arithmetic::reserve(states.len())?;
-    permute_states(states, &mut out)?;
+    poseidon2::permute_states(states, &mut out).map_err(failure)?;
     Ok(vec![Value::KoalaBearVector(out.into())])
 }
 
@@ -97,6 +65,9 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] =
 mod tests {
     use super::*;
     use crate::external_kernels::Budget;
+    use p3_koala_bear::default_koalabear_poseidon2_16;
+    use p3_symmetric::Permutation;
+    use zkc_kernels::plonky3::poseidon2::WIDTH;
 
     fn states(n: usize) -> Value {
         Value::KoalaBearVector((0..n as u32).map(KoalaBear::new).collect::<Vec<_>>().into())
@@ -176,6 +147,21 @@ mod tests {
             .code,
             "refused:poseidon2-attributes"
         );
+    }
+
+    #[test]
+    fn allocation_failure_preserves_the_charged_work_and_input() {
+        let input = states(32);
+        let Value::KoalaBearVector(values) = &input else {
+            panic!("vector")
+        };
+        let saved = values.to_vec();
+        let mut budget = Budget::default();
+        let _failure = zkc_kernels::allocation::failure::after(0);
+        let error = run(std::slice::from_ref(&input), &mut budget, usize::MAX).unwrap_err();
+        assert_eq!(error.code, "exhausted:allocation");
+        assert_eq!(budget.spent, 2);
+        assert_eq!(values.as_ref(), saved);
     }
 
     #[test]

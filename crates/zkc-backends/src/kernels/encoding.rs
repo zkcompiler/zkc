@@ -1,11 +1,11 @@
 //! Exact mathematical encodings, separate from native transport and observation.
-use crate::plonky3::words::{self, Form};
 use crate::{
     Binary64, Binary64Ext3, GroupPoint, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result,
     Scalar, Value, ark, refused, value::size,
 };
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
+use zkc_kernels::plonky3::words::{self, Form};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
@@ -95,7 +95,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
 }
 
 fn field_be(value: &Scalar) -> Result<[u8; 32]> {
-    let mut bytes = zkc_arkworks::encode_scalar(value).map_err(ark)?;
+    let mut bytes = zkc_kernels::encode_scalar(value).map_err(ark)?;
     bytes.reverse();
     Ok(bytes)
 }
@@ -292,12 +292,12 @@ trait BitPattern: Copy + Default {
     fn vector_value(values: Arc<[Self]>) -> Value;
 }
 impl BitPattern for Binary64 {
-    const WIDTH: usize = crate::plonky3::binary::WIDTH;
+    const WIDTH: usize = zkc_kernels::plonky3::binary::WIDTH;
     fn encode_into(self, out: &mut Vec<u8>) {
-        out.extend_from_slice(&crate::plonky3::binary::encode(self));
+        out.extend_from_slice(&zkc_kernels::plonky3::binary::encode(self));
     }
     fn decode(bytes: &[u8]) -> Option<Self> {
-        crate::plonky3::binary::decode(bytes).ok()
+        zkc_kernels::plonky3::binary::decode(bytes).ok()
     }
     fn field(value: &Value) -> Option<Self> {
         match value {
@@ -319,12 +319,12 @@ impl BitPattern for Binary64 {
     }
 }
 impl BitPattern for Binary64Ext3 {
-    const WIDTH: usize = crate::plonky3::binary::EXT3_WIDTH;
+    const WIDTH: usize = zkc_kernels::plonky3::binary::EXT3_WIDTH;
     fn encode_into(self, out: &mut Vec<u8>) {
-        out.extend_from_slice(&crate::plonky3::binary::encode_ext3(self));
+        out.extend_from_slice(&zkc_kernels::plonky3::binary::encode_ext3(self));
     }
     fn decode(bytes: &[u8]) -> Option<Self> {
-        crate::plonky3::binary::decode_ext3(bytes).ok()
+        zkc_kernels::plonky3::binary::decode_ext3(bytes).ok()
     }
     fn field(value: &Value) -> Option<Self> {
         match value {
@@ -526,7 +526,7 @@ pub(crate) fn apply(
             for chunk in bytes.as_chunks::<32>().0.iter().take(count) {
                 let mut little = *chunk;
                 little.reverse();
-                match zkc_arkworks::decode_scalar(&little) {
+                match zkc_kernels::decode_scalar(&little) {
                     Ok(value) => values.push(value),
                     Err(_) => {
                         valid = false;
@@ -543,7 +543,7 @@ pub(crate) fn apply(
             policy.output(1024, available)?;
             let value = if let Ok(mut bytes) = <[u8; 32]>::try_from(bytes.as_ref()) {
                 bytes.reverse();
-                zkc_arkworks::decode_scalar(&bytes).ok()
+                zkc_kernels::decode_scalar(&bytes).ok()
             } else {
                 None
             };
@@ -624,7 +624,9 @@ pub(crate) fn apply(
                 .try_into()
                 .map_err(|_| refused("encoding-width"))?;
             budget.charge_units(2048)?;
-            Ok(vec![Value::EdwardsGroup(crate::edwards::map(input)?)])
+            Ok(vec![Value::EdwardsGroup(
+                zkc_kernels::edwards::map(input).ok_or_else(|| refused("edwards-map"))?,
+            )])
         }
         ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
             policy.bytes(96)?;
@@ -1211,7 +1213,7 @@ mod tests {
         let wide = [0x5a; 64];
         assert!(
             matches!(run("encoding.field_reduce_be", &[bytes(&wide)]).as_slice(),
-            [Value::Field(v)] if *v == zkc_arkworks::scalar_from_wide_be(&wide))
+            [Value::Field(v)] if *v == zkc_kernels::scalar_from_wide_be(&wide))
         );
     }
     #[test]
@@ -1522,7 +1524,7 @@ mod tests {
 
     #[test]
     fn koala_bear_words_round_trip_both_residue_forms() {
-        let p = crate::plonky3::MODULUS;
+        let p = zkc_kernels::plonky3::MODULUS;
         let values = [0, 1, 2, p - 1, 1 << 24, 987_654_321];
         let vector = Value::KoalaBearVector(values.map(KoalaBear::new).to_vec().into());
         let policy = Policy::default();
@@ -1589,7 +1591,7 @@ mod tests {
 
     #[test]
     fn koala_bear_word_decoders_reject_noncanonical_words_and_widths() {
-        let p = crate::plonky3::MODULUS;
+        let p = zkc_kernels::plonky3::MODULUS;
         let policy = Policy::default();
         for name in [
             "encoding.field_from_le",
@@ -1643,7 +1645,7 @@ mod tests {
 
     #[test]
     fn koala_bear_extension_words_are_ascending_coordinates() {
-        let p = crate::plonky3::MODULUS;
+        let p = zkc_kernels::plonky3::MODULUS;
         let policy = Policy::default();
         let x = KoalaBearExt8::from_basis_coefficients_fn(|i| KoalaBear::new(100 + i as u32));
         let canonical = koala(

@@ -34,7 +34,7 @@ fn table(msb: bool, values: &[u64]) -> Value {
     let values: Vec<_> = values.iter().copied().map(Scalar::from).collect();
     if msb {
         Value::TableMsb(Arc::new(
-            zkc_arkworks::MsbTable::from_logical(&values, &Policy::default().ark_bounds()).unwrap(),
+            zkc_kernels::MsbTable::from_logical(&values, &Policy::default().ark_bounds()).unwrap(),
         ))
     } else {
         Value::table(&values, &Policy::default()).unwrap()
@@ -197,7 +197,7 @@ fn constant_fold_keeps_output_capacity_before_positive_arity_refusal() {
 #[test]
 fn table_destinations_and_physical_constructors_check_before_writing() {
     let bounds = Policy::default().ark_bounds();
-    let lsb = zkc_arkworks::Table::from_physical_vec(
+    let lsb = zkc_kernels::Table::from_physical_vec(
         vec![2u64, 11, 5, 19]
             .into_iter()
             .map(Scalar::from)
@@ -205,7 +205,7 @@ fn table_destinations_and_physical_constructors_check_before_writing() {
         &bounds,
     )
     .unwrap();
-    let msb = zkc_arkworks::MsbTable::from_physical_vec(
+    let msb = zkc_kernels::MsbTable::from_physical_vec(
         vec![2u64, 5, 11, 19]
             .into_iter()
             .map(Scalar::from)
@@ -217,22 +217,22 @@ fn table_destinations_and_physical_constructors_check_before_writing() {
     let mut destination = [Scalar::from(97); 3];
     assert_eq!(
         lsb.restrict_first_into(Scalar::from(3), &mut destination),
-        Err(zkc_arkworks::Error::InvalidTableLength)
+        Err(zkc_kernels::Error::InvalidTableLength)
     );
     assert_eq!(destination, [Scalar::from(97); 3]);
     assert_eq!(
         msb.restrict_first_into(Scalar::from(3), &mut destination),
-        Err(zkc_arkworks::Error::InvalidTableLength)
+        Err(zkc_kernels::Error::InvalidTableLength)
     );
     assert_eq!(destination, [Scalar::from(97); 3]);
     for values in [vec![], vec![Scalar::from(1); 3]] {
         assert_eq!(
-            zkc_arkworks::Table::from_physical_vec(values.clone(), &bounds).unwrap_err(),
-            zkc_arkworks::Error::InvalidTableLength
+            zkc_kernels::Table::from_physical_vec(values.clone(), &bounds).unwrap_err(),
+            zkc_kernels::Error::InvalidTableLength
         );
         assert_eq!(
-            zkc_arkworks::MsbTable::from_physical_vec(values, &bounds).unwrap_err(),
-            zkc_arkworks::Error::InvalidTableLength
+            zkc_kernels::MsbTable::from_physical_vec(values, &bounds).unwrap_err(),
+            zkc_kernels::Error::InvalidTableLength
         );
     }
     let tiny = Policy {
@@ -241,12 +241,12 @@ fn table_destinations_and_physical_constructors_check_before_writing() {
     }
     .ark_bounds();
     assert_eq!(
-        zkc_arkworks::Table::from_physical_vec(vec![Scalar::from(1); 2], &tiny).unwrap_err(),
-        zkc_arkworks::Error::ArityLimit
+        zkc_kernels::Table::from_physical_vec(vec![Scalar::from(1); 2], &tiny).unwrap_err(),
+        zkc_kernels::Error::ArityLimit
     );
     assert_eq!(
-        zkc_arkworks::MsbTable::from_physical_vec(vec![Scalar::from(1); 2], &tiny).unwrap_err(),
-        zkc_arkworks::Error::ArityLimit
+        zkc_kernels::MsbTable::from_physical_vec(vec![Scalar::from(1); 2], &tiny).unwrap_err(),
+        zkc_kernels::Error::ArityLimit
     );
 }
 
@@ -464,9 +464,9 @@ fn quotient_checks<E: ExtensionField<KoalaBear>>(
             .0
             .unwrap();
             assert_value(&result[0], &vector(expected.clone()));
-            let domain = zkc_backends::plonky3::polynomial::Domain::new(n, shift, n).unwrap();
+            let domain = zkc_kernels::plonky3::polynomial::Domain::new(n, shift, n).unwrap();
             assert_eq!(
-                zkc_backends::plonky3::polynomial::opening_quotient(&values, domain, point, claim)
+                zkc_kernels::plonky3::polynomial::opening_quotient(&values, domain, point, claim)
                     .unwrap(),
                 expected
             );

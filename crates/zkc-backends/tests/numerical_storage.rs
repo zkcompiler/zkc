@@ -198,7 +198,7 @@ fn storage<F>(
             if operation == "vector.dot" {
                 args.push(input.clone());
                 if domain.field == zkc_runtime::vm::Identity::KoalaBear {
-                    setup += zkc_backends::plonky3::PACKING_WIDTH as u64;
+                    setup += zkc_kernels::plonky3::PACKING_WIDTH as u64;
                 }
             }
             check_limits(
@@ -271,7 +271,7 @@ fn general_storage_preserves_all_eight_fields_at_exact_and_one_short_limits() {
         Value::KoalaBearExt8Field,
         |values| Value::KoalaBearExt8Vector(values.into()),
     );
-    use zkc_backends::plonky3::binary::{ext3_from_bits, from_bits};
+    use zkc_kernels::plonky3::binary::{ext3_from_bits, from_bits};
     storage(
         domains::BINARY64,
         [2, 5, 1 << 63].map(from_bits),

@@ -94,11 +94,9 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     );
     assert!(SetupRegistry::new(vec![a.verifier_key().clone(); 65], &policy).is_err());
 
-    let table = zkc_arkworks::Table::from_logical(
-        &[Scalar::from(2), Scalar::from(5)],
-        &policy.ark_bounds(),
-    )
-    .unwrap();
+    let table =
+        zkc_kernels::Table::from_logical(&[Scalar::from(2), Scalar::from(5)], &policy.ark_bounds())
+            .unwrap();
     let state = a.prover_key().commit(&table).unwrap();
     let value = Value::Commitment(Arc::new(state.commitment().clone()));
     let wire = host.encode_native_value(&value).unwrap();
@@ -179,7 +177,7 @@ fn only_default_table_layout_crosses_native_wire() {
     let backend = ark_backend(None);
     let lsb = table(&[0, 1, 4, 9]);
     let msb = Value::TableMsb(Arc::new(
-        zkc_arkworks::MsbTable::from_logical(
+        zkc_kernels::MsbTable::from_logical(
             &[0u64, 1, 4, 9].map(Scalar::from),
             &policy.ark_bounds(),
         )
@@ -243,7 +241,7 @@ fn native_nested_messages_resolve_only_registered_setups() {
             let state = k
                 .prover_key()
                 .commit(
-                    &zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(7); n], &bounds)
+                    &zkc_kernels::Table::from_logical_vec(vec![Scalar::from(7); n], &bounds)
                         .unwrap(),
                 )
                 .unwrap();

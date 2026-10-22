@@ -686,7 +686,7 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
     let mut data = Vec::with_capacity(4096);
     data.extend([2u64, 3].map(Scalar::from));
     let t = Value::Table(Arc::new(
-        zkc_arkworks::Table::from_logical_vec(data, &Policy::default().ark_bounds()).unwrap(),
+        zkc_kernels::Table::from_logical_vec(data, &Policy::default().ark_bounds()).unwrap(),
     ));
     let state = private_state(&k, &t);
     let pk = Value::ProverKey(Arc::new(k.prover_key().clone()));

@@ -9,8 +9,8 @@
 //! here, and each root keeps what is actually its own.
 #![allow(dead_code)]
 
-use zkc_arkworks::VerifierKey;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_kernels::VerifierKey;
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, Backend, Stop, StopKind};
 

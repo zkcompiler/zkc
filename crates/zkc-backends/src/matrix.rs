@@ -5,7 +5,6 @@ use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use ark_ff::{BigInt, BigInteger, PrimeField};
 use p3_field::{BasedVectorSpace, PrimeField32};
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
 use zkc_runtime::vm::Identity;
 
 /// Canonical mathematical coefficients, independent of Montgomery or wire
@@ -46,7 +45,7 @@ impl IdentityCoefficient for crate::KoalaBearExt4 {
     const IDENTITY: Identity = Identity::KoalaBearExt4;
     fn canonical(self) -> String {
         // As for the octic extension: sum(c_i * p^i) in the ascending basis.
-        let radix = BigInt::<4>::from(crate::plonky3::MODULUS);
+        let radix = BigInt::<4>::from(zkc_kernels::plonky3::MODULUS);
         let mut value = BigInt::<4>::default();
         let coordinates: &[crate::KoalaBear] = self.as_basis_coefficients_slice();
         for c in coordinates.iter().rev() {
@@ -62,13 +61,13 @@ impl IdentityCoefficient for crate::KoalaBearExt4 {
 impl IdentityCoefficient for crate::Binary64 {
     const IDENTITY: Identity = Identity::Binary64;
     fn canonical(self) -> String {
-        crate::plonky3::binary::bits(self).to_string()
+        zkc_kernels::plonky3::binary::bits(self).to_string()
     }
 }
 impl IdentityCoefficient for crate::Binary64Ext3 {
     const IDENTITY: Identity = Identity::Binary64Ext3;
     fn canonical(self) -> String {
-        BigInt::<3>::new(crate::plonky3::binary::ext3_bits(self)).to_string()
+        BigInt::<3>::new(zkc_kernels::plonky3::binary::ext3_bits(self)).to_string()
     }
 }
 impl IdentityCoefficient for crate::KoalaBearExt8 {
@@ -77,7 +76,7 @@ impl IdentityCoefficient for crate::KoalaBearExt8 {
         // The installed ascending power basis gives the canonical integer
         // sum(c_i * p^i). Its decimal spelling is injective and agrees with
         // prime-field spelling for embedded base elements. p^8 < 2^256.
-        let radix = BigInt::<4>::from(crate::plonky3::MODULUS);
+        let radix = BigInt::<4>::from(zkc_kernels::plonky3::MODULUS);
         let mut value = BigInt::<4>::default();
         let coordinates: &[crate::KoalaBear] = self.as_basis_coefficients_slice();
         for c in coordinates.iter().rev() {
@@ -91,36 +90,39 @@ impl IdentityCoefficient for crate::KoalaBearExt8 {
 pub const MATRIX_DIMENSION_LIMIT: usize = 1 << 16;
 pub const MATRIX_NONZERO_LIMIT: usize = 1 << 20;
 
-/// Entries are unique, nonzero and strictly ordered by (row, column). Only
-/// checked constructors can create this representation; clones share backing.
+/// Native matrix storage with VM backing identity and policy admission.
 #[derive(Clone, Debug)]
 pub struct SparseCoo<S> {
-    rows: usize,
-    columns: usize,
-    entries: Arc<[(u32, u32, S)]>,
+    data: zkc_kernels::matrix::SparseCoo<S>,
 }
 impl<S> SparseCoo<S> {
     pub fn rows(&self) -> usize {
-        self.rows
+        self.data.rows()
     }
     pub fn columns(&self) -> usize {
-        self.columns
+        self.data.columns()
     }
     pub fn entries(&self) -> &[(u32, u32, S)] {
-        &self.entries
+        self.data.entries()
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
-        size(self.entries.len(), std::mem::size_of::<(u32, u32, S)>())
+        size(self.entries().len(), std::mem::size_of::<(u32, u32, S)>())
     }
-    /// The shared entry allocation, which holds the whole retained charge.
     pub(crate) fn backing(&self) -> Result<zkc_runtime::vm::Backing> {
         Ok(zkc_runtime::vm::Backing::of(
-            &self.entries,
+            self.data.storage(),
             self.retained_bytes()?,
         ))
     }
     pub(crate) fn policy(&self, p: &Policy) -> Result<()> {
-        preflight::<S>(self.rows, self.columns, self.entries.len(), p)
+        preflight::<S>(self.rows(), self.columns(), self.entries().len(), p)
+    }
+}
+fn failure(error: zkc_kernels::matrix::Error) -> zkc_runtime::vm::BackendError {
+    if error == zkc_kernels::matrix::Error::Allocation {
+        exhausted(error.code())
+    } else {
+        refused(error.code())
     }
 }
 fn preflight<S>(rows: usize, columns: usize, nnz: usize, p: &Policy) -> Result<()> {
@@ -139,37 +141,8 @@ fn preflight<S>(rows: usize, columns: usize, nnz: usize, p: &Policy) -> Result<(
     p.output(size(nnz, std::mem::size_of::<(u32, u32, S)>())?, usize::MAX)
 }
 
-/// Checked lookup in the logical coefficient map. Missing entries within the
-/// shape denote zero; coordinates outside the shape are refused.
-pub(crate) fn get<S: Coefficient>(matrix: &SparseCoo<S>, row: usize, column: usize) -> Result<S> {
-    if row >= matrix.rows || column >= matrix.columns {
-        return Err(refused("matrix-index"));
-    }
-    // Construction caps each dimension at 65536. Check bounds before narrowing
-    // so a large dynamic index cannot alias an in-range coordinate.
-    Ok(matrix
-        .entries
-        .binary_search_by_key(&(row as u32, column as u32), |&(r, c, _)| (r, c))
-        .map(|i| matrix.entries[i].2)
-        .unwrap_or_else(|_| S::zero()))
-}
-fn entry<S: Coefficient>(
-    rows: usize,
-    columns: usize,
-    previous: Option<(u32, u32)>,
-    current: (u32, u32, S),
-) -> Result<()> {
-    let (r, c, a) = current;
-    if r as usize >= rows || c as usize >= columns {
-        return Err(refused("matrix-index"));
-    }
-    if previous.is_some_and(|p| p >= (r, c)) {
-        return Err(refused("matrix-order"));
-    }
-    if a == S::zero() {
-        return Err(refused("matrix-zero"));
-    }
-    Ok(())
+pub(crate) fn get<S: Coefficient>(m: &SparseCoo<S>, row: usize, column: usize) -> Result<S> {
+    zkc_kernels::matrix::get(&m.data, row, column).map_err(failure)
 }
 pub(crate) fn from_entries<S: Coefficient>(
     rows: usize,
@@ -178,20 +151,10 @@ pub(crate) fn from_entries<S: Coefficient>(
     p: &Policy,
 ) -> Result<SparseCoo<S>> {
     preflight::<S>(rows, columns, entries.len(), p)?;
-    let mut previous = None;
-    for &e in entries {
-        entry(rows, columns, previous, e)?;
-        previous = Some((e.0, e.1));
-    }
-    let mut owned = reserve(entries.len())?;
-    owned.extend_from_slice(entries);
     Ok(SparseCoo {
-        rows,
-        columns,
-        entries: owned.into(),
+        data: zkc_kernels::matrix::from_entries(rows, columns, entries).map_err(failure)?,
     })
 }
-
 /// Public-data content binding under SHA256, not relation satisfaction or key
 /// provenance. Checked constructors already enforce normalized sorted COO.
 /// Stream compact JSON without retaining a second copy of the matrix:
@@ -214,11 +177,11 @@ pub(crate) fn identity_check<S: IdentityCoefficient>(
     hash.update(b"[\"zkc.matrix/0\",\"");
     hash.update(S::IDENTITY.name());
     hash.update(b"\",[\"");
-    hash.update(m.rows.to_string());
+    hash.update(m.rows().to_string());
     hash.update(b"\",\"");
-    hash.update(m.columns.to_string());
+    hash.update(m.columns().to_string());
     hash.update(b"\",[");
-    for (i, &(r, c, a)) in m.entries.iter().enumerate() {
+    for (i, &(r, c, a)) in m.entries().iter().enumerate() {
         if i != 0 {
             hash.update(b",");
         }
@@ -249,9 +212,9 @@ pub(crate) fn mul<S: Coefficient>(
     available: usize,
 ) -> Result<Vec<S>> {
     let (input, output) = if transpose {
-        (m.rows, m.columns)
+        (m.rows(), m.columns())
     } else {
-        (m.columns, m.rows)
+        (m.columns(), m.rows())
     };
     if x.len() != input {
         return Err(refused("matrix-shape"));
@@ -260,67 +223,17 @@ pub(crate) fn mul<S: Coefficient>(
     p.output(size(output, std::mem::size_of::<S>())?, available)?;
     let mut result = reserve(output)?;
     result.resize(output, S::zero());
-    if transpose {
-        for row in m.entries.chunk_by(|a, b| a.0 == b.0) {
-            let weight = x[row[0].0 as usize];
-            for &(_, c, a) in row {
-                result[c as usize] = result[c as usize] + a * weight;
-            }
-        }
-    } else {
-        for row in m.entries.chunk_by(|a, b| a.0 == b.0) {
-            result[row[0].0 as usize] = contract_row(row, x);
-        }
-    }
+    zkc_kernels::matrix::mul_into(&m.data, x, transpose, &mut result).map_err(failure)?;
     Ok(result)
 }
-fn contract_row<S: Coefficient>(entries: &[(u32, u32, S)], x: &[S]) -> S {
-    entries
-        .iter()
-        .map(|&(_, c, a)| a * x[c as usize])
-        .reduce(|sum, term| sum + term)
-        .unwrap_or_else(S::zero)
-}
-/// Contract only the selected row. Sorted COO gives a contiguous range, found
-/// without reading coefficients in other rows or allocating a dense vector.
 pub(crate) fn row_dot<S: Coefficient>(m: &SparseCoo<S>, x: &[S], row: usize) -> Result<S> {
-    if x.len() != m.columns {
-        return Err(refused("matrix-shape"));
-    }
-    if row >= m.rows {
-        return Err(refused("matrix-index"));
-    }
-    let start = m.entries.partition_point(|&(r, _, _)| (r as usize) < row);
-    let end = start + m.entries[start..].partition_point(|&(r, _, _)| (r as usize) == row);
-    Ok(contract_row(&m.entries[start..end], x))
+    zkc_kernels::matrix::row_dot(&m.data, x, row).map_err(failure)
 }
-
-/// Row-major COO has no contiguous column range. Scan its existing nonzeros,
-/// multiplying only the selected column and retaining just one accumulator.
-pub(crate) fn column_dot<S: Coefficient>(m: &SparseCoo<S>, y: &[S], column: usize) -> Result<S> {
-    if y.len() != m.rows {
-        return Err(refused("matrix-shape"));
-    }
-    if column >= m.columns {
-        return Err(refused("matrix-index"));
-    }
-    Ok(m.entries
-        .iter()
-        .filter(|&&(_, c, _)| c as usize == column)
-        .fold(S::zero(), |sum, &(r, _, a)| sum + a * y[r as usize]))
+pub(crate) fn column_dot<S: Coefficient>(m: &SparseCoo<S>, x: &[S], column: usize) -> Result<S> {
+    zkc_kernels::matrix::column_dot(&m.data, x, column).map_err(failure)
 }
-
-/// Distributivity applies the left weight once per occupied row, without
-/// materializing the forward product or changing the stored entry order.
 pub(crate) fn bilinear<S: Coefficient>(m: &SparseCoo<S>, y: &[S], x: &[S]) -> Result<S> {
-    if y.len() != m.rows || x.len() != m.columns {
-        return Err(refused("matrix-shape"));
-    }
-    Ok(m.entries
-        .chunk_by(|a, b| a.0 == b.0)
-        .fold(S::zero(), |sum, row| {
-            sum + y[row[0].0 as usize] * contract_row(row, x)
-        }))
+    zkc_kernels::matrix::bilinear(&m.data, y, x).map_err(failure)
 }
 
 pub(crate) trait Wire: Coefficient {
@@ -334,10 +247,10 @@ impl Wire for crate::Bn254Scalar {
     const WIDTH: usize = 32;
     const TAG: u8 = 45;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_arkworks::bn254::decode_scalar(bytes).map_err(crate::ark)
+        zkc_kernels::bn254::decode_scalar(bytes).map_err(crate::ark)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_arkworks::bn254::encode_scalar(&self).map_err(crate::ark)?);
+        out.extend(zkc_kernels::bn254::encode_scalar(&self).map_err(crate::ark)?);
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -348,10 +261,10 @@ impl Wire for crate::Scalar {
     const WIDTH: usize = 32;
     const TAG: u8 = 23;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_arkworks::decode_scalar(bytes).map_err(crate::ark)
+        zkc_kernels::decode_scalar(bytes).map_err(crate::ark)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_arkworks::encode_scalar(&self).map_err(crate::ark)?);
+        out.extend(zkc_kernels::encode_scalar(&self).map_err(crate::ark)?);
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -377,10 +290,10 @@ impl Wire for crate::KoalaBear {
     const WIDTH: usize = 4;
     const TAG: u8 = 25;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        crate::plonky3::decode_scalar(bytes)
+        zkc_kernels::plonky3::decode_scalar(bytes).map_err(crate::field_error)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(crate::plonky3::encode_scalar(self));
+        out.extend(zkc_kernels::plonky3::encode_scalar(self));
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -391,10 +304,10 @@ impl Wire for crate::KoalaBearExt8 {
     const WIDTH: usize = 32;
     const TAG: u8 = 30;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        crate::plonky3::decode_extension(bytes)
+        zkc_kernels::plonky3::decode_extension(bytes).map_err(crate::field_error)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(crate::plonky3::encode_extension(self));
+        out.extend(zkc_kernels::plonky3::encode_extension(self));
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -405,10 +318,10 @@ impl Wire for crate::KoalaBearExt4 {
     const WIDTH: usize = 16;
     const TAG: u8 = 28;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        crate::plonky3::decode_quartic(bytes)
+        zkc_kernels::plonky3::decode_quartic(bytes).map_err(crate::field_error)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(crate::plonky3::encode_quartic(self));
+        out.extend(zkc_kernels::plonky3::encode_quartic(self));
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -416,13 +329,13 @@ impl Wire for crate::KoalaBearExt4 {
     }
 }
 impl Wire for crate::Binary64 {
-    const WIDTH: usize = crate::plonky3::binary::WIDTH;
+    const WIDTH: usize = zkc_kernels::plonky3::binary::WIDTH;
     const TAG: u8 = 75;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        crate::plonky3::binary::decode(bytes)
+        zkc_kernels::plonky3::binary::decode(bytes).map_err(crate::field_error)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(crate::plonky3::binary::encode(self));
+        out.extend(zkc_kernels::plonky3::binary::encode(self));
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -430,13 +343,13 @@ impl Wire for crate::Binary64 {
     }
 }
 impl Wire for crate::Binary64Ext3 {
-    const WIDTH: usize = crate::plonky3::binary::EXT3_WIDTH;
+    const WIDTH: usize = zkc_kernels::plonky3::binary::EXT3_WIDTH;
     const TAG: u8 = 78;
     fn decode(bytes: &[u8]) -> Result<Self> {
-        crate::plonky3::binary::decode_ext3(bytes)
+        zkc_kernels::plonky3::binary::decode_ext3(bytes).map_err(crate::field_error)
     }
     fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(crate::plonky3::binary::encode_ext3(self));
+        out.extend(zkc_kernels::plonky3::binary::encode_ext3(self));
         Ok(())
     }
     fn value(m: SparseCoo<Self>) -> Value {
@@ -450,19 +363,19 @@ fn wire_size<S: Wire>(n: usize) -> Result<usize> {
 }
 fn encode_matrix<S: Wire>(m: &SparseCoo<S>, p: &Policy) -> Result<Vec<u8>> {
     m.policy(p)?;
-    let length = wire_size::<S>(m.entries.len())?;
+    let length = wire_size::<S>(m.entries().len())?;
     p.wire(length)?;
     let mut out = reserve(length)?;
     out.extend_from_slice(b"ZKCV\x00");
     out.push(S::TAG);
-    for n in [m.rows, m.columns, m.entries.len()] {
+    for n in [m.rows(), m.columns(), m.entries().len()] {
         out.extend(
             u32::try_from(n)
                 .map_err(|_| exhausted("size-overflow"))?
                 .to_le_bytes(),
         );
     }
-    for &(r, c, a) in m.entries.iter() {
+    for &(r, c, a) in m.entries().iter() {
         out.extend(r.to_le_bytes());
         out.extend(c.to_le_bytes());
         a.encode(&mut out)?;

@@ -169,33 +169,37 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::FieldArray(array) => {
             array.validate().map_err(NativeWireError::Backend)?;
             for element in array.elements() {
-                bytes.extend_from_slice(&zkc_arkworks::encode_scalar(element).map_err(encoding)?);
+                bytes.extend_from_slice(&zkc_kernels::encode_scalar(element).map_err(encoding)?);
             }
         }
         Value::Index(v) => bytes.extend_from_slice(&v.to_le_bytes()),
         Value::Bool(v) => bytes.push(u8::from(*v)),
         Value::Field(v) => {
-            bytes.extend_from_slice(&zkc_arkworks::encode_scalar(v).map_err(encoding)?)
+            bytes.extend_from_slice(&zkc_kernels::encode_scalar(v).map_err(encoding)?)
         }
         Value::Curve(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254Field(v) => {
-            bytes.extend_from_slice(&zkc_arkworks::bn254::encode_scalar(v).map_err(encoding)?)
+            bytes.extend_from_slice(&zkc_kernels::bn254::encode_scalar(v).map_err(encoding)?)
         }
         Value::Bn254G1(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bls12381G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bls12381Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
-        Value::KoalaBearField(v) => bytes.extend_from_slice(&crate::plonky3::encode_scalar(*v)),
+        Value::KoalaBearField(v) => {
+            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_scalar(*v))
+        }
         Value::KoalaBearExt8Field(v) => {
-            bytes.extend_from_slice(&crate::plonky3::encode_extension(*v))
+            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_extension(*v))
         }
         Value::KoalaBearExt4Field(v) => {
-            bytes.extend_from_slice(&crate::plonky3::encode_quartic(*v))
+            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_quartic(*v))
         }
-        Value::Binary64Field(v) => bytes.extend_from_slice(&crate::plonky3::binary::encode(*v)),
+        Value::Binary64Field(v) => {
+            bytes.extend_from_slice(&zkc_kernels::plonky3::binary::encode(*v))
+        }
         Value::Binary64Ext3Field(v) => {
-            bytes.extend_from_slice(&crate::plonky3::binary::encode_ext3(*v))
+            bytes.extend_from_slice(&zkc_kernels::plonky3::binary::encode_ext3(*v))
         }
         Value::RistrettoField(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::RistrettoGroup(v) => bytes.extend_from_slice(&v.compress().to_bytes()),
@@ -333,7 +337,7 @@ impl NativeBackend {
                 elements.try_reserve_exact(count).map_err(|_| Limit)?;
                 for element in bytes[6..].as_chunks::<32>().0 {
                     elements.push(
-                        zkc_arkworks::decode_scalar(element)
+                        zkc_kernels::decode_scalar(element)
                             .map_err(|_| Invalid(DecodeReason::Scalar))?,
                     );
                 }
@@ -349,7 +353,7 @@ impl NativeBackend {
             // These checked helpers already normalize upstream decoding and
             // canonical re-encoding errors. No lost provenance is reconstructed.
             1 => Value::Field(
-                zkc_arkworks::decode_scalar(&bytes[6..])
+                zkc_kernels::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             9 => Value::Curve(
@@ -361,7 +365,7 @@ impl NativeBackend {
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
             40 => Value::Bn254Field(
-                zkc_arkworks::bn254::decode_scalar(&bytes[6..])
+                zkc_kernels::bn254::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             46 => Value::Bn254G1(
@@ -381,24 +385,24 @@ impl NativeBackend {
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             )),
             19 => Value::KoalaBearField(
-                crate::plonky3::decode_scalar(&bytes[6..])
+                zkc_kernels::plonky3::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             26 => Value::KoalaBearExt8Field(
-                crate::plonky3::decode_extension(&bytes[6..])
+                zkc_kernels::plonky3::decode_extension(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             21 => Value::KoalaBearExt4Field(
-                crate::plonky3::decode_quartic(&bytes[6..])
+                zkc_kernels::plonky3::decode_quartic(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             // Every bit pattern of the exact width is an element.
             73 => Value::Binary64Field(
-                crate::plonky3::binary::decode(&bytes[6..])
+                zkc_kernels::plonky3::binary::decode(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             76 => Value::Binary64Ext3Field(
-                crate::plonky3::binary::decode_ext3(&bytes[6..])
+                zkc_kernels::plonky3::binary::decode_ext3(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             13 => Value::RistrettoField(
@@ -457,9 +461,9 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
     values.try_reserve_exact(count).map_err(|_| Limit)?;
     for element in bytes[10..].as_chunks::<32>().0 {
         values
-            .push(zkc_arkworks::decode_scalar(element).map_err(|_| Invalid(DecodeReason::Scalar))?);
+            .push(zkc_kernels::decode_scalar(element).map_err(|_| Invalid(DecodeReason::Scalar))?);
     }
-    let table = zkc_arkworks::Table::from_logical_vec(values, &policy.ark_bounds())
+    let table = zkc_kernels::Table::from_logical_vec(values, &policy.ark_bounds())
         .map_err(|e| NativeWireError::Backend(crate::ark(e)))?;
     let value = Value::Table(std::sync::Arc::new(table));
     policy

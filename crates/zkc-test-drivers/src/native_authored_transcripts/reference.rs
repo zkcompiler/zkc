@@ -5,10 +5,8 @@ use p3_challenger_043::{CanObserve, CanSample, DuplexChallenger};
 use p3_field_043::{PrimeCharacteristicRing, PrimeField32};
 use serde_json::Value as Json;
 use sha2::Digest;
-use zkc_backends::{
-    Policy, Sequence, Value,
-    external::{monero, openvm},
-};
+use zkc_backends::{Policy, Sequence, Value};
+use zkc_kernels::external::{monero, openvm};
 use zkc_runtime::vm::LogicalType;
 use zkc_tools::proof::NativeDeployment;
 fn packed(state: &openvm::Duplex) -> Value {
