@@ -107,3 +107,6 @@ pub use test_tape::TestTape;
 pub(crate) fn field_error(error: zkc_kernels::fields::Error) -> BackendError {
     refused(error.code())
 }
+
+mod host;
+pub use host::native_encoding_bound;

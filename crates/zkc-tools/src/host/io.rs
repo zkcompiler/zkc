@@ -76,7 +76,7 @@ pub(crate) fn read_shared(
         .and_then(|n| n.checked_mul(2))
         .and_then(|n| n.checked_add(512))
         .ok_or("artifact-input-work-limit")?;
-    let retained = super::shared::allocation(ledger, bound)?;
+    let retained = zkc_runtime::host::wire::reserve_allocation(ledger, bound)?;
     let bytes = read_from(file, length).map_err(|e| match e {
         ReadError::Limit => "entry-input-reference-byte-limit",
         ReadError::Io(_) => "entry-input-reference",

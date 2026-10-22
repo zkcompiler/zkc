@@ -1,4 +1,71 @@
+//! Host wire contracts and bounded proof framing, independent of concrete values.
+use crate::vm::{
+    Backend, BackendError, DecodeReason, ExecutionLedger, LiveReservation, PhysicalType, WorkBudget,
+};
 use std::{borrow::Cow, fmt};
+
+/// Invalid input is an accepted receive attempt; capacity and adapter failures
+/// occur before the receive completion. Never classify opaque backend strings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WireError {
+    Invalid(DecodeReason),
+    Limit,
+    Backend(BackendError),
+}
+impl fmt::Display for WireError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Invalid(reason) => write!(f, "host-wire-invalid:{}", reason.as_str()),
+            Self::Limit => f.write_str("host-wire-limit"),
+            Self::Backend(error) => write!(f, "host-wire-backend:{error}"),
+        }
+    }
+}
+impl std::error::Error for WireError {}
+
+/// Trusted wire implementation installed independently of artifacts. Support
+/// refers to complete physical identities, never merely their logical kinds.
+/// Native implements its closed admitted profile; this is not an artifact codec
+/// registry. Bounds must precede allocation and cover all codec-owned storage.
+pub trait WireBackend: Backend {
+    fn supports_wire(&self, ty: &PhysicalType) -> bool;
+    /// Exact width when independent of the value; None means variable width.
+    fn fixed_wire_size(&self, _ty: &PhysicalType) -> Option<usize> {
+        None
+    }
+    /// Conservative encoding allocation bound, without performing encoding.
+    fn encoding_bound(&self, _value: &Self::Value) -> Result<usize, WireError> {
+        Err(WireError::Limit)
+    }
+    /// Conservative decoded retention before materialization. Unsupported
+    /// measurement fails closed, including without a shared execution ledger.
+    fn decoding_bound(&self, _ty: &PhysicalType, _bytes: &[u8]) -> Result<usize, WireError> {
+        Err(WireError::Limit)
+    }
+    fn encode_wire(&self, value: &Self::Value) -> Result<Vec<u8>, WireError>;
+    fn decode_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Self::Value, WireError>;
+}
+
+/// Proof-specific value access. The application selects the acceptance index
+/// and authenticated transport; neither is inferred from proof bytes.
+pub trait ProofBackend: WireBackend {
+    fn acceptance(&self, value: &Self::Value) -> Option<bool>;
+    /// Borrow the existing byte payload without allocating or adding framing.
+    /// Its size must be bounded by Value::retained_bytes().
+    fn raw_bytes<'a>(&self, _value: &'a Self::Value) -> Result<&'a [u8], WireError> {
+        Err(WireError::Backend(BackendError::new(
+            "raw-bytes-unsupported",
+        )))
+    }
+    fn raw_decoding_bound(&self, _ty: &PhysicalType, _bytes: &[u8]) -> Result<usize, WireError> {
+        Err(WireError::Limit)
+    }
+    fn decode_raw(&self, _ty: &PhysicalType, _bytes: &[u8]) -> Result<Self::Value, WireError> {
+        Err(WireError::Backend(BackendError::new(
+            "raw-bytes-unsupported",
+        )))
+    }
+}
 
 /// Selected by an authenticated deployment, independently of proof contents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -22,26 +89,36 @@ impl ProofFormat {
             Self::RawBytes => "raw.bytes/0",
         }
     }
-    pub(super) fn encode<'a>(
+    pub(crate) fn encode<'a, B: ProofBackend>(
         self,
-        backend: &zkc_native::NativeBackend,
-        value: &'a zkc_native::Value,
-    ) -> Result<Cow<'a, [u8]>, super::ArtifactFailure> {
+        backend: &B,
+        value: &'a B::Value,
+    ) -> Result<Cow<'a, [u8]>, WireError> {
         match self {
-            Self::Native => backend.encode_native_value(value).map(Cow::Owned),
-            Self::RawBytes => backend.encode_raw_bytes(value).map(Cow::Borrowed),
+            Self::Native => backend.encode_wire(value).map(Cow::Owned),
+            Self::RawBytes => backend.raw_bytes(value).map(Cow::Borrowed),
         }
-        .map_err(super::ArtifactFailure::NativeWire)
     }
-    pub(super) fn decode(
+    pub(crate) fn decoding_bound<B: ProofBackend>(
         self,
-        backend: &zkc_native::NativeBackend,
-        ty: &zkc_runtime::vm::PhysicalType,
+        backend: &B,
+        ty: &PhysicalType,
         bytes: &[u8],
-    ) -> Result<zkc_native::Value, zkc_native::NativeWireError> {
+    ) -> Result<usize, WireError> {
         match self {
-            Self::Native => backend.decode_native_value(ty, bytes),
-            Self::RawBytes => backend.decode_raw_bytes(ty, bytes),
+            Self::Native => backend.decoding_bound(ty, bytes),
+            Self::RawBytes => backend.raw_decoding_bound(ty, bytes),
+        }
+    }
+    pub(crate) fn decode<B: ProofBackend>(
+        self,
+        backend: &B,
+        ty: &PhysicalType,
+        bytes: &[u8],
+    ) -> Result<B::Value, WireError> {
+        match self {
+            Self::Native => backend.decode_wire(ty, bytes),
+            Self::RawBytes => backend.decode_raw(ty, bytes),
         }
     }
 }
@@ -77,8 +154,8 @@ pub struct ProofWriter {
     bytes: Vec<u8>,
     messages: usize,
     limit: usize,
-    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-    retained: Vec<zkc_runtime::vm::LiveReservation>,
+    ledger: Option<crate::vm::ExecutionLedger>,
+    retained: Vec<crate::vm::LiveReservation>,
 }
 impl ProofWriter {
     pub fn new(format: ProofFormat, expected_binding: &[u8; 32]) -> Self {
@@ -118,15 +195,14 @@ impl ProofWriter {
         format: ProofFormat,
         expected_binding: &[u8; 32],
         limit: usize,
-        ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+        ledger: Option<crate::vm::ExecutionLedger>,
     ) -> Result<Self, FormatError> {
         let header = if format == ProofFormat::Native {
             HEADER_BYTES
         } else {
             0
         };
-        let guard = crate::host::shared::allocation(ledger.as_ref(), header)
-            .map_err(|_| FormatError::Limit)?;
+        let guard = reserve_allocation(ledger.as_ref(), header).map_err(|_| FormatError::Limit)?;
         let mut writer = Self::with_limit(format, expected_binding, limit)?;
         writer.ledger = ledger;
         writer.retained.extend(guard);
@@ -148,8 +224,8 @@ impl ProofWriter {
         if self.bytes.len().saturating_add(additional) > self.limit {
             return Err(FormatError::Limit);
         }
-        let guard = crate::host::shared::allocation(self.ledger.as_ref(), additional)
-            .map_err(|_| FormatError::Limit)?;
+        let guard =
+            reserve_allocation(self.ledger.as_ref(), additional).map_err(|_| FormatError::Limit)?;
         self.retained.extend(guard);
         self.bytes
             .try_reserve_exact(additional)
@@ -173,7 +249,7 @@ impl ProofWriter {
     }
     pub(super) fn finish_retained(
         self,
-    ) -> Result<(Vec<u8>, Vec<zkc_runtime::vm::LiveReservation>), FormatError> {
+    ) -> Result<(Vec<u8>, Vec<crate::vm::LiveReservation>), FormatError> {
         if self.format == ProofFormat::RawBytes && self.messages != 1 {
             return Err(FormatError::Truncated);
         }
@@ -264,6 +340,30 @@ impl<'a> ProofReader<'a> {
             Err(FormatError::Trailing)
         }
     }
+}
+
+/// Charge cumulative allocation/work and retain live storage until the guard drops.
+pub fn reserve_allocation(
+    ledger: Option<&ExecutionLedger>,
+    bytes: usize,
+) -> Result<Option<LiveReservation>, String> {
+    let Some(ledger) = ledger else {
+        return Ok(None);
+    };
+    ledger
+        .charge(
+            WorkBudget {
+                instructions: 0,
+                iterations: 0,
+                logical_bytes: bytes as u64,
+            },
+            bytes,
+        )
+        .map_err(|e| e.to_string())?;
+    ledger
+        .reserve_live(bytes)
+        .map(Some)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

@@ -4,8 +4,8 @@ use serde_json::Value as Json;
 use std::{collections::BTreeMap, path::Path};
 use zkc_native::services::ServiceRegistry;
 use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{Identity, LogicalType, ProgramAction};
-use zkc_tools::run::*;
 
 #[derive(Deserialize)]
 struct Experiments {
@@ -82,7 +82,7 @@ impl Hooks<NativeBackend> for Wire {
         _: usize,
     ) -> Result<Option<Vec<u8>>, String> {
         let codec = backend("codec");
-        let decoded = codec.decode_native(exchange.ty, bytes).unwrap();
+        let decoded = codec.decode_native_value(exchange.ty, bytes).unwrap();
         if exchange.sender == "Checker" {
             let Value::Field(coin) = decoded else {
                 panic!("coin delivery");
@@ -104,7 +104,7 @@ impl Hooks<NativeBackend> for Wire {
                 }
                 _ => panic!("selected field messages"),
             };
-            return Ok(Some(codec.encode_native(&changed).unwrap()));
+            return Ok(Some(codec.encode_native_value(&changed).unwrap()));
         }
         Ok(None)
     }

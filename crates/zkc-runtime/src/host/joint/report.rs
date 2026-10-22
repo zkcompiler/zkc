@@ -1,6 +1,6 @@
 use super::Step;
-use zkc_runtime::interpreter::Runner;
-use zkc_runtime::vm::{
+use crate::interpreter::Runner;
+use crate::vm::{
     Backend, CutKind, DecodeReason, Origin, ProgramState, ReceiveCompletion, RuntimeError, Stop,
     StopKind, Usage,
 };
@@ -36,7 +36,7 @@ pub struct StopSummary {
     pub origin: Origin,
     pub site: Option<String>,
     pub cause: StopCause,
-    pub local: Option<Box<zkc_runtime::vm::LocalContext>>,
+    pub local: Option<Box<crate::vm::LocalContext>>,
     pub cleanup_errors: Vec<Text>,
     pub omitted_errors: usize,
 }
@@ -85,7 +85,7 @@ impl State {
     pub(super) fn inspect<B: Backend>(runner: &Runner<B>) -> Self {
         match runner
             .inspect_program()
-            .expect("native session owns native runners")
+            .expect("joint session owns program runners")
         {
             ProgramState::Unpolled { kind, site } => Self::Unpolled {
                 kind,
@@ -212,7 +212,7 @@ pub struct RoleReport<V> {
     pub role: String,
     pub before: State,
     pub usage: Option<Usage>,
-    pub execution_counts: zkc_runtime::vm::ExecutionCounts,
+    pub execution_counts: crate::vm::ExecutionCounts,
     pub observation: Observation,
     pub cancelled: bool,
     pub after: State,
@@ -232,14 +232,14 @@ pub struct Report<B: Backend> {
     pub pending: Option<PendingMessage>,
     pub roles: Vec<RoleReport<B::Value>>,
     pub backends: Vec<(String, B)>,
-    pub(super) retained: Vec<zkc_runtime::vm::RetainedOutputs<B::Value>>,
-    pub(super) wire_live: Option<zkc_runtime::vm::LiveReservation>,
+    pub(super) retained: Vec<crate::vm::RetainedOutputs<B::Value>>,
+    pub(super) wire_live: Option<crate::vm::LiveReservation>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_runtime::vm::BackendError;
+    use crate::vm::BackendError;
     #[test]
     fn diagnostic_copies_are_bounded_at_utf8_boundaries() {
         let huge = "한".repeat(3000);
@@ -253,7 +253,7 @@ mod tests {
             role: "Alice".into(),
             site: Some("site".into()),
             kind: StopKind::Backend(BackendError::new(huge.clone())),
-            local: Some(Box::new(zkc_runtime::vm::LocalContext {
+            local: Some(Box::new(crate::vm::LocalContext {
                 site: "call".into(),
                 function: "fn".into(),
                 instruction: Some("site".into()),

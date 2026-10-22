@@ -7,24 +7,22 @@ mod messages;
 use crate::execution::Capacity;
 use crate::execution::InputValue;
 pub use inputs::ProofInputs;
-mod driver;
+use zkc_runtime::host::proof::{self as driver, ArtifactFailure, ArtifactReport};
 mod entropy;
 mod setups;
-mod wire;
 use crate::host::admission::{Admission, Input, Operand, ResourceInput, entry_values};
 use crate::host::inputs::*;
 pub use attempts::{AttemptPolicy, AttemptRecord};
-pub use driver::{ArtifactFailure, ArtifactReport, Produced};
 use entropy::Entropy;
 use serde_json::{Value as Json, json};
 pub use setups::SetupAuthority;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-pub use wire::{FormatError, MAX_PROOF_BYTES, ProofFormat, ProofReader, ProofWriter};
 use zkc_native::{
     Capability, Domain, EntryPolicy, NativeBackend, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
 };
+use zkc_runtime::host::wire::{MAX_PROOF_BYTES, ProofFormat};
 use zkc_runtime::{
     logical,
     vm::{
@@ -728,7 +726,7 @@ impl NativeDeployment {
                 && let Some(proof) = proof
             {
                 let ty = &role.inputs.last().expect("admitted codec input").1;
-                retained.extend(crate::host::shared::allocation(
+                retained.extend(zkc_runtime::host::wire::reserve_allocation(
                     self.shared_ledger.as_ref(),
                     proof.len().saturating_add(512),
                 )?);
@@ -828,7 +826,7 @@ impl NativeDeployment {
                     match proof {
                         None => {
                             let produced = self.prepared_call(&mut runner, role, |runner| {
-                                driver::produce_native_shared(
+                                driver::produce(
                                     runner,
                                     &binding,
                                     self.transport(),
@@ -840,18 +838,19 @@ impl NativeDeployment {
                             report.outcome = produced
                                 .outcome
                                 .map(|p| {
-                                    report.retained.extend(p.retained);
-                                    report.outputs = Some(self.original_outputs(role, p.outputs));
-                                    p.proof
+                                    let (proof, outputs, retained) = p.into_parts();
+                                    report.retained.extend(retained);
+                                    report.outputs = Some(self.original_outputs(role, outputs));
+                                    proof
                                 })
-                                .map_err(|e| driver::failure(&e));
+                                .map_err(|e| driver_failure(&e));
                             report.messages = produced.messages;
                             report.bytes = produced.bytes;
                             report.cancelled = produced.cancelled.is_some();
                         }
                         Some(proof) => {
                             let validated = self.prepared_call(&mut runner, role, |runner| {
-                                driver::validate_native_shared(
+                                driver::validate(
                                     runner,
                                     proof,
                                     &binding,
@@ -874,7 +873,7 @@ impl NativeDeployment {
                                     report.outputs = Some(self.original_outputs(role, values));
                                     Vec::new()
                                 })
-                                .map_err(|e| driver::failure(&e));
+                                .map_err(|e| driver_failure(&e));
                             report.messages = validated.messages;
                             report.bytes = validated.bytes;
                             report.cancelled = validated.cancelled.is_some();
@@ -1108,5 +1107,22 @@ impl std::fmt::Debug for NativeProofReport {
             .field("stop", &self.stop)
             .field("cleanup_errors", &self.cleanup_errors)
             .finish_non_exhaustive()
+    }
+}
+
+fn driver_failure(error: &ArtifactFailure) -> String {
+    match error {
+        ArtifactFailure::StartedRunner => "artifact-runner-started".into(),
+        ArtifactFailure::Format(e) => e.to_string(),
+        ArtifactFailure::Backend(e) => e.code.clone(),
+        ArtifactFailure::Wire(e) => zkc_native::NativeWireError::from(e.clone()).to_string(),
+        ArtifactFailure::Runtime(e) => e.to_string(),
+        ArtifactFailure::Stopped(stop) => match &stop.kind {
+            zkc_runtime::vm::StopKind::Backend(e) => e.code.clone(),
+            _ => format!("artifact-stopped:{:?}", stop.kind),
+        },
+        ArtifactFailure::UnexpectedCommunication => "artifact-unexpected-communication".into(),
+        ArtifactFailure::AcceptanceType => "artifact-acceptance-type".into(),
+        ArtifactFailure::Rejected => "artifact-rejected".into(),
     }
 }

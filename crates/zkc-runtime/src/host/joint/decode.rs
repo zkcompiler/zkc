@@ -40,7 +40,7 @@ struct SegmentSeed<'a> {
 impl<'de> DeserializeSeed<'de> for SegmentSeed<'_> {
     type Value = RawSegment;
     fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<RawSegment, D::Error> {
-        if self.depth >= zkc_runtime::vm::Limits::STACK_DEPTH {
+        if self.depth >= crate::vm::Limits::STACK_DEPTH {
             return Err(limit_error(self.exceeded));
         }
         d.deserialize_map(self)
@@ -138,7 +138,7 @@ fn flatten(
     limit: usize,
     depth: usize,
 ) -> Result<Vec<Segment>, BundleError> {
-    if depth >= zkc_runtime::vm::Limits::STACK_DEPTH {
+    if depth >= crate::vm::Limits::STACK_DEPTH {
         return Err(BundleError::Limit);
     }
     fn append(raw: RawStep, steps: &mut Vec<Step>, limit: usize) -> Result<usize, BundleError> {

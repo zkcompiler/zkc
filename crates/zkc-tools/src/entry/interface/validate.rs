@@ -348,7 +348,7 @@ fn job(
             format,
         } => {
             require(
-                *format == crate::proof::ProofFormat::Native && services.len() == 1,
+                *format == zkc_runtime::host::wire::ProofFormat::Native && services.len() == 1,
                 E::Selection,
             )?;
             let selected = protocol

@@ -83,7 +83,7 @@ impl EntryHost {
             self.options.limits.capacity.values,
             self.options.limits.capacity.work,
         );
-        let context_live = crate::host::shared::allocation(
+        let context_live = zkc_runtime::host::wire::reserve_allocation(
             Some(&ledger),
             deployment::context_bytes(&request.context),
         )
@@ -129,7 +129,7 @@ impl PreparedFunction<'_> {
         };
         // Reserve bounded native observation scratch even when the retained
         // journal is disabled or full. A final failure still carries its stop.
-        let returned = match crate::host::shared::allocation(
+        let returned = match zkc_runtime::host::wire::reserve_allocation(
             Some(&execution.ledger),
             crate::host::diagnostics::SCRATCH_BYTES,
         ) {
@@ -190,7 +190,7 @@ impl Execution<'_> {
             .map_err(|e| self.fail(e))
     }
     fn function(&mut self, symbol: &str, arguments: Vec<TypedValue>) -> ExecResult<TypedValue> {
-        let _frame = crate::host::shared::allocation(
+        let _frame = zkc_runtime::host::wire::reserve_allocation(
             Some(&self.ledger),
             symbol
                 .len()
@@ -216,14 +216,15 @@ impl Execution<'_> {
                 .iter()
                 .map(|op| op.results().len())
                 .sum::<usize>();
-        let _environment = crate::host::shared::allocation(Some(&self.ledger), slots * 512 + 512)
-            .map_err(|e| self.fail(e))?;
+        let _environment =
+            zkc_runtime::host::wire::reserve_allocation(Some(&self.ledger), slots * 512 + 512)
+                .map_err(|e| self.fail(e))?;
         let mut env: BTreeMap<_, _> = b.arguments.iter().map(|a| a.id).zip(arguments).collect();
         for (index, op) in b.operations.iter().enumerate() {
             self.path.push(format!("operation:{index}"));
             self.last_native = None;
             self.charge(1, 0)?;
-            let _operands = crate::host::shared::allocation(
+            let _operands = zkc_runtime::host::wire::reserve_allocation(
                 Some(&self.ledger),
                 (op.operands().len() + op.results().len()) * 512 + 512,
             )
@@ -348,8 +349,8 @@ impl Execution<'_> {
             + target.len()
             + operation.len()
             + self.path.iter().map(|s| s.len() + 512).sum::<usize>();
-        let live =
-            crate::host::shared::allocation(Some(&self.ledger), bytes).map_err(|e| self.fail(e))?;
+        let live = zkc_runtime::host::wire::reserve_allocation(Some(&self.ledger), bytes)
+            .map_err(|e| self.fail(e))?;
         self.journal_live.extend(live);
         let index = self.calls.len();
         self.calls.push(CallReceipt {
@@ -416,7 +417,7 @@ impl Execution<'_> {
         let index = self.begin(id, "numeric")?;
         self.dispatch()?;
         let c = &self.host.calculations[id];
-        let _input_vector = crate::host::shared::allocation(
+        let _input_vector = zkc_runtime::host::wire::reserve_allocation(
             Some(&self.ledger),
             values.iter().map(|v| v.schema().leaves.len() * 512).sum(),
         )
@@ -531,7 +532,7 @@ impl Execution<'_> {
             .iter()
             .map(|v| data::metadata(v.schema()))
             .sum::<usize>();
-        let _request_live = crate::host::shared::allocation(
+        let _request_live = zkc_runtime::host::wire::reserve_allocation(
             Some(&self.ledger),
             context_copy.saturating_add(descriptors),
         )
@@ -625,7 +626,7 @@ impl Execution<'_> {
                 } else {
                     Some(deployment::proof_bytes(&values[1]).map_err(|e| self.fail(e))?)
                 };
-                let proof_limit = crate::proof::MAX_PROOF_BYTES
+                let proof_limit = zkc_runtime::host::wire::MAX_PROOF_BYTES
                     .saturating_sub(self.usage.proof_bytes)
                     .min(
                         self.host
@@ -673,7 +674,7 @@ impl Execution<'_> {
                 // own checked typed result. Vec-to-Arc proof conversion also
                 // reserves the second allocation before copying exact bytes.
                 let _proof_copy = if producer {
-                    crate::host::shared::allocation(
+                    zkc_runtime::host::wire::reserve_allocation(
                         Some(&self.ledger),
                         report.native.bytes.saturating_add(512),
                     )

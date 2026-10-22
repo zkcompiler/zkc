@@ -1,8 +1,7 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
 use super::{WireBackend, WireError};
-use zkc_native::native_wire_size;
-use zkc_runtime::interpreter::Runner;
-use zkc_runtime::vm::{
+use crate::interpreter::Runner;
+use crate::vm::{
     Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
     ValueBudget, WorkBudget,
 };
@@ -138,11 +137,11 @@ impl<B: Backend> Slot<B> {
     }
 }
 struct Execution<B: WireBackend> {
-    wire_live: Option<zkc_runtime::vm::LiveReservation>,
+    wire_live: Option<crate::vm::LiveReservation>,
     slots: Vec<Slot<B>>,
     report: Report<B>,
     limits: RunLimits,
-    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    shared_ledger: Option<crate::vm::ExecutionLedger>,
 }
 enum StepResult {
     Completed,
@@ -181,7 +180,7 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
     mut inputs: Vec<RoleInput<B>>,
     limits: RunLimits,
     hooks: &mut H,
-    shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    shared_ledger: Option<crate::vm::ExecutionLedger>,
 ) -> Result<Report<B>, StartError<B>> {
     if let Err(failure) = limits.validate() {
         return Err(StartError { failure, inputs });
@@ -221,6 +220,13 @@ pub fn run_with_ledger<B: WireBackend, H: Hooks<B>>(
                 .any(|(value, (_, ty))| value.physical_type() != *ty)
         {
             return refuse(FailureKind::Setup, "role-input-types", inputs);
+        }
+        if role.actions.iter().any(|action| {
+            matches!(action,
+                ProgramAction::Send { ty, .. } | ProgramAction::Receive { ty, .. }
+                if !input.backend.supports_wire(ty))
+        }) {
+            return refuse(FailureKind::Setup, "role-wire-type", inputs);
         }
     }
     let mut slots = Vec::new();
@@ -714,27 +720,31 @@ impl<B: WireBackend> Execution<B> {
                     unreachable!("checked send")
                 };
                 let value = packet.payload.clone();
-                let bound = crate::host::shared::wire_bound(&value);
+                let bound = runner.backend().encoding_bound(&value).map_err(codec)?;
                 // A retention-based allocation bound includes descriptor/slack
-                // bytes, not bytes sent. Only a fixed native width can decide
+                // bytes, not bytes sent. Only an installed fixed width can decide
                 // this limit before encoding. Dynamic frames are fully reserved
                 // here and checked below before committing the send.
                 if self.shared_ledger.is_some()
-                    && native_wire_size(&value.physical_type()).is_some_and(|width| {
-                        width > self.limits.wire_bytes
-                            || width
-                                > self
-                                    .limits
-                                    .total_wire_bytes
-                                    .saturating_sub(self.report.wire.sent_bytes)
-                                    .saturating_sub(self.report.wire.replacement_bytes)
-                    })
+                    && runner
+                        .backend()
+                        .fixed_wire_size(&value.physical_type())
+                        .is_some_and(|width| {
+                            width > self.limits.wire_bytes
+                                || width
+                                    > self
+                                        .limits
+                                        .total_wire_bytes
+                                        .saturating_sub(self.report.wire.sent_bytes)
+                                        .saturating_sub(self.report.wire.replacement_bytes)
+                        })
                 {
                     return Err(limit());
                 }
-                let wire_live = crate::host::shared::allocation(self.shared_ledger.as_ref(), bound)
-                    .map_err(|_| limit())?;
-                let bytes = runner.backend().encode_native(&value).map_err(codec)?;
+                let wire_live =
+                    crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
+                        .map_err(|_| limit())?;
+                let bytes = runner.backend().encode_wire(&value).map_err(codec)?;
                 if bytes.len() > bound {
                     return Err(limit());
                 }
@@ -743,7 +753,11 @@ impl<B: WireBackend> Execution<B> {
                 };
                 // All messages use admitted codecs; fixed-width frames also
                 // require the encoder's result to match the exact static size.
-                if native_wire_size(ty).is_some_and(|width| width != bytes.len()) {
+                if runner
+                    .backend()
+                    .fixed_wire_size(ty)
+                    .is_some_and(|width| width != bytes.len())
+                {
                     return Err(Failure::new(FailureKind::Codec, "native-wire-width"));
                 }
                 if bytes.len() > self.limits.wire_bytes {
@@ -787,7 +801,7 @@ impl<B: WireBackend> Execution<B> {
                     .pending
                     .as_ref()
                     .ok_or_else(|| contract("empty-handoff"))?;
-                let (_decoded_live, invalid) = if let Some(ledger) = &self.shared_ledger {
+                if let Some(ledger) = &self.shared_ledger {
                     ledger
                         .charge(
                             WorkBudget {
@@ -798,21 +812,22 @@ impl<B: WireBackend> Execution<B> {
                             0,
                         )
                         .map_err(|_| limit())?;
-                    match runner.backend().decoding_bound(ty, &pending.bytes) {
-                        Ok(bound) => (
-                            crate::host::shared::allocation(Some(ledger), bound)
-                                .map_err(|_| limit())?,
-                            None,
-                        ),
-                        Err(WireError::Invalid(reason)) => (None, Some(reason)),
-                        Err(error) => return Err(codec(error)),
-                    }
-                } else {
-                    (None, None)
+                }
+                let (_decoded_live, invalid) = match runner
+                    .backend()
+                    .decoding_bound(ty, &pending.bytes)
+                {
+                    Ok(bound) => (
+                        crate::host::wire::reserve_allocation(self.shared_ledger.as_ref(), bound)
+                            .map_err(|_| limit())?,
+                        None,
+                    ),
+                    Err(WireError::Invalid(reason)) => (None, Some(reason)),
+                    Err(error) => return Err(codec(error)),
                 };
                 let decoded = match invalid {
                     Some(reason) => Err(reason),
-                    None => match runner.backend().decode_native(ty, &pending.bytes) {
+                    None => match runner.backend().decode_wire(ty, &pending.bytes) {
                         Ok(value) => Ok(value),
                         Err(WireError::Invalid(reason)) => Err(reason),
                         Err(error) => return Err(codec(error)),
@@ -903,16 +918,11 @@ fn observe<B: Backend, H: Hooks<B>>(hooks: &mut H, slot: &Slot<B>, phase: Phase)
 #[cfg(test)]
 mod contract_tests {
     use super::*;
+    use crate::host::test_backend::{Host, TestValue};
     use serde_json::json;
-    use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
 
-    fn backend() -> NativeBackend {
-        NativeBackend::new(
-            Policy::default(),
-            EntryPolicy::new(Domain::new("Alice", "test", "main", None), None),
-            Default::default(),
-        )
-        .unwrap()
+    fn backend() -> Host {
+        Host::default()
     }
     fn loop_bundle() -> Bundle {
         let candidate = json!([
@@ -954,14 +964,14 @@ mod contract_tests {
         )
         .unwrap()
     }
-    fn execute(bundle: &Bundle) -> Report<NativeBackend> {
+    fn execute(bundle: &Bundle) -> Report<Host> {
         run(
             bundle,
             "test",
             vec![RoleInput {
                 role: "Alice".into(),
                 backend: backend(),
-                values: vec![zkc_native::Value::Index(1)],
+                values: vec![TestValue::Index(1)],
             }],
             RunLimits::default(),
             &mut NoHooks,

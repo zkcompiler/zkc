@@ -20,7 +20,7 @@ pub(in crate::entry) struct ProofPorts {
     pub completion: Option<usize>,
     pub suite: Option<String>,
     pub construction: Option<String>,
-    pub format: crate::proof::ProofFormat,
+    pub format: zkc_runtime::host::wire::ProofFormat,
     pub replaced_services: Vec<usize>,
 }
 #[derive(Clone, Copy, Debug, Default)]

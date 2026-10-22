@@ -1,4 +1,5 @@
 //! Canonical framing and aggregate limits, independent of compiler producers.
+#[cfg(feature = "test-utils")]
 use zkc_runtime::interpreter::Runner;
 mod common;
 use serde_json::json;

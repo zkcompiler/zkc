@@ -53,7 +53,7 @@ impl Default for AttemptOptions {
     fn default() -> Self {
         Self {
             count: 1,
-            proof_bytes: crate::proof::MAX_PROOF_BYTES,
+            proof_bytes: zkc_runtime::host::wire::MAX_PROOF_BYTES,
         }
     }
 }
@@ -185,7 +185,7 @@ impl ProofEntry {
         let completion = proof.completion;
         let scope = if proof.suite.is_some() {
             BindingScope::Transcript
-        } else if proof.format == crate::proof::ProofFormat::Native {
+        } else if proof.format == zkc_runtime::host::wire::ProofFormat::Native {
             BindingScope::HeaderOnly
         } else {
             BindingScope::Authored
@@ -367,7 +367,7 @@ impl ProofEntry {
         // copies before argument construction, under the effective child limit.
         let key_bytes = setups::material_bytes(&self.interface, &request.setups, capacity)
             .map_err(|e| E::new(P::Request, e))?;
-        let _keys_live = crate::host::shared::allocation(Some(&ledger), key_bytes)
+        let _keys_live = zkc_runtime::host::wire::reserve_allocation(Some(&ledger), key_bytes)
             .map_err(|e| E::new(P::Preparation, e))?;
         let inputs = self
             .inputs(request, producer, capacity)

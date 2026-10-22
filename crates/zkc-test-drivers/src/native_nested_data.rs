@@ -419,7 +419,7 @@ fn main() {
 }
 
 fn checked_indexing(directory: &Path, keys: &Keys) {
-    use zkc_tools::run::*;
+    use zkc_runtime::host::joint::*;
     for suffix in ["", "_plain", "_release"] {
         let bytes = std::fs::read(directory.join(format!("checked{suffix}.bundle"))).unwrap();
         let bundle = Bundle::admit(&bytes, &backend(keys), BundleLimits::default()).unwrap();

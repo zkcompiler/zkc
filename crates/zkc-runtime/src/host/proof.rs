@@ -1,8 +1,7 @@
-use super::{FormatError, ProofFormat, ProofReader, ProofWriter};
-use zkc_runtime::interpreter::Runner;
-use zkc_runtime::vm::{
-    Action, Backend, BackendError, RuntimeError, Stop, StopKind, Value as RuntimeValue,
-};
+//! Ordered proof production and validation under application-supplied contracts.
+use super::wire::{FormatError, ProofBackend, ProofFormat, ProofReader, ProofWriter, WireError};
+use crate::interpreter::Runner;
+use crate::vm::{Action, Backend, BackendError, RuntimeError, Stop, Value as RuntimeValue};
 
 #[derive(Debug)]
 pub enum ArtifactFailure {
@@ -10,7 +9,7 @@ pub enum ArtifactFailure {
     Format(FormatError),
     Runtime(RuntimeError),
     Backend(BackendError),
-    NativeWire(zkc_native::NativeWireError),
+    Wire(WireError),
     Stopped(Box<Stop>),
     UnexpectedCommunication,
     AcceptanceType,
@@ -35,7 +34,7 @@ impl From<BackendError> for ArtifactFailure {
 pub struct Produced<V> {
     pub proof: Vec<u8>,
     pub outputs: Vec<V>,
-    pub(super) retained: Vec<zkc_runtime::vm::LiveReservation>,
+    retained: Vec<crate::vm::LiveReservation>,
 }
 
 pub struct ArtifactReport<T> {
@@ -92,7 +91,7 @@ fn cancel_failure<B: Backend>(runner: &mut Runner<B>, failed: bool) -> Option<St
 
 /// How the admitted participant program exchanges its proof with the Host.
 #[derive(Clone, Copy)]
-pub(super) enum Transport {
+pub enum Transport {
     Messages(ProofFormat),
     Record,
 }
@@ -108,23 +107,15 @@ impl Transport {
     }
 }
 
-/// Called only by the host after native proof-entry admission.
-#[cfg(test)]
-pub(super) fn produce_native(
-    runner: &mut Runner<zkc_native::NativeBackend>,
+/// Execute a fresh producer after application admission. The Host owns binding,
+/// transport and capacity selection. No deployment authority is derived here.
+pub fn produce<B: ProofBackend>(
+    runner: &mut Runner<B>,
     expected_binding: &[u8; 32],
     transport: Transport,
     limit: usize,
-) -> ArtifactReport<Produced<zkc_native::Value>> {
-    produce_native_shared(runner, expected_binding, transport, limit, None)
-}
-pub(super) fn produce_native_shared(
-    runner: &mut Runner<zkc_native::NativeBackend>,
-    expected_binding: &[u8; 32],
-    transport: Transport,
-    limit: usize,
-    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-) -> ArtifactReport<Produced<zkc_native::Value>> {
+    ledger: Option<crate::vm::ExecutionLedger>,
+) -> ArtifactReport<Produced<B::Value>> {
     let encoding_retained = std::cell::RefCell::new(None);
     produce_admitted_with_limit(
         runner,
@@ -136,24 +127,29 @@ pub(super) fn produce_native_shared(
             let bound = if transport.format() == ProofFormat::RawBytes {
                 value.retained_bytes()
             } else {
-                crate::host::shared::wire_bound(value)
+                backend
+                    .encoding_bound(value)
+                    .map_err(ArtifactFailure::Wire)?
             };
             // The allocation allowance includes retention/framing slack. The
             // writer checks actual frame bytes before any proof append.
-            let live = crate::host::shared::allocation(ledger.as_ref(), bound)
+            let live = crate::host::wire::reserve_allocation(ledger.as_ref(), bound)
                 .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
             encoding_retained.replace(live);
-            transport.format().encode(backend, value)
+            transport
+                .format()
+                .encode(backend, value)
+                .map_err(ArtifactFailure::Wire)
         },
     )
 }
 
-pub(super) fn produce_admitted_with_limit<B: Backend>(
+fn produce_admitted_with_limit<B: Backend>(
     runner: &mut Runner<B>,
     expected_binding: &[u8; 32],
     transport: Transport,
     limit: usize,
-    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
+    ledger: Option<crate::vm::ExecutionLedger>,
     encode: impl for<'a> Fn(&B, &'a B::Value) -> Result<std::borrow::Cow<'a, [u8]>, ArtifactFailure>,
 ) -> ArtifactReport<Produced<B::Value>> {
     if let Some(report) = entry_report(runner) {
@@ -222,45 +218,31 @@ pub(super) fn produce_admitted_with_limit<B: Backend>(
     }
 }
 
-#[cfg(test)]
-pub(super) fn validate_native(
-    runner: &mut Runner<zkc_native::NativeBackend>,
+/// Validate an independent proof against a fresh admitted validator and the
+/// application's explicit binding, transport and acceptance selector.
+pub fn validate<B: ProofBackend>(
+    runner: &mut Runner<B>,
     proof: &[u8],
     expected_binding: &[u8; 32],
     transport: Transport,
     acceptance: usize,
-) -> ArtifactReport<Vec<zkc_native::Value>> {
-    validate_native_shared(runner, proof, expected_binding, transport, acceptance, None)
-}
-pub(super) fn validate_native_shared(
-    runner: &mut Runner<zkc_native::NativeBackend>,
-    proof: &[u8],
-    expected_binding: &[u8; 32],
-    transport: Transport,
-    acceptance: usize,
-    ledger: Option<zkc_runtime::vm::ExecutionLedger>,
-) -> ArtifactReport<Vec<zkc_native::Value>> {
+    ledger: Option<crate::vm::ExecutionLedger>,
+) -> ArtifactReport<Vec<B::Value>> {
     validate_admitted(
         runner,
         proof,
         expected_binding,
         transport,
         acceptance,
-        |v| {
-            if let zkc_native::Value::Bool(b) = v {
-                Some(*b)
-            } else {
-                None
-            }
-        },
+        |backend, value| backend.acceptance(value),
         |runner, request, bytes| {
-            let cut = Action::<zkc_native::Value>::Receive(request.clone())
+            let cut = Action::<B::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;
-            let _live = if let Some(ledger) = &ledger {
+            if let Some(ledger) = &ledger {
                 ledger
                     .charge(
-                        zkc_runtime::vm::WorkBudget {
+                        crate::vm::WorkBudget {
                             instructions: 0,
                             iterations: 0,
                             logical_bytes: bytes.len() as u64,
@@ -268,33 +250,29 @@ pub(super) fn validate_native_shared(
                         0,
                     )
                     .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
-                let retained = match transport.format() {
-                    ProofFormat::Native => {
-                        match runner.backend().measure_native_wire(&request.ty, bytes) {
-                            Ok(size) => size.retained_bytes(),
-                            Err(zkc_native::NativeWireError::Invalid(reason)) => {
-                                // Measurement may reject framing before allocation. It is
-                                // still an accepted receive attempt with a Decode stop.
-                                runner.complete_receive(&cut, Err(reason))?;
-                                return Ok(());
-                            }
-                            Err(error) => return Err(ArtifactFailure::NativeWire(error)),
-                        }
+            }
+            let retained =
+                match transport
+                    .format()
+                    .decoding_bound(runner.backend(), &request.ty, bytes)
+                {
+                    Ok(bound) => bound,
+                    Err(WireError::Invalid(reason)) => {
+                        // Measurement rejection is still an accepted Decode completion.
+                        runner.complete_receive(&cut, Err(reason))?;
+                        return Ok(());
                     }
-                    ProofFormat::RawBytes => bytes.len(),
+                    Err(error) => return Err(ArtifactFailure::Wire(error)),
                 };
-                crate::host::shared::allocation(Some(ledger), retained)
-                    .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?
-            } else {
-                None
-            };
+            let _live = crate::host::wire::reserve_allocation(ledger.as_ref(), retained)
+                .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
             let decoded = match transport
                 .format()
                 .decode(runner.backend(), &request.ty, bytes)
             {
                 Ok(value) => Ok(value),
-                Err(zkc_native::NativeWireError::Invalid(reason)) => Err(reason),
-                Err(error) => return Err(ArtifactFailure::NativeWire(error)),
+                Err(WireError::Invalid(reason)) => Err(reason),
+                Err(error) => return Err(ArtifactFailure::Wire(error)),
             };
             runner.complete_receive(&cut, decoded)?;
             Ok(())
@@ -307,8 +285,8 @@ fn validate_admitted<B: Backend>(
     expected_binding: &[u8; 32],
     transport: Transport,
     acceptance_index: usize,
-    boolean: impl Fn(&B::Value) -> Option<bool>,
-    receive: impl Fn(&mut Runner<B>, zkc_runtime::vm::Receive, &[u8]) -> Result<(), ArtifactFailure>,
+    boolean: impl Fn(&B, &B::Value) -> Option<bool>,
+    receive: impl Fn(&mut Runner<B>, crate::vm::Receive, &[u8]) -> Result<(), ArtifactFailure>,
 ) -> ArtifactReport<Vec<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;
@@ -350,7 +328,10 @@ fn validate_admitted<B: Backend>(
                 if let Some(reader) = &reader {
                     reader.finish()?;
                 }
-                return match outputs.get(acceptance_index).and_then(&boolean) {
+                return match outputs
+                    .get(acceptance_index)
+                    .and_then(|value| boolean(runner.backend(), value))
+                {
                     Some(true) => Ok(outputs),
                     Some(false) => Err(ArtifactFailure::Rejected),
                     None => Err(ArtifactFailure::AcceptanceType),
@@ -366,22 +347,10 @@ fn validate_admitted<B: Backend>(
     }
 }
 
-#[cfg(test)]
-mod tests;
-
-pub(super) fn failure(error: &ArtifactFailure) -> String {
-    match error {
-        ArtifactFailure::StartedRunner => "artifact-runner-started".into(),
-        ArtifactFailure::Format(e) => e.to_string(),
-        ArtifactFailure::Backend(e) => e.code.clone(),
-        ArtifactFailure::NativeWire(e) => e.to_string(),
-        ArtifactFailure::Runtime(e) => e.to_string(),
-        ArtifactFailure::Stopped(stop) => match &stop.kind {
-            StopKind::Backend(e) => e.code.clone(),
-            _ => format!("artifact-stopped:{:?}", stop.kind),
-        },
-        ArtifactFailure::UnexpectedCommunication => "artifact-unexpected-communication".into(),
-        ArtifactFailure::AcceptanceType => "artifact-acceptance-type".into(),
-        ArtifactFailure::Rejected => "artifact-rejected".into(),
+impl<V> Produced<V> {
+    /// Transfer the proof and outputs together with the proof buffer's live
+    /// reservations. Keep these guards for as long as their bytes are retained.
+    pub fn into_parts(self) -> (Vec<u8>, Vec<V>, Vec<crate::vm::LiveReservation>) {
+        (self.proof, self.outputs, self.retained)
     }
 }

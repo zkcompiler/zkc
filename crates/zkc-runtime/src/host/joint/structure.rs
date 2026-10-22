@@ -1,7 +1,7 @@
 //! Independent static coverage and scope checks for compact execution schedules.
 use super::{Bundle, BundleError, Step, bundle::Segment};
+use crate::vm::ProgramAction;
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::vm::ProgramAction;
 
 type Result<T> = std::result::Result<T, BundleError>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

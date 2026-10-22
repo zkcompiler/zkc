@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use zkc_native::services::{ServiceObservation, ServiceReference, ServiceRegistry};
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 
+use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::Value as RuntimeValue;
-use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(

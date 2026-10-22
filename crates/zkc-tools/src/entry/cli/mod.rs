@@ -205,7 +205,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
                         .unwrap()
                         .to_str()
                         .ok_or("entry-input-document")?,
-                    crate::proof::MAX_PROOF_BYTES,
+                    zkc_runtime::host::wire::MAX_PROOF_BYTES,
                 )?)
             } else {
                 None

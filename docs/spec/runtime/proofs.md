@@ -3,6 +3,25 @@
 This native contract defines proof execution, completion and failure.
 [Transport](../formats/proof.md) owns bytes; [attempts](attempts.md) own retries.
 
+## Reusable driver boundary
+
+`zkc-runtime::host::proof` owns ordered producer/validator execution, exact Runner
+cuts, framing completion and cancellation. `host::wire` owns proof framing and
+provider-independent `WireError` outcomes. `ProofBackend` adds explicit Boolean
+projection and borrowed raw-byte access to the installed wire contract. Raw
+payloads remain borrowed until the bounded writer copies them. Unsupported
+decoding measurement refuses closed before allocating or accepting a receive.
+Invalid bytes complete the receive with Decode; capacity and trusted adapter
+failures remain Host failures and cannot establish acceptance or rejection.
+
+Native implements these contracts in `zkc-native`. `zkc-tools` retains native
+deployment admission, independent setup/public-input/binding authority, transport
+and acceptance selection, immutable prepared computation identity, attempts and
+publication. Drivers infer none of that authority from proof or candidate
+contents. Shared-ledger production transfers proof-buffer live guards with its
+result; callers retaining bytes must retain those guards. Cumulative work remains
+consumed after cancellation or guard release.
+
 ## Operation admission
 
 A combined deployment contains both actual producer and validator endpoints.

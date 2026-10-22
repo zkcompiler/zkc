@@ -81,6 +81,18 @@ pub fn native_wire_size(ty: &PhysicalType) -> Option<usize> {
 fn unsupported() -> NativeWireError {
     NativeWireError::Backend(BackendError::new("native-wire-type"))
 }
+// Fixed leaves preserve framing errors before capacity checks. Share this
+// nonallocating check with Host measurement so preflight cannot mask Decode.
+fn fixed_header(ty: &PhysicalType, bytes: &[u8]) -> Result<(u8, usize), NativeWireError> {
+    let (tag, width) = frame(ty).ok_or_else(unsupported)?;
+    if bytes.len() != width {
+        return Err(NativeWireError::Invalid(DecodeReason::Length));
+    }
+    if &bytes[..5] != super::MAGIC || bytes[5] != tag {
+        return Err(NativeWireError::Invalid(DecodeReason::Header));
+    }
+    Ok((tag, width))
+}
 /// Whether this closed native codec accepts a complete physical type. Tables
 /// are length-prefixed; `native_wire_size` intentionally remains fixed-width.
 pub fn has_native_wire(ty: &PhysicalType) -> bool {
@@ -303,13 +315,7 @@ impl NativeBackend {
         if table_type(ty) {
             return decode_table(self.policy(), bytes);
         }
-        let (tag, width) = frame(ty).ok_or_else(unsupported)?;
-        if bytes.len() != width {
-            return Err(Invalid(DecodeReason::Length));
-        }
-        if &bytes[..5] != super::MAGIC || bytes[5] != tag {
-            return Err(Invalid(DecodeReason::Header));
-        }
+        let (tag, width) = fixed_header(ty, bytes)?;
         self.policy().wire(width).map_err(|_| Limit)?;
         if tag != 64 {
             // Installed fixed scalar/group wrappers retain 512 bytes, except the
@@ -435,7 +441,7 @@ impl NativeBackend {
     }
 }
 
-fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError> {
+fn table_header(policy: &Policy, bytes: &[u8]) -> Result<(usize, usize), NativeWireError> {
     use NativeWireError::{Invalid, Limit};
     if bytes.len() < 10 {
         return Err(Invalid(DecodeReason::Length));
@@ -454,6 +460,11 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
     if bytes.len() != width {
         return Err(Invalid(DecodeReason::Length));
     }
+    Ok((count, width))
+}
+fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError> {
+    use NativeWireError::{Invalid, Limit};
+    let (count, width) = table_header(policy, bytes)?;
     policy
         .output(width.checked_add(512).ok_or(Limit)?, usize::MAX)
         .map_err(|_| Limit)?;

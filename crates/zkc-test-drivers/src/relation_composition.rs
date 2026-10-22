@@ -4,8 +4,8 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path};
 use zkc_native::services::ServiceRegistry;
 use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
-use zkc_tools::run::*;
 
 #[derive(Deserialize)]
 struct Experiment {

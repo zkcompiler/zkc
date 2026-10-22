@@ -1,13 +1,14 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_runtime::host::joint::*;
+use zkc_runtime::host::wire::{WireBackend, WireError};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Value as RuntimeValue;
 use zkc_runtime::vm::{
     Action, Backend, BackendError, CutKind, DecodeReason, Frame, FrameExit, Invocation,
     PhysicalType, Stop, StopKind, ValueBudget,
 };
-use zkc_tools::run::*;
 const BOOL: &str = "bool@native.bool/0";
 #[derive(Clone, Copy, Debug, Default)]
 enum Decode {
@@ -88,7 +89,20 @@ impl Backend for Host {
     }
 }
 impl WireBackend for Host {
-    fn encode_native(&self, value: &Value) -> Result<Vec<u8>, WireError> {
+    fn supports_wire(&self, ty: &PhysicalType) -> bool {
+        self.codec.supports_wire(ty)
+    }
+    fn fixed_wire_size(&self, ty: &PhysicalType) -> Option<usize> {
+        self.codec.fixed_wire_size(ty)
+    }
+    fn encoding_bound(&self, value: &Value) -> Result<usize, WireError> {
+        self.codec.encoding_bound(value)
+    }
+    fn decoding_bound(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<usize, WireError> {
+        self.codec.decoding_bound(ty, bytes)
+    }
+
+    fn encode_wire(&self, value: &Value) -> Result<Vec<u8>, WireError> {
         if self.bad_width {
             return Ok(vec![0; 6]);
         }
@@ -98,7 +112,7 @@ impl WireBackend for Host {
             self.codec.encode_native_value(value).map_err(Into::into)
         }
     }
-    fn decode_native(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Value, WireError> {
+    fn decode_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Value, WireError> {
         match self.decode {
             Decode::Normal => self
                 .codec
@@ -631,6 +645,58 @@ fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity(
         }
     }
 }
+
+#[test]
+fn fixed_frame_length_and_header_precede_native_capacity_in_joint_receive() {
+    for shared in [false, true] {
+        for (bytes, reason) in [
+            (b"ZKCV\0\x05\x01\0".to_vec(), DecodeReason::Length),
+            (b"bad!\0\x05\x01".to_vec(), DecodeReason::Header),
+        ] {
+            let mut inputs = inputs();
+            let policy = Policy {
+                max_wire_bytes: 6,
+                ..Policy::default()
+            };
+            inputs[0].backend.codec = NativeBackend::new(
+                policy,
+                EntryPolicy::new(Domain::new("Bob", "session", "main", None), None),
+                Default::default(),
+            )
+            .unwrap();
+            let report = run_with_ledger(
+                &admit(&raw()).unwrap(),
+                "session",
+                inputs,
+                RunLimits {
+                    values: ValueBudget {
+                        live_bytes: 4096,
+                        ..Default::default()
+                    },
+                    ..RunLimits::default()
+                },
+                &mut Controls {
+                    replacement: Some(bytes),
+                    ..Default::default()
+                },
+                shared.then(|| {
+                    zkc_runtime::vm::ExecutionLedger::new(
+                        ValueBudget::default(),
+                        Default::default(),
+                    )
+                }),
+            )
+            .unwrap();
+            assert_eq!(stopped(&report, 1).cause, StopCause::Decode(reason));
+            assert_eq!((report.wire.sends, report.wire.receives), (1, 1));
+            assert!(report.pending.is_none());
+            assert_eq!(
+                report.reached[2].receive_completion,
+                Some(zkc_runtime::vm::ReceiveCompletion::Stopped)
+            );
+        }
+    }
+}
 #[test]
 fn typed_message_change_is_distinct_from_bad_encoding() {
     let report = execute(
@@ -935,6 +1001,8 @@ fn wrong_encoder_width_refuses_before_commit_and_unknown_observations_stay_unkno
     i[1].backend.bad_width = true;
     let report = execute(&mut NoHooks, i, RunLimits::default());
     failed(&report, FailureKind::Codec);
+    assert!(matches!(&report.outcome, Outcome::DriverFailed(failure)
+        if failure.detail.text == "native-wire-width"));
     assert_eq!(report.wire.sends, 0);
     assert!(report.pending.is_none());
     assert!(matches!(
@@ -1485,8 +1553,8 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
         .unwrap();
         assert_eq!(report.outcome, Outcome::Completed, "{ty}");
         assert_eq!(
-            codec.encode_native(&report.roles[1].outputs[0]).unwrap(),
-            codec.encode_native(&value).unwrap()
+            codec.encode_wire(&report.roles[1].outputs[0]).unwrap(),
+            codec.encode_wire(&value).unwrap()
         );
         assert!(report.pending.is_none());
         assert_eq!(report.wire.receives, 1);
@@ -1506,7 +1574,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
 fn structured_wire_failures_preserve_handoff_and_cleanup() {
     let value = Value::Vector(vec![zkc_native::Scalar::from(9); 2].into());
     let codec = Host::default();
-    let wire = codec.encode_native(&value).unwrap();
+    let wire = codec.encode_wire(&value).unwrap();
     let bundle = admit(&message_bundle(&value.physical_type().spelling())).unwrap();
     for scenario in [
         "short",
@@ -1534,7 +1602,7 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
                 limits.total_wire_bytes = 2 * wire.len();
                 hooks.replacement = Some(
                     codec
-                        .encode_native(&Value::Vector(vec![zkc_native::Scalar::from(7); 2].into()))
+                        .encode_wire(&Value::Vector(vec![zkc_native::Scalar::from(7); 2].into()))
                         .unwrap(),
                 );
             }
@@ -1558,7 +1626,7 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
             "replace" => {
                 assert_eq!(report.outcome, Outcome::Completed);
                 assert_eq!(
-                    codec.encode_native(&report.roles[1].outputs[0]).unwrap(),
+                    codec.encode_wire(&report.roles[1].outputs[0]).unwrap(),
                     replacement.unwrap()
                 );
                 assert_eq!(
@@ -1593,7 +1661,7 @@ fn excessive_sequence_count_preserves_pending_frame_and_cleanup() {
         )
         .unwrap(),
     );
-    let wire = Host::default().encode_native(&value).unwrap();
+    let wire = Host::default().encode_wire(&value).unwrap();
     let mut replacement = wire.clone();
     replacement[6..10].fill(255);
     let mut hooks = Controls {

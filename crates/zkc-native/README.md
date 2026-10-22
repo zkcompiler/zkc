@@ -6,6 +6,16 @@ owns program admission and execution; this crate owns concrete values, installed
 backend capacity checks. [zkc-kernels](../zkc-kernels/README.md) owns typed
 arithmetic, transforms, commitments and curve primitives without VM authority.
 
+## Host transport integration
+
+`NativeBackend` implements `zkc-runtime::host::wire::{WireBackend, ProofBackend}`
+in this crate. Installed message support, fixed native widths, conservative
+encoding bounds, decode measurements, native codecs, borrowed raw bytes and
+Boolean projection remain concrete native responsibilities. `NativeWireError`
+is translated to runtime-owned `WireError` at this boundary; generic drivers and
+reports have no native value or error dependency. Native application Hosts retain
+deployment, setup and public-input authority in `zkc-tools`.
+
 ## Construction and authority
 
 Construct `NativeBackend::new(policy, entry, setups)` with an explicit

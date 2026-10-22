@@ -1,4 +1,5 @@
 use super::*;
+use zkc_runtime::host::wire::ProofWriter;
 use zkc_runtime::interpreter::Runner;
 mod admission;
 #[test]
@@ -70,7 +71,7 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
             ledger.clone(),
         )
         .unwrap_or_else(|error| panic!("{}", error.error));
-        let report = driver::validate_native_shared(
+        let report = driver::validate(
             &mut runner,
             &proof,
             &binding,

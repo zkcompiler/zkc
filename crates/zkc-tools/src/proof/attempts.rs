@@ -358,7 +358,7 @@ impl Session<'_> {
                                 .producer()
                                 .expect("admitted producer attempt"),
                             |runner| {
-                                driver::produce_native_shared(
+                                driver::produce(
                                     runner,
                                     self.binding,
                                     self.deployment.transport(),
@@ -385,7 +385,7 @@ impl Session<'_> {
                         (backend, retained_outputs) = runner.into_retained_outputs();
                         produced
                             .outcome
-                            .map_err(|e| driver::failure(&e))
+                            .map_err(|e| driver_failure(&e))
                             .and_then(|produced| {
                                 for &(input, output) in &self.plan.rng {
                                     let (Value::Rng(before), Some(Value::Rng(after))) =
@@ -516,7 +516,7 @@ pub(super) fn execute(
                     Err(_) => Err(Stop::Abort),
                     Ok((false, _)) => Ok(Decision::Retry(())),
                     Ok((true, produced)) => {
-                        let retention = crate::host::shared::allocation(
+                        let retention = zkc_runtime::host::wire::reserve_allocation(
                             deployment.shared_ledger.as_ref(),
                             produced.proof.len(),
                         );
@@ -533,8 +533,9 @@ pub(super) fn execute(
                             }
                         };
                         context.state_mut().retained.extend(retention);
-                        context.state_mut().retained.extend(produced.retained);
-                        if let Err(reason) = context.append(&produced.proof) {
+                        let (proof, outputs, retained) = produced.into_parts();
+                        context.state_mut().retained.extend(retained);
+                        if let Err(reason) = context.append(&proof) {
                             let state = context.state_mut();
                             let error = "native-attempt-buffer-limit".to_owned();
                             state
@@ -550,7 +551,7 @@ pub(super) fn execute(
                                     .entry
                                     .producer()
                                     .expect("admitted producer attempt"),
-                                produced.outputs,
+                                outputs,
                             ),
                         ))
                     }

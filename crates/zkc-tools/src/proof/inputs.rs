@@ -209,7 +209,7 @@ pub(super) fn prepare(
             crate::host::admission::check_native_data(&ty, input, host.capacity)?;
         }
     }
-    let _root_tree = crate::host::shared::allocation(
+    let _root_tree = zkc_runtime::host::wire::reserve_allocation(
         host.shared_ledger.as_ref(),
         host.binding_metadata_bytes
             .saturating_add(request.context.len() * 2),
@@ -426,9 +426,9 @@ pub(super) fn prepare(
     let mut encoding_retained = Vec::new();
     for (port, input) in host.public.iter().zip(&request.public) {
         if input.wire_bytes().is_none() {
-            encoding_retained.extend(crate::host::shared::allocation(
+            encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
                 host.shared_ledger.as_ref(),
-                crate::host::shared::wire_bound(&loaded[public_ids[&port.original]]),
+                zkc_native::native_encoding_bound(&loaded[public_ids[&port.original]]),
             )?);
         }
         let bytes = canonical(&backend, &loaded[public_ids[&port.original]], input)?;
@@ -453,9 +453,9 @@ pub(super) fn prepare(
     }
     for (original, id, input) in shared {
         let _live = if input.wire_bytes().is_none() {
-            crate::host::shared::allocation(
+            zkc_runtime::host::wire::reserve_allocation(
                 host.shared_ledger.as_ref(),
-                crate::host::shared::wire_bound(&loaded[id]),
+                zkc_native::native_encoding_bound(&loaded[id]),
             )?
         } else {
             None
@@ -497,7 +497,7 @@ pub(super) fn prepare(
     if retain_root {
         host.capacity.check_wire(encoding.size())?;
     }
-    encoding_retained.extend(crate::host::shared::allocation(
+    encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
         host.shared_ledger.as_ref(),
         if retain_root { encoding.size() } else { 0 },
     )?);

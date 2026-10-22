@@ -1,5 +1,4 @@
 //! Application-owned loading and lifecycle for an authenticated native bundle.
-use super::*;
 use crate::execution::Capacity;
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
@@ -12,6 +11,7 @@ use zkc_native::{
     Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, SetupRegistry, Value,
     services::{ServiceReference, ServiceRegistry},
 };
+use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{EntryRole, Type, Value as RuntimeValue};
 mod inputs;
 mod report;

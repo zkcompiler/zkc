@@ -5,14 +5,13 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use zkc_native::services::{ServiceReference, ServiceRegistry};
 use zkc_native::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc_runtime::host::joint::{Bundle, BundleLimits};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, LogicalType, Packet, PathElement, ProgramState, StopKind, Value as RuntimeValue,
 };
 use zkc_tools::execution::InputValue;
-use zkc_tools::run::{
-    Bundle, BundleLimits, HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority,
-};
+use zkc_tools::run::{HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority};
 
 #[path = "language_native/attempts.rs"]
 mod attempts;

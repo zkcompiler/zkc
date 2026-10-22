@@ -73,7 +73,8 @@ judgment.
 | Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
 | Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
 | Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
-| Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
+| Rust Host drivers | `zkc-runtime::host::{joint,proof,wire}`: ordered scheduling, proof transport, completion, cancellation and bounded reports |
+| Rust application Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint authority, authentication, preparation and publication |
 | Mathematical kernels | [zkc-kernels](../crates/zkc-kernels/README.md): typed arithmetic, transforms, commitments, curve operations and scoped numerical storage |
 | Backend integration | [zkc-native](../crates/zkc-native/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
@@ -96,10 +97,18 @@ typed operands and explicit computation limits, without VM values, resource
 stores, transcript sessions or Host authority. Independent kernel code and the
 VM do not depend on each other; native adapters connect them.
 
-The joint Host's `WireBackend` contract reports Host-owned `WireError` outcomes.
-Invalid received bytes are an accepted stopping completion, while capacity or
-backend failure occurs before that completion is accepted. This boundary retains
-the admitted native message profile; it does not install arbitrary codecs.
+The reusable drivers live in `zkc-runtime::host`, separately from the VM and
+interpreter, without native or kernel dependencies. `host::wire::WireBackend`
+supplies installed complete-type support, fixed widths, encoding/decoding bounds
+and value codecs. `ProofBackend` adds borrowed raw bytes and Boolean acceptance
+projection. `zkc-native` implements these contracts with its closed native profile.
+Artifacts cannot register codecs or select implementations.
+
+Host-owned `WireError` distinguishes invalid received data, capacity exhaustion
+and trusted adapter failures. Invalid data is an accepted Decode stop; capacity
+or adapter failure leaves the receive unaccepted. Unsupported measurement fails
+closed. Applications supply authenticated bindings and acceptance selectors;
+the drivers grant no package, deployment, setup or public-input authority.
 
 An Entry package retains the source interface, original checked IR,
 compilation choices and selected artifact. Local source commands trust the

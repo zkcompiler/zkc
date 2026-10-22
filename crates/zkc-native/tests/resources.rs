@@ -595,6 +595,7 @@ fn retiring_a_failed_attempt_preserves_other_resources_and_never_reuses_identity
     );
 }
 
+#[cfg(feature = "test-utils")]
 #[test]
 fn finite_attempt_controller_passes_real_successor_rng_without_reinitialization() {
     use std::ops::ControlFlow::{Break, Continue};

@@ -55,8 +55,19 @@ impl NativeBackend {
     }
     /// Measure one native frame without decoding its cryptographic elements.
     /// Fixed leaves and tables use length bounds; recursive and bulk frames
-    /// require shape scans. Complete framing and value checks remain with loading.
+    /// require shape scans. Preserve each decoder's framing/setup checks before
+    /// its policy checks. Canonical element and value checks remain with loading.
     pub fn measure_native_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<NativeInputSize> {
+        if !super::has_native_wire(ty) {
+            return Err(unsupported());
+        }
+        if super::frame(ty).is_some() {
+            super::fixed_header(ty, bytes)?;
+        } else if super::table_type(ty) {
+            super::table_header(self.policy(), bytes)?;
+        } else if let Some(tag) = super::pcs::tag(ty) {
+            super::pcs::preflight(self.setups(), tag, bytes)?;
+        }
         let mut counts = structured::Counts::default();
         let retained = if super::table_type(ty)
             || super::frame(ty).is_some() && !ty.has_native_array_frame()
@@ -74,6 +85,14 @@ impl NativeBackend {
             counts.add(elements, groups)?;
             Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), self.policy())
                 .map_err(|_| Error::Limit)?
+        } else if super::bulk::format(ty).is_some() {
+            // Root bulk decoders scan framing before whole-value counts. A
+            // recursive wrapper's earlier node allowance must not mask that.
+            let (retained, elements, groups) = super::bulk::scan(ty, bytes, self.policy())?;
+            counts.nodes = 1;
+            counts.add(elements, groups)?;
+            structured::peak(self.policy(), retained, bytes.len())?;
+            retained
         } else {
             let retained = structured::scan(ty, bytes, self.policy(), self.setups(), &mut counts)?;
             structured::peak(self.policy(), retained, bytes.len())?;

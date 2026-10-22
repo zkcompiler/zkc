@@ -41,7 +41,12 @@ typed input layouts retained during admission. Return handoffs carry owned
 values and their backing obligation; VM recording snapshots retain preparation
 accounting. Primitive value checks also reside in the VM;
 `zkc_runtime::interpreter::Runner` owns control evaluation and pending actions.
-Hosts use that interpreter for Entry, proof and joint execution. The
+Hosts use that interpreter for Entry, proof and joint execution.
+`zkc-runtime::host::{joint,proof,wire}` owns reusable ordered drivers and framing
+without native or kernel dependencies. Runtime-only controls use a separate
+backend and Value through joint and proof paths; native integration implements
+the closed wire profile. Application identity, setup, public inputs and prepared
+computation authority remain in `zkc-tools`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
 Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their

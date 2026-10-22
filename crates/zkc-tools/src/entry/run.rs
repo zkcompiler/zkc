@@ -2,8 +2,9 @@
 //! evaluator here: the bound interface supplies names and product/sum layouts.
 use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{EntryAssets, Interface, Package, SetupAuthority, Value, arguments, setups, value};
-use crate::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
+use crate::run::{self as native, HostLimits, HostReport, RunHost};
 use std::collections::BTreeMap;
+use zkc_runtime::host::joint::{Outcome, Report};
 
 type Result<T> = std::result::Result<T, String>;
 pub type NamedValues = BTreeMap<String, Value>;
@@ -256,7 +257,7 @@ impl PreparedRun<'_> {
 }
 fn collect(
     interface: &Interface,
-    execution: &native::Report<zkc_native::NativeBackend>,
+    execution: &Report<zkc_native::NativeBackend>,
 ) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {

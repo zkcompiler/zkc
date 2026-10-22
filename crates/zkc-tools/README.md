@@ -9,10 +9,14 @@ functions through the generic runtime. The public library separates project comp
 | `project` | Manifest discovery, source maps, Entry selection, standard paths, template plans and bounded compiler invocation |
 | `execution` | Shared `Capacity`, `InputValue`, immutable `PreparedData` and authenticated `ProverMaterial` |
 | `entry` | Authenticated packages, named input binding, execution and generated Rust data and callable bindings |
-| `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
+| `run` | Authenticated native run bundles, role preparation, setup authority and application reports |
 | `proof` | Independently admitted producer/verifier deployments, public binding, proof execution, attempts and setup authority |
 
-`proof` also exports bounded proof readers/writers and execution reports.
+Reusable scheduling, proof execution, bounded framing and driver reports live
+in `zkc-runtime::host::{joint,proof,wire}`. Callers import those owners directly;
+`NativeBackend` implements their transport contracts in `zkc-native`. This crate
+retains independent package/deployment pins, public inputs, setup authorization,
+acceptance selection, prepared computation policy, attempts and publication.
 Private `host` helpers own byte ingress, native input admission, immutable prover
 material, operational capacities, setup validation and bounded compiler-process
 execution. No host dispatches on a protocol name.

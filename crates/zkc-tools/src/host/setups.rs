@@ -85,7 +85,7 @@ impl VerifierKeys {
             .checked_mul(16)
             .and_then(|n| n.checked_add(4096))
             .ok_or("native-setup-capacity")?;
-        let guard = crate::host::shared::allocation(self.ledger.as_ref(), bound)?;
+        let guard = zkc_runtime::host::wire::reserve_allocation(self.ledger.as_ref(), bound)?;
         self.retained.extend(guard);
         let key = zkc_kernels::VerifierKey::from_bytes(bytes, pin, &self.bounds)
             .map_err(|e| e.to_string())?;

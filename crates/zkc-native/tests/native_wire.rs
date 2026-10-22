@@ -4,6 +4,7 @@ use common::ark_backend;
 use zkc_native::{
     GroupPoint, NativeBackend, NativeWireError, Policy, Scalar, Value, native_wire_size,
 };
+use zkc_runtime::host::wire::{WireBackend, WireError};
 use zkc_runtime::vm::{DecodeReason, PhysicalType, Value as RuntimeValue};
 
 #[test]
@@ -144,6 +145,48 @@ fn policy_failure_and_other_providers_never_become_decode_stops() {
             .unwrap_err(),
         NativeWireError::Limit
     );
+}
+
+#[test]
+fn host_measurement_preserves_decoder_framing_and_setup_precedence() {
+    let limited = NativeBackend::new(
+        Policy {
+            max_wire_bytes: 0,
+            max_value_bytes: 0,
+            ..Policy::default()
+        },
+        common::entry(None),
+        Default::default(),
+    )
+    .unwrap();
+    for spelling in [
+        "bool",
+        "index",
+        "field:bls12-381.fr",
+        "field_array<bls12-381.fr,2>",
+        "table:bls12-381.fr",
+        "proof:multilinear.kzg.bls12-381/0",
+        "bytes",
+        "vector:bls12-381.fr",
+    ] {
+        let ty = PhysicalType::default_for(zkc_runtime::vm::LogicalType::parse(spelling).unwrap())
+            .unwrap();
+        let width = native_wire_size(&ty).unwrap_or(10);
+        for bytes in [
+            vec![],
+            vec![0; width - 1],
+            vec![0; width],
+            vec![0; width + 1],
+        ] {
+            let expected = limited.decode_native_value(&ty, &bytes).unwrap_err();
+            assert_eq!(
+                limited.decoding_bound(&ty, &bytes).unwrap_err(),
+                WireError::from(expected),
+                "{spelling}, {} bytes",
+                bytes.len()
+            );
+        }
+    }
 }
 
 #[test]
