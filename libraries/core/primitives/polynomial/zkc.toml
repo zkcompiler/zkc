@@ -4,6 +4,7 @@
 "zkc::polynomial" = "polynomial.zkc"
 "zkc::symbolic" = "symbolic.zkc"
 "zkc::primitives::coset" = "coset.zkc"
+"zkc::primitives::quotient" = "quotient.zkc"
 
 ["dependencies"]
 "primitive-collections" = "../collections"

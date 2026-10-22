@@ -258,7 +258,7 @@ def candidates(inventory):
         if group == "resource":
             choices = [(["Ticket"], "logical")]
         elif group == "nullary":
-            choices = [([], "native" if name.startswith(("index.", "indices.", "external.", "bytes.", "shake128.", "hash.", "encoding.")) else "arkworks")]
+            choices = [([], "native" if name.startswith(("index.", "indices.", "quotient.", "external.", "bytes.", "shake128.", "hash.", "encoding.")) else "arkworks")]
         elif group == "sequence":
             choices = [([payload], "native") for payload in
                        ["index", "field:bn254.fr", "group:bn254.g2", "field:koala-bear",
@@ -536,6 +536,10 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
 def test_explicit_semantic_witnesses(drivers, directory):
     # Independently authored signatures keep a shared inventory error visible.
     witnesses = [
+        ("quotient.add", [], ["indices", "indices", "index"], ["indices"]),
+        ("quotient.subtract", [], ["indices", "indices", "index"], ["indices"]),
+        ("quotient.multiply", [], ["indices", "indices", "index"], ["indices"]),
+        ("quotient.norm_within", [], ["indices", "indices", "index", "index"], ["bool"]),
         *(("curve.identity", [group], [], [f"group:{group}"])
           for group in ("ristretto255.group", "bls12-381.g1", "bn254.g1", "bn254.g2", "bn254.gt")),
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),

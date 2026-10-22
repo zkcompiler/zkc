@@ -1,0 +1,44 @@
+module zkc::quotient;
+use zkc::indices as indices;
+use zkc::indices::{Indices};
+use zkc::primitives::quotient as raw;
+
+// Canonical coefficients in (Z/QZ)[X]/(X^N+1), in ascending degree order.
+// Both static parameters participate in the nominal source type's identity.
+pub struct Polynomial<Q: nat, N: nat> {
+  data: Indices
+}
+
+pub fn polynomial<Q: nat, N: nat>(data: Indices) -> Polynomial<Q, N>
+    effects(stop) where 2 <= Q, 1 <= N {
+  require indices::length(data) == index<N>();
+  for position in 0..indices::length(data) {
+    require indices::less(indices::get(data, position), index<Q>());
+  }
+  return Polynomial<Q, N> { data: data };
+}
+
+pub math fn coefficients<Q: nat, N: nat>(input: Polynomial<Q, N>) -> Indices where () {
+  return input.data;
+}
+
+pub fn add<Q: nat, N: nat>(left: Polynomial<Q, N>, right: Polynomial<Q, N>)
+    -> Polynomial<Q, N> effects(stop) where () {
+  return Polynomial<Q, N> { data: raw::add(left.data, right.data, index<Q>()) };
+}
+
+pub fn subtract<Q: nat, N: nat>(left: Polynomial<Q, N>, right: Polynomial<Q, N>)
+    -> Polynomial<Q, N> effects(stop) where () {
+  return Polynomial<Q, N> { data: raw::subtract(left.data, right.data, index<Q>()) };
+}
+
+pub fn multiply<Q: nat, N: nat>(left: Polynomial<Q, N>, right: Polynomial<Q, N>)
+    -> Polynomial<Q, N> effects(stop) where () {
+  return Polynomial<Q, N> { data: raw::multiply(left.data, right.data, index<Q>()) };
+}
+
+// Sum both centered squared norms over integers, with an inclusive bound.
+pub fn norm_within<Q: nat, N: nat>(left: Polynomial<Q, N>, right: Polynomial<Q, N>, bound: index)
+    -> bool effects(stop) where () {
+  return raw::norm_within(left.data, right.data, index<Q>(), bound);
+}

@@ -204,7 +204,11 @@
       "bool.and",
       "bool.not",
       "bool.or",
-      "control.require"
+      "control.require",
+      "quotient.add",
+      "quotient.subtract",
+      "quotient.multiply",
+      "quotient.norm_within"
     ],
     "resource": [
       "resource_unit.create",

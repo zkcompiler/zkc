@@ -1,0 +1,13 @@
+module lattice;
+use zkc::quotient as quotient;
+use zkc::quotient::{Polynomial};
+
+// Arithmetic short-preimage predicate: s1 = c-h*s2 and ||(s1,s2)||^2 <= bound.
+// The caller supplies the challenge and canonical response residues. Encoding,
+// HashToPoint, parameter selection and signature authentication are external.
+pub fn short_preimage<Q: nat, N: nat>(public_key: Polynomial<Q, N>,
+    challenge: Polynomial<Q, N>, response: Polynomial<Q, N>, bound: index)
+    -> bool effects(stop) where () {
+  let first = quotient::subtract(challenge, quotient::multiply(public_key, response));
+  return quotient::norm_within(first, response, bound);
+}

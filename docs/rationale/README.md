@@ -9,6 +9,7 @@ the alternatives, the reason for choosing, and the cost that remains.
 |---|---|
 | Why separate the MLIR compiler, Rust runtime and Lean models? | [System boundaries](architecture.md) |
 | Why keep mathematics in ordinary SSA? | [Mathematical IR](mathematical-ir.md) |
+| Why reuse external compiler machinery for structured lattice arithmetic? | [Quotient rings](quotient-rings.md) |
 | Why check actual transformation results? | [Validation](validation.md) |
 | Why must projection preserve explicit communication? | [Participant generation](participant-generation.md) |
 | Why use sequences alongside numeric collections? | [Nested data](nested-sequences.md) |

@@ -128,6 +128,24 @@ value. `polynomial` stores univariate coefficients in increasing
 power order; an empty coefficient vector denotes zero.
 
 
+## Quotient-ring coefficients
+
+`quotient::polynomial<Q,N>(data)` checks exactly `N` canonical unsigned residues
+below `Q`, with static `Q >= 2` and `N >= 1`. Its private `Polynomial<Q,N>`
+retains both parameters in source type identity. `coefficients`, `add`,
+`subtract`, `multiply` and the paired `norm_within` predicate operate on this
+view. Multiplication reduces by `X^N+1`; the norm uses centered integer lifts
+and an inclusive bound. Composite moduli and non-two-adic degrees are supported.
+
+Receive raw `Indices` and construct the view locally. Native operations check
+the raw arrays independently and use exact unsigned modular arithmetic; the
+source wrapper does not install a field or a native refinement type. The
+[contract](../../docs/spec/domains/quotient-rings.md) states failures and resource
+admission. The [lattice library](../relations/lattice/README.md) composes these
+operations into a short-preimage predicate. The
+[rationale](../../docs/rationale/quotient-rings.md) explains the coefficient and
+external-dialect boundary.
+
 ## Linear group expressions
 
 `linear::Combination<G>` stores ordered scalar/point terms in private fields.

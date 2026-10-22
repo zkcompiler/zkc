@@ -42,6 +42,10 @@ no runtime encoding; they differ from normalized coefficient objects below.
 
 ## Univariate coefficient objects
 
+[Negacyclic quotient-ring coefficients](quotient-rings.md) have their own exact
+extent and modular meaning. They do not use the normalized field-polynomial
+representation below.
+
 A univariate polynomial over `F` has a finite ascending coefficient sequence:
 `p(X) = sum_i c[i] * X^i`. Its normalized sequence omits trailing zero
 coefficients; the zero polynomial has an empty sequence. Construction may

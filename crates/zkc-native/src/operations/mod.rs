@@ -7,6 +7,7 @@ pub(crate) mod curve;
 pub(crate) mod field;
 pub(crate) mod indices;
 pub(crate) mod pairwise;
+pub(crate) mod quotient;
 pub(crate) mod resources;
 
 pub(crate) mod encoding;

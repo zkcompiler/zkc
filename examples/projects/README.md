@@ -16,6 +16,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [FemtoCairo](femtocairo/README.md) | Clean VM execution with program and immutable-memory lookups |
 | [Bulletproofs+](bulletproofs-plus/README.md) | Monero range proofs with reusable weighted inner-product rounds, exact external bytes and managed randomness |
 | [EIP-4844](eip4844/README.md) | Ethereum blob commitments and opening proofs, reproducing c-kzg-4844's challenge hash inputs, with a digest-pinned trusted setup input |
+| [Lattice arithmetic](lattice-arithmetic/README.md) | Checked quotient-ring coefficients and an integer short-preimage norm predicate |
 
 Each project owns its concrete domains, Entries and invocation inputs. Reusable
 algorithms live in [`libraries/`](../../libraries/README.md). Language feature

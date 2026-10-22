@@ -116,6 +116,11 @@ def IndicesEmptyOp : BoundOp<AlgebraDialect, "exec.indices_empty", [OpIndicesEmp
 
 def IndicesLengthOp : BoundOp<AlgebraDialect, "exec.indices_length", [OpIndicesLength]>;
 
+def QuotientAddOp : BoundOp<AlgebraDialect, "exec.quotient_add", [OpQuotientAdd]>;
+def QuotientSubtractOp : BoundOp<AlgebraDialect, "exec.quotient_subtract", [OpQuotientSubtract]>;
+def QuotientMultiplyOp : BoundOp<AlgebraDialect, "exec.quotient_multiply", [OpQuotientMultiply]>;
+def QuotientNormWithinOp : BoundOp<AlgebraDialect, "exec.quotient_norm_within", [OpQuotientNormWithin]>;
+
 def FieldInverseOp : BoundOp<AlgebraDialect, "exec.field_inverse", [OpFieldInverse]>;
 
 def MatrixBilinearOp : BoundOp<AlgebraDialect, "exec.matrix_bilinear", [OpMatrixBilinear]>;

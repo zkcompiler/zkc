@@ -31,6 +31,34 @@ Validate realization refinements across representative operations and protocol
 families. Keep alternate interpreters, JIT and AOT dependent on evidence and the
 same execution contract; the VM separation itself makes no performance claim.
 
+## Compile structured quotient arithmetic
+
+Reuse HEIR's Polynomial and ModArith arithmetic vocabulary inside checked
+compiler regions, following the [quotient-ring rationale](rationale/quotient-rings.md).
+Retain compound ring and module operations until transform placement and
+realization selection finish. The checked coefficient source contract remains
+the observable boundary; existing field-polynomial types retain their meanings.
+
+First establish a pinned arithmetic dependency and a supported toolchain, an
+explicit full-NTT profile, consistent folding and execution, and transform
+coordinate checks. Then connect source region formation and independent
+candidate readers to managed execution. The first complete integration includes
+Falcon batch arithmetic and an ML-DSA-style module matrix-vector computation,
+with shared transforms, charged preparation and scratch, unchanged ordered
+admission, and a coefficient fallback. Dialect registration or a standalone
+lowering experiment does not complete that integration.
+
+Compare complete arithmetic regions against competent native composition,
+including compilation, preparation, retained transformed storage and execution.
+Use compiler work limits and runtime capacity checks when selecting a realization.
+
+Extend to RNS through an exact signed-digit commitment matrix-vector consumer.
+Keep the protocol modulus separate from auxiliary compute primes, and check
+centered-reconstruction capacity before selecting accumulation or chunking.
+Partial NTT, broader ring maps and new hardware targets need their own admitted
+profiles. Native arithmetic integration proceeds independently of Lean
+correspondence work.
+
 ## Establish native correspondence
 
 Select one concrete `.zkc`/MLIR protocol, source semantics, observation boundary
