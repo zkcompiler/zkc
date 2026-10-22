@@ -86,7 +86,7 @@ claim_request request3Data using Registration.library method request3Method
 /-- Exact source request; attachment and method are separate. -/
 def request4Data : Wire.Request :=
 {
-  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "example::Interactive", .interactive, []⟩
+  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
   property := ⟨"completeness", 0⟩
   parameters := none
   model := ⟨⟨"models.interactive", 0⟩, []⟩
@@ -103,7 +103,7 @@ claim_request request4Data using Registration.library method request4Method
 /-- Exact source request; attachment and method are separate. -/
 def request5Data : Wire.Request :=
 {
-  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "example::Interactive", .interactive, []⟩
+  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
   property := ⟨"special_soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.interactive", 0⟩, []⟩

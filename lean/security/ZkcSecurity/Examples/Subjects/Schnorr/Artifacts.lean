@@ -59,10 +59,10 @@ def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
     | .compiledIdeal => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]
     | .executableBytes => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩, ⟨"verifier-program", "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"⟩]⟩
 
-/-- Independently bound bytes for the separately admitted interactive Entry. -/
+/-- Independently bound bytes for the separately admitted interactive protocol subject. -/
 def interactiveReference : Zkc.Claims.SubjectRef :=
   ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc",
-    "example::Interactive", .interactive, []⟩
+    "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
 
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
