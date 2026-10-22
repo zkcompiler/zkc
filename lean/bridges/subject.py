@@ -168,7 +168,8 @@ class Driver(Runner):
             names = glue.body_names(artifacts["snapshot"], subject.get("bodies", "interactive_entry"))
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, subject.get("bodies", "closed", False),
-                                                              names, self, self.args.lake)
+                                                              names, self, self.args.lake,
+                                                              fresh=self.args.fresh_bodies)
             self.generated(subject, "interactive_bodies", text, modules)
             views = subject.module_name("interactive_views")
             if views:
@@ -200,7 +201,8 @@ class Driver(Runner):
             bodies = subject.module_name("bodies")
             body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"))
             self.build(data)
-            text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake)
+            text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake,
+                                                              fresh=self.args.fresh_bodies)
             self.generated(subject, "bodies", text, modules)
             names.update(bodies=bodies, helpers=helpers, protocols=protocols)
         if admission != "views":
@@ -983,6 +985,7 @@ def main():
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--native", type=Path, default=ROOT / "target/release/zkc", help="the runtime CLI")
     parser.add_argument("--lake", default="lake")
+    parser.add_argument("--fresh-bodies", action="store_true", help="elaborate body printers without Lake replay")
     parser.add_argument("--output", type=Path, help="new or empty evidence directory")
     parser.add_argument("--list-mutations", action="store_true", help="list the generic mutation kinds and exit")
     args = parser.parse_args()
