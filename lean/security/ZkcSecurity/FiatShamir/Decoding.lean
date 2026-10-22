@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Soundness
+public import ZkcSecurity.FiatShamir.Sampling
 public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
 @[expose] public section

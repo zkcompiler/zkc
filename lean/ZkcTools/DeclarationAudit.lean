@@ -620,6 +620,27 @@ private def dependencyPolicyJson : String := r##"{
         "Zkc.Source",
         "Zkc.Compiler"
       ]
+    },
+    {
+      "name": "generic-certificates",
+      "owners": [
+        "ZkcSecurity.FiatShamir.Interface",
+        "ZkcSecurity.FiatShamir.Keyed",
+        "ZkcSecurity.FiatShamir.Typed",
+        "ZkcSecurity.FiatShamir.Sampling",
+        "ZkcSecurity.FiatShamir.Decoding",
+        "ZkcSecurity.FiatShamir.Obligations",
+        "ZkcSecurity.FiatShamir.Grinding",
+        "ZkcSecurity.FiatShamir.Laws",
+        "ZkcSecurity.FiatShamir.Lifting",
+        "ZkcSecurity.FiatShamir.Reduction"
+      ],
+      "exact": true,
+      "dependencies": [
+        "Zkc.Construction",
+        "ZkcSecurity.FiatShamir.Soundness",
+        "ZkcSecurity.FiatShamir.Composition"
+      ]
     }
   ],
   "exceptions": [

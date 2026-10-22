@@ -12,7 +12,7 @@ public import CompPoly.Fields.BLS12_381.Basic
 A query site decodes a uniform oracle answer into its result sort, and the
 certificate of `ZkcSecurity.FiatShamir.Typed` bounds escapes under this decoded
 law. A protocol's round-by-round analysis bounds escapes under the uniform law
-of the sort instead. This module relates the two multiplicatively.
+of the sort instead. This module relates the two through additive and multiplicative bounds.
 
 - `Dominated decode factor`: every event of the decoded value is at most
   `factor` times as likely as the same event of a uniform value of the sort. A
@@ -49,6 +49,19 @@ set_option autoImplicit false
 
 namespace ZkcSecurity.FiatShamir
 open OracleComp
+
+section Additive
+variable {F B : Type} [SampleableType F]
+
+/-- Decoded oracle answers: every event of the decoded challenge is at most
+`loss` likelier than under the uniform field. -/
+def Balanced [SampleableType B] (decode : B → F) (loss : ENNReal) : Prop :=
+  ∀ event : F → Prop,
+    Pr{let answer ← $ᵗ B}[event (decode answer)] ≤ Pr{let challenge ← $ᵗ F}[event challenge] + loss
+
+theorem balanced_id : Balanced (B := F) (id : F → F) 0 := fun _ => by simp
+
+end Additive
 
 section Laws
 variable {B R : Type}

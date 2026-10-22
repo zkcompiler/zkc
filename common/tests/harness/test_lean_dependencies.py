@@ -51,6 +51,22 @@ def test_hard_guard_applies_through_an_otherwise_allowed_layer():
         policy().audit_graph(graph, ['Zkc'])
 
 
+@pytest.mark.parametrize('uniform', ['Zkc.Construction.FiatShamir',
+                                   'ZkcSecurity.FiatShamir.Soundness',
+                                   'ZkcSecurity.FiatShamir.Composition'])
+def test_generic_certificates_refuse_transitive_uniform_dependencies(uniform):
+    graph = {'ZkcSecurity.FiatShamir.Reduction': ['ZkcSecurity.FiatShamir.Lifting'],
+             'ZkcSecurity.FiatShamir.Lifting': [uniform]}
+    with pytest.raises(ValueError, match='generic-certificates'):
+        policy().audit_graph(graph, ['ZkcSecurity'])
+
+
+def test_uniform_adapter_may_consume_generic_certificates():
+    graph = {'ZkcSecurity.FiatShamir.Composition': [
+        'ZkcSecurity.FiatShamir.Soundness', 'ZkcSecurity.FiatShamir.Reduction']}
+    policy().audit_graph(graph, ['ZkcSecurity'])
+
+
 @pytest.mark.parametrize('defect', ['duplicate', 'shadowed', 'wrong-rule', 'unknown-target'])
 def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
     import json

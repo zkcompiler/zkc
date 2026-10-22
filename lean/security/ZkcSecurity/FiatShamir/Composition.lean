@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Soundness
+public import ZkcSecurity.FiatShamir.Reduction
 
 @[expose] public section
 
@@ -245,5 +246,46 @@ theorem QueryBound.repeatN {A : Type} (step : A → PIR.Process (Actions F G) A)
         rw [Nat.succ_mul, Nat.add_comm]
       rw [arithmetic]
       exact bound
+
+end ZkcSecurity.FiatShamir
+
+namespace ZkcSecurity.FiatShamir
+open OracleComp OracleSpec
+open Zkc.Source Zkc.Construction
+
+variable {F G A B : Type} [SampleableType F] [SampleableType B]
+
+/-- A reduction over the common participant actions with a uniform error is a
+charged reduction over their transcript interface, with the same doomed
+residuals at every history, the final predicate as postcondition, and the bound
+`escape` gives for the decoded challenges as the charge of every key. -/
+def Reduction.typed {final : A → Prop} {error : ENNReal}
+    (reduction : Reduction (F := F) (G := G) final error) (context : Context) (decode : B → F)
+    (bound : ENNReal)
+    (escape : ∀ event : F → Prop, Pr{let challenge ← $ᵗ F}[event challenge] ≤ error →
+      Pr{let answer ← $ᵗ B}[event (decode answer)] ≤ bound) :
+    Typed.Reduction (interface (G := G) context decode) (fun _ value => final value)
+      (fun _ _ => bound) where
+  doomed _ process := reduction.doomed process
+  step history process member := by
+    have step := reduction.step process member
+    match process, step with
+    | .done value, step => exact step
+    | .halt _, _ => trivial
+    | .call operation next, step =>
+        cases operation with
+        | receive ty site sender => exact fun _ value _ => step value
+        | send site receiver sent =>
+            simp only [Typed.ChargedStepTo, interface]
+            cases Payload.ofValue _ sent with
+            | none => trivial
+            | some payload => exact step
+        | query site op arguments =>
+            refine le_trans (le_of_eq (prEvent_congr _ _
+              (fun raw => ¬ reduction.doomed (next (decode raw))) fun raw => ?_)) (escape _ step)
+            exact ⟨fun ⟨_, decoded, outside⟩ => by
+                cases Option.some.inj decoded
+                exact outside,
+              fun outside => ⟨_, rfl, outside⟩⟩
 
 end ZkcSecurity.FiatShamir

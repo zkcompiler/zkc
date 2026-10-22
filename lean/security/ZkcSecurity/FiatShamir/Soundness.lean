@@ -175,13 +175,6 @@ def RoundByRound.ofStep {accepts : A → Prop} {error : ENNReal}
   send _ _ _ _ _ member := step _ member
   query _ _ _ _ member := step _ member
 
-/-- Decoded oracle answers: every event of the decoded challenge is at most
-`loss` likelier than under the uniform field. -/
-def Balanced [SampleableType B] (decode : B → F) (loss : ENNReal) : Prop :=
-  ∀ event : F → Prop,
-    Pr{let answer ← $ᵗ B}[event (decode answer)] ≤ Pr{let challenge ← $ᵗ F}[event challenge] + loss
-
-theorem balanced_id : Balanced (B := F) (id : F → F) 0 := fun _ => by simp
 
 end RoundByRound
 
