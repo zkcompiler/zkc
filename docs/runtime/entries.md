@@ -284,7 +284,7 @@ original source names. The bindings contain no protocol arithmetic or custom int
 them when the authorized package changes. The [SDK crate](../../crates/zkc/README.md)
 owns the API inventory.
 
-## Entry Host and SDKs
+## Entry Host and Rust SDK
 
 Entry control and numerical computation have separate owners. The compiled Host
 program selects control branches and static calls; numerical functions use the
@@ -306,22 +306,8 @@ generated ordinary records; inspection exposes their schemas. Context cannot
 replace source call operands. Defaults cover children without
 setup slots. Required setup authority must be supplied explicitly.
 
-Function packages generate an `Arguments` structure, an admission function pinned
-to the package, and a typed `call` wrapper with the source result type:
-
-```rust,ignore
-let host = bindings::admit(package_bytes, options, authority)?;
-let result = bindings::call(&host, arguments, context)?;
-// result.report retains usage, reached calls and failures.
-// result.value is present only after successful execution and conversion.
-```
-
-Applications may also use `FunctionEntry::prepare(FunctionRequest)` directly.
-Authority and context are separate from ordinary arguments. Generated wrappers
-check exact package identity before preparation; schema equality alone cannot
-select a different deployment.
-
-The [Python SDK](../../python/README.md) calls the installed CLI, which uses this
-same Host. It accepts checked JSON-shaped arguments and returns the source value
-with its native report. It passes proof bytes unchanged. Each call starts a fresh
-process; retaining an admitted Host for repeated calls is available in Rust.
+The [Rust SDK guide](../../crates/zkc/README.md) explains generated arguments,
+package admission, reusable Hosts, preparation, typed reports and proof calls.
+Generated wrappers check exact package identity before preparation; schema
+equality alone cannot select a different deployment. Authority and invocation
+context are separate from ordinary arguments.

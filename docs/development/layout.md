@@ -4,7 +4,6 @@
 |---|---|
 | `compiler/` | C++ Language, Protocol IR, relation adapters, native compilation and installed SDK |
 | `crates/` | Rust kernels, VM, interpreter, native bindings, Entry/proof/joint Hosts and CLI |
-| `python/` | Typed Python process adapter for the common Entry Host |
 | `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |
 | `examples/relations/` | Relation data JSON |
@@ -31,6 +30,8 @@ kernels remain general inputs to that graph.
 Native integration clients live in `crates/zkc-test-drivers`;
 [their manifest](../../crates/zkc-test-drivers/README.md) selects test providers.
 The user CLI is built separately with default features.
+The [Rust SDK guide](../../crates/zkc/README.md) owns embedding and generated bindings;
+Python tools in the development environment own testing, compiler and research workflows.
 
 ## Build ownership
 

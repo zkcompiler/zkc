@@ -64,7 +64,7 @@ The [native validation map](native.md) connects compiler boundaries to
 representative controls and states their evidence limits.
 
 - `protocol/` covers compiler-generated mathematical programs, native proofs,
-  Entry Host commands, generated bindings, public `.zkc` projects, CLI discovery
+  Entry Host commands, [generated Rust SDK calls](protocol/test_rust_sdk.py), public `.zkc` projects, CLI discovery
   and executable documentation. Native generators run into fresh directories;
   a previous CTest run cannot satisfy their inputs.
   Contract conformance compares C++ Contracts, Rust admission and native backend
@@ -82,6 +82,8 @@ representative controls and states their evidence limits.
   integer reference arithmetic. The compiler and Lean fixture generators share `variant_codec.py`; independent production readers keep their own implementations.
 - `consumer/` also owns the Rust consumer source used by `check_rust_sdk.py`; the
   `rust-consumer` Nix check provides the pinned Cargo toolchain and dependency closure.
+  Preparation builds `Twice`, `Echo`, `Core`, `Checked` and `Withhold` packages
+  for numerical, joint, proof, execution-failure and withheld-result controls.
   `consumer/` owns SDK discovery fixtures and the separately configured installed C++ consumers. Small fixtures cover package selection and refusal cases; real installed consumers cover upstream LLVM/MLIR variables, linkage and public headers.
 - `fixtures/` contains independently retained reference vectors; its README
   identifies their owners.

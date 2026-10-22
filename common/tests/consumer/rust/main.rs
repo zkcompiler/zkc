@@ -11,10 +11,19 @@ mod joint {
 mod proof {
     include!("proof.rs");
 }
+#[allow(dead_code, non_snake_case)]
+mod checked {
+    include!("checked.rs");
+}
+#[allow(dead_code, non_snake_case)]
+mod withhold {
+    include!("withhold.rs");
+}
 use std::convert::TryFrom;
 use zkc::entry::{
-    BindingPolicy, FunctionInterface, InvocationBinding, InvocationContext, NamedValues, Package,
-    ProofOptions, ProofRequest, RoleInputs, RunContext, SetupAuthority, Value,
+    BindingPolicy, FunctionInterface, FunctionOptions, InvocationBinding, InvocationContext,
+    NamedValues, Package, ProofContext, ProofOptions, ProofRequest, RoleInputs, RunContext,
+    SetupAuthority, Value,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -126,8 +135,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(rejected.verification_result(), Some(false));
         assert!(!rejected.is_success());
     }
+    let host = checked::admit(
+        include_bytes!("checked.zkpkg"),
+        Default::default(),
+        Default::default(),
+    )?;
+    for valid in [false, true] {
+        let result = checked::call(
+            &host,
+            checked::Arguments { value: 7, valid },
+            Default::default(),
+        )?;
+        assert!(result.conversion_error.is_none());
+        assert_eq!(result.report.is_success(), valid);
+        if valid {
+            assert_eq!(result.value, Some(8));
+        } else {
+            assert!(result.value.is_none());
+            assert_eq!(
+                result.report.failure.as_ref().unwrap().code,
+                "entry-host-require"
+            );
+        }
+    }
+    let bytes = include_bytes!("withhold.zkpkg");
+    let package = Package::capture(bytes, &withhold::PACKAGE_SHA256, Package::MAX_BYTES)?;
+    let inventory = FunctionInterface::deployment_interfaces(&package)?;
+    let authorities = inventory
+        .iter()
+        .map(|d| (d.id().into(), SetupAuthority::default()))
+        .collect();
+    let host = withhold::admit(
+        bytes,
+        FunctionOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        },
+        authorities,
+    )?;
+    let context = || InvocationContext {
+        deployments: host
+            .deployments()
+            .map(|(id, operation)| {
+                assert_eq!(operation, "prove");
+                (id.into(), InvocationBinding::Proof(ProofContext::default()))
+            })
+            .collect(),
+    };
+    for complete in [false, true] {
+        let arguments = NamedValues::from([
+            (
+                "public".into(),
+                Value::Record([("expected".into(), true.into())].into()),
+            ),
+            (
+                "witness".into(),
+                Value::Record([("candidate".into(), true.into())].into()),
+            ),
+            ("complete".into(), complete.into()),
+        ]);
+        let result = withhold::call(&host, withhold::Arguments::try_from(arguments)?, context())?;
+        assert!(result.conversion_error.is_none());
+        assert_eq!(result.report.is_success(), complete);
+        assert_eq!(result.value.is_some(), complete);
+        assert!(
+            result
+                .report
+                .calls
+                .iter()
+                .any(|c| c.operation == "prove" && c.completed)
+        );
+        if !complete {
+            assert_eq!(
+                result.report.failure.as_ref().unwrap().code,
+                "entry-host-require"
+            );
+        }
+    }
     println!(
-        "normal-feature staged SDK: Unicode, numerical, joint, preparation, independent statements, repeated calls and refusals passed"
+        "normal-feature staged SDK: Unicode, numerical, joint, preparation, independent statements, repeated calls, execution failures, withheld results and refusals passed"
     );
     Ok(())
 }

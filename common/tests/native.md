@@ -37,7 +37,7 @@ or external prover/verifier compatibility.
 
 | Boundary | Controls |
 |---|---|
-| Named source Entries | [Language Host](protocol/test_language_host.py), [CLI walkthroughs](protocol/test_developer_commands.py) |
+| Named source Entries | [Language Host](protocol/test_language_host.py), [generated Rust SDK consumer](protocol/test_rust_sdk.py), [preparation policies](protocol/test_preparation_policies.py), [CLI walkthroughs](protocol/test_developer_commands.py) |
 | Source inference and contracts | [Definition completion, annotations, static holes, service arguments and limits](../../compiler/test/language_inference.cpp) |
 | Library operators | [Scope and primitive controls](../../compiler/test/library_operators.cpp), [inference and binding-witness mutations](../../compiler/test/operator_inference.cpp), and [named/operator runtime comparisons](protocol/test_math_libraries.py). Scope re-enumeration and structural matching check the selected binding independently of candidate search; these executable checks do not prove elaboration correctness. |
 | Mathematical notation | [Parsing, visibility and resource controls](../../compiler/test/language_notation.cpp), [inspection scope and source spans](../../compiler/test/language_notation_inspection.cpp), [effect and evaluation-order controls](../../compiler/test/notation_semantics.cpp), and [CLI and runtime comparisons](protocol/test_language_notation.py) |

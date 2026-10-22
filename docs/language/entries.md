@@ -135,5 +135,5 @@ interface, compilation choices and the executable artifact in an
 [Entry package](../spec/formats/entry.md). Applications authenticate the package
 before executing its common Host.
 
-See [running Entries](../runtime/entries.md) for CLI use, Rust bindings and the
-Python adapter. Entry execution does not establish a protocol security theorem.
+See [running Entries](../runtime/entries.md) for CLI use and
+[the Rust SDK](../../crates/zkc/README.md) for embedding. Entry execution does not establish a protocol security theorem.

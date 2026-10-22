@@ -5,8 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from zkc import Client
-
 
 @pytest.fixture
 def policy_project(directory):
@@ -84,20 +82,44 @@ def test_package_prepare_resolves_each_child_policy(
     assert journal.json(command)['status'] == 'inputs-checked'
 
 
-def test_python_dry_runs_preserve_native_input_and_policy_validation(toolchain, policy_project):
-    client = Client(policy_project, executable=toolchain.runtime, compiler=toolchain.compiler)
-    refused = client.run(arguments(), entry='Produce', options=['--dry-run'])
-    assert not refused.ok and refused.report['code'] == 'entry-proof-binding-policy'
+def test_dry_runs_preserve_native_input_policy_and_publication_boundaries(
+        toolchain, journal, directory, policy_project):
+    target = [f'--project={policy_project}', f'--compiler={toolchain.compiler}']
+    inputs = journal.write('arguments.json', arguments())
+    results = directory / 'results.json'
+    command = [toolchain.runtime, '--json', 'run', 'Produce', *target,
+               f'--input={inputs}', f'--results={results}', '--dry-run']
+    journal.json(command, refuses='entry-proof-binding-policy')
     options = ['--dry-run', '--allow-authored']
-    checked = client.run(arguments(), entry='Produce', options=options).require_success()
-    assert checked.report['status'] == 'inputs-checked'
-    assert checked.value is None and checked.proof is None
+    checked = journal.json([*command, '--allow-authored'])
+    assert checked['status'] == 'inputs-checked' and 'execution' not in checked
+    assert not results.exists()
+    # A dry run must also leave existing output untouched.
+    results.write_bytes(b'prior result')
     invalid = arguments() | {'public': {'expected': None}}
-    refused = client.run(invalid, entry='Produce', options=options)
-    assert not refused.ok and refused.report['code'] == 'entry-input-unfilled'
-    public, witness = {'expected': True}, {'candidate': True}
-    checked = client.prove(public, witness, entry='Core', options=options).require_success()
-    assert checked.report['status'] == 'inputs-checked' and checked.proof is None
-    proof = client.prove(public, witness, entry='Core', options=['--allow-authored']).require_success().proof
-    checked = client.verify(public, proof, entry='Core', options=options).require_success()
-    assert checked.report['status'] == 'inputs-checked' and checked.value is None
+    inputs.write_text(json.dumps(invalid))
+    journal.json([*command, '--allow-authored'], refuses='entry-input-unfilled')
+    assert results.read_bytes() == b'prior result'
+    inputs.write_text(json.dumps(arguments()))
+    journal.json([*command, '--allow-authored'])
+    assert results.read_bytes() == b'prior result'
+    public = journal.write('public.json', {'expected': True})
+    witness = journal.write('witness.json', {'candidate': True})
+    proof = directory / 'proof.bin'
+    producing = [toolchain.runtime, '--json', 'prove', 'Core', *target,
+                 f'--public={public}', f'--witness={witness}', f'--output={proof}',
+                 f'--results={results}']
+    journal.json([*producing, '--dry-run'], refuses='entry-proof-binding-policy')
+    checked = journal.json([*producing, *options])
+    assert checked['status'] == 'inputs-checked' and 'execution' not in checked
+    assert not proof.exists() and results.read_bytes() == b'prior result'
+    produced = journal.json([*producing, '--allow-authored'])
+    assert produced['status'] == 'produced'
+    sentinel = proof.read_bytes(), results.read_bytes()
+    journal.json([*producing, *options])
+    assert (proof.read_bytes(), results.read_bytes()) == sentinel
+    verifying = [toolchain.runtime, '--json', 'verify', 'Core', *target,
+                 f'--public={public}', f'--proof={proof}', f'--results={results}']
+    checked = journal.json([*verifying, *options])
+    assert checked['status'] == 'inputs-checked' and 'execution' not in checked
+    assert (proof.read_bytes(), results.read_bytes()) == sentinel

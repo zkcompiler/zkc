@@ -1,12 +1,11 @@
 """Separate CLI jobs adapt authenticated source packages to the shared Host."""
 
-from entry import joint_execution
+from entry import compile_named_entry, joint_execution
 
 from input_files import input_files, invocation_file
 import hashlib
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -17,15 +16,8 @@ FIXTURES = ROOT / 'compiler/test/fixtures/language'
 
 
 def compile_entry(toolchain, journal, directory, entry, source=None):
-    package = directory / f'{entry}.zkpkg'
-    args = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-            f'--module=sample={source or FIXTURES / "attempts.zkc"}',
-            f'sample::{entry}', f'--output={package}']
-    report = json.loads(journal.run(args))
-    assert report['status'] == 'compiled'
-    assert Path(report['compiler']).is_absolute() and len(report['toolchain']) == 64
-    assert report['package_sha256'] == hashlib.sha256(package.read_bytes()).hexdigest()
-    return package, report['package_sha256']
+    return compile_named_entry(toolchain, journal, directory, entry,
+                               source or FIXTURES / 'attempts.zkc')
 
 
 def write(path, value):
@@ -135,7 +127,6 @@ def test_named_run_defaults_and_private_result_files(toolchain, journal, directo
     journal.run([*command, '--results=duplicate'], refuses='cli-option')
 
 
-
 @pytest.mark.parametrize('done', [False, True])
 def test_conditional_completion_preserves_logical_result_order(toolchain, journal, directory, done):
     source = directory / 'completion.zkc'
@@ -179,181 +170,6 @@ def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, direct
     for changed, code in mutations:
         write(inputs, {'inputs': {'P': {'payload': changed, 'empty': None}, 'V': {}}})
         journal.run(command, refuses=code)
-
-
-def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal, directory):
-    run_package, run_pin = compile_entry(toolchain, journal, directory, 'Demo', FIXTURES / 'host_values.zkc')
-    proof_source = directory / 'statement.zkc'
-    proof_text = (FIXTURES / 'attempts.zkc').read_text()
-    proof_text = proof_text.replace('(done:bool@P, coins:', '(expected:bool@(P,V), done:bool@P, coins:', 1)
-    proof_text = proof_text.replace('accepted=ok);', 'accepted=ok && expected);', 1)
-    proof_text = proof_text.replace('prover P;verifier V;public{};accept accepted;complete result.ready;',
-                                    'prover P;verifier V;public{expected};accept accepted;complete result.ready;', 1)
-    proof_source.write_text(proof_text)
-    proof_package, proof_pin = compile_entry(toolchain, journal, directory, 'Derived', proof_source)
-    shapes_dir = directory / 'shapes'
-    shapes_dir.mkdir()
-    collision = shapes_dir / 'p.zkc'
-    collision.write_text('module p;pub struct Outputs {pub flag:bool}')
-    shapes_package = shapes_dir / 'Demo.zkpkg'
-    shapes_report = json.loads(journal.run([
-        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-        f'--module=sample={FIXTURES / "host_bindings.zkc"}', f'--module=p={collision}',
-        'sample::Demo', f'--output={shapes_package}',
-    ]))
-    shapes_pin = shapes_report['package_sha256']
-    pcs_package, pcs_pin = compile_entry(toolchain, journal, directory, 'Prove', FIXTURES / 'pcs_setup.zkc')
-    for name, package, pin in [('run', run_package, run_pin), ('proof', proof_package, proof_pin), ('shapes', shapes_package, shapes_pin), ('pcs', pcs_package, pcs_pin)]:
-        journal.run([toolchain.runtime, '--json', 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / f'{name}.rs'}'])
-    original = run_package.read_bytes()
-    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={run_package}'], refuses='entry-output-path')
-    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={directory / 'unused.rs'}', '--setups=missing'], refuses='cli-option')
-    assert run_package.read_bytes() == original
-    # This is a consumer crate, not a module compiled under zkc internals.
-    (directory / 'Cargo.toml').write_text(f'''[package]
-name = "entry-bindings-consumer"
-version = "0.0.0"
-edition = "2018"
-[workspace]
-[dependencies]
-zkc = {{ path = {json.dumps(str(ROOT / 'crates/zkc'))} }}
-[[bin]]
-name = "entry-bindings-consumer"
-path = "main.rs"
-''')
-    shutil.copyfile(ROOT / 'Cargo.lock', directory / 'Cargo.lock')
-    (directory / 'main.rs').write_text(r'''#![deny(warnings)]
-#[allow(dead_code)] mod run { include!("run.rs"); }
-#[allow(dead_code)] mod proof { include!("proof.rs"); }
-#[allow(dead_code)] mod pcs { include!("pcs.rs"); }
-#[allow(dead_code, non_camel_case_types)] mod shapes {
-    struct String; struct Box; struct From; struct TryFrom; #[allow(non_camel_case_types)] struct entry;
-    type Result<T> = ::core::result::Result<T, ()>;
-    struct Ok; struct Err;
-    struct bool; struct u64; struct u8; struct str;
-    #[allow(unused_macros)] macro_rules! Debug { ($($items:tt)*) => { compile_error!("shadowed Debug") }; }
-    #[allow(unused_macros)] macro_rules! vec { ($($items:tt)*) => { compile_error!("shadowed vec") }; }
-    include!("shapes.rs");
-}
-use zkc::entry::{RoleInputs,ProofRequest,FunctionEntry,FunctionInterface,
-    InvocationContext,InvocationBinding,RunContext,Package,SetupAuthority};
-fn authority(bytes:&[u8],pin:&[u8;32])->std::collections::BTreeMap<String,SetupAuthority> {
-    let package=Package::capture(bytes,pin,Package::MAX_BYTES).unwrap();
-    let children=FunctionInterface::deployment_interfaces(&package).unwrap();
-    children.iter().map(|child|{
-        assert_eq!(child.operation(),"run");
-        assert_eq!(child.interface().setup_names().len(),0);
-        (child.id().into(),Default::default())
-    }).collect()
-}
-fn context(host:&FunctionEntry,session:&str)->InvocationContext {
-    InvocationContext{deployments:host.deployments().map(|(id,operation)|{
-        assert_eq!(operation,"run");
-        (id.into(),InvocationBinding::Run(RunContext{session:Some(session.into()),..Default::default()}))
-    }).collect()}
-}
-use std::convert::{TryFrom,TryInto};
-fn main() {
-    let args:Vec<_>=std::env::args().collect();
-    let scalar = |n:u8| -> zkc::entry::Value {
-        let mut frame=b"ZKCV\x00\x01".to_vec();
-        let mut bytes=[0u8;32]; bytes[0]=n; frame.extend_from_slice(&bytes);
-        zkc::execution::InputValue::Wire(frame.into()).into()
-    };
-    // Public API construction, independent of private zkc modules. The
-    // actual setup-bearing calls are separately exercised across CLI processes.
-    let key=||zkc::entry::Value::from(zkc::execution::InputValue::ProverKeyFile {
-        path:"prover.key".into(), fingerprint:[0;32],
-    });
-    let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
-    let input:zkc::entry::NamedValues=input.into();
-    assert!(matches!(input.get("pk0").unwrap(),zkc::entry::Value::Leaf(zkc::execution::InputValue::ProverKeyFile{..})));
-    let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
-    let _verifier=pcs::VInputs{};
-    assert_eq!(pcs::setups::first,"first");
-    let malformed=zkc::entry::Value::Array(vec![zkc::entry::Value::Record([("extra".into(),true.into())].into())]);
-    assert_eq!(<[shapes::SampleEmpty;1]>::try_from(malformed).err().unwrap(),"entry-binding-fields");
-    let named:zkc::entry::Value=shapes::SampleCases::a__b{}.into();
-    let zkc::entry::Value::Variant{alternative,..}=named else{panic!()};
-    assert_eq!(alternative,"a__b");
-    assert_eq!(pcs::PROVER,"P"); assert_eq!(pcs::VERIFIER,"V");
-    assert_eq!(proof::services::coins,"coins");
-    let bytes=std::fs::read(&args[3]).unwrap();
-    let host=shapes::admit(&bytes,Default::default(),authority(&bytes,&shapes::PACKAGE_SHA256)).unwrap();
-    let input=shapes::SampleShapesInputsP {
-        empty:shapes::SampleEmpty{}, choice:shapes::SampleCases::__zkc_53656c66{},
-        names:shapes::SampleNames{__zkc_6173796e63:true,__zkc_73656c66:false,Foo:true,foo:false,__zkc_5f:true},
-        zero:[], collision:shapes::POutputs{flag:true},
-    };
-    let zkc::entry::Value::Record(mut named)=input.into() else {panic!()};
-    let zkc::entry::Value::Record(fields)=named.get("names").unwrap() else {panic!()};
-    assert!(fields.contains_key("Foo") && fields.contains_key("foo") && fields.contains_key("_"));
-    let zkc::entry::Value::Record(mut fields)=named.remove("names").unwrap() else {panic!()};
-    assert!(bool::try_from(fields.remove("Foo").unwrap()).unwrap());
-    assert!(!bool::try_from(fields.remove("foo").unwrap()).unwrap());
-    fields.insert("Foo".into(),true.into()); fields.insert("foo".into(),false.into());
-    named.insert("names".into(),zkc::entry::Value::Record(fields));
-    let restored:shapes::SampleShapesInputsP=zkc::entry::Value::Record(std::mem::take(&mut named)).try_into().unwrap();
-    assert!(restored.names.Foo && !restored.names.foo);
-    let result=shapes::call(&host,shapes::Arguments{
-        inputs:shapes::SampleShapesInputs{P:restored},
-    },context(&host,"binding_shapes")).unwrap();
-    assert!(result.report.is_success(),"{}",result.report.diagnostics());
-    assert!(result.conversion_error.is_none());
-    let output=result.value.unwrap().P;
-    assert!(output.wrapped.value);
-    assert!(matches!(output.choice,shapes::SampleCases::__zkc_53656c66{}));
-    let zkc::entry::Value::Record(mut invalid)=output.into() else {panic!()};
-    invalid.insert("extra".into(),true.into());
-    assert_eq!(shapes::SampleShapesRunResultP::try_from(zkc::entry::Value::Record(invalid)).err().unwrap(),"entry-binding-fields");
-
-    let bytes=std::fs::read(&args[1]).unwrap();
-    let host=run::admit(&bytes,Default::default(),authority(&bytes,&run::PACKAGE_SHA256)).unwrap();
-    let inputs=run::SampleEchoInputsP {
-        payload:run::SamplePayload {choice:run::SampleChoice::Data {
-            item_0:run::SampleInner::Pair{item_0:scalar(7),item_1:scalar(11)},
-            item_1:run::ArgumentsInputsPPayloadChoiceData1{item_0:false,item_1:()},
-            item_2:[scalar(13),scalar(17)],
-        },marker:true},
-        empty:(),
-    };
-    let result=run::call(&host,run::Arguments{
-        inputs:run::SampleEchoInputs{P:inputs,V:run::SampleEchoInputsV{}},
-    },context(&host,"generated_bindings")).unwrap();
-    assert!(result.report.is_success(),"{}",result.report.diagnostics());
-    assert!(result.conversion_error.is_none());
-    let received=result.value.unwrap().V;
-    assert!(received.received.marker);
-    assert!(matches!(received.received.choice,run::SampleChoice::Data{..}));
-    let zkc::entry::Value::Record(values)=received.into() else {panic!()};
-    let output=zkc::entry::files::proof_outputs(&values,Default::default(),Default::default()).unwrap();
-    assert!(std::str::from_utf8(&output).unwrap().contains(r#""7""#));
-    let mut tampered=bytes;tampered.push(b' ');
-    assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");
-
-    let bytes=std::fs::read(&args[2]).unwrap();
-    let prover=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
-    let verifier=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
-    let produced=prover.prove(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
-        private:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
-    assert!(produced.is_success());
-    let returned:proof::POutputs=produced.outputs.unwrap().try_into().unwrap();
-    assert!(returned.result.ready);
-    let checked=verifier.verify(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
-        private:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
-    assert!(checked.is_success());
-    let checked:proof::VOutputs=checked.outputs.unwrap().try_into().unwrap();
-    assert!(checked.accepted);
-    let produced=prover.prove(ProofRequest{public:proof::PublicInputs{expected:true}.into(),
-        private:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
-    let changed=verifier.verify(ProofRequest{public:proof::PublicInputs{expected:false}.into(),
-        private:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
-    assert!(!changed.is_success());
-    assert_eq!(changed.native.outcome.as_ref().err().map(String::as_str),Some("proof-header"));
-}
-''')
-    journal.run(['cargo', 'run', '--offline', '--quiet', '--manifest-path', directory / 'Cargo.toml',
-                 '--target-dir', directory / 'consumer-target', '--', run_package, proof_package, shapes_package], timeout=600)
 
 
 def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
@@ -637,3 +453,147 @@ proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction a
     report = journal.json(proving, refuses='artifact-stopped')
     assert not proof.exists(), 'producer rejection published a partial proof'
     assert 'Explicit("reject")' in str(report)
+
+
+def numerical_project(directory):
+    source = directory / 'numerical.zkc'
+    source.write_text('''module application;
+fn increment(value:index)->index{return value+1;}
+entry fn Next(value:index){return increment(value);}
+entry fn Twice(value:index){let next=Next(value);return Next(next);}
+entry fn Checked(value:index,valid:bool){require valid;return increment(value);}
+''')
+    manifest = directory / 'zkc.toml'
+    manifest.write_text('format="zkc.project/0"\n[modules]\napplication="numerical.zkc"\n')
+    return manifest
+
+
+@pytest.mark.parametrize('selector,value', [('Echo', False), ('Echo', True),
+                                          ('Echo<bool>', False), ('Echo<index>', '17')])
+def test_automatic_protocol_and_closed_generic_selectors(toolchain, journal, directory, selector, value):
+    generic = '<T:Type>' if '<' in selector else ''
+    kind = 'T' if generic else 'bool'
+    source = directory / 'echo.zkc'
+    source.write_text(f'''module sample;
+protocol Echo{generic} roles(P,V)(value:{kind}@P)->(received:{kind}@V){{
+  let received=send P->V(value);return received;
+}}
+''')
+    package, pin = compile_entry(toolchain, journal, directory, selector, source)
+    target = [f'--package={package}', f'--sha256={pin}']
+    view = journal.json([toolchain.runtime, '--json', 'inspect', *target])['interface']
+    assert view['entry'] == f'sample::{selector}' and view['kind'] == 'function'
+    inputs = write(directory / 'arguments.json', {'inputs': {'P': {'value': value}, 'V': {}}})
+    output = directory / 'result.json'
+    report = journal.json([toolchain.runtime, '--json', 'run', *target,
+                           f'--input={inputs}', f'--results={output}'])
+    assert report['status'] == 'executed'
+    assert json.loads(output.read_text())['value'] == {'P': {}, 'V': {'received': value}}
+
+
+def test_numerical_source_value_and_execution_failure(toolchain, journal, directory):
+    manifest = numerical_project(directory)
+    target = [f'--project={manifest}', f'--compiler={toolchain.compiler}']
+    view = journal.json([toolchain.runtime, '--json', 'inspect', 'Twice', *target])['interface']
+    assert view['kind'] == 'function'
+    assert [p['name'] for p in view['signature']['parameters']] == ['value']
+    inputs = write(directory / 'arguments.json', {'value': '7'})
+    output = directory / 'result.json'
+    report = journal.json([toolchain.runtime, '--json', 'run', 'Twice', *target,
+                           f'--input={inputs}', f'--results={output}'])
+    assert json.loads(output.read_text())['value'] == '9'
+    assert report['execution']['usage']['instructions'] > 0
+    sentinel = output.read_bytes()
+    write(inputs, {'value': '7', 'valid': False})
+    failed = journal.json([toolchain.runtime, '--json', 'run', 'Checked', *target,
+                           f'--input={inputs}', f'--results={output}'], refuses='entry-host-require')
+    assert failed['phase'] == 'execution' and failed['execution']['failure']
+    assert not failed['execution']['completed'] and output.read_bytes() == sentinel
+
+
+def test_proof_entry_calls_keep_independent_statements_and_withhold_stopped_results(toolchain, journal, directory):
+    source = directory / 'entry-proofs.zkc'
+    source.write_text('''module sample;
+protocol Equality roles(P,V)(expected:bool@(P,V),candidate:bool@P)->(accepted:bool@V){
+  let received=send P->V(candidate);
+  let accepted@V=received==expected;
+  return(accepted=accepted);
+}
+proof Core=Equality{prover P;verifier V;public{expected};accept accepted;construction authored;}
+entry fn Produce(public:Core::Public,witness:Core::Witness){
+  let produced=Core::prove(public,witness);return produced.proof;
+}
+entry fn Validate(public:Core::Public,candidate:Core::Proof){return Core::verify(public,candidate);}
+entry fn Withhold(public:Core::Public,witness:Core::Witness,complete:bool){
+  let produced=Core::prove(public,witness);require complete;return produced.proof;
+}
+''')
+    targets = {}
+    for entry in ('Produce', 'Validate', 'Withhold', 'Core'):
+        package, pin = compile_entry(toolchain, journal, directory, entry, source)
+        targets[entry] = [f'--package={package}', f'--sha256={pin}', '--allow-authored']
+
+    def call(entry, arguments, *, refuses=None):
+        inputs = write(directory / f'{entry}.json', arguments)
+        output = directory / f'{entry}.result.json'
+        # Existing output must survive a later refusal, too.
+        sentinel = output.read_bytes() if output.exists() else None
+        report = journal.json([toolchain.runtime, '--json', 'run', *targets[entry],
+                               f'--input={inputs}', f'--results={output}'], refuses=refuses)
+        if refuses:
+            assert (output.read_bytes() if output.exists() else None) == sentinel
+            assert not report['execution']['completed']
+            return report
+        assert report['status'] == 'executed' and report['execution']['completed']
+        return json.loads(output.read_text())['value']
+
+    positive = call('Produce', {'public': {'expected': True}, 'witness': {'candidate': True}})
+    accepted = call('Validate', {'public': {'expected': True}, 'candidate': positive})
+    assert accepted == {'case': 'Accepted', 'fields': {'outputs': {'accepted': True}}}
+    negative = call('Produce', {'public': {'expected': True}, 'witness': {'candidate': False}})
+    rejected = call('Validate', {'public': {'expected': True}, 'candidate': negative})
+    assert rejected == {'case': 'Rejected', 'fields': {}}
+    call('Validate', {'public': {'expected': False}, 'candidate': positive}, refuses='proof-header')
+    withheld = call('Withhold', {'public': {'expected': True}, 'witness': {'candidate': True},
+                                 'complete': False}, refuses='entry-host-require')
+    assert any(c['operation'] == 'prove' and c['completed'] for c in withheld['execution']['calls'])
+    assert not (directory / 'Withhold.result.json').exists()
+    # Independent file APIs bind a nonempty statement to the same proof deployment.
+    public = write(directory / 'public.json', {'expected': True})
+    witness = write(directory / 'witness.json', {'candidate': True})
+    proof = directory / 'proof.bin'
+    produced = journal.json([toolchain.runtime, '--json', 'prove', *targets['Core'],
+                             f'--public={public}', f'--witness={witness}', f'--output={proof}'])
+    assert produced['status'] == 'produced' and produced['proof_published']
+    independent = write(directory / 'verifier-public.json', {'expected': True})
+    checked = journal.json([toolchain.runtime, '--json', 'verify', *targets['Core'],
+                            f'--public={independent}', f'--proof={proof}'])
+    assert checked['status'] == 'accepted'
+
+
+def test_input_documents_confine_references_and_refuse_symlink_and_parent_escape(toolchain, journal, directory):
+    manifest = numerical_project(directory)
+    target = [f'--project={manifest}', f'--compiler={toolchain.compiler}']
+    wire = b'ZKCV\x00\x1f' + (7).to_bytes(8, 'little')
+    data = directory / 'data'
+    data.mkdir()
+    leaf = data / 'index.zkcv'
+    leaf.write_bytes(wire)
+    pin = hashlib.sha256(wire).hexdigest()
+    arguments = write(data / 'arguments.json', {'value': {'file': leaf.name, 'sha256': pin}})
+    output = directory / 'result.json'
+    command = [toolchain.runtime, '--json', 'run', 'Twice', *target, f'--results={output}']
+    journal.json([*command, f'--input={arguments}'])
+    assert json.loads(output.read_text())['value'] == '9'
+    sentinel = output.read_bytes()
+    alias = data / 'alias.json'
+    alias.symlink_to(arguments.name)
+    journal.json([*command, f'--input={alias}'], refuses='entry-input-document')
+    # A real outside value and a symlink to it must both remain inaccessible.
+    outside = directory / 'outside.zkcv'
+    outside.write_bytes(wire)
+    (data / 'alias.zkcv').symlink_to(outside)
+    for reference in ('../outside.zkcv', 'alias.zkcv'):
+        write(arguments, {'value': {'file': reference, 'sha256': pin}})
+        journal.json([*command, f'--input={arguments}'], refuses='entry-input-reference')
+        assert output.read_bytes() == sentinel

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CRATES = ('zkc', 'zkc-runtime', 'zkc-native', 'zkc-kernels', 'zkc-test-support')
 SOURCE = '''module application;
 entry fn Twice(値:index) { return 値 + 2; }
+entry fn Checked(value:index,valid:bool){require valid;return value+1;}
 protocol Echo roles(P,V)(value:bool@P)->(received:bool@V){
   let received=send P->V(value); return received;
 }
@@ -19,6 +20,9 @@ protocol Equality roles(P,V)(expected:bool@(P,V),candidate:bool@P)->(accepted:bo
 }
 proof Core = Equality {
   prover P; verifier V; public{expected}; accept accepted; construction authored;
+}
+entry fn Withhold(public:Core::Public,witness:Core::Witness,complete:bool){
+  let produced=Core::prove(public,witness);require complete;return produced.proof;
 }
 '''
 
@@ -35,7 +39,8 @@ def prepare(output, cli, compiler):
     output.mkdir(parents=True)
     source = output / '数学.zkc'
     source.write_text(SOURCE)
-    for name, entry in [('numerical', 'Twice'), ('joint', 'Echo'), ('proof', 'Core')]:
+    for name, entry in [('numerical', 'Twice'), ('joint', 'Echo'), ('proof', 'Core'),
+                        ('checked', 'Checked'), ('withhold', 'Withhold')]:
         package = output / f'{name}.zkpkg'
         result = json.loads(run([cli, '--json', 'compile', f'application::{entry}',
                                  f'--module=application={source}', f'--compiler={compiler}',
