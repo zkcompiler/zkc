@@ -9,7 +9,7 @@ open PIR Zkc.Source.Finite
 
 abbrev interface : Signature := ⟨Unit, fun _ => Nat⟩
 
-def add (state item : Nat) : Proc interface Nat := .done (state + item)
+def add (state item : Nat) : Process interface Nat := .done (state + item)
 
 -- Entry checks survive empty enumeration and otherwise unused definitions.
 example : (Domain.check false .refused (.elements ([] : List Nat))).admit =
@@ -39,12 +39,12 @@ example : execute (.elements [3, 4]) add 0 = .done 7 := rfl
 example : execute (.elements [1, 2]) add 0 ≠ execute (.elements [3, 4]) add 0 := by
   intro impossible
   cases impossible
-example : execute (.elements [1, 2]) (fun _ item => (Proc.done (7 + item) : Proc interface Nat)) 7 =
+example : execute (.elements [1, 2]) (fun _ item => (Process.done (7 + item) : Process interface Nat)) 7 =
     .done 9 := rfl
 example : execute (.elements [1, 2]) add 7 = .done 10 := rfl
 
 -- Pure finite calculations compose with arbitrary replies in an open suffix.
-def next (value : Nat) : Proc interface Nat := .call () fun reply => .done (value + reply)
+def next (value : Nat) : Process interface Nat := .call () fun reply => .done (value + reply)
 
 theorem add_sum (items : List Nat) (initial : Nat) :
     items.foldl (· + ·) initial = initial + items.sum := by
@@ -55,28 +55,28 @@ theorem add_sum (items : List Nat) (initial : Nat) :
 theorem sum_replacement (domain : Domain Nat) (initial : Nat) :
     ExactRefinement ((execute domain add initial).bind next)
       ((admitThen domain.admit fun items =>
-        Proc.done (initial + items.sum)).bind next) :=
+        Process.done (initial + items.sum)).bind next) :=
   execute_replace (I := interface) domain add (· + ·) (fun _ _ => rfl)
     (fun items state => state + items.sum) add_sum initial next
 
 -- A dot-like contraction and a Horner residual use the same finite machinery.
-def dotStep (state : Nat) (item : Nat × Nat) : Proc interface Nat :=
+def dotStep (state : Nat) (item : Nat × Nat) : Process interface Nat :=
   .done (state + item.1 * item.2)
 example : execute (.zip (.elements [2, 3]) (.elements [5, 7])) dotStep 0 = .done 31 := rfl
 
-def horner (challenge state coefficient : Nat) : Proc interface Nat :=
+def horner (challenge state coefficient : Nat) : Process interface Nat :=
   .done (state * challenge + coefficient)
 example : execute (.elements [2, 3, 4]) (horner 5) 0 = .done 69 := rfl
 
 -- Checking the first transition alone is insufficient for carried-state laws.
-def delayedStop (state _item : Nat) : Proc interface Nat :=
+def delayedStop (state _item : Nat) : Process interface Nat :=
   if state = 0 then .done 1 else .halt .reject
 example : delayedStop 0 0 = .done 1 := rfl
 example : fold delayedStop [0, 0] 0 = .halt .reject := rfl
 
 -- A Local callback remains ordered. A later map failure precedes the reducer.
-def collectFailure (_ : Nat) : Proc interface Nat := .halt .abort
-def checkedMap (state item : Nat) : Proc interface Nat :=
+def collectFailure (_ : Nat) : Process interface Nat := .halt .abort
+def checkedMap (state item : Nat) : Process interface Nat :=
   if item = 2 then .halt .reject else .done (state + item)
 example : (fold checkedMap [1, 2] 0).bind collectFailure = .halt .reject := rfl
 example : fold (fun state item => (checkedMap state item).bind collectFailure) [1, 2] 0 =
@@ -87,7 +87,7 @@ example : (fold checkedMap [1, 2] 0).bind collectFailure ≠
   cases impossible
 
 -- A reached nested computation differs from eagerly hoisted admission.
-def nested (_state _item : Nat) : Proc interface Nat :=
+def nested (_state _item : Nat) : Process interface Nat :=
   execute (.check false .refused (.elements [1])) add 0
 example : fold nested [] 9 = .done 9 := rfl
 example : fold nested [0] 9 = .halt .refused := rfl
@@ -95,7 +95,7 @@ example : execute (.before (.check false .refused (.elements [1]))
     (.elements ([] : List Nat))) add 9 = .halt .refused := rfl
 
 -- Arbitrary replies and actual successor state survive a failure mid-loop.
-def interactive (state item : Nat) : Proc interface Nat :=
+def interactive (state item : Nat) : Process interface Nat :=
   .call () fun reply => if reply = 0 then .halt .reject else .done (state + item + reply)
 def replies : Handler interface Nat Nat := fun _ state =>
   ⟨.returned (if state = 0 then 5 else 0), state + 1, [state]⟩
@@ -128,7 +128,7 @@ example : ((execute (.check false .refused (.elements [1])) interactive 0).run r
     0 := rfl
 
 abbrev itemInterface : Signature := ⟨Nat × Nat, fun _ => Unit⟩
-def logItem (state : Nat) (item : Nat × Nat) : Proc itemInterface Nat :=
+def logItem (state : Nat) (item : Nat × Nat) : Process itemInterface Nat :=
   .call item fun _ => .done (state + 1)
 def itemHandler : Handler itemInterface Nat (Nat × Nat) := fun item state =>
   ⟨.returned (), state + 1, [item]⟩
@@ -136,14 +136,14 @@ example : ((execute (.product (.elements [1, 2]) (.elements [3, 4])) logItem 0).
     itemHandler 0).events = [(1, 3), (1, 4), (2, 3), (2, 4)] := rfl
 
 -- A nested check reached after a call preserves that call, including on failure.
-def nestedAfterCall (state item : Nat) : Proc interface Nat :=
+def nestedAfterCall (state item : Nat) : Process interface Nat :=
   .call () fun _ => execute (.check (item != 2) .refused (.elements [item])) add state
 example : ((fold nestedAfterCall [1, 2, 3] 0).run replies 0).events = [0, 1] := rfl
 example : ((fold nestedAfterCall [1, 2, 3] 0).run replies 0).outcome =
     .stopped .refused := rfl
 
 -- The useful totality law is restricted by both item membership and a state invariant.
-def boundedStep (state item : Nat) : Proc interface Nat :=
+def boundedStep (state item : Nat) : Process interface Nat :=
   if item < 3 ∧ state < 5 then .done ((state + item) % 5) else .halt .reject
 example : ¬ (∀ state item, boundedStep state item = .done ((state + item) % 5)) := by
   intro global
@@ -152,7 +152,7 @@ example : ¬ (∀ state item, boundedStep state item = .done ((state + item) % 5
 
 theorem bounded_replacement :
     ExactRefinement ((execute (.elements [0, 1, 2]) boundedStep 0).bind next)
-      ((admitThen (Domain.elements [0, 1, 2]).admit fun _ => Proc.done 3).bind next) := by
+      ((admitThen (Domain.elements [0, 1, 2]).admit fun _ => Process.done 3).bind next) := by
   apply execute_replace_on (total := fun state item => (state + item) % 5)
     (valid := fun state => state < 5) (start := by decide)
   · intro items admitted state item member valid

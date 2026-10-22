@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -49,10 +49,10 @@ def retained_subject(suite, stem, module, stage, source, symbol):
 def subject_cases(suite, stem, module, proof):
     source = FIXTURES / f"{stem}.zkc"
     suite.sources.append({"authored": str(source.relative_to(ROOT)), "sha256": digest(source)})
-    flags = ["--source-format=zkc", f"--module={module}={source}", f"--entry={module}::Run"]
-    original_text, interface = native_run(
+    flags = ["--source-format=zkc", f"--module={module}={source}", f"--subject={fixture_table()[stem]['subject']}"]
+    original_text, interface_text, interface = native_subject(
         lambda command: suite.command(f"{stem}:frontend", command), suite.tools["compiler"], flags)
-    write_json(suite.directory / f"{stem}-interface.json", interface)
+    (suite.directory / f"{stem}-interface.json").write_text(interface_text, encoding="utf-8")
     symbol = interface["protocol"]
     original = retained_subject(suite, stem, proof, "Original", original_text, symbol)
     assert interface["original"] == digest(original[0]), "frontend interface identifies different bytes"

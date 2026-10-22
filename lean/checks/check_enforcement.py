@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from support import evidence  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
 from check_library import permitted  # noqa: E402
+from support.dependencies import POLICY, audit_graph, exceptions  # noqa: E402
 
 
 def main():
@@ -29,6 +30,17 @@ def main():
                 rows.append('malformed-header-refused')
             else:
                 raise AssertionError('invalid header was accepted')
+        # Parse a real new violating import with Lean's header parser, then run
+        # the same graph audit used for maintained source packages.
+        graph = {'Zkc.Source.NewClient': headers.imports(
+            'module\npublic import ZkcSecurity.Probability.UniformTape\n')}
+        try:
+            audit_graph(graph, ['Zkc.Source'])
+        except ValueError as error:
+            assert 'forbidden dependency (core-to-probability)' in str(error), error
+            rows.append('new-violating-import-refused')
+        else:
+            raise AssertionError('new violating import was accepted')
     rows.append('header-comments-and-modifiers')
     # Compile temporary modules independently. The ordinary Lean kernel accepts
     # axioms and sorry, so rejection must come from the maintained audit itself.
@@ -179,6 +191,20 @@ def main():
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
+            ('security-upstream-arklib', 'ZkcSecurity.GuardFixture',
+             'ArkLib.GuardFixture', 'body', False),
+            ('security-optional-adapter', 'ZkcSecurity.GuardFixture',
+             'ZkcArkLib.GuardFixture', 'type', False),
+            ('security-vcvio-example-provider', 'ZkcSecurity.Families.GuardFixture',
+             'Examples.Schnorr.SigmaProtocol', 'body', True),
+            ('core-probability-body', 'Zkc.Source.GuardFixture',
+             'ZkcSecurity.Probability.GuardFixture', 'body', False),
+            ('security-example-type', 'ZkcSecurity.HashChain.GuardFixture',
+             'ZkcSecurity.Examples.GuardFixture', 'type', False),
+            ('clean-example-test-body', 'CleanExamples.GuardFixture',
+             'TestsClean.GuardFixture', 'body', False),
+            ('family-probability-rejected', 'Zkc.Protocols.Sumcheck.Verifier',
+             'ZkcSecurity.Probability.UniformTape', 'body', False),
             ('execution-protocol-body', 'ZkcSecurity.VCVio.Execution',
              'Zkc.Protocols.GuardFixture', 'body', False),
             ('execution-source-type', 'ZkcSecurity.VCVio.Execution',
@@ -186,18 +212,18 @@ def main():
             ('execution-example-body', 'ZkcSecurity.VCVio.Execution',
              'ZkcSecurity.Examples.GuardFixture', 'body', False),
             ('execution-arklib-body', 'ZkcSecurity.VCVio.Execution',
-             'ZkcSecurity.ArkLib.GuardFixture', 'body', False),
+             'ZkcArkLib.GuardFixture', 'body', False),
             ('execution-upstream-arklib-body', 'ZkcSecurity.VCVio.Execution',
              'ArkLib.GuardFixture', 'body', False),
-            ('causal-example-body', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Completion',
+            ('causal-example-body', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Completion',
              'ZkcSecurity.Examples.GuardFixture', 'body', False),
-            ('causal-source-type', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Phase',
+            ('causal-source-type', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Phase',
              'Zkc.Source.GuardFixture', 'type', False),
             ('schnorr-protocol-allowed', 'ZkcSecurity.VCVio.Schnorr',
              'Zkc.Protocols.Schnorr.Common', 'body', True),
             ('execution-semantics-allowed', 'ZkcSecurity.VCVio.Execution',
              'Zkc.Semantics.GuardFixture', 'body', True),
-            ('causal-protocol-allowed', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Soundness',
+            ('causal-protocol-allowed', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Soundness',
              'Zkc.Protocols.GuardFixture', 'body', True),
         ]
         for name, owner, dependency, kind, allowed in ownership_cases:
@@ -225,6 +251,28 @@ def main():
                 assert result.returncode > 0 and f'forbidden {kind} dependency' in result.stdout, (name, result)
                 assert 'OWNER-GUARD-PASS' not in result.stdout
             rows.append(name)
+        # The data has one owner, but its two interpreters must also agree.
+        # Cover every layer pair, exact guards, and every retained exception.
+        representatives = [prefix + '.GuardFixture' for prefix, _ in POLICY['layers']]
+        representatives += [owner for guard in POLICY['guards'] for owner in guard['owners']]
+        representatives += ['Client']
+        pairs = sorted({(owner, dependency) for owner in representatives
+                        for dependency in representatives} | set(exceptions(POLICY)))
+        literals = ',\n'.join(f'({json.dumps(owner)}, {json.dumps(dependency)})'
+                              for owner, dependency in pairs)
+        (directory / 'Parity.lean').write_text(
+            'import ZkcTools.DeclarationAudit\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Source.GuardFixture '
+            '`ZkcSecurity.Probability.GuardFixture = false := by decide +kernel\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocols.Sumcheck.Verifier '
+            '`ZkcSecurity.Probability.UniformTape = false := by decide +kernel\n'
+            f'def pairs : List (String × String) := [{literals}]\n'
+            '#eval IO.println (Lean.toJson (pairs.map fun (owner, dependency) => '
+            'ZkcTools.DeclarationAudit.permitted owner.toName dependency.toName)).compress\n')
+        result = compile_module('Parity')
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert json.loads(result.stdout) == [permitted(*pair) for pair in pairs]
+        rows.append(f'shared-policy-interpreter-parity-{len(pairs)}')
         executable = ROOT / '.lake/build/bin/common-source'
 
         def invoke(name, arguments, expected):

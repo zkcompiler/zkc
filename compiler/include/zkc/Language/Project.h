@@ -564,6 +564,39 @@ struct SpecificationClause {
   std::optional<SpecificationSelector> decision;
   Span span;
 };
+/// Source claim data has no security interpretation in the native frontend.
+/// Argument labels are empty for positional arguments; versions are explicit
+/// registry keys, never inferred from an installed native implementation.
+struct ClaimExpression {
+  enum class Kind { Natural, Reference, Application, Binary, Unary, List } kind;
+  std::string text;
+  std::optional<uint32_t> version;
+  std::vector<ClaimExpression> arguments;
+  std::vector<std::string> labels;
+  Span span;
+  /// Lexically resolved carrier for the unversioned cardinality builtin.
+  /// Authored argument text remains intact; export closes this type against
+  /// the selected Entry and writes its canonical nominal domain identity.
+  std::optional<Type> cardinalityDomain;
+};
+struct SourceClaim {
+  std::string label;
+  ClaimExpression property;
+  Span span;
+};
+struct SourceClaimBlock {
+  std::string name, entry;
+  std::vector<SourceClaim> claims;
+  Span span;
+  std::optional<DeclarationId> subject;
+  /// Closed, checked arguments of a protocol subject; empty for proof entries.
+  std::vector<Type> arguments;
+};
+struct SourceVerification {
+  std::string block, label;
+  ClaimExpression method;
+  Span span;
+};
 struct SetupSlot {
   std::string name;
   std::vector<InputSelector> inputs;
@@ -730,6 +763,8 @@ struct Declaration {
   std::optional<Span> specificationBlock;
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
+  std::vector<SourceClaimBlock> sourceClaims;
+  std::vector<SourceVerification> sourceVerifications;
   std::optional<DeclarationId> target;
   std::optional<protocol::ProofFormat> proofFormat;
   std::optional<ConstructionDefinition> construction;
@@ -790,6 +825,10 @@ llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {},
                                        std::optional<EntryKind> = {});
+/// Close a proof declaration or a protocol specialization for semantic export.
+/// An authored Host Entry function is not a protocol subject.
+llvm::Expected<ClosedEntry> closeSubject(const CheckedProject &,
+                                         llvm::StringRef, const Limits & = {});
 /// Operation policy is used by generated child deployments; verifier ingress
 /// excludes producer-only ports while retaining the checked comparison graph.
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,

@@ -81,8 +81,8 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
       let obligations ← localLaw operation solver
       let operationType ← instantiateMVars (← operation.getType)
       let step ← whnf operationType.getAppArgs.back!
-      let rule := if step.isAppOf ``PIR.Proc.done then ``Region.Derivation.letOpReturn
-        else if step.isAppOf ``PIR.Proc.halt then ``Region.Derivation.letOpStop
+      let rule := if step.isAppOf ``PIR.Process.done then ``Region.Derivation.letOpReturn
+        else if step.isAppOf ``PIR.Process.halt then ``Region.Derivation.letOpStop
         else ``Region.Derivation.letOp
       let newGoals ← applyRule goal rule
       let newCallbacks :: newOperation :: rest := newGoals
@@ -104,8 +104,8 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
       let pending ← derive body solver
       let bodyType ← instantiateMVars (← body.getType)
       let first ← whnf bodyType.getAppArgs.back!
-      let rule := if first.isAppOf ``PIR.Proc.done then ``Region.Derivation.bindReturn
-        else if first.isAppOf ``PIR.Proc.halt then ``Region.Derivation.bindStop
+      let rule := if first.isAppOf ``PIR.Process.done then ``Region.Derivation.bindReturn
+        else if first.isAppOf ``PIR.Process.halt then ``Region.Derivation.bindStop
         else ``Region.Derivation.bind
       let newBody :: rest ← applyRule goal rule
         | throwError "derive_region: unexpected selected bind rule shape"

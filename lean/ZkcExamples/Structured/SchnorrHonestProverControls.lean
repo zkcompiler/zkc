@@ -116,13 +116,13 @@ variable {F G : Type} [Field F] [DecidableEq F]
 
 set_option maxRecDepth 20000 in
 def responseProcess (base key : G) (secret : F) (service : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (responseProgram.participant F G 0 (SchnorrInteractive.proverInputs base key secret service)).bind
     fun outputs => .done (outputs.get .here)
 
 set_option maxRecDepth 20000 in
 def siteProcess (base key : G) (secret : F) (service : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (siteProgram.participant F G 0 (SchnorrInteractive.proverInputs base key secret service)).bind
     fun outputs => .done (outputs.get .here)
 
@@ -158,7 +158,7 @@ theorem response_execution (base key : G) (secret nonce challenge : F) (service 
          .send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
            (nonce - challenge * secret)]⟩ : Execution F G) := by
   rw [response_equation]
-  simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
   rfl
 
 set_option maxRecDepth 20000 in
@@ -186,7 +186,7 @@ theorem changed_site_refused (base key : G) (secret nonce challenge : F) (servic
       (replyHandler service (.returned nonce) (.returned challenge)) ()).outcome =
         .stopped .refused := by
   rw [site_equation]
-  simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get,
+  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get,
     SchnorrInteractive.wiring, ZkcExamples.NativePrograms.Schnorr.wiring]
 
 set_option maxRecDepth 20000 in

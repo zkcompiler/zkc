@@ -4,6 +4,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Compiler/Observation.h"
+#include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -23,10 +24,11 @@ int runLanguageCompiler(int argc, char **argv) {
   std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
   ArrayRef<SourceBuffer> diagnosticSources;
-  std::string entry, format;
+  std::string entry, subject, format;
   std::optional<EntryKind> entryKind;
   bool declarations = false;
   bool api = false;
+  bool sourceClaims = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -180,6 +182,11 @@ int runLanguageCompiler(int argc, char **argv) {
         return refuse(error("source.options",
                             "Entry selection must be nonempty and unique"));
       entry = arg.str();
+    } else if (arg.consume_front("--subject=")) {
+      if (arg.empty() || !subject.empty())
+        return refuse(error("source.options",
+                            "subject selection must be nonempty and unique"));
+      subject = arg.str();
     } else if (arg.consume_front("--entry-kind=")) {
       if (entryKind || (arg != "function" && arg != "proof") ||
           command == "language-check")
@@ -217,6 +224,12 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--source-claims") {
+      if (sourceClaims || command != "language-check")
+        return refuse(
+            error("source.options",
+                  "--source-claims is a check option and may appear once"));
+      sourceClaims = true;
     } else if (arg == "--api") {
       if (api || command != "language-check")
         return refuse(error("source.options",
@@ -273,6 +286,14 @@ int runLanguageCompiler(int argc, char **argv) {
     observation = std::make_unique<CompilationObservation>(dumps);
     options.observations = observation.get();
   }
+  if (!subject.empty() && (!entry.empty() || entryKind))
+    return refuse(
+        error("source.options",
+              "--subject is exclusive with --entry and --entry-kind"));
+  if (sourceClaims && entry.empty() && subject.empty())
+    return refuse(
+        error("source.options",
+              "--source-claims requires --subject=NAME or --entry=NAME"));
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
@@ -294,7 +315,9 @@ int runLanguageCompiler(int argc, char **argv) {
   json::Object checked{{"format", "zkc.source-check/0"},
                        {"status", "checked"},
                        {"phase", "complete"},
-                       {"scope", entry.empty() ? "definitions" : "entry"},
+                       {"scope", !subject.empty() ? "subject"
+                                 : entry.empty()  ? "definitions"
+                                                  : "entry"},
                        {"capture", captured->identity()},
                        {"installation", project->installationIdentity()}};
   if (command == "language-check") {
@@ -335,10 +358,12 @@ int runLanguageCompiler(int argc, char **argv) {
     outs() << bytes;
     return 0;
   };
-  if (entry.empty() && command == "language-check") {
+  if (entry.empty() && subject.empty() && command == "language-check") {
     return publishCheck();
   }
-  auto selected = closeEntry(*project, entry, limits, entryKind);
+  auto selected = subject.empty()
+                      ? closeEntry(*project, entry, limits, entryKind)
+                      : closeSubject(*project, subject, limits);
   if (!selected)
     return refuse(selected.takeError());
   auto original = prepareOriginal(*selected);
@@ -369,6 +394,12 @@ int runLanguageCompiler(int argc, char **argv) {
       });
     }
     checked["original"] = original->identity();
+    if (sourceClaims) {
+      auto report = exportSourceClaims(*original, limits);
+      if (!report)
+        return refuse(report.takeError());
+      checked["source_claims"] = cantFail(json::parse(*report));
+    }
     return publishCheck();
   }
   if (command == "language-emit") {

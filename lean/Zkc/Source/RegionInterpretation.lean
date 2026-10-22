@@ -28,7 +28,7 @@ structure RegionMeaning.Translation (meaning : RegionMeaning dialect I)
     (operations : PIR.OperationInterpretation I J) where
   operation : (op : dialect.Op) → Values meaning.Value (dialect.arguments op) →
     Values (RegionFunction meaning.Value J) (dialect.regions op) →
-      PIR.Proc J (Values meaning.Value (dialect.results op))
+      PIR.Process J (Values meaning.Value (dialect.results op))
   commutes : ∀ op args bodies,
     operation op args (RegionFunctions.translate operations bodies) =
       (meaning.operation op args bodies).interpret operations
@@ -48,13 +48,13 @@ mutual
     | ret values => rfl
     | stop reason => rfl
     | letOp op args bodies next =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, Regions.denote_translate meaning operations translation bodies,
+      simp only [Region.denote, PIR.Process.interpret_bind, Regions.denote_translate meaning operations translation bodies,
         RegionMeaning.Translation.meaning, translation.commutes]
       congr 1
       funext values
       exact Region.denote_translate meaning operations translation next _
     | bind body next =>
-      simp only [Region.denote, PIR.Proc.interpret_bind, Region.denote_translate meaning operations translation body]
+      simp only [Region.denote, PIR.Process.interpret_bind, Region.denote_translate meaning operations translation body]
       congr 1
       funext values
       exact Region.denote_translate meaning operations translation next _

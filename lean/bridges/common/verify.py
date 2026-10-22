@@ -18,7 +18,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from native_entry import native_run
+from native_entry import native_subject
 from registry import CONTRACTS
 from request_support import Obligation, require
 from snapshot import render, string, natural
@@ -201,7 +201,7 @@ def render_certificate(data, request, proposal):
     generic = 'G' if contract.group else 'F'
     context = ('\n    [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
-    actual_type = f'PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
+    actual_type = f'PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
     unfolds = ['sourceProcess', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
 
@@ -263,12 +263,12 @@ def sourceProcess {contract.binders} : {actual_type} :=
 theorem source_expansion {contract.binders} :
     verifier {parameters} {contract.arguments} = sourceProcess {parameters} {contract.arguments} := by
   change (imported.program.denote (scalarMeaning F {generic}) id {request['role']}
-    (inputs {parameters} {contract.arguments}).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (inputs {parameters} {contract.arguments}).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   repeat' first
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-       rw [PIR.Proc.bind_ite]
+    | (apply PIR.Process.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+       rw [PIR.Process.bind_ite]
        simp only [↓reduceIte])
     | rfl
     | fail_if_no_progress congr 1
@@ -277,10 +277,10 @@ theorem source_expansion {contract.binders} :
 theorem correspondence {contract.binders} :
     sourceProcess {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
   dsimp +instances [{', '.join(unfolds)}]
-  {('simp only [PIR.Proc.bind_ite, PIR.Proc.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
+  {('simp only [PIR.Process.bind_ite, PIR.Process.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
   all_goals repeat' first
     | rfl
-    | (apply PIR.Proc.call_congr; intro reply)
+    | (apply PIR.Process.call_congr; intro reply)
     | (solve | ring1)
     | (solve | abel1)
     | fail_if_no_progress congr 1
@@ -344,7 +344,7 @@ def expectedInputs {contract.binders} :
   {values}
 
 def expectedVerifier {contract.binders} :
-    PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
+    PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
   GeneratedCertificate.imported.denote (scalarMeaning F {generic}) id {request['role']}
     (expectedInputs {parameters} {contract.arguments})
 
@@ -424,8 +424,9 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
         path.write_text(candidate)
         receipt['certificate_sha256'] = hashlib.sha256(candidate.encode()).hexdigest()
         contract = CONTRACTS[request['contract']]
-        environment = (ROOT / 'integrations/arklib' if any(
-            contract.properties[prop].module for prop in request['properties']) else ROOT)
+        modules = [contract.properties[prop].module or contract.module for prop in request['properties']]
+        environment = (ROOT / 'integrations/arklib' if any(m.startswith('ZkcArkLib.') for m in modules)
+                       else ROOT / 'security' if any(m.startswith('ZkcSecurity.') for m in modules) else ROOT)
         receipt['toolchain'] = (environment / 'lean-toolchain').read_text().strip()
         receipt['dependency_manifest_sha256'] = hashlib.sha256(
             (environment / 'lake-manifest.json').read_bytes()).hexdigest()
@@ -471,13 +472,13 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
     return receipt
 
 
-def export_native(modules, entry, compiler, output):
+def export_native(modules, subject, compiler, output):
     output.mkdir(parents=True, exist_ok=True)
-    flags = ['--source-format=zkc', *['--module=' + item for item in modules], '--entry=' + entry]
+    flags = ['--source-format=zkc', *['--module=' + item for item in modules], '--subject=' + subject]
     def execute(command):
         return subprocess.check_output(list(map(str, command)), text=True, stderr=subprocess.PIPE, timeout=30)
-    text, interface = native_run(execute, compiler, flags)
-    (output / 'interface.json').write_text(json.dumps(interface, indent=2) + '\n')
+    text, interface_text, interface = native_subject(execute, compiler, flags)
+    (output / 'interface.json').write_text(interface_text)
     digest = hashlib.sha256(text.encode()).hexdigest()
     require(interface['original'] == digest, 'native-identity', 'Native interface and retained source disagree')
     source = output / 'native.mlir'
@@ -493,7 +494,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--snapshot', type=Path)
     parser.add_argument('--module', action='append', default=[], help='Native module binding NAME=PATH; repeatable')
-    parser.add_argument('--entry', help='Qualified native DSL Entry')
+    parser.add_argument('--subject', help='Closed native protocol specialization')
     parser.add_argument('--compiler', type=Path, default=ROOT.parent / 'build/compiler/zkc-compile')
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument('--request', type=Path)
@@ -501,17 +502,17 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--lake', default='lake')
     args = parser.parse_args()
-    if bool(args.snapshot) == bool(args.module) or bool(args.module) != bool(args.entry):
-        parser.error('choose --snapshot or --module NAME=PATH with --entry MODULE::ENTRY')
+    if bool(args.snapshot) == bool(args.module) or bool(args.module) != bool(args.subject):
+        parser.error('choose --snapshot or --module NAME=PATH with --subject MODULE::PROTOCOL')
     if args.spec and args.snapshot:
-        parser.error('--spec requires a native DSL entry to resolve names and the target relation')
+        parser.error('--spec requires a native protocol subject to resolve names and the target relation')
     native = None
     try:
         request = read_json(args.request or args.spec)
         if args.snapshot:
             data = read_json(args.snapshot)
         else:
-            data, native = export_native(args.module, args.entry, args.compiler.resolve(), args.output.resolve())
+            data, native = export_native(args.module, args.subject, args.compiler.resolve(), args.output.resolve())
         relation = None
         if args.spec:
             from intent import resolve

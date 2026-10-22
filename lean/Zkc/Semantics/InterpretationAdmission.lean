@@ -38,7 +38,7 @@ variable {source : Interaction I} {target : Interaction J}
 /-- Transport legality and the actual return relation together. A legal entry
 alone would not justify the caller's continuation after an expanded operation. -/
 theorem transport (admission : InterpretationAdmission source target operations)
-    (program : Proc I A) (post : A → source.Phase → Prop)
+    (program : Process I A) (post : A → source.Phase → Prop)
     (phase : source.Phase) (lowerPhase : target.Phase)
     (formed : Conforms source program phase)
     (exits : Boundary.Returns source post program phase)
@@ -62,13 +62,13 @@ theorem transport (admission : InterpretationAdmission source target operations)
 
 end InterpretationAdmission
 
-namespace Proc
+namespace Process
 
 /-- A uniform expansion bound scales the logical call budget. This counts
 interface calls, not field operations, memory traffic or native running time. -/
 theorem within_interpret (operations : OperationInterpretation I J)
     (operationBound : Nat) (bounded : ∀ op, Within operationBound (operations op))
-    (program : Proc I A) (sourceBound : Nat) (source : Within sourceBound program) :
+    (program : Process I A) (sourceBound : Nat) (source : Within sourceBound program) :
     Within (sourceBound * operationBound) (program.interpret operations) := by
   induction program generalizing sourceBound with
   | done => cases sourceBound * operationBound <;> trivial
@@ -77,10 +77,10 @@ theorem within_interpret (operations : OperationInterpretation I J)
     cases sourceBound with
     | zero => exact False.elim source
     | succ n =>
-      simpa only [Proc.interpret, Nat.succ_mul, Nat.add_comm] using
+      simpa only [Process.interpret, Nat.succ_mul, Nat.add_comm] using
         Boundary.within_bind (operations op) (fun reply => (next reply).interpret operations)
           operationBound (n * operationBound) (bounded op)
           (fun reply => ih reply n (source reply))
 
-end Proc
+end Process
 end PIR

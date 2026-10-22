@@ -23,14 +23,14 @@ existing structural rules. Neither constructor assumes a caller equation. -/
 inductive CalleeResolution {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I)
     {Γ out : List Ty} (body : Region protocolDialect Γ out)
     (environment : Environment meaning.Value Γ)
-    (target : PIR.Proc I (Values meaning.Value out)) : Prop where
+    (target : PIR.Process I (Values meaning.Value out)) : Prop where
   | localLaw (law : body.denote meaning environment = target)
   | inspect (derivation : Region.Derivation meaning (fun op => .call op .done)
       body (@environment) target)
 
 theorem CalleeResolution.sound {I : PIR.Signature} {meaning : RegionMeaning protocolDialect I}
     {Γ out : List Ty} {body : Region protocolDialect Γ out}
-    {environment : Environment meaning.Value Γ} {target : PIR.Proc I (Values meaning.Value out)}
+    {environment : Environment meaning.Value Γ} {target : PIR.Process I (Values meaning.Value out)}
     (resolution : CalleeResolution meaning body (@environment) target) :
     body.denote meaning environment = target := by
   cases resolution with
@@ -53,7 +53,7 @@ structure CallSpecification (payload : UnitPayload) {Γ out : List Ty}
   exactRaw : definition.raw = body.erase
   premise : ProtocolContext → Nat → Values (Component (assignment F G)) call.callSite.signature.inputs → Prop
   target : ProtocolContext → Nat → Values (Component (assignment F G)) call.callSite.signature.inputs →
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) call.callSite.signature.outputs)
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) call.callSite.signature.outputs)
 
 /-- A required local leaf at every context and actual input tuple. The returned
 process is the raw callee body; generic source composition applies output masks.
@@ -116,7 +116,7 @@ theorem protocolApply_operationLaw (payload : UnitPayload)
     (exactRaw : definition.raw = body.erase)
     (roles : List Nat) (site : String) (context : ProtocolContext) (self : Nat)
     (args : Values (Component (assignment F G)) signature.inputs)
-    (target : PIR.Proc J (Values (Component (assignment F G)) signature.outputs))
+    (target : PIR.Process J (Values (Component (assignment F G)) signature.outputs))
     (callee : (context.enter site roles).contains signature self = true →
       (body.denote
         (participantMeaningWith observations actions helpers self
@@ -142,7 +142,7 @@ theorem protocolApply_operationLaw (payload : UnitPayload)
   · simp only [protocolOperationWith, inside, ↓reduceIte]
     erw [protocol_invoke_body_view observations actions helpers payload.protocols
       payload.protocolsLinked definition member body exactRaw]
-    erw [PIR.Proc.interpret_bind, callee inside]
+    erw [PIR.Process.interpret_bind, callee inside]
     rfl
   · simp only [protocolOperationWith, inside]
     rfl
@@ -176,7 +176,7 @@ theorem protocolApply_body (payload : UnitPayload)
     (payload.protocolTable F G) context).bind _ = _
   simp only [protocolOperationWith, inside, ↓reduceIte]
   erw [payload.protocol_body_view_as (F := F) (G := G) definition member signature sameSignature body exactRaw]
-  exact PIR.Proc.bind_assoc _ _ _
+  exact PIR.Process.bind_assoc _ _ _
 
 /-- Substitute a local callee law once at an actual source application. The
 premise concerns only the callee at these masked actual operands. -/
@@ -190,7 +190,7 @@ theorem protocolApply_substitute (payload : UnitPayload)
     (next : Region protocolDialect (signature.outputs ++ Γ) out)
     (environment : Environment (Component (assignment F G)) Γ)
     (inside : (context.enter site roles).contains signature self = true)
-    (target : PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) signature.outputs))
+    (target : PIR.Process (observedInterface F G) (Values (Component (assignment F G)) signature.outputs))
     (callee : CalleeResolution
       (participantMeaning (payload.tables F G) self (payload.protocolTable F G)
         (context.enter site roles)) body
@@ -219,7 +219,7 @@ theorem protocolApply_interpret_substitute (payload : UnitPayload)
     (environment : Environment (Component (assignment F G)) Γ)
     (inside : (context.enter site roles).contains signature self = true)
     {J : PIR.Signature} (operations : PIR.OperationInterpretation (observedInterface F G) J)
-    (target : PIR.Proc J (Values (Component (assignment F G)) signature.outputs))
+    (target : PIR.Process J (Values (Component (assignment F G)) signature.outputs))
     (callee : (body.denote
       (participantMeaning (payload.tables F G) self (payload.protocolTable F G)
         (context.enter site roles))
@@ -234,7 +234,7 @@ theorem protocolApply_interpret_substitute (payload : UnitPayload)
         (environment.prepend (maskValues self
           ((context.enter site roles).mapScopes signature.outputScopes) returned))).interpret operations) := by
   rw [payload.protocolApply_body definition member signature sameSignature body exactRaw
-    roles site context self operands next environment inside, PIR.Proc.interpret_bind, callee]
+    roles site context self operands next environment inside, PIR.Process.interpret_bind, callee]
 
 /-- After an actual returning callee execution, the continuation starts at its
 residual handler state, with masked outputs and all earlier events retained. -/
@@ -311,7 +311,7 @@ theorem protocolApply_outside (payload : UnitPayload)
   change (protocolOperationWith (observedSites F G) observeAction (payload.tables F G) self
     (.protocolApply signature roles site) (operands.eval environment) .nil
     (payload.protocolTable F G) context).bind _ = _
-  simp only [protocolOperationWith, outside, Bool.false_eq_true, ↓reduceIte, PIR.Proc.bind]
+  simp only [protocolOperationWith, outside, Bool.false_eq_true, ↓reduceIte, PIR.Process.bind]
   rfl
 
 end UnitPayload
@@ -326,7 +326,7 @@ theorem ContractBinding.protocolApply_operationLaw {snapshot : Snapshot}
     (operations : PIR.OperationInterpretation I J)
     (roles : List Nat) (site : String) (context : ProtocolContext) (self : Nat)
     (args : Values (Component (assignment F G)) binding.protocol.inputs)
-    (target : PIR.Proc J (Values (Component (assignment F G)) binding.protocol.outputs))
+    (target : PIR.Process J (Values (Component (assignment F G)) binding.protocol.outputs))
     (callee : (context.enter site roles).contains binding.protocol.signature self = true →
       (binding.protocol.body.denote
         (participantMeaningWith observations actions helpers self

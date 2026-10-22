@@ -8,8 +8,8 @@
    (`claims.lock.json`): stale theorem names, changed statement hashes and
    theorems with forbidden axioms fail. Qualified Lean names cited in
    `docs/status.md` and the formal documents must still exist.
-3. Render the "What is proved" table and, from subject manifests, one
-   `zkc.assurance-report/0` per subject and the subject rows; compare each
+3. Render the "What is proved" table and, from bound source requests and typed
+   receipts, one `zkc.assurance-report/0` per configured subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
    one. A report is established only with the pipeline's evidence, so the
    subject rows are compared only by a run given `--evidence`.
@@ -32,6 +32,7 @@ import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from records import controls, ledger, reports  # noqa: E402
 from records.declarations import Records, emit, forbidden_axioms  # noqa: E402
+from support.packages import selected as select_packages  # noqa: E402
 
 LEAN = HERE.parent
 ROOT = LEAN.parent
@@ -69,7 +70,7 @@ def compare(document, region, rendered, write, failures, notes):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--integration", action="append", choices=["arklib", "clean"], default=[])
+    parser.add_argument("--integration", action="append", choices=["security", "arklib", "clean"], default=[])
     parser.add_argument("--records", type=Path, help="reuse emitted records from this directory")
     parser.add_argument("--output", type=Path, default=support.evidence.records("records", ""))
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")
@@ -81,15 +82,14 @@ def main():
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    packages = ["main", *dict.fromkeys(args.integration)]
+    packages = select_packages(list(dict.fromkeys(args.integration)))
     subject_manifests = manifests(args.manifests or SUBJECTS)
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = list(controls.EMITTED_APPLICATIONS) if "arklib" in packages else []
+    details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "arklib" in packages else []
     for path in subject_manifests + samples:
-        names = reports.claim_names(reports.load_manifest(path))
-        for name in (names["instance"], names["application"]):
-            if name:
-                details.append(name)
+        manifest = reports.load_manifest(path)
+        evidence = reports.load_evidence(args.evidence, manifest["name"])
+        details.extend(reports.claim_details(evidence))
     failures, notes = [], []
 
     paths = {}
@@ -100,7 +100,7 @@ def main():
         lake = str(Path(support.lake.resolve(args.lake)).absolute())
         for package in packages:
             target = output / "declarations" / f"{package}.jsonl"
-            selected = [name for name in details if package == "arklib"]
+            selected = details if package in {"security", "arklib"} else []
             with (output / f"emit-{package}.log").open("w") as log:
                 result = emit(package, target, lake=lake, details=selected, log=log)
             # A signal death is a failure too, so success is the only accepted status.
@@ -163,6 +163,9 @@ def main():
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
     control_rows = controls.run()
+    receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
+    control_rows += receipt_rows
+    failures += receipt_failures
     if "arklib" in packages:
         emitted_rows, emitted_failures = controls.run_emitted(records)
         control_rows += emitted_rows

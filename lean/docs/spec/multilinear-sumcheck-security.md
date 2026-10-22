@@ -1,6 +1,6 @@
 # Multilinear interactive Sumcheck
 
-The optional `ZkcSecurity.ArkLib.Sumcheck.Multilinear` package connects the
+The optional `ZkcArkLib.Sumcheck.Multilinear` package connects the
 [independent table and endpoint contracts](multilinear-sumcheck.md) to ArkLib's
 actual interactive Sumcheck development. It proves complete soundness,
 honest completeness and partial residual soundness for arbitrary round counts
@@ -77,7 +77,7 @@ this theorem describes the separate public-table discharge observation.
 ## Complete security and completeness
 
 `soundness_of_oracle` in `Soundness.lean` (namespace
-`ZkcSecurity.ArkLib.Sumcheck.Multilinear`) proves
+`ZkcArkLib.Sumcheck.Multilinear`) proves
 
 ```text
 Pr[returned claim satisfies the original-table evaluation relation] ≤ n / |F|
@@ -239,7 +239,7 @@ needs its own correspondence.
 `runM_bind_transport` transports returned values, not just Unit work.
 `runM_bind_determined` handles effectful trusted work followed by a determined
 value, retaining stops and events. `runM_determined_of_proc` derives the local
-execution law from a Proc-level body equation. `checked_le_of_proc` composes a
+execution law from a Process-level body equation. `checked_le_of_proc` composes a
 Boolean checker through any prefix, requiring only that true implies the
 mathematical terminal predicate. A conservative checker is sufficient.
 

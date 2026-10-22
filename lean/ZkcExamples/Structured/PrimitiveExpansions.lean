@@ -146,34 +146,34 @@ theorem appendSummary_body_observed {I : PIR.Signature} (sites : SiteObservation
     PrimitiveSequenceViews.appendSummaryBody.denote (Evaluation.meaning sites table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr", .index]).get =
     (sites.mark "s0").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorLength "bls12-381.fr") (.cons input0 .nil)) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result0 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorLength "bls12-381.fr") (.cons input0 .nil)) : PIR.Process I (Values (assignment F G) [.index])).bind fun result0 =>
     (sites.mark "s2").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexConstant 1) .nil) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result1 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexConstant 1) .nil) : PIR.Process I (Values (assignment F G) [.index])).bind fun result1 =>
     (sites.mark "s3").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexAdd) (.cons (result0.get .here) (.cons (result1.get .here) .nil))) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result2 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexAdd) (.cons (result0.get .here) (.cons (result1.get .here) .nil))) : PIR.Process I (Values (assignment F G) [.index])).bind fun result2 =>
     (sites.mark "s5").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorAppend "bls12-381.fr") (.cons input0 (.cons input1 .nil))) : PIR.Proc I (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result3 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorAppend "bls12-381.fr") (.cons input0 (.cons input1 .nil))) : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result3 =>
     (sites.mark "s7").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexDiv) (.cons (result2.get .here) (.cons input2 .nil))) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result4 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexDiv) (.cons (result2.get .here) (.cons input2 .nil))) : PIR.Process I (Values (assignment F G) [.index])).bind fun result4 =>
     (sites.mark "s9").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexMod) (.cons (result2.get .here) (.cons input2 .nil))) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result5 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexMod) (.cons (result2.get .here) (.cons input2 .nil))) : PIR.Process I (Values (assignment F G) [.index])).bind fun result5 =>
     (sites.mark "s11").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexConstant 1) .nil) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result6 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexConstant 1) .nil) : PIR.Process I (Values (assignment F G) [.index])).bind fun result6 =>
     (sites.mark "s12").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexSub) (.cons (result2.get .here) (.cons (result6.get .here) .nil))) : PIR.Proc I (Values (assignment F G) [.index])).bind fun result7 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.indexSub) (.cons (result2.get .here) (.cons (result6.get .here) .nil))) : PIR.Process I (Values (assignment F G) [.index])).bind fun result7 =>
     (sites.mark "s14").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorSum "bls12-381.fr") (.cons (result3.get .here) .nil)) : PIR.Proc I (Values (assignment F G) [.field "bls12-381.fr"])).bind fun result8 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorSum "bls12-381.fr") (.cons (result3.get .here) .nil)) : PIR.Process I (Values (assignment F G) [.field "bls12-381.fr"])).bind fun result8 =>
     (sites.mark "s16").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEqual "bls12-381.fr") (.cons input0 (.cons (result3.get .here) .nil))) : PIR.Proc I (Values (assignment F G) [.boolean])).bind fun result9 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEqual "bls12-381.fr") (.cons input0 (.cons (result3.get .here) .nil))) : PIR.Process I (Values (assignment F G) [.boolean])).bind fun result9 =>
     (sites.mark "s18").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.fieldEqual "bls12-381.fr") (.cons (result8.get .here) (.cons input1 .nil))) : PIR.Proc I (Values (assignment F G) [.boolean])).bind fun result10 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.fieldEqual "bls12-381.fr") (.cons (result8.get .here) (.cons input1 .nil))) : PIR.Process I (Values (assignment F G) [.boolean])).bind fun result10 =>
     (sites.mark "s20").bind fun _ =>
-    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEmpty "bls12-381.fr") .nil) : PIR.Proc I (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result11 =>
+    (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEmpty "bls12-381.fr") .nil) : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result11 =>
     .done (.cons (result3.get .here) (.cons (result4.get .here) (.cons (result5.get .here) (.cons (result7.get .here) (.cons (result8.get .here) (.cons (result9.get .here) (.cons (result10.get .here) (.cons (result11.get .here) .nil)))))))) := by
   simp only [PrimitiveSequenceViews.appendSummaryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
+    PIR.Process.bind, PIR.Process.bind_assoc, Evaluation.invokeCallback, ite_apply]
   all_goals rfl
 
 set_option backward.isDefEq.respectTransparency false in
@@ -181,12 +181,12 @@ theorem sequence_entry_observed {I : PIR.Signature} (sites : SiteObservations I)
     PrimitiveSequenceViews.entryBody.denote (Evaluation.meaning sites table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr", .index]).get =
     (sites.mark "s0").bind fun _ =>
-    (invoke table ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : PIR.Proc I (Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"])).bind fun result0 =>
+    (invoke table ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) (.cons (result0.get (.there (.there (.there .here)))) (.cons (result0.get (.there (.there (.there (.there .here))))) (.cons (result0.get (.there (.there (.there (.there (.there .here)))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))))))) := by
   simp only [PrimitiveSequenceViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
+    PIR.Process.bind, PIR.Process.bind_assoc, Evaluation.invokeCallback, ite_apply]
   all_goals rfl
 
 end ZkcExamples.Structured.PrimitiveExpansions

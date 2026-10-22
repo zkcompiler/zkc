@@ -6,7 +6,7 @@ public import ZkcExamples.Structured.MapPrefixBodies
 
 @[expose] public section
 
-/-! Bounded exact expansions of actual-source body views into the existing Proc,
+/-! Bounded exact expansions of actual-source body views into the existing Process,
 derived operation by operation from the typed bodies. -/
 namespace ZkcExamples.Structured.MapSourceExpansions
 open Zkc.Source Zkc.Source.Structured

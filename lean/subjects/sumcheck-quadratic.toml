@@ -7,9 +7,6 @@ modules = { scalar_sumcheck = "lean/bridges/common/fixtures/sumcheck.zkc" }
 [profiles]
 scalar = true
 
-[claims]
-properties = ["perfect-completeness", "interactive-soundness"]
-
 [scalar]
 contract = "sumcheck.quadratic-two-round/0"
 namespace = "Zkc.Protocols.Sumcheck.Common"
@@ -32,11 +29,13 @@ claim = ["claim", "field"]
 service = ["service", "service"]
 
 [scalar.properties.perfect-completeness]
+module = "ZkcSecurity.Families.Sumcheck.Common"
 theorem = "perfect_completeness"
 experiment = "interactive.independent-uniform-field/0"
 premises = ["honest abstract strategy", "two independent uniform full-field coins"]
 
 [scalar.properties.interactive-soundness]
+module = "ZkcSecurity.Families.Sumcheck.Common"
 theorem = "soundness"
 experiment = "interactive.independent-uniform-field/0"
 premises = ["false public sum claim", "arbitrary fixed causal strategy", "two independent uniform full-field coins"]
@@ -46,6 +45,6 @@ theorem = "randomized_soundness"
 experiment = "interactive.reached-uniform-queries/0"
 premises = ["false public sum claim", "arbitrary private distribution of causal two-round strategies",
             "fresh uniform full-field sampling at reached challenge queries", "finite field"]
-module = "ZkcSecurity.ArkLib.Sumcheck.Soundness"
+module = "ZkcArkLib.Sumcheck.Soundness"
 context = "[Fintype F] [SampleableType F] "
 consumer = "ZkcSecurity.ArkLib.Sumcheck.randomized_soundness"

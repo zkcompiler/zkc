@@ -110,7 +110,7 @@ cases.
 
 ## Optional formal checks
 
-Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
+Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean security`, `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-security`, `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
 [its native control](fixtures/clean/air-control.json) and the
 [Bundle fixtures](../../compiler/adapters/clean/README.md) to be the producers'
 current outputs; the [native comparison](protocol/test_clean_air_conformance.py)
@@ -139,7 +139,7 @@ This scope exercises wrong-program, wrong-relation and unproved-certificate
 refusals as well as successful claims. Reports are retained under
 `build/reports/lean/native` (or the selected report root).
 
-Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#arklib` and
+Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#security`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
 The retained research sources and their vectors do not establish correspondence
 or security for the current compiler merely because their checks pass.

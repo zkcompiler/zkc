@@ -14,7 +14,7 @@ A checked rule from a source stage to a target stage has five parts.
 
 1. **Stage meanings.** Each stage has its own meaning, independent of the rules
    that mention it: a process over a declared action interface
-   (`PIR.Proc`), or a monadic computation over an oracle. Adjacent rules meet at
+   (`PIR.Process`), or a monadic computation over an oracle. Adjacent rules meet at
    a shared stage meaning.
 2. **Certificate.** Data the compiler emits beside the target to guide the
    check. It may be empty, when the check recomputes the correspondence from

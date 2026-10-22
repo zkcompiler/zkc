@@ -18,26 +18,26 @@ set_option autoImplicit false
 namespace PIR
 
 /-- Every value a process can return satisfies `property`. -/
-def Yields {I : Signature} {A : Type} (property : A → Prop) : Proc I A → Prop
+def Yields {I : Signature} {A : Type} (property : A → Prop) : Process I A → Prop
   | .done value => property value
   | .halt _ => True
   | .call _ next => ∀ reply, Yields property (next reply)
 
 theorem Yields.bind_congr {I : Signature} {A B : Type} {property : A → Prop}
-    {process : Proc I A} (yields : Yields property process) {first second : A → Proc I B}
+    {process : Process I A} (yields : Yields property process) {first second : A → Process I B}
     (same : ∀ value, property value → first value = second value) :
     process.bind first = process.bind second := by
   induction process with
   | done value => exact same value yields
   | halt reason => rfl
   | call operation next ih =>
-      simp only [Proc.bind]
+      simp only [Process.bind]
       congr 1
       funext reply
       exact ih reply (yields reply)
 
 theorem Yields.bind {I : Signature} {A B : Type} {property : A → Prop} {result : B → Prop}
-    {process : Proc I A} (yields : Yields property process) {next : A → Proc I B}
+    {process : Process I A} (yields : Yields property process) {next : A → Process I B}
     (nextYields : ∀ value, property value → Yields result (next value)) :
     Yields result (process.bind next) := by
   induction process with
@@ -46,7 +46,7 @@ theorem Yields.bind {I : Signature} {A B : Type} {property : A → Prop} {result
   | call operation continuation ih => exact fun reply => ih reply (yields reply)
 
 theorem Yields.mono {I : Signature} {A : Type} {property weaker : A → Prop}
-    {process : Proc I A} (yields : Yields property process)
+    {process : Process I A} (yields : Yields property process)
     (implies : ∀ value, property value → weaker value) : Yields weaker process := by
   induction process with
   | done value => exact implies value yields
@@ -55,7 +55,7 @@ theorem Yields.mono {I : Signature} {A : Type} {property weaker : A → Prop}
 
 /-- Repeated steps preserve a counted invariant. -/
 theorem Yields.repeatN {I : Signature} {A : Type} {invariant : Nat → A → Prop}
-    {step : A → Proc I A}
+    {step : A → Process I A}
     (preserved : ∀ index value, invariant index value → Yields (invariant (index + 1)) (step value)) :
     ∀ (count index : Nat) (value : A), invariant index value →
       Yields (invariant (index + count)) (PIR.repeatN count step value)

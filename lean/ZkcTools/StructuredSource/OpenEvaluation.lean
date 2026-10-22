@@ -5,7 +5,7 @@ public import ZkcTools.StructuredSource.OpenValues
 @[expose] public section
 
 /-! Bounded scripted observation of the admitted open process. This executable
-capacity counts visited Proc constructors, including marks and the terminal
+capacity counts visited Process constructors, including marks and the terminal
 constructor. It is not the native reference's SSA work count. -/
 
 namespace ZkcTools.StructuredSource
@@ -117,7 +117,7 @@ def replay (roles : List String) (self : Nat) (action : OpenAction) (state : Rep
 /-- Capacity is an observer resource refusal, never a semantic `exhausted` stop.
 An internal mark is handled locally and cannot consume a provider reply. -/
 def observe {types : List Ty} (roles : List String) (self : Nat) : Nat →
-    PIR.Proc (observedInterface Scalar Scalar) (OptionalValues types) →
+    PIR.Process (observedInterface Scalar Scalar) (OptionalValues types) →
     ReplayState → Except String Json
   | 0, _, _ => .error "structured-open-capacity"
   | _ + 1, .done values, state => .ok (returnedResult state values)

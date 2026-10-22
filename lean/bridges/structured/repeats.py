@@ -21,7 +21,7 @@ from project import project_inputs  # noqa: E402
 
 # The retained subjects, from `fixtures.toml`: stem, data name, Entry and its
 # single source module or project manifest.
-SUBJECTS = [(stem, spec["data"], spec["entry"], fixture_source(spec).relative_to(ROOT))
+SUBJECTS = [(stem, spec["data"], spec["subject"], fixture_source(spec).relative_to(ROOT))
             for stem, spec in fixture_table().items() if stem in fixture_stems("repeats")]
 
 

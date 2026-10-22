@@ -24,10 +24,10 @@ def reorderedImport : Imported := Variants.SchnorrReorderedData.snapshot.check.t
 variable {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def helpers (base key : G) (service : Nat) : PIR.Proc (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
+def helpers (base key : G) (service : Nat) : PIR.Process (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
   helpersImport.denote (scalarMeaning F G) id 1 (Schnorr.verifierInputs base key service)
 
-def reordered (base key : G) (service : Nat) : PIR.Proc (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
+def reordered (base key : G) (service : Nat) : PIR.Process (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
   reorderedImport.denote (scalarMeaning F G) id 1 (Schnorr.verifierInputs base key service)
 
 def verifier (form : Form) : Zkc.Protocols.Schnorr.Common.Verifier F G :=
@@ -42,16 +42,16 @@ theorem helpers_correspondence (base key : G) (service : Nat) :
 
 theorem reordered_correspondence (base key : G) (service : Nat) :
     reordered (F := F) base key service = Schnorr.experiment base key service := by
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro commitment
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro challenge
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro acknowledgement
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro response
-  change PIR.Proc.done (some (decide (response • base = challenge • key + commitment))) =
-    PIR.Proc.done (some (decide (response • base = commitment + challenge • key)))
+  change PIR.Process.done (some (decide (response • base = challenge • key + commitment))) =
+    PIR.Process.done (some (decide (response • base = commitment + challenge • key)))
   rw [add_comm (challenge • key) commitment]
 
 theorem contract (form : Form) : Zkc.Protocols.Schnorr.Common.VerifierContract Schnorr.wiring (verifier (F := F) (G := G) form) := by

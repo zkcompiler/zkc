@@ -61,23 +61,23 @@ theorem body_equation (table : Meanings F G) (xs : List F) (x : F) (divisor : Na
           simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
             Evaluation.operation, Operands.eval, Regions.denote, inputs, outputs, reference,
             Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-            SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+            SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
             checkedIndices, lengthBound, addBound, divisorBound, nonzero, extended,
             show 1 < indexLimit by decide +kernel]
       · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
           Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
           Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-          SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+          SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
           checkedIndices, lengthBound, addBound, divisorBound, show 1 < indexLimit by decide +kernel]
     · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
         Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
         Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-        SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+        SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
         checkedIndices, lengthBound, addBound, show 1 < indexLimit by decide +kernel]
   · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
       Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-      SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, lengthBound]
+      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome, lengthBound]
 
 set_option smartUnfolding false in
 theorem helper_equation (xs : List F) (x : F) (divisor : Nat) :
@@ -130,7 +130,7 @@ theorem division_zero_sites {I : PIR.Signature} (sites : SiteObservations I)
   dsimp only [inputs]
   rw [PrimitiveExpansions.appendSummary_body_observed]
   have lengthBound : xs.length < indexLimit := by omega
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
     checkedIndices, Values.get, lengthBound, bound,
     show 0 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
     and_self, ite_true]
@@ -163,7 +163,7 @@ theorem original_division_zero_sites {I : PIR.Signature} (sites : SiteObservatio
   change (sites.mark "s0").bind (fun _ =>
     (invoke (Evaluation.payloadMeanings sites program.payload) appendSummaryHelper (inputs xs x 0)).bind _) = _
   rw [helper, division_zero_sites sites _ xs x bound]
-  simp only [PIR.Proc.bind_assoc]
+  simp only [PIR.Process.bind_assoc]
   rfl
 
 end ZkcExamples.Structured.PrimitiveSequence

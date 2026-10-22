@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 
 from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 import snapshot as constructors
 
 GROUP = "bls12-381.g1"
@@ -59,13 +59,13 @@ class OpenSuite(Suite):
         assert native == expected, {"reference": native, "expected": expected}
         assert formal == expected, {"formal": formal, "expected": expected}
 
-    def authored(self, label, entry, modules, retained=None):
-        flags = ["--source-format=zkc", "--entry=" + entry,
+    def authored(self, label, selected_subject, modules, retained=None):
+        flags = ["--source-format=zkc", "--subject=" + selected_subject,
                  *[f"--module={name}={source}" for name, source in modules.items()]]
-        source, interface = native_run(
+        source, interface_text, interface = native_subject(
             lambda command: self.command(label + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export(label, source, interface["protocol"])
-        write_json(subject[1].parent / "interface.json", interface)
+        (subject[1].parent / "interface.json").write_text(interface_text, encoding="utf-8")
         if retained is not None:
             stem, module = retained
             targets = [

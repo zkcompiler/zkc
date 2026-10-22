@@ -36,7 +36,7 @@ def denoteRepeat {F G : Type} {I : PIR.Signature}
     (captures : Values (Component (assignment F G)) spec.captures)
     (body : RegionFunction (Component (assignment F G)) I
       (.index :: (spec.state ++ spec.captures), spec.state)) :
-    PIR.Proc I (Values (Component (assignment F G)) spec.state) :=
+    PIR.Process I (Values (Component (assignment F G)) spec.state) :=
   if (spec.roles.map context.roles).contains self then
     match count with
     | none => .halt .incomplete
@@ -68,7 +68,7 @@ theorem denoteRepeat_interpret {F G : Type} {I J : PIR.Signature}
     | some count =>
       dsimp only
       split
-      · simp only [Finite.interpret_execute, Repeat.step, PIR.Proc.interpret_bind, PIR.Proc.interpret]
+      · simp only [Finite.interpret_execute, Repeat.step, PIR.Process.interpret_bind, PIR.Process.interpret]
       · rfl
   · rfl
 

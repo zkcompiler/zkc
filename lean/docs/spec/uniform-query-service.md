@@ -54,7 +54,7 @@ Sampling does not invent a logging event; such an event belongs to a callback.
 
 ## General-count process transport
 
-`ZkcSecurity.Examples.CausalSumcheck.Iteration` imports the shared module
+`ZkcArkLib.Examples.CausalSumcheck.Iteration` imports the shared module
 `ZkcExamples.Structured.SumcheckVerifierProcess` and its
 `SumcheckVerifierLaws.roundPresent` definition. It constructs a `Causal.Strategy` from the
 two actual qualified receives and the actual send. HIGH receives LOW's updated

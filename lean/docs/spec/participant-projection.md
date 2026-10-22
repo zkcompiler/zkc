@@ -202,7 +202,7 @@ is the Fiat–Shamir transform of the original Sumcheck validator, read through
 its acceptance output. `compiled_transform_rounds` rewrites the original with
 `SumcheckSourceVerifier.verifier_checked`: for an admitted round count and a
 decoded verifier table, the transformed process is the source rounds followed by
-the multilinear terminal check. `ZkcSecurity.Examples.CompiledSumcheckFiatShamir`
+the multilinear terminal check. `ZkcArkLib.Examples.CompiledSumcheckFiatShamir`
 composes this equation with the multi-round Fiat–Shamir soundness of the
 imported verifier's transform
 ([multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)):
@@ -260,7 +260,7 @@ On a well-formed statement that original validator is the plain GKR verifier
 normal form of the admitted root, `GkrSourceNormalForms.verifier_participant`,
 an instance of the
 [normalizer's soundness](structured-source.md#participant-normal-forms)),
-which `ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
+which `ZkcArkLib.Examples.CompiledGkrFiatShamir` bounds
 ([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
 No equation about the compiled program's meaning is specific to the Entry.
 
@@ -275,7 +275,7 @@ check accepts the export (`compiled`), and `compiled_transform` is the generic
 equation at the Entry's public offset and acceptance output, as for Schnorr. The
 original validator is the four-operation participant process `experiment`, by
 computation (`verifier_correspondence`).
-`ZkcSecurity.Examples.CompiledGuessFiatShamir` bounds the compiled verifier by a
+`ZkcArkLib.Examples.CompiledGuessFiatShamir` bounds the compiled verifier by a
 certificate imported from an ArkLib verifier
 ([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
 

@@ -15,20 +15,8 @@ data = "lean/ZkcExamples/Construction/GuessProofData.lean"
 bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GuessProof.lean"
-artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Guess/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Guess/Claims.lean"
-
-[family]
-module = "ZkcSecurity.FiatShamir.Realization"
-construction = "soundness"
-kind = "upstream"
-
-[claims]
-namespace = "ZkcSecurity.Examples.Subjects.Guess"
-endpoint = "ideal-meaning"
-properties = ["soundness"]
-statement = "adaptive"
-regime = "exact-uniform challenges"
+artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Claims.lean"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
@@ -47,3 +35,7 @@ model_imports = ["ZkcExamples.Construction.GuessProofModel"]
 
 [bodies]
 entry = "proof"
+
+[lean]
+namespace = "ZkcSecurity.Examples.Subjects.Guess"
+imports = ["ZkcArkLib.Examples.Subjects.Guess.Registration"]

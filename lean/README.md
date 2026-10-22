@@ -6,8 +6,9 @@ compiler: the scalar common-source profile, and the structured profile, which
 admits original protocol-stage PIR with shared helpers, participants, services,
 protocol applications and repeats. Lean checks each import's typed admission;
 for selected imports it proves open-process contracts from checked derivations
-and local mathematical laws. Optional packages then apply ArkLib and VCVio
-security theorems to those subjects.
+and local mathematical laws. The reusable security package applies VCVio and
+quantitative security results; optional ArkLib adapters supply additional family
+theorems. Their module and package roots are disjoint.
 
 The [formal reference](docs/README.md) defines the models, and
 [support](docs/support.md) states the exact scope and assumptions of each claim.
@@ -46,7 +47,7 @@ with independent execution and negative controls.
 |---|---|---|---|
 | Scalar imports | Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|` | `Zkc.Source.Common.Native.Snapshot.check_parts`, `Zkc.Protocols.Schnorr.Common.VerifierContract.perfect_completeness`, `Zkc.Protocols.Schnorr.Common.VerifierContract.special_soundness`, `Zkc.Protocols.Sumcheck.Common.VerifierContract.soundness` | [Scalar import](docs/spec/common-source.md), [support](docs/support.md) |
 | Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | `Zkc.Source.Structured.Imported.exactSubject`, `Zkc.Source.Structured.check_ok_inversion`, `Zkc.Source.Structured.Imported.protocolApplication` | [Structured source](docs/spec/structured-source.md), [support](docs/support.md) |
-| Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | `ZkcExamples.Structured.SchnorrInteractive.perfect_completeness`, `ZkcExamples.Structured.SchnorrInteractive.special_soundness`, `ZkcSecurity.Examples.StructuredSchnorrSigma.fresh_challenge_hvzk` | [Schnorr subject](docs/support.md#interactive-schnorr), [security integration](integrations/arklib/README.md) |
+| Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | `ZkcExamples.Structured.SchnorrInteractive.perfect_completeness`, `ZkcExamples.Structured.SchnorrInteractive.special_soundness`, `ZkcSecurity.Examples.StructuredSchnorrSigma.fresh_challenge_hvzk` | [Schnorr subject](docs/support.md#interactive-schnorr), [reusable security](security/README.md) |
 | Compiled Schnorr proof | Checked transcript-construction and participant projection rules accept the actual compiled validator; by their composed soundness, the ideal interpretation of the exported validator is the Fiat–Shamir transform of the original verifier, with a fixed-statement extraction-probability bound in the random-oracle model via VCVio | `ZkcExamples.Construction.SchnorrProof.compiled_transform`, `ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness` | [Fiat–Shamir construction](docs/spec/fiat-shamir.md), [participant projection](docs/spec/participant-projection.md), [support](docs/support.md) |
 | Executable Schnorr proof | A checked lowering rule accepts the `zkc.program/0` validator the runtime admits against that constructed validator; its meaning, with proof framing, any decoder, an instruction budget, frames and transcript custody, reflects acceptance at every budget, and the extraction bound transfers to provers of proof bytes through the general construction, projection and lowering rules, with no Entry-specific equation about the compiled program | `ZkcExamples.Executable.SchnorrProof.executable_transform`, `ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness` | [Executable stage](docs/spec/executable.md), [support](docs/support.md) |
 | Executable Sumcheck proof and normalization | The lowering rule accepts the executable Sumcheck validator, with a loop and helper calls whose program bodies are proved to implement the source's checked helpers (the helpers inside the helper rule's recipe table by the rule, proved sound once, and the terminal check by its own proof), and, through checked normalization of pure total calculations, a deferred-rounds program that computes a round's product after a later draw; accepted normal forms have equal ideal meanings. Host validation prunes the transform of the original Sumcheck verifier at every budget, so the compiled bounds transfer to provers of proof bytes; at a budget sufficient for every run the executable is the ideal meaning, and honest-prover completeness holds at every budget of at least `68 + 59 · rounds` instructions for every round count up to the Entry's static maximum, with proofs that do not depend on the value of the maximum | `Zkc.Executable.checkNormalized_sound`, `Zkc.Executable.checkHelpers_sound`, `ZkcExamples.Executable.SumcheckProof.executable_transform_prunes`, `ZkcExamples.Executable.SumcheckCompleteness.honest_accepted`, `ZkcExamples.Executable.SumcheckFamily.honest_accepted`, `ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness`, `ZkcExamples.Executable.DeferredRounds.executable_validate` | [Executable stage](docs/spec/executable.md#the-compiled-sumcheck-proof-verifier), [normalization](docs/spec/executable.md#normalization), [support](docs/support.md) |
@@ -83,19 +84,19 @@ with independent execution and negative controls.
   executable validators the runtime admits (`ZkcExamples.Executable`).
 - `ZkcTools`: executable scalar and structured references, header parser and
   declaration audit.
-- [Security integration](integrations/arklib/README.md): optional ArkLib/VCVio
+- [Reusable security](security/README.md) and [ArkLib adapters](integrations/arklib/README.md): separate generic and optional
   consumers. The core does not import these libraries.
 - [Clean integration](integrations/clean/README.md): isolated finite AIR export
   and native fixture producer; independent of protocol security consumers.
 
 ## Build and use
 
-The [toolchain](lean-toolchain) and the three owning Lake manifests pin a coherent
+The [toolchain](lean-toolchain) and the four owning Lake manifests pin a coherent
 Lean 4.34.1 dependency closure. See the [dependency rationale](docs/dependencies.md).
 From `lean/`, `lake build` builds all maintained core libraries, examples, controls,
 executables and declaration audits. The optional packages each use `lake build`
 from their own directories. [Development](../docs/development/README.md) describes
-Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-integration`, and
+Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-security`, `just test-lean-integration`, and
 `just test-lean-clean` entry points.
 
 `just test-lean-native` additionally checks the native import and authored

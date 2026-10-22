@@ -145,10 +145,10 @@ def inputs (base key : G) (secret : F) :
   .cons (some base) (.cons (some key) (.cons (some secret) .nil))
 theorem corresponds (base key : G) (secret : F) :
     imported.denote (scalarMeaning F G) id 0 (inputs base key secret) =
-      PIR.Proc.done (some (decide (key = secret • base))) := by
+      PIR.Process.done (some (decide (key = secret • base))) := by
   change (imported.program.denote (scalarMeaning F G) id 0
-    (inputs base key secret).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (inputs base key secret).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   rfl
 end GeneratedRelation
 '''
@@ -168,7 +168,7 @@ variable {{F G : Type}} [Field F] [DecidableEq F]
 theorem approvedRelation (base key : G) (secret : F) :
     GeneratedRelation.imported.denote (scalarMeaning F G) id 0
       (.cons (some base) (.cons (some key) (.cons (some secret) .nil))) =
-      PIR.Proc.done (some (decide (key = secret • base))) :=
+      PIR.Process.done (some (decide (key = secret • base))) :=
   GeneratedRelation.corresponds base key secret
 
 /-- Two accepting executions of the actual imported verifier yield a witness
@@ -183,7 +183,7 @@ theorem target_special_soundness (base key : G) (service : Nat)
     GeneratedRelation.imported.denote (scalarMeaning F G) id 0
       (.cons (some base) (.cons (some key) (.cons
         (some ((prover.response first - prover.response second) / (first - second))) .nil))) =
-      PIR.Proc.done (some true) := by
+      PIR.Process.done (some true) := by
   rw [approvedRelation]
   have opening := ExpectedRequest.approvedContract.special_soundness
     base key service prover first second distinct acceptFirst acceptSecond

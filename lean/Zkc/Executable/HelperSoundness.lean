@@ -272,8 +272,8 @@ section Evaluations
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The outcome of a closed process followed by a continuation. -/
-theorem closedOutcome_bind {A B : Type} (process : PIR.Proc closedInterface A)
-    (next : A → PIR.Proc closedInterface B) :
+theorem closedOutcome_bind {A B : Type} (process : PIR.Process closedInterface A)
+    (next : A → PIR.Process closedInterface B) :
     Construction.closedOutcome (process.bind next) =
       Finite.continueWith (Construction.closedOutcome process) fun value =>
         Construction.closedOutcome (next value) := by
@@ -1180,8 +1180,8 @@ theorem walkRegion_sound : ∀ (fuel : Nat) (available : List CheckedDefinition)
                     if (Operands.eval values arguments).get .here then .returned .nil else .stopped .reject := by
                   rcases arguments with _ | ⟨conditionVariable, _ | _⟩
                   cases bodies
-                  change Construction.closedOutcome (if values conditionVariable then PIR.Proc.done Values.nil
-                    else PIR.Proc.halt .reject) = (if values conditionVariable then _ else _)
+                  change Construction.closedOutcome (if values conditionVariable then PIR.Process.done Values.nil
+                    else PIR.Process.halt .reject) = (if values conditionVariable then _ else _)
                   cases values conditionVariable <;> rfl
                 rw [guardOutcome]
                 obtain ⟨condition₀, conditionFound, conditionLooked⟩ := inputsAgree _ .here

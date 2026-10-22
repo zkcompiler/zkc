@@ -125,8 +125,8 @@ theorem unresolved_local_call : ¬ CalleeResolution
     identityBody (Values.cons (some 7) Values.nil).get (.halt .refused) := by
   intro resolution
   have impossible := resolution.sound
-  change (PIR.Proc.done (Values.cons (some 7) Values.nil) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) [Ty.index])) = .halt .refused at impossible
+  change (PIR.Process.done (Values.cons (some 7) Values.nil) :
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) [Ty.index])) = .halt .refused at impossible
   cases impossible
 
 /-- Zero-result calls still stop. The callee's prefix mark survives and the

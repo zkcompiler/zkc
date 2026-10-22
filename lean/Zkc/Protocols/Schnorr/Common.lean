@@ -30,10 +30,10 @@ variable {F G : Type} [Field F]
 
 abbrev actions := Participant.interface Nat Ty services (ScalarValue F G)
 abbrev Verifier (F G : Type) [Field F] [AddCommGroup G] [Module F G] :=
-  G → G → Nat → PIR.Proc (actions (F := F) (G := G)) (Option Bool)
+  G → G → Nat → PIR.Process (actions (F := F) (G := G)) (Option Bool)
 
 def experiment (wiring : Wiring) (base key : G) (service : Nat) :
-    PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
+    PIR.Process (actions (F := F) (G := G)) (Option Bool) :=
   .call (.receive (.group wiring.groupDomain) wiring.commitmentSite wiring.prover) fun commitment =>
   .call (.query wiring.challengeSite wiring.fieldDomain (.cons service .nil)) fun challenge =>
   .call (.send (ty := .field wiring.fieldDomain) wiring.deliverySite wiring.prover challenge) fun _ =>

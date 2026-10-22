@@ -165,7 +165,7 @@ abbrev opening := openingWith openingStep
 def openingInputs (xs ys : List Nat) (left right : Bool) (seed scale : Nat) :
     Values Value OpeningInputs := vals[xs, ys, left, right, seed, scale]
 
-def openingStepReference (scale state x y : Nat) : Proc interface (Values Value [.number]) :=
+def openingStepReference (scale state x y : Nat) : Process interface (Values Value [.number]) :=
   .call (.receive 1) fun reply =>
     if x * y == reply then
       .call (.send 2 (x * y * scale + state)) fun _ =>
@@ -173,7 +173,7 @@ def openingStepReference (scale state x y : Nat) : Proc interface (Values Value 
     else .halt .reject
 
 def openingReference (xs ys : List Nat) (left right : Bool) (seed scale : Nat) :
-    Proc interface (Values Value [.number, .number]) :=
+    Process interface (Values Value [.number, .number]) :=
   .call (.receive 0) fun claimed =>
     (Finite.execute (zipDomain xs ys left right)
       (fun state item => openingStepReference scale (state.get .here) item.1 item.2)
@@ -220,7 +220,7 @@ def verifierInputs (base key challenge : Nat) (enabled : Bool) (audit : List Nat
   vals[base, key, challenge, enabled, audit, admitted]
 
 def verifierReference (base key challenge : Nat) (enabled : Bool) (audit : List Nat)
-    (admitted : Bool) : Proc interface (Values Value (Numbers 3)) :=
+    (admitted : Bool) : Process interface (Values Value (Numbers 3)) :=
   Finite.admitThen (Finite.Domain.check admitted .refused (.elements audit)).admit fun _ =>
     .call (.receive 10) fun commitment =>
       .call (.send 11 challenge) fun _ =>
@@ -235,25 +235,25 @@ def verifierReference (base key challenge : Nat) (enabled : Bool) (audit : List 
 theorem openingStep_correspondence (env : Environment Value (Numbers 4)) :
     openingStep.denote meaning env =
       openingStepReference (env v3) (env v0) (env v1) (env v2) := by
-  apply Proc.call_congr
+  apply Process.call_congr
   intro reply
-  change (if env v1 * env v2 == reply then Proc.done (vals[] : Values Value [])
-    else Proc.halt .reject).bind _ = _
+  change (if env v1 * env v2 == reply then Process.done (vals[] : Values Value [])
+    else Process.halt .reject).bind _ = _
   split <;> rfl
 
 theorem capturedStep_correspondence (env : Environment Value (Numbers 4)) :
     (capturedStep openingStep).denote meaning env =
       openingStepReference (env v3) (env v0) (env v1) (env v2) := by
   have suffix : (fun (values : Values Value [.number]) =>
-      (Proc.done (Operands.eval (env.prepend values) vals[v0]) :
-        Proc interface (Values Value [.number]))) = Proc.done := by
+      (Process.done (Operands.eval (env.prepend values) vals[v0]) :
+        Process interface (Values Value [.number]))) = Process.done := by
     funext values
     cases values with
     | cons value rest => cases rest; rfl
   change (openingStep.denote meaning
     (vals[env v0, env v1, env v2, env v3] : Values Value (Numbers 4)).get).bind
       (fun values => .done (Operands.eval (env.prepend values) vals[v0])) = _
-  rw [suffix, Proc.bind_done]
+  rw [suffix, Process.bind_done]
   exact openingStep_correspondence _
 
 theorem openingFold_correspondence (env : Environment Value OpeningInputs) :
@@ -284,15 +284,15 @@ vectors, admission flags, captures and every independent external reply. -/
 theorem opening_correspondence (xs ys : List Nat) (left right : Bool) (seed scale : Nat) :
     opening.denote meaning (openingInputs xs ys left right seed scale).get =
       openingReference xs ys left right seed scale := by
-  apply Proc.call_congr
+  apply Process.call_congr
   intro claimed
   change (((openingFold openingStep).rename (fun ref => .there ref)).denote meaning
     (Environment.push (ty := Ty.number) (openingInputs xs ys left right seed scale).get claimed)).bind _ = _
-  rw [Region.denote_rename, openingFold_correspondence, Proc.bind_assoc]
+  rw [Region.denote_rename, openingFold_correspondence, Process.bind_assoc]
   congr 1
   funext total
-  change (if total.get .here == claimed then Proc.done (vals[] : Values Value [])
-    else Proc.halt .reject).bind _ = _
+  change (if total.get .here == claimed then Process.done (vals[] : Values Value [])
+    else Process.halt .reject).bind _ = _
   split <;> rfl
 
 theorem capturedStep_congr {left right : Region dialect (Numbers 4) [.number]}
@@ -325,19 +325,19 @@ theorem openingStep_commuted :
     Region.Equivalent meaning openingStep (openingStepWith true) := by
   intro env
   rw [openingStep_correspondence]
-  apply Proc.call_congr
+  apply Process.call_congr
   intro reply
-  change _ = (if env v2 * env v1 == reply then Proc.done (vals[] : Values Value [])
-    else Proc.halt .reject).bind _
-  rw [Proc.bind_ite]
+  change _ = (if env v2 * env v1 == reply then Process.done (vals[] : Values Value [])
+    else Process.halt .reject).bind _
+  rw [Process.bind_ite]
   change (if env v1 * env v2 == reply then
-      Proc.call (I := interface) (.send 2 (env v1 * env v2 * env v3 + env v0))
+      Process.call (I := interface) (.send 2 (env v1 * env v2 * env v3 + env v0))
         (fun _ => .done (vals[env v1 * env v2 * env v3 + env v0] : Values Value [.number]))
-      else Proc.halt .reject) =
+      else Process.halt .reject) =
     (if env v2 * env v1 == reply then
-      Proc.call (I := interface) (.send 2 (env v2 * env v1 * env v3 + env v0))
+      Process.call (I := interface) (.send 2 (env v2 * env v1 * env v3 + env v0))
         (fun _ => .done vals[env v2 * env v1 * env v3 + env v0])
-      else Proc.halt .reject)
+      else Process.halt .reject)
   rw [Nat.mul_comm (env v2) (env v1)]
 
 /-- Concrete arithmetic replacement under nested captures and a multi-result
@@ -353,17 +353,17 @@ theorem verifier_correspondence (base key challenge : Nat) (enabled : Bool)
   cases admitted with
   | false => rfl
   | true =>
-      apply Proc.call_congr
+      apply Process.call_congr
       intro commitment
-      apply Proc.call_congr
+      apply Process.call_congr
       intro acknowledgement
-      apply Proc.call_congr
+      apply Process.call_congr
       intro response
       cases enabled with
       | false => rfl
       | true =>
           change ((((if response * base == commitment + challenge * key then
-            Proc.done (vals[] : Values Value []) else Proc.halt .reject).bind _).bind _).bind _).bind _ = _
+            Process.done (vals[] : Values Value []) else Process.halt .reject).bind _).bind _).bind _).bind _ = _
           split <;> rfl
 
 end ZkcExamples.StructuredPrograms

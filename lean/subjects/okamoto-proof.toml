@@ -16,20 +16,8 @@ data = "lean/ZkcExamples/Construction/OkamotoProofData.lean"
 bodies = "lean/ZkcExamples/Construction/OkamotoProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/OkamotoProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/OkamotoProof.lean"
-artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Okamoto/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Okamoto/Claims.lean"
-
-[family]
-module = "ZkcSecurity.Families.SchnorrVariants"
-construction = "knowledge"
-kind = "sigma"
-
-[claims]
-namespace = "ZkcSecurity.Examples.Subjects.Okamoto"
-endpoint = "ideal-meaning"
-properties = ["knowledge-soundness"]
-statement = "fixed"
-regime = "exact-uniform challenges"
+artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Artifacts.lean"
+claims = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Claims.lean"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -46,3 +34,7 @@ entry = "proof"
 [construction]
 model = "Zkc.Protocols.Schnorr.Variants.representation wiring"
 model_imports = ["ZkcExamples.Construction.OkamotoProofModel"]
+
+[lean]
+namespace = "ZkcSecurity.Examples.Subjects.Okamoto"
+imports = ["ZkcSecurity.Examples.Subjects.Okamoto.Registration"]

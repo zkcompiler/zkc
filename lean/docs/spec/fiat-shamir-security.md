@@ -16,11 +16,11 @@ hash-chain provider simulation in `ZkcSecurity.HashChain`, the bound for
 verifiers with committed tables in `ZkcSecurity.Commitment`, the transport
 between oracle key forms in `ZkcSecurity.Oracle.Keys`, and the
 [stage relations](#stage-relations) that compose them in `ZkcSecurity.Stage`;
-the Sumcheck instance is `ZkcSecurity.Examples.SumcheckFiatShamir`.
+the Sumcheck instance is `ZkcArkLib.Examples.SumcheckFiatShamir`.
 
 ## Typed query sites
 
-A validator is a process `PIR.Proc I A` over any operation signature `I`. A
+A validator is a process `PIR.Process I A` over any operation signature `I`. A
 **transcript interface** `Zkc.Transcript.Interface I E P Raw` (also
 `Typed.Interface`) states, for each operation, how the transform treats it
 (`Zkc.Transcript.Absorption`); `Raw : E → Type` is the raw answer type of each
@@ -594,7 +594,7 @@ its identifier with `registryEntry`):
 
 ## Imports from ArkLib's round-by-round soundness
 
-`ZkcSecurity.FiatShamir.Upstream` imports ArkLib's worst-case-per-prefix
+`ZkcArkLib.FiatShamir.Upstream` imports ArkLib's worst-case-per-prefix
 round-by-round soundness (`Verifier.rbrSoundnessWorstCase`) into the typed
 engine. An ArkLib verifier for a protocol specification of `n` rounds has a
 **process form** (`validator`): one operation per round (`signature`), receiving
@@ -634,7 +634,7 @@ for fixed inputs and for inputs the prover chooses after its queries.
 `(queries + challenges) · bound` for `challenges` challenge rounds when every
 round's error is at most `bound`.
 
-`TestsSecurity.UpstreamImports` checks the import on two protocols:
+`TestsArkLib.UpstreamImports` checks the import on two protocols:
 
 - A two-round guessing protocol with a pure verifier and error `1 / 4`: the
   transform accepts with probability at most `(queries + 1) / 4`, and a prover
@@ -676,7 +676,7 @@ that instance, not the generic adapter.
 
 ### Imported certificates for compiled verifiers
 
-`ZkcSecurity.FiatShamir.Realization` carries a process-form certificate to the
+`ZkcArkLib.FiatShamir.Realization` carries a process-form certificate to the
 participant interface compiled Entries use. `Upstream.Realizes` relates a
 participant process to a process-form residual operation by operation, a
 morphism of the two transcript interfaces along a pair of processes: a
@@ -689,7 +689,7 @@ realizes a related returned verdict. `Realizes.certificate` makes the
 participant residuals that realize a doomed process-form residual a
 `Typed.Certificate` over the participant interface with field challenges.
 
-`ZkcSecurity.Examples.CompiledGuessFiatShamir` uses it to reach compiled code.
+`ZkcArkLib.Examples.CompiledGuessFiatShamir` uses it to reach compiled code.
 The guessing fixture's `example::Proof` Entry
 (`lean/bridges/construction/fixtures/guess.zkc`) receives a guess, draws a field
 challenge, delivers it and accepts when the guess plus the public offset is the
@@ -920,7 +920,7 @@ acceptance of the image implies acceptance of the transform's outcome.
 
 ## The compiled Sumcheck proof Entry
 
-`ZkcSecurity.Examples.CompiledSumcheckFiatShamir` composes these theorems with
+`ZkcArkLib.Examples.CompiledSumcheckFiatShamir` composes these theorems with
 the transcript-construction and
 [participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)
 rules. Its subject is the compiled verifier itself: `compiledVerifier challenge
@@ -968,7 +968,7 @@ uses the same binding. The binding establishes statement determination only;
 native absorption of the encoded rows remains a named assumption of the
 [executable stage](executable.md#named-assumptions-and-trusted-links).
 
-The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
+The controls (`TestsArkLib.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold
 together. The compiled program, evaluated in the kernel without the
 construction equation, accepts the cheating proof exactly at the challenge `2`
@@ -980,7 +980,7 @@ bound `3 / 5`.
 
 ## The plain GKR verifier
 
-`ZkcSecurity.Examples.GkrFiatShamir` bounds the transform of
+`ZkcArkLib.Examples.GkrFiatShamir` bounds the transform of
 `ZkcExamples.Structured.GkrVerifier.verifier`, the verifier of the
 [GKR library](../../../libraries/protocols/polynomial/gkr/README.md) for a statement already decoded
 to tables: the claimed outputs and the inputs as tables of the width, and each
@@ -1027,7 +1027,7 @@ expensive site, so `soundness` bounds acceptance by
 
 ## The compiled GKR proof Entry
 
-`ZkcSecurity.Examples.CompiledGkrFiatShamir` states the bound for the compiled
+`ZkcArkLib.Examples.CompiledGkrFiatShamir` states the bound for the compiled
 `example::Proof` verifier of the GKR example. `compiledVerifier challenge inputs
 outputs add mul layers selector width initial proof` is the ideal interpretation
 of the exported validator `GkrProof.participant`, as for Sumcheck, on the raw
@@ -1761,11 +1761,12 @@ registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
   fixture, which retains none, uses the language of the imported ArkLib
   soundness statement instead), recovered
   from the export by `bind_contract` and read at the policy's published inputs,
-  whose selectors and publication order the kernel checks. The evidence
-  structures take this predicate as a parameter: they do not themselves derive
-  it from the retained contract, so that the predicate is the retained formula
-  is a property of each subject's `Contract` module, not of the evidence type.
-  No false statement is required to exist;
+  whose selectors and publication order the kernel checks. A retained target
+  reads published inputs from that policy statement; a witness embedding only
+  supplies private coordinates. Evidence requires a proof that its false set
+  or witness relation equals this derived application meaning. An explicit
+  imported-language alternative is available only when the admitted original
+  retains no clauses. No false statement is required to exist;
 - the **regime** (`Regime`): the oracle's answer type and the decoding of a
   challenge from it, exactly uniform field elements at `Regime.exact`.
 
@@ -1837,6 +1838,15 @@ is a separate property. The family packages of Schnorr and of three variants
 (Chaum–Pedersen over the base pair, two Schnorr proofs under one challenge, and
 Okamoto's proof of a representation) supply shapes of one or two commitments and
 one or two responses.
+
+These family-specific endpoint theorems justify a named extraction computation;
+they do not, on their own, prevent a statement-indexed family from choosing
+witness search. Source knowledge claims additionally fix the registered
+response-difference profile before selecting evidence. The method proves that
+its family extraction equals that profile's computation, and that canonical
+replay uses the actual verifier. See the [request and receipt contract](verification.md)
+for profile admission, witness coordinates, fallback sampling, and adversary
+inputs. The source-claim meaning contains no existential Sigma-family choice.
 
 A named hypothesis (`Hypothesis`) cites a registry entry by identifier, with
 the proposition it instantiates and its status: a proof, or a reported

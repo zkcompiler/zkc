@@ -40,7 +40,7 @@ def Program.denote (meaning : Mathematical.Meaning language)
     (condition : meaning.Value language.condition → Bool) (self : Role) {Γ ty} :
     Program Role language services Γ ty →
       Environment (fun sort => Option (meaning.Value sort)) Γ →
-        PIR.Proc (Participant.interface Role language.Ty services meaning.Value) (Option (meaning.Value ty))
+        PIR.Process (Participant.interface Role language.Ty services meaning.Value) (Option (meaning.Value ty))
   | .ret value, env => .done (env value)
   | .calculate body next, env =>
       next.denote meaning condition self (env.push (body.evalAt meaning self env))

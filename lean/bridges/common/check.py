@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import shutil
 
-from native_entry import native_run
+from native_entry import native_subject
 from snapshot import render
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
@@ -331,8 +331,8 @@ def main():
             setattr(args, name, target)
         suite=Suite(args,temporary)
         flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
-               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--entry=example::Interactive']
-        text, interface = native_run(execute, args.compiler, flags)
+               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--subject=schnorr::Schnorr<example::G>']
+        text, interface_text, interface = native_subject(execute, args.compiler, flags)
         assert interface['original']==hashlib.sha256(text.encode()).hexdigest()
         symbol=interface['protocol']
         data=suite.exercise(text,symbol)
@@ -344,8 +344,8 @@ def main():
         suite.exercise(fixture_text)
         sumcheck_flags=['--source-format=zkc',
                         '--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
-                        '--entry=scalar_sumcheck::Interactive']
-        sumcheck_text, sumcheck_interface = native_run(execute, args.compiler, sumcheck_flags)
+                        '--subject=scalar_sumcheck::Sumcheck']
+        sumcheck_text, interface_text, sumcheck_interface = native_subject(execute, args.compiler, sumcheck_flags)
         assert sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()
         sumcheck_symbol=sumcheck_interface['protocol']
         sumcheck_data=suite.exercise(sumcheck_text,sumcheck_symbol)
@@ -357,11 +357,11 @@ def main():
             {'Schnorr':(text,symbol),'Sumcheck':(sumcheck_text,sumcheck_symbol)})
         factor_controls=check_factor_forms(suite,ROOT,execute)
         algebra_sources=[]
-        for entry in ('Helpers','Expanded','AirResidual'):
+        for entry in ('WithHelper', 'Inline', 'Residual'):
             flags=['--source-format=zkc',
                    '--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
-                   '--entry=scalar_algebra::'+entry]
-            algebra_text, algebra_interface = native_run(execute, args.compiler, flags)
+                   '--subject=scalar_algebra::'+entry]
+            algebra_text, interface_text, algebra_interface = native_subject(execute, args.compiler, flags)
             algebra_symbol = algebra_interface['protocol']
             suite.exercise(algebra_text,algebra_symbol)
             algebra_sources.append((algebra_text,algebra_symbol))

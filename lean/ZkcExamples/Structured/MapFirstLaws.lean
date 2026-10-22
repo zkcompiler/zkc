@@ -60,18 +60,18 @@ theorem first_body (table : Meanings F G) (halves : HalvesLaw table) (map : MapL
       Nat.lt_of_le_of_lt (by simp only [List.length_take]; exact Nat.min_le_right _ _) lengthBound
     have mapped := map (xs.take (xs.length / 2)) (xs.drop (xs.length / 2)) r sameLength lowBound
     have subBound : dimension - 1 < indexLimit := Nat.lt_of_le_of_lt (Nat.sub_le _ _) dimensionBound
-    simp only [positive, splitShape, ite_true, PIR.Proc.bind, Values.get_cons, Environment.push, Values.get, mapped,
+    simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get, mapped,
       Primitive.evaluate, checkedIndices, dimensionBound,
       show 1 < indexLimit by decide +kernel, and_self, ite_true, primitiveOutcome]
     simp only [show 1 ≤ dimension by omega, subBound, ite_true, primitiveOutcome,
-      PIR.Proc.bind, Values.get_cons, Environment.push, Values.get, inputs, restrictValues]
+      PIR.Process.bind, Values.get_cons, Environment.push, Values.get, inputs, restrictValues]
     change (invoke table mapHelper
       (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil)))).bind
       (fun result => .done (inputs (result.get .here) (dimension - 1) columns)) =
       .done (inputs (restrictValues xs r) (dimension - 1) columns)
     rw [mapped]
     rfl
-  · simp only [positive, ite_false, PIR.Proc.bind]
+  · simp only [positive, ite_false, PIR.Process.bind]
 
 omit [DecidableEq F] in
 /-- The result keeps every column and removes exactly one leading row bit. -/
@@ -123,26 +123,26 @@ theorem wrapper_body (table : Meanings F G)
   dsimp only [inputs, vector] at tableLaw
   rw [tableLaw]
   by_cases shape : HasShape xs dimension columns
-  · simp only [shape, ite_true, PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+  · simp only [shape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
     have firstLaw := firstLaw xs dimension columns r shape lengthBound
     change (invoke table firstHelper (firstInputs xs dimension columns r)).bind _ = _
     rw [firstLaw]
     by_cases positive : 0 < dimension
-    · simp only [positive, ite_true, PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+    · simp only [positive, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
       change (invoke table valuesRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [valuesLaw]
-      simp only [PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+      simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
       change (invoke table variablesRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [variablesLaw]
-      simp only [PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+      simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
       change (invoke table widthRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [widthLaw]
       rfl
-    · simp only [positive, ite_false, PIR.Proc.bind]
-  · simp only [shape, ite_false, PIR.Proc.bind]
+    · simp only [positive, ite_false, PIR.Process.bind]
+  · simp only [shape, ite_false, PIR.Process.bind]
 
 
 theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (r : F) :
@@ -156,6 +156,6 @@ theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
     intro result
     cases result with | cons a rest => cases rest with | cons b rest => cases rest with
       | cons c rest => cases rest; rfl
-  simp only [eta, PIR.Proc.bind_done]
+  simp only [eta, PIR.Process.bind_done]
 
 end ZkcExamples.Structured.MapFirstLaws

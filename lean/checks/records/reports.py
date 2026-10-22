@@ -1,11 +1,9 @@
-"""Assurance reports: `zkc.assurance-report/0`, one per subject manifest.
+"""Assurance reports: `zkc.assurance-report/0`, one per compiled subject.
 
-A report records a checked application of a registered endpoint to
-artifact-indexed evidence. It is assembled from the subject manifest, the
-declaration records (with the registry and the registered endpoints), and the
-subject pipeline's evidence for the subject. The generator is fail-closed:
-anything it cannot classify or connect makes the claim `unresolved`, with the
-reason. `lean/docs/spec/assurance-report.md` specifies the format.
+Requested meanings come only from bound source claims. Typed receipt indices,
+actual proofs and their dependencies are extracted by Lean. Legacy endpoint
+helpers remain for mathematical ledger and negative-control auditing; they do
+not select requested claims for the public report builder. `lean/docs/spec/assurance-report.md` specifies the format.
 """
 
 import hashlib
@@ -23,7 +21,7 @@ EVIDENCE_FORMAT = "zkc.subject-evidence/0"
 ENDPOINTS = ("ideal-meaning", "executable-bytes")
 STATEMENTS = ("fixed", "adaptive")
 
-# Trusted links every claim about a covered endpoint rests on. A typed
+# Legacy endpoint audit metadata, retained for its ledger/control helpers. A typed
 # public-value binding discharges statement determination only, never the
 # native absorption of the public values, which stays assumed until a theorem
 # about native transcript bytes exists.
@@ -68,11 +66,19 @@ class Registry:
     def __init__(self, entries, endpoints):
         self.entries = entries or []
         self.endpoints = endpoints or []
-        self.by_identifier = {entry["identifier"]: entry for entry in self.entries}
+        self.by_identifier = {}
         self.by_schema = {}
         for entry in self.entries:
+            identifier = entry["identifier"]
+            if identifier in self.by_identifier:
+                raise ValueError(f"conflicting registry identifier: {identifier}")
+            self.by_identifier[identifier] = entry
+        for entry in self.entries:
             if entry.get("schema"):
-                self.by_schema.setdefault(entry["schema"], entry)
+                schema = entry["schema"]
+                if schema in self.by_schema and self.by_schema[schema] != entry:
+                    raise ValueError(f"conflicting registry schema: {schema}")
+                self.by_schema[schema] = entry
 
     def classify(self, head):
         return self.by_schema.get(head) if head else None
@@ -187,7 +193,7 @@ def validation(evidence):
 def checker(records):
     """Toolchain, dependency pins and declared compatibility patches."""
     pins, manifests, patches = {}, {}, []
-    for relative in ("lake-manifest.json", "integrations/arklib/lake-manifest.json",
+    for relative in ("lake-manifest.json", "security/lake-manifest.json", "integrations/arklib/lake-manifest.json",
                      "integrations/clean/lake-manifest.json"):
         path = LEAN / relative
         if path.exists():
@@ -327,7 +333,8 @@ def binder_reasons(record, origin):
         if binder.get("premise"):
             continue
         head = binder.get("type_head")
-        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES) or \
+        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES
+                               and binder.get("model_instance") is True) or \
                 (binder.get("binder") == "explicit" and head == "String"):
             continue
         reasons.append(f"hidden parameter: binder {position} of {origin} {record['name']} has type {head}, "
@@ -357,7 +364,7 @@ def hypotheses(record, registry):
     detail = record.get("detail") or {}
     found, discharged, reasons = [], [], []
     listed = detail.get("hypotheses")
-    if listed is None:
+    if not isinstance(listed, list):
         return found, discharged, [f"the named hypotheses of {record['name']} were not recorded"]
     named_premises = set()
     for item in listed:
@@ -581,7 +588,7 @@ def reused_reason(directory):
             "not tied to the sources the pipeline validated")
 
 
-def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+def endpoint_audit_report(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
     manifest = load_manifest(manifest_path)
     entries, endpoints = records.registry()
     registry = Registry(entries, endpoints)
@@ -632,12 +639,582 @@ def render_subjects(reports):
     lines = ["| Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |",
              "|---|---|---|---|---|---|---|"]
     for report in reports:
-        entry = report["manifest"]["entries"].get("proof", "")
+        default_entry = report["manifest"]["entries"].get("proof", "")
         for item in report["claims"] or [{}]:
+            entry = ((item.get("request") or {}).get("subject") or {}).get("entry", default_entry)
             identifiers = ", ".join(f"`{row['id']}`" for row in item.get("assumptions", []))
             reason = item.get("reasons", report["reasons"])
-            verdict = item.get("outcome", report["outcome"])
+            verdict = item.get("status", item.get("outcome", report.get("status", report["outcome"])))
             note = f"{verdict}: {reason[0]}" if reason and verdict != "established" else verdict
             lines.append(f"| {report['subject']} | `{entry}` | {item.get('covered_endpoint', '')} | "
-                         f"{item.get('property', '')} | {item.get('statement', '')} | {identifiers} | {note} |")
+                         f"{item.get('property', '')} | {item.get('statement') or ''} | {identifiers} | {note} |")
     return "\n".join(lines) + "\n"
+
+
+BOUND_CLAIMS_FORMAT = "zkc.bound-source-claims/0"
+RECEIPT_TYPE = "Zkc.Claims.Receipt"
+ADMITTED_RECEIPT_TYPE = "ZkcSecurity.Claims.AdmittedReceipt"
+REQUEST_TYPE = "Zkc.Claims.Wire.Request"
+ROUTES = {"endpoint", "theorem", "derivation"}
+# The new request path covers interpreted endpoints. Native realization links
+# remain metadata of the legacy audit, not obligations of these meanings.
+STAGE_LINKS = {"interactive": (), "compiled-ideal": ("construction.checked",),
+               "executable-bytes": ("construction.checked", "lowering.interpreted_bytes")}
+ARTIFACT_ROLES = {"constructed-participant": "constructed_export", "verifier-program": "program"}
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                      allow_nan=False).encode("ascii")
+
+
+def data_digest(value):
+    return "sha256:" + hashlib.sha256(canonical(value)).hexdigest()
+
+
+def request_projection(request):
+    """Wire.Request preserves the complete native envelope, including targets."""
+    return json.loads(json.dumps(request))
+
+
+def claim_details(evidence):
+    """Declarations requested by the pipeline; not a source of meanings."""
+    return [item[key] for item in (evidence or {}).get("claim_receipts", [])
+            for key in ("request_declaration", "receipt_declaration") if item.get(key)]
+
+
+def owned_module_path(module):
+    # Module ownership follows physical providers, independently of declaration
+    # namespaces (notably ZkcSecurity declarations in ZkcArkLib modules).
+    from .declarations import PACKAGES
+    candidates = [directory / Path(*module.split(".")).with_suffix(".lean")
+                  for directory, _ in PACKAGES.values()]
+    found = [path for path in candidates if path.is_file()]
+    if len(found) != 1:
+        raise ValueError(f"owned module {module} has {len(found)} source providers")
+    return found[0]
+
+
+def verified_environment(records):
+    """Read-only pin and compatibility verification; never prepare dependencies."""
+    import subprocess
+    from .declarations import PACKAGES
+    facts = checker(records)
+    verified, reasons, seen = [], [], set()
+    for package in sorted(records.packages()):
+        if package not in PACKAGES:
+            reasons.append(f"unknown package provider: {package}")
+            continue
+        directory = PACKAGES[package][0]
+        manifest_path = directory / "lake-manifest.json"
+        if not manifest_path.is_file():
+            reasons.append(f"missing dependency manifest: {manifest_path}")
+            continue
+        manifest = json.loads(manifest_path.read_text())
+        compatibility_path = directory / "compatibility.json"
+        compatibility = json.loads(compatibility_path.read_text()) if compatibility_path.is_file() else None
+        for pin in manifest.get("packages", []):
+            if pin.get("type") != "git":
+                continue
+            source = (directory / manifest.get("packagesDir", ".lake/packages") /
+                      pin["name"].removeprefix("«").removesuffix("»")).resolve()
+            key = (str(source), pin["rev"])
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"],
+                                               text=True, stderr=subprocess.DEVNULL).strip()
+                if head != pin["rev"]:
+                    raise ValueError("HEAD differs from locked revision")
+                changed = set(subprocess.check_output(
+                    ["git", "-C", str(source), "diff", "--name-only", "-z", "HEAD"],
+                    stderr=subprocess.DEVNULL).decode().split("\0")) - {""}
+                untracked = set(subprocess.check_output(
+                    ["git", "-C", str(source), "ls-files", "--others", "--exclude-standard", "-z"],
+                    stderr=subprocess.DEVNULL).decode().split("\0")) - {""}
+                config = compatibility if compatibility and compatibility["package"] == pin["name"] else None
+                if config:
+                    if config["revision"] != pin["rev"] or sha256(directory / config["patch"]) != config["patch_sha256"]:
+                        raise ValueError("compatibility pin or patch digest differs")
+                    files = config["files"]
+                    added = {name for name, values in files.items() if values["base_sha256"] is None}
+                    if changed - files.keys() or untracked - added:
+                        raise ValueError("undeclared dependency changes")
+                    for name, values in files.items():
+                        path = source / name
+                        expected = values["patched_sha256"]
+                        if (expected is None and path.exists()) or (expected is not None and
+                                (not path.is_file() or sha256(path) != expected)):
+                            raise ValueError(f"compatibility source differs: {name}")
+                elif changed or untracked:
+                    raise ValueError("dependency source has undeclared changes")
+                verified.append({"package": pin["name"], "revision": head,
+                                 "compatibility": config})
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                reasons.append(f"unverified dependency {pin['name']}: {error}")
+    facts["verified_dependencies"] = verified
+    return facts, reasons
+
+
+def semantic_dependencies(closure, records, environment):
+    """A body-sensitive audit digest; never a replacement for type checking."""
+    modules, identities, reasons = {}, [], []
+    for item in closure:
+        if not item.get("owned"):
+            continue
+        module = item.get("module")
+        if not module:
+            reasons.append(f"dependency {item.get('name')} has no module identity")
+            continue
+        try:
+            path = owned_module_path(module)
+            modules[module] = {"path": str(path.relative_to(ROOT)), "sha256": sha256(path)}
+        except ValueError as error:
+            reasons.append(str(error))
+        identities.append({key: item.get(key) for key in ("name", "module", "statement")})
+    if not modules:
+        reasons.append("no owned semantic dependency modules were emitted")
+    payload = {"modules": modules, "declarations": sorted(identities, key=lambda item: item["name"]),
+               "environment": environment}
+    return {"digest": data_digest(payload), **payload}, reasons
+
+
+def module_attached(module, modules):
+    try:
+        source = owned_module_path(module).resolve()
+    except ValueError:
+        return False
+    return any((ROOT / item["path"]).resolve() == source for item in modules)
+
+
+def receipt_join(mapping, records, modules, evidence):
+    reasons = []
+    for key in ("request_declaration", "receipt_declaration"):
+        name = mapping.get(key)
+        record = records.get(name) if name else None
+        if not record:
+            reasons.append(f"missing emitted {key}: {name}")
+        elif not module_attached(record["module"], modules):
+            reasons.append(f"mismatched artifact: {key} {name} is outside this subject's generated modules")
+    receipt = records.get(mapping.get("receipt_declaration"))
+    if not any(check.get("name") == "claim-receipt" and check.get("outcome") == "accepted" and
+               check.get("module") == (receipt or {}).get("module") and
+               check.get("request") == mapping.get("request_declaration") and
+               check.get("receipt") == mapping.get("receipt_declaration")
+               for check in (evidence or {}).get("checks", [])):
+        reasons.append("no accepted claim-receipt check built the actual request and receipt declarations")
+    return reasons
+
+
+def receipt_attribution(receipt):
+    """Optional method notes may be absent, malformed or unrecognizable."""
+    try:
+        provenance = receipt.get("provenance") or {}
+        closure = receipt.get("dependencies") or []
+        actual_names = {item.get("name") for item in receipt.get("proof_dependencies", closure)}
+        route = receipt.get("root_route")
+        declared_route = (provenance.get("root") or "").rsplit(".", 1)[-1]
+        discharger = receipt.get("discharger")
+        diagnostics = []
+        if route == "constructor" and declared_route == "theorem":
+            route = "theorem"
+        if route not in ROUTES or declared_route != route:
+            diagnostics.append("route attribution does not match the receipt constructor")
+        if not discharger or provenance.get("discharger") != discharger or discharger not in actual_names:
+            diagnostics.append("discharger attribution does not match the actual proof root")
+        if any(name not in actual_names for name in provenance.get("dependencies", [])):
+            diagnostics.append("dependency attribution is absent from the actual proof closure")
+        if receipt.get("provenance_error"):
+            diagnostics.append(receipt["provenance_error"])
+        return ("unattributed" if diagnostics else route), diagnostics
+    except (AttributeError, TypeError, ValueError) as error:
+        return "unattributed", [f"optional attribution could not be read: {error}"]
+
+
+def audit_receipt(record, request_record, request, registry, records, generated_modules=None):
+    reasons, assumptions, discharged = [], [], []
+    if not records.headers or any(header.get("axiom_provenance") != "resolved-constant-info/0" or
+                                  header.get("reference_provenance") != "checked-stored-module/0"
+                                  for header in records.headers.values()):
+        reasons.append("declaration records lack checked stored-provider/actual-axiom provenance")
+    detail = record.get("detail") or {}
+    data = detail.get("claim_data") or {}
+    receipt = data.get("receipt") or {}
+    if detail.get("type_head") not in {RECEIPT_TYPE, ADMITTED_RECEIPT_TYPE} or not receipt:
+        reasons.append(f"proof type mismatch: {record['name']} is not an extracted typed Receipt")
+    if data.get("extraction_error"):
+        reasons.append(f"receipt extraction failed: {data['extraction_error']}")
+    request_detail = (request_record or {}).get("detail") or {}
+    actual_request = (request_detail.get("claim_data") or {}).get("wire_request")
+    try:
+        expected = request_projection(request)
+    except (ValueError, KeyError, TypeError) as error:
+        expected = None
+        reasons.append(f"request cannot be represented: {error}")
+    if request_detail.get("type_head") != REQUEST_TYPE or actual_request != expected:
+        reasons.append("wrong request: emitted Wire.Request differs from the bound source request")
+    if receipt.get("wire_request") != expected:
+        reasons.append("wrong request: Receipt indices do not name the actual bound request declaration")
+    if receipt.get("indices_checked") is not True or receipt.get("proof_type_matches") is not True:
+        reasons.append("proof type mismatch: Resolved/Evaluated/Receipt indices were not checked")
+    registered = receipt.get("registered_property")
+    expected_identifier = {key: (request.get("property") or {}).get(key) for key in ("name", "version")}
+    if registered != expected_identifier:
+        reasons.append("wrong registered property: actual Resolved export differs from the request")
+    checked_consumer = receipt.get("capability_consumer")
+    comparisons = receipt.get("registry_checks") or {}
+    canonical = (receipt.get("canonical_registry") is True and
+                 all(comparisons.get(key) is True for key in
+                     ("lookup", "property_definition", "property_export", "model_export")))
+    builtin = expected_identifier["name"] in {"soundness", "knowledge"}
+    recognized = canonical and checked_consumer == f"{expected_identifier['name']}@{expected_identifier['version']}"
+    if builtin and not recognized:
+        reasons.append("unrecognized property/model registry for a built-in security request")
+    quantity = (request.get("quantity") or {}).get("kind")
+    capabilities = receipt.get("exported_capabilities") or []
+    if request.get("capabilities") and not recognized:
+        reasons.append("requested capabilities have no recognized checked consumer")
+    if capabilities and not (recognized and checked_consumer == "soundness@0" and quantity == "charged"):
+        reasons.append("unrecognized or unsupported capability export")
+    if recognized:
+        if receipt.get("quantity_kind") != quantity:
+            reasons.append("wrong quantity: evaluated typed arguments differ from the wire quantity")
+        if quantity == "charged" and "capabilities.charged_reduction@0" not in capabilities:
+            reasons.append("missing charged reduction capability in the actual evaluated receipt")
+        if quantity == "scalar" and "capabilities.charged_reduction@0" in capabilities:
+            reasons.append("scalar request cannot export a charged reduction without a charged meaning")
+        coverage = receipt.get("application_coverage") or {}
+        if coverage.get("checked") is not True:
+            reasons.append("application coverage is not checked against the actual designated request binder/model")
+        mode = coverage.get("mode")
+        if mode not in {"fixed-statement", "parameter", "fixed"}:
+            reasons.append("unrecognized application coverage mode")
+        if mode in {"parameter", "fixed"} and not all(coverage.get(key) is True for key in
+                ("context_matches", "reference_matches", "model_value_matches")):
+            reasons.append("application coverage context/reference/value comparison failed")
+        if mode == "parameter" and (coverage.get("value_is_binder") is not True or
+                                     not coverage.get("designated_binder")):
+            reasons.append("parameter application does not equal the designated free request binder")
+        if mode == "fixed" and (not isinstance(coverage.get("fixed_value"), str) or
+                                coverage.get("designated_binder") is not None):
+            reasons.append("fixed application scope is not concrete or narrows a designated free request binder")
+    for capability in request.get("capabilities") or []:
+        key = f"{capability.get('name')}@{capability.get('version')}"
+        if key not in capabilities:
+            reasons.append(f"missing requested capability: {key}")
+    typed_subject = receipt.get("subject") or {}
+    if expected_identifier["name"] in {"soundness", "knowledge"} and not typed_subject.get("artifacts_head"):
+        reasons.append("missing actual typed security subject artifact identity")
+    admission = receipt.get("admission") or {}
+    if typed_subject or admission.get("security_subject") is True or detail.get("type_head") == ADMITTED_RECEIPT_TYPE:
+        if admission.get("security_subject") is not True or admission.get("associated") is not True:
+            reasons.append("missing typed security model admission association")
+        if admission.get("subject_checked") is not True:
+            reasons.append("actual security Subject.check did not admit this request/target/acceptance")
+        if admission.get("model_status") != "admitted":
+            reasons.append(f"actual security model resolution is {admission.get('model_status', 'unchecked')}")
+        if detail.get("type_head") == ADMITTED_RECEIPT_TYPE and admission.get("certificate_checked") is not True:
+            reasons.append("typed security admission certificate does not match the actual receipt indices")
+    for current, origin in ((record, "receipt"), (request_record, "request")):
+        if not current:
+            continue
+        reasons += binder_reasons(current, origin)
+        found, omitted = telescope(current, registry, origin)
+        assumptions += found
+        reasons += omitted
+        reasons += declaration(records, current["name"], origin)[1]
+    # Optional provenance attributes a method; it cannot add assumptions or
+    # restrict which kernel-checked proof establishes the fixed meaning.
+    route, attribution = receipt_attribution(receipt)
+    closure = receipt.get("dependencies") or []
+    # Actual axioms and provider identities remain authoritative. Unsupplied
+    # transitive function telescopes are not remaining caller premises.
+    for item in closure:
+        current = records.get(item.get("name"))
+        if current:
+            reasons += declaration(records, current["name"], "dependency")[1]
+    # Independently reconstructed typed stage goals, never caller-selected
+    # labels, determine the interpreted endpoint's required links.
+    links = receipt.get("required_links") or []
+    identifiers = [link.get("identifier") for link in links]
+    if len(identifiers) != len(set(identifiers)):
+        reasons.append("ambiguous registered obligation identifiers")
+    for link in links:
+        if link.get("proved") is not True:
+            reasons.append(f"unproved registered obligation: {link.get('identifier')}")
+    required = STAGE_LINKS.get((request.get("subject") or {}).get("stage"))
+    if required is None:
+        reasons.append("unknown request stage")
+        required = ()
+    stage_facts = receipt.get("stage_links") or {}
+    recognized = stage_facts.get("recognized_subject") is True
+    if required and not recognized:
+        reasons.append("unrecognized actual typed compiled subject: stage obligations were not reconstructed")
+    if recognized and stage_facts.get("stage") != (request.get("subject") or {}).get("stage"):
+        reasons.append("wrong interpreted stage: typed subject differs from the request")
+    expected_links = stage_facts.get("obligations") or []
+    if recognized and tuple(link.get("identifier") for link in expected_links) != required:
+        reasons.append("incomplete checked stage obligations: emitted coverage differs from the interpreted endpoint")
+    for identifier in required:
+        expected = [link for link in expected_links if link.get("identifier") == identifier]
+        if not recognized or len(expected) != 1:
+            reasons.append(f"missing required interpreted-stage link: {identifier}")
+            continue
+        matches = expected[0].get("matches") or []
+        matching = ([link for link in links if link.get("index") == matches[0].get("index") and
+                     link.get("identifier") == identifier] if len(matches) == 1 else [])
+        if len(matching) != 1 or matching[0].get("proved") is not True:
+            reasons.append(f"missing required interpreted-stage link: {identifier}")
+        elif matches[0].get("goal_defeq") is not True or matches[0].get("subject_matches") is not True:
+            reasons.append(f"wrong actual subject or goal for interpreted-stage link: {identifier}")
+        else:
+            discharged.append({"id": identifier, "category": "stage-link", "schema": expected[0].get("goal_head"),
+                "statement": expected[0].get("goal"), "instantiated": matching[0].get("goal"),
+                "discharge": "proved", "source": "kernel comparison with actual Subject.stageLinks",
+                "goal_identity": expected[0].get("goal_identity"), "context": expected[0].get("context")})
+    assumptions.append({"id": "source.correspondence", "category": "trusted-link",
+                        "schema": None, "statement": "Source-to-IR correspondence remains unproved",
+                        "instantiated": None, "discharge": "assumed", "source": "IR-relative milestone"})
+    return {**receipt, "root_route": route, "attribution_diagnostics": attribution}, assumptions, discharged, reasons
+
+
+def requested_claim(item, mappings, records, registry, modules, evidence, checks, connected_reasons,
+                    environment, environment_reasons, reused_records):
+    request = item.get("request") or {}
+    reasons = list(connected_reasons) + list(environment_reasons)
+    digest = data_digest(request)
+    node = (item.get("attachment") or {}).get("node")
+    if item.get("request_digest") != digest:
+        reasons.append("wrong request digest: bound source request bytes changed")
+    candidates = [mapping for mapping in mappings if mapping.get("node") == node]
+    if len(candidates) != 1:
+        reasons.append("missing or ambiguous request/receipt source-node association")
+    mapping = candidates[0] if len(candidates) == 1 else {}
+    if mapping and mapping.get("request_digest") != digest:
+        reasons.append("wrong request digest: receipt association is stale")
+    if reused_records is not None:
+        reasons.append(reused_reason(reused_records))
+    subject = request.get("subject") or {}
+    artifacts = (evidence or {}).get("artifacts") or {}
+    # Pipeline artifact keys are stable byte roles, not claim semantics.
+    unit_key = "interactive_export" if subject.get("stage") == "interactive" else "original_export"
+    if subject.get("unit") != artifacts.get(unit_key):
+        reasons.append("mismatched artifact: request unit is not the admitted original export")
+    expected_roles = ({"constructed-participant"} if subject.get("stage") == "compiled-ideal" else
+                      {"constructed-participant", "verifier-program"} if subject.get("stage") == "executable-bytes"
+                      else set())
+    supplied = subject.get("artifacts") or []
+    if len(supplied) != len(expected_roles) or {row.get("role") for row in supplied} != expected_roles:
+        reasons.append("mismatched artifact: request stage has the wrong artifact roles")
+    for artifact in supplied:
+        if artifact.get("digest") != artifacts.get(ARTIFACT_ROLES.get(artifact.get("role"))):
+            reasons.append(f"mismatched artifact: request {artifact.get('role')} differs from pipeline bytes")
+    bound_source = (evidence or {}).get("source_claims") or {}
+    bound_entries = bound_source.get("entries", [bound_source.get("entry")])
+    if not isinstance(bound_entries, list) or subject.get("entry") not in bound_entries:
+        reasons.append("wrong subject: source request Entry differs from the admitted exports")
+    if checks["outcome"] != "accepted":
+        reasons.append("pipeline validation has not accepted this subject")
+    receipt, assumptions, discharged = {}, [], []
+    receipt_record = records.get(mapping.get("receipt_declaration"))
+    if receipt_record:
+        reasons += receipt_join(mapping, records, modules, evidence)
+        receipt, assumptions, discharged, audit_reasons = audit_receipt(
+            receipt_record, records.get(mapping.get("request_declaration")), request, registry, records, modules)
+        reasons += audit_reasons
+        typed_subject = receipt.get("subject") or {}
+        if typed_subject:
+            for key, artifact_role in (("original_source", "source"),
+                                       ("participant_source", "source"),
+                                       ("participant_candidate", "constructed_candidate")):
+                if typed_subject.get(key) != artifacts.get(artifact_role):
+                    reasons.append(f"mismatched artifact: actual typed subject {key} differs from pipeline")
+            target_protocol = (request.get("target") or {}).get("protocol")
+            if typed_subject.get("original_entry") != target_protocol:
+                reasons.append("wrong target protocol: request differs from actual admitted snapshot")
+            artifact_record = records.get(typed_subject.get("artifacts_head"))
+            if not artifact_record or not module_attached(artifact_record["module"], modules):
+                reasons.append("mismatched artifact: actual typed subject artifacts are outside the regenerated modules")
+    else:
+        reasons.append("no emitted typed receipt proves this request")
+    dependencies, dependency_reasons = semantic_dependencies(receipt.get("dependencies") or [], records, environment)
+    if receipt:
+        reasons += dependency_reasons
+    expected_dependency_digest = mapping.get("semantic_dependency_digest")
+    if expected_dependency_digest is not None and expected_dependency_digest != dependencies["digest"]:
+        reasons.append("stale semantic dependency digest: referenced definition bodies or environment changed")
+    obligations = [{"identity": digest, "typed_statement_digest": data_digest(receipt.get("proposition")),
+                    "context_digest": data_digest(receipt.get("context") or []),
+                    "parameter_telescope": receipt.get("context") or [], "expected_responsibility_layer": "P",
+                    "root_route": receipt.get("root_route") or "open", "discharger": receipt.get("discharger"),
+                    "attachment": item.get("attachment")}]
+    for identifier in STAGE_LINKS.get(subject.get("stage"), ()):
+        proved = next((row for row in discharged if row["id"] == identifier), None)
+        expected_link = next((row for row in (receipt.get("stage_links") or {}).get("obligations", [])
+                              if row.get("identifier") == identifier), {})
+        obligations.append({"identity": identifier, "goal": expected_link.get("goal"),
+                            "goal_identity": expected_link.get("goal_identity"),
+                            "typed_statement_digest": data_digest(expected_link.get("goal")),
+                            "context_digest": data_digest(expected_link.get("context")),
+                            "expected_responsibility_layer": expected_link.get("expected_responsibility_layer"),
+                            "root_route": "theorem" if proved else "open",
+                            "status": "certified" if proved else "open"})
+    stage_identifiers = set(STAGE_LINKS.get(subject.get("stage"), ()))
+    for link in receipt.get("required_links") or []:
+        if link.get("identifier") in stage_identifiers:
+            continue
+        obligations.append({"identity": link.get("identifier"), "goal": link.get("goal"),
+            "typed_statement_digest": data_digest(link.get("goal")),
+            "context_digest": data_digest(link.get("context")),
+            "expected_responsibility_layer": link.get("expected_responsibility_layer"),
+            "root_route": "theorem" if link.get("proved") else "open",
+            "status": "certified" if link.get("proved") else "open"})
+    resolution = mapping.get("resolution") or {}
+    definitions = resolution.get("definitions")
+    missing = (resolution.get("status") == "incomplete" and
+               resolution.get("kind") in (None, "registered-undefined") and
+               isinstance(definitions, list) and bool(definitions) and
+               all(isinstance(item, str) and item.strip() for item in definitions))
+    if missing and receipt:
+        reasons.append("inconsistent resolution: a typed receipt accompanies missing definitions")
+    # Incompleteness is a diagnostic, never positive evidence. A receipt and a
+    # frontend missing-definition claim are inconsistent and cannot certify.
+    state = "incomplete" if missing and not receipt else "open" if reasons else "certified"
+    obligations[0]["status"] = state
+    return {"request": request, "request_digest": digest, "attachment": item.get("attachment"),
+            "property": (request.get("property") or {}).get("name"),
+            "covered_endpoint": (receipt.get("stage_links") or {}).get("covered_endpoint") or subject.get("stage"),
+            "requested_stage": subject.get("stage"), "statement": None,
+            "status": state, "outcome": "established" if state == "certified" else "unresolved",
+            "product": "certified_verifier", "scope": "ir-relative", "native_closure": "open",
+            "validation": checks["outcome"], "resolution": resolution, "attempts": mapping.get("attempts") or [],
+            "method_plan": item.get("method"), "receipt": receipt_record and receipt_record["name"],
+            "root_route": receipt.get("root_route"), "discharger": receipt.get("discharger"),
+            "attribution_diagnostics": receipt.get("attribution_diagnostics") or [],
+            "method_version": ((receipt.get("provenance") or {}).get("method")
+                               if isinstance(receipt.get("provenance"), dict) else None),
+            "exported_capabilities": receipt.get("exported_capabilities") or [],
+            "application_coverage": receipt.get("application_coverage"),
+            "actual_dependency_declarations": receipt.get("proof_dependencies") or [],
+            "actual_receipt_dependencies": receipt.get("dependencies") or [], "obligations": obligations,
+            "checked_correspondences": [row for row in discharged if row.get("category") == "stage-link"],
+            "assumptions_by_category": {category: [row for row in assumptions if row["category"] == category]
+                                        for category in sorted({row["category"] for row in assumptions})},
+            "semantic_dependencies": dependencies, "assumptions": assumptions, "discharged": discharged,
+            "bound": {"property": receipt.get("proposition")}, "reasons": list(dict.fromkeys(reasons)),
+            "matching": {"kernel": (["registered resolution", "evaluated meaning", "receipt proof type"]
+                                    if receipt.get("indices_checked") is True else []),
+                         "frontend": ["source request association", "artifact byte digests", "source site labels"]}}
+
+
+def scope_reasons(source, scope, proof_entry=None):
+    """Validate whole-Entry selection without selecting individual properties."""
+    if not isinstance(scope, dict):
+        return ["missing source claim Entry scope"]
+    entries = scope.get("entries")
+    if (not isinstance(entries, list) or not entries or
+            any(not isinstance(entry, str) or not entry for entry in entries) or
+            len(entries) != len(set(entries))):
+        return ["invalid source claim Entry scope"]
+    reasons = []
+    if scope.get("selection") not in ("proof-entry", "explicit"):
+        reasons.append("unknown source claim Entry selection")
+    if entries != source.get("entries", [source.get("entry")]):
+        reasons.append("source claim Entry scope differs from bound Entries")
+    if scope.get("selection") == "proof-entry" and entries != [proof_entry]:
+        reasons.append("default source claim scope differs from the manifest proof Entry")
+    if any((item.get("request", {}).get("subject") or {}).get("entry") not in entries
+           for item in source.get("claims", [])):
+        reasons.append("source request Entry is outside the selected scope")
+    return reasons
+
+
+def report_claim_scope(source, mappings, records, registry, modules, evidence, checks, reasons,
+                       environment, environment_reasons, reused_records):
+    """Use the same receipt audit for selected Entries and visible other trials."""
+    reasons = list(reasons)
+    claims = [requested_claim(item, mappings, records, registry, modules, evidence, checks,
+                              reasons, environment, environment_reasons, reused_records)
+              for item in source.get("claims", [])]
+    nodes = [canonical((item.get("attachment") or {}).get("node")) for item in source.get("claims", [])]
+    if len(nodes) != len(set(nodes)):
+        reasons.append("duplicate bound source claim node")
+    known_nodes = set(nodes)
+    if any(canonical(mapping.get("node")) not in known_nodes for mapping in mappings):
+        reasons.append("receipt association names a source node absent from this scope")
+    outcome = "established" if claims and not reasons and all(item["status"] == "certified" for item in claims) else "unresolved"
+    state = ("no-claim" if not claims and source.get("format") == BOUND_CLAIMS_FORMAT else
+             "certified" if outcome == "established" else
+             "incomplete" if claims and all(item["status"] == "incomplete" for item in claims) else "open")
+    return {"claims": claims, "outcome": outcome, "status": state, "reasons": reasons}
+
+
+def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+    """Build reports only from source requests and checked emitted receipts."""
+    manifest = load_manifest(manifest_path)
+    evidence = load_evidence(evidence_directory, manifest["name"])
+    modules = attached(manifest)
+    connected, connected_reasons = connection(manifest, manifest_path, modules, evidence)
+    checks = validation(evidence)
+    reasons = []
+    try:
+        entries, endpoints = records.registry()
+        registry = Registry(entries, endpoints)
+    except ValueError as error:
+        registry = Registry([], [])
+        reasons.append(str(error))
+    environment, environment_reasons = verified_environment(records)
+    if evidence is not None and evidence.get("format") != EVIDENCE_FORMAT:
+        reasons.append("unsupported pipeline evidence format")
+    if evidence is not None and evidence.get("manifest_sha256") != sha256(manifest_path):
+        reasons.append("pipeline evidence lacks this exact manifest identity")
+    source = (evidence or {}).get("source_claims") or {}
+    if source.get("format") != BOUND_CLAIMS_FORMAT:
+        reasons.append("no bound source claim export was produced")
+    scope = (evidence or {}).get("source_claim_scope")
+    common_reasons = reasons + connected_reasons
+    selected_reasons = common_reasons + scope_reasons(source, scope, (manifest.get("entries") or {}).get("proof"))
+    selected = report_claim_scope(source, (evidence or {}).get("claim_receipts") or [], records, registry,
+                                  modules, evidence, checks, selected_reasons, environment,
+                                  environment_reasons, reused_records)
+    trials = []
+    trial_entries = set()
+    selected_entries = scope.get("entries", []) if isinstance(scope, dict) else []
+    for trial in (evidence or {}).get("source_claim_trials") or []:
+        entry = trial.get("entry")
+        bound = {**source, "entry": entry, "entries": [entry], "claims": trial.get("claims") or []}
+        trial_evidence = {**(evidence or {}), "source_claims": bound}
+        trial_scope = {"entries": [entry], "selection": "explicit"}
+        trial_reasons = scope_reasons(bound, trial_scope)
+        if entry in trial_entries or entry in selected_entries:
+            trial_reasons.append("duplicate or selected Entry in source claim trials")
+        trial_entries.add(entry)
+        mappings = trial.get("claim_receipts") or []
+        available = all(records.get(mapping.get("request_declaration")) and
+                        (not mapping.get("receipt_declaration") or records.get(mapping["receipt_declaration"]))
+                        for mapping in mappings) and len(mappings) == len(bound["claims"])
+        audited = report_claim_scope(bound, mappings, records, registry, modules, trial_evidence, checks,
+                                     common_reasons + trial_reasons, environment, environment_reasons,
+                                     reused_records)
+        if not available:
+            audited["status"], audited["outcome"] = "open", "unresolved"
+            audited["reasons"].append("trial declaration records unavailable; trial is unaudited")
+            for claim in audited["claims"]:
+                claim["status"], claim["outcome"] = "open", "unresolved"
+                claim["reasons"].append("trial declaration records unavailable; trial is unaudited")
+        trials.append({"entry": entry, "source_claim_scope": trial_scope,
+                       "bound_claims": bound["claims"], "claim_receipts": mappings,
+                       "audit_status": "checked" if available else "unaudited", **audited})
+    try:
+        relative = str(Path(manifest_path).resolve().relative_to(ROOT))
+    except ValueError:
+        relative = str(manifest_path)
+    return {"format": FORMAT, "subject": manifest["name"], **selected,
+            "product": "certified_verifier", "scope": "ir-relative", "native_closure": "open",
+            "source_claim_scope": scope, "source_claim_trials": trials,
+            "manifest": {"path": relative, "sha256": sha256(manifest_path),
+                "schema": manifest.get("schema"), "entries": manifest.get("entries") or {}},
+            "artifacts": {"attached": modules, "connected": connected}, "checker": environment,
+            "context": context(manifest, ledger, records, registry),
+            "allowed_axioms": list(ALLOWED_AXIOMS)}

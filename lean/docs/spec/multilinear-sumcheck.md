@@ -144,7 +144,7 @@ not supply those agreements. A malicious-prover security consumer should bind
 the verifier's fixed statement, rather than assume an adversary's table agrees.
 
 The pair algebra accepts arbitrary pair values. There is no process constructor
-that silently makes received values equal to sent values. A `PIR.Proc`
+that silently makes received values equal to sent values. A `PIR.Process`
 contract for the source must preserve its order: receive both endpoints, guard the
 boundary, draw `cv`, deliver a separate `cp`, and update each role locally.
 The actual lowering uses two ordered scalar receives for the pair. Keep both

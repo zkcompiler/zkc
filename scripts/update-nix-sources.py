@@ -52,7 +52,7 @@ def main():
     args = parser.parse_args()
     root = args.root
     packages = {}
-    for name in ("lean/lake-manifest.json", "lean/integrations/arklib/lake-manifest.json",
+    for name in ("lean/lake-manifest.json", "lean/security/lake-manifest.json", "lean/integrations/arklib/lake-manifest.json",
                  "lean/integrations/clean/lake-manifest.json"):
         for package in json.loads((root / name).read_text())["packages"]:
             if package["type"] == "git":

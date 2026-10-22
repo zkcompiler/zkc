@@ -19,12 +19,14 @@ from support.compatibility import prepare
 import subprocess
 
 from support.lean_headers import HeaderParser
+from support.packages import PACKAGES, selected as select_packages
 
 
 ROOT = Path(__file__).resolve().parent
 # Optional packages: owned source directories and a standalone client, if any.
 INTEGRATIONS = {
-    "arklib": (("ZkcSecurity", "TestsSecurity"), "clients/ArkLib.lean"),
+    "security": (("ZkcSecurity", "TestsSecurity"), "clients/Security.lean"),
+    "arklib": (("ZkcArkLib", "TestsArkLib"), "clients/ArkLib.lean"),
     "clean": (("ZkcClean", "TestsClean"), None),
 }
 
@@ -76,6 +78,7 @@ def collect(headers, seeds, search):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--with-security", action="store_true")
     selection.add_argument("--with-arklib", action="store_true")
     selection.add_argument("--with-clean", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -87,11 +90,11 @@ def main():
     except support.lake.Unavailable as absent:
         raise SystemExit(str(absent)) from None
     lake = str(Path(lake).absolute())
-    integration = "arklib" if args.with_arklib else "clean" if args.with_clean else None
+    integration = "arklib" if args.with_arklib else "clean" if args.with_clean else "security" if args.with_security else None
     work = ROOT
     raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
-    if integration:
-        work = ROOT / "integrations" / integration
+    for name in select_packages([integration] if integration else [])[1:]:
+        work = PACKAGES[name][0]
         share_dependencies(ROOT, work)
         raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
         prepare(work)
@@ -99,15 +102,16 @@ def main():
     seeds = [ROOT / "Zkc.lean", ROOT / "clients/Main.lean"]
     for directory in ("Zkc", "Tests", "ZkcExamples", "ZkcTools"):
         seeds.extend((ROOT / directory).rglob("*.lean"))
-    if integration:
-        directories, client = INTEGRATIONS[integration]
+    for name in select_packages([integration] if integration else [])[1:]:
+        directory = PACKAGES[name][0]
+        directories, client = INTEGRATIONS[name]
         if client:
             seeds.append(ROOT / client)
-        for directory in directories:
-            entry = work / f"{directory}.lean"
+        for family in directories:
+            entry = directory / f"{family}.lean"
             if entry.is_file():
                 seeds.append(entry)
-            seeds.extend((work / directory).rglob("*.lean"))
+            seeds.extend((directory / family).rglob("*.lean"))
     with HeaderParser(root=work, lake=lake) as headers:
         roots, sources = collect(headers, seeds, search)
     # Never turn an empty selection into Mathlib's implicit "download all".
@@ -119,7 +123,7 @@ def main():
              if not Path(path).is_file() or hashlib.sha256(Path(path).read_bytes()).hexdigest() != digest]
     record = {
         "status": "pass" if exit_code == 0 and not drift else "fail",
-        "with_arklib": args.with_arklib, "with_clean": args.with_clean, "dry_run": args.dry_run,
+        "with_security": args.with_security or args.with_arklib, "with_arklib": args.with_arklib, "with_clean": args.with_clean, "dry_run": args.dry_run,
         "command": command, "mathlib_roots": roots, "parsed_sources": sources,
         "source_drift": drift, "exit_code": exit_code,
         "scope": "cache root selection only; builds and proof audits remain separate",

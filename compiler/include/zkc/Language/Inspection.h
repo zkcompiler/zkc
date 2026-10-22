@@ -25,6 +25,15 @@ llvm::Expected<std::string> inspectDeclarations(const CheckedProject &,
 /// output by limits.apiInspectionBytes. Failure is source.limit with no output.
 llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                              const Limits & = {});
+/// Version-0 wire claims for exactly this Entry. Registry definitions, budget
+/// binding and request meaning are resolved by Lean, independently of methods.
+/// This diagnostic view changes neither native interfaces nor program identity.
+llvm::Expected<std::string> inspectSourceClaims(const ClosedEntry &,
+                                                const Limits & = {});
+/// Strict comparison with the current checked export. Unknown/duplicate fields,
+/// noncanonical numbers and changed attachments, requests or Entry are refused.
+llvm::Error checkSourceClaims(const ClosedEntry &, llvm::StringRef,
+                              const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

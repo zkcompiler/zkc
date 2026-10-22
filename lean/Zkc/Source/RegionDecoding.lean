@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Source.Structure
 public import Zkc.Source.ContextDecoding
 
@@ -276,3 +279,10 @@ theorem RawRegions.erase_of_elaborate [DecidableEq dialect.Ty]
 termination_by sizeOf raw
 
 end Zkc.Source
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.RawRegion.operations
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.RawRegions.operations

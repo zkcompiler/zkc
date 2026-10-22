@@ -10,6 +10,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | [Definitions and types](definitions.md) | Capture, names, static terms, mathematics, permissions, callables and bounds |
 | [Protocol bodies and relations](protocols.md) | Ordered control, availability, services, composition, repetition, completion and specification clauses |
 | [Entry declarations](entries.md) | Closed jobs, participants, construction, selected results and setup associations |
+| [Source claims](claims.md) | Versioned wire requests, Entry/target/site resolution and optional Lean handoff |
 | [Operation bindings](bindings.md) | Native nominal types, operation applications and physical selection |
 | [Translation](translation.md) | MLIR emission, independent source comparison and the immutable checked original |
 

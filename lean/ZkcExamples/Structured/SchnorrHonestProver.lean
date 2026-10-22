@@ -5,7 +5,7 @@ public import ZkcExamples.Structured.SchnorrInteractive
 @[expose] public section
 
 /-! Observation boundary for the checked original-stage prover.
-Messages are extracted from `Proc.run`, never supplied by the algebraic formula.
+Messages are extracted from `Process.run`, never supplied by the algebraic formula.
 The fixed replies describe one successful honest profile, not a provider law.
 -/
 namespace ZkcExamples.Structured.SchnorrHonestProver
@@ -90,7 +90,7 @@ theorem execution_eq (base key : G) (secret nonce challenge : F) (service : Nat)
          .send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
            (nonce + challenge * secret)]⟩ := by
   rw [execution, SchnorrInteractive.prover_equation]
-  simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
   rfl
 
 theorem extract_execution (base key : G) (secret nonce challenge : F) (service : Nat) :
@@ -172,7 +172,7 @@ theorem nonce_stopped (base key : G) (secret challenge : F) (service : Nat) (why
         (replyHandler service (.stopped why) (.returned challenge)) () =
       ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ := by
   rw [SchnorrInteractive.prover_equation]
-  simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
 
 /-- A stopped receive retains the commitment and receive request, with no response. -/
 theorem challenge_stopped (base key : G) (secret nonce : F) (service : Nat) (why : PIR.Stop) :
@@ -183,7 +183,7 @@ theorem challenge_stopped (base key : G) (secret nonce : F) (service : Nat) (why
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1]⟩ := by
   rw [SchnorrInteractive.prover_equation]
-  simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
   rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

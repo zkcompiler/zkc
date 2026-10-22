@@ -118,7 +118,7 @@ the absorbed history before each query and the query's occurrence. Returns the
 outcome and the unread proof suffix. -/
 def transform (absorb : Interface I E P Raw)
     (oracle : (preceding : List E) → (event : E) → m (Raw event)) :
-    PIR.Proc I A → List E → List P → m (PIR.Outcome A × List P)
+    PIR.Process I A → List E → List P → m (PIR.Outcome A × List P)
   | .done value, _, proof => pure (.returned value, proof)
   | .halt stop, _, proof => pure (.stopped stop, proof)
   | .call operation next, history, proof =>
@@ -147,7 +147,7 @@ variable (absorb : Interface I E P Raw) (oracle : (preceding : List E) → (even
 @[simp] theorem transform_halt (stop : PIR.Stop) (history : List E) (proof : List P) :
     transform (A := A) absorb oracle (.halt stop) history proof = pure (.stopped stop, proof) := rfl
 
-theorem transform_receive {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem transform_receive {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : P → E} {recover : E → Option (I.Reply operation)}
     (absorbed : absorb operation = .receive event recover) (history : List E) (message : P)
     (rest : List P) :
@@ -157,20 +157,20 @@ theorem transform_receive {operation : I.Op} {next : I.Reply operation → PIR.P
       | none => pure (.stopped .refused, message :: rest) := by
   simp only [transform, absorbed]
 
-theorem transform_receive_nil {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem transform_receive_nil {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : P → E} {recover : E → Option (I.Reply operation)}
     (absorbed : absorb operation = .receive event recover) (history : List E) :
     transform absorb oracle (.call operation next) history [] = pure (.stopped .refused, []) := by
   simp only [transform, absorbed]
 
-theorem transform_send {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem transform_send {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : E} {value : I.Reply operation} (absorbed : absorb operation = .send event value)
     (history : List E) (proof : List P) :
     transform absorb oracle (.call operation next) history proof =
       transform absorb oracle (next value) (history ++ [event]) proof := by
   simp only [transform, absorbed]
 
-theorem transform_query {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem transform_query {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     {event : E} {decode : Raw event → Option (I.Reply operation)}
     (absorbed : absorb operation = .query event decode) (history : List E) (proof : List P) :
     transform absorb oracle (.call operation next) history proof =
@@ -180,7 +180,7 @@ theorem transform_query {operation : I.Op} {next : I.Reply operation → PIR.Pro
         | none => pure (.stopped .exhausted, proof) := by
   simp only [transform, absorbed]
 
-theorem transform_refuse {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
+theorem transform_refuse {operation : I.Op} {next : I.Reply operation → PIR.Process I A}
     (absorbed : absorb operation = .refuse) (history : List E) (proof : List P) :
     transform absorb oracle (.call operation next) history proof =
       pure (.stopped .refused, proof) := by
@@ -191,7 +191,7 @@ is the transform over the original interface with `map` applied to the oracle's
 answers. -/
 theorem transform_mapRaw [LawfulMonad m] {Raw' : E → Type} (map : (event : E) → Raw' event → Raw event)
     (oracle' : (preceding : List E) → (event : E) → m (Raw' event)) :
-    ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (history : List E) (proof : List P),
       transform (absorb.mapRaw map) oracle' process history proof =
         transform absorb (fun preceding event => map event <$> oracle' preceding event) process
           history proof := by
@@ -243,40 +243,40 @@ theorem accepted_mapOutcome {A B : Type} (f : A → B) (accepts : B → Prop) :
 
 /-- A pure final projection commutes with the transform. -/
 theorem transform_bind_done [LawfulMonad m] {B : Type} (f : A → B) :
-    ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
+    ∀ (process : PIR.Process I A) (history : List E) (proof : List P),
       transform absorb oracle (process.bind fun value => .done (f value)) history proof =
         (fun result => (mapOutcome f result.1, result.2)) <$>
           transform absorb oracle process history proof := by
   intro process
   induction process with
-  | done value => intro history proof; simp [PIR.Proc.bind, mapOutcome]
-  | halt stop => intro history proof; simp [PIR.Proc.bind, mapOutcome]
+  | done value => intro history proof; simp [PIR.Process.bind, mapOutcome]
+  | halt stop => intro history proof; simp [PIR.Process.bind, mapOutcome]
   | call operation next ih =>
       intro history proof
       rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
         ⟨event, decode⟩ | _
       · cases proof with
         | nil =>
-            simp only [PIR.Proc.bind]
+            simp only [PIR.Process.bind]
             rw [transform_receive_nil _ _ absorbed, transform_receive_nil _ _ absorbed]
             simp [mapOutcome]
         | cons message rest =>
-            simp only [PIR.Proc.bind]
+            simp only [PIR.Process.bind]
             rw [transform_receive _ _ absorbed, transform_receive _ _ absorbed]
             cases recover (event message) with
             | none => simp [mapOutcome]
             | some value => exact ih value _ _
-      · simp only [PIR.Proc.bind]
+      · simp only [PIR.Process.bind]
         rw [transform_send _ _ absorbed, transform_send _ _ absorbed]
         exact ih value _ _
-      · simp only [PIR.Proc.bind]
+      · simp only [PIR.Process.bind]
         rw [transform_query _ _ absorbed, transform_query _ _ absorbed, map_bind]
         congr 1
         funext raw
         cases decode raw with
         | none => simp [mapOutcome]
         | some value => exact ih value _ _
-      · simp only [PIR.Proc.bind]
+      · simp only [PIR.Process.bind]
         rw [transform_refuse _ _ absorbed, transform_refuse _ _ absorbed]
         simp [mapOutcome]
 

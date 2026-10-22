@@ -28,13 +28,14 @@ from support.compatibility import prepare
 HERE = Path(__file__).resolve().parent
 INTEGRATION = Path('integrations/arklib')
 CLEAN = Path('integrations/clean')
+SECURITY = Path('security')
 # The Clean producer's maintained output, consumed by the native integration tests.
 CLEAN_CONTROL = Path('../common/tests/fixtures/clean/air-control.json')
 
 
 
 
-def build_inputs(root, with_arklib=False, with_clean=False):
+def build_inputs(root, with_arklib=False, with_clean=False, with_security=False):
     files = [root / name for name in (
         'lakefile.toml', 'lake-manifest.json', 'lean-toolchain',
         'reproduce.py', 'Zkc.lean')]
@@ -45,14 +46,21 @@ def build_inputs(root, with_arklib=False, with_clean=False):
     for directory in ('Zkc', 'Tests', 'ZkcExamples', 'ZkcTools'):
         files.extend((root / directory).rglob('*.lean'))
     files.append(root / 'clients/Main.lean')
+    if with_security or with_arklib:
+        optional = root / SECURITY
+        files.append(root / 'clients/Security.lean')
+        files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
+        for directory in ('ZkcSecurity', 'TestsSecurity'):
+            files.extend((optional / directory).rglob('*.lean'))
     if with_arklib:
         files.append(root / 'clients/ArkLib.lean')
+        files.append(root / 'clients/UniformComposition.lean')
         optional = root / INTEGRATION
         # A declared dependency patch is present only while an upstream change is pending.
         files.extend(path for name in ('compatibility.json', 'compatibility.patch')
                      if (path := optional / name).is_file())
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcSecurity', 'TestsSecurity'):
+        for directory in ('ZkcArkLib', 'TestsArkLib'):
             files.extend((optional / directory).rglob('*.lean'))
     if with_clean:
         optional = root / CLEAN
@@ -103,7 +111,7 @@ def prepare_dependencies(work, caches, integrations=()):
         targets.mkdir(parents=True)
         for package in other['packages']:
             if package['type'] == 'path':
-                if package['name'] != 'zkc' or (optional / package['dir']).resolve() != work.resolve():
+                if package['name'] not in {'zkc', 'zkc_security'} or (optional / package['dir']).resolve() != (work if package['name'] == 'zkc' else work / SECURITY).resolve():
                     raise ValueError('unexpected integration path dependency')
                 continue
             name = package['name'].removeprefix('«').removesuffix('»')
@@ -164,9 +172,9 @@ def clean_control(lake, directory, expected, log_path, env):
             'expected': str(CLEAN_CONTROL), 'expected_sha256': support.lake.sha(expected)}
 
 
-def run_clients(lake, work, output, with_arklib, env):
+def run_clients(lake, work, output, with_arklib, env, with_security=False):
     subprocess.run(['python3', 'checks/check_clients.py', '--lake', lake, '--output', str(output),
-                    *(['--with-arklib'] if with_arklib else [])], cwd=work, env=env, check=False)
+                    *(['--with-arklib'] if with_arklib else ['--with-security'] if with_security else [])], cwd=work, env=env, check=False)
     receipt = output / 'result.json'
     return json.loads(receipt.read_text()) if receipt.is_file() else {'status': 'not-run'}
 
@@ -177,13 +185,13 @@ def run(args):
         raise ValueError('the independent output must be outside the formal package')
     output.mkdir(parents=True, exist_ok=False)
     work = output / 'lean'
-    inputs = build_inputs(HERE, args.with_arklib, args.with_clean)
+    inputs = build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security)
     for name in inputs:
         target = work / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(HERE / name, target)
     caches = [path.resolve() for path in [args.dependency_cache, *args.integration_dependency_cache] if path]
-    integrations = [path for path, chosen in ((INTEGRATION, args.with_arklib), (CLEAN, args.with_clean))
+    integrations = [path for path, chosen in ((SECURITY, args.with_security or args.with_arklib), (INTEGRATION, args.with_arklib), (CLEAN, args.with_clean))
                     if chosen]
     pins = prepare_dependencies(work, caches, integrations)
     options = [option for path in integrations for option in ('--integration', path.name)] or ['--main-only']
@@ -199,13 +207,18 @@ def run(args):
         raise ValueError(f'wrong Lean toolchain: {version}; expected {expected}')
     with (output / 'boundaries.json').open('w') as stream:
         subprocess.run(['python3', 'checks/check_library.py', '--lake', lake, *options], cwd=work, env=env, check=True, stdout=stream)
+    with (output / 'package-ownership.json').open('w') as stream:
+        subprocess.run(['python3', 'checks/check_package_ownership.py', '--lake', lake, *options], cwd=work, env=env, check=True, stdout=stream)
     subprocess.run(['python3', 'checks/audit_imports.py', *options], cwd=work, env=env, check=True)
     start = time.monotonic()
     runs = {'main': checked_build(lake, work, output / 'main-build.log', env,
             ['DEPENDENCY-AUDIT-PASS', 'CORE-AUDIT-PASS'])}
-    if args.with_arklib and runs['main']['status'] == 'pass':
-        runs['arklib'] = checked_build(lake, work / INTEGRATION, output / 'arklib-build.log', env,
+    if (args.with_security or args.with_arklib) and runs['main']['status'] == 'pass':
+        runs['security'] = checked_build(lake, work / SECURITY, output / 'security-build.log', env,
             ['DEPENDENCY-AUDIT-PASS', 'SECURITY-AUDIT-PASS'])
+    if args.with_arklib and runs.get('security', {}).get('status') == 'pass':
+        runs['arklib'] = checked_build(lake, work / INTEGRATION, output / 'arklib-build.log', env,
+            ['DEPENDENCY-AUDIT-PASS', 'ARKLIB-AUDIT-PASS'])
     control = {'status': 'not-run'}
     if args.with_clean and runs['main']['status'] == 'pass':
         runs['clean'] = checked_build(lake, work / CLEAN, output / 'clean-build.log', env,
@@ -215,14 +228,16 @@ def run(args):
             control = clean_control(lake, work / CLEAN, work / CLEAN_CONTROL, output / 'clean-control.log', env)
     clients = {'status': 'not-run'}
     if all(run['status'] == 'pass' for run in runs.values()):
-        clients = run_clients(lake, work, output / 'clients', args.with_arklib, env)
-    changed = (build_inputs(work, args.with_arklib, args.with_clean) != inputs
-               or build_inputs(HERE, args.with_arklib, args.with_clean) != inputs)
+        clients = run_clients(lake, work, output / 'clients', args.with_arklib, env, args.with_security)
+    changed = (build_inputs(work, args.with_arklib, args.with_clean, args.with_security) != inputs
+               or build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security) != inputs)
     passed = (all(run['status'] == 'pass' for run in runs.values()) and not changed
+              and (not (args.with_security or args.with_arklib) or 'security' in runs)
               and (not args.with_arklib or 'arklib' in runs) and clients['status'] == 'pass'
               and (not args.with_clean or control['status'] == 'pass'))
     record = {
         'format': 'zkc.formal-reproduction.v0', 'status': 'pass' if passed else 'fail',
+        'with_security': args.with_security or args.with_arklib,
         'with_arklib': args.with_arklib, 'with_clean': args.with_clean, 'source_drift': changed,
         'elapsed_seconds': round(time.monotonic() - start, 2),
         'lake_executable': lake,
@@ -251,6 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--dependency-cache', type=Path)
     parser.add_argument('--integration-dependency-cache', type=Path, action='append', default=[],
                         help='Git source cache of an optional package; repeat for each')
+    parser.add_argument('--with-security', action='store_true')
     parser.add_argument('--with-arklib', action='store_true')
     parser.add_argument('--with-clean', action='store_true')
     parser.add_argument('--output', type=Path, required=True)

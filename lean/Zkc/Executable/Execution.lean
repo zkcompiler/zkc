@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Executable.Program
 public import Zkc.Executable.Numerical
 public import Zkc.Construction.Semantics
@@ -811,3 +814,14 @@ def validate (binding : List UInt8) (acceptance : Nat) (data : List (Value F G))
 end Machine
 
 end Zkc.Executable
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.forK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.localStep
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.loopK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runK
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Executable.runStep

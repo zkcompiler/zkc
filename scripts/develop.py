@@ -45,7 +45,7 @@ def execute(args):
     elif args.operation == "lean":
         directory = ROOT / "lean"
         if args.deps != "main":
-            directory /= f"integrations/{args.deps}"
+            directory /= "security" if args.deps == "security" else f"integrations/{args.deps}"
             # Apply a declared dependency patch to its exact pinned source before building.
             run([sys.executable, ROOT / "lean/support/compatibility.py", directory])
         run(["lake", "build"], cwd=directory)
@@ -66,7 +66,7 @@ def main():
         if operation in {"configure", "compiler"}:
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
         if operation in {"fetch-lean", "lean"}:
-            command.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
+            command.add_argument("--deps", choices=["main", "security", "arklib", "clean"], default="main")
     args = parser.parse_args()
     validate_environment()
     if os.environ.get("CARGO_TARGET_DIR"):

@@ -46,13 +46,13 @@ structure Interpretation (language : Language) (interface : PIR.Signature) where
   Value : language.Ty → Type
   condition : Value language.condition → Bool
   operation : (op : language.Op) → Values Value (language.arguments op) →
-    PIR.Proc interface (Value (language.result op))
+    PIR.Process interface (Value (language.result op))
 
 variable {language : Language} {interface : PIR.Signature}
 
 def Program.denote (meaning : Interpretation language interface) {Γ ty}
     (program : Program language Γ ty) (env : Environment meaning.Value Γ) :
-    PIR.Proc interface (meaning.Value ty) :=
+    PIR.Process interface (meaning.Value ty) :=
   match program with
   | .ret v => .done (env v)
   | .stop reason => .halt reason

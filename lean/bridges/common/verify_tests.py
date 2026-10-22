@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from native_entry import native_run
+from native_entry import native_subject
 from contracts import label
 from verify import verify, read_json
 
@@ -63,10 +63,10 @@ def main():
     native = native.replace('claim:', 'target:').replace('== claim;', '== target;')
     source = args.output / 'alternative.zkc'
     source.write_text(native)
-    flags = ['--source-format=zkc', f'--module=alternative={source}', '--entry=alternative::Horner']
+    flags = ['--source-format=zkc', f'--module=alternative={source}', '--subject=alternative::EvaluationVerifier']
     def execute(command):
         return subprocess.check_output(list(map(str, command)), cwd=ROOT, text=True, timeout=30)
-    mlir, interface = native_run(execute, args.compiler, flags)
+    mlir, interface_text, interface = native_subject(execute, args.compiler, flags)
     assert interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()
     path = args.output / 'alternative.mlir'
     path.write_text(mlir)

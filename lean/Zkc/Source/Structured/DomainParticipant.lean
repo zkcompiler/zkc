@@ -66,8 +66,8 @@ theorem observedSitesOn_forgetSitesOn :
 
 theorem observeActionOn_forgetSitesOn (action : (participantInterfaceOn carriers).Op) :
     (observeActionOn action).interpret forgetSitesOn = participantActionsOn carriers action := by
-  simp only [observeActionOn, forgetSitesOn, participantActionsOn, PIR.Proc.interpret,
-    PIR.Proc.bind_done]
+  simp only [observeActionOn, forgetSitesOn, participantActionsOn, PIR.Process.interpret,
+    PIR.Process.bind_done]
 
 end Carriers
 
@@ -99,7 +99,7 @@ def denoteRepeatOn {carriers : Carriers} {I : PIR.Signature}
     (captures : Values (Component carriers.Value) spec.captures)
     (body : RegionFunction (Component carriers.Value) I
       (.index :: (spec.state ++ spec.captures), spec.state)) :
-    PIR.Proc I (Values (Component carriers.Value) spec.state) :=
+    PIR.Process I (Values (Component carriers.Value) spec.state) :=
   if (spec.roles.map context.roles).contains self then
     match count with
     | none => .halt .incomplete
@@ -121,7 +121,7 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
     (callbacks : Values (RegionFunction (Component model.Value) I) op.regions)
     (protocols : ProtocolTable model.Value I := [])
     (context : ProtocolContext := {}) :
-    PIR.Proc I (Values (Component model.Value) op.results) :=
+    PIR.Process I (Values (Component model.Value) op.results) :=
   match op, args with
   | .repeat spec _, .cons count values =>
     let parts := Values.split spec.state values
@@ -206,14 +206,14 @@ def UnitPayload.plainProtocolTableOn (payload : UnitPayload) :
 
 def Program.observedOn (program : Program)
     (self : Nat) (inputs : Values (Component model.Value) program.payload.entry.inputs) :
-    PIR.Proc (observedInterfaceOn model.toCarriers)
+    PIR.Process (observedInterfaceOn model.toCarriers)
       (Values (Component model.Value) program.payload.entry.outputs) :=
   invokeProtocol (program.payload.protocolTableOn model) program.payload.entry.signature {} self inputs
 
 /-- A participant is selected by its index in this root's roster. -/
 def Program.participantOn (program : Program)
     (self : Nat) (inputs : Values (Component model.Value) program.payload.entry.inputs) :
-    PIR.Proc (participantInterfaceOn model.toCarriers)
+    PIR.Process (participantInterfaceOn model.toCarriers)
       (Values (Component model.Value) program.payload.entry.outputs) :=
   (program.observedOn model self inputs).interpret forgetSitesOn
 
@@ -385,7 +385,7 @@ theorem Program.participant_eq_participantOn (program : Program) (self : Nat)
     (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
     program.participant F G self inputs = program.participantOn (ringModel F G) self inputs := by
   unfold Program.participant Program.participantOn
-  rw [← Program.observed_toOn, PIR.Proc.interpret_interchange observedToOn forgetSitesOn forgetSites
+  rw [← Program.observed_toOn, PIR.Process.interpret_interchange observedToOn forgetSitesOn forgetSites
     observedToOn_forgetSitesOn]
 
 end Uniform

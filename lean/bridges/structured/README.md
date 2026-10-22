@@ -494,7 +494,7 @@ Lean set up ([development guide](../../../docs/development/README.md)):
    it to a library, as
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
-   [`ChaumPedersenSigma`](../../integrations/arklib/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
+   [`ChaumPedersenSigma`](../../security/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
    (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
    as errors: a lemma that does not use every section instance needs
    `omit [...] in`, written before its docstring.

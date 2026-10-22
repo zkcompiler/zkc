@@ -21,7 +21,7 @@ import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
 from bridges.common.lean_render import file_digest as digest  # noqa: E402
 
@@ -55,7 +55,7 @@ def fixture_source(spec):
 
 
 def fixture(stem):
-    """The Entry, source modules and retained name of one structured fixture."""
+    """The closed subject, source modules and retained name of a fixture."""
     spec = fixture_table()[stem]
     if "modules" in spec:
         modules = {name: ROOT / path for name, path in spec["modules"].items()}
@@ -65,7 +65,7 @@ def fixture(stem):
         found, assets = project_inputs(fixture_source(spec))
         assert not assets
         modules = dict(sorted(found.items()))
-    return spec["entry"], modules, (stem, spec["data"])
+    return spec["subject"], modules, (stem, spec["data"])
 
 
 def write_json(path, value):
@@ -281,11 +281,11 @@ class Suite:
     def frontend(self, entry):
         source = Path(__file__).parent / "fixtures/accumulate.zkc"
         flags = ["--source-format=zkc", "--module=structured=" + str(source),
-                 "--entry=structured::" + entry]
-        text, interface = native_run(
+                 "--subject=structured::" + entry]
+        text, interface_text, interface = native_subject(
             lambda command: self.command(entry + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export("frontend-" + entry, text, interface["protocol"])
-        write_json(subject[1].parent / "interface.json", interface)
+        (subject[1].parent / "interface.json").write_text(interface_text, encoding="utf-8")
         shutil.copy2(source, subject[1].parent / "source.zkc")
         return subject
 
@@ -645,7 +645,7 @@ def run_cases(suite):
     assert sum(item[1] == "pair" for item in shared[2][7]) == 1
     structured = ROOT / "compiler/test/fixtures/structured-source"
     indexed = suite.export("indexed-helper", (structured / "indexed-helper.mlir").read_text(encoding="utf-8"))
-    for entry in ("Run", "IndexedRun"):
+    for entry in ("Accumulate", "Indexed"):
         compiled = suite.frontend(entry)
         for items in ([], [2], [MODULUS - 1, 2, 2**180]):
             values = [fields(items), "7"]

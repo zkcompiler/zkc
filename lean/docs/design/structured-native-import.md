@@ -198,7 +198,7 @@ theorem by itself.
 Primitive bindings are retained separately from callable declarations. The
 closed fifteen-operation vocabulary exposes ordered ports independently of its
 evaluator, avoiding an import cycle through helper meanings. One Local exec
-operation uses `PIR.Outcome` and `Proc` stops; pure index expressions
+operation uses `PIR.Outcome` and `Process` stops; pure index expressions
 remain distinct calculations. Full-table framing and effect translation add one
 family case. Binding names and helper origin names supply no semantic authority.
 

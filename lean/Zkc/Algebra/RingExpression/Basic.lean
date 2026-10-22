@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Mathlib.Algebra.Ring.Defs
 
 @[expose] public section
@@ -82,3 +85,9 @@ theorem eval_substitute [CommRing R] (e : Expr R I)
 
 end Expr
 end Zkc.Algebra.RingExpression
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Algebra.RingExpression.Expr.map

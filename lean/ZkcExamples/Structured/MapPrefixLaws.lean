@@ -39,7 +39,7 @@ theorem step_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
       invoke table firstHelper (firstInputs xs dimension columns r) := by
   dsimp only [firstInputs, vector, scalar]
   rw [MapSourceExpansions.prefix_step]
-  simp only [triple_eta, PIR.Proc.bind_done]
+  simp only [triple_eta, PIR.Process.bind_done]
 
 theorem foldStep_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
     (r : F) (point : List F) :
@@ -47,7 +47,7 @@ theorem foldStep_body (table : Meanings F G) (xs : List F) (dimension columns : 
       (Values.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))).get =
       invoke table stepHelper (firstInputs xs dimension columns r) := by
   rw [MapSourceExpansions.prefix_foldStep]
-  simp only [triple_eta, PIR.Proc.bind_done]
+  simp only [triple_eta, PIR.Process.bind_done]
   rfl
 
 theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
@@ -55,14 +55,14 @@ theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Na
       invoke table foldWrapperHelper (prefixInputs xs dimension columns point) := by
   dsimp only [prefixInputs, vector]
   rw [MapSourceExpansions.prefix_prefix]
-  simp only [triple_eta, PIR.Proc.bind_done]
+  simp only [triple_eta, PIR.Process.bind_done]
 
 theorem foldWrapper_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     foldWrapperBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
       invoke table foldHelper (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
   dsimp only [prefixInputs, vector]
   rw [MapSourceExpansions.prefix_foldWrapper]
-  simp only [triple_eta, PIR.Proc.bind_done]
+  simp only [triple_eta, PIR.Process.bind_done]
 
 theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     foldBody.denote (meaning F G table)
@@ -77,7 +77,7 @@ theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
     funext result
     cases result with | cons a rest => cases rest with | cons b rest => cases rest with
       | cons c rest => cases rest; rfl
-  · exact PIR.Proc.bind_done _
+  · exact PIR.Process.bind_done _
 
 /-- The invariant only requires the First law on shaped, representable reached states. -/
 def FirstLaw (table : Meanings F G) : Prop :=
@@ -105,7 +105,7 @@ theorem fold_restriction (table : Meanings F G) (law : FirstLaw table)
     change (invoke table firstHelper (firstInputs xs dimension columns r)).bind _ = _
     rw [law xs dimension columns r shape lengthBound]
     by_cases positive : 0 < dimension
-    · simp only [positive, ite_true, PIR.Proc.bind]
+    · simp only [positive, ite_true, PIR.Process.bind]
       rw [ih (restrictValues xs r) (dimension - 1)
         (restrict_shape xs dimension columns r shape positive)
         (restrict_length_bound xs r lengthBound)]
@@ -116,7 +116,7 @@ theorem fold_restriction (table : Meanings F G) (law : FirstLaw table)
       simp only [order, remaining, restrictPrefixValues, List.foldl_cons]
     · have tooLong : ¬ (r :: point).length ≤ dimension := by
         simp only [List.length_cons]; omega
-      simp only [positive, tooLong, ite_false, PIR.Proc.bind]
+      simp only [positive, tooLong, ite_false, PIR.Process.bind]
 
 theorem wrapper_body (table : Meanings F G)
     (tableLaw : ∀ (xs : List F) (dimension columns : Nat),
@@ -154,32 +154,32 @@ theorem wrapper_body (table : Meanings F G)
   dsimp only [inputs, vector] at tableLaw
   rw [tableLaw]
   by_cases shape : HasShape xs dimension columns
-  · simp only [shape, ite_true, PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+  · simp only [shape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
     by_cases pointBound : point.length < indexLimit
     · simp only [pointBound, ite_true]
       have prefixLaw := prefixLaw xs dimension columns point shape lengthBound pointBound
       change (invoke table prefixHelper (prefixInputs xs dimension columns point)).bind _ = _
       rw [prefixLaw]
       by_cases fits : point.length ≤ dimension
-      · simp only [fits, ite_true, PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+      · simp only [fits, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
         change (invoke table valuesRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [valuesLaw]
-        simp only [PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+        simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
         change (invoke table variablesRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [variablesLaw]
-        simp only [PIR.Proc.bind, Values.get_cons, Environment.push, Values.get]
+        simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
         change (invoke table widthRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [widthLaw]
         rfl
-      · simp only [fits, ite_false, PIR.Proc.bind]
+      · simp only [fits, ite_false, PIR.Process.bind]
     · have exhausted := exhaustedLaw xs dimension columns point pointBound
       change (invoke table prefixHelper (prefixInputs xs dimension columns point)).bind _ = _
       rw [exhausted]
-      simp only [pointBound, ite_false, PIR.Proc.bind]
-  · simp only [shape, ite_false, PIR.Proc.bind]
+      simp only [pointBound, ite_false, PIR.Process.bind]
+  · simp only [shape, ite_false, PIR.Process.bind]
 
 
 theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
@@ -193,7 +193,7 @@ theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
     intro result
     cases result with | cons a rest => cases rest with | cons b rest => cases rest with
       | cons c rest => cases rest; rfl
-  simp only [eta, PIR.Proc.bind_done]
+  simp only [eta, PIR.Process.bind_done]
 
 /-- Actual finite domain and callback ABI, including the full captured point. -/
 def FoldStepLaw (table : Meanings F G) : Prop :=

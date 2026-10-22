@@ -42,7 +42,7 @@ theorem run_body_view (context : ProtocolContext) (self : Nat)
   unit.protocol_body_view_as runDefinition run_member runSignature run_signature
     runBody run_raw context self args
 
-def receiverStep (parent : Option String) (a : F) : PIR.Proc (observedInterface F G) F :=
+def receiverStep (parent : Option String) (a : F) : PIR.Process (observedInterface F G) F :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s5"))
   .call (.mark (site "s4")) <| fun _ =>
@@ -56,7 +56,7 @@ def receiverStep (parent : Option String) (a : F) : PIR.Proc (observedInterface 
   .done (a + received)
 
 def verifierStep (parent : Option String) (go : Bool) (coins : Nat) (b : F) :
-    PIR.Proc (observedInterface F G) F :=
+    PIR.Process (observedInterface F G) F :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s5"))
   .call (.mark (site "s4")) <| fun _ =>
@@ -73,13 +73,13 @@ def verifierStep (parent : Option String) (go : Bool) (coins : Nat) (b : F) :
   else .halt .reject
 
 def receiverObserved (parent : Option String) (count : Nat) (a : F) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
   .call (.mark (qualifyProtocolSite parent "s3")) <| fun _ =>
   (PIR.repeatN count (receiverStep parent) a).bind <| fun result =>
   .done (.cons (some result) (.cons none .nil))
 
 def verifierObserved (parent : Option String) (count : Nat) (b : F) (go : Bool) (coins : Nat) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
   .call (.mark (qualifyProtocolSite parent "s3")) <| fun _ =>
   (PIR.repeatN count (verifierStep parent go coins) b).bind <| fun result =>
   .done (.cons none (.cons (some result) .nil))
@@ -138,14 +138,14 @@ theorem contextual_receiver (parent : Option String) (count : Nat) (bound : coun
     invokeProtocol (unit.protocolTable F G) runSignature ⟨parent, id⟩ 0
       (inputs (some count) (some a) b go coins) = receiverObserved parent count a := by
   rw [run_body_view]
-  change ((PIR.Proc.call (I := observedInterface F G)
+  change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite parent "s3")) (fun _ =>
       (denoteRepeat repeatSpec ⟨parent, id⟩ 0 (some count) (receiverState a)
         (.cons none (.cons none .nil)) (callback (F := F) (G := G) parent 0)).bind _)).bind _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-  simp only [PIR.Proc.bind]
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+  simp only [PIR.Process.bind]
   rw [receiver_repeat parent count bound a]
-  erw [PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+  erw [PIR.Process.bind_assoc, PIR.Process.bind_assoc]
   rfl
 
 theorem contextual_verifier (parent : Option String) (count : Nat) (bound : count ≤ 4)
@@ -154,14 +154,14 @@ theorem contextual_verifier (parent : Option String) (count : Nat) (bound : coun
       (inputs (some count) a (some b) (some go) (some coins)) =
         verifierObserved parent count b go coins := by
   rw [run_body_view]
-  change ((PIR.Proc.call (I := observedInterface F G)
+  change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite parent "s3")) (fun _ =>
       (denoteRepeat repeatSpec ⟨parent, id⟩ 1 (some count) (verifierState b)
         (.cons (some go) (.cons (some coins) .nil)) (callback (F := F) (G := G) parent 1)).bind _)).bind _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-  simp only [PIR.Proc.bind]
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+  simp only [PIR.Process.bind]
   rw [verifier_repeat parent count bound go coins b]
-  erw [PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+  erw [PIR.Process.bind_assoc, PIR.Process.bind_assoc]
   rfl
 
 theorem observed_receiver (count : Nat) (bound : count ≤ 4)
@@ -221,12 +221,12 @@ theorem excess_count_receiver (count : Nat) (large : 4 < count)
   change invokeProtocol (unit.protocolTable F G) runSignature {} 0
     (inputs (some count) a b go coins) = _
   rw [run_body_view]
-  change ((PIR.Proc.call (I := observedInterface F G)
+  change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite none "s3")) (fun _ =>
       (denoteRepeat repeatSpec ⟨none, id⟩ 0 (some count) (.cons a (.cons none .nil))
         (.cons none (.cons none .nil)) (callback (F := F) (G := G) none 0)).bind _)).bind _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-  simp only [PIR.Proc.bind]
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+  simp only [PIR.Process.bind]
   rw [repeat_above_maximum repeatSpec ⟨none, id⟩ 0 _ _ _ count rfl large]
   rfl
 
@@ -246,12 +246,12 @@ theorem excess_count_verifier (count : Nat) (large : 4 < count)
   change invokeProtocol (unit.protocolTable F G) runSignature {} 1
     (inputs (some count) a b go coins) = _
   rw [run_body_view]
-  change ((PIR.Proc.call (I := observedInterface F G)
+  change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite none "s3")) (fun _ =>
       (denoteRepeat repeatSpec ⟨none, id⟩ 1 (some count) (.cons none (.cons b .nil))
         (.cons go (.cons coins .nil)) (callback (F := F) (G := G) none 1)).bind _)).bind _ :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-  simp only [PIR.Proc.bind]
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+  simp only [PIR.Process.bind]
   rw [repeat_above_maximum repeatSpec ⟨none, id⟩ 1 _ _ _ count rfl large]
   rfl
 
@@ -267,11 +267,11 @@ theorem positive_missing_go (count : Nat) (positive : 0 < count) (bound : count 
     change invokeProtocol (unit.protocolTable F G) runSignature {} 1
       (inputs (some (count + 1)) a b none coins) = _
     rw [run_body_view]
-    change ((PIR.Proc.call (I := observedInterface F G) (.mark "s3") (fun _ =>
+    change ((PIR.Process.call (I := observedInterface F G) (.mark "s3") (fun _ =>
       (denoteRepeat repeatSpec {} 1 (some (count + 1)) (.cons none (.cons b .nil))
         (.cons none (.cons coins .nil)) (callback (F := F) (G := G) none 1)).bind _)).bind _ :
-      PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
-    simp only [PIR.Proc.bind]
+      PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) = _
+    simp only [PIR.Process.bind]
     rw [repeat_admitted repeatSpec {} 1 _ _ _ (count + 1) rfl bound, Repeat.loop_succ]
     rfl
 

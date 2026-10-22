@@ -4,7 +4,7 @@ import hashlib
 import json
 
 from contracts import label
-from native_entry import native_run
+from native_entry import native_subject
 from snapshot import render
 from verify import read_json, render_client
 
@@ -49,8 +49,8 @@ def check_factor_forms(suite, root, execute):
     for form in ('Expanded', 'Horner', 'WrongPoint', 'WrongResidual'):
         flags = ['--source-format=zkc',
                  '--module=factor_openings=lean/bridges/common/fixtures/factor-openings.zkc',
-                 '--entry=factor_openings::' + form]
-        text, interface = native_run(execute, suite.args.compiler, flags)
+                 '--subject=factor_openings::' + form + 'Protocol']
+        text, interface_text, interface = native_subject(execute, suite.args.compiler, flags)
         assert interface['original'] == hashlib.sha256(text.encode()).hexdigest()
         symbol = interface['protocol']
         data = suite.exercise(text, symbol)
@@ -59,7 +59,7 @@ def check_factor_forms(suite, root, execute):
         constructor = fixture.parent.parent / 'Variants' / f'Factor{form}Data.lean'
         assert render(data, f'ZkcExamples.NativePrograms.Variants.Factor{form}Data') == constructor.read_text()
         request = read_json(root / 'lean/bridges/common/requests/factor-openings.json')
-        client = root / f'lean/ZkcExamples/NativePrograms/Factor{form}.lean'
+        client = root / f'lean/security/ZkcSecurity/Examples/NativePrograms/Factor{form}.lean'
         assert render_client(data, request, f'Factor{form}') == client.read_text()
         sources[form] = text, symbol
         fixtures.append({'form': form, 'source': data[1]})

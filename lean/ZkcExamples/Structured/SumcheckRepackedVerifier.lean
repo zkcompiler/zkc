@@ -54,7 +54,7 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
   subst self
   unfold SumcheckRepackedNormalForms.verifierProcess
   rw [verifierReduce_rounds unit helperBodies (SumcheckRepackedNormalForms.reduceContext ctx) separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 /-- The repacked root skips P's table construction, calls the same Reduce at
@@ -75,7 +75,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
     reduce_invoke_plain (ctx.enter "s3" [0, 1]) self (reduceArguments none none none claim count service),
     reduce_optional unit helperBodies (ctx.enter "s3" [0, 1]) self verifier separate
       SumcheckRepackedNormalForms.reduceMaximum none none none claim count service]
-  refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
+  refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl
 
 /-- The actual complete repacked participant V. -/
@@ -106,7 +106,7 @@ theorem participant_repacked (claim : Option F) (count dimension : Option Nat)
         (fun outputs => .done (rootResults
           (outputs.get (.there (.there .here)), outputs.get (.there (.there (.there .here)))))) := by
   rw [verifier_optional, SumcheckReduceVerifier.verifier_optional]
-  refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
+  refine Eq.trans ?_ (PIR.Process.bind_assoc _ _ _).symm
   rfl
 
 end ZkcExamples.Structured.SumcheckRepackedVerifier

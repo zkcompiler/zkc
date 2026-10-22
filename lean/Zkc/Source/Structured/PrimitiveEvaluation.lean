@@ -11,7 +11,7 @@ observer work capacity. Stops reuse PIR.Outcome; there is no primitive executor.
 namespace Zkc.Source.Structured
 
 /-- Convert a local return-or-stop to the existing process meaning. -/
-def primitiveOutcome {I : PIR.Signature} {A : Type} : PIR.Outcome A → PIR.Proc I A
+def primitiveOutcome {I : PIR.Signature} {A : Type} : PIR.Outcome A → PIR.Process I A
   | .returned value => .done value
   | .stopped reason => .halt reason
 

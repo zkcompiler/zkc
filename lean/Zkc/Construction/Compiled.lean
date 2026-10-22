@@ -82,7 +82,7 @@ theorem spec_bind_congr (context : Context) (handle : Nat) (table : Structured.M
   cases found : read final returned with
   | none => rfl
   | some values =>
-    simp only [PIR.Proc.bind]
+    simp only [PIR.Process.bind]
     rw [agree values (read_length found)]
 
 /-- The composed rules: for every export accepted against an admitted original,
@@ -134,8 +134,8 @@ theorem compiled_transform {original : Structured.Snapshot} (imported : Structur
       inputs related arity
     have composed := congrArg (fun process => process.bind fun options => .done (decide options))
       projected
-    simp only [PIR.Proc.bind_assoc, PIR.Proc.bind] at composed
-    rw [composed, PIR.Proc.interpret_bind, PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+    simp only [PIR.Process.bind_assoc, PIR.Process.bind] at composed
+    rw [composed, PIR.Process.interpret_bind, PIR.Process.interpret_bind, PIR.Process.bind_assoc]
     congr 1
   · cases accepted
   · cases accepted

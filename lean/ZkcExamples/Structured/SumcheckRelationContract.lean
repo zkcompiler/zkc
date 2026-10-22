@@ -82,7 +82,7 @@ theorem add_equation (table : Meanings F G) (a b : F) :
       .done (.cons (a + b) .nil) := by
   let env : Environment (assignment F G) [scalar, scalar] := (Values.cons a (.cons b (Values.nil : Values (assignment F G) []))).get
   have derivation : Region.Derivation (meaning F G table) identityEffect addBody env
-      ((PIR.Proc.done (.cons (a + b) .nil)).bind fun values =>
+      ((PIR.Process.done (.cons (a + b) .nil)).bind fun values =>
         .done (Operands.eval (env.prepend values) (.cons .here .nil))) := by
     unfold addBody
     apply Region.Derivation.letOp _ _ Regions.Derivation.nil ?_ (fun _ => .ret _ _)
@@ -122,7 +122,7 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
   rw [bodies.total.invoke linked]
   simp only [totalBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Values.get, Regions.denote,
-    PIR.Proc.bind, Environment.prepend, Environment.push, Nat.cast_zero]
+    PIR.Process.bind, Environment.prepend, Environment.push, Nat.cast_zero]
   have admitted : (foldSpec.domain.denote (Values.cons xs
       (Values.nil : Values (assignment F G) []))).admit = .returned xs := by
     simp [foldSpec, DomainSpec.denote, Finite.Domain.admit, Values.get, bounded]
@@ -139,7 +139,7 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
   change (Evaluation.denoteFold _ foldSpec
     ((Values.cons xs Values.nil).append ((Values.cons (0 : F) Values.nil).append Values.nil))).bind _ = _
   rw [folded]
-  simp only [sum_fold (G := G) xs (0 : F), zero_add, PIR.Proc.bind, Environment.prepend, Environment.push]
+  simp only [sum_fold (G := G) xs (0 : F), zero_add, PIR.Process.bind, Environment.prepend, Environment.push]
 
 set_option backward.isDefEq.respectTransparency false in
 /-- The formula's helper call, comparison and return are composed by the shared
@@ -152,14 +152,14 @@ theorem sum_equation (association : BodyIn definitions sumHelper sumBody) (xs : 
   let table := closedMeanings (F := F) (G := G) definitions
   let env : Environment (assignment F G) [vector, scalar] := (Values.cons xs (.cons claim (Values.nil : Values (assignment F G) []))).get
   have derivation : Region.Derivation (meaning F G table) identityEffect sumBody env
-      ((PIR.Proc.done (Values.cons (ty := scalar) xs.sum (Values.nil : Values (assignment F G) []))).bind fun totals =>
-        (PIR.Proc.done (Values.cons (ty := Ty.boolean) (decide (claim = totals.get .here)) (Values.nil : Values (assignment F G) []))).bind fun result =>
+      ((PIR.Process.done (Values.cons (ty := scalar) xs.sum (Values.nil : Values (assignment F G) []))).bind fun totals =>
+        (PIR.Process.done (Values.cons (ty := Ty.boolean) (decide (claim = totals.get .here)) (Values.nil : Values (assignment F G) []))).bind fun result =>
           .done (.cons (result.get .here) .nil)) := by
     unfold sumBody
     apply Region.Derivation.letOp _ _ Regions.Derivation.nil
     · intro callbacks _
       cases callbacks
-      simpa only [PIR.Proc.interpret_identity, Evaluation.operation, Operands.eval,
+      simpa only [PIR.Process.interpret_identity, Evaluation.operation, Operands.eval,
         env, table, Values.get] using total_equation linked bodies xs bounded
     · intro totals
       cases totals with | cons total rest => ?_
@@ -185,7 +185,7 @@ theorem tableSum_equation
   simp only [tableSumBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Values.get, Regions.denote]
   rw [values.invoke linked]
-  simp only [valuesBody, Region.denote, Operands.eval, Values.get, PIR.Proc.bind, Environment.prepend, Environment.push]
+  simp only [valuesBody, Region.denote, Operands.eval, Values.get, PIR.Process.bind, Environment.prepend, Environment.push]
   rw [total_equation linked bodies xs bounded]
   rfl
 

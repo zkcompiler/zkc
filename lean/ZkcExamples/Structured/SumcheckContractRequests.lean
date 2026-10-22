@@ -262,7 +262,7 @@ theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted 
     SumcheckSourceVerifier.childContext 1 rfl (by decide)]
   simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count ([], claim)]
-  exact PIR.Proc.bind_assoc _ _ _
+  exact PIR.Process.bind_assoc _ _ _
 
 /-- For the complete public-table experiment, dimension comes from V's actual
 count input. Missing count remains unavailable; width is explicitly scalar. -/

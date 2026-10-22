@@ -562,6 +562,9 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
 namespace {
 Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
                          detail::Work &work) {
+  if (entry.protocolOrNull())
+    if (auto error = detail::checkClosedSourceClaims(entry, work))
+      return error;
   Layouts layouts(entry, limits);
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;
@@ -794,6 +797,31 @@ Expected<ClosedEntry> closeInvocation(const CheckedProject &project,
     return e;
   storage->work = work.used;
   return child;
+}
+
+Expected<ClosedEntry> closeSubject(const CheckedProject &project,
+                                   StringRef name, const Limits &limits) {
+  if (name.empty())
+    return detail::failure("source.subject",
+                           "a closed subject must be selected");
+  auto selected = resolveEntry(project, name, limits);
+  if (!selected)
+    return selected.takeError();
+  const auto &declaration = project.declarations()[selected->declaration.index];
+  if (declaration.kind == Declaration::Kind::Entry && declaration.proof())
+    return closeEntry(project, name, limits, EntryKind::Proof);
+  if (!declaration.generated ||
+      declaration.generated->operation != HostInvocation::Kind::Run)
+    return detail::failure("source.subject",
+                           "subject must name a closed protocol or proof, not "
+                           "a Host Entry function",
+                           declaration.span);
+  return closeInvocation(project,
+                         {HostInvocation::Kind::Run,
+                          declaration.generated->target,
+                          std::move(selected->arguments),
+                          {}},
+                         limits);
 }
 
 const Declaration &ClosedEntry::entry() const {

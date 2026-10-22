@@ -29,7 +29,11 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 def lean_checks():
-    return sorted((ROOT / "lean/checks").glob("*.py")) + sorted(
+    # These tools emit or compare explicitly supplied migration snapshots. They
+    # are not checks of the current checkout and have no default input selection.
+    snapshot_tools = {"check_migration.py", "source_responsibility.py"}
+    return sorted(path for path in (ROOT / "lean/checks").glob("*.py")
+                  if path.name not in snapshot_tools) + sorted(
         (ROOT / "lean/consumers").glob("*/check.py"))
 
 
@@ -59,15 +63,28 @@ def execute(scope, args):
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
         for check in lean_checks():
-            selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py"} else []
+            selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
+            if check.name == "check_migration_exporter.py":
+                selection = ["--package", ROOT / "lean", "--output", reports / "lean/migration-exporter"]
             run([sys.executable, check, *selection])
+    elif scope == "lean-security":
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "security"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "security"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "security"])
+        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-security",
+             "--output", reports / "lean/clients-security"], cwd=ROOT / "lean")
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "security"])
     elif scope == "lean-integration":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "arklib"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "arklib"])
         run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
              "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
         run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib"])
     elif scope == "lean-clean":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "clean"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "clean"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "clean"])
         run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "clean"])
         directory = ROOT / "lean/integrations/clean"
         output = reports / "lean/clean-air-control.json"
@@ -172,7 +189,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scopes = parser.add_subparsers(dest="scope", required=True)
     for scope in ["integration", "harness", "sdk", "smoke", "rust", "compiler", "lean",
-                  "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
+                  "lean-security", "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
         command = scopes.add_parser(scope)
         if scope == 'smoke':
             sys.path.insert(0, str(ROOT / 'common/tests/support'))

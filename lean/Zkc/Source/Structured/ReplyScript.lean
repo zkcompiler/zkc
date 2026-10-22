@@ -41,7 +41,7 @@ def handler (script : ReplyScript F G) :
       | none => ⟨.stopped .refused, state, [action]⟩
 
 /-- One run of a role-local process against the script. -/
-def run (script : ReplyScript F G) {A : Type} (process : PIR.Proc (participantInterface F G) A) :
+def run (script : ReplyScript F G) {A : Type} (process : PIR.Process (participantInterface F G) A) :
     PIR.Execution Unit (participantInterface F G).Op A :=
   process.run script.handler ()
 
