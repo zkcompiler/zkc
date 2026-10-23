@@ -179,10 +179,6 @@ private meta def normalizeResolution (expression : Expr) (declarations : Array (
   let mut value ← instantiateMVars expression
   let mut normalization ← mkEqRefl expression
   for _ in [:8] do
-    -- A reduced `Except` continuation can expose a symbolic decision only at
-    -- the head. Expose it before simplifying, without recursively unfolding
-    -- instance arguments (which may enumerate an entire finite carrier).
-    value ← whnf value
     let previous := value
     let (step, _) ← configuration.dischargeWrapper.with fun discharge? => do
       let methods := match discharge? with
@@ -223,7 +219,13 @@ private meta def normalizeResolution (expression : Expr) (declarations : Array (
       Simp.mainCore value configuration.ctx (methods := symbolic)
     normalization ← mkEqTrans normalization (← step.getProof)
     value := step.expr
-    if value == previous then break
+    if value == previous then
+      -- Only a stuck, already simplified continuation needs head reduction.
+      -- Reducing the original resolver first can open a complete imported
+      -- subject before the metadata guards above have hidden its proof fields.
+      let reduced ← whnf value
+      if reduced == value then break
+      value := reduced
   return (value, normalization)
 
 elab "claim_model" "normalizing" "[" declarations:ident,* "]" : tactic => withMainContext do
