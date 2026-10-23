@@ -1,4 +1,4 @@
-# Constructed validator export
+# Constructed participant and pair exports
 
 `zkc-compile protocol-constructed-participant SOURCE.mlir POLICY CANDIDATE.mlir`
 exports the validator participant of a supplied native proof candidate. It first
@@ -7,6 +7,21 @@ runs the same check as `protocol-check-proof`: the candidate must equal the
 [deployment policy](proof.md#deployment-policy-and-descriptor), including every
 inserted transcript helper. A refused candidate produces no export. The command
 accepts the same mathematical-selection options as `protocol-check-proof`.
+The optional `--role=producer` selects the policy producer instead;
+`--role=validator` selects the default explicitly. Roles are policy selections,
+not arbitrary source participants. Conflicting or repeated role options refuse.
+
+`zkc-compile protocol-constructed-pair SOURCE.mlir POLICY CANDIDATE.mlir` checks
+the candidate once and exports both actual participants in the exact array:
+
+```text
+["zkc.constructed-pair/0", producer-record, validator-record]
+```
+
+Each child uses the participant envelope below, with identical source identity,
+candidate identity and full policy. Neither command reconstructs an interactive
+source producer as the exported producer. The pair command accepts mathematical
+selection options, and refuses a role option because both roles are required.
 
 The export is the input of the formal
 [transcript-construction](../../../lean/docs/spec/fiat-shamir.md) and
@@ -27,7 +42,7 @@ the candidate module's generic operation print, without locations. Both are
 `sha256:` followed by 64 lowercase hexadecimal digits; they identify bytes and
 are not authority. `policy` is the canonical policy array. `participant` is the
 symbol of the participant whose instance is the policy entry and whose role is
-the policy validator; exactly one must exist. `inputs` and `outputs` are the
+the selected policy producer or validator; exactly one must exist. `inputs` and `outputs` are the
 printed MLIR types of its signature, in order.
 
 ## Instructions
@@ -74,7 +89,8 @@ Any other operation, any other region, a successor or a missing reference
 refuses the export with a `constructed-participant-*` diagnostic.
 
 Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
-2048 exported instructions in total and 1 MiB of printed JSON.
+2048 exported instructions in total and 1 MiB of printed JSON per participant.
+The pair container applies these limits independently to its two children.
 
 ## Boundary
 
@@ -89,3 +105,12 @@ native construction, whose check reconstructs the whole candidate from the
 source; the export does not establish it. The [formal
 bridge](../../../lean/bridges/construction/README.md) regenerates its retained
 data from this export and checks the exact bytes.
+
+The independent pair reader in `lean/bridges/construction/pair.py` also checks
+the exact paired envelope and shared identities/policy. The formal
+`Zkc.Construction.AuthoredPair` selection fixes the complete participant trees,
+source helper dependencies, input contract, role maps and retained target before
+admission. Its producer structural check and whole-artifact equality do not
+establish original-source-to-constructed-producer correspondence. That theorem,
+export/read-back correspondence and domain interpretation remain separate
+obligations; a native check or a matching digest is not their proof.

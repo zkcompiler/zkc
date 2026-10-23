@@ -1895,31 +1895,66 @@ public:
     return record;
   }
 };
-} // namespace
-
-Expected<json::Value> exportConstructedParticipant(
-    ModuleOp source, ModuleOp candidate, StringRef sourceBytes,
-    const NativeProofPolicy &policy,
-    MathematicalSelectionPolicy mathematicalSelection) {
-  if (auto e =
-          checkNativeProof(source, candidate, policy, mathematicalSelection))
-    return std::move(e);
+Expected<json::Value>
+exportCheckedParticipant(ModuleOp source, ModuleOp candidate,
+                         StringRef sourceBytes, const NativeProofPolicy &policy,
+                         ConstructedParticipantRole role) {
   auto module = unit(candidate);
   auto original = unit(source);
   if (!module || !original)
     return error("constructed-participant-module");
   pir::ParticipantOp selected;
+  StringRef selectedRole = role == ConstructedParticipantRole::Producer
+                               ? policy.producer
+                               : policy.validator;
+  StringRef refusal = role == ConstructedParticipantRole::Producer
+                          ? "constructed-participant-producer"
+                          : "constructed-participant-validator";
   for (auto participant : module.getBody().front().getOps<pir::ParticipantOp>())
     if (participant.getInstance() == policy.entry &&
-        participant.getRole() == policy.validator) {
+        participant.getRole() == selectedRole) {
       if (selected)
-        return error("constructed-participant-validator");
+        return error(refusal);
       selected = participant;
     }
   if (!selected)
-    return error("constructed-participant-validator");
+    return error(refusal);
   return ParticipantExporter(module, original)
       .run(selected, sourceBytes, printedText(candidate.getOperation()),
            policy);
+}
+} // namespace
+
+Expected<json::Value>
+exportConstructedParticipant(ModuleOp source, ModuleOp candidate,
+                             StringRef sourceBytes,
+                             const NativeProofPolicy &policy,
+                             MathematicalSelectionPolicy mathematicalSelection,
+                             ConstructedParticipantRole role) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  return exportCheckedParticipant(source, candidate, sourceBytes, policy, role);
+}
+
+Expected<json::Value>
+exportConstructedPair(ModuleOp source, ModuleOp candidate,
+                      StringRef sourceBytes, const NativeProofPolicy &policy,
+                      MathematicalSelectionPolicy mathematicalSelection) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  auto producer =
+      exportCheckedParticipant(source, candidate, sourceBytes, policy,
+                               ConstructedParticipantRole::Producer);
+  if (!producer)
+    return producer.takeError();
+  auto validator =
+      exportCheckedParticipant(source, candidate, sourceBytes, policy,
+                               ConstructedParticipantRole::Validator);
+  if (!validator)
+    return validator.takeError();
+  return json::Array{"zkc.constructed-pair/0", std::move(*producer),
+                     std::move(*validator)};
 }
 } // namespace zkc
