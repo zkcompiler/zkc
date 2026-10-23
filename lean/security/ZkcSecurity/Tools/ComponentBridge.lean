@@ -28,7 +28,7 @@ partial def compose (goal : MVarId) (leaves : Array (TSyntax `term))
     (normalize side finish : TSyntax `tactic) : TacticM Unit :=
     goal.withContext <| Term.withoutErrToSorry <| withoutRecover do
   setGoals [goal]
-  evalTactic (← `(tactic| try simp_all only [ite_true, ite_false]))
+  evalTactic (← `(tactic| try simp_all only [ite_true, ite_false, Bool.false_eq_true, Bool.true_eq_false]))
   if (← getGoals).isEmpty then return
   evalTactic normalize
   if (← getGoals).isEmpty then return

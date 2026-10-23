@@ -99,4 +99,10 @@ variable {carriers : Structured.Carriers} {I : PIR.Signature}
   compose_component_bridge [] normalizing skip solving assumption finishing rfl
 
 #print axioms guarded
+theorem boolean_guard (enabled : Bool) :
+    Bridge absorb (fun _ (result : Bool) => result = true) history
+      (if enabled = true then .done enabled else .halt .reject)
+      (if enabled = true then .done enabled else .halt .reject) := by
+  compose_component_bridge [] normalizing skip solving assumption finishing rfl
+
 end TestsSecurity.ComponentBridgeGuards

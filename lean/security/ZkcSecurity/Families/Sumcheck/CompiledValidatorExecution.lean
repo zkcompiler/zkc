@@ -2,8 +2,7 @@ module
 
 public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
 public import ZkcSecurity.Families.Sumcheck.CompiledValidator
-public import ZkcSecurity.FiatShamir.DomainReduction
-public meta import Lean.Elab.Tactic
+public import ZkcSecurity.FiatShamir.DomainComposition
 
 @[expose] public section
 
@@ -52,24 +51,39 @@ theorem sourceLoop (field : String) (program : Structured.Program) (context : Zk
   exact CompiledValidator.loop_bridge connection captured indices ⟨point, scalar, history⟩
 
 
-meta section
-open Lean Meta Elab Tactic
+open FiatShamir.DomainReduction
 
-/-- Name the actual captured SSA environment at a reached validator loop. -/
-elab "validator_capture " name:ident : tactic => withMainContext do
-  let target ← instantiateMVars (← getMainTarget)
-  let args := target.getAppArgs
-  let process ← if target.isAppOf ``FiatShamir.DomainReduction.ReadingTo ||
-        target.isAppOf ``FiatShamir.DomainReduction.Bridge then
-      pure args[args.size - 2]!
-    else if target.isAppOf ``FiatShamir.DomainReduction.CoherentTo then
-      pure args.back!
-    else throwError "validator_capture expects an actual Domain bridge, reading or coherence goal"
-  let some value := TableComponent.Execution.firstCapture process
-    | throwError "validator has not reached an actual iterate application"
-  let goal ← getMainGoal
-  let goal ← goal.define name.getId (← inferType value) value
-  let (_, goal) ← goal.intro1P
-  replaceMainGoal [goal]
-end
+/-- Retain the complete typed state when composing the reached source loop
+with its continuation. The encoder/decoder round trip is checked. -/
+theorem sourceLoopBind {B : Type}
+    (field : String) (program : Structured.Program) (context : Zkc.Construction.Context)
+    (plan : CompiledRound.Plan) (sites : Nominal.Schedule field)
+    (connection : CompiledValidator.RoundConnection (F := F) (G := G) field program context plan sites)
+    (body : Domain.Environment (uniformCarriers F G) → PIR.Process (Domain.effects (uniformCarriers F G))
+      (Domain.Environment (uniformCarriers F G)))
+    (offset : Nat) (body_eq : body = CompiledRound.block plan program context field offset)
+    (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = offset)
+    (indices : List Nat) (point : List F) (scalar : F)
+    (history : Domain.History (uniformCarriers F G))
+    (Post : Domain.History (uniformCarriers F G) → B → Prop)
+    (nextActual : Domain.Environment (uniformCarriers F G) → PIR.Process (Domain.effects (uniformCarriers F G)) B)
+    (nextPresented : CompiledValidator.State F G → PIR.Process (Nominal.signature F field) B)
+    (next : ∀ final, final.point.length = point.length + indices.length →
+      FiatShamir.DomainReduction.Bridge (Nominal.interface (G := G) field) Post final.history
+        (nextActual (CompiledValidator.carried field context.suite final)) (nextPresented final)) :
+    FiatShamir.DomainReduction.Bridge (Nominal.interface (G := G) field) Post history
+      ((Domain.iterate body captured [offset + 21, offset + 26, offset + 20]
+        [.data (.vector field), .data (.field field), .transcript context.suite]
+        indices (CompiledValidator.carried field context.suite ⟨point, scalar, history⟩)).bind nextActual)
+      ((CompiledValidator.run field sites indices ⟨point, scalar, history⟩).bind nextPresented) := by
+  apply ZkcSecurity.FiatShamir.DomainReduction.Bridge.bindEncoded
+    (CompiledValidator.carried field context.suite) CompiledValidator.decode (fun _ => rfl)
+    CompiledValidator.State.history (fun final => final.point.length = point.length + indices.length)
+    ((sourceLoop field program context plan sites connection body offset body_eq captured size indices point scalar history).weaken ?_)
+    nextActual nextPresented next
+  intro reached output post
+  obtain ⟨final, same, length, outputEq⟩ := post
+  exact ⟨final, same.symm, length, outputEq⟩
+
+
 end ZkcSecurity.Families.Sumcheck.CompiledValidator.Execution
