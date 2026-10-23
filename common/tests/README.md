@@ -143,3 +143,46 @@ Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
 The retained research sources and their vectors do not establish correspondence
 or security for the current compiler merely because their checks pass.
+
+## Offline arithmetic model validation
+
+The optional [arithmetic command](check_arithmetic.py) checks independent models
+of unsigned-word centering and exact centered CRT reconstruction. It uses Z3
+and LLVM's SMT dialect/exporter with versions selected by the
+[owning manifest](fixtures/arithmetic/pins.json). Supply those tools explicitly:
+
+```sh
+python3 common/tests/check_arithmetic.py \
+  --solver /path/to/z3 \
+  --mlir-translate /path/to/mlir-translate \
+  --output build/reports/arithmetic-models
+```
+
+The output directory must be new. The command downloads nothing and does not
+participate in ordinary builds or runtime/compiler admission. The manifest
+records a reference solver archive; verify its SHA-256 when acquiring that
+binary. A locally built tool with the selected version is also accepted as a
+trusted host tool. Version reporting alone does not establish its source or
+binary provenance. Each report records actual executable hashes and versions,
+the checker hash, query files and digests, complete process output, and replayed
+counterexamples. LLVM's owning dependency remains the compiler toolchain;
+this optional check does not upgrade it or change Nix's solver package.
+
+The command runs fourteen solver queries: two word-model controls and six
+integer CRT controls in both authored SMT-LIB and exported MLIR forms. The
+valid interval checks equality of the reconstructed integer itself, so reduction
+into any protocol modulus follows from that identity. Every
+SAT control must replay its premises and arithmetic disagreement in Python
+integers. A concrete extra-column control exposes why reconstruction must be
+chunked before its integer range exceeds the CRT capacity. A separate tiny
+interval is exhaustively checked without a solver. Unknown, timeout, process
+failure, unsupported versions, unexpected status and invalid models fail the
+command; each solver receives a ten-second and 512-MB limit, with a fifteen-second
+process deadline. Harness tests cover these refusal paths without requiring
+Z3 or MLIR installations.
+
+These are independently authored formulas, not a translation of the Rust kernel
+or a compiler candidate. UNSAT trusts the formula, exporter and solver; no proof
+certificate is checked. The [validation rationale](../../docs/rationale/validation.md#solver-checks-and-schedule-authoring)
+states how this tool and prospective Transform/PDL scheduling fit the existing
+independent candidate readers.

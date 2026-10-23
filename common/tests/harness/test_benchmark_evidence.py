@@ -255,7 +255,12 @@ def test_live_runner_uses_structural_proof_validator(evidence, monkeypatch, tmp_
     monkeypatch.setattr(runner.Journal, 'command', lambda *args, **kwargs: {'wall_seconds': 0.01})
     # No artifact reads are needed for these structural refusals.
     monkeypatch.setattr(Path, 'is_file', lambda self: True)
-    monkeypatch.setattr(Path, 'stat', lambda self, **kw: type('Stat', (), {'st_size': worker['proof_bytes']})())
+    real_stat = Path.stat
+    # Preserve directory metadata used by pathlib.mkdir on supported Python 3.12.
+    monkeypatch.setattr(Path, 'stat', lambda self, **kw:
+                        type('Stat', (), {'st_size': worker['proof_bytes']})()
+                        if self == run_directory/'proof.bin' or self.suffix == '.proof'
+                        else real_stat(self, **kw))
     worker_job = runner.Job(job['case'], job['implementation'], job['operation'], tmp_path/'unused',
                             job['backend'], tmp_path/'unused.proof', job['boundary'])
     with pytest.raises(io.MeasurementError): runner.execute_job(worker_job, run_directory, document['plan'], 1)

@@ -48,6 +48,11 @@ just test-docs
 
 Use the [test guide](../../common/tests/README.md#selecting-checks) to choose affected checks. `just test` is broad integration validation and includes resource-boundary cases; run it when changes justify that scope. Direct test drivers use existing outputs; Cargo tests and SDK checks build their own test targets and consumers. Domain installation checks explicitly prepare separate base/domain builds unless `--skip-build` selects existing ones. Record commands, revision, environment and actual results rather than treating documentation links as fresh evidence.
 
+The optional [arithmetic-model check](../../common/tests/README.md#offline-arithmetic-model-validation)
+uses explicitly supplied Z3 and MLIR SMT tools for word and CRT obligations.
+It retains solver queries and replays counterexamples without changing native
+admission or requiring the Lean package.
+
 ## Build profiles and installed consumers
 
 [CMake presets](../../compiler/CMakePresets.json) provide separate `release`,

@@ -1,0 +1,12 @@
+{
+  "z3": {
+    "version": "5.3.1",
+    "revision": "ac9156f97cb44e56472e1c841f7a2beb1e976b24",
+    "reference_binary": {
+      "platform": "x64-glibc-2.39",
+      "url": "https://github.com/Z3Prover/z3/releases/download/z3-5.3.1/z3-5.3.1-x64-glibc-2.39.zip",
+      "sha256": "acca9625e8cc8edeb9647b653a1bd696544ddeb5d1c2970a4576734a0c175b40"
+    }
+  },
+  "llvm": {"version": "23.1.3"}
+}
