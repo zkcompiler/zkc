@@ -4,6 +4,7 @@ public import ZkcSecurity.Examples.Components.TwoSumsValidatorLeftRound
 public import ZkcSecurity.Examples.Components.TwoSumsValidatorRightRound
 public import ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorExecution
+public meta import ZkcSecurity.Tools.ComponentBridge
 
 @[expose] public section
 noncomputable section
@@ -95,61 +96,37 @@ noncomputable def presented (left right : List F) (leftClaim rightClaim : F) (co
         (inputs left right leftClaim rightClaim count history))
       (presented left right leftClaim rightClaim count history) := by
   have emptyLaw := SumcheckDomainHelpers.empty (F := F) (G := G) program domain_bodies.sumcheck
-  by_cases allowed : count ≤ 4
-  all_goals
-    rw [TwoSumsValidator.participant_eq]
-    simp only [TwoSumsValidator.view, Domain.View.participant, TwoSumsValidator.inputSorts,
-      TwoSumsValidator.outputSorts, TwoSumsValidator.returned, inputs, field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, Domain.sortsMatch,
-      Domain.Value.sort, Domain.Payload.ty, field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, List.map_cons, List.map_nil, beq_self_eq_true,
-      ite_true, presented, allowed, ite_false]
-    unfold_component_bodies [TwoSumsValidator.view]
-    normalize_table_validator [emptyLaw] unfolding [field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, allowed, ite_false]
-  · conv => arg 4; simp only [PIR.Process.bind_assoc]
-    validator_capture actualLeftCaptured
-    have loops := CompiledValidator.loop_bridge ValidatorLeftRound.connection actualLeftCaptured
-      (List.range count) ⟨[], leftClaim, history⟩
-    simp only [show actualLeftCaptured.length = round0.validatorCapture from rfl, Nat.reduceAdd] at loops
-    rw [← round0.validator_block F G program context rfl] at loops
-    simp only [context_suite] at loops
-    apply loops.bind
-    intro reached leftOutput post
-    obtain ⟨leftState, historyEq, lengthEq, rfl⟩ := post
-    have pointLength : leftState.point.length = count := by
-      simpa only [List.length_nil, Nat.zero_add, List.length_range] using lengthEq
-    have small : leftState.point.length < 64 := by omega
-    have terminal := SumcheckValidatorHelpers.terminal_all (F := F) (G := G) program domain_bodies
-      left leftState.point leftState.scalar small
-    subst reached
-    simp only [afterLeft, CompiledValidator.carried, CompiledValidator.decode]
-    normalize_table_validator [terminal, emptyLaw] unfolding [actualLeftCaptured, leftCaptured, inputs, field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, allowed, ite_false]
-    by_cases leftBound : left.length < indexLimit
-    · normalize_table_validator [emptyLaw] unfolding [field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, leftBound, allowed, ite_false]
-      conv => arg 4; simp only [PIR.Process.bind_assoc]
-      validator_capture actualRightCaptured
-      have loops := CompiledValidator.loop_bridge ValidatorRightRound.connection actualRightCaptured
-        (List.range count) ⟨[], rightClaim, leftState.history⟩
-      simp only [show actualRightCaptured.length = round1.validatorCapture from rfl, Nat.reduceAdd] at loops
-      rw [← round1.validator_block F G program context rfl] at loops
-      simp only [right_context_suite] at loops
-      apply loops.bind
-      intro reached rightOutput post
-      obtain ⟨rightState, historyEq, lengthEq, rfl⟩ := post
-      have pointLength : rightState.point.length = count := by
-        simpa only [List.length_nil, Nat.zero_add, List.length_range] using lengthEq
-      have small : rightState.point.length < 64 := by omega
-      have terminal := SumcheckValidatorHelpers.terminal_all (F := F) (G := G) program domain_bodies
-        right rightState.point rightState.scalar small
-      subst reached
-      simp only [finish, CompiledValidator.carried, CompiledValidator.decode]
-      normalize_table_validator [terminal] unfolding [actualRightCaptured, actualLeftCaptured, rightCaptured, leftCaptured, inputs, decision, field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, ite_false]
-      by_cases rightBound : right.length < indexLimit
-      · normalize_table_validator [] unfolding [actualRightCaptured, actualLeftCaptured, rightCaptured, leftCaptured, inputs, decision, field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq, suite, context_suite, right_context_suite, ValidatorRightRound.field, ValidatorRightRound.field_eq, List.length_cons, List.length_nil, leftBound, rightBound, ite_false]
-        exact .done _ _ trivial
-      · simp only [rightBound, ite_false, PIR.Process.bind]
-        exact .halt _ .exhausted
-    · simp only [leftBound, ite_false, PIR.Process.bind]
-      exact .halt _ .exhausted
-  · exact .halt _ .refused
+  have leftLoop := sourceLoop field program context round0.plan.toPlan ValidatorLeftRound.sites
+    ValidatorLeftRound.connection _ _ (round0.validator_block F G program context rfl)
+  have rightLoop := sourceLoop field program context round1.plan.toPlan ValidatorRightRound.sites
+    ValidatorRightRound.connection _ _ (round1.validator_block F G program context rfl)
+  dsimp only [round0.validatorCapture, round0.descriptor] at leftLoop
+  dsimp only [round1.validatorCapture, round1.descriptor] at rightLoop
+  simp only [field, ValidatorLeftRound.field_eq, context_suite, suite, Nat.reduceAdd,
+    CompiledValidator.carried] at leftLoop rightLoop
+  rw [TwoSumsValidator.participant_eq]
+  simp only [TwoSumsValidator.view, Domain.View.participant, TwoSumsValidator.inputSorts,
+    TwoSumsValidator.outputSorts, TwoSumsValidator.returned, inputs, field, ValidatorLeftRound.field,
+    ValidatorLeftRound.field_eq, suite, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, context_suite,
+    List.map_cons, List.map_nil, beq_self_eq_true, ite_true]
+  unfold_component_bodies [TwoSumsValidator.view]
+  compose_component_bridge [leftLoop, rightLoop]
+    normalizing (
+      try (rename_i reached output post; obtain ⟨state, historyEq, lengthEq, rfl⟩ := post; subst reached; simp only [List.length_nil, List.length_range, Nat.zero_add] at *)
+      repeat first
+        | fail_if_no_progress (simp (disch := omega) only [SumcheckValidatorHelpers.terminal_all program domain_bodies])
+        | fail_if_no_progress (
+            normalize_table_validator [emptyLaw] unfolding
+              [Validator.presented, Validator.afterLeft, Validator.finish, Validator.decision,
+                CompiledValidator.decode, CompiledValidator.carried, rightCaptured, leftCaptured, inputs,
+                field, ValidatorLeftRound.field, ValidatorLeftRound.field_eq,
+                ValidatorRightRound.field, ValidatorRightRound.field_eq, suite, context_suite, right_context_suite,
+                List.length_nil, List.length_range, Nat.zero_add]
+            try simp_all only [ite_true, ite_false])
+        | fail_if_no_progress (conv => arg 4; simp only [PIR.Process.bind_assoc]))
+    solving rfl
+    finishing trivial
+
 
 #print axioms bridge
 

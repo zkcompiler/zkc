@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.Examples.Components.SmallSumcheckValidatorRound
 public import ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorExecution
+public meta import ZkcSecurity.Tools.ComponentBridge
 
 @[expose] public section
 noncomputable section
@@ -71,37 +72,31 @@ noncomputable def presented (raw : List F) (claim : F) (count : Nat)
       (Domain.participant (ringModel F G) program context SmallSumcheckValidator.artifact (inputs raw claim count history))
       (presented raw claim count history) := by
   have emptyLaw := SumcheckDomainHelpers.empty (F := F) (G := G) program helper_bodies.sumcheck
-  by_cases allowed : count ≤ 2
-  all_goals
-    rw [SmallSumcheckValidator.participant_eq]
-    simp only [SmallSumcheckValidator.view, Domain.View.participant, SmallSumcheckValidator.inputSorts,
-      SmallSumcheckValidator.outputSorts, SmallSumcheckValidator.returned, inputs, field, ValidatorRound.field, ValidatorRound.field_eq, suite, Domain.sortsMatch,
-      Domain.Value.sort, Domain.Payload.ty, context_suite, List.map_cons, List.map_nil, beq_self_eq_true, ite_true,
-      presented, allowed, ite_false]
-    unfold_component_bodies [SmallSumcheckValidator.view]
-    normalize_table_validator [emptyLaw] unfolding [ValidatorRound.field_eq, context_suite, allowed, ite_false]
-  · conv => arg 4; simp only [PIR.Process.bind_assoc]
-    validator_capture actualCaptured
-    have loops := CompiledValidator.loop_bridge ValidatorRound.connection actualCaptured
-      (List.range count) ⟨[], claim, history⟩
-    simp only [show actualCaptured.length = round0.validatorCapture from rfl, Nat.reduceAdd] at loops
-    rw [← round0.validator_block F G program context rfl] at loops
-    simp only [context_suite] at loops
-    apply loops.bind
-    intro reached output post
-    obtain ⟨state, historyEq, lengthEq, rfl⟩ := post
-    have pointLength : state.point.length = count := by
-      simpa only [List.length_nil, Nat.zero_add, List.length_range] using lengthEq
-    have small : state.point.length < 64 := by omega
-    have terminal := SumcheckValidatorHelpers.terminal_all (F := F) (G := G) program helper_bodies raw state.point state.scalar small
-    subst reached
-    simp only [CompiledValidator.carried, finish, CompiledValidator.decode]
-    by_cases bounded : raw.length < indexLimit
-    all_goals
-      normalize_table_validator [terminal] unfolding [actualCaptured, captured, inputs, field, ValidatorRound.field, ValidatorRound.field_eq, suite, context_suite, bounded, ite_false]
-    · exact .done _ _ trivial
-    · exact .halt _ .exhausted
-  · exact .halt _ .refused
+  have loopLaw := sourceLoop field program context round0.plan.toPlan ValidatorRound.sites
+    ValidatorRound.connection _ _ (round0.validator_block F G program context rfl)
+  dsimp only [round0.validatorCapture, round0.descriptor] at loopLaw
+  simp only [field, ValidatorRound.field_eq, context_suite, suite, Nat.reduceAdd, CompiledValidator.carried] at loopLaw
+  rw [SmallSumcheckValidator.participant_eq]
+  simp only [SmallSumcheckValidator.view, Domain.View.participant, SmallSumcheckValidator.inputSorts,
+    SmallSumcheckValidator.outputSorts, SmallSumcheckValidator.returned, inputs, field, ValidatorRound.field,
+    ValidatorRound.field_eq, suite, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, context_suite,
+    List.map_cons, List.map_nil, beq_self_eq_true, ite_true]
+  unfold_component_bodies [SmallSumcheckValidator.view]
+  compose_component_bridge [loopLaw]
+    normalizing (
+      try (rename_i reached output post; obtain ⟨state, historyEq, lengthEq, rfl⟩ := post; subst reached; simp only [List.length_nil, List.length_range, Nat.zero_add] at *)
+      repeat first
+        | fail_if_no_progress (simp (disch := omega) only [SumcheckValidatorHelpers.terminal_all program helper_bodies])
+        | fail_if_no_progress (
+            normalize_table_validator [emptyLaw] unfolding
+              [Validator.presented, Validator.finish, CompiledValidator.decode, CompiledValidator.carried,
+                captured, inputs, field, ValidatorRound.field, ValidatorRound.field_eq, suite, context_suite,
+                List.length_nil, List.length_range, Nat.zero_add]
+            try simp_all only [ite_true, ite_false])
+        | fail_if_no_progress (conv => arg 4; simp only [PIR.Process.bind_assoc]))
+    solving rfl
+    finishing trivial
+
 
 #print axioms bridge
 
