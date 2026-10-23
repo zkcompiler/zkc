@@ -180,6 +180,9 @@ and Wire owners. `Prepared` retains decoded immutable data with its canonical
 encoding; each invocation still checks type, policy, setup and loading limits.
 `WireFile` retains an opened regular descriptor and an expected
 SHA-256; common Host preparation reads and authenticates it under input limits.
+Applications can use `InputFile::read_verified` to materialize the same pinned
+descriptor under an explicit byte ceiling before constructing a `Wire` input.
+Materialization checks the pin; ordinary Host type and capacity checks still apply.
 The admitted source schema's `constructible` authority applies recursively
 through products and alternative payloads. A matching native representation does
 not confer private constructor authority. Source randomness comes through named

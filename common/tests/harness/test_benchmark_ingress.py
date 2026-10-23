@@ -45,7 +45,8 @@ def saved_host_manifest(policy='json', operation='prove', inputs=2, iterations=1
     job = dict(case='case', implementation='zkc', operation=operation, boundary='admitted_entry_call',
                backend=dict(kind='host', package='entry.zkpkg', sha256='0'*64, ingress=policy, inputs=[{'public': f'{i}-public.json'} for i in range(inputs)], preparation=True))
     return dict(format='zkc.benchmark/0', ingress=policy, status='passed', observation='timing',
-                compiler_options=[], processes=1, plan=plan, matrix=[job], contracts={}, host={},
+                compiler_options=[], processes=1, plan=plan, matrix=[job], contracts={}, threads=1,
+                host={'requested_cpus': None, 'affinity': None},
                 results=[dict(case='case', implementation='zkc', operation=operation, status='passed',
                               repetition=0, worker=worker, validated_proofs=len(worker['proofs']))])
 
@@ -234,6 +235,7 @@ def test_preowned_report_retains_attribution_without_a_decode_label(modules, tmp
     job = dict(case='case', implementation='zkc', operation='verify', boundary='admitted_entry_call', backend=backend)
     manifest = dict(format='zkc.benchmark/0', ingress='prepared', status='passed', observation='timing',
                     compiler_options=[], processes=1, plan=PLAN, matrix=[job], contracts={},
+                    threads=1, host={'requested_cpus': None, 'affinity': None},
                     results=[job | {'status': 'passed', 'repetition': 0, 'worker': preowned('prepared')}])
     modules['results'].publish(tmp_path, manifest)
     rows = json.loads((tmp_path/'summary.json').read_text())['rows']
@@ -331,7 +333,7 @@ def test_run_worker_uses_one_statement_and_the_same_report_contract(modules, tmp
     executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({report!r}))\n')
     executable.chmod(0o755)
     job = modules['runner'].Job('same-run-case', 'zkc', 'run', executable,
-        {'kind': 'run', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'arguments': 'captured', 'accept_role': 'P'},
+        {'kind': 'run', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': policy, 'arguments': 'captured', 'check': {'kind': 'acceptance', 'role': 'P'}},
         tmp_path/'unused', 'admitted_function_call')
     result = modules['runner'].execute_job(job, tmp_path/'run', PLAN, 5)
     assert result['worker']['lifecycle']['ingress'] == policy

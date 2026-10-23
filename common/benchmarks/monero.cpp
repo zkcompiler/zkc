@@ -7,6 +7,7 @@
 #include "serialization/serialization.h"
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <rapidjson/document.h>
@@ -41,6 +42,11 @@ static std::string read(const std::string &path) {
   if (!in)
     throw std::runtime_error("cannot read " + path);
   return {std::istreambuf_iterator<char>(in), {}};
+}
+static std::string status_value(const std::string &line) {
+  auto value = line.substr(line.find(':') + 1);
+  auto first = value.find_first_not_of(" \t");
+  return first == std::string::npos ? "" : value.substr(first);
 }
 static void write(const std::string &path, const std::string &value) {
   std::ofstream out(path, std::ios::binary);
@@ -272,11 +278,38 @@ int main(int argc, char **argv) {
                          allocator);
       if (line.rfind("Threads:", 0) == 0)
         process.AddMember("threads_at_exit",
-                          Json(line.substr(8).c_str(), allocator), allocator);
-      if (line.rfind("Cpus_allowed_list:", 0) == 0)
-        process.AddMember("affinity", Json(line.substr(18).c_str(), allocator),
+                          Json(status_value(line).c_str(), allocator),
                           allocator);
+      if (line.rfind("Cpus_allowed_list:", 0) == 0)
+        process.AddMember(
+            "affinity", Json(status_value(line).c_str(), allocator), allocator);
     }
+    Json affinities(rapidjson::kArrayType), errors(rapidjson::kArrayType);
+    for (const auto &task :
+         std::filesystem::directory_iterator("/proc/self/task")) {
+      const auto path = task.path() / "status";
+      std::ifstream stream(path);
+      if (!stream && !std::filesystem::exists(path))
+        continue; // The task vanished during the observation.
+      bool found = false;
+      while (std::getline(stream, line)) {
+        if (line.rfind("Cpus_allowed_list:", 0) != 0)
+          continue;
+        Json record(rapidjson::kObjectType);
+        record.AddMember(
+            "tid",
+            static_cast<uint64_t>(std::stoull(task.path().filename().string())),
+            allocator);
+        record.AddMember("cpus", Json(status_value(line).c_str(), allocator),
+                         allocator);
+        affinities.PushBack(record, allocator);
+        found = true;
+      }
+      if (!found || stream.bad())
+        errors.PushBack(Json(path.c_str(), allocator), allocator);
+    }
+    process.AddMember("thread_affinities", affinities, allocator);
+    process.AddMember("thread_observation_errors", errors, allocator);
     report.AddMember("process", process, allocator);
     uint64_t floor = UINT64_MAX;
     for (unsigned i = 0; i < 1000; ++i) {

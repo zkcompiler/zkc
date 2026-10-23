@@ -11,10 +11,11 @@ from .projects import freeze_project
 from .workloads import Protocol, catalog as protocol_catalog
 from .coverage import catalog as execution_catalog, SMOKE
 from .providers import Case as ProviderCase, catalog as provider_catalog
+from .eip4844 import Case as Eip4844Case, catalog as eip4844_catalog
 
 
 def catalog():
-    return protocol_catalog() + execution_catalog() + provider_catalog()
+    return protocol_catalog() + execution_catalog() + provider_catalog() + eip4844_catalog()
 
 
 class ProofChecks:
@@ -38,12 +39,12 @@ def prepare(args, output, capture, manifest):
     if args.preset == 'smoke':
         selected = [c for c in selected if c[0] in SMOKE]
     elif args.preset == 'execution':
-        selected = [c for c in selected if not isinstance(c[1], (Protocol, ProviderCase))]
+        selected = [c for c in selected if not isinstance(c[1], (Protocol, ProviderCase, Eip4844Case))]
     elif args.preset == 'stark':
         selected = [c for c in selected if c[1].name in ('air', 'stark', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
     if args.execution_counts:
-        require(all(not isinstance(c[1], (Protocol, ProviderCase)) for c in selected), 'execution counts require source workloads')
+        require(all(not isinstance(c[1], (Protocol, ProviderCase, Eip4844Case)) for c in selected), 'execution counts require source workloads')
     controls = [c for c in selected if not isinstance(c[1], Protocol)]
     selected = [c for c in selected if isinstance(c[1], Protocol)]
     suites = {c[1].name: c[1] for c in selected}
@@ -58,8 +59,10 @@ def prepare(args, output, capture, manifest):
     execution_checks = {}
     from .execution import prepare_case as prepare_execution
     from .providers import prepare_case as prepare_provider
+    from .eip4844 import prepare_case as prepare_eip4844
     for name, case, _ in controls:
-        prepare_control = prepare_provider if isinstance(case, ProviderCase) else prepare_execution
+        prepare_control = (prepare_provider if isinstance(case, ProviderCase) else
+                           prepare_eip4844 if isinstance(case, Eip4844Case) else prepare_execution)
         jobs, gate = prepare_control(args, output, capture, manifest, case)
         all_jobs.extend(jobs)
         execution_checks[name] = gate
@@ -82,7 +85,7 @@ def capture_sources(args, output, capture, manifest, suites):
         capture.add(getattr(args, name))
     # The executing harness and worker sources are evidence, not proof of a binary build.
     for path in sorted((ROOT / 'common/benchmarks').rglob('*')):
-        if path.is_file() and path.suffix in ('.py', '.cpp'):
+        if path.is_file() and path.suffix in ('.py', '.cpp', '.rs'):
             capture.add(path, Path('measurement') / path.relative_to(ROOT))
     for path in sorted((root / 'crates/zkc-benchmarks').rglob('*')):
         if path.is_file() and path.suffix in ('.rs', '.toml'):
@@ -104,6 +107,21 @@ def capture_sources(args, output, capture, manifest, suites):
             path = tree / relative
             if path.is_file():
                 capture.add(path, Path(name) / relative)
+    for index, path in enumerate(getattr(args, 'cargo_manifest', [])):
+        path = path.resolve()
+        metadata = output/'preparation'/f'cargo-metadata-{index}.json'
+        journal.command(['cargo', 'metadata', '--offline', '--locked', '--format-version=1',
+                         '--manifest-path', path], cwd=path.parent, stdout=metadata)
+        graph = json.loads(metadata.read_text())
+        packages = {p['id']: p for p in graph['packages']}
+        manifest.setdefault('references', {}).setdefault('rust_features', []).append({
+            'manifest': str(path), 'metadata': capture.add(metadata),
+            'scope': 'resolved source graph; not an attestation of a prebuilt binary or target-specific compilation',
+            'packages': [{'name': packages[n['id']]['name'], 'version': packages[n['id']]['version'],
+                          'features': sorted(n['features'])} for n in graph['resolve']['nodes']],
+        })
+        capture.add(path)
+        capture.add(Path(graph['workspace_root'])/'Cargo.lock')
     for protocol in suites.values():
         tool = getattr(args, protocol.reference_tool)
         require(tool is not None, f'{protocol.name} requires --{protocol.reference_tool}')

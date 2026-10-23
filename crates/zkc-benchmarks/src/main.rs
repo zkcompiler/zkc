@@ -1,4 +1,5 @@
 //! Development-only benchmark client. Production execution stays in the Host.
+mod evidence;
 mod host;
 mod ingress;
 mod kernel;
@@ -75,7 +76,7 @@ enum Backend {
         package: PathBuf,
         sha256: String,
         arguments: PathBuf,
-        accept_role: String,
+        check: run_entry::Check,
     },
     Kernel {
         provider: kernel::Provider,
@@ -143,10 +144,11 @@ impl Report {
             lifecycle: None,
             process_peak_rss_bytes: None,
             proofs: Vec::new(),
-            build: json!({"compiler":env!("BENCH_RUSTC"), "profile":env!("BENCH_PROFILE"),
-                "opt_level":env!("BENCH_OPT_LEVEL"), "target":env!("BENCH_TARGET"),
-                "debug_assertions":cfg!(debug_assertions),
-                "execution_counts":zkc_runtime::vm::ExecutionCounts::ENABLED}),
+            build: {
+                let mut facts = evidence::build();
+                facts["execution_counts"] = json!(zkc_runtime::vm::ExecutionCounts::ENABLED);
+                facts
+            },
             process: Value::Null,
             timer_floor_ns: 0,
         }
@@ -161,23 +163,7 @@ fn retain_proof(path: &Path, proof: &[u8], outputs: &mut Vec<Value>) -> Result<(
     Ok(())
 }
 
-// This is the worker's lifetime high-water mark, including setup and warmups.
-fn peak_rss() -> Option<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        let status = std::fs::read_to_string("/proc/self/status").ok()?;
-        let line = status.lines().find(|s| s.starts_with("VmHWM:"))?;
-        line.split_whitespace()
-            .nth(1)?
-            .parse::<u64>()
-            .ok()?
-            .checked_mul(1024)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
+use evidence::peak_rss;
 
 fn run() -> Result<Report> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -219,8 +205,8 @@ fn run() -> Result<Report> {
             package,
             sha256,
             arguments,
-            accept_role,
-        } => run_entry::run(&request, package, sha256, arguments, accept_role),
+            check,
+        } => run_entry::run(&request, package, sha256, arguments, check),
         Backend::Kernel {
             provider,
             group,
@@ -253,22 +239,8 @@ fn run() -> Result<Report> {
         Err(_) => cause,
     })?;
     report.process_peak_rss_bytes = peak_rss();
-    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
-    let status_value = |key: &str| {
-        status
-            .lines()
-            .find_map(|line| line.strip_prefix(key).map(str::trim))
-    };
-    report.process = json!({"threads_at_exit":status_value("Threads:"), "affinity":status_value("Cpus_allowed_list:"),
-        "rayon_num_threads":std::env::var("RAYON_NUM_THREADS").ok()});
-    report.timer_floor_ns = (0..1000)
-        .map(|_| {
-            let start = std::time::Instant::now();
-            std::hint::black_box(());
-            start.elapsed().as_nanos()
-        })
-        .min()
-        .unwrap();
+    report.process = evidence::process();
+    report.timer_floor_ns = evidence::timer_floor_ns();
     Ok(report)
 }
 fn main() {
@@ -336,7 +308,7 @@ mod request_tests {
                 json!({"kind":kind,"package":"package","sha256":"pin","inputs":[],
                     "preparation":true,"preparation_entries":null,"preparation_bytes":null})
             } else {
-                json!({"kind":kind,"package":"package","sha256":"pin","arguments":"arguments.json","accept_role":"P"})
+                json!({"kind":kind,"package":"package","sha256":"pin","arguments":"arguments.json","check":{"kind":"acceptance","role":"P"}})
             };
             assert!(serde_json::from_value::<Backend>(backend.clone()).is_err());
             for ingress in ["json", "wire", "native", "prepared"] {

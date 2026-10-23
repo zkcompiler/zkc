@@ -126,6 +126,12 @@ fn convert(
     capacity: Capacity,
     retained: &mut usize,
 ) -> Result<Value> {
+    let value = match value {
+        Value::Leaf(InputValue::WireFile { file, sha256 }) => Value::Leaf(InputValue::Wire(
+            file.read_verified(&sha256, capacity.wire_bytes)?.into(),
+        )),
+        other => other,
+    };
     let converted = match value {
         Value::Leaf(InputValue::Wire(bytes)) => {
             let types = array(schema, "native_types")?;
@@ -345,8 +351,8 @@ fn share_leaf(value: &InputValue) -> Result<InputValue> {
             file: file.clone(),
             fingerprint: *fingerprint,
         },
-        // File-backed ordinary data and physical variants are not produced by
-        // this worker's bounded, resolver-free named Decoder.
+        // Ordinary files were materialized before ownership. Physical variants
+        // are represented by their admitted source Value shape.
         _ => return Err("benchmark-ingress: unsupported input constructor".into()),
     })
 }

@@ -53,11 +53,11 @@ def valid_digest(value):
     return isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value) is not None
 
 
-def validate_backend(backend, ingress=None, boundary=None):
+def validate_backend(backend, ingress=None, boundary=None, operation=None):
     require(isinstance(backend, dict),
             'missing preparation request' if boundary == 'admitted_entry_call' else 'invalid matrix backend')
     kind = backend.get('kind')
-    require(kind in ('host', 'run', 'schnorr', 'sumcheck', 'monero', 'kernel'), 'invalid matrix backend kind')
+    require(kind in ('host', 'run', 'schnorr', 'sumcheck', 'monero', 'kernel', 'c_kzg'), 'invalid matrix backend kind')
     required, optional = {'kind'}, set()
     if kind == 'kernel':
         from .providers import BOUNDARIES
@@ -78,6 +78,18 @@ def validate_backend(backend, ingress=None, boundary=None):
         require(type(chain_length) is int and 1 <= chain_length <= 32
                 and (chain_length == 1 or backend['boundary'] in ('resident', 'converted', 'resident_installed_chain', 'wire_resident_chain')),
                 'invalid provider chain length')
+    elif kind == 'c_kzg':
+        required |= {'api', 'setup', 'inputs'}
+        optional.add('expected')
+        require(backend.get('api') in ('commitment', 'opening', 'point', 'blob', 'batch'), 'invalid c-kzg operation')
+        require(all(valid_path(backend.get(name)) for name in ('setup', 'inputs'))
+                and ('expected' not in backend or valid_path(backend['expected'])), 'invalid c-kzg paths')
+        require(boundary in (None, 'reference_kzg_call'), 'invalid c-kzg boundary')
+        if operation is not None:
+            supported = {'commitment': ('run',), 'opening': ('run',), 'point': ('verify',),
+                         'blob': ('prove', 'verify'), 'batch': ('prove', 'verify')}
+            require(operation in supported[backend['api']], 'invalid c-kzg API/operation pair')
+            require(operation == 'verify' or 'expected' in backend, 'missing c-kzg expected output')
     elif kind in ('host', 'run'):
         required |= {'ingress', 'package', 'sha256'}
         require(boundary is None or boundary == ('admitted_entry_call' if kind == 'host' else 'admitted_function_call'),
@@ -110,10 +122,13 @@ def validate_backend(backend, ingress=None, boundary=None):
             require(valid_path(record['public']) and all(record.get(name) is None or valid_path(record[name])
                     for name in ('witness', 'proof')), 'invalid Host input path')
     elif kind == 'run':
-        required |= {'arguments', 'accept_role'}
+        required |= {'arguments', 'check'}
         require(valid_path(backend.get('arguments')), 'invalid Function arguments path')
-        require(isinstance(backend.get('accept_role'), str) and backend['accept_role'],
-                'invalid Function acceptance role')
+        check = backend.get('check')
+        require(isinstance(check, dict) and check.get('kind') in ('acceptance', 'output'), 'invalid Function output check')
+        key = 'role' if check['kind'] == 'acceptance' else 'expected'
+        validate_fields(check, {'kind', key}, set(), 'Function output check')
+        require(valid_path(check[key]), 'invalid Function output expectation')
     validate_fields(backend, required, optional, 'backend')
 
 
@@ -229,6 +244,23 @@ def validate_worker(report, plan, boundary):
     return report
 
 
+def validate_reference(worker, backend, operation, contract=None):
+    if backend['kind'] != 'c_kzg':
+        return
+    diagnostics = worker['diagnostics']
+    require(isinstance(diagnostics, dict) and diagnostics.get('api') == backend['api'], 'c-kzg API differs from request')
+    count = diagnostics.get('blob_count')
+    require(type(count) is int and 1 <= count <= 64 and (backend['api'] == 'batch' or count == 1),
+            'invalid c-kzg blob count')
+    require(type(diagnostics.get('precompute')) is int and diagnostics['precompute'] == 0,
+            'unexpected c-kzg precompute setting')
+    require(worker['proof_bytes'] == (0 if operation == 'run' else count*48), 'c-kzg proof size differs')
+    if contract is not None:
+        require(contract.get('api') == backend['api'] and type(contract.get('blobs')) is int
+                and contract['blobs'] == count,
+                'c-kzg workload differs from contract')
+
+
 def validate_manifest(manifest):
     """A successful saved run must contain the entire declared measurement matrix."""
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
@@ -262,7 +294,7 @@ def validate_manifest(manifest):
         require(isinstance(configuration['origins'], dict) and set(configuration['origins']) == keys
                 and all(isinstance(v, str) and v for v in configuration['origins'].values()), 'invalid configuration origins')
     for job in matrix:
-        validate_backend(job.get('backend'), manifest['ingress'], job.get('boundary'))
+        validate_backend(job.get('backend'), manifest['ingress'], job.get('boundary'), job['operation'])
     successful = manifest['status'] == 'passed'
     # Preparation failures need no matrix or workers. Any retained worker still
     # needs its declared request and complete plan, irrespective of outer status.
@@ -273,6 +305,9 @@ def validate_manifest(manifest):
         require(set(plan) == {'samples', 'warmups', 'iterations'}, 'invalid measurement plan fields')
         for name, minimum in (('samples', 1), ('warmups', 0), ('iterations', 1)):
             require(type(plan.get(name)) is int and plan[name] >= minimum, f'invalid plan {name}')
+    if successful or any(r['status'] != 'failed' for r in results):
+        from .environment import validate_condition
+        validate_condition(manifest.get('host'), manifest.get('threads'))
     if successful:
         require(matrix, 'missing measurement matrix')
     jobs = {}
@@ -297,8 +332,15 @@ def validate_manifest(manifest):
         require(key[:3] in jobs and result['repetition'] < processes, 'unexpected measurement')
         job = jobs[key[:3]]
         worker = validate_worker(result['worker'], plan, job['boundary'])
+        if result['status'] != 'failed':
+            from .environment import validate_process
+            validate_process(worker['process'], manifest['host'], manifest['threads'])
         from .providers import validate_evidence
         validate_evidence(worker, job['backend'])
+        if job['backend']['kind'] == 'c_kzg':
+            contract = manifest.get('contracts', {}).get(job['case'])
+            require(isinstance(contract, dict), 'missing c-kzg workload contract')
+            validate_reference(worker, job['backend'], job['operation'], contract)
         if job['boundary'] == 'admitted_entry_call':
             validate_preparation_limits(worker['lifecycle']['preparation_limits'], job['backend'])
         if job['boundary'] in ('admitted_entry_call', 'admitted_function_call'):
@@ -354,11 +396,12 @@ def validate_negative_report(report, backend, *, truncated=False, completed=None
     require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
             and report.get('status') in allowed, 'negative control failed outside verification')
     required = {'format', 'status', 'error'}
-    if backend['kind'] != 'monero':
+    external = backend['kind'] in ('monero', 'c_kzg')
+    if not external:
         required |= {'ingress', 'completed_calls', 'refusal', 'preparation', 'preparation_limits'}
     validate_fields(report, required, set(), 'negative worker report')
     require(isinstance(report['error'], str), 'invalid negative worker error')
-    if backend['kind'] == 'monero':
+    if external:
         require(report['status'] == 'rejected', 'external worker cannot report input bounds')
         require(completed is None and classes is None, 'external worker has no invocation observations')
         return

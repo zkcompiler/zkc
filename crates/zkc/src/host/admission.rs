@@ -265,9 +265,7 @@ impl<'a> Admission<'a> {
                 _ => "entry-input-reference",
             })?
         };
-        if <[u8; 32]>::from(Sha256::digest(&bytes)) != *sha256 {
-            return Err("entry-input-reference-digest".into());
-        }
+        super::input_file::InputFile::verify(&bytes, sha256)?;
         Ok(bytes)
     }
     pub fn add(&mut self, input: Input<'a>) -> Result<usize> {

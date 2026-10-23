@@ -43,3 +43,11 @@ different trusted setup. The build compiles c-kzg-4844 and blst from the crate
 sources. The [integration tests](../../protocol/test_kzg_eip4844.py) consume the
 retained corpora; they never run this executable. These are finite
 compatibility checks, not a proof of parser equivalence or security.
+
+The same standalone workspace also builds `zkc-c-kzg-benchmarks`, the external
+client for the [maintained benchmark scheduler](../../../benchmarks/README.md#eip-4844-comparison).
+It shares the development worker's timer and process/build observation code.
+It loads the setup once with `precompute=0`, decodes inputs outside timing,
+checks every output and retains every produced proof. This client remains
+outside the production workspace; the corpus reproduction executable and its
+line protocol are unchanged.

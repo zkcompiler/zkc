@@ -64,7 +64,7 @@ print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='
     worker.chmod(0o755)
     args = SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=1,
                            warmups=0, iterations=1, ingress='json', execution_counts=False,
-                           compiler_option=[], processes=2, seed=17, cpu=None, threads=1,
+                           compiler_option=[], processes=2, seed=17, cpus=None, threads=1,
                            label='provider test', timeout=5, worker=worker)
     case = next(case for _, case, shape in providers.catalog()
                 if shape == dict(group='g1', kernel='scale', elements=1, boundary='resident'))

@@ -199,7 +199,7 @@ def lifecycle_worker(times=(10, 100, 30, 300)):
     calls = [{'input_index': i % 2, 'decode_ns': 5, 'request_ns': 2, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'admitted_entry_call',
         'proof_bytes': 4, 'admission_ns': 3, 'process_peak_rss_bytes': 100, 'proofs': [],
-        'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {}, 'timer_floor_ns': 1,
+        'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1,
         'diagnostics': {}, 'lifecycle': {'ingress': 'json', 'input_setup': [], 'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
             'peak_rss_before_diagnostics': 80, 'peak_rss_after_diagnostics': 100, 'calls': calls},
         'samples': [{'phase': 'warmup' if i < 2 else 'sample', 'index': i, 'iterations': 1,
@@ -289,6 +289,7 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
            'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
+                'threads': 1, 'host': {'requested_cpus': None, 'affinity': None},
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
                             for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
@@ -310,6 +311,7 @@ def test_saved_manifest_checks_requested_limits(modules, backend):
     if backend != 'absent':
         job['backend'] = backend
     manifest = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'status': 'passed', 'processes': 1,
+                'threads': 1, 'host': {'requested_cpus': None, 'affinity': None},
                 'compiler_options': [], 'observation': 'timing',
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
@@ -440,7 +442,7 @@ def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
            'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     baseline = {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
-                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
+                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {'requested_cpus': None, 'affinity': None}, 'threads': 1, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
     changed['results'][0]['worker']['lifecycle']['preparation_limits'][bound] *= 2
@@ -467,7 +469,7 @@ sys.path.insert(0, {str(root/'common/benchmarks')!r})
 from bench import io, runner
 io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
 args = SimpleNamespace(output=Path({str(output)!r}), exclusive=True, samples=1, warmups=0, iterations=1,
-    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, ingress='json', execution_counts=False, compiler_option=[])
+    processes=1, seed=0, cpus=None, threads=1, label='signal', timeout=1, ingress='json', execution_counts=False, compiler_option=[])
 def prepare(*args):
     os.kill(os.getpid(), signal.SIGTERM)
 raise SystemExit(runner.run(args, prepare))
@@ -495,6 +497,7 @@ def counted_manifest():
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
            'backend': {'kind': 'host', 'package': 'entry.zkpkg', 'sha256': '0'*64, 'ingress': 'json', 'inputs': [{'public': 'first.json'}, {'public': 'second.json'}], 'preparation': True}}
     return {'format': 'zkc.benchmark/0', 'ingress': 'json', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
+            'threads': 1, 'host': {'requested_cpus': None, 'affinity': None},
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},
             'results': [job | {'status': 'passed', 'repetition': 0, 'worker': worker}]}

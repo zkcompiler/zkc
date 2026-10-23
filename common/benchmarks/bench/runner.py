@@ -10,7 +10,8 @@ import shutil
 import sys
 
 from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_preparation_limits, validate_worker, validate_ingress, validate_backend, validate_proof_artifacts, validate_negative_report
+from .results import FORMAT, publish, validate_manifest, validate_preparation_limits, validate_worker, validate_ingress, validate_backend, validate_proof_artifacts, validate_negative_report, validate_reference
+from .environment import cpu_facts, validate_process
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
@@ -68,11 +69,11 @@ def host_info():
             'cpu_model': cpu, 'cpu_count': os.cpu_count(),
             'affinity': affinity, 'command_environment': command_environment(), 'performance_environment': performance_environment(),
             'settings': {str(path): path.read_text().strip() for path in settings
-                         if path.is_file()}}
+                         if path.is_file()}, **cpu_facts(affinity)}
 
 
 def execute_job(job, directory, plan, timeout):
-    validate_backend(job.backend, boundary=job.boundary)
+    validate_backend(job.backend, boundary=job.boundary, operation=job.operation)
     directory.mkdir(parents=True)
     proof = directory / 'proof.bin' if job.operation == 'prove' else job.proof
     request = {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': job.operation,
@@ -84,6 +85,7 @@ def execute_job(job, directory, plan, timeout):
     report = validate_worker(read_report(command), plan, job.boundary)
     from .providers import validate_evidence
     validate_evidence(report, job.backend)
+    validate_reference(report, job.backend, job.operation)
     require(report['build'].get('execution_counts', False) is job.execution_counts,
             'worker execution-counts feature differs from the requested observation')
     if job.backend.get('kind') in ('host', 'run'):
@@ -131,13 +133,15 @@ def run_suite(args, prepare):
     if getattr(args, 'configuration', None) is not None:
         manifest['configuration'] = args.configuration
     try:
-        if args.cpu is not None:
+        if args.cpus is not None:
             require(hasattr(os, 'sched_setaffinity'), 'CPU affinity is unavailable')
             original_affinity = os.sched_getaffinity(0)
-            require(args.cpu in original_affinity, 'CPU is outside current affinity')
-            os.sched_setaffinity(0, {args.cpu})
+            require(set(args.cpus) <= original_affinity, 'CPU set is outside current affinity')
+            os.sched_setaffinity(0, set(args.cpus))
         os.environ['RAYON_NUM_THREADS'] = str(args.threads)
         manifest['host'] = host_info()
+        manifest['host']['requested_cpus'] = args.cpus
+        manifest['host']['thread_policy'] = 'RAYON_NUM_THREADS request; not a universal provider budget'
         manifest['threads'] = args.threads
         jobs, check = prepare(args, output, capture, manifest)
         require(jobs, 'empty benchmark matrix')
@@ -179,10 +183,7 @@ def run_suite(args, prepare):
             try:
                 result.update(execute_job(job, directory, manifest['plan'], args.timeout))
                 process = result['worker']['process']
-                require(process.get('rayon_num_threads') == str(args.threads), 'worker thread setting differs')
-                if args.cpu is not None:
-                    affinity = process.get('affinity')
-                    require(isinstance(affinity, str) and affinity.strip() == str(args.cpu), 'worker affinity differs')
+                validate_process(process, manifest['host'], args.threads)
                 result['status'] = 'measured'
                 measured.append((job, directory, result))
             except Exception as error:
@@ -224,7 +225,7 @@ def run_suite(args, prepare):
     return 0 if manifest['status'] == 'passed' else 1
 
 def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=None):
-    validate_backend(job.backend, boundary=job.boundary)
+    validate_backend(job.backend, boundary=job.boundary, operation='verify')
     directory.mkdir(parents=True)
     path = directory / 'request.json'
     write_json(path, {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': 'verify',

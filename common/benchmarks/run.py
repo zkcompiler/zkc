@@ -11,6 +11,7 @@ from bench.results import compare, publish, validate_manifest
 from bench.runner import run
 from bench.suites import catalog, prepare
 from bench.configuration import flags
+from bench.environment import cpu_list
 
 
 def nonnegative(value):
@@ -29,12 +30,15 @@ def main(argv=None):
     report_parser = commands.add_parser('report', help='recompute summaries without remeasuring')
     report_parser.add_argument('manifest', type=Path)
     report_parser.add_argument('--output', type=Path, required=True)
-    run_parser = commands.add_parser('run', help='prepare, validate, measure and report')
+    run_parser = commands.add_parser('run', help='prepare, validate, measure and report', allow_abbrev=False)
     run_parser.add_argument('--source', type=Path, default=ROOT, help='project source tree (harness remains this checkout)')
     for name in ('compiler', 'runtime', 'worker'):
         run_parser.add_argument(f'--{name}', type=executable, required=True)
     run_parser.add_argument('--monero', type=executable)
     run_parser.add_argument('--monero-source', type=Path)
+    run_parser.add_argument('--c-kzg', type=executable, help='standalone pinned c-kzg benchmark client')
+    run_parser.add_argument('--cargo-manifest', type=Path, action='append', default=[],
+                            help='capture an offline resolved source feature graph; does not attest a prebuilt worker')
     run_parser.add_argument('--case', action='append', choices=[c[0] for c in catalog()])
     run_parser.add_argument('--suite', action='append', choices=sorted({c[1].name for c in catalog()}))
     run_parser.add_argument('--preset', choices=('smoke', 'stark', 'execution', 'all'), default='all')
@@ -51,7 +55,7 @@ def main(argv=None):
     run_parser.add_argument('--iterations', type=positive_integer, default=1)
     run_parser.add_argument('--threads', type=positive_integer, default=1)
     run_parser.add_argument('--seed', type=int, default=0)
-    run_parser.add_argument('--cpu', type=nonnegative)
+    run_parser.add_argument('--cpus', type=cpu_list, help='CPU list/ranges, for example 2,4-7')
     run_parser.add_argument('--timeout', type=positive_integer, default=300)
     run_parser.add_argument('--execution-counts', action='store_true', help='require an instrumented source worker; report execution counts without timing comparisons')
     run_parser.add_argument('--compiler-option', action='append', default=[],

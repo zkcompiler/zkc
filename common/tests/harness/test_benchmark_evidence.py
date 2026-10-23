@@ -83,7 +83,7 @@ def test_backend_variant_mutations(evidence, kind, fault):
         else: backend['inputs'][0]['witness'] = []
     elif kind == 'run':
         if fault == 'nested_unknown': backend['arguments'] = {'path': 'input.json'}
-        elif fault == 'nested_missing': del backend['accept_role']
+        elif fault == 'nested_missing': del backend['check']
         else: backend['arguments'] = ['input.json']
     elif kind in ('schnorr', 'monero'): backend['witness'] = {}
     else: backend['witness'] = None  # Sumcheck has no witness field.
@@ -199,7 +199,7 @@ def test_monero_negative_shape_and_optional_backend_fields(evidence):
 
 @pytest.mark.parametrize('kind,field', [
     ('host', field) for field in ('kind', 'ingress', 'package', 'sha256', 'inputs', 'preparation')
-] + [('run', field) for field in ('kind', 'ingress', 'package', 'sha256', 'arguments', 'accept_role')]
+] + [('run', field) for field in ('kind', 'ingress', 'package', 'sha256', 'arguments', 'check')]
   + [('sumcheck', 'public'), ('schnorr', 'public'), ('monero', 'public')])
 def test_every_required_backend_field_is_required(evidence, kind, field):
     results, io, fixtures = evidence
@@ -224,7 +224,7 @@ def test_host_backend_value_types(evidence, field, value):
 
 @pytest.mark.parametrize('field,value', [
     ('arguments', {}), ('arguments', None), ('arguments', ''),
-    ('accept_role', []), ('accept_role', ''),
+    ('check', []), ('check', {}), ('check', {'kind': 'acceptance', 'role': ''}), ('check', {'kind': 'output', 'expected': ''}),
 ])
 def test_function_backend_argument_and_result_selection(evidence, field, value):
     results, io, fixtures = evidence

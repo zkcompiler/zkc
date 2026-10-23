@@ -14,7 +14,7 @@ use std::{
 };
 use zkc::entry::{
     BindingPolicy, NamedValues, Package, ProofEntry, ProofOperation, ProofOptions, ProofRequest,
-    inputs::Decoder,
+    files::Documents,
 };
 use zkc_runtime::vm::StopKind;
 
@@ -128,20 +128,13 @@ pub fn run(
     let data = inputs
         .iter()
         .map(|input| {
-            let public = std::fs::read(&input.public).map_err(|e| e.to_string())?;
-            let witness = input
-                .witness
-                .as_ref()
-                .map(std::fs::read)
-                .transpose()
-                .map_err(|e| e.to_string())?;
             let proof = if job.operation == Operation::Verify {
                 std::fs::read(input.proof.as_ref().unwrap_or(&job.proof))
                     .map_err(|e| e.to_string())?
             } else {
                 Vec::new()
             };
-            Ok((public, witness, proof))
+            Ok(proof)
         })
         .collect::<Result<Vec<_>>>()?;
     let groups = entry.interface().input_groups();
@@ -154,14 +147,13 @@ pub fn run(
         .find(|group| group.name() == "witness")
         .ok_or("missing witness input group")?;
     let decode = |index: usize| {
-        let (public, witness, _) = &data[index];
-        let mut decoder = Decoder::new(options.capacity)?;
+        let mut decoder = Documents::new(options.capacity)?;
         let public = decoder
-            .decode(public_group, public, None)
+            .load(public_group, Some(&inputs[index].public))
             .map_err(|e| e.to_string())?;
         let private = if job.operation == Operation::Prove {
             decoder
-                .decode(witness_group, witness.as_deref().unwrap_or(b"{}"), None)
+                .load(witness_group, inputs[index].witness.as_deref())
                 .map_err(|e| e.to_string())?
         } else {
             Default::default()
@@ -252,7 +244,7 @@ pub fn run(
             (if job.operation == Operation::Prove {
                 entry.prove(input)
             } else {
-                entry.verify(input, &data[index].2)
+                entry.verify(input, &data[index])
             })
             .map(|report| (index, report))
             .map_err(|error| Failure::Failed(error.to_string()))
@@ -320,7 +312,7 @@ pub fn run(
         if job.operation == Operation::Prove {
             last.native.outcome.as_ref().unwrap().len()
         } else {
-            data[index].2.len()
+            data[index].len()
         },
     );
     report.admission_ns = Some(capture_ns + admit_ns);

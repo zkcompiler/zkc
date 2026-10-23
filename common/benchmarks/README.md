@@ -45,7 +45,7 @@ Selection options intersect:
 - `--preset smoke`: a fixed, small list covering the major execution paths.
 - `--preset stark`: AIR (both single-table profiles), FRI, polynomial, extension, transcript and machine cases.
 - `--preset execution`: all source controls and library workloads, without an external reference build.
-- `--preset all` (default): everything, including the optional Monero comparison.
+- `--preset all` (default): everything, including the optional Monero and c-kzg comparisons.
 
 The default is four **sequential** fresh processes per implementation/operation,
 two warmup samples and five measured samples per process, one call per sample.
@@ -61,8 +61,12 @@ with identical sources, inputs and worker settings. A smaller intermediate or
 instruction count does not by itself establish a timing improvement.
 
 `--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
-`--cpu` pins the suite and children to one allowed CPU. Workers check the requested
-environment and affinity. The harness records governor/turbo/SMT settings but does
+`--cpus 2,4-7` pins the suite and children to a set within the current affinity;
+`--cpus 2` selects one CPU. Workers check the requested environment, main-thread
+affinity and every surviving thread's CPU set. This is an exit-time observation,
+not scheduler tracing or proof that a terminated thread never escaped.
+The harness records CPU topology, common runtime ISA features across the selected
+CPUs and governor/turbo/SMT settings but does
 not change them. `--seed` shuffles case/operation blocks; paired implementations
 run consecutively with their order reversed on alternate process repetitions.
 Child processes receive a recorded, allowlisted environment: tool paths, temporary
@@ -70,6 +74,61 @@ paths, allocator/thread settings and explicit locale controls. Ambient feature
 switches, Python injection paths and unrelated credentials are not inherited.
 The schedule seed does not seed production prover randomness. Input generators use fixed,
 recorded algorithms and seeds, with full generated inputs retained.
+
+Rust workers embed their compiler, profile, target features, Rust flags and
+crate features. `--cargo-manifest Cargo.toml` additionally captures an offline,
+locked source dependency-feature resolution; repeat for standalone reference
+workspaces. Source graphs and lockfiles do not attest which features a prebuilt
+binary linked. Compiled Rust target features also do not describe the ISA of
+separately compiled C/assembly dependencies.
+
+### EIP-4844 comparison
+
+Build the [pinned standalone reference](../tests/reference/c-kzg/README.md):
+
+```sh
+cargo build --release --locked --manifest-path common/tests/reference/c-kzg/Cargo.toml \
+  --bin zkc-c-kzg-benchmarks --target-dir build/experiments/c-kzg-reference
+python3 common/benchmarks/run.py run --suite eip4844 \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks \
+  --c-kzg build/experiments/c-kzg-reference/release/zkc-c-kzg-benchmarks \
+  --cargo-manifest Cargo.toml --cargo-manifest common/tests/reference/c-kzg/Cargo.toml \
+  --threads 1 --cpus 0 --output build/experiments/eip4844
+```
+
+Use an allowed CPU. Compare multicore conditions in a separate run, for example
+`--threads 4 --cpus 0-3`. c-kzg's EIP-4844 APIs are single-threaded; its setup
+`precompute` setting stays zero because it targets EIP-7594 operations.
+Neither affinity nor the Rayon environment creates a shared provider budget.
+The reference uses its pinned `std` and `portable` features; Native keeps its
+normal build policy. Captured feature graphs expose that distinction, which
+also prevents interpreting the API ratio as a matched ISA comparison.
+
+The panel measures the ordinary authored EIP-4844 library: commitments, point
+openings and verification, single blob proofs, and batches of 1/4/16 blobs.
+Blobs contain distinct deterministic full-width scalars. Every function output
+is compared with the reference outside the execution timer; every produced blob
+proof is byte-checked and cross-verified. Changed statements and truncated and
+trailing proofs are negative controls. The panel stays within normal Host
+capacities. A 64-blob concatenated statement exceeds the current logical tree
+limit, so it is outside the maintained timing panel. A refused case remains
+failed evidence and is never silently resized.
+
+The source timer includes SDK input adaptation, source-level statement/setup
+validation, provider conversions, execution, publication and teardown. The
+reference timer covers the upstream call and returned bytes. Both exclude
+result checks and proof-file writes. Source JSON decoding parses input documents
+and resolves deferred file references; the timed SDK call reads those payloads,
+checks pins and imports values. Preowned ingress materializes payloads during
+its one-time input construction. Reference input decoding and setup loading are
+outside its timer. Lifecycle records separate source capture/admission,
+document parsing/reference resolution, ownership, requests and diagnostics. Reference setup/decode
+times are diagnostics. Conversion diagnostics are counts, not isolated timings.
+Thus this is a practical API comparison, not a matched kernel-only speedup.
+The current compiler's mixed-provider policy is used normally. An all-Arkworks
+KZG baseline needs an explicit captured pre-preference compiler; the harness
+does not rewrite executable artifacts to change providers.
 
 ### External Monero comparison
 
@@ -99,6 +158,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `relation_rows` | Actual table residuals for quadratic and coupled constraints; varying height/width, valid and perturbed traces | Independent complete residual oracle, including inactive slots; Bundle admission, result checks and Host costs included |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `kzg` | Generic KZG evaluation/quotient on checked roots-of-unity evaluations; on/off-domain, BLS Fr sizes 1/8/64/256/1,024, a bit-reversed control and KoalaBear size 32 | Independent coefficients, Horner and synthetic division; every quotient entry checked, including the derivative at an on-domain point; no pairing or commitment |
+| `eip4844` | Actual 4,096-scalar blob commitments, openings, point/single/blob-batch verification; 1/4/16 blobs | Authored library against c-kzg 2.1.8; exact bytes and independent cross-verification; different SDK/API validation boundaries and normal resource limits |
 | `curve_family` | BLS12-381 and BN254 G1/G2, Ristretto and prime Edwards; fixed-base source multiplication, shared-scalar/per-point scaling and MSM; 257-point scaling controls cross the Arkworks chunk boundary | Python scalar expectations plus shared-provider group-law self-consistency; includes point construction and checks, without an independent curve-coordinate oracle |
 | `sparse_matrix` | Controlled dimensions/nnz and uniform, clustered or empty-row distributions; forward, transpose and bilinear contractions; prime, extension and binary fields | Independent complete-output Python contractions with dense extension coordinates; bilinear includes singleton/long-row controls; no full R1CS proof or enlarged capacities |
 | `opening_quotient` | Current `deep_columns` versus explicit per-opening quotient/accumulate; KB/Ext4/Ext8, selected columns, repeated/distinct off-domain points | Identical inputs; independent coefficient/Horner/quotient expectations, all accumulated coordinates and final weight checked; checked setup and output construction inside SDK/run |
@@ -548,10 +608,7 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 
 ```sh
 cargo test --locked -p zkc-benchmarks
-uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
-  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
-  common/tests/harness/test_benchmark_library_algebra.py \
-  common/tests/harness/test_benchmark_execution.py \
+uv run --no-sync --locked pytest common/tests/harness/test_benchmark*.py \
   common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py
 uv run --no-sync --locked ruff check common/benchmarks
