@@ -37,6 +37,11 @@ def Residual : Shaped<"Residual", "residual">;
 
 def Table : Shaped<"Table", "table">;
 
+def QuotientMatrix : TypeDef<PolynomialDialect, "QuotientMatrix"> {
+  let mnemonic = "quotient_matrix";
+  let summary = "private immutable prepared quotient-ring matrix";
+  let assemblyFormat = "";
+}
 def Univariate : TypeDef<PolynomialDialect, "Univariate"> {
   let mnemonic = "univariate";
   let summary = "normalized ascending coefficients; zero is the empty polynomial";

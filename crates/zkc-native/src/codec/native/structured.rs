@@ -157,7 +157,7 @@ fn internal_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
         Value::OracleStates(_, v) => (v.len(), 0),
         Value::MerkleDigests(scheme, v) => (v.len() / scheme.digest_bytes(), 0),
         Value::MerkleTrees(_, v) => (v.len(), 0),
-        Value::Shake128State(_) => (0, 0),
+        Value::Shake128State(_) | Value::QuotientMatrix(_) => (0, 0),
         _ => return Err(unsupported()),
     })
 }

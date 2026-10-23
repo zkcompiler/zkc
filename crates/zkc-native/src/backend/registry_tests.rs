@@ -381,6 +381,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "Indices" => R::Indices,
             "Bytes" => R::Bytes,
             "Shake128State" => R::Shake128State,
+            "QuotientMatrix" => R::QuotientMatrix,
             "Matrix" => R::FrSparseCoo,
             "RistrettoMatrix" => R::DalekSparseCoo,
             "KoalaBearMatrix" => R::KoalaBearSparseCoo,
@@ -458,6 +459,22 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         I::None,
         crate::hash::Shake128State::RETAINED_BYTES,
     );
+    let prepared = crate::operations::quotient::apply(
+        "quotient.prepare_matrix",
+        &[
+            Value::Indices(vec![1, 2, 3, 4].into()),
+            Value::Index(17),
+            Value::Index(2),
+            Value::Index(1),
+            Value::Index(2),
+            Value::Index(1),
+        ],
+        &Policy::default(),
+        usize::MAX,
+    )
+    .unwrap()
+    .remove(0);
+    check(prepared, Type::QuotientMatrix, I::None, 1056);
     macro_rules! scalar_family {
         ($scalar:expr, $identity:ident, $field:ident, $vector:ident, $poly:ident, $round:ident, $matrix:ident, $width:expr) => {{
             let scalar = $scalar;

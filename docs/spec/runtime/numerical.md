@@ -179,6 +179,9 @@ shape and residue checks before numerical work or destination allocation.
 Their owning contract defines the linear and quadratic work scores and exact
 managed payloads. The integer norm predicate has a scalar result and consumes
 no coefficient workspace. Published input aliases remain immutable.
+[Prepared quotient matrices](../domains/quotient-matrices.md) retain checked RNS
+transforms as private immutable values and use the same output and scratch
+scopes for repeated bounded signed-digit products.
 
 ## Pointwise expressions
 

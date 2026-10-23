@@ -1,5 +1,12 @@
 // Canonical coefficient arrays in (Z/qZ)[X]/(X^n+1). Ring parameters and
 // residues are checked at invocation; these are partial executable operations.
+def OpQuotientPrepareMatrix : ZKC_Operation<"quotient.prepare_matrix", [],
+    [ZKC_Apply<TypeIndices, []>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeQuotientMatrix, []>]>;
+def OpQuotientMatvec : ZKC_Operation<"quotient.matvec", [],
+    [ZKC_Apply<TypeQuotientMatrix, []>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeIndices, []>]>;
 def OpQuotientAdd : ZKC_Operation<"quotient.add", [],
     [ZKC_Apply<TypeIndices, []>, ZKC_Apply<TypeIndices, []>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeIndices, []>], []> { int ordinal = 204; }

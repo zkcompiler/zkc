@@ -1,9 +1,10 @@
 # Structured quotient arithmetic reuses external compiler machinery
 
 The selected direction is to reuse HEIR's Polynomial and ModArith dialects for
-structured lattice arithmetic, with RNS as a subsequent exact-arithmetic
-extension. zkc retains the source contract, independent transformation readers
-and runtime admission. The [roadmap](../roadmap.md#compile-structured-quotient-arithmetic)
+structured lattice arithmetic, with a separate checked native RNS realization for exact signed-digit
+module products. zkc retains the source contract, independent transformation readers
+and runtime admission. The [numerical execution decision](numerical-execution.md)
+explains why structured selection currently targets managed native providers. The [roadmap](../roadmap.md#compile-structured-quotient-arithmetic)
 orders integration; [status](../status.md) distinguishes this direction from
 the installed coefficient operations.
 
@@ -126,3 +127,52 @@ Native integration can proceed independently of the Lean redesign. Formal work
 can later interpret the retained source and selected realization under the new
 Lean owners. Native tests and transformation readers remain distinct from that
 formal correspondence and from protocol security proofs.
+
+## Exact module products and RNS admission
+
+The [prepared matrix contract](../spec/domains/quotient-matrices.md) separates
+protocol modulus, compute-prime basis, integer bounds and retained storage.
+The representation has private immutable ownership: input transforms may be
+reused, but a caller cannot relabel coordinates with a different basis or bound.
+This uses the existing Polynomial domain for a local provider value; no owned
+RNS dialect mirrors HEIR. A general module-expression source vocabulary should
+be added when an actual compiler transformation consumes it, with source-relative
+comparison and the same integer-lift obligations.
+
+Chunking an accumulation before the centered CRT lift is established prior art,
+including the [Akita overflow correction](https://github.com/LayerZero-Labs/akita/commit/0a36011).
+The contribution here is the checked source/native contract, private retained
+representation, actual digit-bound validation and managed execution. The bound
+and algorithm are not claimed as new cryptography. Compute primes permit exact
+work over protocol rings without a full scalar NTT, including even and composite
+moduli. Direct transforms in a supported protocol ring remain a useful cheaper
+alternative; RNS is not the default replacement for every ring multiplication.
+
+HEIR's [RNS conversion](https://heir.dev/docs/dialects/rns/) remains outside the
+admitted compiler profile. The selected revision's conversion supports odd
+bases, whereas the native matrix contract also permits even protocol moduli.
+Its ModArith storage additionally needs a spare sign bit. Qualification with
+128-bit storage and target modulus `2^64-59` matched independent centered CRT
+results for one and two compute primes. The three-prime boundary control
+`x=(P-1)/2` disagreed with independent integer reduction after generated LLVM
+execution. Correcting the isolated Horner multiplier in the emitted arithmetic
+restored agreement for all seven signed boundary controls.
+
+The inspected [mixed-radix builder at the pinned revision](https://github.com/google/heir/blob/v2026.10.01/lib/Dialect/RNS/IR/RNSOps.cpp)
+uses the current limb modulus as the inner Horner multiplier, where the preceding
+basis modulus is required. This makes the prior coefficient contribution vanish
+modulo the current limb. The finding is specific to that revision and profile;
+it is not a conclusion about every HEIR arithmetic transformation. Existing
+Polynomial/ModArith region integration remains admitted under its independent
+reader. A future RNS admission must repair and qualify conversion, define exact
+integer capacity and even-target behavior, and compare the actual candidate.
+Registering upstream RNS operations in the development optimizer grants none
+of those obligations automatically.
+
+Prepared RNS execution also has fixed costs. Exploratory comparisons include
+preparation, repeated calls, retained storage and scratch, with ordinary
+schoolbook and manually shared protocol-modulus NTT controls. The direct NTT
+control is cheaper where its root profile applies; tiny chunked matrices can
+favor schoolbook arithmetic. Source-to-CLI measurements include preparation,
+serialization and process startup, so they are kept separate from kernel costs.
+No universal speedup or constant-time implementation is claimed.

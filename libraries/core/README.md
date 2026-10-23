@@ -8,7 +8,7 @@ your source uses directly; public facades retain concise source names.
 |---|---|
 | [Primitive collections](primitives/collections/zkc.toml) | `primitives::{vector,indices,bytes}`, `sequence`, `matrix`, `field_array` |
 | [Primitive algebra](primitives/algebra/zkc.toml) | `primitives::{curve,scalar}`, `pairing` |
-| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic`, `quotient_math` |
+| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic`, `quotient_math`, `quotient_matrix` |
 | [Primitive cryptography](primitives/cryptography/zkc.toml) | `primitives::hash`, `encoding`, `oracle`, `permutation`, `shake128`, `transcript` |
 | [Traversal](traversal/zkc.toml) | `accumulation`, `finite_domain`, `finite`, `finite_math` |
 | [Collections](collections/zkc.toml) | `vector`, `indices` |
@@ -150,9 +150,10 @@ external-dialect boundary.
 inside `math fn`. `project` reduces arbitrary unsigned sequences, `add`,
 `subtract`, and `multiply` compose elements of the same ring, and `coefficients`
 observes their canonical representatives. The operators are `+`, `-`, and `*`.
-These formal values have no native ingress or message encoding. They currently
-realize through the managed coefficient operations; automatic external transform
-selection remains separate integration work.
+These formal values have no native ingress or message encoding. They realize
+through managed coefficient operations. An optional HEIR-enabled compiler selects
+shared transforms for admitted whole calculations after independent comparison;
+other calculations retain coefficient execution.
 
 The raw `zkc::primitives::quotient` module also exposes explicit `project`,
 `ntt`, `intt` and `pointwise` operations. Projection reduces arbitrary finite
@@ -162,6 +163,17 @@ inverse root supplied to `intt`. Their full scalar profile covers the Falcon
 and ML-DSA ring parameters; matching bases remains the caller's responsibility.
 These ordered native calls are execution building blocks, not an automatic
 source-region optimization.
+
+`zkc::quotient_matrix::prepare(a, q, n, rows, columns, bound)` constructs a
+private immutable `PreparedMatrix` for repeated signed-digit module products.
+`multiply(prepared, digits)` checks each canonical digit's centered magnitude
+against the declared bound and returns row-major canonical coefficients. Inputs
+are flattened in row/column/coefficient order. Preparation retains compute-prime
+transforms with a checked exact reconstruction capacity; a copy shares storage.
+Receive ordinary coefficients and prepare locally: the carrier has no wire
+encoding or unchecked constructor. The [matrix contract](../../docs/spec/domains/quotient-matrices.md)
+includes composite/full-word protocol moduli, chunking, refusals and managed
+resource costs. This is arithmetic support, not a signature or lattice proof.
 
 ## Linear group expressions
 

@@ -24,8 +24,11 @@ physical schedule. Extend the checked SCF loop schedule with target-specific
 numerical kernels, preserving domains, indexing, reductions and failure obligations.
 Compare numerical variants through the same checked transaction and installed
 operation contracts. Establish field representations,
-layouts, aliasing and work bounds before adding generated arithmetic. VM control
-retains participant order and authority.
+layouts, aliasing and work bounds before adding generated arithmetic. The
+[numerical execution decision](rationale/numerical-execution.md) retains native
+providers and defers production AOT; a future quotient-kernel deployment needs
+its own target, ABI, workspace and code-authority design. VM control retains
+participant order and authority.
 
 Validate realization refinements across representative operations and protocol
 families. Keep alternate interpreters, JIT and AOT dependent on evidence and the
@@ -41,8 +44,8 @@ the observable boundary; existing field-polynomial types retain their meanings.
 
 Build on the optional [pinned arithmetic package](../compiler/external/heir/README.md)
 and its [full-NTT comparison profile](spec/realization/heir-arithmetic.md).
-Connect source region formation and independent candidate readers to managed
-execution, extending reader coverage at each lowering boundary. The first complete integration includes
+Extend the source and candidate reader coverage of the existing managed
+integration at each new lowering boundary. The admitted integration includes
 Falcon batch arithmetic and an ML-DSA-style module matrix-vector computation,
 with shared transforms, charged preparation and scratch, unchanged ordered
 admission, and a coefficient fallback. Dialect registration or a standalone
@@ -52,9 +55,11 @@ Compare complete arithmetic regions against competent native composition,
 including compilation, preparation, retained transformed storage and execution.
 Use compiler work limits and runtime capacity checks when selecting a realization.
 
-Extend to RNS through an exact signed-digit commitment matrix-vector consumer.
-Keep the protocol modulus separate from auxiliary compute primes, and check
-centered-reconstruction capacity before selecting accumulation or chunking.
+Build on the [prepared exact module-product consumer](spec/domains/quotient-matrices.md)
+when extending compiler selection to RNS. Keep protocol moduli separate from
+compute primes, and preserve checked centered-reconstruction capacity through
+accumulation and chunking. HEIR RNS conversion needs repaired and independently
+qualified lowering before it joins the admitted arithmetic profile.
 Partial NTT, broader ring maps and new hardware targets need their own admitted
 profiles. Native arithmetic integration proceeds independently of Lean
 correspondence work.

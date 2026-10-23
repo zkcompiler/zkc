@@ -311,7 +311,9 @@ void installedInventory() {
   // Frozen independently of representations: changing physical availability
   // must not broaden or narrow this logical formation profile.
   const std::map<std::string, std::vector<std::string>> expected{
-      {"", {"bool", "index", "indices", "bytes", "shake128_state"}},
+      {"",
+       {"bool", "index", "indices", "bytes", "shake128_state",
+        "quotient_matrix"}},
       {"bls12-381.fr",
        {"field", "vector", "polynomial", "round", "matrix", "table", "point",
         "rng", "nonce"}},
@@ -364,7 +366,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 98 && actual == pairs,
+  require(pairs.size() == 99 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -443,6 +445,7 @@ const ExpectedType types[] = {
     {"indices", "", "native.indices/0", "zkcv.indices/0"},
     {"bytes", "", "native.bytes/0", "zkcv.bytes/0"},
     {"shake128_state", "", "native.shake128/0", ""},
+    {"quotient_matrix", "", "native.quotient_matrix/0", ""},
     {"field", "bls12-381.fr", "arkworks.fr/0", "zkcv.field.bls12-381.fr/0"},
     {"vector", "bls12-381.fr", "arkworks.fr-vector/0",
      "zkcv.vector.bls12-381.fr/0"},

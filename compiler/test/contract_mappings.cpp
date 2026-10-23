@@ -130,6 +130,8 @@ constexpr ExpectedMapping expected[] = {
     {"quotient.add", "algebra.exec.quotient_add"},
     {"quotient.subtract", "algebra.exec.quotient_subtract"},
     {"quotient.multiply", "algebra.exec.quotient_multiply"},
+    {"quotient.prepare_matrix", "algebra.exec.quotient_prepare_matrix"},
+    {"quotient.matvec", "algebra.exec.quotient_matvec"},
     {"quotient.norm_within", "algebra.exec.quotient_norm_within"},
     {"quotient.project", "algebra.exec.quotient_project"},
     {"quotient.ntt", "algebra.exec.quotient_ntt"},

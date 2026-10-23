@@ -267,7 +267,8 @@ impl Core {
                 }
                 None
             }
-            Value::Shake128State(..)
+            Value::QuotientMatrix(..)
+            | Value::Shake128State(..)
             | Value::ResourceUnit(..)
             | Value::Bn254Field(..)
             | Value::Bn254Round(..)
