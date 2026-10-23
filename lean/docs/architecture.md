@@ -9,6 +9,10 @@ transports that contract to a property's conclusion under its stated assumptions
 a proved preservation law. Property conjunction combines conclusions and their
 assumptions; it never invents independent randomness or multiplies error bounds.
 
+The [checked component architecture](spec/components.md) connects generated full-process
+bindings to both honest completeness and adversarial reductions. Its canonical
+claim authority fixes the experiment before either proof method is selected.
+
 ## Package boundaries
 
 `Zkc.Semantics` defines effects, execution, refinement and continuation laws.

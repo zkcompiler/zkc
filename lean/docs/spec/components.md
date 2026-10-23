@@ -1,0 +1,177 @@
+# Checked components and compiled claims
+
+A component connects an actual imported open process to a mathematical
+interface. Its process equation is independent of the property later proved.
+Completeness and adversarial soundness consume that equation with different
+premises; neither property changes the admitted program or the request's
+meaning.
+
+## Ownership
+
+```mermaid
+flowchart TD
+  IR["Original and constructed IR exports"] --> Admit["Checked source, bodies, policy and occurrences"]
+  Admit --> View["Generated views and full Process equations"]
+  View --> Honest["Actual producer–verifier readback"]
+  View --> Adversarial["All-replies verifier reading and coherence"]
+  Math["Reference, representation and message laws"] --> Honest
+  Math --> Adversarial
+  Honest --> Complete["Fixed compiled-ideal completeness"]
+  Adversarial --> Reduce["Existing Typed.Reduction and oracle engine"]
+  Reduce --> Sound["Fixed adaptive or charged soundness"]
+  Complete --> Receipt["Exact canonical receipt and required links"]
+  Sound --> Receipt
+```
+
+| Owner | Responsibility |
+|---|---|
+| `Zkc.Source.Structured` | Typed admission, source identity, complete helper and protocol bodies, normal forms and their soundness |
+| `Zkc.Construction` | Constructed participant/pair admission, nominal values, execution, views and source-occurrence correspondence |
+| `Zkc.Obligations` | Yes/No promises, contexts, frames and structural derivations without a probability dependency |
+| `ZkcSecurity.Obligations` | Actual-distribution escape laws and interpretation into the existing reduction engine |
+| `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
+| `ZkcSecurity.Examples` | Exact source-body instances, selected subjects and root proof applications |
+| `ZkcSecurity.Claims` | Request-owned models and canonical meanings, stage links and receipt admission |
+| `ZkcTools`, `ZkcSecurity.Generation` and test generators | Candidate search and ordinary Lean source emission; their output must be checked |
+
+The dependency audit rejects reusable family code importing source-specific
+examples. A family can require a typed helper-law record; an example supplies
+it by proving equations for the actual admitted bodies. Names, matching types
+or hashes alone do not prove a helper's mathematical behavior.
+
+## Generated binding and its scope
+
+The Lean normalizer supplies the meaning of a generated view. The printer
+emits ordinary definitions and applications of its soundness theorem. The
+`structured-source component-bindings` command also emits a ledger indexed by
+source occurrence and obligation responsibility. It does not execute Python
+to construct its expression language. Python remains responsible for external
+process orchestration, byte capture, report joins and retained older clients.
+
+Binding equations preserve optional inputs and output masks, captures,
+complete return values, callbacks, call contexts, bounded loops, effects and
+stopped execution. Mathematical helper summaries are explicit checked
+parameters; an unknown helper can remain opaque. Exact constructed views
+retain the nominal sorts of every operand/result and the full producer and
+validator instruction sequences.
+
+For adversarial verification, `DomainReduction.ReadingTo` proves the endpoint
+execution reading, while `CoherentTo` proves locality at the actual reached
+history, including stopped outcomes. Their conjunction is the bridge into
+`Typed.Reduction`. It preserves ordered oracle visits, repeated keys, arbitrary
+stateful oracles and the unread-proof condition. It does not create a second
+probabilistic evaluator or identify a cached oracle answer with a fresh coin.
+Both bridge fields carry the same returned-state postcondition. Sequential
+composition therefore asks for one continuation proof at the actual reached
+history. Weakening forgets that postcondition on both fields together.
+
+Source printers belong to the generation/tooling layer. Checked subjects may
+import proof elaborators that construct kernel terms, but cannot import those
+printers or their generation configuration. The dependency audit checks this
+boundary transitively; a generated file is not an exception to the rule.
+
+## Reference mathematics
+
+`Families.Sumcheck.Reference` separates a remaining-round state, mathematical
+total, round polynomial and restriction operation. `ReferenceLaws` requires
+both a degree bound and closure under every next challenge, together with
+boundary and evaluation equations. These are defined on admissible false
+claims as well as true ones. A stopped honest execution is not a definition of
+the mathematical reference.
+
+`Message` supplies separate interpretation and degree laws for received
+messages. The honest proof establishes that the actual sent message denotes
+the reference. The soundness proof quantifies over all admitted messages and
+uses the difference between their polynomial and the reference. Its local
+probability bound refers to the actual sampling distribution. Uniform
+finite-field root counting is one instance, not an assumption for every
+challenge kind.
+
+For table Sumcheck, `TableReference` uses the sum of the table after the current
+prefix restriction. Shape closure justifies every subsequent restriction;
+one-step even length is insufficient. For product references, factors are
+restricted separately, preserving off-cube evaluations. The GKR round adapter
+requires explicit independence of the inactive variable and the actual
+caller table layout. A product of Boolean tables alone does not establish
+that polynomial identity.
+
+Joint-IR discovery proposes a reference and dependency cuts. It does not prove
+representation, degree, freshness or target agreement. An explicitly supplied
+reference follows the same checking path. Missing candidates remain
+unresolved; they are not counterexamples. Comparison of discovery methods
+must charge all mathematical laws, generators, configuration and source
+correspondence work, including the producer proof needed by every method.
+
+## Obligations and composition
+
+`Token` has disjoint `Yes` and `No` predicates and permits a gap. Its safety
+predicate is `not No`, which need not imply `Yes`. Facts may be reused; live
+obligations may be removed only through a proved implication or the stated
+stopping rule. A frame or call rule uses the actual returned state and history.
+
+A derivation supplies local rules for guards, stops, calls, all-reply steps and
+remaining-count loops. The core relative-adequacy theorem relates these Lean
+proof objects to the abstract charged reading. It is not a decision procedure,
+a finite certificate serialization theorem or complete automatic proof search.
+The security interpretation separately proves each local escape bound and
+reuses the existing oracle reduction theorem.
+
+Budget composition is history-sensitive and positional. A shared challenge
+does not automatically replace a sum by a maximum. A component's final
+acceptance/false-state rule and the root's cost bound remain explicit. Charge
+labels resolve to actual nominal source occurrences and dynamic coordinates;
+unknown keys pay the declared fallback maximum. Repeated visits remain visits,
+even when the oracle returns a cached value.
+
+`derive_component_cost` assembles installed component bounds through return,
+stop, bind and the actual conditional branches. Each continuation bound must
+cover every returned value and reached history. The resulting proof uses the
+existing charged walk semantics; an omitted component bound or an insufficient
+requested total cannot produce a certificate. Both compiled table roots use
+this composer. Their remaining root presentation and proof assembly are still
+authored; these examples do not yet demonstrate zero authored structural glue.
+
+## Fixed experiments and receipts
+
+An honest subject fixes the original, actual compiled producer and validator,
+retained relation, input clauses, typed input policy, output selector and
+public-input mapping. Completeness requires a concrete admissible input
+(nonvacuity) and bounds failure for every related admissible input. The
+experiment runs both actual participants with one initially empty random-oracle
+cache and counts input preparation failure, stops, decoding failures, rejection
+and unread proof as failures. It has no adversary query parameter.
+
+The soundness projection reuses that subject's actual validator and retained
+target. It does **not** inherit the honest input policy. Adaptive adversaries
+may query before selecting any typed statement, including malformed table
+shapes or out-of-range counts. Root proofs must handle those paths by their
+actual verifier behavior. Scalar and charged bounds use `ENNReal`; their
+request quantities and the carriers determining cardinalities are fixed before
+evidence.
+
+`CanonicalAuthority` recognizes the complete selected model, property and
+subject shape. Receipt status depends on exact meaning, authorized telescope,
+standard axioms and proved request-side links. Proof method or evidence
+attribution never selects the meaning and may be `unattributed`. An author
+extension is reported separately from a canonical security property.
+
+Authored-pair selection currently has a typed Lean request API. Its source
+language declaration surface remains a coordinated language decision; the
+validator-only source-claim artifact binder is not an authored-pair binder.
+Compiled-ideal completeness does not establish byte-level completeness or the
+aggregate deployed authored-pair certification.
+
+## Model and implementation boundaries
+
+Nominal domain carriers remain distinct through payloads, statements, replies,
+histories and requests. Algebra and embedding laws are proved against the
+actual operational model. A field's cardinality is derived from its carrier;
+an extension field does not inherit its base field's size. Model admission
+checks the exported catalogue and fixed capability package.
+
+These theorems concern interpreted IR and selected exact exports. The native
+frontend/exporter association remains an explicit trusted source link until
+proved separately. Native codecs/arithmetic, deployed transcript bytes,
+computational commitment security, QROM security, knowledge extraction and
+full GKR circuit-output acceptance require their own results. Source mutations
+and finite experiments test boundaries but do not establish those results.

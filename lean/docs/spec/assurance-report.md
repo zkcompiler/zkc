@@ -59,10 +59,15 @@ interactive claims and requests without an association. Duplicate nodes,
 ambiguous associations, stale digests and associations to absent nodes are
 errors.
 
-`source_claims.entries` lists every admitted proof or interactive Entry. Each
-request must name an Entry in that list; older exports fall back to
-`[source_claims.entry]`. Its unit digest still matches the stage's original or
-interactive export independently.
+`source_claims.entries` lists the selected author-facing proof or interactive
+Entries; older exports fall back to `[source_claims.entry]`. Each item's
+`source_entry` must be selected. Its `entry_association` records the exact
+checked native interface digest, source Entry and admitted protocol symbol;
+the symbol must equal `request.subject.entry`. This remains trusted frontend
+attribution, separate from kernel correspondence. Crossed, malformed or missing
+alias associations refuse. Without an association only exactly equal
+source/request Entries are supported. The unit digest still matches the stage's
+original or interactive export independently.
 
 `source_claim_scope` retains the exact whole-Entry selection: `entries` and
 `selection` (`proof-entry` or `explicit`). It must agree with the bound Entries
@@ -116,8 +121,11 @@ arguments; reporting never erases them to turn a different request into a match.
 | `wire_request`, `request_head`, `resolved_head`, `evaluated_head` | Actual typed indices, including the complete request data |
 | `indices_checked`, `proof_type_matches`, `proposition` | Extracted typed resolution/evaluation and the proof's checked type |
 | `registered_property`, `registered_schema`, `canonical_registry`, `registry_checks` | Actual selected export, checked lookup and kernel comparisons of selected property, export and model elaborator with canonical definitions |
-| `capability_consumer` | Recognized checked consumer of capabilities, independent of argument shape |
+| `authority` | Closed subject shape, product, canonical/author/reserved classification and kernel-checked selected-export association |
+| `telescope` | Lean-owned classification of every remaining binder, authorization result and conditional premises with their typed arguments |
+| `capability_consumer` | Diagnostic attribution of the canonical capability consumer; Python does not recognize consumer names |
 | `application_coverage` | Actual model context, interpreted application value and checked designated free binder, or concrete fixed scope |
+| `honest_input_policy` | The selected pair's closed typed policy, checked against the complete wire request parameters |
 | `admission` | Actual Subject.check result and full resolveModel result, with the typed model association and explicit admitted/registered-undefined/refused outcome |
 | `evidence_attribution` | Best-effort referenced Evidence declarations; attribution only, never receipt obligations |
 | `subject` | Actual typed security subject's artifacts declaration, snapshot source/Entry and participant source/candidate identities |
@@ -125,7 +133,7 @@ arguments; reporting never erases them to turn a different request into a match.
 | `root_route`, `discharger` | Checked route attribution and actual proof root; missing or inconsistent attribution reports `unattributed` |
 | `proof_dependencies`, `dependencies` | Actual proof/index closure and complete receipt closure, each with declaration, module, ownership and statement identity |
 | `required_links` | Registry-owned dependent goals and actual proof presence; remaining telescope conditions are audited separately |
-| `stage_links` | Independently reconstructed actual-subject stage obligations, with kernel goal comparisons and explicit subject-index comparisons against registered links |
+| `stage_links` | Actual-subject stage obligations and physical artifact roles, with kernel goal comparisons and explicit subject-index comparisons against registered links |
 | `provenance`, `provenance_error` | Optional route/method notes and extraction diagnostics; strings cannot introduce assumptions |
 
 A failure to extract authoritative semantic fields is explicit and leaves the
@@ -135,13 +143,26 @@ is allowed when its full emitted data equals the actual request index data.
 
 ## Audit
 
-Every leading premise of the request and receipt is classified by its registered
-schema, including implicit hypotheses and proof instances. Other parameters must
-be type carriers, supported model instances on free non-propositional carrier
-variables, or the explicit string application context. `Inhabited False`,
-`Inhabited P`, `Inhabited (PLift P)` and unsupported Type-valued proof wrappers
-are not ordinary model parameters. The emitted `model_instance = true` judgment
-is required; a class name alone is insufficient.
+Lean classifies every leading binder of the request and receipt, including
+implicit and instance binders. Receipt parameters must use the actual subject's
+carriers, their supported instances, or the designated application context.
+Dependencies of carrier instances must themselves be admitted parameters.
+`Inhabited False`, `Inhabited (PLift P)`, extra carrier variables and unsupported
+Type-valued proof wrappers are refused. Python consumes this classification;
+its legacy endpoint audit retains its separate policy until those clients move.
+
+A recognized premise additionally needs explicit authorization in the model
+application's `assumptions` argument: a list of closed versioned applications.
+`assumptions.faithful_scalar_action@0` fixes the scalar-action law on the selected
+field and group. `assumptions.dlog_search@0` fixes worst-case recovery resistance
+for finite scalar equality-query decision trees at the selected model's fixed
+query limit. This narrow search game is not general computational discrete-log
+hardness. Each admitted condition reports its actual typed arguments. Symbolic
+limits without a fixed typed instantiation remain unsupported. Arbitrary
+propositions, substituted carriers or limits, budget inequalities, target truth,
+helper correspondence, local-event bounds and required stage links cannot enter
+through these schemas. Registration in the legacy assumption ledger alone does
+not authorize a receipt premise.
 
 Receipt authority is the exact request-fixed evaluated proposition and typed
 admission, its remaining request/receipt telescope, standard axioms, and a proof
@@ -172,11 +193,13 @@ Every security receipt must independently pass `Subject.check` and full actual
 `resolveModel` elaboration for its exact typed subject, request, field, original
 snapshot and endpoint. The extractor checks the resulting success expressions
 by kernel definitional equality. When symbolic model computation is blocked,
-an exact typed certificate may supply the actual existential witness and an
-equation proof whose type is compared with that same reconstructed full call.
+an exact typed certificate may prove existence of a successful elaboration
+whose type is compared with that same reconstructed full call. A witness may
+be extracted for diagnostics, but proof-body visibility is not admission.
 This cannot override an actual refusal or registered-undefined result. The
 emitted admission `success_authority` distinguishes `definitional-evaluation`
-and `kernel-equation`. Looking up a model identifier is insufficient.
+and `kernel-equation` (or `kernel-existence` when the witness is opaque).
+Looking up a model identifier is insufficient.
 `ZkcSecurity.Claims.AdmittedReceipt` in `Claims.ReceiptAdmission` associates a
 model registry with the exact `Evaluated` indices and enclosed core receipt,
 requiring checked subject and model admission equations. Manual extensions can
@@ -187,11 +210,77 @@ whose elaborator returns `True` cannot bypass target, acceptance or model
 admission. Registered undefined is distinct from outer resolution refusal.
 No generated admission theorem name is privileged.
 
-For built-in security requests, the selected property/export and actual model
-elaborator must equal the canonical definitions by kernel definitional equality
-after checked lookup. Unrelated exports appended to either registry are allowed;
+`CanonicalReceipt` associates the complete selected property export with the
+fixed `CanonicalAuthority.propertyEntry`, and shares a `CanonicalModelAdmission` certificate
+for the complete selected model export and its successful elaboration.
+`CanonicalAdmission.meaning` derives the semantic argument and link association
+from the existing `Resolved` and `Evaluated` equations. The generator reuses a
+model certificate for requests with the same model application. For migrating
+bare receipts the exporter constructs and kernel-checks the same association.
+Neither proof-body attribution nor a property name can supply this certificate. Unrelated exports appended to either registry are allowed;
 duplicate keys and replacement definitions fail. The whole registry's name or
 container expression is not semantic authority.
+
+`CanonicalAuthority` is a closed family indexed by the supported subject type.
+Its uniform constructor uses the existing uniform verifier implementation;
+the other constructors use the actual nominal-domain compiled verifier and
+the actual compiled honest pair. Dispatch contains no protocol names,
+author-selected propositions or extensible policy instances. The core
+`Zkc.Claims.Receipt` stays generic. Pair subjects use a universe lift only;
+their fixed meaning calls the honest model's `CanonicalCompleteness` directly.
+Uniform completeness remains undefined. Domain verifiers support fixed and
+adaptive scalar or charged soundness; honest pairs support scalar completeness under the exact
+argument-free honest model, without an adversary query parameter.
+
+The domain subject interprets its retained target on the actual model's
+typed source values, statements and witness selectors. Its preselected
+capabilities supply laws for the actual catalogue, finite instances only at
+admitted field identities, and sampling at the actual event-dependent reply
+types. Cardinality reads these carriers; unknown identities refuse. Evidence
+cannot replace this interpretation. Domain construction links include the
+source-occurrence check. Pair links require exact pair admission, retained
+target and source input association, selected validator admission, and both
+source-occurrence equations.
+
+Adaptive domain adversaries return the actual statement and proof after their
+oracle queries. The typed public codec injectively binds every raw public value,
+including malformed vector widths and counts, in the selected application
+namespace. Charged quantities select retained native challenge templates before
+evidence; matching retains every dynamic coordinate. Unknown/malformed keys pay
+the maximum declared price. The meaning requires both the actual weighted
+endpoint bound and a checked existing typed reduction at exactly those prices,
+with complete execution reading, coherence, false-state membership and validator
+cost. This does not change the oracle's keys, cache or query order.
+
+Honest completeness includes a nonvacuity witness. Its closed typed input
+policy fixes source positions, nominal domains, widths and bounds before
+evidence. A nonempty policy must match the version-zero `honest.input_policy`
+descriptor in the existing request parameters exactly; missing, changed or
+extra rules refuse. The report exposes the policy description and the product
+`compiled_ideal_completeness`. This product does not assert native correspondence
+or a general security result for the pair.
+
+Declaration extraction reconstructs this closed authority from checked type
+indices. One Lean telescope policy classifies remaining binders and exports
+authorization facts, required links, artifact roles, coverage and product.
+Python consumes these facts without a parallel property or binder registry.
+Unknown shapes refuse. Standard model laws must be closed in concrete clients;
+arbitrary capability or law binders cannot authorize a receipt. Direct opaque
+proofs retain checked status even when attribution is unavailable.
+Uniform manual author receipts without unused sampling binders derive their
+sampler from the actual finite field; selected canonical meanings retain their
+actual sampling arguments. This introduces no additional premise schema.
+
+`AuthorExtensionReceipt` has a distinct checked admission and proves its
+identifier is outside the reserved set. All root names and infrastructure
+namespaces are reserved at every version, including undefined completeness.
+Reports retain all requests in `claims`, expose `security_claims`,
+`author_claims` and `generic_claims` separately, and aggregate only security
+claims. Generic core receipts do not establish a canonical security headline;
+changing the subject type cannot authorize a reserved key. A failed or unresolved
+explicit author request stays visible with its own reasons and attempts.
+An author equation cannot establish a canonical security headline.
+
 The actual exported property/version, quantity, requested capabilities, typed
 subject, retained/imported target, acceptance, stage and artifacts must match.
 A charged receipt proves both its ordinary property and its charged export;
@@ -270,8 +359,10 @@ Model and hardness premises can remain explicitly conditional. Until source
 correspondence has its own checked bridge, reports retain
 `source.correspondence` as a trusted link and `scope: "ir-relative"`.
 Interpreted-byte semantics is distinct from native executable conformance.
-`native_closure` remains `open` and the certification product is at most
-`certified_verifier`, never `certified_authored_pair`.
+`native_closure` remains `open`. The closed verifier shapes report
+`certified_verifier`; the honest pair reports `compiled_ideal_completeness`
+with `honest-inputs` coverage. Mixed or empty aggregate products report
+`assurance_report`. These products do not assert `certified_authored_pair`.
 
 ### Semantic dependency identity
 

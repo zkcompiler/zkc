@@ -14,6 +14,16 @@ certified. Missing definitions, unregistered identifiers or versions, and missin
 proofs are distinguished by the Lean resolver. In particular an unknown version
 is exported exactly, never interpreted as version zero.
 
+The native export names the selected source declaration (for example, a proof
+alias). The Lean artifact binder resolves that name to the admitted protocol
+symbol using the exact native interface: its source identity, source entry and
+protocol symbol must all agree with the exported original. The bound request's
+`SubjectRef.entry` is that protocol symbol. The source alias remains separately
+recorded for attachments and whole-entry report selection. This association is
+reported as trusted frontend work; it does not prove source-to-IR semantic
+correspondence or supply a proof of a requested property. The stage and exact
+artifact digests continue to distinguish configured compiled participants.
+
 ## Declarations
 
 A named block at module scope attaches claims to one configured proof or closed protocol subject:
