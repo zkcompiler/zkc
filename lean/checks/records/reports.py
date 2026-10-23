@@ -910,7 +910,9 @@ def audit_receipt(record, request_record, request, registry, records, generated_
     if recognized and not typed_subject.get("artifacts_head"):
         reasons.append("missing actual typed security subject artifact identity")
     admission = receipt.get("admission") or {}
-    if typed_subject or admission.get("security_subject") is True or detail.get("type_head") in SECURITY_RECEIPT_TYPES:
+    security_subject = (bool(typed_subject) or security or recognized or
+                        detail.get("type_head") in SECURITY_RECEIPT_TYPES)
+    if security_subject:
         if admission.get("security_subject") is not True or admission.get("associated") is not True:
             reasons.append("missing typed security model admission association")
         if admission.get("subject_checked") is not True:
@@ -955,33 +957,37 @@ def audit_receipt(record, request_record, request, registry, records, generated_
     for link in links:
         if link.get("proved") is not True:
             reasons.append(f"unproved registered obligation: {link.get('identifier')}")
-    stage_facts = receipt.get("stage_links") or {}
-    recognized = stage_facts.get("recognized_subject") is True
-    if not recognized:
-        reasons.append("unrecognized actual typed compiled subject: stage obligations were not reconstructed")
-    if recognized and stage_facts.get("stage") != (request.get("subject") or {}).get("stage"):
-        reasons.append("wrong interpreted stage: typed subject differs from the request")
-    expected_links = stage_facts.get("obligations") or []
-    required = tuple(link.get("identifier") for link in expected_links)
-    if recognized and (not required or len(set(required)) != len(required)):
-        reasons.append("incomplete checked stage obligations: missing or ambiguous Lean authority policy")
-    for identifier in required:
-        expected = [link for link in expected_links if link.get("identifier") == identifier]
-        if not recognized or len(expected) != 1:
-            reasons.append(f"missing required interpreted-stage link: {identifier}")
-            continue
-        matches = expected[0].get("matches") or []
-        matching = ([link for link in links if link.get("index") == matches[0].get("index") and
-                     link.get("identifier") == identifier] if len(matches) == 1 else [])
-        if len(matching) != 1 or matching[0].get("proved") is not True:
-            reasons.append(f"missing required interpreted-stage link: {identifier}")
-        elif matches[0].get("goal_defeq") is not True or matches[0].get("subject_matches") is not True:
-            reasons.append(f"wrong actual subject or goal for interpreted-stage link: {identifier}")
-        else:
-            discharged.append({"id": identifier, "category": "stage-link", "schema": expected[0].get("goal_head"),
-                "statement": expected[0].get("goal"), "instantiated": matching[0].get("goal"),
-                "discharge": "proved", "source": "kernel comparison with actual Subject.stageLinks",
-                "goal_identity": expected[0].get("goal_identity"), "context": expected[0].get("context")})
+    # Generic author properties have their registered links above, but no
+    # compiled security stage. A typed/canonical security receipt must also
+    # reconstruct all stage obligations from its actual subject.
+    if security_subject:
+        stage_facts = receipt.get("stage_links") or {}
+        stage_recognized = stage_facts.get("recognized_subject") is True
+        if not stage_recognized:
+            reasons.append("unrecognized actual typed compiled subject: stage obligations were not reconstructed")
+        if stage_recognized and stage_facts.get("stage") != (request.get("subject") or {}).get("stage"):
+            reasons.append("wrong interpreted stage: typed subject differs from the request")
+        expected_links = stage_facts.get("obligations") or []
+        required = tuple(link.get("identifier") for link in expected_links)
+        if stage_recognized and (not required or len(set(required)) != len(required)):
+            reasons.append("incomplete checked stage obligations: missing or ambiguous Lean authority policy")
+        for identifier in required:
+            expected = [link for link in expected_links if link.get("identifier") == identifier]
+            if not stage_recognized or len(expected) != 1:
+                reasons.append(f"missing required interpreted-stage link: {identifier}")
+                continue
+            matches = expected[0].get("matches") or []
+            matching = ([link for link in links if link.get("index") == matches[0].get("index") and
+                         link.get("identifier") == identifier] if len(matches) == 1 else [])
+            if len(matching) != 1 or matching[0].get("proved") is not True:
+                reasons.append(f"missing required interpreted-stage link: {identifier}")
+            elif matches[0].get("goal_defeq") is not True or matches[0].get("subject_matches") is not True:
+                reasons.append(f"wrong actual subject or goal for interpreted-stage link: {identifier}")
+            else:
+                discharged.append({"id": identifier, "category": "stage-link", "schema": expected[0].get("goal_head"),
+                    "statement": expected[0].get("goal"), "instantiated": matching[0].get("goal"),
+                    "discharge": "proved", "source": "kernel comparison with actual Subject.stageLinks",
+                    "goal_identity": expected[0].get("goal_identity"), "context": expected[0].get("context")})
     assumptions.append({"id": "source.correspondence", "category": "trusted-link",
                         "schema": None, "statement": "Source-to-IR correspondence remains unproved",
                         "instantiated": None, "discharge": "assumed", "source": "IR-relative milestone"})

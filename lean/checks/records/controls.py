@@ -489,6 +489,18 @@ def run_emitted_stage_receipts(data):
         audited, assumptions, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
         passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
         extracted = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+        if short in {"Canonical.checkedReceipt", "manualReceipt"}:
+            # Generic author properties need no security-stage reconstruction;
+            # both canonical and author properties on a security Subject do.
+            missing_stage = copy.deepcopy(record)
+            missing_stage["detail"]["claim_data"]["receipt"].pop("stage_links", None)
+            _, _, _, missing_reasons = reports.audit_receipt(
+                missing_stage, request, wire, registry, data, [])
+            if passed and any("stage obligations were not reconstructed" in reason
+                              for reason in missing_reasons):
+                rows.append("emitted-interpreted-missing-stage-metadata-" + short)
+            else:
+                failures.append(f"missing stage metadata control {name}: {missing_reasons}")
         if short == "Canonical.authorizedReceipt":
             conditional = [row for row in assumptions if row.get("category") == "hardness"]
             passed = passed and len(conditional) == 1 and conditional[0].get("arguments") and \
