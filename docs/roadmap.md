@@ -42,7 +42,7 @@ Retain compound ring and module operations until transform placement and
 realization selection finish. The checked coefficient source contract remains
 the observable boundary; existing field-polynomial types retain their meanings.
 
-Build on the optional [pinned arithmetic package](../compiler/external/heir/README.md)
+Build on the required [pinned arithmetic package](../compiler/external/heir/README.md)
 and its [full-NTT comparison profile](spec/realization/heir-arithmetic.md).
 Extend the source and candidate reader coverage of the existing managed
 integration at each new lowering boundary. The admitted integration includes

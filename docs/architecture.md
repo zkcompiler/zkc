@@ -140,11 +140,19 @@ Local functions are the executable output. Source symbol context and output
 binding allocation remain separate.
 Numerical realization chooses native contractions, compact pointwise expressions,
 bulk vector operations or a private standard SCF schedule before Local lowering.
+Admitted field expressions pass through private upstream Func/Tensor/Linalg
+regions with nominal scalar arithmetic and actual-payload comparison. Quotient
+realization uses the pinned HEIR Polynomial/ModArith profile by default where
+its transform premises and optimization capacity hold. The
+[consumer boundaries](compiler/representation.md#numerical-consumer-boundaries)
+retain separate formal-polynomial, MLE, finite-control and native-provider
+roles; they all use the same implementation and physical-selection transaction.
 The native expression handlers borrow typed columns and scalar captures,
 evaluate bounded row chunks, and construct private results through the existing
 numerical scope. They share provider-packed slice arithmetic with dense vector
-kernels, without a new VM instruction or executable format. Compiler-generated
-writable-buffer layouts and target vector IR remain future work.
+kernels, without a new VM instruction or executable format. Generated writable
+buffers and target vector code remain development experiments; production
+execution uses installed providers under the managed numerical contract.
 Participant scheduling, transport and resource authority stay with their existing owners.
 Installed numerical and effectful operations share the binding mechanism;
 installation alone does not authorize extraction into a numerical unit.

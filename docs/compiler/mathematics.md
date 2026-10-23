@@ -42,10 +42,12 @@ construction, projection reduces arbitrary finite unsigned sequences and is
 total for valid fixed parameters. The compiler can retain shared inputs and
 compound expressions without assigning a transform basis to the source value.
 
-The current fallback emits managed coefficient operations and independently
+The coefficient realization emits managed operations and independently
 checks their actual constants, operands and returned values. This path supports
-composite and full-word moduli. The optional HEIR integration operates on
-complete qualified calculations. Separate readers check the actual HEIR
+composite and full-word moduli. The default HEIR integration operates on
+complete qualified calculations when its transform premises and optimization
+capacity hold; other calculations retain coefficient realization.
+Separate readers check the actual HEIR
 arithmetic and managed execution against the retained source; placement can
 share transforms across the entire expression. See the
 [contract](../spec/domains/quotient-rings.md#formal-calculations) and

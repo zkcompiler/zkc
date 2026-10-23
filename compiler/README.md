@@ -14,7 +14,9 @@ compiler and runtime owners.
 
 Use the repository [development guide](../docs/development/README.md) and
 [test guide](../common/tests/README.md#selecting-checks). A matching LLVM/MLIR installation
-and utf8proc 2.12.0 are required. Configure CMake with
+and utf8proc 2.12.0 are required, together with the pinned
+[HEIR arithmetic package](external/heir/README.md). The default Nix environment
+provides these dependencies. Configure CMake with
 `-S compiler -B BUILD -DMLIR_DIR=... -Dutf8proc_DIR=...`; build
 with `cmake --build BUILD -j4` and run `ctest --test-dir BUILD --output-on-failure`.
 The same source supports static and shared libraries. Install into a fresh prefix
@@ -101,7 +103,9 @@ The `Tools` package component imports `Zkc::zkc-compile`, `Zkc::zkc-opt` and
 Support, Contracts, Relation and Program use LLVM without MLIR. Language also
 requires the pinned external utf8proc library for NFC; it depends on Contracts
 and Relation and still has no MLIR dependency. Program depends on Contracts.
-IR adds MLIR and depends on Program and Relation. Transforms depends on IR; Translation depends on IR and Language; Compiler depends on Transforms
+IR adds MLIR and depends on Program and Relation. Transforms depends on IR and
+the required HEIR arithmetic package; its Tensor/Linalg and HEIR APIs remain
+private implementation details. Translation depends on IR and Language; Compiler depends on Transforms
 and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
 Tools imports Driver's dependency closure.
 
@@ -121,6 +125,14 @@ LLVM-only requests. Native components additionally discover MLIR and installed
 contribution dependencies. The SDK retains these external installations rather
 than bundling them. Static and shared libraries use the same component contract;
 install into a fresh prefix and relocate the entire prefix together.
+
+Requests whose dependency closure includes Transforms discover the exact
+`ZkcHeirArithmetic` package and its pinned HEIR revision and patch. Its exported
+targets retain the matching LLVM/MLIR and OR-Tools dependency contracts.
+Support, Contracts, Relation, Program, Language, IR and Translation can be
+requested without HEIR; requesting Transforms or a dependent component cannot
+bypass arithmetic qualification. See the
+[dependency manifest](external/heir/pins.json) for the selected versions.
 
 For source capture, checking and inspection without MLIR:
 

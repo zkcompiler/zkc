@@ -39,6 +39,45 @@ Replacing it with `scf.for` requires representing those obligations explicitly;
 renaming it would not establish preservation. A [Kernel call](../spec/ir/kernel.md)
 remains ordered even when the enclosed function denotes total mathematics.
 
+## Qualified implementation regions
+
+Pure field formulas use upstream Func/Tensor/Linalg operations directly. Their
+scalar bodies retain nominal field operations instead of assuming that machine
+integer overflow implements field arithmetic. Upstream common-subexpression
+elimination removes repeated pure work; an independent reader interprets the
+actual resulting payload and compares it with the retained expression. Both
+vector and numerical emission consume that checked payload. Eager input-shape
+checks remain outside the pure region, including checks on unused inputs.
+
+Quotient calculations retain their source ring and integer observations while
+the admitted implementation profile uses HEIR Polynomial/ModArith. Exact
+modulus, degree, transform roots, ordering and inverse normalization belong to
+the representation contract. The private bridge and final reader qualify a
+specific upstream profile; merely linking HEIR does not admit its other
+representations or passes. The required dependency has one
+[source and patch manifest](../../compiler/external/heir/pins.json).
+
+These APIs belong to private Transforms implementation. A builtin tensor or
+vector type does not acquire native message, participant or runtime permission.
+Passes that construct implementation operations declare their
+[dependent dialects](https://mlir.llvm.org/docs/PassManagement/#dependent-dialects)
+before execution; loading a dialect does not extend an admitted profile.
+Public semantic interfaces stay independent of these container APIs.
+
+The [consumer table](../compiler/representation.md#numerical-consumer-boundaries)
+records the retained roles. Ring asset sharing serves captured expressions and
+formal-product consumers; field-map sharing uses upstream CSE. Native coefficient,
+direct-transform and prepared RNS implementations serve distinct admitted
+profiles and cost regimes under the same managed call boundary. Their presence
+does not require a second planner or a compatibility reader.
+
+Transform and Vector have a concrete development code-generation consumer, but
+no production schedule or deployed-code consumer is qualified. PDL has no
+current reusable production pattern to own. Those dependencies remain outside
+the production implementation surface; the
+[execution rationale](numerical-execution.md) records the generated-kernel
+decision and the remaining deployment obligations.
+
 ## One operation across representations
 
 Boolean literals illustrate an actual overlap. A reached literal materializes a

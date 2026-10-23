@@ -334,6 +334,10 @@ def main():
                     assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):
                     assert not include.startswith("mlir/"), f"{name}: {path} includes {include}"
+                if include.startswith(tuple(f"mlir/Dialect/{dialect}/" for dialect in
+                                            ("Linalg", "Tensor", "Vector", "Transform", "PDL", "PDLInterp"))):
+                    assert name == "ZkcTransforms" and path not in supported_public, \
+                        f"implementation dialect outside private Transforms: {path} -> {include}"
                 if include == "MathematicalRecipes.inc":
                     assert (name == "ZkcTransforms" and
                             path == ROOT / "lib/Transforms/MathematicalRecipes.cpp"), f"recipe inventory outside its owner: {path}"

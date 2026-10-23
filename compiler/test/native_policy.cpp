@@ -251,6 +251,16 @@ int main() {
       require(!mathematical::nativeTypePolicy(type),
               "unclassified type acquired permission");
   });
+  cases.run("implementation containers do not acquire native permissions", [&] {
+    auto field = algebra::FieldType::get(&context, "koala-bear");
+    for (Type type :
+         {Type(RankedTensorType::get({4}, field)),
+          Type(RankedTensorType::get({}, field)),
+          Type(VectorType::get({4}, IntegerType::get(&context, 32)))})
+      require(
+          !mathematical::nativeTypePolicy(type),
+          "implementation shape acquired participant or runtime permission");
+  });
   cases.run("type argument constructors remain owner-local", [&] {
     for (const auto &constructor : protocol::boundTypeConstructors())
       if (llvm::is_contained(constructor.parameters, "Type"))

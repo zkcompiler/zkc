@@ -98,6 +98,13 @@ rejects("public extension headers cannot reexport raw builders",
         root / "include/zkc/Dialect/IR.h",
         lambda text: '#include "zkc/Dialect/detail/Builders.h"\n' + text,
         "public header exposes unsupported detail")
+for dialect in ("Linalg", "Tensor", "Vector", "Transform", "PDL", "PDLInterp"):
+    for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp",
+                   "include/zkc/Transforms/Passes.h"):
+        rejects(f"implementation dialect stays private: {dialect} in {source}",
+                root / source,
+                lambda text, dialect=dialect: f'#include "mlir/Dialect/{dialect}/IR/Api.h"\n' + text,
+                "implementation dialect outside private Transforms")
 
 def move_source(text, source, destination):
     lines = []
