@@ -476,5 +476,8 @@ add_zkc_test(language_entry_functions Language language-entry-functions)
 add_zkc_test(resident_representations Transforms resident-representations)
 mlir_target_link_libraries(zkc-resident_representations-test PRIVATE MLIRParser MLIRPass)
 
+add_zkc_test(native_preferences Transforms native-preferences)
+mlir_target_link_libraries(zkc-native_preferences-test PRIVATE MLIRParser MLIRPass)
+
 add_zkc_test(aggregate_layouts Transforms aggregate-layouts)
 mlir_target_link_libraries(zkc-aggregate_layouts-test PRIVATE MLIRParser MLIRPass)

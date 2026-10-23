@@ -163,6 +163,10 @@ checkProgramCapacity(ModuleOp candidate, const target::PhysicalPlan &plan) {
     return error("source-limit");
   SmallVector<target::OperationIndex> expressions;
   for (auto [index, operation] : enumerate(plan.operations)) {
+    if (!operation.conversions.empty()) {
+      expressions.push_back(index);
+      continue;
+    }
     if (!operation.binding)
       continue;
     const auto &contract =

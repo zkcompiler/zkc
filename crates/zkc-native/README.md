@@ -69,7 +69,11 @@ upstream known answer, p3-poseidon2's generic round functions and an integer
 implementation.
 
 `native_contracts()` contributes resident `blst/fr`, `blst/g1` and `blst/g2`
-scalar and bulk storage to the neutral VM. Default layouts remain Arkworks.
+scalar and bulk storage to the neutral VM. Canonical layouts remain Arkworks.
+The compiler's [Target preferences](../../docs/compiler/representation.md#resident-providers)
+select resident BLS12-381 G2 scaling and pairing checks automatically, with
+checked conversions at canonical boundaries. Native executes those exact
+bindings; provider selection adds no runtime optimizer.
 Selected values stay in their provider representation across adjacent calls,
 control flow and supported containers. Explicit flat conversion calls delimit
 provider boundaries; there is no implicit container conversion.

@@ -374,18 +374,27 @@ public:
     // automatic choice at the other. Never reset either endpoint's cursor.
     auto bindings = failure.bindings;
     llvm::sort(bindings);
+    bool advanced = false;
+    std::set<size_t> visited;
     for (auto binding : bindings) {
       if (binding >= bindingCursors.size() || !bindingCursors[binding])
         continue;
-      auto &entry = implementations[representative(*bindingCursors[binding])];
+      auto id = representative(*bindingCursors[binding]);
+      if (!visited.insert(id).second)
+        continue;
+      auto &entry = implementations[id];
       if (entry.next + 1 < entry.candidates.size()) {
         if (!numerical.chargeCatalog())
           return error("finite-analysis-limit");
         ++entry.next;
-        return true;
+        advanced = true;
+        // Capacity concerns the complete plan. Advance its automatic
+        // choices together instead of rebuilding every prefix.
+        if (failure.kind != PhysicalFailureKind::OptionalProgramCapacity)
+          return true;
       }
     }
-    return false;
+    return advanced;
   }
 };
 Expected<BindingApplication>
@@ -1201,8 +1210,11 @@ class Proposer {
           break;
         }
       if (binding == plan.bindings.size()) {
-        if (binding >= 4096)
+        if (binding >= 4096) {
+          if (auto e = capacityFailure(plan, {index}))
+            return e;
           return error("binding-declaration-limit");
+        }
         auto specialized = plan.bindings[origin];
         specialized.binding.name = fresh(used, "specialized_", next);
         specialized.binding.application = std::move(app);
@@ -1228,6 +1240,25 @@ public:
         indices(indexOperations(operations)), failureLocation(failureLocation),
         selection(selection), functionPorts(functionPorts),
         valueLayouts(valueLayouts) {}
+
+  Error capacityFailure(const PhysicalPlan &plan,
+                        ArrayRef<OperationIndex> affected) {
+    auto &failure = selection.failure;
+    failure = {};
+    failure.kind = PhysicalFailureKind::OptionalProgramCapacity;
+    failure.operations.assign(affected.begin(), affected.end());
+    // Declaration and escaped-carrier limits concern the complete plan.
+    // Decline optional provider choices together instead of reconstructing
+    // provenance through scalar joins and aggregate layout equations. Fixed
+    // bindings have no cursor; numerical retry retains the reported slice.
+    for (auto [index, binding] : enumerate(plan.bindings)) {
+      if (!selection.numerical.chargeCatalog())
+        return error("finite-analysis-limit");
+      if (!binding.fixed && !binding.origin)
+        failure.bindings.push_back(index);
+    }
+    return Error::success();
+  }
 
   Error initialize(ArrayRef<std::pair<std::string, std::string>> requests,
                    bool contractions) {
@@ -1677,7 +1708,13 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       if (refusal || plan.bindings.size() <= 4096)
         break;
       if (plan.contractions.empty()) {
-        refusal = error("binding-declaration-limit");
+        SmallVector<OperationIndex> conversions;
+        for (const auto &operation : plan.operations)
+          if (!operation.conversions.empty())
+            conversions.push_back(operation.operation);
+        refusal = proposer.capacityFailure(plan, conversions);
+        if (!refusal)
+          refusal = error("binding-declaration-limit");
         break;
       }
       groupLimit = plan.contractions.size() - 1;
@@ -1700,9 +1737,9 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         if (!capacity)
           refusal = capacity.takeError();
         else if (!capacity->empty()) {
-          selection.failure.kind = PhysicalFailureKind::OptionalProgramCapacity;
-          selection.failure.operations = std::move(*capacity);
-          refusal = error("source-limit");
+          refusal = proposer.capacityFailure(plan, *capacity);
+          if (!refusal)
+            refusal = error("source-limit");
         }
       }
     }

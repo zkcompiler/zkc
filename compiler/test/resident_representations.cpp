@@ -254,10 +254,8 @@ int main(int argc, char **argv) {
     }
   });
   cases.run(
-      "Ark remains default and variable-time MSM has no automatic preference",
-      [&] {
-        for (auto contract :
-             {"field.add", "vector.mul", "curve.msm", "pairing.check"}) {
+      "field defaults and explicit variable-time MSM remain unchanged", [&] {
+        for (auto contract : {"field.add", "vector.mul", "curve.msm"}) {
           BindingApplication op{contract,
                                 {StringRef(contract).starts_with("curve.")
                                      ? "bls12-381.g1"

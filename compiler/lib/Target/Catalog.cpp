@@ -8,6 +8,21 @@ using namespace llvm;
 using namespace zkc::protocol;
 namespace zkc::target {
 namespace {
+// Short, measured target preferences. Contracts remains the installation and
+// applicability authority; this table changes neither its canonical defaults
+// nor the public ABI. The physical planner owns conversions and bounded retry.
+// G1 scaling stays canonical: a single call's conversion cost can exceed its
+// arithmetic saving. Resident G1 and variable-time MSM remain explicit choices.
+struct ImplementationPreference {
+  StringRef contract, domain, implementation;
+};
+constexpr ImplementationPreference preferredImplementations[] = {
+    {"curve.scale", "bls12-381.g2", "blst/resident/curve.scale"},
+    {"curve.scale_each", "bls12-381.g2", "blst/resident/curve.scale_each"},
+    {"curve.vector_scale", "bls12-381.g2", "blst/resident/curve.vector_scale"},
+    {"pairing.check", "bls12-381.fr", "blst/resident/pairing.check"},
+};
+
 // Facets identify the contraction port; exact installed descriptors identify
 // its available implementation. Representation spelling grants no provider.
 Expected<std::vector<BindingApplication>>
@@ -92,7 +107,36 @@ public:
         return terminal;
       return std::vector<std::string>{};
     }
-    return std::vector<std::string>{std::move(*fallback)};
+    std::vector<std::string> choices;
+    for (const auto &[contract, domain, implementation] :
+         preferredImplementations) {
+      if (application.contract != contract ||
+          application.arguments.size() != 1 ||
+          application.arguments.front() != domain ||
+          *fallback == implementation)
+        continue;
+      const auto *entry =
+          installedImplementations().find(contract, implementation);
+      if (!entry || entry->requiresExplicitSelection)
+        continue;
+      auto candidate = application;
+      candidate.implementation = implementation.str();
+      auto installed = resolveBinding(candidate, true);
+      if (!installed) {
+        auto terminal = handleErrors(
+            installed.takeError(), [](const Refusal &refusal) -> Error {
+              if (refusal.code == "binding-implementation")
+                return Error::success();
+              return error(refusal.code, refusal.detail);
+            });
+        if (terminal)
+          return terminal;
+        continue;
+      }
+      choices.push_back(implementation.str());
+    }
+    choices.push_back(std::move(*fallback));
+    return choices;
   }
   std::vector<BindingApplication>
   conversions(const BoundType &from, const BoundType &to) const override {

@@ -149,8 +149,30 @@ implementation boundary; these laws do not establish its correctness.
 BLS12-381 scalar/vector and G1/G2 scalar/bulk values have explicit `blst/fr`,
 `blst/g1` and `blst/g2` representations. The `blst/resident/` implementations
 consume these physical ports directly. Adjacent calls can retain provider-owned
-buffers. Ordinary kernel calls retain Arkworks defaults; adding a provider does
-not change a source program's selections.
+buffers. Canonical function ports and Contracts defaults remain Arkworks. The
+Target candidate catalog gives the following installed implementations priority
+for automatic physical selection:
+
+| Domain | Operations | Preferred implementation prefix |
+|---|---|---|
+| `bls12-381.g2` | `curve.scale`, `curve.scale_each`, `curve.vector_scale` | `blst/resident/` |
+| `bls12-381.fr` | `pairing.check` | `blst/resident/` |
+
+These static preferences include representation conversion costs in their
+evaluation. G1 scaling and ordinary field arithmetic keep their canonical
+automatic choices. Empty or very small work can still cost more with conversions;
+this policy is not a cost optimizer or a guarantee for every program. Exact
+source selections and requested implementations take precedence. MSM remains an
+explicit choice because its variable-time authority is independent of selection.
+
+The catalog checks each suggestion against the installed signature and retains
+the canonical fallback. The physical planner records and independently validates
+the actual crossings. Missing adapters advance affected automatic choices
+through the existing bounded retry. An optional whole-program capacity refusal
+advances automatic choices together, including choices connected through inferred
+container layouts; this coarse fallback does not search for a minimum repair.
+Fixed choices and exhausted selection work remain exact refusals. Native executes
+the emitted bindings without provider search or runtime retry.
 
 `native/representation.convert` implements only explicitly installed direct
 conversions. Its logical arguments contain the erased logical type; its physical

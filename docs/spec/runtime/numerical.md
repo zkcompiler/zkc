@@ -107,7 +107,7 @@ numerical work or mandatory memory floor. Both paths retain affine-base scalar
 multiplication and private complete-output publication. Dalek scaling keeps its
 existing constant-time provider calls and does not use this scratch.
 
-Explicit `blst/resident/*` alternatives operate on selected BLS12-381 scalar,
+`blst/resident/*` alternatives operate on selected BLS12-381 scalar,
 G1 and G2 storage. Canonical bridges and subgroup checks occur in reached
 `representation.convert` calls. Linking checks the conversion endpoints;
 arithmetic reuses those admitted signatures without parsing them again.
@@ -125,7 +125,9 @@ publishes no result. Provider-internal allocation failure can still abort the
 process. Every invocation checks current implementation permission before
 charging work, including a retained prepared handle after idle policy changes.
 Selection does not establish a constant-time guarantee; MSM is variable-time.
-Arkworks remains the default.
+Canonical ports and Contracts defaults remain Arkworks; the compiler's
+[Target preferences](../../compiler/representation.md#resident-providers) may
+select resident G2 scaling and pairing checks with explicit conversions.
 
 `poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
 quartic/octic extensions. Shape and domain checks precede numerical admission;
