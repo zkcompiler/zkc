@@ -120,9 +120,12 @@ control, return-type and resource checks apply. Program identifiers are bounded
 to 128 bytes. Missing, duplicate or malformed sites and duplicate outputs fail
 admission, including in retained unused functions and dormant branches.
 
-The logical MLIR operation is `local.bool_constant`; its physical form is
-`plan.bool_constant` with exactly the selected native Boolean representation.
-These operations have no `Pure`, `ConstantLike` or speculative-execution grant.
+The MLIR operation is `local.bool_constant` in both logical and physical
+profiles. Its logical result is `i1`; the physical profile requires exactly
+`bool@native.bool/0`. Physical selection changes the result representation,
+not the operation, site or value. The enclosing profile independently rejects
+a result from the other stage. The operation has no `Pure`, `ConstantLike`
+or speculative-execution grant.
 Their placement and accounting belong to executable local semantics. Total
 `arith.constant` remains a different operation before lowering.
 

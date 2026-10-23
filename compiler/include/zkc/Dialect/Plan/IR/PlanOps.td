@@ -16,12 +16,6 @@ def Plan_ApplyOp : Op<PlanDialect, "apply"> {
   let hasVerifier = 1;
 }
 
-def Plan_BoolConstantOp : Op<PlanDialect, "bool_constant"> {
-  let arguments = (ins BoolAttr:$value, StrAttr:$site);
-  let results = (outs PhysicalData:$output);
-  let hasVerifier = 1;
-}
-
 def ReleaseOp : Op<PlanDialect, "release"> {
   let arguments = (ins Variadic<PhysicalData>:$values);
   let hasVerifier = 1;

@@ -1,5 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
@@ -18,4 +20,17 @@ void zkc::local::LocalDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Local/IR/localOps.cpp.inc"
       >();
+}
+
+LogicalResult zkc::local::BoolConstantOp::verify() {
+  if (getOutput().getType().isSignlessInteger(1))
+    return success();
+  auto type = zkc::protocol::encodeBoundType(getOutput().getType(), true);
+  if (!type) {
+    llvm::consumeError(type.takeError());
+    return zkc::diagnostics::emit(emitOpError(), "native-boolean-type");
+  }
+  if (type->spelling() != "bool@native.bool/0")
+    return zkc::diagnostics::emit(emitOpError(), "native-boolean-type");
+  return success();
 }

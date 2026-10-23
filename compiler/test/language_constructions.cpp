@@ -1122,7 +1122,8 @@ construction Base<N:nat> for First<N>{base authored;}
     builder.setInsertionPoint(&handler.getBody().front().back());
     for (unsigned i = 0; i < 12000; ++i) {
       zkc::local::BoolConstantOp::create(
-          builder, handler.getLoc(), builder.getBoolAttr(false),
+          builder, handler.getLoc(), builder.getI1Type(),
+          builder.getBoolAttr(false),
           builder.getStringAttr("cost" + std::to_string(i)));
     }
     SmallVector<mlir::Attribute> rules;

@@ -94,10 +94,12 @@ def Local_GuardOp : Op<LocalDialect, "guard", [MemoryEffects<[MemRead, MemWrite]
 }
 
 // Executing a literal charges a step and allocates a runtime value.
-// It is intentionally neither pure nor speculatable.
+// Logical and physical profiles share this ordered operation. Only its port
+// representation changes; it is intentionally neither pure nor speculatable.
 def Local_BoolConstantOp : Op<LocalDialect, "bool_constant"> {
   let arguments = (ins BoolAttr:$value, StrAttr:$site);
-  let results = (outs I1:$output);
+  let results = (outs AnyType:$output);
+  let hasVerifier = 1;
 }
 
 def RequireOp : BoundOp<LocalDialect, "exec.require", [OpControlRequire]>;

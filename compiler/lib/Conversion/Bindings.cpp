@@ -56,17 +56,10 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   }
   for (auto [index, decision] : enumerate(plan.operations)) {
     auto *op = work[index];
-    if (auto literal = dyn_cast<zkc::local::BoolConstantOp>(op)) {
+    if (isa<zkc::local::BoolConstantOp>(op)) {
       if (decision.outputs.size() != 1 || decision.binding ||
           !decision.conversions.empty())
         return createStringError("native-boolean-physical-plan");
-      builder.setInsertionPoint(op);
-      auto physical = zkc::plan::BoolConstantOp::create(
-          builder, op->getLoc(), decision.outputs.front(),
-          literal.getValueAttr(), literal.getSiteAttr());
-      op->replaceAllUsesWith(physical->getResults());
-      op->erase();
-      work[index] = physical;
       continue;
     }
     if (!decision.binding && decision.conversions.empty())

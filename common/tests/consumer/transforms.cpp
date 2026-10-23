@@ -73,12 +73,12 @@ int main() {
   if (scope.getProfile() != zkc::protocol_ir::Profile::Physical)
     return 2;
   unsigned literals = 0;
-  module->walk([&](zkc::plan::BoolConstantOp) { ++literals; });
+  module->walk([&](zkc::local::BoolConstantOp) { ++literals; });
   if (literals != 1)
     return 3;
   mlir::OwningOpRef<mlir::ModuleOp> changed(
       mlir::cast<mlir::ModuleOp>(module->clone()));
-  changed->walk([&](zkc::plan::BoolConstantOp value) {
+  changed->walk([&](zkc::local::BoolConstantOp value) {
     value->setAttr("value", builder.getBoolAttr(false));
   });
   if (failed(mlir::verify(*changed)))

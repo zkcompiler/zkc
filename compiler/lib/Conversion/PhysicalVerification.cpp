@@ -98,8 +98,6 @@ class PhysicalCorrespondence {
         return false;
     } else {
       auto name = source->getName().getStringRef();
-      if (isa<local::BoolConstantOp>(source))
-        name = plan::BoolConstantOp::getOperationName();
       if (actual->getName().getStringRef() != name ||
           !llvm::equal(actual->getOperands(), operands) ||
           !llvm::equal(actual->getResultTypes(), decision.outputs))

@@ -162,7 +162,7 @@ class ArtifactCorrespondence {
             !inputs(r->inputs) || !outputs(r->outputs))
           return false;
       } else if (auto r = record.get<program::BooleanConstant>()) {
-        auto literal = dyn_cast<plan::BoolConstantOp>(op);
+        auto literal = dyn_cast<local::BoolConstantOp>(op);
         if (!literal || literal.getValue() != r->value || !outputs({r->output}))
           return false;
       } else if (auto r = record.get<program::Return>()) {

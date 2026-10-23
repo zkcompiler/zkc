@@ -392,10 +392,8 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
-      } else if (isa<zkc::local::BoolConstantOp, zkc::plan::BoolConstantOp>(
-                     op)) {
-        if (!local || physical != isa<zkc::plan::BoolConstantOp>(op) ||
-            !attributes(op, {"site", "value"})) {
+      } else if (isa<zkc::local::BoolConstantOp>(op)) {
+        if (!local || !attributes(op, {"site", "value"})) {
           fail("native-boolean-context");
           return {};
         }

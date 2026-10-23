@@ -49,7 +49,23 @@ for optimize in (False, True):
     assert "arith." not in bound and "local.bool_constant" in bound
     commands.source("protocol-export", bound, refuses="native-physical-required")
     physical = commands.verified(bound, None, "--zkc-select-physical=release-storage=true")
-    assert "local.bool_constant" not in physical and "plan.bool_constant" in physical
+    assert "local.bool_constant" in physical and "plan.bool_constant" not in physical
+    # Physical selection changes only the representation of an ordered literal.
+    def literals(text):
+        return re.findall(r'"local.bool_constant"\(\) <\{([^}]+)\}>', text)
+    logical_literals = literals(bound)
+    assert logical_literals and logical_literals == literals(physical)
+    # Each representation is valid alone, but not in the opposite profile.
+    # An unused literal isolates admission from operand/signature mismatches.
+    for subject, wrong_type in ((bound, '!plan.data<i1, "native.bool/0">'),
+                                (physical, "i1")):
+        mutant, changed = re.subn(
+            r'(local\.func[^\n]+\{\n)',
+            r'\1      %wrong_profile = "local.bool_constant"() '
+            '{site="wrong_profile", value=true} : () -> ' + wrong_type + '\n',
+            subject, count=1)
+        assert changed == 1
+        commands.verified(mutant, "native-local-policy")
     encoded = commands.source("protocol-export", physical)
     carrier = json.loads(encoded)
     assert carrier[0] == "zkc.program/0"
@@ -130,3 +146,12 @@ for length in (128, 129):
     literal = next(op for f in named[2] for op in f[4] if op[0] == 'bool_constant')
     literal[1] = 's' * length
     canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name')
+
+# Operation verification admits only logical Boolean or its exact native port.
+for wrong_type in ("i8", "i64", "f32", "si1", "ui1"):
+    commands.verified(
+        'module { %v = "local.bool_constant"() {value=true, site="literal"}'
+        f' : () -> {wrong_type} }}', "native-boolean-type")
+# A removed operation spelling is not a compatibility input.
+commands.verified(physical.replace("local.bool_constant", "plan.bool_constant"),
+                  "unregistered operation")
