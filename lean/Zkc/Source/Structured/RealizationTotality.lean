@@ -27,6 +27,9 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     (meaning observations table).TotalOperation op := by
   intro args bodies _
   cases op with
+  | fieldEmbed =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; exact ⟨_, rfl⟩
   | indexConstant | fieldConstant | booleanConstant | groupIdentity =>
     cases args
     cases bodies

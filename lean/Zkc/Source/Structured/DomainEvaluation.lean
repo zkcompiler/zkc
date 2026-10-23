@@ -185,6 +185,8 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluateOn model.toFieldModel args)
   | .indexConstant value, .nil, .nil => .done (.cons value .nil)
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .fieldEmbed extension base, .cons value .nil, .nil =>
+      .done (.cons (model.embed extension base value) .nil)
   | .fieldConstant domain value, .nil, .nil => .done (.cons (value : model.Field domain) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)

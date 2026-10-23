@@ -25,6 +25,8 @@ def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
     Values model.Value op.arguments → Values model.Value op.results
   | .indexConstant value, _, .nil => .cons value .nil
   | .indexEqual, _, .cons a (.cons b .nil) => .cons (decide (a = b)) .nil
+  | .fieldEmbed extension base, _, .cons value .nil =>
+      .cons (model.embed extension base value) .nil
   | .fieldConstant domain value, _, .nil => .cons (value : model.Field domain) .nil
   | .fieldAdd _, _, .cons a (.cons b .nil) => .cons (a + b) .nil
   | .fieldSubtract _, _, .cons a (.cons b .nil) => .cons (a - b) .nil
@@ -132,6 +134,7 @@ def Equality.decide (model : DomainModel) : {ty : Ty} → Equality ty → Decida
   | _, .field domain => model.fieldDecEq domain
   | _, .group domain => model.groupDecEq domain
   | _, .index => inferInstanceAs (DecidableEq Nat)
+  | _, .boolean => inferInstanceAs (DecidableEq Bool)
 
 /-- The plain participant interface over the model's carriers. -/
 abbrev Interface (model : DomainModel) := participantInterfaceOn model.toCarriers
@@ -191,6 +194,9 @@ def Form.denoteWith {A : Type}
       (Evaluation.operationOn model (.silent _) tables.closed op (Terms.eval results args binders)
         (op.calculationRegions allowed)).bind fun values =>
           next.denoteWith leaf (.cons values binders)
+  | _, .math helper args next, binders =>
+      (invoke tables.components helper (Comps.eval results args binders)).bind fun values =>
+        next.denoteWith leaf (.cons values binders)
   | _, .byLaw _ _ next, binders => next.denoteWith leaf binders
   | _, .owned owner helper args next, binders =>
       (Participant.owned (context.roles owner) (context.roles owner) (invoke tables.closed helper)
@@ -345,6 +351,7 @@ def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws callees Δ out �
   | _, .guard _ _ _ next => next.LawsMatch
   | _, .strict _ _ next => next.LawsMatch
   | _, .compute _ _ _ next => next.LawsMatch
+  | _, .math _ _ next => next.LawsMatch
   | _, .byLaw entry helper next => laws[entry].helper = helper ∧ next.LawsMatch
   | _, .owned _ _ _ next => next.LawsMatch
   | _, .repeat _ _ _ _ _ _ next => next.LawsMatch
@@ -361,6 +368,7 @@ def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws callees Δ out �
   | _, .guard _ _ _ next => next.lawCalls
   | _, .strict _ _ next => next.lawCalls
   | _, .compute _ _ _ next => next.lawCalls
+  | _, .math _ _ next => next.lawCalls
   | _, .byLaw entry helper next => (entry, helper) :: next.lawCalls
   | _, .owned _ _ _ next => next.lawCalls
   | _, .repeat _ _ _ _ _ _ next => next.lawCalls
@@ -378,6 +386,7 @@ def Form.calleeCalls {out : List Ty} : {Δ : Scope} → Form laws callees Δ out
   | _, .guard _ _ _ next => next.calleeCalls
   | _, .strict _ _ next => next.calleeCalls
   | _, .compute _ _ _ next => next.calleeCalls
+  | _, .math _ _ next => next.calleeCalls
   | _, .byLaw _ _ next => next.calleeCalls
   | _, .owned _ _ _ next => next.calleeCalls
   | _, .repeat _ _ _ _ _ _ next => next.calleeCalls
@@ -409,6 +418,7 @@ theorem Form.lawsMatch_of_lists {out : List Ty} :
   | _, .guard _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
   | _, .strict _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
   | _, .compute _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .math _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
   | _, .byLaw _ _ next, laws, applied => by
     simp only [Form.lawCalls, List.map_cons, List.cons.injEq] at laws
     exact ⟨laws.1, next.lawsMatch_of_lists laws.2 applied⟩

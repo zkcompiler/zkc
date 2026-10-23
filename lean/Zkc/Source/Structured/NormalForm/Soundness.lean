@@ -1267,8 +1267,25 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
                 exact continue_push sig results processes _ inputs nextRegion next sound state _ restForm rest restMatched
                   binders inputsEq _ rfl
               · cases normalized
-            all_goals cases normalized
-          · cases normalized
+            all_goals
+              simp only [exactMathCall] at normalized
+              obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
+              cases built
+              refine (bind_congr_left (math_rule model tables protocols context _ _ allowed _ _) _).trans ?_
+              simp only [Form.denote, Form.denoteWith]
+              apply congrArg
+              funext values
+              exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _ values _ restForm rest
+                matched binders inputsEq _ (comps_eval_reads (types := helper.outputs) results binders values)
+          · simp only [exactMathCall] at normalized
+            obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
+            cases built
+            refine (bind_congr_left (math_rule model tables protocols context _ _ allowed _ _) _).trans ?_
+            simp only [Form.denote, Form.denoteWith]
+            apply congrArg
+            funext values
+            exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _ values _ restForm rest
+              matched binders inputsEq _ (comps_eval_reads (types := helper.outputs) results binders values)
         · cases normalized
       all_goals first
         | (simp [Op.total] at notTotal; done)
@@ -1517,7 +1534,20 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
                 exact step
               · simp only [holds, decide_false, Bool.false_eq_true, ite_false]
                 rfl
-          · cases normalized
+          · obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
+            cases built
+            simp only [Participant.guard, stored, Comp.eval, ite_true, Form.denote, Form.denoteWith, Term.eval]
+            by_cases holds : condition.eval results binders = true
+            · simp only [holds, ite_true, PIR.Process.bind]
+              have kept : Comps.eval results (state.set arg (.present (.bool true))).env binders =
+                  Comps.eval results state.env binders :=
+                comps_eval_set results binders state.env arg _ (by
+                  simp only [← entryAt_eq_get, stored, Comp.eval, Term.eval, holds])
+              have step := continue_push sig results processes _ inputs nextRegion next sound
+                (state.set arg (.present (.bool true))) .nil restForm rest matched binders inputsEq _ rfl
+              rw [kept] at step
+              exact step
+            · simp only [holds, Bool.false_eq_true, ite_false, PIR.Process.bind]
         · cases normalized
   | statement relation types selectors acceptance =>
     simp only [operation] at normalized

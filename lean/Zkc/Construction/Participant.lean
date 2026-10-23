@@ -127,6 +127,7 @@ inductive Calculation where
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
   | fieldMultiply (domain : String)
+  | fieldEmbed (extension base : String)
   | fieldEqual (domain : String)
   | groupIdentity (domain : String)
   | groupAdd (domain : String)
@@ -148,6 +149,7 @@ def op : Calculation → Structured.Op
   | .fieldAdd domain => .fieldAdd domain
   | .fieldSubtract domain => .fieldSubtract domain
   | .fieldMultiply domain => .fieldMultiply domain
+  | .fieldEmbed extension base => .fieldEmbed extension base
   | .fieldEqual domain => .fieldEqual domain
   | .groupIdentity domain => .groupIdentity domain
   | .groupAdd domain => .groupAdd domain
@@ -170,6 +172,7 @@ def ofOp? : Structured.Op → Option Calculation
   | .fieldAdd domain => some (.fieldAdd domain)
   | .fieldSubtract domain => some (.fieldSubtract domain)
   | .fieldMultiply domain => some (.fieldMultiply domain)
+  | .fieldEmbed extension base => some (.fieldEmbed extension base)
   | .fieldEqual domain => some (.fieldEqual domain)
   | .groupIdentity domain => some (.groupIdentity domain)
   | .groupAdd domain => some (.groupAdd domain)

@@ -287,6 +287,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["field.constant", domain, literal-string]` | canonical scalar constant: a decimal residue, or for a binary field a [bit-pattern literal](../domains/values.md#bit-pattern-literals) |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
+| `["field.embed", extension, base]` | one base-field value to the named extension field |
 | `["group.identity", group]` | group identity |
 | `["group.add", group]` | two groups to group |
 | `["group.scale", group, field]` | group then associated scalar field to group |
@@ -529,6 +530,15 @@ spellings are exact, not an extensible prefix convention.
 | `algebra.exec.vector_equal` | `vector.equal` | `[V,V] → [B]` | `[]` |
 | `algebra.exec.vector_find_last` | `vector.find_last` | `[V,F] → [I]` | `[]` |
 | `algebra.exec.field_equal` | `field.equal` | `[F,F] → [B]` | `[]` |
+| `algebra.exec.field_embed` | `field.embed` | `[field:base] → [field:extension]` | `[]` |
+
+The `field.embed` binding takes one domain argument, the extension. Its
+`BaseField` member fixes the operand's domain. The existing `exec` descriptor
+retains this binding and its site; Lean lowers it to the same nominal embedding
+operation as the direct descriptor. Embedding admission requires `ExtensionField`
+and `Field` on the extension, `Field` on the base, an exact `BaseField` member,
+and equal, present characteristic moduli. These checks select a domain pair;
+they do not establish the algebraic laws of its interpretation.
 
 `n` matches `0|[1-9][0-9]*` and denotes a value at most
 `18446744073709551615`. Index inputs/results have the same u64 range, independent

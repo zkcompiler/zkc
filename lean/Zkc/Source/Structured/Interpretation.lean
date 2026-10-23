@@ -189,6 +189,9 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     (operation leftSites left op args bodies).interpret operations =
       operation rightSites right op args (RegionFunctions.translate (dialect := dialect) operations bodies) := by
   cases op with
+  | fieldEmbed =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; rfl
   | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
   | mark site =>
     cases args; cases bodies

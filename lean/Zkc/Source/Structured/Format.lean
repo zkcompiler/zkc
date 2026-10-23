@@ -97,6 +97,7 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "field.add", d] => return .fieldAdd (← field d)
   | [.str "field.subtract", d] => return .fieldSubtract (← field d)
   | [.str "field.multiply", d] => return .fieldMultiply (← field d)
+  | [.str "field.embed", extension, base] => return .fieldEmbed (← field extension) (← field base)
   | [.str "field.equal", d] => return .fieldEqual (← field d)
   | [.str "group.identity", g] => return .groupIdentity (← group g)
   | [.str "group.add", g] => return .groupAdd (← group g)

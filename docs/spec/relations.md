@@ -151,6 +151,10 @@ ReductionContract(input,residual,s,r,bad) :=
   residual(r) → input(s) ∨ bad.
 ```
 
+`ReductionContract` here is mathematical notation for an implication. Lean
+uses ordinary predicates and the checked obligation derivation API, without
+a separate record wrapping this implication.
+
 The predicates can be validity in specified relation families or other
 explicit mathematical predicates. The contract is an implication for these
 actual instances. It does not generate the residual, reconstruct a witness,

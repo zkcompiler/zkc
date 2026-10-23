@@ -67,6 +67,7 @@ inductive Descriptor where
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
   | fieldMultiply (domain : String)
+  | fieldEmbed (extension base : String)
   | fieldEqual (domain : String)
   | groupIdentity (group : String)
   | groupAdd (group : String)

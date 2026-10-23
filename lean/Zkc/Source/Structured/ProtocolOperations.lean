@@ -12,7 +12,7 @@ Exact signatures retain the kind; a hand-built Local reference cannot inhabit
 this view. Admission separately checks the kind of every stored helper body. -/
 def Op.isCalculation : Op → Bool
   | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
-    .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. |
+    .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. |
     .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .boundedAt .. => true
   | .invoke helper => helper.kind == .math

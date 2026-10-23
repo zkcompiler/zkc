@@ -72,10 +72,10 @@ example : renamedForm.CallsMatch := by kernel_rfl
 example : normalize (renamedSignature true) SumcheckVerifierBodies.roundBody 0 1
     SumcheckRoundNormalForms.proverEmptyPattern = .error "no-law" := by kernel_rfl
 
-/-- A Math call is presented only through a law on components: without one the
-Reduce body's first call is refused, not presented as a total term. -/
+/-- Math calls now retain their exact component invocation without a law.
+The Reduce verifier still refuses its later owned local call without a law. -/
 example : normalize {} (SumcheckVerifierBodies.reduceBody 4) 1 2
     (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil)))))) =
-    .error "calculation-can-stop" := by kernel_rfl
+    .error "no-law" := by kernel_rfl
 
 end Tests.StructuredNormalForms

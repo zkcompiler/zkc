@@ -5,13 +5,28 @@ use zkc::vector::{Vector};
 use zkc::boolean::{both};
 use zkc::multilinear as mle;
 
+math fn total<F: Field>(values: Vector<F>) -> F {
+  return zkc::finite_math::fold(zkc::vector::elements(values), 0,
+    fn(current, value) => current + value);
+}
+
+pub relation BothSums<F: Field>(parameter left: Vector<F>,
+    parameter right: Vector<F>, statement left_sum: F, statement right_sum: F) {
+  return left_sum == total(left) && right_sum == total(right);
+}
+
 // A client of the round protocol: check two independent public-table claims.
 // Each role supplies its own data; each obligation is checked against its own
 // table. One random service is threaded through both calls in source order.
 pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
     (left: Vector<F> @(P,V), right: Vector<F> @(P,V),
      left_sum: F @V, right_sum: F @V, rounds: index @(P,V),
-     challenges: Random<F> @V) -> (accepted: bool @V) {
+     challenges: Random<F> @V) -> (accepted: bool @V)
+    where () spec {
+      target public_sums = BothSums<F>(in.left@V, in.right@V,
+        in.left_sum, in.right_sum) accept out.accepted;
+    }
+{
   let left_table @P = mle::table(left, rounds, 1);
   #[site(left)] let (left_point, left_residual, left_claim) =
     Reduce<F,Max>(left_table, left_sum, rounds, challenges);

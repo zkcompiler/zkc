@@ -297,6 +297,23 @@ with case('binary-and-extension-identities-export-their-rows'):
                                ['ExtensionField', 'TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo'],
                                '2130706433']
 
+with case('field-embedding-retains-nominal-binding-and-ports'):
+    base, extension = 'koala-bear', 'koala-bear.ext4-binomial3'
+    base_type, extension_type = f'!algebra.field<"{base}">', f'!algebra.field<"{extension}">'
+    declarations = f'''
+"local.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
+local.func @embed_helper(%x:{base_type}) -> {extension_type}
+    attributes {{logical_origin=["embed_helper",[]]}} {{
+  %y = "algebra.exec.field_embed"(%x) {{binding=@embed,parameters=[],site="embedding"}} : ({base_type})->{extension_type}
+  local.return %y : {extension_type}
+}}
+'''
+    data = export(simple(declarations))
+    assert data[6] == [['binding', 'embed', 'field.embed', [extension], '']]
+    assert table(data)['embed_helper'][4:6] == [[['field', base]], [['field', extension]]]
+    assert instructions(table(data)['embed_helper']) == [
+        [['exec', 'algebra.exec.field_embed', 'embed', []], [0], [['field', extension]], [], 'embedding']]
+
 with case('unsupported-service-contract'):
     source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.other/0">)').replace(
         'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.other/0">)->i1').replace(

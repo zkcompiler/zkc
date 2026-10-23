@@ -93,6 +93,7 @@ def operation {F G : Type} {interface : PIR.Signature}
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
   | .fieldMultiply _, .cons a (.cons b .nil), .nil => .done (.cons (a * b) .nil)
+  | .fieldEmbed _ _, .cons value .nil, .nil => .done (.cons value .nil)
   | .fieldEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .groupIdentity _, .nil, .nil =>
       .done (.cons 0 .nil)
