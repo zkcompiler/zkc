@@ -32,7 +32,7 @@ fn scalar() -> PhysicalType {
 fn sequence(element: &PhysicalType) -> PhysicalType {
     native_contracts()
         .aggregate_type(
-            LogicalType::sequence(element.logical()).unwrap(),
+            LogicalType::sequence(element.logical().clone()).unwrap(),
             Representation::Sequence,
             vec![element.clone()],
         )
@@ -194,7 +194,7 @@ fn complete_inactive_layout_and_nested_resident_children_survive_pack_and_access
         vec![field, vector, g1, g2],
     );
     let empty = Value::pack_variant(ty.clone(), 0, vec![]).unwrap();
-    let default = PhysicalType::default_for(ty.logical()).unwrap();
+    let default = PhysicalType::default_for(ty.logical().clone()).unwrap();
     assert_ne!(empty.physical_type(), default);
     assert_eq!(empty.unpack_variant().unwrap().0, ty);
     assert!(
@@ -338,7 +338,10 @@ fn nested_selected_codec_uses_identical_frames_and_decodes_directly() {
     let bytes = native.encode_native_value(&value).unwrap();
     let selected = native.decode_native_value(&ty, &bytes).unwrap();
     let default = native
-        .decode_native_value(&PhysicalType::default_for(ty.logical()).unwrap(), &bytes)
+        .decode_native_value(
+            &PhysicalType::default_for(ty.logical().clone()).unwrap(),
+            &bytes,
+        )
         .unwrap();
     assert_eq!(native.encode_native_value(&default).unwrap(), bytes);
     assert_eq!(native.encode_native_value(&selected).unwrap(), bytes);
@@ -408,7 +411,10 @@ fn nested_frames_preserve_every_selected_resident_leaf_without_conversion() {
         assert_eq!(decoded.physical_type(), ty);
         assert_eq!(native.encode_native_value(&decoded).unwrap(), bytes);
         let canonical = native
-            .decode_native_value(&PhysicalType::default_for(ty.logical()).unwrap(), &bytes)
+            .decode_native_value(
+                &PhysicalType::default_for(ty.logical().clone()).unwrap(),
+                &bytes,
+            )
             .unwrap();
         assert_eq!(native.encode_native_value(&canonical).unwrap(), bytes);
         if alternative == 1 {
@@ -452,7 +458,7 @@ fn inactive_local_only_layout_denies_wire_without_denying_immutable_preparation(
 
 fn prepared_program() -> Program {
     let ty = dense(Type::FixedVector, 4);
-    let field = PhysicalType::default_for(scalar().logical()).unwrap();
+    let field = PhysicalType::default_for(scalar().logical().clone()).unwrap();
     let convert = OperationBinding {
         contract: "representation.convert".into(),
         arguments: vec![field.logical().spelling()],
@@ -641,7 +647,7 @@ fn family_actual_metadata_refuses_wrong_complete_parameters_and_lifted_conversio
         assert!(backend().prepare_binding(&bad).is_none());
         assert!(native_contracts().resolve(bad).is_err());
     }
-    let default = PhysicalType::default_for(ty.logical()).unwrap();
+    let default = PhysicalType::default_for(ty.logical().clone()).unwrap();
     let conversion = OperationBinding {
         contract: "representation.convert".into(),
         arguments: vec![ty.logical().spelling()],
@@ -656,7 +662,7 @@ fn family_actual_metadata_refuses_wrong_complete_parameters_and_lifted_conversio
 fn inactive_foreign_layout_cannot_borrow_native_catalog_authority() {
     let mut foreign = ContractsBuilder::standard();
     let child = foreign
-        .add_representation("blst/fr", scalar().logical())
+        .add_representation("blst/fr", scalar().logical().clone())
         .unwrap();
     assert_ne!(child, scalar());
     let logical = LogicalType::parse(&zkc_test_support::variants::logical(

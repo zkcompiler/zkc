@@ -759,7 +759,7 @@ fn malformed_duplicate_and_cross_catalog_contributions_refuse() {
         ErrorCode::Representation
     );
     assert_eq!(
-        PhysicalType::new(ty.logical(), ty.representation())
+        PhysicalType::new(ty.logical().clone(), ty.representation())
             .unwrap_err()
             .code,
         ErrorCode::Representation
@@ -1267,7 +1267,7 @@ fn trusted_context_discovery_and_logical_constraints_are_independent_of_executio
     );
     let add = declaration("add");
     let logical = deploy.contracts.logical_signature(&add).unwrap();
-    assert_eq!(logical.inputs, vec![deploy.field.logical(); 2]);
+    assert_eq!(logical.inputs, vec![deploy.field.logical().clone(); 2]);
     assert!(deploy.contracts.resolve(add.clone()).is_err());
     let mut wrong = add.clone();
     wrong.arguments = vec!["bls12-381.fr".into()];

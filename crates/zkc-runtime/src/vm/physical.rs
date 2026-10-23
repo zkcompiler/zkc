@@ -397,7 +397,7 @@ mod tests {
             if ty.kind() == Type::Sequence {
                 let child = ty.sequence_element().unwrap();
                 assert_eq!(ty.children().unwrap(), std::slice::from_ref(child));
-                assert_eq!(ty.logical().sequence_element().unwrap(), &child.logical());
+                assert_eq!(ty.logical().sequence_element().unwrap(), child.logical());
             }
         }
     }

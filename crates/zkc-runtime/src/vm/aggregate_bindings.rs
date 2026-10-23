@@ -67,7 +67,7 @@ impl AggregateImplementationFamily {
             Self::Sequence => Ok(()),
             Self::FieldArray { scalar, .. } | Self::FixedVector { scalar, .. } => {
                 let children = PhysicalType::logical_children(container)?;
-                if children.as_deref() == Some(std::slice::from_ref(&scalar.logical())) {
+                if children.as_deref() == Some(std::slice::from_ref(scalar.logical())) {
                     Ok(())
                 } else {
                     Err(AdmissionError::new(
@@ -101,7 +101,7 @@ impl AggregateImplementationFamily {
             [selected] => selected.clone(),
             _ => return Err(fail()),
         };
-        if container.logical() != *logical_container {
+        if container.logical() != logical_container {
             return Err(fail());
         }
         let element = container
@@ -131,11 +131,11 @@ impl AggregateImplementationFamily {
             if ty == logical_container {
                 return Ok(container.clone());
             }
-            if *ty == element.logical() {
+            if ty == element.logical() {
                 return Ok(element.clone());
             }
             if let Some(vector) = vector
-                && *ty == vector.logical()
+                && ty == vector.logical()
             {
                 return Ok(vector.clone());
             }

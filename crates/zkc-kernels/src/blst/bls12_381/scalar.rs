@@ -3,8 +3,8 @@ use crate::field::Coefficient;
 use group::ff::Field;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-/// Canonical scalar with private Montgomery coordinates. No raw foreign
-/// coordinate constructor is exposed. Arithmetic stays in this representation.
+/// Scalar with private Montgomery coordinates and checked byte ingress.
+/// Trusted typed values can transfer directly; arithmetic stays in this representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Scalar(pub(super) blstrs::Scalar);
 

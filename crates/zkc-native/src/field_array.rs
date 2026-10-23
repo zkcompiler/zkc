@@ -165,7 +165,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         [selected] => crate::native_contracts().physical_type(selected).ok()?,
         _ => return None,
     };
-    if array.logical() != LogicalType::field_array(Identity::Bls12381Fr, length).ok()? {
+    if *array.logical() != LogicalType::field_array(Identity::Bls12381Fr, length).ok()? {
         return None;
     }
     let scalar = array.field_array_element()?.clone();

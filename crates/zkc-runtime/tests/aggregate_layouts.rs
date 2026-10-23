@@ -277,7 +277,7 @@ impl Backend for Control {
                 [] => PhysicalType::parse("sequence<field:koala-bear>@logical.sequence/0").ok()?,
                 [name] => {
                     let expected = PhysicalType::aggregate(
-                        LogicalType::sequence(self.scalar.logical()).ok()?,
+                        LogicalType::sequence(self.scalar.logical().clone()).ok()?,
                         Representation::Sequence,
                         vec![self.scalar.clone()],
                     )
@@ -433,7 +433,7 @@ fn deployment() -> Deployment {
         .unwrap();
     let fixed = builder
         .aggregate_type(
-            LogicalType::fixed_vector(scalar.logical(), 2).unwrap(),
+            LogicalType::fixed_vector(scalar.logical().clone(), 2).unwrap(),
             fixed_repr,
             vec![scalar.clone()],
         )
@@ -457,7 +457,7 @@ fn deployment() -> Deployment {
         .unwrap();
     let sequence = builder
         .aggregate_type(
-            LogicalType::sequence(scalar.logical()).unwrap(),
+            LogicalType::sequence(scalar.logical().clone()).unwrap(),
             Representation::Sequence,
             vec![scalar.clone()],
         )
@@ -703,7 +703,7 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
             Representation::Variant,
             vec![
                 d.sequence.clone(),
-                PhysicalType::default_for(d.backend.fixed.logical()).unwrap(),
+                PhysicalType::default_for(d.backend.fixed.logical().clone()).unwrap(),
             ],
         )
         .unwrap();
@@ -715,7 +715,7 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
     assert!(
         d.contracts
             .aggregate_type(
-                logical,
+                logical.clone(),
                 Representation::Variant,
                 vec![d.sequence.clone(), foreign.backend.fixed.clone()]
             )
@@ -724,7 +724,7 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
     assert!(
         d.contracts
             .aggregate_type(
-                d.sequence.logical(),
+                d.sequence.logical().clone(),
                 Representation::Sequence,
                 vec![PhysicalType::parse(INDEX).unwrap()]
             )
@@ -732,13 +732,17 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
     );
     assert!(
         d.contracts
-            .aggregate_type(d.sequence.logical(), Representation::Sequence, vec![])
+            .aggregate_type(
+                d.sequence.logical().clone(),
+                Representation::Sequence,
+                vec![]
+            )
             .is_err()
     );
     assert!(
         d.contracts
             .aggregate_type(
-                d.sequence.logical(),
+                d.sequence.logical().clone(),
                 Representation::Sequence,
                 vec![foreign.backend.scalar.clone()]
             )
@@ -747,7 +751,7 @@ fn complete_layout_identity_canonical_elision_and_foreign_children() {
     assert!(
         d.contracts
             .aggregate_type(
-                d.backend.fixed.logical(),
+                d.backend.fixed.logical().clone(),
                 Representation::FixedVector,
                 vec![d.backend.scalar.clone()]
             )
@@ -795,7 +799,7 @@ fn specialization_is_separate_from_logical_arguments_and_defaults_are_one_choice
     assert_eq!(a.physical_arguments(), std::slice::from_ref(&d.sequence));
     assert_eq!(
         b.physical_arguments(),
-        [PhysicalType::default_for(d.sequence.logical()).unwrap()]
+        [PhysicalType::default_for(d.sequence.logical().clone()).unwrap()]
     );
     assert_ne!(a.signature(), b.signature());
     assert_eq!(
@@ -824,7 +828,7 @@ fn specialization_is_separate_from_logical_arguments_and_defaults_are_one_choice
         "control/representation.convert",
         &[&d.sequence.logical().spelling()],
         vec![
-            PhysicalType::default_for(d.sequence.logical())
+            PhysicalType::default_for(d.sequence.logical().clone())
                 .unwrap()
                 .spelling(),
             d.sequence.spelling(),
@@ -870,14 +874,14 @@ fn trusted_family_registration_is_bounded_scoped_and_uses_existing_inventory() {
         .unwrap();
     let fixed = b
         .aggregate_type(
-            LogicalType::fixed_vector(scalar.logical(), 2).unwrap(),
+            LogicalType::fixed_vector(scalar.logical().clone(), 2).unwrap(),
             representation,
             vec![scalar.clone()],
         )
         .unwrap();
     assert!(
         b.aggregate_type(
-            LogicalType::fixed_vector(scalar.logical(), 3).unwrap(),
+            LogicalType::fixed_vector(scalar.logical().clone(), 3).unwrap(),
             representation,
             vec![scalar.clone()]
         )
@@ -1098,7 +1102,7 @@ fn wire_checks_all_children_and_preserves_local_only_fixed_vectors() {
         .unwrap();
     let sequence = b
         .aggregate_type(
-            d.sequence.logical(),
+            d.sequence.logical().clone(),
             Representation::Sequence,
             vec![scalar.clone()],
         )
@@ -1112,7 +1116,11 @@ fn wire_checks_all_children_and_preserves_local_only_fixed_vectors() {
     b.add_wire_permission(scalar.clone(), WireCodec::Native)
         .unwrap();
     let sequence = b
-        .aggregate_type(d.sequence.logical(), Representation::Sequence, vec![scalar])
+        .aggregate_type(
+            d.sequence.logical().clone(),
+            Representation::Sequence,
+            vec![scalar],
+        )
         .unwrap();
     let logical = LogicalType::parse(&zkc_test_support::variants::logical(
         "Wire",

@@ -257,7 +257,8 @@ fn native_nested_messages_resolve_only_registered_setups() {
             Value::Commitment(Arc::new(state.commitment().clone()))
         })
         .collect();
-    let logical = values[0].physical_type().logical();
+    let value_type = values[0].physical_type();
+    let logical = value_type.logical();
     let value = Value::Sequence(
         Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
@@ -313,7 +314,7 @@ fn native_nested_messages_resolve_only_registered_setups() {
     let bad = Value::Sequence(
         Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(logical).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
             )
             .unwrap(),
             vec![values[0].clone(), values[2].clone()],

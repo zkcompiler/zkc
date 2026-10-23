@@ -214,8 +214,8 @@ fn identical_ports_preserve_exact_handler_selection() {
     );
     assert_eq!(a.signature().unwrap(), b.signature().unwrap());
     let mut registry = installed().unwrap().clone();
-    registry.entries.get_mut(&a.implementation).unwrap().handler = first_handler;
-    registry.entries.get_mut(&b.implementation).unwrap().handler = second_handler;
+    registry.entries.get_mut(&a.implementation).unwrap().handler = Dispatch::Direct(first_handler);
+    registry.entries.get_mut(&b.implementation).unwrap().handler = Dispatch::Direct(second_handler);
     let registry = Box::leak(Box::new(registry));
     for (binding, refusal) in [(a, "refused:first-handler"), (b, "refused:second-handler")] {
         let mut backend = backend();
@@ -944,6 +944,19 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     drop(check);
     assert_eq!(seen, Value::PAYLOAD_NAMES.iter().copied().collect());
     for (value, actual) in &classified {
+        if let zkc_runtime::vm::Representation::Extension(representation) = actual.representation()
+        {
+            // Equal names and mathematical types in another catalog do not
+            // authorize that catalog to classify an installed resident payload.
+            let mut foreign = zkc_runtime::vm::ContractsBuilder::standard();
+            let other = foreign
+                .add_representation(representation.name(), actual.logical().clone())
+                .unwrap();
+            assert_eq!(actual.spelling(), other.spelling());
+            assert_ne!(*actual, other);
+            assert!(!value.has_type(&other));
+            assert!(value.has_type(&actual.clone()));
+        }
         for (_, expected) in &classified {
             assert_eq!(value.has_type(expected), actual == expected);
         }

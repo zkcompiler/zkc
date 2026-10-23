@@ -78,7 +78,7 @@ fn observe(
             [selected] => crate::native_contracts().physical_type(selected).ok()?,
             _ => return None,
         };
-        if payload.logical() != logical {
+        if payload.logical() != &logical {
             return None;
         }
         if !crate::has_native_wire(&payload)

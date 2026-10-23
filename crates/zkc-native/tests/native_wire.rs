@@ -28,7 +28,7 @@ fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
     let sequence = Value::Sequence(
         zkc_native::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(ty.logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(ty.logical().clone()).unwrap(),
             )
             .unwrap(),
             vec![point],
@@ -667,7 +667,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
         let sequence = Value::Sequence(
             zkc_native::Sequence::new(
                 zkc_runtime::vm::PhysicalType::default_for(
-                    zkc_runtime::vm::LogicalType::sequence(ty.logical()).unwrap(),
+                    zkc_runtime::vm::LogicalType::sequence(ty.logical().clone()).unwrap(),
                 )
                 .unwrap(),
                 vec![value.clone(); 3],

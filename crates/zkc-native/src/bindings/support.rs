@@ -66,7 +66,7 @@ pub(super) fn materialize(
     let make = |kind| {
         let ty = make(kind)?;
         if matches!(ports, PortTransform::Msb) && kind == Type::Table {
-            PhysicalType::new(ty.logical(), Representation::TableMsb).ok()
+            PhysicalType::new(ty.logical().clone(), Representation::TableMsb).ok()
         } else {
             Some(ty)
         }
@@ -94,7 +94,7 @@ pub(super) fn materialize(
         } else {
             inputs.get_mut(port)?
         };
-        *port = PhysicalType::new(port.logical(), representation).ok()?;
+        *port = PhysicalType::new(port.logical().clone(), representation).ok()?;
     }
     Some(OperationSignature {
         inputs,

@@ -286,6 +286,61 @@ pub(super) fn dense<S: Family>(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
+    if name.starts_with("field.") {
+        scalar::<S>(name, args, i, p)
+    } else {
+        vector::<S>(name, args, i, p)
+    }
+}
+
+// Scalar arithmetic has no bulk destination, workspace or reservation state.
+#[inline]
+pub(crate) fn scalar<S: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    let field = |j| S::field(args.get(j).ok_or_else(|| refused("kernel-operands"))?);
+    preflight_scalar_output(i, p)?;
+    let value = match name {
+        "field.constant" => {
+            return super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p);
+        }
+        "field.add" => S::field_value(field(0)? + field(1)?),
+        "field.sub" => S::field_value(field(0)? - field(1)?),
+        "field.mul" => S::field_value(field(0)? * field(1)?),
+        "field.neg" => S::field_value(-field(0)?),
+        "field.inverse" => {
+            S::field_value(field(0)?.inverse().ok_or_else(|| refused("zero-inverse"))?)
+        }
+        "field.from_index" => {
+            let Value::Index(mut n) = *args.first().ok_or_else(|| refused("kernel-operands"))?
+            else {
+                return Err(refused("kernel-operands"));
+            };
+            let (mut sum, mut bit) = (S::zero(), S::one());
+            while n != 0 {
+                if n & 1 == 1 {
+                    sum = sum + bit;
+                }
+                n >>= 1;
+                bit = bit + bit;
+            }
+            S::field_value(sum)
+        }
+        "field.equal" => Value::Bool(field(0)? == field(1)?),
+        _ => return Err(refused("kernel-operands")),
+    };
+    Ok(vec![value])
+}
+
+fn vector<S: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let f = |j| S::field(arg(j)?);
     let v = |j| S::vector(arg(j)?);
@@ -332,15 +387,6 @@ pub(super) fn dense<S: Family>(
     };
     preflight_scalar_output(i, p)?;
     match name {
-        "field.constant" => {
-            super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p)
-        }
-        "field.add" => scalar(f(0)? + f(1)?),
-        "field.sub" => scalar(f(0)? - f(1)?),
-        "field.mul" => scalar(f(0)? * f(1)?),
-        "field.neg" => scalar(-f(0)?),
-        "field.inverse" => scalar(f(0)?.inverse().ok_or_else(|| refused("zero-inverse"))?),
-        "field.equal" => boolean(f(0)? == f(1)?),
         "vector.constant" => {
             let mut out = allocation(i.attributes.len())?;
             for literal in i.attributes {
@@ -385,20 +431,6 @@ pub(super) fn dense<S: Family>(
         "vector.dot" => {
             let (a, b) = (v(0)?, v(1)?);
             Ok(vec![dot(a, b, &call)?])
-        }
-        "field.from_index" => {
-            let Value::Index(mut n) = *arg(0)? else {
-                return Err(refused("kernel-operands"));
-            };
-            let (mut sum, mut bit) = (S::zero(), S::one());
-            while n != 0 {
-                if n & 1 == 1 {
-                    sum = sum + bit;
-                }
-                n >>= 1;
-                bit = bit + bit;
-            }
-            scalar(sum)
         }
         "vector.length" => Ok(vec![Value::Index(
             u64::try_from(v(0)?.len()).map_err(|_| exhausted("size-overflow"))?,

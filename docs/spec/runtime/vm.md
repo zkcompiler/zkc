@@ -198,6 +198,9 @@ provenance and publishes a successful record only after frame exit succeeds.
 A cache hit preserves outer frame hooks, cumulative charges,
 subsequent frame IDs and the normal result handoff. Reuse requires compatible
 policy and sufficient remaining capacity; otherwise the original body executes.
+Backend checkpoint compatibility must cover current execution authorization as
+well as work policy. Native uses a process-local identity for its immutable
+catalog, policy and exact-grant view; that identity grants no authority itself.
 Private state, resource authority and proof inputs do not become shared state.
 Runners using a shared execution ledger refuse computation preparation with
 `computation-preparation-context`. Its separate retained cache and replay

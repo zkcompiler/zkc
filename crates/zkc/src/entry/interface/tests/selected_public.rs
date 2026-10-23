@@ -15,7 +15,7 @@ fn sequence(number: u64) -> (Value, NativeValue) {
     let child = native_contracts()
         .physical_type("field:bls12-381.fr@blst/fr")
         .unwrap();
-    let logical = LogicalType::sequence(child.logical()).unwrap();
+    let logical = LogicalType::sequence(child.logical().clone()).unwrap();
     let ty = native_contracts()
         .aggregate_type(logical.clone(), Representation::Sequence, vec![child])
         .unwrap();
@@ -348,7 +348,7 @@ fn selected_public_exact_types_and_canonical_statement_equality_are_required() {
         let (doc, artifact) = fixture(&source, &value.physical_type());
         let host = deployment(&artifact).unwrap();
         let default = PreparedData::from_wire(
-            PhysicalType::default_for(value.physical_type().logical()).unwrap(),
+            PhysicalType::default_for(value.physical_type().logical().clone()).unwrap(),
             PreparedData::from_value(value.clone(), Capacity::default())
                 .unwrap()
                 .canonical_bytes()
@@ -443,9 +443,9 @@ fn selected_public_role_disagreement_in_inactive_children_is_rejected() {
         };
         for index in 0..children.len() {
             let mut changed = children.clone();
-            changed[index] = PhysicalType::default_for(changed[index].logical()).unwrap();
+            changed[index] = PhysicalType::default_for(changed[index].logical().clone()).unwrap();
             let wrong = native_contracts()
-                .aggregate_type(ty.logical(), ty.representation(), changed)
+                .aggregate_type(ty.logical().clone(), ty.representation(), changed)
                 .unwrap();
             assert_ne!(wrong, ty);
             let mut bad = artifact.clone();
@@ -644,11 +644,13 @@ fn selected_public_foreign_child_grants_cannot_impersonate_native_storage() {
         ])
         .map(|(child, layout)| {
             // Same names and logical types still belong to a different catalog.
-            foreign.add_representation(layout, child.logical()).unwrap()
+            foreign
+                .add_representation(layout, child.logical().clone())
+                .unwrap()
         })
         .collect();
     let foreign_type = foreign
-        .aggregate_type(ty.logical(), Representation::Variant, children)
+        .aggregate_type(ty.logical().clone(), Representation::Variant, children)
         .unwrap();
     assert_eq!(foreign_type.spelling(), ty.spelling());
     assert_ne!(foreign_type, ty);
@@ -734,7 +736,7 @@ fn selected_public_positional_byte_transport_uses_the_admitted_selection() {
 fn public_default_storage_remains_supported_by_both_proof_paths() {
     for (source, selected) in [sequence(7), variant()] {
         let data = PreparedData::from_wire(
-            PhysicalType::default_for(selected.physical_type().logical()).unwrap(),
+            PhysicalType::default_for(selected.physical_type().logical().clone()).unwrap(),
             PreparedData::from_value(selected, Capacity::default())
                 .unwrap()
                 .canonical_bytes()

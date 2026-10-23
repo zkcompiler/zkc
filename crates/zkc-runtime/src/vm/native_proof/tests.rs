@@ -531,7 +531,7 @@ fn selected_payload_fixture(codec: bool, payload: &PhysicalType) -> Fixture {
         Fixture::custom()
     };
     let spelling = payload.spelling();
-    f.events[0].payload = Some(payload.logical());
+    f.events[0].payload = Some(payload.logical().clone());
     f.program[3][0][4][1][1] = json!(spelling);
     let observer = f.program[2]
         .as_array_mut()
@@ -747,7 +747,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
         origin: origin.iter().map(|b| format!("{b:02x}")).collect(),
         payload: None,
         bound: None,
-        start_inputs: Some(vec![field.logical()]),
+        start_inputs: Some(vec![field.logical().clone()]),
     };
     let function = &program.program.functions["selected_start"];
     custom_helper(function, &state, std::slice::from_ref(&start), "main", "V").unwrap();

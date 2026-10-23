@@ -382,7 +382,8 @@ mod tests {
                 &mut signature.outputs[0]
             };
             let original = port.clone();
-            *port = PhysicalType::new(original.logical(), Representation::FrDiagonal).unwrap();
+            *port =
+                PhysicalType::new(original.logical().clone(), Representation::FrDiagonal).unwrap();
             assert_eq!(port.logical(), original.logical());
             assert_ne!(*port, original);
             assert_eq!(

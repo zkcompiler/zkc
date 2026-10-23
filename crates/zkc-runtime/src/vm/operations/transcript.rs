@@ -163,7 +163,7 @@ pub(super) fn select_payload(
     let mut signature = select(binding, logical, selection)?;
     match physical {
         [] => {}
-        [payload] if payload.logical() == logical.inputs[1] => {
+        [payload] if payload.logical() == &logical.inputs[1] => {
             signature.inputs[1] = payload.clone();
         }
         _ => return Err(support::failure()),

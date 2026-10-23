@@ -49,8 +49,10 @@ fn roundtrip(v: Value) {
     );
     // Every leaf also passes through expected-type recursive framing.
     let seq = zkc_native::Sequence::new(
-        PhysicalType::default_for(LogicalType::sequence(v.physical_type().logical()).unwrap())
-            .unwrap(),
+        PhysicalType::default_for(
+            LogicalType::sequence(v.physical_type().logical().clone()).unwrap(),
+        )
+        .unwrap(),
         vec![v],
         &Policy::default(),
     )
@@ -149,7 +151,8 @@ fn typed_errors_and_aggregate_limits_precede_bulk_allocation() {
     };
     let nested = Value::Sequence(
         zkc_native::Sequence::new(
-            PhysicalType::default_for(LogicalType::sequence(ty.logical()).unwrap()).unwrap(),
+            PhysicalType::default_for(LogicalType::sequence(ty.logical().clone()).unwrap())
+                .unwrap(),
             vec![value.clone(), value],
             &Policy::default(),
         )
@@ -297,7 +300,7 @@ fn nested_target_budget_precedes_subgroup_validation() {
     let nested = Value::Sequence(
         zkc_native::Sequence::new(
             PhysicalType::default_for(
-                LogicalType::sequence(point.physical_type().logical()).unwrap(),
+                LogicalType::sequence(point.physical_type().logical().clone()).unwrap(),
             )
             .unwrap(),
             vec![point.clone(), point],

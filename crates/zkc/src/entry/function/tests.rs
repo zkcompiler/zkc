@@ -2015,7 +2015,8 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     let inner = zkc_native::Value::Sequence(
         zkc_native::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(scalar.physical_type().logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(scalar.physical_type().logical().clone())
+                    .unwrap(),
             )
             .unwrap(),
             vec![scalar; 32],
@@ -2026,7 +2027,8 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     let native = zkc_native::Value::Sequence(
         zkc_native::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(inner.physical_type().logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(inner.physical_type().logical().clone())
+                    .unwrap(),
             )
             .unwrap(),
             vec![inner; 32],

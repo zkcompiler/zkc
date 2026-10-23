@@ -1066,8 +1066,10 @@ impl PhysicalType {
             children,
         })
     }
-    pub fn logical(&self) -> LogicalType {
-        self.logical.clone()
+    /// Inspect the logical descriptor without copying structural or resource metadata.
+    #[inline]
+    pub fn logical(&self) -> &LogicalType {
+        &self.logical
     }
     pub fn kind(&self) -> Type {
         self.logical.kind
@@ -1077,6 +1079,7 @@ impl PhysicalType {
     }
     /// Exact equality with an unparameterized value representation. Structural
     /// and resource descriptors must be compared by their full physical type.
+    #[inline]
     pub fn is_leaf(&self, kind: Type, identity: Identity, representation: Representation) -> bool {
         let Self {
             logical:

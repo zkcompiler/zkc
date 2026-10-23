@@ -694,8 +694,10 @@ fn native_and_wire_collection_admission_agree_across_nested_shapes() {
         Value::Sequence(
             zkc_native::Sequence::new(
                 zkc_runtime::vm::PhysicalType::default_for(
-                    zkc_runtime::vm::LogicalType::sequence(values[0].physical_type().logical())
-                        .unwrap(),
+                    zkc_runtime::vm::LogicalType::sequence(
+                        values[0].physical_type().logical().clone(),
+                    )
+                    .unwrap(),
                 )
                 .unwrap(),
                 values,
@@ -843,8 +845,10 @@ fn runtime_owned_measurements_preserve_nonwire_data_and_complete_counts() {
     let sequence = Value::Sequence(
         zkc_native::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(polynomial.physical_type().logical())
-                    .unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(
+                    polynomial.physical_type().logical().clone(),
+                )
+                .unwrap(),
             )
             .unwrap(),
             vec![polynomial.clone(), polynomial.clone()],

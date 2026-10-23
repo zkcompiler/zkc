@@ -37,13 +37,13 @@ impl BoundInterface {
             )?;
             for ((_, ty), (_, actual)) in inputs.iter().zip(&entry.inputs) {
                 require(
-                    self.logical_type(ty) == Some(&actual.logical()),
+                    self.logical_type(ty) == Some(actual.logical()),
                     E::NativeBinding,
                 )?;
             }
             for ((_, ty), actual) in outputs.iter().zip(&entry.outputs) {
                 require(
-                    self.logical_type(ty) == Some(&actual.logical()),
+                    self.logical_type(ty) == Some(actual.logical()),
                     E::NativeBinding,
                 )?;
             }

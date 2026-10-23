@@ -44,7 +44,7 @@ fn assert_canonical(native: &NativeBackend, value: &Value, expected: &Value, spe
         .unwrap();
     assert_eq!(decoded.physical_type(), value.physical_type());
     assert_eq!(native.encode_native_value(&decoded).unwrap(), bytes);
-    let default = PhysicalType::default_for(value.physical_type().logical()).unwrap();
+    let default = PhysicalType::default_for(value.physical_type().logical().clone()).unwrap();
     let canonical = native.decode_native_value(&default, &bytes).unwrap();
     assert_eq!(native.encode_native_value(&canonical).unwrap(), bytes);
 }

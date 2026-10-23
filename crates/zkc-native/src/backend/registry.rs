@@ -1,6 +1,6 @@
 //! Immutable exact implementation ownership, independent of runtime admission.
 //! A selected entry carries its signature resolver, security premise and handler.
-use super::NativeBackend;
+use super::{NativeBackend, dispatch::Dispatch};
 use crate::{Result, Value, refused};
 use std::{collections::BTreeMap, sync::OnceLock};
 use zkc_runtime::vm::{BoundSignature, Identity, Invocation, OperationBinding};
@@ -27,7 +27,7 @@ pub(super) type PreparedHandler =
 pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
-    pub(super) handler: Handler,
+    pub(super) handler: Dispatch,
     pub(super) prepared_handler: Option<PreparedHandler>,
     pub(super) deterministic: bool,
     pub(super) requirements: zkc_runtime::vm::ImplementationRequirements,
@@ -90,7 +90,7 @@ impl Registry {
                 Implementation {
                     contract,
                     signature,
-                    handler,
+                    handler: Dispatch::Direct(handler),
                     prepared_handler: None,
                     deterministic,
                     requirements: Default::default(),
@@ -136,7 +136,7 @@ impl Registry {
     fn install_shaped(
         &mut self,
         contracts: &'static [crate::bindings::Contract],
-        handler: Handler,
+        handler: Dispatch,
         deterministic: bool,
     ) -> Result<()> {
         for row in contracts {
@@ -161,14 +161,14 @@ impl Registry {
         rows: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
-        self.install_shaped(rows, handler, false)
+        self.install_shaped(rows, Dispatch::Direct(handler), false)
     }
     fn pure_shaped(
         &mut self,
         rows: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
-        self.install_shaped(rows, handler, true)
+        self.install_shaped(rows, Dispatch::Direct(handler), true)
     }
     fn alternative(&mut self, row: &Alternative) -> Result<()> {
         let mut entry = self
@@ -188,7 +188,7 @@ impl Registry {
             },
         );
         if let Some(handler) = row.handler {
-            entry.handler = handler;
+            entry.handler = Dispatch::Direct(handler);
             entry.prepared_handler = None;
         }
         entry.deterministic &= row.deterministic;
@@ -239,7 +239,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
             )?;
             r.pure_shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(super::execute::PCS_CONTRACTS, basic)?;
-            r.pure_shaped(crate::operations::arithmetic::CONTRACTS, arithmetic)?;
+            r.install_shaped(
+                crate::operations::arithmetic::CONTRACTS,
+                Dispatch::Resolve(super::dispatch::arithmetic),
+                true,
+            )?;
             // Reuse the owning contract row, including all installed providers.
             let constants = crate::operations::arithmetic::CONTRACTS
                 .iter()
@@ -371,7 +375,7 @@ pub(super) fn installed() -> Result<&'static Registry> {
                         Implementation {
                             contract: row.name,
                             signature: Signature::Custom(crate::operations::blst::signature),
-                            handler: blst,
+                            handler: Dispatch::Resolve(super::dispatch::resident),
                             prepared_handler: if row.name == "field.constant" {
                                 Some(prepared_field_constant)
                             } else {
@@ -442,7 +446,11 @@ fn fixed_vector(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Re
 fn sequence(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::sequence::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
-fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+pub(super) fn arithmetic(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
     crate::operations::arithmetic::apply(
         &i.binding.declaration().contract,
         field(i),

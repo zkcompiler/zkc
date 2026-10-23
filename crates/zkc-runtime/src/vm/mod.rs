@@ -12,8 +12,9 @@ mod bindings;
 mod contracts;
 mod physical;
 pub use contracts::{
-    AggregateChildRule, Contracts, ContractsBuilder, ExecutionPolicy, ExtensionRepresentation,
-    ImplementationId, ImplementationRequirements, TimingRequirement, WireCodec,
+    AggregateChildRule, AuthorizationId, Contracts, ContractsBuilder, ExecutionPolicy,
+    ExtensionRepresentation, ImplementationId, ImplementationRequirements, TimingRequirement,
+    WireCodec,
 };
 pub(crate) mod execution_ledger;
 mod field_array;

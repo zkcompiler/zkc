@@ -165,7 +165,8 @@ fn sequence(value: Value) -> Value {
     Value::Sequence(
         Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical().clone())
+                    .unwrap(),
             )
             .unwrap(),
             vec![value],

@@ -312,7 +312,7 @@ fn ports(value: &Json, actual: &[PhysicalType]) -> Result<Vec<Port>> {
         let row = array(row, 2)?;
         let original = index(&row[0])?;
         let logical = LogicalType::parse(text(&row[1])?).map_err(|e| e.to_string())?;
-        if logical != ty.logical() || ports.last().is_some_and(|p: &Port| p.original >= original) {
+        if &logical != ty.logical() || ports.last().is_some_and(|p: &Port| p.original >= original) {
             return Err("native-proof-port-map".into());
         }
         ports.push(Port { original, logical });

@@ -621,20 +621,14 @@ pub(super) fn dense<G: Family>(
         .outputs
         .iter()
         .all(|ty| ty.kind() != zkc_runtime::vm::Type::Groups);
-    let _scalar_reservation = if G::RESIDENT_STORAGE && scalar_output {
+    if scalar_output {
         p.output(512, i.max_output_bytes)?;
+    }
+    let _scalar_reservation = if G::RESIDENT_STORAGE && scalar_output {
         Some(call.reserve_workspace::<u8>(512)?)
     } else {
         None
     };
-    if i.binding
-        .signature()
-        .outputs
-        .iter()
-        .all(|t| t.kind() != zkc_runtime::vm::Type::Groups)
-    {
-        p.output(512, i.max_output_bytes)?;
-    }
     let result = match name {
         "curve.identity" => G::value(G::identity()),
         "curve.generator" => G::value(G::generator()),

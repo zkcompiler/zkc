@@ -240,7 +240,8 @@ fn nested_limits_count_expanded_values_before_allocation() {
     for _ in 0..6 {
         match Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical().clone())
+                    .unwrap(),
             )
             .unwrap(),
             vec![value.clone(); 32],

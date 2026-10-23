@@ -1,5 +1,6 @@
 //! Native backend composition and explicit host-issued capabilities.
 mod call;
+mod dispatch;
 mod preparation;
 pub use preparation::ComputationCheckpoint;
 mod execute;
@@ -427,6 +428,7 @@ impl Backend for NativeBackend {
     ) -> Option<NativeOperation> {
         let implementation = self.implementations.get(&binding.implementation)?;
         let signature = implementation.signature(binding)?;
+        let handler = implementation.handler.resolve(binding, &signature)?;
         let actual = crate::contracts::actual_identity(binding);
         let requirements = implementation.requirements;
         if !self
@@ -446,7 +448,7 @@ impl Backend for NativeBackend {
                 declaration: binding.clone(),
                 signature,
             }),
-            handler: implementation.handler,
+            handler,
             prepared_handler: implementation.prepared_handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),
             sequence,

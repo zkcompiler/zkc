@@ -195,7 +195,8 @@ mod tests {
             let mut ark_state = Transcript::new(suite, &root).unwrap();
             let mut resident_state = Transcript::new(suite, &root).unwrap();
             for ark in &samples {
-                let logical = ark.physical_type().logical();
+                let ty = ark.physical_type();
+                let logical = ty.logical();
                 let representation = match logical.identity() {
                     Identity::Bls12381Fr => "blst/fr",
                     Identity::Bls12381G1 => "blst/g1",

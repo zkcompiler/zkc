@@ -86,7 +86,7 @@ impl FixedVector {
             ),
         };
         if expected.as_ref() != self.physical_type.fixed_vector_element()
-            || expected.as_ref().map(PhysicalType::logical).as_ref() != Some(element)
+            || expected.as_ref().map(PhysicalType::logical) != Some(element)
             || self.physical_type.representation().name() != storage
             || matches!(self.storage, Storage::Blst(_))
                 && Some(self.physical_type.representation())
@@ -138,7 +138,7 @@ pub(crate) fn supports_type(ty: &PhysicalType) -> bool {
     };
     expected
         .as_ref()
-        .is_some_and(|scalar| scalar.logical() == *element)
+        .is_some_and(|scalar| scalar.logical() == element)
         && expected.as_ref() == ty.fixed_vector_element()
 }
 /// Independent native advertisement; never call the runtime operation resolver.
@@ -179,7 +179,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     } else {
         return None;
     };
-    if fixed.logical() != LogicalType::fixed_vector(scalar.logical(), length).ok()?
+    if *fixed.logical() != LogicalType::fixed_vector(scalar.logical().clone(), length).ok()?
         || fixed.fixed_vector_element() != Some(&scalar)
     {
         return None;

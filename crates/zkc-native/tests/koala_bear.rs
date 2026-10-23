@@ -79,8 +79,8 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
             ty.logical().codec().unwrap(),
             format!("zkcv.{}.koala-bear/0", kind.name())
         );
-        assert!(PhysicalType::new(ty.logical(), Representation::Fr).is_err());
-        assert!(PhysicalType::new(ty.logical(), Representation::DalekScalar).is_err());
+        assert!(PhysicalType::new(ty.logical().clone(), Representation::Fr).is_err());
+        assert!(PhysicalType::new(ty.logical().clone(), Representation::DalekScalar).is_err());
     }
     for kind in [
         Type::Rng,

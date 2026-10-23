@@ -479,7 +479,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         _ => return None,
     };
     if sequence.representation() != zkc_runtime::vm::Representation::Sequence
-        || sequence.logical() != LogicalType::sequence(element).ok()?
+        || *sequence.logical() != LogicalType::sequence(element).ok()?
     {
         return None;
     }

@@ -26,7 +26,8 @@ fn native(role: &str) -> NativeBackend {
     .unwrap()
 }
 fn selected(value: &Value) -> PhysicalType {
-    let logical = value.physical_type().logical();
+    let ty = value.physical_type();
+    let logical = ty.logical();
     let representation = match logical.identity() {
         Identity::Bls12381Fr => "blst/fr",
         Identity::Bls12381G1 => "blst/g1",

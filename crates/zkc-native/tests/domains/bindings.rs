@@ -21,15 +21,15 @@ fn nominal_associations_and_native_advertisements_are_checked_independently() {
         let sig = b.signature().unwrap();
         assert_eq!(
             sig.inputs[0].logical(),
-            LogicalType::new(Type::Vector, f).unwrap()
+            &LogicalType::new(Type::Vector, f).unwrap()
         );
         assert_eq!(
             sig.inputs[1].logical(),
-            LogicalType::new(Type::Groups, g).unwrap()
+            &LogicalType::new(Type::Groups, g).unwrap()
         );
         assert_eq!(
             sig.outputs[0].logical(),
-            LogicalType::new(Type::Group, g).unwrap()
+            &LogicalType::new(Type::Group, g).unwrap()
         );
         assert_eq!(backend.binding_signature(&b), Some(sig));
         for name in [

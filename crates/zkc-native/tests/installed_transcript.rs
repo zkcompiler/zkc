@@ -156,7 +156,7 @@ fn physical(spelling: &str) -> PhysicalType {
 fn sequence(element: PhysicalType) -> PhysicalType {
     native_contracts()
         .aggregate_type(
-            LogicalType::sequence(element.logical()).unwrap(),
+            LogicalType::sequence(element.logical().clone()).unwrap(),
             Representation::Sequence,
             vec![element],
         )
@@ -173,7 +173,8 @@ fn samples() -> Vec<(Value, PhysicalType)> {
     ]
     .into_iter()
     .map(|value| {
-        let logical = value.physical_type().logical();
+        let value_type = value.physical_type();
+        let logical = value_type.logical();
         let storage = match logical.identity() {
             Identity::Bls12381Fr => "blst/fr",
             Identity::Bls12381G1 => "blst/g1",

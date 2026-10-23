@@ -40,6 +40,20 @@ impl CatalogId {
     }
 }
 
+/// Process-local identity of an immutable catalog and authorization view.
+/// Equality supports conservative computation reuse; it grants no permission.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AuthorizationId(u64);
+impl AuthorizationId {
+    fn fresh() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        Self(
+            NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .expect("authorization identity space exhausted"),
+        )
+    }
+}
+
 /// Compact installation identity scoped to the immutable contributing catalog.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ImplementationId {
@@ -461,7 +475,7 @@ impl ContractsBuilder {
             let logical = if family.kind() == Type::FieldArray {
                 LogicalType::field_array(scalar.logical().identity(), 0)?
             } else {
-                LogicalType::fixed_vector(scalar.logical(), 0)?
+                LogicalType::fixed_vector(scalar.logical().clone(), 0)?
             };
             self.aggregate_type(logical, *representation, vec![scalar.clone()])?;
         }
@@ -517,11 +531,17 @@ impl ContractsBuilder {
         requirements.validate(signature.inputs.len())?;
         let logical = operations::declared_logical_signature(&declaration)?;
         let erasure = super::OperationSignature {
-            inputs: signature.inputs.iter().map(PhysicalType::logical).collect(),
+            inputs: signature
+                .inputs
+                .iter()
+                .map(PhysicalType::logical)
+                .cloned()
+                .collect(),
             outputs: signature
                 .outputs
                 .iter()
                 .map(PhysicalType::logical)
+                .cloned()
                 .collect(),
             attributes: signature.attributes,
         };
@@ -633,6 +653,7 @@ impl ContractsBuilder {
     }
     pub fn finish(self, policy: ExecutionPolicy) -> Contracts {
         Contracts {
+            authorization: AuthorizationId::fresh(),
             context: Arc::new(ContractContext {
                 registry: self.registry,
                 standard: self.standard,
@@ -657,6 +678,7 @@ struct ContractContext {
 /// registration at execution time and no backend is constructed by admission.
 #[derive(Clone)]
 pub struct Contracts {
+    authorization: AuthorizationId,
     timing_grants: Arc<Vec<TimingGrant>>,
     context: Arc<ContractContext>,
     policy: ExecutionPolicy,
@@ -690,10 +712,20 @@ impl Contracts {
     pub fn policy(&self) -> ExecutionPolicy {
         self.policy
     }
+    /// Clones retain this identity. A catalog, policy or exact-grant change
+    /// creates a distinct view, even if a later change restores the same policy.
+    pub fn authorization_id(&self) -> AuthorizationId {
+        self.authorization
+    }
     /// An explicit trusted policy change retains the same immutable layout and
     /// installation identities. Previously admitted programs retain their policy.
     pub fn with_policy(&self, policy: ExecutionPolicy) -> Self {
         Self {
+            authorization: if policy == self.policy {
+                self.authorization
+            } else {
+                AuthorizationId::fresh()
+            },
             context: self.context.clone(),
             timing_grants: self.timing_grants.clone(),
             policy,
@@ -729,6 +761,7 @@ impl Contracts {
                 return Err(AdmissionError::new(ErrorCode::Limit, "timing-grant-count"));
             }
             Arc::make_mut(&mut view.timing_grants).push(grant);
+            view.authorization = AuthorizationId::fresh();
         }
         Ok(view)
     }
@@ -920,7 +953,7 @@ fn check_type_node(
                 .is_some_and(|owner| owner.accepts(ty))
                 || representations
                     .get(id.name())
-                    .and_then(|layouts| layouts.get(&ty.logical()))
+                    .and_then(|layouts| layouts.get(ty.logical()))
                     .is_some_and(|expected| expected == ty)
         }
         representation => {
@@ -940,7 +973,7 @@ fn check_type_node(
                         children,
                     )
                     .is_ok(),
-                    None => PhysicalType::new(ty.logical(), representation)
+                    None => PhysicalType::new(ty.logical().clone(), representation)
                         .is_ok_and(|expected| expected == *ty),
                 }
         }

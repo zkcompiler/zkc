@@ -51,7 +51,7 @@ fn expected_payload_selection_preserves_fixed_ports_and_complete_inactive_layout
         let baseline = contracts.resolve(default.clone()).unwrap();
         assert_eq!(
             baseline.signature().inputs[1],
-            PhysicalType::default_for(payload.logical()).unwrap()
+            PhysicalType::default_for(payload.logical().clone()).unwrap()
         );
         assert_eq!(
             selected.signature().inputs[0],
@@ -71,7 +71,7 @@ fn expected_payload_selection_preserves_fixed_ports_and_complete_inactive_layout
         // Context discovery/logical admission stays a separate, unspecialized query.
         assert_eq!(
             contracts.logical_signature(&default).unwrap().inputs[1],
-            payload.logical()
+            payload.logical().clone()
         );
         assert!(contracts.logical_signature(selected.declaration()).is_err());
     }
@@ -97,7 +97,7 @@ fn expected_selection_refuses_wrong_schema_arity_owner_local_data_and_foreign_ca
     assert!(
         contracts
             .aggregate_type(
-                local.logical(),
+                local.logical().clone(),
                 Representation::Variant,
                 vec![foreign_field]
             )
@@ -105,7 +105,11 @@ fn expected_selection_refuses_wrong_schema_arity_owner_local_data_and_foreign_ca
     );
     assert!(
         foreign
-            .aggregate_type(local.logical(), Representation::Variant, vec![field])
+            .aggregate_type(
+                local.logical().clone(),
+                Representation::Variant,
+                vec![field]
+            )
             .is_err()
     );
     let valid = binding(&local);

@@ -372,7 +372,7 @@ fn selected_observations_keep_the_installed_suite_policy() {
         b.implementation = format!("{provider}/{contract}");
         assert_eq!(b.logical_signature().unwrap(), logical);
         let selected = b.signature().unwrap();
-        assert_eq!(selected.inputs[1].logical(), ty);
+        assert_eq!(selected.inputs[1].logical(), &ty);
         assert_eq!(
             selected.inputs[0].logical().spelling(),
             format!("transcript:{suite}")
@@ -474,6 +474,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
                 .inputs
                 .iter()
                 .map(PhysicalType::logical)
+                .cloned()
                 .collect::<Vec<_>>(),
             logical.inputs
         );
@@ -482,6 +483,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
                 .outputs
                 .iter()
                 .map(PhysicalType::logical)
+                .cloned()
                 .collect::<Vec<_>>(),
             logical.outputs
         );

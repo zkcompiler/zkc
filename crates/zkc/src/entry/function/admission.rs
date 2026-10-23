@@ -101,7 +101,7 @@ pub(super) fn admit(
                 .map(|(_, t)| t)
                 .chain(&local.outputs)
                 .all(|t| {
-                    zkc_runtime::vm::PhysicalType::default_for(t.logical())
+                    zkc_runtime::vm::PhysicalType::default_for(t.logical().clone())
                         .as_ref()
                         .ok()
                         == Some(t)

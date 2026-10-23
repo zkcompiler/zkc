@@ -522,7 +522,7 @@ fn variants_contain_real_fixed_vectors_and_refuse_unrepresented_payloads() {
     )
     .unwrap();
     backend(Policy::default()).validate_value(&value).unwrap();
-    assert_eq!(value.physical_type().logical(), logical);
+    assert_eq!(value.physical_type().logical(), &logical);
     assert!(matches!(
         value.unpack_variant().unwrap().2[0],
         Value::FixedVector(_)

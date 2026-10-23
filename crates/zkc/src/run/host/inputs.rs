@@ -69,7 +69,7 @@ impl SetupAuthority {
     }
 }
 fn needs_key(ty: &PhysicalType) -> bool {
-    ty.kind() == Type::VerifierKey || needs_input_setup(&ty.logical())
+    ty.kind() == Type::VerifierKey || needs_input_setup(ty.logical())
 }
 pub(super) fn kind(ty: &PhysicalType) -> &'static str {
     match ty.kind() {

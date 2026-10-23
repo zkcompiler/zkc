@@ -273,20 +273,24 @@ impl Value {
         }
     }
 
-    fn ty_resident_kind(&self) -> Type {
-        match self {
-            Self::BlstField(_) => Type::Field,
-            Self::BlstVector(_) => Type::Vector,
-            Self::BlstG1(_) | Self::BlstG2(_) => Type::Group,
-            Self::BlstG1Vector(_) | Self::BlstG2Vector(_) => Type::Groups,
-            _ => unreachable!("resident kind projection"),
-        }
-    }
     pub fn ty(&self) -> Type {
         self.type_identity().0
     }
+    fn resident_type(&self) -> Option<&'static PhysicalType> {
+        let (kind, identity) = match self {
+            Self::BlstField(_) => (Type::Field, Identity::Bls12381Fr),
+            Self::BlstVector(_) => (Type::Vector, Identity::Bls12381Fr),
+            Self::BlstG1(_) => (Type::Group, Identity::Bls12381G1),
+            Self::BlstG1Vector(_) => (Type::Groups, Identity::Bls12381G1),
+            Self::BlstG2(_) => (Type::Group, Identity::Bls12381G2),
+            Self::BlstG2Vector(_) => (Type::Groups, Identity::Bls12381G2),
+            _ => return None,
+        };
+        Some(crate::contracts::physical(kind, identity).expect("installed resident representation"))
+    }
     // Each payload supplies kind, nominal identity and representation together.
     // New variants must explicitly classify all three properties.
+    #[inline]
     fn type_identity(&self) -> (Type, Identity, Representation) {
         match self {
             Self::Sequence(_) => (Type::Sequence, Identity::None, Representation::Sequence),
@@ -302,48 +306,15 @@ impl Value {
                 Identity::None,
                 Representation::ResourceUnit,
             ),
-            Self::BlstField(_) => (
-                Type::Field,
-                Identity::Bls12381Fr,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381Fr)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
-            Self::BlstVector(_) => (
-                Type::Vector,
-                Identity::Bls12381Fr,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381Fr)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
-            Self::BlstG1(_) => (
-                Type::Group,
-                Identity::Bls12381G1,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G1)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
-            Self::BlstG1Vector(_) => (
-                Type::Groups,
-                Identity::Bls12381G1,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G1)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
-            Self::BlstG2(_) => (
-                Type::Group,
-                Identity::Bls12381G2,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G2)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
-            Self::BlstG2Vector(_) => (
-                Type::Groups,
-                Identity::Bls12381G2,
-                crate::operations::blst::physical(self.ty_resident_kind(), Identity::Bls12381G2)
-                    .expect("installed resident representation")
-                    .representation(),
-            ),
+            Self::BlstField(_)
+            | Self::BlstVector(_)
+            | Self::BlstG1(_)
+            | Self::BlstG1Vector(_)
+            | Self::BlstG2(_)
+            | Self::BlstG2Vector(_) => {
+                let ty = self.resident_type().expect("resident leaf");
+                (ty.kind(), ty.logical().identity(), ty.representation())
+            }
             Self::Bn254Field(_) => (Type::Field, Identity::Bn254Fr, Representation::Bn254Fr),
             Self::Bn254Vector(_) => (
                 Type::Vector,
@@ -1090,7 +1061,8 @@ impl RuntimeValue for Value {
                 | Type::Matrix
                 | Type::Commitment
                 | Type::Proof => {
-                    PhysicalType::default_for(ty.logical()).is_ok_and(|expected| expected == *ty)
+                    PhysicalType::default_for(ty.logical().clone())
+                        .is_ok_and(|expected| expected == *ty)
                         || crate::operations::blst::is_resident(ty)
                 }
                 _ => false,
@@ -1317,19 +1289,17 @@ impl RuntimeValue for Value {
             };
             return PhysicalType::default_for(logical).expect("issued capability representation");
         }
+        if let Some(ty) = self.resident_type() {
+            return ty.clone();
+        }
         let (kind, identity, representation) = self.type_identity();
         let logical = LogicalType::new(kind, identity).expect("intrinsic payload type");
-        if matches!(representation, Representation::Extension(_)) {
-            return crate::operations::blst::physical(kind, identity)
-                .expect("intrinsic resident leaf value");
-        }
         PhysicalType::new(logical, representation).expect("intrinsic represented leaf value")
     }
 
     fn validate_serializable(&self) -> Result<()> {
-        if !self.physical_type().is_serializable()
-            && !crate::operations::blst::is_resident(&self.physical_type())
-        {
+        let ty = self.physical_type();
+        if !ty.is_serializable() && !crate::operations::blst::is_resident(&ty) {
             return Err(refused("nonserializable"));
         }
         Ok(())

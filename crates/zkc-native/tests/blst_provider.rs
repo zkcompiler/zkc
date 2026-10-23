@@ -165,6 +165,15 @@ fn run(
     }
 }
 fn compare(name: &str, domain: &str, attrs: &[&str], args: Vec<Value>) {
+    compare_expected(name, domain, attrs, args, None);
+}
+fn compare_expected(
+    name: &str,
+    domain: &str,
+    attrs: &[&str],
+    args: Vec<Value>,
+    error: Option<&str>,
+) {
     let contracts = native_contracts_with_policy(ExecutionPolicy {
         allow_unspecified_timing: true,
         allow_variable_time: true,
@@ -181,8 +190,8 @@ fn compare(name: &str, domain: &str, attrs: &[&str], args: Vec<Value>) {
     )
     .0;
     let encoder = backend(Policy::default(), &contracts);
-    match (left, right) {
-        (Ok(left), Ok(right)) => {
+    match (left, right, error) {
+        (Ok(left), Ok(right), None) => {
             assert_eq!(left.len(), right.len(), "{name}");
             for (a, b) in left.iter().zip(&right) {
                 assert_eq!(
@@ -197,8 +206,13 @@ fn compare(name: &str, domain: &str, attrs: &[&str], args: Vec<Value>) {
                 );
             }
         }
-        (Err(left), Err(right)) => assert_eq!(left, right, "{name}"),
-        (left, right) => panic!("{name}: {left:?} != {right:?}"),
+        (Err(left), Err(right), Some(expected)) => {
+            assert_eq!(left, expected, "{name}");
+            assert_eq!(right, expected, "{name}");
+        }
+        (left, right, expected) => {
+            panic!("{name}: {left:?}, {right:?}; expected error {expected:?}")
+        }
     }
 }
 fn vector(values: &[u64]) -> Value {
@@ -226,11 +240,12 @@ fn resident_scalar_and_vector_closure_matches_arkworks() {
     }
     for name in ["field.neg", "field.inverse"] {
         for value in [0, 1, 17] {
-            compare(
+            compare_expected(
                 name,
                 "bls12-381.fr",
                 &[],
                 vec![Value::Field(Scalar::from(value))],
+                (name == "field.inverse" && value == 0).then_some("refused:zero-inverse"),
             );
         }
     }
@@ -292,11 +307,12 @@ fn resident_scalar_and_vector_closure_matches_arkworks() {
         &["2"],
         vec![vector(&[1, 2, 3])],
     );
-    compare(
+    compare_expected(
         "vector.get",
         "bls12-381.fr",
         &[],
         vec![vector(&[1, 2]), Value::Index(2)],
+        Some("refused:vector-index"),
     );
     compare(
         "vector.slice",
@@ -679,6 +695,34 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
 
 #[test]
 fn remaining_flat_vector_operations_match_arkworks() {
+    for (name, attrs, args, error) in [
+        (
+            "vector.rotate",
+            vec![],
+            vec![vector(&[]), Value::Index(0)],
+            "refused:vector-rotation",
+        ),
+        (
+            "vector.gather",
+            vec!["8"],
+            vec![vector(&[1; 8])],
+            "refused:vector-index",
+        ),
+        (
+            "vector.inverse",
+            vec![],
+            vec![vector(&[1, 0, 3])],
+            "refused:zero-inverse",
+        ),
+        (
+            "vector.add",
+            vec![],
+            vec![vector(&[1]), vector(&[2, 3])],
+            "refused:length-mismatch",
+        ),
+    ] {
+        compare_expected(name, "bls12-381.fr", &attrs, args, Some(error));
+    }
     let a = vector(&[1, 2, 3, 4, 5, 6, 7, 8]);
     for (name, attrs, args) in [
         (
@@ -687,7 +731,6 @@ fn remaining_flat_vector_operations_match_arkworks() {
             vec![a.clone(), Value::Index(2), Value::Index(4)],
         ),
         ("vector.rotate", vec![], vec![a.clone(), Value::Index(3)]),
-        ("vector.rotate", vec![], vec![vector(&[]), Value::Index(0)]),
         ("vector.bit_reverse", vec![], vec![a.clone()]),
         (
             "vector.bit_reverse_rows",
@@ -705,7 +748,6 @@ fn remaining_flat_vector_operations_match_arkworks() {
             vec![a.clone(), Value::Field(Scalar::from(9))],
         ),
         ("vector.gather", vec!["7", "0", "7"], vec![a.clone()]),
-        ("vector.gather", vec!["8"], vec![a.clone()]),
         (
             "vector.scatter_sum",
             vec!["3", "0", "1", "1", "2"],
@@ -726,8 +768,6 @@ fn remaining_flat_vector_operations_match_arkworks() {
             vec!["2", "4", "1"],
             vec![a, vector(&[2, 3])],
         ),
-        ("vector.inverse", vec![], vec![vector(&[1, 0, 3])]),
-        ("vector.add", vec![], vec![vector(&[1]), vector(&[2, 3])]),
     ] {
         compare(name, "bls12-381.fr", &attrs, args);
     }
@@ -1059,7 +1099,20 @@ fn retained_handles_recheck_revoked_policy_and_exact_grants_before_work() {
         type Value = Value;
         type Operation = NativeOperation;
         type Call = NativeCall;
-        type Checkpoint = ();
+        type Checkpoint = zkc_native::ComputationCheckpoint;
+        fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+            self.inner.as_ref().unwrap().computation_checkpoint()
+        }
+        fn replay_computation(
+            &mut self,
+            before: Self::Checkpoint,
+            after: Self::Checkpoint,
+        ) -> bool {
+            self.inner
+                .as_mut()
+                .unwrap()
+                .replay_computation(before, after)
+        }
         fn prepare_binding(&self, binding: &OperationBinding) -> Option<NativeOperation> {
             self.inner.as_ref().unwrap().prepare_binding(binding)
         }
@@ -1096,7 +1149,6 @@ fn retained_handles_recheck_revoked_policy_and_exact_grants_before_work() {
             args: &[Value],
         ) -> Result<Vec<Value>, BackendError> {
             let inner = self.inner.as_mut().unwrap();
-            assert!(inner.prepare_binding(i.binding.declaration()).is_none());
             inner.apply(operation, i, args)
         }
         fn apply_prepared(
@@ -1110,7 +1162,6 @@ fn retained_handles_recheck_revoked_policy_and_exact_grants_before_work() {
                 return self.apply(operation, i, args);
             }
             let inner = self.inner.as_mut().unwrap();
-            assert!(inner.prepare_binding(i.binding.declaration()).is_none());
             inner.apply_prepared(operation, call, i, args)
         }
     }
@@ -1128,6 +1179,99 @@ fn retained_handles_recheck_revoked_policy_and_exact_grants_before_work() {
         native_contracts_with_policy(ExecutionPolicy::general_purpose()),
         grant,
     ] {
+        let native = backend(Policy::default(), &contracts);
+        let group = physical(Type::Group, Identity::Bls12381G1).spelling();
+        let carrier = serde_json::to_vec(&json!([
+            "zkc.program/0",
+            [
+                [
+                    "scalars",
+                    "vector.constant",
+                    ["bls12-381.fr"],
+                    "blst/resident/vector.constant",
+                    []
+                ],
+                [
+                    "points",
+                    "curve.empty",
+                    ["bls12-381.g1"],
+                    "blst/resident/curve.empty",
+                    []
+                ],
+                [
+                    "msm",
+                    "curve.msm",
+                    ["bls12-381.g1"],
+                    "blst/resident/curve.msm",
+                    []
+                ]
+            ],
+            [[
+                "function",
+                "f",
+                [],
+                [group],
+                [
+                    ["op", "scalars", "scalars", [], [], ["xs"]],
+                    ["op", "points", "points", [], [], ["points"]],
+                    ["op", "msm", "msm", [], ["xs", "points"], ["out"]],
+                    ["return", ["out"]]
+                ],
+                ["f", []]
+            ]],
+            [[
+                "participant",
+                "actor",
+                "instance",
+                "P",
+                [],
+                [group],
+                [
+                    ["local", "work", "f", [], ["result"]],
+                    ["return", ["result"]]
+                ],
+                []
+            ]],
+            [["entry", "main", [["P", "actor"]]]]
+        ]))
+        .unwrap();
+        let admitted = Program::decode(&carrier, &contracts).unwrap();
+        admitted.check_installation(&native).unwrap();
+        let cache = zkc_runtime::vm::PreparedComputations::new(
+            &admitted,
+            zkc_runtime::vm::PreparationLimits::default(),
+        );
+        for revoke in [false, false, true] {
+            let caller = Revoked {
+                inner: Some(backend(Policy::default(), &contracts)),
+                revoke,
+                prepared: true,
+            };
+            let mut runner = Runner::new(&admitted, "main", "P", "session", caller, vec![])
+                .unwrap_or_else(|e| panic!("{}", e.error));
+            runner.prepare_computations(cache.clone(), &[]).unwrap();
+            loop {
+                match runner.poll() {
+                    Action::Local(action) => {
+                        runner.execute_local(&action.cut).unwrap();
+                    }
+                    Action::Returned(_) => {
+                        assert!(!revoke);
+                        break;
+                    }
+                    Action::Stopped(stop) => {
+                        assert!(revoke);
+                        assert!(matches!(stop.kind, StopKind::Backend(ref error)
+                            if error.code == "refused:implementation-permission"));
+                        break;
+                    }
+                    other => panic!("unexpected action: {other:?}"),
+                }
+            }
+            assert_eq!(runner.backend().inner.as_ref().unwrap().active_frames(), 0);
+        }
+        assert_eq!(cache.stats().entries, 1);
+        assert_eq!(cache.stats().hits, 1);
         for prepared in [false, true] {
             let native = backend(
                 Policy {

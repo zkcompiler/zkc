@@ -285,7 +285,7 @@ fn helper<'a>(
             payload: if challenge {
                 None
             } else {
-                Some(function.inputs[1].1.logical())
+                Some(function.inputs[1].1.logical().clone())
             },
             bound: bound.map(|b| b.1),
             start_inputs: None,
@@ -300,7 +300,7 @@ fn selected_port(
     port: Option<&PhysicalType>,
     logical: &super::LogicalType,
 ) -> Result<PhysicalType> {
-    port.filter(|ty| ty.logical() == *logical)
+    port.filter(|ty| ty.logical() == logical)
         .cloned()
         .ok_or_else(|| refuse("native-proof-helper-signature"))
 }
@@ -420,7 +420,7 @@ fn custom_helper<'a>(
             }
             expected_outputs.push(selected_port(
                 function.outputs.get(expected_outputs.len()),
-                &query_result(&origin, event.bound.is_some())?.logical(),
+                query_result(&origin, event.bound.is_some())?.logical(),
             )?);
         }
     }
@@ -577,7 +577,11 @@ fn construction_function(
 fn verifier_data(ty: &PhysicalType, contracts: &super::Contracts) -> bool {
     // Selected storage, including every aggregate child, needs its own exact
     // permission. Logical default children cannot authorize selected storage.
-    if PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty) {
+    if PhysicalType::default_for(ty.logical().clone())
+        .ok()
+        .as_ref()
+        != Some(ty)
+    {
         return contracts.permits_wire(ty, super::WireCodec::Native);
     }
     // Private copyable snapshots are local computation data. Wire admission
@@ -606,7 +610,10 @@ fn verifier_data(ty: &PhysicalType, contracts: &super::Contracts) -> bool {
 }
 fn verifier_key(ty: &PhysicalType) -> bool {
     ty.logical().spelling() == "verifier_key:multilinear.kzg.bls12-381/0"
-        && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty)
+        && PhysicalType::default_for(ty.logical().clone())
+            .ok()
+            .as_ref()
+            == Some(ty)
 }
 // General admission checks SSA, exact signatures and resource use. This walk
 // adds ordered construction-state and event-occurrence correspondence.

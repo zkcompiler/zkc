@@ -720,7 +720,7 @@ fn incompatible_signatures_and_uninstalled_implementations_do_not_use_warm_liter
             } else {
                 Representation::Fr
             };
-            assert!(PhysicalType::new(signature.outputs[0].logical(), other).is_err());
+            assert!(PhysicalType::new(signature.outputs[0].logical().clone(), other).is_err());
             let mut wrong = signature.clone();
             wrong.outputs[0] = Value::Index(0).physical_type();
             caller.signature = Some(wrong);

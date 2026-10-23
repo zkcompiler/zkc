@@ -464,7 +464,8 @@ fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
     let value = Value::Sequence(
         zkc_native::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
-                zkc_runtime::vm::LogicalType::sequence(leaf.physical_type().logical()).unwrap(),
+                zkc_runtime::vm::LogicalType::sequence(leaf.physical_type().logical().clone())
+                    .unwrap(),
             )
             .unwrap(),
             vec![leaf.clone(), leaf],

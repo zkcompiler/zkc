@@ -310,7 +310,10 @@ ordinary computations without being retained as keys.
 
 Reuse requires the exact admitted executable, identical backend policy and
 remaining runtime/backend capacities that dominate the original initial
-allowances. It replays cumulative work and allocation charges, advances frame
+allowances. Native checkpoints also require the same immutable catalog and
+execution-authorization view, including exact timing grants. An authorization
+change prevents replay even when numerical policy and capacities are unchanged.
+Reuse replays cumulative work and allocation charges, advances frame
 IDs, and installs returned backing through the ordinary live-storage ledger.
 Otherwise execution follows the original body, including failure location,
 partial usage and cleanup. Failed evaluations are never retained. Reaching a

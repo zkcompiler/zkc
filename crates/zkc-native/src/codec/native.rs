@@ -61,7 +61,11 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
                 .checked_mul(32)?
                 .checked_add(6)?,
         ))
-    } else if PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty) {
+    } else if PhysicalType::default_for(ty.logical().clone())
+        .ok()
+        .as_ref()
+        == Some(ty)
+    {
         use zkc_runtime::vm::{Identity::*, Type::*};
         match (ty.kind(), ty.logical().identity()) {
             (Field, Bn254Fr) => Some((40, 38)),

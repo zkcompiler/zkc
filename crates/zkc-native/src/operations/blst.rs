@@ -20,10 +20,10 @@ pub(crate) fn failure(error: kernel::Error) -> zkc_runtime::vm::BackendError {
 
 /// Positive flat inventory: sharing a nominal domain never enables GT or PCS.
 pub(crate) fn physical(kind: Type, identity: Identity) -> Option<PhysicalType> {
-    crate::contracts::physical(kind, identity)
+    crate::contracts::physical(kind, identity).cloned()
 }
 pub(crate) fn is_resident(ty: &PhysicalType) -> bool {
-    physical(ty.kind(), ty.logical().identity()).as_ref() == Some(ty)
+    crate::contracts::physical(ty.kind(), ty.logical().identity()) == Some(ty)
 }
 
 // The native shape inventory is authored separately from runtime expectations.

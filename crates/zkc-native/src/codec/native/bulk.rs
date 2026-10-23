@@ -21,7 +21,11 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
             _ => Option::None,
         };
     }
-    if PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty) {
+    if PhysicalType::default_for(ty.logical().clone())
+        .ok()
+        .as_ref()
+        != Some(ty)
+    {
         return Option::None;
     }
     use Identity::*;

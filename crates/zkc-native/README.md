@@ -82,9 +82,13 @@ schema. Codec permission combines the installed frame owner with every child
 permission; fixed vectors remain local-only. Immutable preparation eligibility
 is checked separately from wire support.
 
-Scalar/vector arithmetic uses a small provider family. Structured polynomial and
-matrix operations extend that family only where supported; resident scalars do
-not implement placeholder structured operations. Group algebra is separate from
+Scalar/vector arithmetic uses a small provider family. Installation selects typed
+scalar handlers from the backend's own port metadata. Scalar calls do not
+construct bulk destinations or workspace; both paths retain their output checks.
+Intrinsic value classification borrows installed metadata and compares exact
+physical layouts, including catalog identity. Structured polynomial and matrix
+operations extend the family only where supported; resident scalars do not
+implement placeholder structured operations. Group algebra is separate from
 Native value projection, policy and error translation. Resident MSM borrows the
 typed provider buffers directly.
 
@@ -95,6 +99,8 @@ Ristretto MSM, diagonal contractions, table layouts and the independently
 implemented pairwise dot product remain selectable. Resident BLS12-381 MSM declares variable-time input positions independently
 of the trusted admission catalog. It requires an explicit compatible execution
 policy or an exact scoped timing grant; a role or provider name grants neither.
+Computation checkpoints retain the immutable catalog/authorization-view identity;
+changes to policy or exact grants require normal execution rather than replay.
 Kernel timing premises do not establish a whole-runtime timing guarantee.
 
 Each contract row lists its actual default implementation names. Custom families

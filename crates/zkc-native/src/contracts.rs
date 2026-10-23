@@ -134,7 +134,8 @@ fn installed() -> &'static Installation {
             }
         }
         for resident in &layouts {
-            let default = PhysicalType::default_for(resident.logical()).expect("native Ark layout");
+            let default =
+                PhysicalType::default_for(resident.logical().clone()).expect("native Ark layout");
             for (source, target) in [(&default, resident), (resident, &default)] {
                 let declaration = OperationBinding {
                     contract: "representation.convert".into(),
@@ -189,7 +190,7 @@ pub fn native_contracts_with_policy(policy: ExecutionPolicy) -> Contracts {
     native_contracts().with_policy(policy)
 }
 
-pub(crate) fn physical(kind: Type, identity: Identity) -> Option<PhysicalType> {
+pub(crate) fn physical(kind: Type, identity: Identity) -> Option<&'static PhysicalType> {
     if !matches!(
         (kind, identity),
         (Type::Field | Type::Vector, Identity::Bls12381Fr)
@@ -204,7 +205,6 @@ pub(crate) fn physical(kind: Type, identity: Identity) -> Option<PhysicalType> {
         .layouts
         .iter()
         .find(|ty| ty.kind() == kind && ty.logical().identity() == identity)
-        .cloned()
 }
 pub(crate) fn actual_identity(binding: &OperationBinding) -> Option<ImplementationId> {
     installed()
