@@ -190,6 +190,34 @@ def test_unused_map_result_still_checks_shapes(toolchain, journal, directory, fl
     assert 'rejected:require' in json.dumps(refused)
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_shared_map_inputs_remain_observable_after_two_results(toolchain, journal, directory, flags):
+    # The same native vector occupies both rowwise positions. Retaining its
+    # value after two maps detects accidental use of a published input as a
+    # writable destination, including with physical storage release enabled.
+    source = '''module sample;
+domain F=field("koala-bear");
+type Vector<T:Field>=builtin("vector",T);
+math fn combine(x:F,y:F)->F { return x*y+x+1; }
+fn mapped(a:Vector<F>,b:Vector<F>)->Vector<F> {
+  return map combine(each a,each b);
+}
+protocol Run roles(P)(a:Vector<F>@P)
+  ->(first:Vector<F>@P,second:Vector<F>@P,original:Vector<F>@P) {
+  let first @P =mapped(a,a);
+  let second @P =mapped(first,a);
+  return(first=first,second=second,original=a);
+}
+entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    for rows in ([], [0], [0, 1, MODULUS - 1, 65536, 97]):
+        first = [(x*x+x+1) % MODULUS for x in rows]
+        second = [(x*y+x+1) % MODULUS for x, y in zip(first, rows)]
+        assert entry.run(f'rows-{len(rows)}', {'a': vector(rows)}) == {
+            'first': vector(first), 'second': vector(second), 'original': vector(rows)}
+
+
 @pytest.mark.parametrize('flags', [[], ['--release-storage']])
 def test_map_in_a_loop(toolchain, journal, directory, flags):
     entry = Entry(toolchain, journal, directory, LOOP, flags)

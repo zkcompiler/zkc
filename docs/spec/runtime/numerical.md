@@ -3,6 +3,8 @@
 This contract connects checked Kernel realization and physical bindings to
 synchronous native numerical handlers. It uses the existing `plan.apply` and
 `zkc.program/0` operation path; there is no separate numerical executable format.
+The [numerical compilation rationale](../../rationale/numerical-compilation.md)
+explains the selected boundary with standard loop and storage dialects.
 
 ## Types and storage
 
