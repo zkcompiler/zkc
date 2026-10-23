@@ -255,6 +255,7 @@ import ZkcSecurity.Stage.Provider
 import ZkcSecurity.Stage.Relation
 import ZkcSecurity.Tools.ClaimConstruction
 import ZkcSecurity.Tools.ComponentCost
+import ZkcSecurity.Tools.ComponentDerivation
 import ZkcSecurity.Tools.PairConstruction
 import ZkcSecurity.Tools.SubjectABI
 import ZkcSecurity.VCVio.Composition
@@ -285,6 +286,7 @@ import TestsSecurity.CompiledRound
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompletenessClaimConstruction
 import TestsSecurity.ComponentCost
+import TestsSecurity.ComponentDerivation
 import TestsSecurity.Counterexamples.Couplings
 import TestsSecurity.Counterexamples.Encodings
 import TestsSecurity.Counterexamples.Gates

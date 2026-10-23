@@ -164,20 +164,5 @@ noncomputable def run_rejecting
             run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
     exact head.consequence fun reached final post => Or.inl (by simpa only [post.2] using shape)
 
-omit [Field F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- A convenience spelling of the existing shared walk sequencing law. -/
- theorem cost_bind {A B : Type} (field : String)
-    (charge : Domain.History (uniformCarriers F G) → Domain.Event (uniformCarriers F G) → ENNReal)
-    (head : PIR.Process (Nominal.signature F field) A)
-    (next : A → PIR.Process (Nominal.signature F field) B)
-    (history : Domain.History (uniformCarriers F G)) (first second : ENNReal)
-    (bounded : Typed.ChargedCostBound (Nominal.interface (G := G) field) charge head history first)
-    (suffix : ∀ value reached,
-      Typed.ChargedCostBound (Nominal.interface (G := G) field) charge (next value) reached second) :
-    Typed.ChargedCostBound (Nominal.interface (G := G) field) charge (head.bind next) history (first + second) := by
-  apply (Typed.chargedCostBound_iff _ _ _ _ _).mpr
-  exact Zkc.Transcript.Walk.Bound.bind _ (fun _ => bot_le) next
-    (fun value reached => (Typed.chargedCostBound_iff _ _ _ _ _).mp (suffix value reached))
-    head ((Typed.chargedCostBound_iff _ _ _ _ _).mp bounded)
 
 end ZkcSecurity.Families.Sumcheck.CompiledValidator

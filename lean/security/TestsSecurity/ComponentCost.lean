@@ -44,8 +44,17 @@ theorem controls : Typed.ChargedCostBound absorb charge
       derive_component_cost [headBound] unfolding []
   derive_component_cost [headBound, nextBound] unfolding []
 
+/-- An independent caller goal remains visible after the cost tactic closes
+its own goal. -/
+theorem pending_goal : Typed.ChargedCostBound absorb charge
+    (head.bind next) history (5 • price) ∧ True := by
+  constructor
+  derive_component_cost [headBound, nextBound] unfolding []
+  trivial
+
 #print axioms installed
 #print axioms sequential
 #print axioms guarded
 #print axioms controls
+#print axioms pending_goal
 end TestsSecurity.ComponentCost

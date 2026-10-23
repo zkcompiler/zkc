@@ -128,8 +128,23 @@ stop, bind and the actual conditional branches. Each continuation bound must
 cover every returned value and reached history. The resulting proof uses the
 existing charged walk semantics; an omitted component bound or an insufficient
 requested total cannot produce a certificate. Both compiled table roots use
-this composer. Their remaining root presentation and proof assembly are still
-authored; these examples do not yet demonstrate zero authored structural glue.
+this composer.
+
+`derive_component_rejection` composes installed residual contracts over the
+same process structure. It carries their postconditions into continuations,
+including the reached history. A missing admission premise may be split into
+two cases, both of which require a kernel-checked derivation. Forgetting a
+component only supplies the postcondition `True`; the final rejection obligation
+must still follow from the other components. Propositional reasoning handles
+false-child selection, while implementation-specific terminal laws remain at
+the helper-realization boundary. The tactic never chooses a protocol by name.
+
+Both compiled table roots use these shared cost and rejection composers.
+Independent opaque-component controls reject an OR final check when only one
+child is known false, a missing contract and a continuation law restricted to
+the initial history. Source-specific root presentation, binding and subject
+assembly remain authored; these examples do not yet demonstrate zero authored
+structural glue.
 
 ## Fixed experiments and receipts
 

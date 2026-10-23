@@ -68,6 +68,7 @@ partial def inferCost (goal : MVarId) (leaves : Array (TSyntax `term))
   inferCost after leaves definitions
 
 elab "derive_component_cost " "[" leaves:term,* "]" " unfolding " "[" definitions:term,* "]" : tactic => withMainContext <| withoutRecover do
+  let pending := (← getGoals).tail
   let original ← getMainGoal
   let target ← instantiateMVars (← original.getType)
   unless target.isAppOf ``Typed.ChargedCostBound do
@@ -89,5 +90,7 @@ elab "derive_component_cost " "[" leaves:term,* "]" " unfolding " "[" definition
     first | exact le_rfl | exact bot_le |
       (try simp only [add_zero, zero_add, ← add_nsmul];
        apply nsmul_le_nsmul_left (bot_le : (0 : ENNReal) ≤ _); omega)))
+
+  setGoals ((← getGoals) ++ pending)
 
 end ZkcSecurity.Tools.ComponentCost

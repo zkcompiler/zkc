@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.Components.SmallSumcheckValidator
 public meta import ZkcSecurity.Tools.ComponentCost
+public meta import ZkcSecurity.Tools.ComponentDerivation
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness
 
 @[expose] public section
@@ -29,17 +30,6 @@ abbrev compiled := ZkcSecurity.Examples.Generated.SmallSumcheck.validatorCompile
 def Rejected (result : Domain.Result (uniformCarriers F G)) : Prop :=
   compiled.acceptance result ≠ some true
 
-omit [AddCommGroup G] [Module F G] [DecidableEq G] in
- theorem terminal_false (raw : List F) (state : CompiledValidator.State F G)
-    (wrong : raw.length ≠ 2 ^ state.point.length ∨
-      state.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw state.point).sum) :
-    decide (PrimitiveLibrary.HasShape raw state.point.length 1 ∧
-      (Zkc.Polynomial.Multilinear.restrictPrefixValues raw state.point).sum = state.scalar) = false := by
-  apply decide_eq_false_iff_not.mpr
-  rintro ⟨shape, same⟩
-  rcases wrong with bad | bad
-  · exact bad (by simpa only [Nat.mul_one] using shape.length)
-  · exact bad same.symm
 
 noncomputable def derivation
     [∀ event : Domain.Event (uniformCarriers F G), SampleableType (Domain.Raw event)]
@@ -50,20 +40,9 @@ noncomputable def derivation
     (wrong : raw.length = 2 ^ count → claim ≠ raw.sum) :
     Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
       (fun _ result => Rejected result) initial (Validator.presented raw claim count initial) := by
-  unfold Validator.presented
-  split
-  · rw [PIR.Process.bind_assoc]
-    apply (CompiledValidator.run_rejecting field ValidatorRound.sites charge sampling raw claim count initial initial wrong).bind
-    intro reached state post
-    simp only [PIR.Process.bind, Validator.finish, CompiledValidator.decode, CompiledValidator.carried]
-    split
-    · apply Derivation.done
-      have decision := terminal_false raw state post
-      rw [decision]
-      change some false ≠ some true
-      decide
-    · exact .halt .exhausted
-  · exact .halt .refused
+  derive_component_rejection [CompiledValidator.run_rejecting field ValidatorRound.sites charge sampling raw]
+    unfolding [Validator.presented, Validator.finish, CompiledValidator.carried, CompiledValidator.decode]
+    finishing (change some _ ≠ some true; simp (disch := assumption) only [SumcheckValidatorHelpers.terminal_rejects, Bool.false_and, Bool.and_false]; decide)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
  theorem cost

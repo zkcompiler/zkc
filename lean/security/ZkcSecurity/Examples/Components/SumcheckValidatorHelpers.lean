@@ -59,4 +59,18 @@ theorem terminal_all (program : Structured.Program) (bodies : SumcheckDomainHelp
       (lessAll_bounded _ (MapFirstContracts.less_all program.payload.linked bodies.sumcheck.first))
       (SumcheckUnitContracts.shape_body program.payload.linked bodies.sumcheck) raw point claim pointSmall bounded
 
+/-- A false table residual makes this implementation's actual terminal check
+reject. The source-specific shape predicate belongs at the helper-realization
+boundary, while the family reduction remains independent of that predicate. -/
+theorem terminal_rejects (raw point : List F) (scalar : F)
+    (wrong : raw.length ≠ 2 ^ point.length ∨
+      scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum) :
+    decide (PrimitiveLibrary.HasShape raw point.length 1 ∧
+      (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = scalar) = false := by
+  apply decide_eq_false_iff_not.mpr
+  rintro ⟨shape, same⟩
+  rcases wrong with bad | bad
+  · exact bad (by simpa only [Nat.mul_one] using shape.length)
+  · exact bad same.symm
+
 end ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
