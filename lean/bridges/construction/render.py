@@ -89,6 +89,25 @@ def one_parameter(attrs):
 
 def operation(name, attrs, binding, operand_kinds, result_kinds):
     """Classify one exported operation strictly; return its Lean term."""
+    boolean, index = ("boolean", None), ("index", None)
+    if name == "data.index":
+        require(set(attrs) == {"value"} and binding == [] and operand_kinds == [] and result_kinds == [index],
+                "index constant shape")
+        return f".calculate (.indexConstant {decimal(string_attribute(attrs, 'value'), 1 << 64)})"
+    if name == "data.index_equal":
+        require(not attrs and binding == [] and operand_kinds == [index, index] and result_kinds == [boolean],
+                "index equality shape")
+        return ".calculate .indexEqual"
+    if name == "arith.constant":
+        require(set(attrs) == {"value"} and binding == [] and not operand_kinds and result_kinds == [boolean]
+                and attrs["value"][0] == "bool" and type(attrs["value"][1]) is bool,
+                "Boolean constant shape")
+        return f".calculate (.booleanConstant {str(attrs['value'][1]).lower()})"
+    if name == "arith.cmpi":
+        require(set(attrs) == {"predicate"} and binding == [] and operand_kinds == [boolean, boolean]
+                and result_kinds == [boolean] and attrs["predicate"] in (("integer", "0"), ("integer", "1")),
+                "Boolean comparison shape")
+        return ".calculate .booleanEqual" if attrs["predicate"][1] == "0" else ".calculate .booleanNotEqual"
     if name == "protocol.receive" and set(attrs) == {"peer", "schema", "site"} and binding == []:
         require(not operand_kinds and len(result_kinds) == 1, "receive shape")
         return (f".receive {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
@@ -118,6 +137,15 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         (suite,) = record(binding[1], 1)
         require(len(result_kinds) == 2 and result_kinds[0][0] == "field", "challenge results")
         return f".challenge {text(suite)} {text(result_kinds[0][1])} {origin(one_parameter(attrs))}"
+    if name == "algebra.exec.field_embed":
+        require(set(attrs) == {"binding", "parameters", "site"}
+                and attrs["parameters"] == ("strings", []), "field embedding attributes")
+        require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
+                and len(result_kinds) == 1 and result_kinds[0][0] == "field", "field embedding ports")
+        extension, base = result_kinds[0][1], operand_kinds[0][1]
+        require(isinstance(binding, list) and len(binding) == 3 and binding[0] == "field.embed"
+                and binding[1] == [extension], "field embedding binding")
+        return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
     if name == "algebra.group_scale" and not attrs and binding == []:
         require(len(operand_kinds) == 2 and operand_kinds[0][0] == "group" and operand_kinds[1][0] == "field",
                 "group scale operands")
@@ -213,7 +241,7 @@ def block(instructions, kinds, places, indent, depth=0):
     return rendered, kinds, places
 
 
-def render(data, namespace):
+def render_declaration(data, namespace):
     version, source, candidate, selected, symbol, inputs, outputs, instructions, returned = record(data, 9)
     require(version == FORMAT, "wrong participant export version")
     lean_render.namespace(namespace)
@@ -221,17 +249,7 @@ def render(data, namespace):
     rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ")
     returned = references(returned, places, "returned")
     body = ",\n".join(rendered)
-    return f'''module
-
-public import Zkc.Construction.Participant
-
-@[expose] public section
-
-/-! Constructor data from the retained `zkc.constructed-participant/0` export.
-Regenerate with bridges/construction/check.py --write; the Lean rule and its proofs are
-separate. The bridge checks exact regeneration against the compiler. -/
-
-namespace {namespace}
+    return f'''namespace {namespace}
 open Zkc.Construction
 
 def participant : Participant where
@@ -247,6 +265,10 @@ def participant : Participant where
 
 end {namespace}
 '''
+
+
+def render(data, namespace):
+    return 'module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n\n/-! Constructor data from the retained `zkc.constructed-participant/0` export.\nRegenerate with bridges/construction/check.py --write; the Lean rule and its proofs are\nseparate. The bridge checks exact regeneration against the compiler. -/\n\n' + render_declaration(data, namespace)
 
 
 if __name__ == "__main__":

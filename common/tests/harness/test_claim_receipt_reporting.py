@@ -1,8 +1,17 @@
-"""Request/receipt joins and body-sensitive assurance reporting controls."""
+"""Request/receipt joins and Lean-owned assurance reporting controls."""
 from copy import deepcopy
 
 import pytest
 from harness import load
+
+
+# Mocked exported metadata for reporter unit tests, not a production policy.
+# Lean controls check the real closed authority, telescope and subject links.
+EXPORTED_STAGE_LINKS = {
+    "interactive": ("fixture.interactive-link",),
+    "compiled-ideal": ("construction.checked",),
+    "executable-bytes": ("construction.checked", "lowering.interpreted_bytes"),
+}
 
 
 @pytest.fixture
@@ -13,7 +22,7 @@ def api():
 @pytest.fixture
 def receipt_case(api):
     declarations = load("receipt_reporting_declarations", "lean/checks/records/declarations.py")
-    request = {"subject": {"unit": "sha256:unit", "entry": "demo::Proof", "stage": "interactive", "artifacts": []},
+    request = {"subject": {"unit": "sha256:unit", "entry": "demo::Proof", "stage": "interactive", "artifacts": [{"role": "fixture-input", "digest": "sha256:unit"}]},
                "property": {"name": "user.identity", "version": 0, "parameters": None},
                "model": {"kind": "application", "name": "models.identity", "version": 0, "arguments": []},
                "target": {"protocol": "demo", "clause": 0, "name": "identity"},
@@ -24,7 +33,7 @@ def receipt_case(api):
             "statement": {"structural": "1", "explicit": "2"}, "tags": []}
     detail = {"binders": [], "premise_telescope": [], "premises": []}
     data = dict(base, name="Demo.request0Data", detail=dict(detail, type_head=api.REQUEST_TYPE,
-                claim_data={"wire_request": deepcopy(request)}))
+                claim_data={"wire_request": deepcopy(request), "telescope": {"accepted": True}}))
     proof = {"wire_request": deepcopy(request), "request_head": data["name"], "indices_checked": True,
              "proof_type_matches": True, "root_route": "theorem", "discharger": "True.intro",
              "evidence_attribution": {"scope": "referenced-evidence", "declarations": []},
@@ -35,7 +44,11 @@ def receipt_case(api):
                    claim_data={"receipt": proof}))
     records = declarations.Records({"main": {"axiom_provenance": "resolved-constant-info/0",
                                             "reference_provenance": "checked-stored-module/0"}}, [data, receipt])
-    return request, data, receipt, proof, records
+    proof.update(authority={"kind": "author", "checked": True},
+                 telescope={"accepted": True, "binders": [], "conditions": []})
+    case = (request, data, receipt, proof, records)
+    interpreted_stage(api, case, "interactive")
+    return case
 
 
 def audit(api, case):
@@ -48,11 +61,12 @@ def interpreted_stage(api, case, stage):
     for wire in (request, data["detail"]["claim_data"]["wire_request"], proof["wire_request"]):
         wire["subject"]["stage"] = stage
     proof["required_links"] = [{"index": index, "identifier": name, "proved": True, "conditional": False}
-                               for index, name in enumerate(api.STAGE_LINKS[stage])]
+                               for index, name in enumerate(EXPORTED_STAGE_LINKS[stage])]
     proof["stage_links"] = {"recognized_subject": True, "stage": stage,
         "covered_endpoint": "ideal-meaning" if stage == "compiled-ideal" else "interpreted-executable-bytes",
+        "artifact_roles": [{"role": "fixture-input", "pipeline_artifact": "interactive_export"}],
         "obligations": [{"identifier": name, "matches": [{"index": index, "goal_defeq": True, "subject_matches": True}]}
-                        for index, name in enumerate(api.STAGE_LINKS[stage])]}
+                        for index, name in enumerate(EXPORTED_STAGE_LINKS[stage])]}
 
 
 @pytest.mark.parametrize("stage", ["compiled-ideal", "executable-bytes"])
@@ -60,7 +74,7 @@ def test_interpreted_stage_links_can_discharge_without_native_closure(api, recei
     interpreted_stage(api, receipt_case, stage)
     _, _, discharged, reasons = audit(api, receipt_case)
     assert reasons == []
-    assert [row["id"] for row in discharged] == list(api.STAGE_LINKS[stage])
+    assert [row["id"] for row in discharged] == list(EXPORTED_STAGE_LINKS[stage])
 
 
 @pytest.mark.parametrize("comparison", ["goal_defeq", "subject_matches"])
@@ -79,7 +93,7 @@ def test_byte_interpretation_requires_both_checked_links(api, receipt_case, chan
     elif change == "unrecognized":
         proof["stage_links"]["recognized_subject"] = False
     elif change == "missing-lowering":
-        proof["stage_links"]["obligations"].pop()
+        proof["stage_links"]["obligations"][-1]["matches"] = []
     else:
         proof["stage_links"]["stage"] = "compiled-ideal"
     assert audit(api, receipt_case)[3]
@@ -146,6 +160,9 @@ def test_receipt_context_cannot_hide_assumptions(api, receipt_case, binder):
     detail = receipt_case[2]["detail"]
     detail["binders"] = [binder]
     detail["premise_telescope"] = [dict(binder, head=binder["type_head"])]
+    receipt_case[3]["telescope"] = {"accepted": False, "binders": [
+        {"classification": "refused", "reason": "unauthorized premise",
+         "binder": binder["binder"], "type": binder["type_head"]}]}
     assert audit(api, receipt_case)[3]
 
 
@@ -153,8 +170,10 @@ def test_omitting_required_links_cannot_certify(api, receipt_case):
     for value in (receipt_case[0], receipt_case[1]["detail"]["claim_data"]["wire_request"],
                   receipt_case[3]["wire_request"]):
         value["subject"]["stage"] = "executable-bytes"
+    interpreted_stage(api, receipt_case, "executable-bytes")
+    receipt_case[3]["required_links"] = []
     reasons = audit(api, receipt_case)[3]
-    assert all(any(identifier in reason for reason in reasons) for identifier in api.STAGE_LINKS["executable-bytes"])
+    assert all(any(identifier in reason for reason in reasons) for identifier in EXPORTED_STAGE_LINKS["executable-bytes"])
 
 
 def test_body_change_invalidates_semantic_digest_with_same_statement(api, tmp_path, monkeypatch):
@@ -205,17 +224,18 @@ def test_public_report_identity_and_stale_semantic_cache(api, receipt_case, tmp_
             "module": receipt["module"], "request": data["name"], "receipt": receipt["name"]}]}
     monkeypatch.setattr(api, "load_evidence", lambda *_: evidence)
     report = api.build(manifest, records)
-    assert report["status"] == "certified", report["claims"][0]["reasons"]
+    assert report["status"] == "no-claim"
+    assert report["author_claims"][0]["outcome"] == "established", report["claims"][0]["reasons"]
     source["attachment"]["label"] = "after"
     source["method"] = {"name": "different", "version": 99}
-    assert api.build(manifest, records)["status"] == "certified"
+    assert api.build(manifest, records)["author_claims"][0]["outcome"] == "established"
     mapping["resolution"] = {"status": "incomplete", "kind": "registered-undefined", "definitions": ["missing model"]}
     assert api.build(manifest, records)["claims"][0]["status"] == "open"
     del mapping["resolution"]
     mapping["semantic_dependency_digest"] = report["claims"][0]["semantic_dependencies"]["digest"]
     meaning.write_text("def predicate : Prop := False\n")
     changed = api.build(manifest, records)
-    assert changed["status"] == "open"
+    assert changed["claims"][0]["status"] == "open"
     assert any("stale semantic dependency digest" in reason for reason in changed["claims"][0]["reasons"])
 
 
@@ -290,7 +310,7 @@ def test_capability_exports_follow_actual_quantity(api, receipt_case, quantity, 
     for wire in (request, data["detail"]["claim_data"]["wire_request"], proof["wire_request"]):
         wire["property"]["name"] = "soundness"
         wire["quantity"]["kind"] = quantity
-    proof.update(registered_property={"name": "soundness", "version": 0}, canonical_registry=True,
+    proof.update(registered_property={"name": "soundness", "version": 0}, authority={"kind": "canonical", "checked": True},
                  quantity_kind=quantity, exported_capabilities=exported, capability_consumer="soundness@0",
                  registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
                  application_coverage={"mode": "fixed-statement", "checked": True})
@@ -328,16 +348,19 @@ def test_only_structured_registered_undefined_is_incomplete(api, receipt_case, t
     assert claim["attempts"] == mapping["attempts"]
 
 
-@pytest.mark.parametrize("comparison", ["lookup", "property_definition", "property_export", "model_export"])
-def test_builtin_requires_each_selected_registry_comparison(api, receipt_case, comparison):
-    request, data, _, proof, _ = receipt_case
-    for wire in (request, data["detail"]["claim_data"]["wire_request"], proof["wire_request"]):
-        wire["property"]["name"] = "soundness"
-    proof.update(registered_property={"name": "soundness", "version": 0}, canonical_registry=True,
-                 capability_consumer="soundness@0", quantity_kind="scalar",
-                 registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
-                 application_coverage={"checked": True, "mode": "fixed-statement"})
-    proof["registry_checks"][comparison] = False
+@pytest.mark.parametrize("authority", [
+    {"kind": "reserved", "checked": False},
+    {"kind": "canonical", "checked": False},
+    {},
+])
+def test_legacy_registry_flags_cannot_replace_checked_authority(api, receipt_case, authority):
+    security_admission(api, receipt_case)
+    assert audit(api, receipt_case)[3] == []
+    proof = receipt_case[3]
+    proof.update(canonical_registry=True, capability_consumer="soundness@0",
+                 registry_checks={key: True for key in
+                                  ("lookup", "property_definition", "property_export", "model_export")})
+    proof["authority"] = authority
     assert any("unrecognized property/model registry" in reason for reason in audit(api, receipt_case)[3])
 
 
@@ -349,7 +372,7 @@ def test_parameter_coverage_requires_all_emitted_comparisons(api, receipt_case, 
     coverage = {"checked": True, "mode": "parameter", "context_matches": True, "reference_matches": True,
                 "model_value_matches": True, "value_is_binder": True, "designated_binder": {"name": "application", "index": 0}}
     coverage[comparison] = False
-    proof.update(registered_property={"name": "soundness", "version": 0}, canonical_registry=True,
+    proof.update(registered_property={"name": "soundness", "version": 0}, authority={"kind": "canonical", "checked": True},
                  capability_consumer="soundness@0", quantity_kind="scalar",
                  registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
                  application_coverage=coverage)
@@ -399,6 +422,9 @@ def test_generic_evidence_telescope_is_not_a_receipt_premise(api, receipt_case):
     case = (*receipt_case[:4], declarations.Records(records.headers, [*records.declarations, generic]))
     assert audit(api, case)[3] == []
     case[2]["detail"]["binders"] = generic["detail"]["binders"]
+    case[3]["telescope"] = {"accepted": False, "binders": [
+        {"classification": "refused", "reason": "hidden parameter",
+         "binder": "explicit", "type": "ZkcSecurity.Endpoint.Semantics"}]}
     assert any("hidden parameter" in reason for reason in audit(api, case)[3])
 
 
@@ -468,7 +494,8 @@ def test_public_report_keeps_selected_scope_and_incomplete_trial(api, scoped_rep
     evidence["source_claim_inventory"] = [{"declaration": "library::Unused",
                                            "selection": "unselected-subject"}]
     report = api.build(manifest, records)
-    assert report["status"] == "certified", (report["reasons"], report["claims"])
+    assert report["status"] == "no-claim"
+    assert report["author_claims"][0]["outcome"] == "established", (report["reasons"], report["claims"])
     assert report["source_claim_scope"] == evidence["source_claim_scope"]
     assert report["source_claim_inventory"] == evidence["source_claim_inventory"]
     trial = report["source_claim_trials"][0]
@@ -493,7 +520,8 @@ def test_trial_without_emitted_records_is_visible_unaudited_open(api, scoped_rep
     manifest, records, _ = scoped_report
     del records.by_name["Demo.trialData"]
     report = api.build(manifest, records)
-    assert report["status"] == "certified"
+    assert report["status"] == "no-claim"
+    assert report["author_claims"][0]["outcome"] == "established"
     trial = report["source_claim_trials"][0]
     assert trial["audit_status"] == "unaudited"
     assert trial["status"] == trial["claims"][0]["status"] == "open"
@@ -527,7 +555,8 @@ def test_inconsistent_selected_entry_scope_cannot_certify(api, scoped_report, ch
         manifest.write_text(manifest.read_text().replace('proof="demo::Proof"', 'proof="other::Proof"'))
         evidence["manifest_sha256"] = api.sha256(manifest)
     report = api.build(manifest, records)
-    assert report["status"] == "open"
+    assert report["outcome"] == "unresolved"
+    assert report["claims"][0]["outcome"] == "unresolved"
     assert any("scope" in reason or "selection" in reason for reason in report["reasons"])
 
 

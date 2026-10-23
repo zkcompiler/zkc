@@ -1,4 +1,5 @@
 import ZkcTools.DeclarationAudit
+import Zkc.Claims.ClosedString
 
 /-! Declaration records for package-owned code.
 
@@ -47,6 +48,8 @@ Options:
   registered endpoint theorem's statement, unfolded once), and the named
   hypotheses of an evidence value (repeatable). A name that is not a declaration
   of the selected modules is noted and skipped; its consumer reports the absence.
+- `--trace-records`: print the declaration currently being inspected and its
+  elapsed time to stderr. This changes diagnostics only, not the records.
 
 The output is deterministic for a fixed toolchain and fixed sources. Equal
 statement hashes are regression evidence, not semantic preservation. -/
@@ -212,6 +215,7 @@ structure Options where
   endpoints : Option Name := none
   details : Array Name := #[]
   positional : Array String := #[]
+  traceRecords : Bool := false
 
 partial def parse : List String → Options → Except String Options
   | [], options => .ok options
@@ -220,6 +224,7 @@ partial def parse : List String → Options → Except String Options
   | "--endpoints" :: name :: rest, options => parse rest { options with endpoints := some name.toName }
   | "--detail" :: name :: rest, options =>
       parse rest { options with details := options.details.push name.toName }
+  | "--trace-records" :: rest, options => parse rest { options with traceRecords := true }
   | argument :: rest, options =>
       if argument.startsWith "--" then .error s!"unknown or incomplete option: {argument}"
       else parse rest { options with positional := options.positional.push argument }
@@ -375,11 +380,9 @@ def hypothesesJson (binders : Array Expr) (evidence : Expr) (structureName : Nam
       ("status", statusJson)]
   return Json.arr found
 
-/-- Read constructor data by reduction, never by parsing pretty-printed terms. -/
-def literalString (expression : Expr) : MetaM String := do
-  match ← whnfD expression with
-  | .lit (.strVal value) => return value
-  | _ => throwError "claim data contains an unresolved string: {expression}"
+/-- Read closed data using standard operations, never pretty-printed terms. -/
+def literalString (expression : Expr) : MetaM String :=
+  Zkc.Claims.ClosedString.read 4096 expression
 
 def naturalJson (expression : Expr) : MetaM Json := do
   match ← whnfD expression with
@@ -610,9 +613,164 @@ def finiteArgument (application carrier : Expr) : MetaM Expr := do
   let some finite := found | throwError "missing actual finite model instance"
   return finite
 
+/-- Check a constructor proof in the kernel, even for associations synthesized
+for a legacy receipt. Definitional comparisons alone are not exported authority. -/
+def kernelFields (target : Expr) (constructor : Name) (last : Option Expr := none) : MetaM Unit := do
+  let value ← mkFreshExprMVar target
+  let goals ← value.mvarId!.apply (← mkConstWithFreshMVarLevels constructor)
+  for index in [:goals.length] do
+    let goal := goals[index]!
+    if index + 1 == goals.length then
+      if let some proof := last then
+        goal.assign proof
+        continue
+    goal.refl
+  checkWithKernel (← instantiateMVars value)
+
+/-- One Lean-owned policy for all remaining receipt binders. Parameter instances
+must be on the actual subject carriers, and every dependent argument may use
+only previously admitted parameters. A proposition is never a parameter. -/
+def receiptTelescopeJson (binders : Array Expr) (subjectType request : Expr)
+    (context model : Option Expr) (authority : Option Expr := none) : MetaM Json := do
+  let subjectArgs := subjectType.getAppArgs
+  let uniform := headName subjectType == some `ZkcSecurity.Claims.Subject
+  let dependent := authority.isSome && !uniform
+  let security := uniform || dependent
+  let carriers ← if uniform then pure (subjectArgs.extract 0 2) else if dependent then pure #[] else
+    binders.filterM fun binder => do pure (← binder.fvarId!.getDecl).type.isSort
+  let mut parameters : Std.HashSet FVarId := {}
+  let mut rows := #[]
+  let mut conditions := #[]
+  let mut accepted := true
+  for binder in binders do
+    let declaration ← binder.fvarId!.getDecl
+    let proof ← isProp declaration.type
+    let mut parameter := false
+    let mut condition := Json.null
+    let mut reason := ""
+    if !proof then
+      if declaration.type.isSort then
+        parameter ← if security then carriers.anyM (isDefEq binder ·) else pure true
+      else if dependent && declaration.type.isConstOf `Zkc.Source.Structured.DomainModel then
+        parameter ← isDefEq binder subjectArgs[0]!
+      else if security && declaration.type.isConstOf ``String && declaration.binderInfo == .default then
+        if let some context := context then
+          if headName (← inferType context) == some `ZkcSecurity.Claims.ModelContext then
+            let binding ← whnfD (← field `ZkcSecurity.Claims.ModelContext `application context)
+            if binding.isAppOf ``Option.some then
+              let value ← field `ZkcSecurity.Claims.ApplicationBinding `value binding.appArg!
+              parameter ← isDefEq binder value
+      else if !dependent && (← modelInstance declaration) then
+        parameter := true
+        for argument in declaration.type.getAppArgs do
+          let type ← whnf (← inferType argument)
+          if type.isSort && !(← carriers.anyM (isDefEq argument ·)) then parameter := false
+      -- In particular a carrier/instance cannot depend on a rejected proof,
+      -- Type-valued wrapper or an authorized condition that produces values.
+      if parameter then
+        for dependency in (Lean.collectFVars ({} : Lean.CollectFVars.State) declaration.type).fvarIds do
+          unless parameters.contains dependency do parameter := false
+    else if uniform then
+      let application ← field `Zkc.Claims.Wire.Request `model request
+      let recognized ← unfoldTo declaration.type
+        [`ZkcSecurity.Claims.FaithfulScalarAction, `ZkcSecurity.Claims.DLogSearchHard]
+      if let some actual := recognized then
+        let hard := headName actual == some `ZkcSecurity.Claims.DLogSearchHard
+        let key ← mkConstWithFreshMVarLevels (if hard then
+          `ZkcSecurity.Claims.PremiseKey.dlogSearch else `ZkcSecurity.Claims.PremiseKey.faithfulScalarAction)
+        let authorized ← whnfD (← mkAppM `ZkcSecurity.Claims.premiseAuthorized #[application, key])
+        let mut expected : Option Expr := none
+        if hard then
+          if let some model := model then
+            let queries ← whnfD (← field `ZkcSecurity.Claims.Model `queries model)
+            if queries.isAppOf `ZkcSecurity.Claims.QueryLimit.fixed then
+              expected := some (mkAppN (← mkConstWithFreshMVarLevels `ZkcSecurity.Claims.DLogSearchHard)
+                #[subjectArgs[0]!, subjectArgs[1]!, subjectArgs[2]!, subjectArgs[4]!,
+                  subjectArgs[5]!, subjectArgs[6]!, queries.appArg!])
+        else
+          expected := some (mkAppN (← mkConstWithFreshMVarLevels `ZkcSecurity.Claims.FaithfulScalarAction)
+            #[subjectArgs[0]!, subjectArgs[1]!, subjectArgs[2]!, subjectArgs[4]!, subjectArgs[5]!])
+        let argumentsMatch ← match expected with
+          | some expectedType => isDefEq declaration.type expectedType
+          | none => pure false
+        if !authorized.isConstOf ``Bool.true then reason := "registered but unauthorized premise"
+        else if !argumentsMatch then reason := "substituted premise arguments or unsupported model parameters"
+        else
+          let identifier ← mkAppM `ZkcSecurity.Claims.PremiseKey.identifier #[key]
+          let name ← literalString (← field `Zkc.Claims.Identifier `name identifier)
+          let version ← naturalJson (← field `Zkc.Claims.Identifier `version identifier)
+          condition ← pure (Json.mkObj [("id", Json.str (name ++ "@" ++ version.compress)),
+            ("identifier", ← identifierJson identifier),
+            ("category", Json.str (if hard then "hardness" else "model")),
+            ("schema", nameJson (headName actual)), ("arguments", ← argumentsJson actual),
+            ("instantiated", Json.str (toString (← ppExpr declaration.type)))])
+          conditions := conditions.push condition
+    if parameter then parameters := parameters.insert binder.fvarId!
+    let admitted := parameter || condition != Json.null
+    if !admitted then
+      accepted := false
+      if reason.isEmpty then reason := if proof then "omitted premise" else "hidden parameter"
+    rows := rows.push (Json.mkObj [("binder", Json.str (binderName declaration.binderInfo)),
+      ("type", Json.str (toString (← ppExpr declaration.type))),
+      ("classification", Json.str (if parameter then "parameter" else if condition != Json.null then "authorized" else "refused")),
+      ("reason", Json.str reason)])
+  return Json.mkObj [("accepted", Json.bool accepted), ("binders", Json.arr rows),
+    ("conditions", Json.arr conditions)]
+
+/-- Named indices keep the record reader independent of a wrapper's implicit
+parameter count. These are type indices, never proof-body attribution. -/
+def namedIndex (application : Expr) (parameter : Name) : MetaM Expr := do
+  let some head := headName application | throwError "missing indexed structure"
+  let names ← forallTelescope (← getConstInfo head).type fun binders _ =>
+    binders.mapM fun binder => binder.fvarId!.getUserName
+  let some index := names.findIdx? (· == parameter) | throwError "missing index {parameter}"
+  return application.getAppArgs[index]!
+
+/-- Internal data reconstructed from the closed authority's checked indices.
+No author registry installs a view, a binder policy, or a meaning callback. -/
+structure AuthorityView where
+  authority : Expr
+  subject : Expr
+  semanticSubject : Expr
+  subjectType : Expr
+  shape : Name
+
+def authorityView (authority subject : Expr) : MetaM AuthorityView := do
+  let type ← inferType authority
+  unless type.isAppOfArity `ZkcSecurity.Claims.CanonicalAuthority 1 do
+    throwError "unrecognized canonical authority type"
+  unless ← isDefEq type.appArg! (← inferType subject) do
+    throwError "canonical authority differs from actual subject type"
+  let constructor ← whnfD authority
+  let some shape := headName constructor | throwError "unresolved canonical authority"
+  unless [`ZkcSecurity.Claims.CanonicalAuthority.uniform,
+      `ZkcSecurity.Claims.CanonicalAuthority.domains,
+      `ZkcSecurity.Claims.CanonicalAuthority.authoredPair].contains shape do
+    throwError "unknown canonical authority shape"
+  let semanticSubject ← if shape == `ZkcSecurity.Claims.CanonicalAuthority.authoredPair then
+      mkAppM ``ULift.down #[subject] else pure subject
+  return ⟨authority, subject, semanticSubject, ← inferType semanticSubject, shape⟩
+
 /-- Inspect typed indices and actual proof applications. Provenance is emitted
 separately as a claim to audit, never as the authority for these facts. -/
 def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr) (body value : Expr) : MetaM Json := do
+  let certificateType := body
+  let certificateValue := value
+  let certificateHead := headName body
+  let canonicalCertificate := certificateHead == some `ZkcSecurity.Claims.CanonicalReceipt
+  let authorCertificate := certificateHead == some `ZkcSecurity.Claims.AuthorExtensionReceipt
+  let authority ← if canonicalCertificate || authorCertificate then
+      pure (some (← namedIndex certificateType `authority)) else pure none
+  let view ← match authority with
+    | none => pure none
+    | some actual => pure (some (← authorityView actual (← namedIndex certificateType `subject)))
+  let dependentCertificate := view.any (·.shape != `ZkcSecurity.Claims.CanonicalAuthority.uniform)
+  let value ← if dependentCertificate then field certificateHead.get! `receipt value else
+    match headName body with
+    | some `ZkcSecurity.Claims.CanonicalReceipt => mkAppM `ZkcSecurity.Claims.CanonicalReceipt.toAdmittedReceipt #[value]
+    | some `ZkcSecurity.Claims.AuthorExtensionReceipt => mkAppM `ZkcSecurity.Claims.AuthorExtensionReceipt.toAdmittedReceipt #[value]
+    | _ => pure value
+  let body ← inferType value
   let wrapped := headName body == some `ZkcSecurity.Claims.AdmittedReceipt
   let outerValue := value
   let outerBody := body
@@ -640,7 +798,8 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
     catch _ => pure proof
   let actualRoot ← try receiptRoot value catch _ => pure "unattributed"
   let subject := args[3]!
-  let subjectType ← inferType subject
+  let semanticSubject := (view.map (·.semanticSubject)).getD subject
+  let subjectType ← inferType semanticSubject
   let subjectArgs := subjectType.getAppArgs
   let subjectFacts ← if headName subjectType == some `ZkcSecurity.Claims.Subject && subjectArgs.size >= 2 then do
       let art := subjectArgs[subjectArgs.size - 2]!
@@ -652,6 +811,38 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
         ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
         ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source participant))),
         ("participant_candidate", Json.str (← literalString (← field `Zkc.Construction.Participant `candidate participant)))])
+    else if dependentCertificate then do
+      let authority := authority.get!
+      let constructor ← whnfD authority
+      if headName constructor == some `ZkcSecurity.Claims.CanonicalAuthority.domains then
+        let art := subjectArgs.back!
+        let original ← field `ZkcSecurity.Endpoint.Domain.Artifacts `original art
+        let participant ← field `ZkcSecurity.Endpoint.Domain.Artifacts `participant art
+        pure (Json.mkObj [("subject_head", nameJson (headName subject)),
+          ("artifacts_head", nameJson (headName art)),
+          ("original_source", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `source original))),
+          ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
+          ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source participant))),
+          ("participant_candidate", Json.str (← literalString (← field `Zkc.Construction.Participant `candidate participant)))])
+      else
+        let original := subjectArgs[1]!
+        let selection := subjectArgs.back!
+        let artifacts ← field `Zkc.Construction.AuthoredPair.Selection `artifacts selection
+        let producer ← field `Zkc.Construction.AuthoredPair.Artifacts `producer artifacts
+        let validator ← field `Zkc.Construction.AuthoredPair.Artifacts `validator artifacts
+        pure (Json.mkObj [("subject_head", nameJson (headName subject)),
+          ("artifacts_head", nameJson (headName artifacts)),
+          ("original_source", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `source original))),
+          ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
+          ("producer_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source producer))),
+          ("producer_candidate", Json.str (← literalString (← field `Zkc.Construction.Participant `candidate producer))),
+          ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source validator))),
+          ("participant_candidate", Json.str (← literalString (← field `Zkc.Construction.Participant `candidate validator)))])
+    else pure Json.null
+  let honestInputPolicy ← if headName subjectType == some `ZkcSecurity.Claims.HonestPair.Subject then do
+      let policy ← field `ZkcSecurity.Claims.HonestPair.Subject `inputPolicy semanticSubject
+      let description ← listElements (← mkAppM `ZkcSecurity.Claims.HonestPair.InputPolicy.description #[policy])
+      pure (Json.arr (← description.mapM fun row => do return Json.str (← literalString row)))
     else pure Json.null
   let resolvedConstructor ← whnfD resolved
   unless resolvedConstructor.isAppOf `Zkc.Claims.Resolved.mk do throwError "unresolved Resolved constructor"
@@ -672,6 +863,7 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
   let mut modelContext : Option Expr := none
   let mut consumer := ""
   let mut admittedRegistry : Option Expr := if wrapped then some outerBody.getAppArgs[outerBody.getAppArgs.size - 2]! else none
+  if dependentCertificate then admittedRegistry := some (← namedIndex certificateType `registry)
   let mut admittedFinite : Option Expr := none
   if wrapped then admittedFinite := some (← finiteArgument outerBody subjectArgs[0]!)
   if let some selected := selected then
@@ -691,6 +883,8 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
       let canonicalLookup ← whnfD (← mkAppM `Zkc.Claims.Registry.lookup #[canonicalRegistry, entryIdentifier])
       if canonicalLookup.isAppOf ``Except.ok then
         exportChecked ← isDefEq entry canonicalLookup.appArg!
+  if let some modelRegistry := admittedRegistry then
+    if headName subjectType == some `ZkcSecurity.Claims.Subject then
       let modelApplication ← field `Zkc.Claims.Wire.Request `model request
       let modelIdentifier ← field `Zkc.Claims.Wire.Application `identifier modelApplication
       let modelLookup ← whnfD (← mkAppM `Zkc.Claims.Registry.lookup #[modelRegistry, modelIdentifier])
@@ -711,9 +905,28 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
               if canonicalModel.isAppOf ``Except.ok then
                 modelChecked ← isDefEq actualEntry canonicalModel.appArg!
                 if modelChecked then modelContext := some context
-      if propertyChecked && exportChecked && modelChecked && lookupChecked then
-        consumer := if headName selected == some `ZkcSecurity.Claims.soundnessProperty then "soundness@0" else "knowledge@0"
+  if propertyChecked && exportChecked && modelChecked && lookupChecked then
+    consumer := if (selected.bind headName) == some `ZkcSecurity.Claims.soundnessProperty then "soundness@0" else "knowledge@0"
+  if canonicalCertificate || authorCertificate then
+    modelContext := some (← namedIndex certificateType `context)
+    let modelCertificate ← field certificateHead.get! `modelAdmission certificateValue
+    checkWithKernel modelCertificate
+    modelChecked := true
+    let association ← field certificateHead.get! `association certificateValue
+    checkWithKernel association
+    if canonicalCertificate then
+      let key ← namedIndex certificateType `key
+      let target ← mkAppM `ZkcSecurity.Claims.CanonicalAdmission #[authority.get!, admittedRegistry.get!, key, resolved]
+      unless ← isDefEq (← inferType association) target do throwError "wrong canonical association indices"
+      propertyChecked := true
+      exportChecked := true
+      let identifier ← field `Zkc.Claims.Wire.Request `property request
+      let name ← field `Zkc.Claims.Identifier `name identifier
+      let version ← field `Zkc.Claims.Identifier `version identifier
+      consumer := (← literalString name) ++ "@" ++ (← naturalJson version).compress
   let canonicalRegistry := propertyChecked && exportChecked && modelChecked && lookupChecked
+  let mut actualModel : Option Expr := none
+  let mut modelProof : Option Expr := none
   let admission ← if headName subjectType == some `ZkcSecurity.Claims.Subject then do
       let checked ← mkAppM `ZkcSecurity.Claims.Subject.check #[subject, request]
       let subjectResult ← whnfD checked
@@ -745,18 +958,30 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
               modelStatus := "admitted"
               successAuthority := "definitional-evaluation"
               modelValue := Json.str (toString (← ppExpr inner.appArg!))
+              actualModel := some inner.appArg!
+              let witness := inner.appArg!
+              let predicate ← withLocalDeclD `model (mkConst `ZkcSecurity.Claims.Model) fun model => do
+                mkLambdaFVars #[model] (← mkEq actual
+                  (← exceptOk `Zkc.Claims.ResolutionError (← exceptOk `Zkc.Claims.Incomplete model)))
+              modelProof := some (← mkAppOptM ``Exists.intro
+                #[none, some predicate, some witness, some (← mkEqRefl actual)])
           else if inner.isAppOf ``Except.error then modelStatus := "registered-undefined"
           else modelStatus := "open"
         else if outcome.isAppOf ``Except.error then modelStatus := "refused"
         else modelStatus := "open"
         if modelStatus == "open" && wrapped && modelCertificateChecked then
+          modelStatus := "admitted"
+          successAuthority := "kernel-existence"
           let certificate ← field `ZkcSecurity.Claims.AdmittedReceipt `modelAdmitted outerValue
-          if let some (model, proof) ← existsWitness env certificate then
+          modelProof := some certificate
+          let witness ← try existsWitness env certificate catch _ => pure none
+          if let some (model, proof) := witness then
             let expected ← mkEq actual (← exceptOk `Zkc.Claims.ResolutionError (← exceptOk `Zkc.Claims.Incomplete model))
             if ← isDefEq (← inferType proof) expected then
               modelStatus := "admitted"
               successAuthority := "kernel-equation"
               modelValue := Json.str (toString (← ppExpr model))
+              modelProof := some certificate
       -- An actual typed wrapper certificate is additional checked association,
       -- never a substitute for recomputing either admission operation.
       let certificateChecked ← if wrapped then do
@@ -770,7 +995,102 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
         ("subject_checked", Json.bool subjectChecked),
         ("subject_result", nameJson (headName subjectResult)), ("model_status", Json.str modelStatus),
         ("model_value", modelValue), ("success_authority", Json.str successAuthority)])
+    else if dependentCertificate then do
+      let authority := authority.get!
+      let registry := admittedRegistry.get!
+      let context := modelContext.get!
+      let application ← field `Zkc.Claims.Wire.Request `model request
+      let certificate ← field certificateHead.get! `modelAdmission certificateValue
+      let target ← mkAppM `ZkcSecurity.Claims.CanonicalModelAdmission
+        #[authority, registry, context, subject, application]
+      unless ← isDefEq (← inferType certificate) target do throwError "wrong selected model association indices"
+      checkWithKernel certificate
+      let association ← field certificateHead.get! `association certificateValue
+      let checked ← field (if canonicalCertificate then `ZkcSecurity.Claims.CanonicalAdmission
+        else `ZkcSecurity.Claims.AuthorExtensionAdmission) `checked association
+      let actualCheck ← mkAppM `ZkcSecurity.Claims.CanonicalAuthority.check #[authority, subject, request]
+      let expected ← mkEq actualCheck (← exceptOk `Zkc.Claims.ResolutionError (mkConst ``Unit.unit))
+      unless ← isDefEq (← inferType checked) expected do throwError "wrong dependent subject admission indices"
+      checkWithKernel checked
+      pure (Json.mkObj [("security_subject", Json.bool true), ("associated", Json.bool true),
+        ("association", Json.str "typed-certificate"), ("certificate_checked", Json.bool true),
+        ("subject_checked", Json.bool true), ("model_status", Json.str "admitted"),
+        ("success_authority", Json.str "kernel-existence")])
     else pure (Json.mkObj [("security_subject", Json.bool false)])
+  let mut authorityKind := "generic"
+  let mut authorityChecked := false
+  -- A generic Subject does not confer authority to use a reserved security key.
+  -- Keep generic core receipts usable without treating them as canonical claims.
+  if (← getEnv).contains `ZkcSecurity.Claims.reservedIdentifier then
+    let identifier ← field `Zkc.Claims.Wire.Request `property request
+    let reserved ← whnfD (← mkAppM `ZkcSecurity.Claims.reservedIdentifier #[identifier])
+    if reserved.isConstOf ``Bool.true then authorityKind := "reserved"
+  if headName subjectType == some `ZkcSecurity.Claims.Subject then
+    let identifier ← field `Zkc.Claims.Wire.Request `property request
+    let reserved ← whnfD (← mkAppM `ZkcSecurity.Claims.reservedIdentifier #[identifier])
+    authorityKind := if reserved.isConstOf ``Bool.true then "reserved" else "author"
+    try
+      if let some registry := admittedRegistry then
+        if let some context := modelContext then
+          if let some admissionProof := modelProof then
+            let art := subjectArgs[subjectArgs.size - 2]!
+            let _original ← field `ZkcSecurity.Endpoint.Artifacts `original art
+            let application ← field `Zkc.Claims.Wire.Request `model request
+            let some finite := admittedFinite | throwError "missing actual canonical finite instance"
+            let uniformAuthority ← if let some authority := authority then pure authority else do
+              let sampleType ← mkAppM `SampleableType #[subjectArgs[0]!]
+              let inhabitedType ← mkAppM ``Inhabited #[subjectArgs[0]!]
+              let mut sample ← binders.findM? fun binder => do isDefEq (← inferType binder) sampleType
+              let mut inhabited ← binders.findM? fun binder => do isDefEq (← inferType binder) inhabitedType
+              if let some property := selected then
+                for argument in property.getAppArgs do
+                  if ← isDefEq (← inferType argument) sampleType then sample := some argument
+                  if ← isDefEq (← inferType argument) inhabitedType then inhabited := some argument
+              if sample.isNone then
+                sample := some (← mkAppOptM `ZkcSecurity.Claims.CanonicalAuthority.finiteFieldSampling
+                  #[some subjectArgs[0]!, some subjectArgs[2]!, some finite])
+              if inhabited.isNone then
+                inhabited := some (← mkAppOptM `ZkcSecurity.Claims.CanonicalAuthority.fieldInhabited
+                  #[some subjectArgs[0]!, some subjectArgs[2]!])
+              let parameters := subjectArgs.extract 0 (subjectArgs.size - 2)
+              mkAppOptM `ZkcSecurity.Claims.CanonicalAuthority.uniform
+                (parameters.map some |>.push sample |>.push (some finite) |>.push inhabited
+                  |>.push (some art) |>.push (some subjectArgs.back!))
+            let _ ← authorityView uniformAuthority subject
+            let modelTarget ← mkAppM `ZkcSecurity.Claims.CanonicalModelAdmission
+              #[uniformAuthority, registry, context, subject, application]
+            if canonicalCertificate || authorCertificate then
+              let proof ← field certificateHead.get! `modelAdmission certificateValue
+              unless ← isDefEq (← inferType proof) modelTarget do throwError "wrong canonical model certificate indices"
+              checkWithKernel proof
+            else kernelFields modelTarget `ZkcSecurity.Claims.CanonicalModelAdmission.mk (some admissionProof)
+            if canonicalRegistry then
+              let key ← whnfD (← mkAppM `ZkcSecurity.Claims.PropertyKey.ofIdentifier? #[identifier])
+              unless key.isAppOf ``Option.some do throwError "canonical key is undefined"
+              let target ← mkAppM `ZkcSecurity.Claims.CanonicalAdmission #[uniformAuthority, registry, key.appArg!, resolved]
+              if canonicalCertificate then
+                let proof ← field certificateHead.get! `association certificateValue
+                unless ← isDefEq (← inferType proof) target do throwError "wrong canonical certificate key"
+                checkWithKernel proof
+              else kernelFields target `ZkcSecurity.Claims.CanonicalAdmission.mk
+              authorityKind := "canonical"
+              authorityChecked := true
+            else if authorityKind == "author" then
+              let target ← mkAppM `ZkcSecurity.Claims.AuthorExtensionAdmission #[uniformAuthority, resolved]
+              if authorCertificate then
+                let proof ← field certificateHead.get! `association certificateValue
+                unless ← isDefEq (← inferType proof) target do throwError "wrong author certificate indices"
+                checkWithKernel proof
+              else kernelFields target `ZkcSecurity.Claims.AuthorExtensionAdmission.mk
+              authorityChecked := true
+    catch _ => pure ()
+  if dependentCertificate then
+    let identifier ← field `Zkc.Claims.Wire.Request `property request
+    let reserved ← whnfD (← mkAppM `ZkcSecurity.Claims.reservedIdentifier #[identifier])
+    authorityKind := if canonicalCertificate then "canonical" else if reserved.isConstOf ``Bool.false then "author" else "reserved"
+    authorityChecked := canonicalCertificate || authorityKind == "author"
+  let telescope ← receiptTelescopeJson binders subjectType request modelContext actualModel authority
+
   let typedArguments ← whnfD (← field `Zkc.Claims.Resolved `arguments resolved)
   let quantityKind ← if typedArguments.isAppOf ``Except.ok then do
       let argument := typedArguments.appArg!
@@ -781,13 +1101,26 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
           | some `ZkcSecurity.Claims.SoundnessQuantity.scalar => "scalar"
           | some `ZkcSecurity.Claims.SoundnessQuantity.charged => "charged"
           | _ => "unknown")
+      else if headName argumentType == some `ZkcSecurity.Claims.Domain.SoundnessArguments then do
+        let quantity ← whnfD (← field `ZkcSecurity.Claims.Domain.SoundnessArguments `quantity argument)
+        pure (match headName quantity with
+          | some `ZkcSecurity.Claims.Domain.SoundnessQuantity.scalar => "scalar"
+          | some `ZkcSecurity.Claims.Domain.SoundnessQuantity.charged => "charged"
+          | _ => "unknown")
+      else if dependentCertificate && view.any
+          (·.shape == `ZkcSecurity.Claims.CanonicalAuthority.authoredPair) then pure "scalar"
       else if headName argumentType == some `ZkcSecurity.Claims.KnowledgeRequest then pure "guarantee"
       else pure "extension"
     else pure "extension"
-  let coverage ← if canonicalRegistry && typedArguments.isAppOf ``Except.ok then do
+  let coverage ← if dependentCertificate && view.any
+      (·.shape == `ZkcSecurity.Claims.CanonicalAuthority.authoredPair) then
+      pure (Json.mkObj [("mode", Json.str "honest-inputs"), ("checked", Json.bool true)])
+    else if canonicalRegistry && typedArguments.isAppOf ``Except.ok then do
       let argument := typedArguments.appArg!
-      let modelNamespace := if consumer == "soundness@0" then `ZkcSecurity.Claims.SoundnessRequest else `ZkcSecurity.Claims.KnowledgeRequest
-      let model ← field modelNamespace `model argument
+      let domain := view.any (·.shape == `ZkcSecurity.Claims.CanonicalAuthority.domains)
+      let modelNamespace := if domain then `ZkcSecurity.Claims.Domain.SoundnessArguments
+        else if consumer == "soundness@0" then `ZkcSecurity.Claims.SoundnessRequest else `ZkcSecurity.Claims.KnowledgeRequest
+      let model ← field modelNamespace (if domain then `selected else `model) argument
       let form ← whnfD (← field `ZkcSecurity.Claims.Model `form model)
       let binding ← whnfD (← field `ZkcSecurity.Claims.Model `applicationBinding model)
       if binding.isAppOf ``Option.none then
@@ -853,13 +1186,16 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
   -- Derive expected obligations independently of the registry's chosen list.
   -- Compare the subject argument before goal reduction: closed checker equations
   -- for two distinct artifacts may otherwise normalize to similar propositions.
-  let stageLinks ← if headName subjectType == some `ZkcSecurity.Claims.Subject then do
-      let endpoint ← whnfD subjectArgs.back!
+  let stageLinks ← if headName subjectType == some `ZkcSecurity.Claims.Subject || dependentCertificate then do
+      let endpoint ← if dependentCertificate then pure (mkConst `ZkcSecurity.Endpoint.Semantics.idealMeaning)
+        else whnfD subjectArgs.back!
       let (stage, covered) ← match headName endpoint with
         | some `ZkcSecurity.Endpoint.Semantics.idealMeaning => pure ("compiled-ideal", "ideal-meaning")
         | some `ZkcSecurity.Endpoint.Semantics.executableBytes => pure ("executable-bytes", "interpreted-executable-bytes")
         | _ => throwError "unresolved interpreted subject endpoint"
-      let expected ← listElements (← mkAppM `ZkcSecurity.Claims.Subject.stageLinks #[subject])
+      let expected ← listElements (← if let some authority := authority then
+          mkAppM `ZkcSecurity.Claims.CanonicalAuthority.links #[authority, subject]
+        else mkAppM `ZkcSecurity.Claims.Subject.stageLinks #[subject])
       let obligations ← expected.mapM fun expression => do
         let obligation ← whnfD expression
         unless obligation.isAppOf `Zkc.Claims.Obligation.mk do throwError "unresolved expected stage obligation"
@@ -874,7 +1210,7 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
           let sameSubject ← match application with
             | some application =>
               if application.getAppArgs.isEmpty then pure false
-              else isDefEq application.getAppArgs.back! subject
+              else isDefEq application.getAppArgs.back! semanticSubject
             | none => pure false
           -- Comparing large, closed checker goals after a failed subject
           -- match is both unnecessary and expensive. A skipped comparison
@@ -892,8 +1228,25 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
           ("expected_responsibility_layer", Json.str (← literalString (← mkAppM `Zkc.Claims.Responsibility.tag
             #[← field `Zkc.Claims.Obligation `responsibility obligation]))),
           ("matches", Json.arr comparisons)]
+      let ownedAuthority ← match authority with
+        | some authority => pure (some authority)
+        | none => pure none
+      let roles ← match ownedAuthority with
+        | some authority => listElements (← mkAppM `ZkcSecurity.Claims.CanonicalAuthority.artifactRoles #[authority])
+        | none =>
+          let roles := if stage == "executable-bytes" then
+            [("constructed-participant", "constructed_export"), ("verifier-program", "program")]
+            else [("constructed-participant", "constructed_export")]
+          pure (roles.toArray.map toExpr)
+      let roles ← roles.mapM fun pair => do
+        return Json.mkObj [("role", Json.str (← literalString (← mkAppM ``Prod.fst #[pair]))),
+          ("pipeline_artifact", Json.str (← literalString (← mkAppM ``Prod.snd #[pair])))]
+      let covered ← if let some authority := authority then
+          literalString (← mkAppM `ZkcSecurity.Claims.CanonicalAuthority.coveredEndpoint #[authority])
+        else pure covered
       pure (Json.mkObj [("recognized_subject", Json.bool true), ("stage", Json.str stage),
-        ("covered_endpoint", Json.str covered), ("obligations", Json.arr obligations)])
+        ("covered_endpoint", Json.str covered), ("artifact_roles", Json.arr roles),
+        ("obligations", Json.arr obligations)])
     else pure (Json.mkObj [("recognized_subject", Json.bool false), ("obligations", Json.arr #[])])
   -- These optional notes never supply or discharge receipt obligations.
   -- Keep attribution failure local: the kernel-checked fields above survive.
@@ -911,16 +1264,25 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
       ("dependencies", Json.arr declaredDependencies), ("premises", Json.arr premises)], Json.null)
     catch error => pure (Json.null, Json.str (← error.toMessageData.toString))
   let evidenceAttribution := evidenceAttributionJson env actualProof
+  let authorityShape ← match authority with
+    | some actual => literalString (← mkAppM `ZkcSecurity.Claims.CanonicalAuthority.kind #[actual])
+    | none => pure (if headName subjectType == some `ZkcSecurity.Claims.Subject then "uniform-verifier" else "unknown")
+  let authorityProduct ← match authority with
+    | some actual => literalString (← mkAppM `ZkcSecurity.Claims.CanonicalAuthority.product #[actual])
+    | none => pure "certified_verifier"
   return Json.mkObj [("wire_request", ← wireRequestJson request),
     ("subject", subjectFacts),
     ("admission", admission),
+    ("authority", Json.mkObj [("kind", Json.str authorityKind), ("checked", Json.bool authorityChecked),
+      ("shape", Json.str authorityShape), ("product", Json.str authorityProduct)]),
+    ("telescope", telescope),
     ("evidence_attribution", evidenceAttribution),
     ("property_definition", nameJson (headName property)),
     ("canonical_registry", Json.bool canonicalRegistry),
     ("registry_checks", Json.mkObj [("lookup", Json.bool lookupChecked), ("property_definition", Json.bool propertyChecked),
       ("property_export", Json.bool exportChecked), ("model_export", Json.bool modelChecked)]),
     ("capability_consumer", if canonicalRegistry then Json.str consumer else Json.null),
-    ("application_coverage", coverage),
+    ("application_coverage", coverage), ("honest_input_policy", honestInputPolicy),
     ("registered_property", registeredIdentifier), ("registered_schema", Json.str registeredSchema),
     ("quantity_kind", Json.str quantityKind),
     ("exported_capabilities", if consumer == "soundness@0" && quantityKind == "charged" then
@@ -976,8 +1338,15 @@ def detail (env : Environment) (registered : Std.HashSet Name) (properties : Std
     let value := mkAppN (mkConst info.name (info.levelParams.map Level.param)) binders
     let claimData ← try
       if head == some `Zkc.Claims.Wire.Request then
-        pure (Json.mkObj [("wire_request", ← wireRequestJson value)])
-      else if head == some `Zkc.Claims.Receipt || head == some `ZkcSecurity.Claims.AdmittedReceipt then
+        let identifier ← field `Zkc.Claims.Wire.Request `property value
+        let kind ← if (← getEnv).contains `ZkcSecurity.Claims.reservedIdentifier then do
+            let reserved ← whnfD (← mkAppM `ZkcSecurity.Claims.reservedIdentifier #[identifier])
+            pure (if reserved.isConstOf ``Bool.true then "reserved" else "author")
+          else pure "generic"
+        pure (Json.mkObj [("wire_request", ← wireRequestJson value), ("claim_kind", Json.str kind),
+          ("telescope", ← receiptTelescopeJson binders (mkConst ``Unit) value none none)])
+      else if head == some `Zkc.Claims.Receipt || head == some `ZkcSecurity.Claims.AdmittedReceipt ||
+          head == some `ZkcSecurity.Claims.CanonicalReceipt || head == some `ZkcSecurity.Claims.AuthorExtensionReceipt then
         pure (Json.mkObj [("receipt", ← receiptJson env info binders body value)])
       else pure Json.null
       catch error => pure (Json.mkObj [("extraction_error", Json.str (← error.toMessageData.toString))])
@@ -1056,7 +1425,7 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     | .ok options => pure options
     | .error message => IO.eprintln message; return 2
   let usage := "usage: DeclarationRecords [--check BASELINE] [--registry NAME] [--endpoints NAME] " ++
-    "[--detail NAME]... OUTPUT DIRECTORY..."
+    "[--detail NAME]... [--trace-records] OUTPUT DIRECTORY..."
   let some output := options.positional[0]?
     | IO.eprintln usage; return 2
   let directories := options.positional.extract 1
@@ -1169,14 +1538,19 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     ("endpoints", endpoints)]
   let mut lines := #[header.compress]
   for (_, module, name, info) in sorted do
+    let recordStarted ← IO.monoMsNow
+    if options.traceRecords then IO.eprintln s!"declaration-records: start {name}"
     let claimDeclaration ← runMeta env (forallTelescope info.type fun _ body =>
       pure (headName body == some `Zkc.Claims.Wire.Request || headName body == some `Zkc.Claims.Receipt || headName body == some `ZkcSecurity.Claims.AdmittedReceipt ||
+        headName body == some `ZkcSecurity.Claims.CanonicalReceipt || headName body == some `ZkcSecurity.Claims.AuthorExtensionReceipt ||
         (headName body).any (evidenceStructures.contains ·)))
     let detailed := options.details.contains name || endpointTheorems.contains name || claimDeclaration
     let some actualAxioms := checkedAxioms[name]?
       | throw <| IO.userError s!"selected declaration was not provenance audited: {name}"
     let json ← runMeta env (record env registered properties name info module actualAxioms detailed)
     lines := lines.push json.compress
+    if options.traceRecords then
+      IO.eprintln s!"declaration-records: done {name} {(← IO.monoMsNow) - recordStarted}ms"
   IO.FS.writeFile output (String.intercalate "\n" lines.toList ++ "\n")
   IO.eprintln s!"declaration-records: records and output {(← IO.monoMsNow) - audited}ms"
   IO.println s!"{sorted.size} declarations from {modules.size} modules"

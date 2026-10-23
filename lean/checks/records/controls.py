@@ -415,6 +415,15 @@ EMITTED_RECEIPTS = {
 }
 
 EMITTED_STAGE_RECEIPTS = {
+    "Canonical.checkedReceipt": ("idealData", None),
+    "Canonical.reservedReceipt": ("Canonical.reservedData", "reserved author extension"),
+    "Canonical.genericReservedReceipt": ("Canonical.genericReservedData", "reserved author extension"),
+    "Canonical.authorizedReceipt": ("Canonical.authorizedData", None),
+    "Canonical.substitutedArguments": ("Canonical.authorizedData", "substituted premise arguments"),
+    "Canonical.unauthorizedReceipt": ("idealData", "registered but unauthorized premise"),
+    "Canonical.unauthorizedModel": ("idealData", "registered but unauthorized premise"),
+    "Canonical.dependentInstance": ("idealData", "hidden parameter"),
+    "Canonical.opaqueReceipt": ("idealData", None),
     "ProjectedCarrier.directReceipt": ("manualData", None),
     "ProjectedCarrier.carrierReceipt": ("manualData", None),
     "ProjectedCarrier.opaqueReceipt": ("manualData", None),
@@ -426,7 +435,7 @@ EMITTED_STAGE_RECEIPTS = {
     "HigherOrder.unprovedNoteReceipt": ("manualData", None),
     "HigherOrder.unattributedReceipt": ("idealData", None),
     "HigherOrder.extraPremiseReceipt": ("idealData", "omitted premise"),
-    "HigherOrder.symbolicProvenanceReceipt": ("idealData", None),
+    "HigherOrder.symbolicProvenanceReceipt": ("idealData", "hidden parameter"),
     "HigherOrder.optionalNotesReceipt": ("idealData", None),
     "manualReceipt": ("manualData", None),
     "appliedEvidenceReceipt": ("idealData", None),
@@ -480,6 +489,12 @@ def run_emitted_stage_receipts(data):
         audited, assumptions, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
         passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
         extracted = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+        if short == "Canonical.authorizedReceipt":
+            conditional = [row for row in assumptions if row.get("category") == "hardness"]
+            passed = passed and len(conditional) == 1 and conditional[0].get("arguments") and \
+                conditional[0].get("id") == "assumptions.dlog_search@0"
+        if short == "Canonical.opaqueReceipt":
+            passed = passed and audited.get("root_route") == "unattributed"
         if short in {"manualReceipt", "appliedEvidenceReceipt"}:
             admission = extracted.get("admission") or {}
             passed = passed and admission.get("association") == "typed-certificate" and admission.get("model_status") == "admitted" and admission.get("certificate_checked") is True
@@ -518,6 +533,26 @@ def run_emitted_stage_receipts(data):
             rows.append("emitted-interpreted-" + short)
         else:
             failures.append(f"interpreted receipt control {name}: {reasons}")
+    author_request = data.get("TestsSecurity.ClaimReporting.manualData") or {}
+    wire = ((author_request.get("detail") or {}).get("claim_data") or {}).get("wire_request")
+    if wire:
+        node = {"kind": "source-claim", "owner": "reporting-control", "block": 0, "claim": 0}
+        digest = reports.data_digest(wire)
+        source = {"format": reports.BOUND_CLAIMS_FORMAT, "entries": [wire["subject"]["entry"]],
+                  "claims": [{"request": wire, "request_digest": digest, "attachment": {"node": node}}]}
+        mappings = [{"node": node, "request_digest": digest, "request_declaration": author_request["name"],
+                     "receipt_declaration": None, "attempts": [{"status": "refused", "reason": "author theorem failed"}]}]
+        result = reports.report_claim_scope(source, mappings, data, registry, [],
+            {"source_claims": source}, {"outcome": "accepted"}, [], {}, [], None)
+        if (result["status"] == "no-claim" and not result["security_claims"] and
+                len(result["author_claims"]) == len(result["claims"]) == 1 and
+                result["author_claims"][0]["status"] == "open" and
+                result["author_claims"][0]["attempts"] == mappings[0]["attempts"]):
+            rows.append("emitted-author-failure-retained")
+        else:
+            failures.append("author failure was erased or entered the security aggregate")
+    else:
+        failures.append("author failure control: missing emitted author request")
     return rows, failures
 
 
