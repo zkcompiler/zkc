@@ -73,6 +73,10 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         Identity::KoalaBear
         | Identity::KoalaBearExt4
         | Identity::KoalaBearExt8
+        | Identity::BabyBear
+        | Identity::BabyBearExt4
+        | Identity::Goldilocks
+        | Identity::GoldilocksExt2
         | Identity::Binary64
         | Identity::Binary64Ext3 => "plonky3",
         _ => return None,
@@ -115,12 +119,31 @@ pub(crate) enum Prepared {
     Bn254(Plan<crate::Bn254Scalar>),
     Bls12381(Plan<crate::Scalar>),
     Ristretto(Plan<crate::RistrettoScalar>),
-    KoalaBear(Plan<crate::KoalaBear>),
-    KoalaBearExt4(Plan<crate::KoalaBearExt4>),
-    KoalaBearExt8(Plan<crate::KoalaBearExt8>),
+    Residue(ResiduePlan),
     Binary64(Plan<crate::Binary64>),
     Binary64Ext3(Plan<crate::Binary64Ext3>),
 }
+
+macro_rules! residue_plans {
+    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
+        pub(crate) enum ResiduePlan { $($id(Plan<$s>),)* }
+        impl ResiduePlan {
+            fn new(field: Identity, expression: Expression, mask: &[u8], mode: Mode, bytes: usize, binding: &OperationBinding) -> Result<Self> {
+                match field {
+                    $(Identity::$id => Ok(Self::$id(Plan::<$s>::new(expression, mask, mode, bytes, binding)?)),)*
+                    _ => Err(refused("numerical-binding")),
+                }
+            }
+            fn apply(&self, args: &[Value], available: usize, policy: &Policy) -> Result<Vec<Value>> {
+                match self { $(Self::$id(plan) => plan.apply(args, available, policy),)* }
+            }
+        }
+        fn residue_vector_length(value: &Value) -> Option<usize> {
+            match value { $(Value::$v(values) => Some(values.len()),)* _ => None }
+        }
+    }
+}
+crate::fields::inventory!([residue_plans], ());
 
 pub(crate) struct Plan<S> {
     expression: Expression,
@@ -178,9 +201,14 @@ pub(crate) fn prepare(
         Identity::Bn254Fr => plan!(crate::Bn254Scalar, Bn254),
         Identity::Bls12381Fr => plan!(crate::Scalar, Bls12381),
         Identity::Ristretto255Scalar => plan!(crate::RistrettoScalar, Ristretto),
-        Identity::KoalaBear => plan!(crate::KoalaBear, KoalaBear),
-        Identity::KoalaBearExt4 => plan!(crate::KoalaBearExt4, KoalaBearExt4),
-        Identity::KoalaBearExt8 => plan!(crate::KoalaBearExt8, KoalaBearExt8),
+        field if crate::fields::contains(field) => Prepared::Residue(ResiduePlan::new(
+            field,
+            expression,
+            mask,
+            mode,
+            body.len(),
+            binding,
+        )?),
         Identity::Binary64 => plan!(crate::Binary64, Binary64),
         Identity::Binary64Ext3 => plan!(crate::Binary64Ext3, Binary64Ext3),
         _ => return Err(refused("numerical-binding")),
@@ -465,12 +493,9 @@ fn vector_length(value: &Value) -> Option<usize> {
         Value::Bn254Vector(values) => values.len(),
         Value::Vector(values) => values.len(),
         Value::RistrettoVector(values) => values.len(),
-        Value::KoalaBearVector(values) => values.len(),
-        Value::KoalaBearExt4Vector(values) => values.len(),
-        Value::KoalaBearExt8Vector(values) => values.len(),
         Value::Binary64Vector(values) => values.len(),
         Value::Binary64Ext3Vector(values) => values.len(),
-        _ => return None,
+        _ => return residue_vector_length(value),
     })
 }
 
@@ -485,9 +510,7 @@ impl Prepared {
             Self::Bn254(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Bls12381(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Ristretto(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBear(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBearExt4(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBearExt8(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Residue(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Binary64(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Binary64Ext3(plan) => plan.apply(args, i.max_output_bytes, policy),
         }
@@ -624,6 +647,10 @@ mod tests {
         varying_memory_floor::<crate::RistrettoScalar>(Identity::Ristretto255Scalar);
         varying_memory_floor::<crate::KoalaBear>(Identity::KoalaBear);
         varying_memory_floor::<crate::KoalaBearExt4>(Identity::KoalaBearExt4);
+        varying_memory_floor::<crate::BabyBear>(Identity::BabyBear);
+        varying_memory_floor::<crate::BabyBearExt4>(Identity::BabyBearExt4);
+        varying_memory_floor::<crate::Goldilocks>(Identity::Goldilocks);
+        varying_memory_floor::<crate::GoldilocksExt2>(Identity::GoldilocksExt2);
         varying_memory_floor::<crate::KoalaBearExt8>(Identity::KoalaBearExt8);
         varying_memory_floor::<crate::Binary64>(Identity::Binary64);
         varying_memory_floor::<crate::Binary64Ext3>(Identity::Binary64Ext3);

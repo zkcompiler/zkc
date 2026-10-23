@@ -119,7 +119,9 @@ impl Transcript {
         let mut result = match suite {
             Identity::Merlin3Fr64Be
             | Identity::Merlin3Ristretto64Le
-            | Identity::Merlin3KoalaBearExt8 => {
+            | Identity::Merlin3KoalaBearExt8
+            | Identity::Merlin3BabyBearExt4
+            | Identity::Merlin3GoldilocksExt2 => {
                 Self::Merlin(merlin::Transcript::new(b"zkc.artifact/0"))
             }
             Identity::Spongefish080KeccakFr64Be => {
@@ -140,6 +142,12 @@ impl Transcript {
             _ => return Err(refused("transcript-suite")),
         };
         check_root(root)?;
+        if matches!(
+            suite,
+            Identity::Merlin3BabyBearExt4 | Identity::Merlin3GoldilocksExt2
+        ) {
+            result.append_message(b"suite", suite.name().as_bytes());
+        }
         result.append_message(b"binding", root);
         Ok(result)
     }
@@ -300,5 +308,38 @@ mod tests {
         short.request(b"label", &mut prefix);
         assert_ne!(prefix, output[..32]);
         assert_ne!(short.state, long.state);
+    }
+}
+
+#[cfg(test)]
+mod residue_profile_tests {
+    use super::*;
+    #[test]
+    fn exact_merlin_bytes_replay_and_separate_new_suites() {
+        let root =
+            zkc_runtime::logical::encode_tree(&serde_json::json!(["residue-profile-fixture"]))
+                .unwrap();
+        let mut first = Vec::new();
+        for (suite, field) in [
+            (Identity::Merlin3BabyBearExt4, Identity::BabyBearExt4),
+            (Identity::Merlin3GoldilocksExt2, Identity::GoldilocksExt2),
+        ] {
+            assert_eq!(suite.scalar_field(), Some(field));
+            let mut actual = Transcript::new(suite, &root).unwrap();
+            let mut upstream = merlin::Transcript::new(b"zkc.artifact/0");
+            upstream.append_message(b"suite", suite.name().as_bytes());
+            upstream.append_message(b"binding", &root);
+            for _ in 0..3 {
+                actual.append_message(b"origin", b"draw");
+                upstream.append_message(b"origin", b"draw");
+                let (mut x, mut y) = ([0; 64], [0; 64]);
+                actual.challenge_bytes(b"challenge", &mut x);
+                upstream.challenge_bytes(b"challenge", &mut y);
+                assert_eq!(x, y);
+                first.push(x);
+            }
+        }
+        assert_ne!(first[0], first[3]);
+        assert_ne!(first[0], first[1]);
     }
 }

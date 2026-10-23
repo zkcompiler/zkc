@@ -121,7 +121,18 @@ private:
   std::vector<DefaultProvider> defaultProviders;
 };
 
-/// The current BLS/PCS and Ristretto/Merlin installation. Invalid built-in data
+/// Closed residue-field installation for the native Plonky3 release. Extensions
+/// use the ascending binomial basis and the declared prime base's cosets.
+/// Binary fields and construction profiles have separate inventories.
+struct Plonky3Field {
+  llvm::StringRef identity, base, modulus;
+  unsigned degree, nonresidue, coordinateBytes;
+  bool montgomery32;
+};
+llvm::ArrayRef<Plonky3Field> plonky3Fields();
+const Plonky3Field *plonky3Field(llvm::StringRef identity);
+
+/// The current native domain installation. Invalid built-in data
 /// is a fatal installation error, never a partially usable catalog. Lifetime is
 /// static.
 const DomainCatalog &installedDomains();

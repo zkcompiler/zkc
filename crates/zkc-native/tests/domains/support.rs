@@ -219,7 +219,16 @@ pub fn run_program<B: Backend<Value = Value>>(
     bytes: &[u8],
     args: Vec<Value>,
 ) -> (Result<Vec<Value>, String>, B) {
-    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
+    run_program_with_contracts(b, bytes, args, zkc_native::native_contracts())
+}
+
+pub fn run_program_with_contracts<B: Backend<Value = Value>>(
+    b: B,
+    bytes: &[u8],
+    args: Vec<Value>,
+    contracts: &zkc_runtime::vm::Contracts,
+) -> (Result<Vec<Value>, String>, B) {
+    let admitted = zkc_runtime::vm::Program::decode(bytes, contracts)
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)

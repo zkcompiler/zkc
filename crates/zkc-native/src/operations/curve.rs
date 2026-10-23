@@ -49,21 +49,114 @@ pub(super) trait Group: Copy + PartialEq {
     }
 }
 
-type SliceMsm<G> = fn(&[<G as Group>::Scalar], &[G]) -> Result<G>;
+/// Borrow points without requiring their validated wrappers to be slice storage.
+/// A view returns typed points by value; it never reconstructs them from raw data.
+pub(super) trait PointView<G: Group>: Copy {
+    fn len(self) -> usize;
+    fn get(self, index: usize) -> Option<G>;
+    fn iter(self) -> impl ExactSizeIterator<Item = G> + DoubleEndedIterator {
+        (0..self.len()).map(move |index| self.get(index).expect("point view extent"))
+    }
+}
+impl<G: Group> PointView<G> for &[G] {
+    fn len(self) -> usize {
+        <[G]>::len(self)
+    }
+    fn get(self, index: usize) -> Option<G> {
+        <[G]>::get(self, index).copied()
+    }
+}
+
+/// Storage mechanics for the shared dispatcher. Resident destinations retain
+/// their provider's raw buffer privately and accept only validated points.
+pub(super) trait PointStorage<G: Group> {
+    type View<'a>: PointView<G>
+    where
+        G: 'a;
+    type Output;
+    fn reserve(len: usize) -> Result<Self::Output>;
+    fn push(output: &mut Self::Output, point: G);
+    fn extend(output: &mut Self::Output, points: impl IntoIterator<Item = G>) {
+        for point in points {
+            Self::push(output, point);
+        }
+    }
+    fn scale_many(
+        points: Self::View<'_>,
+        scalar: G::Scalar,
+        output: &mut Self::Output,
+        _workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(output, points.iter().map(|point| point.scale(scalar)));
+        Ok(())
+    }
+    fn scale_each(
+        scalars: &[G::Scalar],
+        points: Self::View<'_>,
+        output: &mut Self::Output,
+        _workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(
+            output,
+            points
+                .iter()
+                .zip(scalars)
+                .map(|(point, scalar)| point.scale(*scalar)),
+        );
+        Ok(())
+    }
+}
+
+pub(super) struct SliceStorage;
+impl<G: Group> PointStorage<G> for SliceStorage {
+    type View<'a>
+        = &'a [G]
+    where
+        G: 'a;
+    type Output = Vec<G>;
+    fn reserve(len: usize) -> Result<Self::Output> {
+        reserve(len)
+    }
+    fn push(output: &mut Self::Output, point: G) {
+        output.push(point);
+    }
+    fn extend(output: &mut Self::Output, points: impl IntoIterator<Item = G>) {
+        output.extend(points);
+    }
+    fn scale_many(
+        points: &[G],
+        scalar: G::Scalar,
+        output: &mut Vec<G>,
+        workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        G::scale_many(points, scalar, output, workspace_bytes)
+    }
+    fn scale_each(
+        scalars: &[G::Scalar],
+        points: &[G],
+        output: &mut Vec<G>,
+        workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        G::scale_each(scalars, points, output, workspace_bytes)
+    }
+}
+
+type SliceMsm<G, S = SliceStorage> =
+    fn(&[<G as Group>::Scalar], <S as PointStorage<G>>::View<'_>) -> Result<G>;
 
 /// Native projection, publication and resource admission for group families.
-pub(super) trait Family: Group {
+pub(super) trait Family<S: PointStorage<Self> = SliceStorage>: Group {
     const RESIDENT_STORAGE: bool = false;
     /// None means this adapter requires a distinct bulk MSM handler. It does
     /// not imply that the provider lacks MSM on its own retained bulk carriers.
-    const SLICE_MSM: Option<SliceMsm<Self>> = None;
+    const SLICE_MSM: Option<SliceMsm<Self, S>> = None;
     fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError;
     fn point(v: &Value) -> Result<Self>;
-    fn points(v: &Value) -> Result<&[Self]>;
+    fn points(v: &Value) -> Result<S::View<'_>>;
     fn scalar(v: &Value) -> Result<Self::Scalar>;
     fn scalars(v: &Value) -> Result<&[Self::Scalar]>;
     fn value(v: Self) -> Value;
-    fn values(v: Vec<Self>) -> Value;
+    fn values(v: S::Output) -> Value;
     fn limit(p: &Policy, n: usize) -> Result<()>;
     fn width() -> usize;
 }
@@ -596,6 +689,15 @@ pub(super) fn dense<G: Family>(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
+    dense_with_storage::<G, SliceStorage>(name, args, i, p)
+}
+
+pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let point = |j| G::point(arg(j)?);
     let points = |j| G::points(arg(j)?);
@@ -613,7 +715,7 @@ pub(super) fn dense<G: Family>(
                 .find(|slot| slot.is_none())
                 .ok_or_else(|| refused("kernel-output-count"))? = Some(reservation);
         }
-        reserve::<G>(n)
+        S::reserve(n)
     };
     let scalar_output = i
         .binding
@@ -639,7 +741,7 @@ pub(super) fn dense<G: Family>(
         "curve.nonidentity" => Value::Bool(point(0)? != G::identity()),
         "curve.empty" => G::values(alloc(0)?),
         "curve.at" => G::value(
-            *points(0)?
+            points(0)?
                 .get(natural(i.attributes, 0)?)
                 .ok_or_else(|| refused("group-index"))?,
         ),
@@ -650,7 +752,7 @@ pub(super) fn dense<G: Family>(
             // Conversion failure is out of bounds too, including on 32-bit hosts.
             let index = usize::try_from(*index).map_err(|_| refused("group-index"))?;
             G::value(
-                *points(0)?
+                points(0)?
                     .get(index)
                     .ok_or_else(|| refused("group-index"))?,
             )
@@ -688,7 +790,7 @@ pub(super) fn dense<G: Family>(
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
             with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
-                G::scale_each(s, b, &mut out, workspace_bytes).map_err(G::scaling_failure)
+                S::scale_each(s, b, &mut out, workspace_bytes).map_err(G::scaling_failure)
             })?;
             G::values(out)
         }
@@ -700,8 +802,8 @@ pub(super) fn dense<G: Family>(
                     .checked_add(1)
                     .ok_or_else(|| exhausted("size-overflow"))?,
             )?;
-            out.extend_from_slice(b);
-            out.push(x);
+            S::extend(&mut out, b.iter());
+            S::push(&mut out, x);
             G::values(out)
         }
         "curve.vector_scale" => {
@@ -709,7 +811,7 @@ pub(super) fn dense<G: Family>(
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
             with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
-                G::scale_many(b, x, &mut out, workspace_bytes).map_err(G::scaling_failure)
+                S::scale_many(b, x, &mut out, workspace_bytes).map_err(G::scaling_failure)
             })?;
             G::values(out)
         }
@@ -725,10 +827,10 @@ pub(super) fn dense<G: Family>(
             };
             let mut out = alloc(n)?;
             if name == "curve.concat" {
-                out.extend_from_slice(a);
-                out.extend_from_slice(b);
+                S::extend(&mut out, a.iter());
+                S::extend(&mut out, b.iter());
             } else {
-                out.extend(a.iter().zip(b.iter()).map(|(a, b)| a.add(*b)));
+                S::extend(&mut out, a.iter().zip(b.iter()).map(|(a, b)| a.add(b)));
             }
             G::values(out)
         }
@@ -743,8 +845,8 @@ pub(super) fn dense<G: Family>(
             )?;
             let mut left = alloc(half)?;
             let mut right = alloc(half)?;
-            left.extend_from_slice(&a[..half]);
-            right.extend_from_slice(&a[half..]);
+            S::extend(&mut left, a.iter().take(half));
+            S::extend(&mut right, a.iter().skip(half));
             return Ok(vec![G::values(left), G::values(right)]);
         }
         _ => return Err(refused("kernel-operands")),

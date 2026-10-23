@@ -58,6 +58,7 @@ impl zkc_runtime::vm::InstalledOperation for NativeOperation {
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
+    cpu: crate::CpuExecution,
     ring_assets: crate::ring::Registry,
     relation_assets: crate::relation::Registry,
     ring_work: crate::ring::Budget,
@@ -101,8 +102,9 @@ impl NativeBackend {
         }
         self.core
             .invoke(i, args, &operation.binding, call.as_deref_mut())?;
-        let outputs = match operation.prepared_handler {
-            None => (operation.handler)(self, i, args)?,
+        let cpu = self.cpu.clone();
+        let outputs = cpu.enter(|| match operation.prepared_handler {
+            None => (operation.handler)(self, i, args),
             Some(handler) => handler(
                 self,
                 i,
@@ -110,8 +112,8 @@ impl NativeBackend {
                 call.as_deref()
                     .and_then(Option::as_ref)
                     .ok_or_else(|| crate::refused("kernel-preparation"))?,
-            )?,
-        };
+            ),
+        })?;
         self.core.outputs(i, args, outputs)
     }
 
@@ -121,6 +123,20 @@ impl NativeBackend {
         }
         self.relation_assets = assets;
         Ok(self)
+    }
+
+    /// Share an application-owned numerical pool. Caller validation, accounting
+    /// and ordered effects stay outside worker tasks.
+    pub fn with_cpu(mut self, cpu: crate::CpuExecution) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("cpu-active-backend"));
+        }
+        self.cpu = cpu;
+        Ok(self)
+    }
+
+    pub fn cpu(&self) -> &crate::CpuExecution {
+        &self.cpu
     }
     pub fn with_ring_assets(mut self, assets: crate::ring::Registry) -> Result<Self> {
         if self.active_frames() != 0 {
@@ -220,7 +236,33 @@ impl NativeBackend {
     /// An empty registry is valid for computations that use no setup.
     pub fn new(policy: Policy, entry: EntryPolicy, setups: crate::SetupRegistry) -> Result<Self> {
         setups.validate(&policy)?;
+        Self::from_validated(
+            policy,
+            entry,
+            setups,
+            crate::CpuExecution::serial().map_err(|_| crate::exhausted("cpu-pool-creation"))?,
+        )
+    }
+
+    /// Construct with the Host's shared numerical worker owner. Supplying the
+    /// context before admission avoids creating a pool for each participant.
+    pub fn new_with_cpu(
+        policy: Policy,
+        entry: EntryPolicy,
+        setups: crate::SetupRegistry,
+        cpu: crate::CpuExecution,
+    ) -> Result<Self> {
+        setups.validate(&policy)?;
+        Self::from_validated(policy, entry, setups, cpu)
+    }
+    fn from_validated(
+        policy: Policy,
+        entry: EntryPolicy,
+        setups: crate::SetupRegistry,
+        cpu: crate::CpuExecution,
+    ) -> Result<Self> {
         Ok(Self {
+            cpu,
             ring_assets: crate::ring::Registry::default(),
             relation_assets: crate::relation::Registry::default(),
             ring_work: crate::ring::Budget::default(),

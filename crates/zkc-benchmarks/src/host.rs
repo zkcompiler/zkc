@@ -104,7 +104,8 @@ pub fn run(
         ..Default::default()
     };
     let mut entry =
-        ProofEntry::admit(package, options, Default::default()).map_err(|e| e.to_string())?;
+        ProofEntry::admit_with_cpu(package, options, Default::default(), job.cpu()?.clone())
+            .map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
     let defaults = zkc_runtime::vm::PreparationLimits::default();
     let mut limits = defaults;
@@ -175,6 +176,7 @@ pub fn run(
                         entry.interface(),
                         ingress,
                         options.capacity,
+                        entry.cpu(),
                     )?;
                     let private = Owner::new(
                         private,
@@ -182,6 +184,7 @@ pub fn run(
                         entry.interface(),
                         ingress,
                         options.capacity,
+                        entry.cpu(),
                     )?;
                     // Check exact admitted types, binding and aggregate loading
                     // without issuing randomness, a transcript or capabilities.

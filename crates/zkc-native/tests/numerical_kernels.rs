@@ -170,6 +170,10 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
                     | zkc_runtime::vm::Identity::KoalaBear
                     | zkc_runtime::vm::Identity::KoalaBearExt8
                     | zkc_runtime::vm::Identity::KoalaBearExt4
+                    | zkc_runtime::vm::Identity::BabyBear
+                    | zkc_runtime::vm::Identity::BabyBearExt4
+                    | zkc_runtime::vm::Identity::Goldilocks
+                    | zkc_runtime::vm::Identity::GoldilocksExt2
             )
         );
         assert_eq!(

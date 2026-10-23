@@ -3,6 +3,7 @@
 
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -89,7 +90,11 @@ inline bool nativeMessageData(const BoundType &type) {
     // These exact installed resident owners positively supply the existing
     // canonical field/group frames. Other nondefault layouts remain local.
     return *selected == type || type.representation == "blst/fr" ||
-           type.representation == "blst/g1" || type.representation == "blst/g2";
+           type.representation == "blst/g1" ||
+           type.representation == "blst/g2" ||
+           type.representation == "halo2curves-axiom/bn254.fr" ||
+           type.representation == "halo2curves-axiom/bn254.g1" ||
+           type.representation == "halo2curves-axiom/bn254.g2";
   }
   if (type.kind == "sequence")
     return type.arguments.size() == 1 &&
@@ -120,9 +125,7 @@ inline bool nativeMessageData(const BoundType &type) {
            type.kind == "matrix") &&
           (type.identity == "bn254.fr" ||
            type.identity == "ristretto255.scalar" ||
-           type.identity == "koala-bear" ||
-           type.identity == "koala-bear.ext8-binomial3" ||
-           type.identity == "koala-bear.ext4-binomial3" ||
+           plonky3Field(type.identity) ||
            type.identity == "gf2-64.pentanomial-4-3-1" ||
            type.identity == "gf2-64.pentanomial-4-3-1.ext3-trinomial1")) ||
          ((type.kind == "group" || type.kind == "groups") &&
@@ -140,6 +143,12 @@ inline bool nativeMessageData(const BoundType &type) {
            type.identity == "rows.merkle-keccak256.koala-bear/0" ||
            type.identity ==
                "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
+           type.identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
+           type.identity == "rows.merkle-poseidon2-8.goldilocks/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0" ||
            type.identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
            type.identity ==
                "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));

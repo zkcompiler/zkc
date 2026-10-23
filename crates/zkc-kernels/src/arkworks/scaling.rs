@@ -184,13 +184,13 @@ impl<P: SWCurveConfig> Plan<P> {
         self.len * size_of::<Affine<P>>()
     }
 
-    pub(crate) fn scale_into<W: Copy>(
+    pub(crate) fn scale_into<W: Copy + Send + Sync>(
         &mut self,
         points: &[W],
         destination: &mut [W],
-        scalar_at: impl Fn(usize) -> <P::ScalarField as PrimeField>::BigInt,
-        affine: impl Fn(W) -> Affine<P>,
-        wrap: impl Fn(Affine<P>) -> W,
+        scalar_at: impl Fn(usize) -> <P::ScalarField as PrimeField>::BigInt + Send + Sync,
+        affine: impl Fn(W) -> Affine<P> + Send + Sync,
+        wrap: impl Fn(Affine<P>) -> W + Send + Sync,
     ) -> Result<(), Error> {
         if points.len() != self.len || destination.len() != self.len {
             return Err(Error::InvalidEncoding);
@@ -202,20 +202,30 @@ impl<P: SWCurveConfig> Plan<P> {
                     .zip(destination.chunks_mut(*chunk_len))
                     .enumerate()
                 {
-                    scratch.projectives.clear();
-                    scratch
-                        .projectives
-                        .extend(inputs.iter().enumerate().map(|(index, point)| {
-                            // Preserve affine mul_bigint dispatch, including the provider's GLV choice.
-                            affine(*point).mul_bigint(scalar_at(chunk_index * *chunk_len + index))
-                        }));
+                    scratch.projectives.resize(inputs.len(), Projective::zero());
+                    // Reuse the already admitted aggregate scratch. Workers own
+                    // disjoint projectives; normalization retains one prefix buffer.
+                    crate::cpu::chunks_mut(&mut scratch.projectives, 32, |offset, chunk| {
+                        for (index, output) in chunk.iter_mut().enumerate() {
+                            let index = offset + index;
+                            *output = affine(inputs[index])
+                                .mul_bigint(scalar_at(chunk_index * *chunk_len + index));
+                        }
+                    });
                     scratch.normalize(outputs, &wrap);
                 }
             }
             Execution::Direct => {
-                for (index, (point, output)) in points.iter().zip(destination).enumerate() {
-                    *output = wrap(affine(*point).mul_bigint(scalar_at(index)).into_affine());
-                }
+                crate::cpu::chunks_mut(destination, 32, |offset, chunk| {
+                    for (index, output) in chunk.iter_mut().enumerate() {
+                        let index = offset + index;
+                        *output = wrap(
+                            affine(points[index])
+                                .mul_bigint(scalar_at(index))
+                                .into_affine(),
+                        );
+                    }
+                });
             }
         }
         Ok(())

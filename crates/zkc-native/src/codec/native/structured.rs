@@ -133,13 +133,14 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
 // wire format. Preserve the owner's collection units: opaque handle collections
 // count handles, while their backing storage remains in the retained charge.
 fn internal_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
+    if let Some(count) = crate::fields::count(value) {
+        return Ok((count, 0));
+    }
     Ok(match value {
         Value::Polynomial(v) => (v.len(), 0),
         Value::Bn254Polynomial(v) => (v.len(), 0),
         Value::RistrettoPolynomial(v) => (v.len(), 0),
-        Value::KoalaBearPolynomial(v) => (v.len(), 0),
-        Value::KoalaBearExt4Polynomial(v) => (v.len(), 0),
-        Value::KoalaBearExt8Polynomial(v) => (v.len(), 0),
+
         Value::Binary64Polynomial(v) => (v.len(), 0),
         Value::Binary64Ext3Polynomial(v) => (v.len(), 0),
         Value::FieldArray(v) => (v.len(), 0),
@@ -147,9 +148,6 @@ fn internal_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
         Value::Round(_)
         | Value::Bn254Round(_)
         | Value::RistrettoRound(_)
-        | Value::KoalaBearRound(_)
-        | Value::KoalaBearExt4Round(_)
-        | Value::KoalaBearExt8Round(_)
         | Value::Binary64Round(_)
         | Value::Binary64Ext3Round(_) => (3, 0),
         Value::Point(v) => (v.len(), 0),

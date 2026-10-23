@@ -7,8 +7,11 @@
 pub mod allocation;
 pub mod arkworks;
 pub mod blst;
+/// Shared CPU workers for typed numerical phases; independent of the VM.
+pub mod cpu;
 pub mod dalek;
 pub mod field;
+pub mod halo2curves;
 pub mod interop;
 pub mod matrix;
 pub mod numerical;

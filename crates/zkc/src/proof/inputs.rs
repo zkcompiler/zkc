@@ -299,14 +299,21 @@ pub(super) fn prepare(
             );
         }
     }
-    let backend = backend(policy, role, host.entry.entry(), registry, constraints)?
-        .with_ring_assets(host.ring_assets.clone())
-        .map_err(|e| e.to_string())?
-        .with_relation_assets(host.relation_assets.clone())
-        .map_err(|e| e.to_string())?
-        .with_ring_work_limit(host.ring_work_limit)
-        .with_external_work_limit(host.external_work_limit)
-        .with_sequence_work_limit(host.sequence_work_limit);
+    let backend = backend(
+        policy,
+        role,
+        host.entry.entry(),
+        registry,
+        constraints,
+        host.cpu.clone(),
+    )?
+    .with_ring_assets(host.ring_assets.clone())
+    .map_err(|e| e.to_string())?
+    .with_relation_assets(host.relation_assets.clone())
+    .map_err(|e| e.to_string())?
+    .with_ring_work_limit(host.ring_work_limit)
+    .with_external_work_limit(host.external_work_limit)
+    .with_sequence_work_limit(host.sequence_work_limit);
     let selected = |original| {
         host.setups
             .inputs

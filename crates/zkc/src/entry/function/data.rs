@@ -142,14 +142,22 @@ impl TypedValue {
         Ok(())
     }
 }
-pub(super) fn backend(capacity: Capacity) -> DataResult<NativeBackend> {
-    backend_for(capacity, "entry")
+pub(super) fn backend(capacity: Capacity, cpu: CpuExecution) -> DataResult<NativeBackend> {
+    backend_for(capacity, "entry", cpu)
 }
-pub(super) fn backend_for(capacity: Capacity, function: &str) -> DataResult<NativeBackend> {
-    NativeBackend::new(
+pub(super) fn numerical_backend(
+    host: &EntryHost,
+    capacity: Capacity,
+    function: &str,
+) -> DataResult<NativeBackend> {
+    backend_for(capacity, function, host.cpu.clone())
+}
+fn backend_for(capacity: Capacity, function: &str, cpu: CpuExecution) -> DataResult<NativeBackend> {
+    NativeBackend::new_with_cpu(
         capacity.backend(),
         EntryPolicy::new(Domain::new("", "entry-host", function, None), None),
         Default::default(),
+        cpu,
     )
     .map_err(|e| e.to_string())
 }
@@ -218,7 +226,7 @@ pub(super) fn pack(
                     .sum::<usize>(),
             );
         let live = charge(ledger, bytes)?;
-        let backend = backend(host.options.limits.capacity)?;
+        let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
         let mut sizes = Vec::new();
         for value in &values {
             value.measure_leaves(&backend, ledger, &mut sizes)?;
@@ -330,7 +338,7 @@ pub(super) fn import(
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
     super::super::value::check_import(s)?;
-    load_ingress(host, s, v, ledger)
+    host.cpu.enter(|| load_ingress(host, s, v, ledger))
 }
 fn load_ingress(
     host: &EntryHost,
@@ -342,7 +350,7 @@ fn load_ingress(
 
     let mut inputs = Vec::new();
     super::super::value::flatten(s, v, &mut inputs)?;
-    let backend = backend(host.options.limits.capacity)?;
+    let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
     let mut admission =
         crate::host::admission::Admission::new(host.options.limits.capacity.loading())?
             .with_shared_ledger(Some(ledger.clone()));
@@ -652,7 +660,7 @@ pub(super) fn from_output(
     // Bound measurement scratch before walking the source shape. The complete
     // active variants are checked before collect_owned builds any native spine.
     let planning = charge(ledger, metadata(schema))?;
-    let backend = backend(host.options.limits.capacity)?;
+    let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
     // Standalone native leaves retain their owner's validation and count units;
     // only a newly assembled active variant needs aggregate payload counts.
     let bytes = bound(host, &backend, ledger, schema, &value, None)?

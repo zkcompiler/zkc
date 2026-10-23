@@ -80,6 +80,20 @@ impl Core {
                     .typed_groups::<zkc_kernels::blst::bls12_381::G2>(v.len())?;
                 None
             }
+            Value::HaloVector(v) => {
+                self.policy.vector(v.len())?;
+                None
+            }
+            Value::HaloG1Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::halo2curves::bn254::G1>(v.len())?;
+                None
+            }
+            Value::HaloG2Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::halo2curves::bn254::G2>(v.len())?;
+                None
+            }
             Value::Bn254Vector(v) => {
                 self.policy.vector(v.len())?;
                 None
@@ -127,11 +141,71 @@ impl Core {
                 m.policy(&self.policy)?;
                 None
             }
+            Value::BabyBearMatrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::BabyBearExt4Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::GoldilocksMatrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::GoldilocksExt2Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
             Value::KoalaBearExt4Vector(a) => {
                 self.policy.vector_width(a.len(), 16)?;
                 None
             }
+            Value::BabyBearVector(a) => {
+                self.policy.vector_width(a.len(), 4)?;
+                None
+            }
+            Value::BabyBearExt4Vector(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                None
+            }
+            Value::GoldilocksVector(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                None
+            }
+            Value::GoldilocksExt2Vector(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                None
+            }
             Value::KoalaBearExt4Polynomial(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                if !zkc_kernels::polynomial::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::BabyBearPolynomial(a) => {
+                self.policy.vector_width(a.len(), 4)?;
+                if !zkc_kernels::polynomial::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::BabyBearExt4Polynomial(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                if !zkc_kernels::polynomial::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::GoldilocksPolynomial(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                if !zkc_kernels::polynomial::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::GoldilocksExt2Polynomial(a) => {
                 self.policy.vector_width(a.len(), 16)?;
                 if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
@@ -291,6 +365,9 @@ impl Core {
             | Value::Bn254G2(..)
             | Value::BlstField(..)
             | Value::BlstG1(..)
+            | Value::HaloField(..)
+            | Value::HaloG1(..)
+            | Value::HaloG2(..)
             | Value::BlstG2(..)
             | Value::Bls12381G2(..)
             | Value::Bls12381Gt(..)
@@ -301,7 +378,15 @@ impl Core {
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)
             | Value::KoalaBearExt4Field(..)
+            | Value::BabyBearField(..)
+            | Value::BabyBearExt4Field(..)
+            | Value::GoldilocksField(..)
+            | Value::GoldilocksExt2Field(..)
             | Value::KoalaBearExt4Round(..)
+            | Value::BabyBearRound(..)
+            | Value::BabyBearExt4Round(..)
+            | Value::GoldilocksRound(..)
+            | Value::GoldilocksExt2Round(..)
             | Value::Binary64Field(..)
             | Value::Binary64Round(..)
             | Value::Binary64Ext3Field(..)

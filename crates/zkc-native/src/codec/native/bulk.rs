@@ -10,6 +10,21 @@ type Result<T> = std::result::Result<T, Error>;
 // Tag, scalar/point wire width, retained element width. Matrix entries add two
 // u32 coordinates. Existing BLS native vector tags intentionally remain 66/67.
 pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
+    if crate::operations::halo2curves::is_resident(ty) {
+        use zkc_kernels::halo2curves::bn254 as kernel;
+        return match (ty.kind(), ty.logical().identity()) {
+            (Type::Vector, Identity::Bn254Fr) => {
+                Some((41, 32, std::mem::size_of::<kernel::ScalarElement>()))
+            }
+            (Type::Groups, Identity::Bn254G1) => {
+                Some((47, 32, std::mem::size_of::<kernel::G1Element>()))
+            }
+            (Type::Groups, Identity::Bn254G2) => {
+                Some((49, 64, std::mem::size_of::<kernel::G2Element>()))
+            }
+            _ => Option::None,
+        };
+    }
     if crate::operations::blst::is_resident(ty) {
         use zkc_kernels::blst::bls12_381 as kernel;
         return match ty.kind() {
@@ -30,6 +45,19 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
     }
     use Identity::*;
     use Type::*;
+    if crate::fields::contains(ty.logical().identity()) {
+        let tags = crate::fields::tags(ty.logical().identity()).ok()?;
+        let width = crate::fields::element_width(ty.logical().identity()).ok()?;
+        return match ty.kind() {
+            Vector => Some((tags[1], width, width)),
+            Matrix => Some((
+                tags[2],
+                width + 8,
+                crate::fields::matrix_entry_width(ty.logical().identity()).ok()?,
+            )),
+            _ => Option::None,
+        };
+    }
     // Digest-generic Merkle roots and proofs: one tag each for every scheme;
     // the expected type supplies the digest width and encoding.
     if let Some(scheme) = crate::merkle::Scheme::from_identity(ty.logical().identity()) {
@@ -44,9 +72,6 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Vector, Bls12381Fr) => (66, 32, 32),
         (Vector, Bn254Fr) => (41, 32, 32),
         (Vector, Ristretto255Scalar) => (14, 32, 32),
-        (Vector, KoalaBear) => (20, 4, 4),
-        (Vector, KoalaBearExt8) => (27, 32, 32),
-        (Vector, KoalaBearExt4) => (22, 16, 16),
         (Vector, Binary64) => (74, 8, 8),
         (Vector, Binary64Ext3) => (77, 24, 24),
         (Groups, Bls12381G1) => (67, 48, 128),
@@ -58,9 +83,6 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Matrix, Bls12381Fr) => (23, 40, 40),
         (Matrix, Bn254Fr) => (45, 40, 40),
         (Matrix, Ristretto255Scalar) => (24, 40, 40),
-        (Matrix, KoalaBear) => (25, 12, 12),
-        (Matrix, KoalaBearExt8) => (30, 40, 40),
-        (Matrix, KoalaBearExt4) => (28, 24, 24),
         (Matrix, Binary64) => (75, 16, 16),
         (Matrix, Binary64Ext3) => (78, 32, 32),
         (Commitment, MerkleKoalaBear) => (33, 32, 32),
@@ -91,16 +113,20 @@ fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result
     Ok(())
 }
 fn count(value: &Value) -> Result<usize> {
+    if let Some(count) = crate::fields::count(value) {
+        return Ok(count);
+    }
     Ok(match value {
         Value::BlstVector(v) => v.len(),
+        Value::HaloVector(v) => v.len(),
         Value::BlstG1Vector(v) => v.len(),
+        Value::HaloG1Vector(v) => v.len(),
         Value::BlstG2Vector(v) => v.len(),
+        Value::HaloG2Vector(v) => v.len(),
         Value::Vector(v) => v.len(),
         Value::Bn254Vector(v) => v.len(),
         Value::RistrettoVector(v) => v.len(),
-        Value::KoalaBearVector(v) => v.len(),
-        Value::KoalaBearExt8Vector(v) => v.len(),
-        Value::KoalaBearExt4Vector(v) => v.len(),
+
         Value::Binary64Vector(v) => v.len(),
         Value::Binary64Ext3Vector(v) => v.len(),
         Value::Groups(v) => v.len(),
@@ -112,9 +138,7 @@ fn count(value: &Value) -> Result<usize> {
         Value::Matrix(v) => v.entries().len(),
         Value::Bn254Matrix(v) => v.entries().len(),
         Value::RistrettoMatrix(v) => v.entries().len(),
-        Value::KoalaBearMatrix(v) => v.entries().len(),
-        Value::KoalaBearExt8Matrix(v) => v.entries().len(),
-        Value::KoalaBearExt4Matrix(v) => v.entries().len(),
+
         Value::Binary64Matrix(v) => v.entries().len(),
         Value::Binary64Ext3Matrix(v) => v.entries().len(),
         Value::OracleRoot(..) => 1,
@@ -209,7 +233,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     let width = width(value, policy)?;
     policy.wire(width).map_err(|_| Error::Limit)?;
     peak(policy, value.retained_bytes(), width)?;
-    if crate::operations::blst::is_resident(&value.physical_type()) {
+    if crate::operations::resident::is_resident(&value.physical_type()) {
         let (tag, _, _) = format(&value.physical_type()).ok_or_else(unsupported)?;
         let mut out = Vec::new();
         out.try_reserve_exact(width).map_err(|_| Error::Limit)?;
@@ -226,7 +250,17 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
                     out.extend_from_slice(&s.to_bytes_le());
                 }
             }
+            Value::HaloVector(v) => {
+                for s in v.iter() {
+                    out.extend_from_slice(&s.to_bytes_le());
+                }
+            }
             Value::BlstG1Vector(v) => {
+                for p in v.iter() {
+                    out.extend_from_slice(&p.to_bytes());
+                }
+            }
+            Value::HaloG1Vector(v) => {
                 for p in v.iter() {
                     out.extend_from_slice(&p.to_bytes());
                 }
@@ -236,9 +270,19 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
                     out.extend_from_slice(&p.to_bytes());
                 }
             }
+            Value::HaloG2Vector(v) => {
+                for p in v.iter() {
+                    out.extend_from_slice(&p.to_bytes());
+                }
+            }
             _ => return Err(unsupported()),
         }
         return Ok(out);
+    }
+    if value.ty() == Type::Vector
+        && crate::fields::contains(value.physical_type().logical().identity())
+    {
+        return crate::fields::encode_vector(value, policy).map_err(Error::Backend);
     }
     // Type-owned encoders produce complete canonical frames. Validate their
     // framing against the expected physical type without rewriting it.
@@ -310,14 +354,33 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
     let (retained, _, _) = scan(ty, bytes, backend.policy())?;
     peak(backend.policy(), retained, bytes.len())?;
     let (tag, _, _) = format(ty).ok_or_else(unsupported)?;
+    if crate::fields::contains(ty.logical().identity()) {
+        use crate::operations::field::Family;
+        return crate::fields::with_residue_or!(ty.logical().identity(), Err(unsupported()), |S| {
+            (|| -> Result<Value> {
+                if ty.kind() == Type::Matrix {
+                    return matrix::<S>(bytes, backend.policy());
+                }
+                let width = zkc_kernels::plonky3::residue::width::<S>();
+                let mut values = Vec::new();
+                values
+                    .try_reserve_exact((bytes.len() - 10) / width)
+                    .map_err(|_| Error::Limit)?;
+                for word in bytes[10..].chunks_exact(width) {
+                    values.push(
+                        zkc_kernels::plonky3::residue::decode::<S>(word)
+                            .map_err(|_| invalid(DecodeReason::Scalar))?,
+                    );
+                }
+                Ok(S::vector_value(values))
+            })()
+        });
+    }
     if ty.kind() == Type::Matrix {
         return match tag {
             23 => matrix::<crate::Scalar>(bytes, backend.policy()),
             45 => matrix::<crate::Bn254Scalar>(bytes, backend.policy()),
             24 => matrix::<crate::RistrettoScalar>(bytes, backend.policy()),
-            25 => matrix::<crate::KoalaBear>(bytes, backend.policy()),
-            30 => matrix::<crate::KoalaBearExt8>(bytes, backend.policy()),
-            28 => matrix::<crate::KoalaBearExt4>(bytes, backend.policy()),
             75 => matrix::<crate::Binary64>(bytes, backend.policy()),
             78 => matrix::<crate::Binary64Ext3>(bytes, backend.policy()),
             _ => Err(unsupported()),
@@ -369,6 +432,26 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             Ok(Value::$variant(v.into()))
         }};
     }
+    if crate::operations::halo2curves::is_resident(ty) {
+        use zkc_kernels::halo2curves::bn254 as kernel;
+        let decoded = match tag {
+            41 => kernel::ScalarVector::from_bytes(&bytes[10..])
+                .map(|v| Value::HaloVector(std::sync::Arc::new(v))),
+            47 => kernel::G1Vector::from_bytes(&bytes[10..])
+                .map(|v| Value::HaloG1Vector(std::sync::Arc::new(v))),
+            49 => kernel::G2Vector::from_bytes(&bytes[10..])
+                .map(|v| Value::HaloG2Vector(std::sync::Arc::new(v))),
+            _ => return Err(unsupported()),
+        };
+        return decoded.map_err(|e| match e {
+            kernel::Error::InvalidEncoding => invalid(if tag == 41 {
+                DecodeReason::Scalar
+            } else {
+                DecodeReason::Group
+            }),
+            _ => Error::Backend(crate::operations::halo2curves::failure(e)),
+        });
+    }
     if crate::operations::blst::is_resident(ty) {
         use zkc_kernels::blst::bls12_381 as kernel;
         return match tag {
@@ -401,24 +484,6 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             32,
             zkc_kernels::arkworks::bn254::decode_scalar,
             Bn254Vector,
-            Scalar
-        ),
-        20 => values!(
-            4,
-            zkc_kernels::plonky3::decode_scalar,
-            KoalaBearVector,
-            Scalar
-        ),
-        27 => values!(
-            32,
-            zkc_kernels::plonky3::decode_extension,
-            KoalaBearExt8Vector,
-            Scalar
-        ),
-        22 => values!(
-            16,
-            zkc_kernels::plonky3::decode_quartic,
-            KoalaBearExt4Vector,
             Scalar
         ),
         74 => values!(

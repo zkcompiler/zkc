@@ -165,6 +165,18 @@ this policy is not a cost optimizer or a guarantee for every program. Exact
 source selections and requested implementations take precedence. MSM remains an
 explicit choice because its variable-time authority is independent of selection.
 
+The explicit BN254 alternative is `halo2curves-axiom/resident/<contract>`.
+Its positive operation inventory covers field/vector arithmetic, G1/G2 algebra,
+MSM and `pairing.check`. Flat field/vector ports use
+`halo2curves-axiom/bn254.fr`, and group/groups ports use
+`halo2curves-axiom/bn254.g1` or `halo2curves-axiom/bn254.g2`. Exact implementation
+selections use the ordinary physical planner, which inserts conversions at
+canonical ports and can retain explicitly selected function ports. These
+descriptors require explicit selection and add no automatic Target preference.
+There are no Halo GT, PCS, FFT, matrix, field-array or fixed-vector routes.
+The compiler driver does not yet expose a general source `--provider` option;
+the installed provider menu is available to exact physical selection requests.
+
 The catalog checks each suggestion against the installed signature and retains
 the canonical fallback. The physical planner records and independently validates
 the actual crossings. Missing adapters advance affected automatic choices

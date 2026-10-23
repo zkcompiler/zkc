@@ -268,6 +268,15 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
       if (logical->identity == "bls12-381.g2")
         resident = "blst/g2";
     }
+    if ((logical->kind == "field" || logical->kind == "vector") &&
+        logical->identity == "bn254.fr")
+      resident = "halo2curves-axiom/bn254.fr";
+    if (logical->kind == "group" || logical->kind == "groups") {
+      if (logical->identity == "bn254.g1")
+        resident = "halo2curves-axiom/bn254.g1";
+      if (logical->identity == "bn254.g2")
+        resident = "halo2curves-axiom/bn254.g2";
+    }
     if (resident.empty() ||
         !((from->representation == ordinary->representation &&
            to->representation == resident) ||

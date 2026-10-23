@@ -450,3 +450,75 @@ fn static_signature_is_independent_and_exact() {
         }
     }
 }
+
+fn residue_relation<S: crate::ring::Carrier>() {
+    let base = S::IDENTITY.base_field().unwrap_or(S::IDENTITY);
+    let text = FINITE.replace("koala-bear", S::IDENTITY.name());
+    let bundle = Bundle::parse(&text).unwrap();
+    let view = bundle.table_view(0, S::IDENTITY).unwrap();
+    let values = |xs: &[u64]| xs.iter().map(|n| S::from_u64(*n)).collect::<Vec<_>>();
+    let result = rows(
+        view,
+        4,
+        &values(&[1, 0, 3, 1, 7, 2, 9, 0]),
+        &[],
+        &values(&[1]),
+        &Policy::default(),
+        &mut Budget::default(),
+        usize::MAX,
+    )
+    .unwrap();
+    assert_eq!(
+        result,
+        values(&[2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 8])
+    );
+    // Row views are homogeneous; polynomial views additionally lift a base
+    // table into its declared extension carrier.
+    let base_bundle = Bundle::parse(&FINITE.replace("koala-bear", base.name())).unwrap();
+    if base != S::IDENTITY {
+        assert!(base_bundle.table_view(0, S::IDENTITY).is_err());
+    }
+    let view = base_bundle.polynomial_view(0, S::IDENTITY).unwrap();
+    let a = S::from_basis_coefficients_fn(|i| S::Base::from_usize(i + 2));
+    let input = [a, a.square(), a + S::ONE, S::ONE];
+    let expected = [
+        input[1] - input[0],
+        input[0] - input[3],
+        input[2].square() - input[2],
+        S::ZERO,
+        input[0] - input[3],
+    ];
+    for packed in [false, true] {
+        let result = points(
+            &view,
+            &input,
+            1,
+            packed,
+            &Policy::default(),
+            &mut Budget::default(),
+            usize::MAX,
+        )
+        .unwrap();
+        assert_eq!(result, expected);
+    }
+    // Full-width decimal relation values retain their prime-subfield meaning.
+    if base == Identity::Goldilocks {
+        let arithmetic = Arithmetic::<S>(PhantomData);
+        let literal = "18446744069414584320";
+        assert_eq!(arithmetic.constant(base, literal).unwrap(), -S::ONE);
+        assert_eq!(arithmetic.value(base, &[literal.into()]).unwrap(), -S::ONE);
+        assert!(
+            arithmetic
+                .value(base, &["18446744069414584321".into()])
+                .is_err()
+        );
+        assert!(arithmetic.value(Identity::BabyBear, &["1".into()]).is_err());
+    }
+}
+#[test]
+fn registered_residue_relation_rows_and_nonbase_point_substitutions() {
+    residue_relation::<crate::BabyBear>();
+    residue_relation::<crate::BabyBearExt4>();
+    residue_relation::<crate::Goldilocks>();
+    residue_relation::<crate::GoldilocksExt2>();
+}

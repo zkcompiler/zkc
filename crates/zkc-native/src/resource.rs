@@ -140,7 +140,7 @@ enum State {
     Bn254Rng(Box<RandomSource>),
     #[cfg(feature = "test-utils")]
     Bn254Tape(std::collections::VecDeque<crate::Bn254Scalar>),
-    ExtensionRng(Box<rand::rngs::StdRng>),
+    ExtensionRng(Identity, Box<rand::rngs::StdRng>),
     RistrettoRng(Box<rand::rngs::StdRng>),
     #[cfg(feature = "test-utils")]
     RistrettoTape(std::collections::VecDeque<crate::RistrettoScalar>),
@@ -161,7 +161,7 @@ impl State {
             #[cfg(feature = "test-utils")]
             Self::Bn254Tape(_) => Identity::Bn254Fr,
             Self::Transcript(_, suite) => *suite,
-            Self::ExtensionRng(_) => Identity::KoalaBearExt8,
+            Self::ExtensionRng(field, _) => *field,
             Self::RistrettoRng(_)
             | Self::RistrettoIssuedNonce(_)
             | Self::RistrettoReadyNonce(_)
@@ -176,7 +176,7 @@ impl State {
     fn ty(&self) -> Type {
         match self {
             Self::ResourceUnit(_) => Type::ResourceUnit,
-            Self::Bn254Rng(_) | Self::Rng(_) | Self::RistrettoRng(_) | Self::ExtensionRng(_) => {
+            Self::Bn254Rng(_) | Self::Rng(_) | Self::RistrettoRng(_) | Self::ExtensionRng(..) => {
                 Type::Rng
             }
             #[cfg(feature = "test-utils")]
@@ -193,7 +193,7 @@ impl State {
     fn stage(&self) -> &'static str {
         match self {
             Self::ResourceUnit(_) => "resource_unit",
-            Self::Bn254Rng(_) | Self::Rng(_) | Self::RistrettoRng(_) | Self::ExtensionRng(_) => {
+            Self::Bn254Rng(_) | Self::Rng(_) | Self::RistrettoRng(_) | Self::ExtensionRng(..) => {
                 "rng"
             }
             #[cfg(feature = "test-utils")]
@@ -383,8 +383,11 @@ impl Resources {
             bytes
         };
         let value = match suite {
-            Identity::Merlin3KoalaBearExt8 | Identity::HashChainKeccak256KoalaBearExt8 => {
-                Value::KoalaBearExt8Field(crate::sampling::extension(block)?)
+            Identity::Merlin3KoalaBearExt8
+            | Identity::Merlin3BabyBearExt4
+            | Identity::Merlin3GoldilocksExt2
+            | Identity::HashChainKeccak256KoalaBearExt8 => {
+                crate::sampling::value(suite.scalar_field().expect("installed suite"), block)?
             }
             Identity::Merlin3Fr64Be
             | Identity::Spongefish080KeccakFr64Be
@@ -435,12 +438,12 @@ impl Resources {
         bound: u64,
     ) -> Result<(Value, Capability)> {
         use rand::Rng;
-        if t.identity != Identity::KoalaBearExt8 {
+        if !crate::sampling::installed(t.identity) {
             return Err(refused("query-rng"));
         }
         crate::sampling::index_bound(bound)?;
         let slot = self.consume(f, t, Type::Rng)?;
-        let State::ExtensionRng(rng) = &mut slot.state else {
+        let State::ExtensionRng(_, rng) = &mut slot.state else {
             unreachable!("validated RNG")
         };
         let mut bytes = [0; 64];
@@ -454,13 +457,16 @@ impl Resources {
         Ok(match field {
             Identity::Bn254Fr => State::Bn254Rng(Box::new(RandomSource::from_os()?)),
             Identity::Bls12381Fr => State::Rng(Source::Os(Box::new(RandomSource::from_os()?))),
-            Identity::KoalaBearExt8 | Identity::Ristretto255Scalar => {
+            Identity::KoalaBearExt8
+            | Identity::BabyBearExt4
+            | Identity::GoldilocksExt2
+            | Identity::Ristretto255Scalar => {
                 let rng = Box::new(
                     rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng)
                         .map_err(|_| exhausted("entropy-unavailable"))?,
                 );
-                if field == Identity::KoalaBearExt8 {
-                    State::ExtensionRng(rng)
+                if crate::sampling::installed(field) {
+                    State::ExtensionRng(field, rng)
                 } else {
                     State::RistrettoRng(rng)
                 }
@@ -578,21 +584,24 @@ impl Resources {
                 }
                 (Value::Bn254Vector(values.into()), slot.generation)
             }
-            Identity::KoalaBearExt8 => {
+            field if crate::sampling::installed(field) => {
+                use crate::operations::field::Family;
                 use rand::Rng;
-                let mut values = crate::operations::arithmetic::reserve(n)?;
-                let slot = self.transition(f, t, Type::Rng, draws)?;
-                let State::ExtensionRng(rng) = &mut slot.state else {
-                    unreachable!("validated RNG")
-                };
-                for _ in 0..n {
-                    values.push(crate::sampling::extension(|| {
-                        let mut bytes = [0; 64];
-                        rng.fill_bytes(&mut bytes);
-                        bytes
-                    })?);
-                }
-                (Value::KoalaBearExt8Vector(values.into()), slot.generation)
+                crate::fields::with_residue!(field, |E| {
+                    let mut values = crate::operations::arithmetic::reserve(n)?;
+                    let slot = self.transition(f, t, Type::Rng, draws)?;
+                    let State::ExtensionRng(_, rng) = &mut slot.state else {
+                        unreachable!("validated RNG")
+                    };
+                    for _ in 0..n {
+                        values.push(crate::sampling::residue::<E>(|| {
+                            let mut bytes = [0; 64];
+                            rng.fill_bytes(&mut bytes);
+                            bytes
+                        })?);
+                    }
+                    Ok((E::vector_value(values), slot.generation))
+                })?
             }
             Identity::Bls12381Fr => {
                 let mut values = crate::operations::arithmetic::reserve(n)?;
@@ -637,13 +646,13 @@ impl Resources {
             State::Bn254Tape(tape) => {
                 Value::Bn254Field(tape.pop_front().ok_or_else(|| exhausted("test-tape"))?)
             }
-            State::ExtensionRng(rng) => {
+            State::ExtensionRng(field, rng) => {
                 use rand::Rng;
-                Value::KoalaBearExt8Field(crate::sampling::extension(|| {
+                crate::sampling::value(*field, || {
                     let mut bytes = [0; 64];
                     rng.fill_bytes(&mut bytes);
                     bytes
-                })?)
+                })?
             }
             State::RistrettoRng(rng) => {
                 Value::RistrettoField(crate::RistrettoScalar::random(rng.as_mut()))
@@ -1028,11 +1037,11 @@ impl Resources {
         if !matches!(&slot.domain, Custody::Service(actual) if actual == owner) {
             return Err(refused("service-owner"));
         }
-        if !matches!(slot.state, State::ExtensionRng(_)) {
+        if !matches!(slot.state, State::ExtensionRng(..)) {
             return Err(refused("query-rng"));
         }
         let slot = Self::consume_slot(slot)?;
-        let State::ExtensionRng(rng) = &mut slot.state else {
+        let State::ExtensionRng(_, rng) = &mut slot.state else {
             unreachable!("checked state")
         };
         let mut bytes = [0; 64];

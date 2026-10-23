@@ -362,7 +362,7 @@ pub(super) fn prepare<'a>(
                 );
             }
         }
-        let backend = NativeBackend::new(
+        let backend = NativeBackend::new_with_cpu(
             policy,
             EntryPolicy::new(
                 Domain::new(
@@ -375,6 +375,7 @@ pub(super) fn prepare<'a>(
             )
             .with_ports(ports),
             setups.clone(),
+            host.cpu.clone(),
         )
         .map_err(|e| e.to_string())?
         .with_ring_assets(host.ring_assets.clone())

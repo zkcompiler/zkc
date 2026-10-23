@@ -89,6 +89,46 @@ checked exponentiation for inverses of the octic extension. It asserts no unprov
 or native adequacy theorem. Generic formal PIR semantics remains parameterized
 by mathematical fields and the embedding laws required by each consumer.
 
+### Registered residue fields
+
+The native Plonky3 0.8.0 installation registers these additional exact domains:
+
+| Identity | Prime base and characteristic | Degree | Defining polynomial | Coordinate bytes |
+| --- | --- | --- | --- | --- |
+| `baby-bear` | `baby-bear`, 2013265921 | 1 | — | 4 |
+| `baby-bear.ext4-binomial11` | `baby-bear`, 2013265921 | 4 | `X^4 - 11` | 4 |
+| `goldilocks` | `goldilocks`, 18446744069414584321 | 1 | — | 8 |
+| `goldilocks.ext2-binomial7` | `goldilocks`, 18446744069414584321 | 2 | `X^2 - 7` | 8 |
+
+Each prime base holds `PrimeField`, `TwoAdicField`, `Field`, `CommRing` and
+`CharacteristicNotTwo`. Each extension holds the same facts except `PrimeField`,
+and additionally `ExtensionField` with exactly the listed `BaseField`.
+Extensions use ascending binomial coordinates `(1, X, ..., X^(d-1))`;
+embedding sends `a` to `(a, 0, ..., 0)`. Different families and different
+extensions never acquire implicit embeddings, including equal-width values.
+
+The registered residue family includes the three existing KoalaBear domains
+above. Every member supplies field, vector, polynomial, quadratic-round and
+sparse-matrix representations under `plonky3.<identity>/0`, with the respective
+suffixes (none), `-vector`, `-polynomial`, `-quadratic`, `-sparse-coo` before `/0`.
+Logical codec identities are `zkcv.<kind>.<identity>/0`. Native message payloads
+cover field, vector and matrix values; polynomial and round values remain local.
+Canonical readable coordinates are decimal integers below the prime
+characteristic, including the full Goldilocks range above `2^63`.
+Canonical little-endian byte operations use the listed bytes per coordinate,
+in ascending basis order, and reject out-of-range words or incomplete elements.
+Montgomery32 byte operations are installed only for KoalaBear and BabyBear and
+their registered extensions; Goldilocks has no such representation.
+
+The new extension fields separately install `IndexRandomness` and services
+`random.baby-bear.ext4-binomial11/0` and
+`random.goldilocks.ext2-binomial7/0`. Their explicit Merlin byte suites are
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`. These profiles are not
+inferred from arithmetic capabilities. The explicit [Poseidon2 row instances](oracles.md#poseidon2-instances)
+commit base and extension rows; the hash profile remains a separate choice from
+the field. The OpenVM adapter retains its independent upstream pin.
+
 ## Binary fields
 
 The installed nominal domain `gf2-64.pentanomial-4-3-1` denotes

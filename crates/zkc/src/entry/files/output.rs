@@ -48,15 +48,20 @@ fn encode(value: impl Serialize) -> Result<Vec<u8>> {
 // Native wire frames depend on value shape and capacity, not the session domain.
 // Outputs have already been admitted under their role's setup policy; encoding
 // here adds no setup authorization and issues no resources.
-fn backend(capacity: Capacity, setups: zkc_native::SetupRegistry) -> Result<NativeBackend> {
+fn backend(
+    capacity: Capacity,
+    setups: zkc_native::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+) -> Result<NativeBackend> {
     capacity.validate()?;
-    NativeBackend::new(
+    NativeBackend::new_with_cpu(
         capacity.backend(),
         zkc_native::EntryPolicy::new(
             zkc_native::Domain::new("host", "entry_results", "results", None),
             None,
         ),
         setups,
+        cpu,
     )
     .map_err(|e| e.to_string())
 }
@@ -105,12 +110,26 @@ pub fn run_outputs(
     capacity: Capacity,
     setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
+    run_outputs_with_cpu(
+        values,
+        capacity,
+        setups,
+        crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
+    )
+}
+/// Encode role results using the caller's existing CPU context.
+pub fn run_outputs_with_cpu(
+    values: &RoleValues,
+    capacity: Capacity,
+    setups: zkc_native::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
         roles: T,
     }
-    let backend = backend(capacity, setups)?;
+    let backend = backend(capacity, setups, cpu.clone())?;
     struct Roles<'a> {
         values: &'a RoleValues,
         backend: &'a NativeBackend,
@@ -131,12 +150,14 @@ pub fn run_outputs(
             map.end()
         }
     }
-    encode(Document {
-        format: "zkc.entry-outputs/0",
-        roles: Roles {
-            values,
-            backend: &backend,
-        },
+    cpu.enter(|| {
+        encode(Document {
+            format: "zkc.entry-outputs/0",
+            roles: Roles {
+                values,
+                backend: &backend,
+            },
+        })
     })
 }
 /// Encode one proof participant's named results without changing runtime state.
@@ -145,19 +166,35 @@ pub fn proof_outputs(
     capacity: Capacity,
     setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
+    proof_outputs_with_cpu(
+        values,
+        capacity,
+        setups,
+        crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
+    )
+}
+/// Encode proof results using the caller's existing CPU context.
+pub fn proof_outputs_with_cpu(
+    values: &NamedValues,
+    capacity: Capacity,
+    setups: zkc_native::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
         values: T,
     }
-    let backend = backend(capacity, setups)?;
-    encode(Document {
-        format: "zkc.entry-outputs/0",
-        values: Named {
-            values,
-            backend: &backend,
-            depth: 1,
-        },
+    let backend = backend(capacity, setups, cpu.clone())?;
+    cpu.enter(|| {
+        encode(Document {
+            format: "zkc.entry-outputs/0",
+            values: Named {
+                values,
+                backend: &backend,
+                depth: 1,
+            },
+        })
     })
 }
 /// Encode only the explicit successful source return, using native wire codecs.
@@ -166,19 +203,35 @@ pub fn function_output(
     capacity: Capacity,
     setups: zkc_native::SetupRegistry,
 ) -> Result<Vec<u8>> {
+    function_output_with_cpu(
+        value,
+        capacity,
+        setups,
+        crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
+    )
+}
+/// Encode a function result using the caller's existing CPU context.
+pub fn function_output_with_cpu(
+    value: &Value,
+    capacity: Capacity,
+    setups: zkc_native::SetupRegistry,
+    cpu: crate::execution::CpuExecution,
+) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
         value: T,
     }
-    let backend = backend(capacity, setups)?;
-    encode(Document {
-        format: "zkc.entry-outputs/0",
-        value: Item {
-            value,
-            backend: &backend,
-            depth: 1,
-        },
+    let backend = backend(capacity, setups, cpu.clone())?;
+    cpu.enter(|| {
+        encode(Document {
+            format: "zkc.entry-outputs/0",
+            value: Item {
+                value,
+                backend: &backend,
+                depth: 1,
+            },
+        })
     })
 }
 struct Named<'a> {
@@ -332,10 +385,14 @@ mod tests {
             keys: [("setup".into(), keys.verifier_key().metadata().key_id())].into(),
         };
         let registry = output_setups(&material, &authority, capacity).unwrap();
-        let expected = backend(capacity, registry.clone())
-            .unwrap()
-            .encode_native_value(&value)
-            .unwrap();
+        let expected = backend(
+            capacity,
+            registry.clone(),
+            crate::execution::CpuExecution::serial().unwrap(),
+        )
+        .unwrap()
+        .encode_native_value(&value)
+        .unwrap();
         let document: serde_json::Value =
             serde_json::from_slice(&proof_outputs(&values, capacity, registry).unwrap()).unwrap();
         assert_eq!(document["values"]["commitment"]["wire"], hex(&expected));
@@ -353,7 +410,12 @@ mod tests {
     #[test]
     fn private_capabilities_refuse_without_consuming_them() {
         let capacity = Capacity::default();
-        let mut native = backend(capacity, Default::default()).unwrap();
+        let mut native = backend(
+            capacity,
+            Default::default(),
+            crate::execution::CpuExecution::serial().unwrap(),
+        )
+        .unwrap();
         let value = native
             .issue_rng_for(
                 Identity::Bls12381Fr,

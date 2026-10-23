@@ -1,63 +1,120 @@
 //! Bounded test transport for independent bundle and staged-program admission
 //! and evaluation with native field arithmetic.
-use p3_field::{BasedVectorSpace, PrimeField32};
+use p3_field::PrimeField64;
 use serde_json::{Value, json};
 use std::io::{self, Read};
-use zkc_kernels::plonky3;
-use zkc_native::{KoalaBear, KoalaBearExt8};
+use zkc_kernels::plonky3::residue::{self, Residue};
+use zkc_native::{
+    BabyBear, BabyBearExt4, Goldilocks, GoldilocksExt2, KoalaBear, KoalaBearExt4, KoalaBearExt8,
+};
 use zkc_runtime::relation::{self, Algebra, Bundle, ChannelKind, Error, Staged};
 use zkc_runtime::vm::Identity;
 
 type Result<T> = std::result::Result<T, Error>;
 struct Native;
-impl Algebra for Native {
-    type Value = KoalaBearExt8;
-    fn value(&self, field: Identity, coordinates: &[String]) -> Result<Self::Value> {
-        let width = match field {
-            Identity::KoalaBear => 1,
-            Identity::KoalaBearExt8 => 8,
-            _ => return Err(Error("test-field")),
-        };
-        if coordinates.len() != width {
-            return Err(Error("test-coordinate"));
-        }
-        let mut values = [KoalaBear::new(0); 8];
-        for (out, text) in values.iter_mut().zip(coordinates) {
-            *out = plonky3::parse_decimal(text).map_err(|_| Error("test-coordinate"))?;
-        }
-        Ok(KoalaBearExt8::from(values))
+
+fn native_value<E: Residue>(coordinates: &[String]) -> Result<E> {
+    if coordinates.len() != E::DIMENSION {
+        return Err(Error("test-coordinate"));
     }
-    fn constant(&self, field: Identity, text: &str) -> Result<Self::Value> {
-        if !matches!(field, Identity::KoalaBear | Identity::KoalaBearExt8) {
-            return Err(Error("test-field"));
-        }
-        Ok(plonky3::parse_decimal(text)
-            .map_err(|_| Error("test-coordinate"))?
-            .into())
-    }
-    fn add(&self, _: Identity, a: &Self::Value, b: &Self::Value) -> Self::Value {
-        *a + *b
-    }
-    fn mul(&self, _: Identity, a: &Self::Value, b: &Self::Value) -> Self::Value {
-        *a * *b
-    }
-    fn neg(&self, _: Identity, a: &Self::Value) -> Self::Value {
-        -*a
-    }
-    fn embed(&self, from: Identity, to: Identity, a: &Self::Value) -> Result<Self::Value> {
-        if from != Identity::KoalaBear || to != Identity::KoalaBearExt8 {
-            return Err(Error("test-embedding"));
-        }
-        Ok(*a)
-    }
-    fn coordinates(&self, field: Identity, value: &Self::Value) -> Vec<String> {
-        let values: &[KoalaBear] = value.as_basis_coefficients_slice();
-        values[..if field == Identity::KoalaBear { 1 } else { 8 }]
-            .iter()
-            .map(|v| v.as_canonical_u32().to_string())
-            .collect()
-    }
+    let values = coordinates
+        .iter()
+        .map(|text| residue::parse_base::<E::Base>(text).map_err(|_| Error("test-coordinate")))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(E::from_basis_coefficients_fn(|i| values[i]))
 }
+
+fn native_coordinates<E: Residue>(value: &E) -> Vec<String> {
+    value
+        .as_basis_coefficients_slice()
+        .iter()
+        .map(|v| v.as_canonical_u64().to_string())
+        .collect()
+}
+
+// Keep each nominal field in its own native carrier: the two KoalaBear
+// extensions have different quotient polynomials and cannot share arithmetic.
+macro_rules! native_algebra {
+    ($($field:ident),+ $(,)?) => {
+        #[derive(Clone)]
+        enum NativeValue {
+            $($field($field),)+
+        }
+
+        impl Algebra for Native {
+            type Value = NativeValue;
+
+            fn value(&self, field: Identity, coordinates: &[String]) -> Result<Self::Value> {
+                match field {
+                    $(Identity::$field => native_value(coordinates).map(NativeValue::$field),)+
+                    _ => Err(Error("test-field")),
+                }
+            }
+
+            fn constant(&self, field: Identity, text: &str) -> Result<Self::Value> {
+                match field {
+                    $(Identity::$field => residue::parse_decimal(text)
+                        .map(NativeValue::$field)
+                        .map_err(|_| Error("test-coordinate")),)+
+                    _ => Err(Error("test-field")),
+                }
+            }
+
+            fn add(&self, field: Identity, a: &Self::Value, b: &Self::Value) -> Self::Value {
+                match (field, a, b) {
+                    $((Identity::$field, NativeValue::$field(a), NativeValue::$field(b)) =>
+                        NativeValue::$field(*a + *b),)+
+                    _ => unreachable!("admitted field operands"),
+                }
+            }
+
+            fn mul(&self, field: Identity, a: &Self::Value, b: &Self::Value) -> Self::Value {
+                match (field, a, b) {
+                    $((Identity::$field, NativeValue::$field(a), NativeValue::$field(b)) =>
+                        NativeValue::$field(*a * *b),)+
+                    _ => unreachable!("admitted field operands"),
+                }
+            }
+
+            fn neg(&self, field: Identity, a: &Self::Value) -> Self::Value {
+                match (field, a) {
+                    $((Identity::$field, NativeValue::$field(a)) => NativeValue::$field(-*a),)+
+                    _ => unreachable!("admitted field operand"),
+                }
+            }
+
+            fn embed(&self, from: Identity, to: Identity, a: &Self::Value) -> Result<Self::Value> {
+                match (from, to, a) {
+                    (Identity::KoalaBear, Identity::KoalaBearExt4, NativeValue::KoalaBear(a)) =>
+                        Ok(NativeValue::KoalaBearExt4((*a).into())),
+                    (Identity::KoalaBear, Identity::KoalaBearExt8, NativeValue::KoalaBear(a)) =>
+                        Ok(NativeValue::KoalaBearExt8((*a).into())),
+                    (Identity::BabyBear, Identity::BabyBearExt4, NativeValue::BabyBear(a)) =>
+                        Ok(NativeValue::BabyBearExt4((*a).into())),
+                    (Identity::Goldilocks, Identity::GoldilocksExt2, NativeValue::Goldilocks(a)) =>
+                        Ok(NativeValue::GoldilocksExt2((*a).into())),
+                    _ => Err(Error("test-embedding")),
+                }
+            }
+
+            fn coordinates(&self, field: Identity, value: &Self::Value) -> Vec<String> {
+                match (field, value) {
+                    $((Identity::$field, NativeValue::$field(value)) => native_coordinates(value),)+
+                    _ => unreachable!("admitted field value"),
+                }
+            }
+        }
+    };
+}
+native_algebra!(
+    KoalaBear,
+    KoalaBearExt4,
+    KoalaBearExt8,
+    BabyBear,
+    BabyBearExt4,
+    Goldilocks,
+    GoldilocksExt2,
+);
 fn scalar(values: &[String]) -> Value {
     if values.len() == 1 {
         json!(values[0])

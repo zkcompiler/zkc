@@ -60,7 +60,11 @@ records the choices and captures the resulting packages. Compare separate runs
 with identical sources, inputs and worker settings. A smaller intermediate or
 instruction count does not by itself establish a timing improvement.
 
-`--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
+`--threads` selects the shared Native CPU context (default one). The development
+worker transports this request through `RAYON_NUM_THREADS`; SDK and CLI execution
+receive an explicit context. Worker reports separate pool initialization from
+admission and timed calls. Foreign reference providers retain their own policy;
+this is not a universal process thread limit.
 `--cpus 2,4-7` pins the suite and children to a set within the current affinity;
 `--cpus 2` selects one CPU. Workers check the requested environment, main-thread
 affinity and every surviving thread's CPU set. This is an exit-time observation,
@@ -176,7 +180,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
 | `air` | Trace height, width and evaluation blowup vary separately, including original independent recurrences and new coupled quadratic/cubic columns | First/last/transition constraints; one table; default execution capacities |
-| `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
+| `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument), retaining KoalaBear quartic FRI and octic Merlin draws; additional bounded BabyBear quartic and Goldilocks quadratic configurations | Independent integer recurrence and same-stack proof verification; exact field/hash/transcript profiles, constant final polynomial; no external proof compatibility or field-only performance attribution |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
 | `machine` | LogUp/grand-product, optional memory absent/present; bounded CPU/program and memory heights | Existing `ThreeTableArgument` and external accumulator interpreter; same-stack proof checks, not production zkVM scale |
 
@@ -189,6 +193,27 @@ collect–fold composition does not cross those boundaries.
 Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.
+
+The additional `stark-baby-bear-quartic-poseidon2-16-*` and
+`stark-goldilocks-quadratic-poseidon2-8-*` cases use the existing
+`baby_bear_quartic::Poseidon2` and `goldilocks_quadratic::Poseidon2` library
+configurations. Their exact extension fields are `baby-bear.ext4-binomial11`
+and `goldilocks.ext2-binomial7`; their Merlin suites are
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`. Poseidon2 widths are 16
+and 8, and coset shifts are 31 and 7, respectively. Shape metadata retains
+these selections and each characteristic before compilation. Each field has
+11 fixed cases: independent quadratic columns and coupled quadratic/cubic
+columns, heights 8/32/128, widths 1/2/4/8/16, blowups 4/8 and eight queries.
+The largest trace has 512 base elements and the largest evaluation domain has
+512 rows. Each shape matches an existing KoalaBear recurrence control, with
+all arithmetic reduced modulo its selected characteristic. The existing KoalaBear
+cases and smoke list stay fixed. Changed statements and canonical claim mutations
+use the selected modulus and coordinate width. These are composed SDK/Host proof
+workloads under normal capacities; field, hash and transcript all change between
+profiles, so a ratio cannot isolate arithmetic throughput. They provide no external
+STARK byte compatibility or independent security result. BLS provider, Monero and
+EIP-4844 comparisons keep their separate contracts.
 
 ### Fixed numerical panel
 

@@ -1,7 +1,7 @@
 //! Exact native field adapters shared by dense kernels and numerical consumers.
 //! Values are matched by nominal field; vectors are borrowed immutable backings.
 //! Arithmetic and canonical literals remain delegated to the existing providers.
-use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
+use crate::{Binary64, Binary64Ext3};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
 use std::sync::Arc;
 pub(crate) use zkc_kernels::field::Coefficient;
@@ -105,36 +105,6 @@ family!(
 );
 
 family!(
-    KoalaBear,
-    KoalaBearField,
-    KoalaBearVector,
-    KoalaBearMatrix,
-    KoalaBearPolynomial,
-    KoalaBearRound,
-    |s| zkc_kernels::plonky3::parse_decimal(s).map_err(crate::field_error)
-);
-
-family!(
-    KoalaBearExt8,
-    KoalaBearExt8Field,
-    KoalaBearExt8Vector,
-    KoalaBearExt8Matrix,
-    KoalaBearExt8Polynomial,
-    KoalaBearExt8Round,
-    |s| zkc_kernels::plonky3::parse_extension_decimal(s).map_err(crate::field_error)
-);
-
-family!(
-    KoalaBearExt4,
-    KoalaBearExt4Field,
-    KoalaBearExt4Vector,
-    KoalaBearExt4Matrix,
-    KoalaBearExt4Polynomial,
-    KoalaBearExt4Round,
-    |s| zkc_kernels::plonky3::parse_quartic_decimal(s).map_err(crate::field_error)
-);
-
-family!(
     Binary64,
     Binary64Field,
     Binary64Vector,
@@ -170,17 +140,8 @@ macro_rules! with_field {
                 type $coefficient = $crate::RistrettoScalar;
                 $body
             }
-            zkc_runtime::vm::Identity::KoalaBear => {
-                type $coefficient = $crate::KoalaBear;
-                $body
-            }
-            zkc_runtime::vm::Identity::KoalaBearExt4 => {
-                type $coefficient = $crate::KoalaBearExt4;
-                $body
-            }
-            zkc_runtime::vm::Identity::KoalaBearExt8 => {
-                type $coefficient = $crate::KoalaBearExt8;
-                $body
+            identity if crate::fields::contains(identity) => {
+                $crate::fields::with_residue!(identity, |$coefficient| $body)
             }
             zkc_runtime::vm::Identity::Binary64 => {
                 type $coefficient = $crate::Binary64;

@@ -8,13 +8,15 @@ It defines a native execution contract. The [mathematical source profile](../lan
 
 `!protocol.service_ref<Contract>` is a reference to one managed service root.
 Installed contracts are `random.bls12-381.fr/0`, `random.bn254.fr/0`,
-`random.ristretto255.scalar/0` and `random.koala-bear.ext8-binomial3/0`.
-These four RNG distributions/providers are the complete registered service
+`random.ristretto255.scalar/0`, `random.koala-bear.ext8-binomial3/0`,
+`random.baby-bear.ext4-binomial11/0` and
+`random.goldilocks.ext2-binomial7/0`.
+These six RNG distributions/providers are the complete registered service
 surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
 that field's default representation. A contract whose field has the catalog
-fact `IndexRandomness` also has method `index`; currently this is only
-`random.koala-bear.ext8-binomial3/0`. KoalaBear base has no installed random
+fact `IndexRandomness` also has method `index`; this holds for the KoalaBear
+octic, BabyBear quartic and Goldilocks quadratic services. The base fields have no installed random
 service. The contract fixes the distribution signature; it does not authenticate
 a root or prove an independence law. A reference is an entry input with exactly one owner. Several inputs may
 refer to the same root. Copying a reference preserves identity and does not copy,
@@ -59,6 +61,15 @@ that provider (operating-system entropy here, the transcript suite under a
 property a test establishes. Low bits of a field element are a different
 distribution and do not realize this method; for an odd prime they are biased
 even at a power-of-two N.
+
+BabyBear quartic and Goldilocks quadratic draws independently reject coordinate
+candidates at or above their characteristic, using four-byte little-endian
+31-bit candidates and eight-byte little-endian 64-bit candidates respectively.
+Coordinates fill the ascending extension basis; at most sixteen 64-byte blocks
+are requested for one draw. Failure to fill the element stops with
+`challenge-rejection-limit`. Rejected candidates are never reduced. Managed
+Merlin suites use the same coordinate decoder; they do not reuse the OpenVM
+construction's pinned older permutation or byte schedule.
 
 References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.

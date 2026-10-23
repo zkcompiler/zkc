@@ -159,6 +159,18 @@ impl ScalarVector {
 macro_rules! group_vector {
     ($name:ident, $point:ident, $upstream:ty) => {
         impl $name {
+            /// Reserve empty provider storage, accepting only typed points
+            /// through push. No wrapper vector is staged.
+            pub fn with_capacity(capacity: usize) -> Result<Self, Error> {
+                crate::allocation::reserve(capacity)
+                    .map(Self)
+                    .map_err(|_| Error::Allocation)
+            }
+            /// Append a typed point, reusing reserved provider storage.
+            /// Like Vec::push, this may grow the buffer when capacity is full.
+            pub fn push(&mut self, point: $point) {
+                self.0.push(point.0);
+            }
             /// Equal-length variable-time MSM borrowing both resident buffers.
             /// No wrapper-to-upstream Vec is created. Upstream still allocates
             /// affine points, scalar bytes and Pippenger workspace infallibly.
@@ -178,14 +190,17 @@ macro_rules! group_vector {
             fn map_into(
                 &self,
                 out: &mut Self,
-                mut element: impl FnMut(usize, $point) -> $point,
+                element: impl Fn(usize, $point) -> $point + Send + Sync,
             ) -> Result<(), Error> {
                 if self.len() != out.len() {
                     return Err(Error::LengthMismatch);
                 }
-                for (index, (point, out)) in self.iter().zip(&mut out.0).enumerate() {
-                    *out = element(index, point).0;
-                }
+                crate::cpu::chunks_mut(&mut out.0, 32, |offset, chunk| {
+                    for (index, out) in chunk.iter_mut().enumerate() {
+                        let index = offset + index;
+                        *out = element(index, $point(self.0[index])).0;
+                    }
+                });
                 Ok(())
             }
 

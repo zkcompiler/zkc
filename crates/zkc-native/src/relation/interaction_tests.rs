@@ -3,6 +3,7 @@
 //! `koala-bear.ext8-binomial3`.
 use super::*;
 use crate::{KoalaBearExt8, ring::Budget};
+use p3_field::PrimeField32;
 use std::collections::BTreeMap;
 use zkc_runtime::relation::{
     Assertion, Authority, Channel, ChannelKind, Columns, Group, Height, HeightAuthority, Input,

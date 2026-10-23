@@ -120,7 +120,7 @@ impl G2 {
         let mut bases = crate::arkworks::allocation::vector(p.len())?;
         bases.extend(p.iter().map(|p| p.0));
         Ok(Self(
-            G2Projective::msm(&bases, s)
+            crate::cpu::install(|| G2Projective::msm(&bases, s))
                 .map_err(|_| Error::InvalidEncoding)?
                 .into_affine(),
         ))
@@ -149,7 +149,10 @@ pub fn pairing_check(a: &[G1], b: &[G2]) -> Result<bool, Error> {
     if a.len() != b.len() {
         return Err(Error::InvalidEncoding);
     }
-    Ok(Bls12_381::multi_pairing(a.iter().map(|p| p.0), b.iter().map(|p| p.0)).is_zero())
+    Ok(crate::cpu::install(|| {
+        Bls12_381::multi_pairing(a.iter().map(|p| p.0), b.iter().map(|p| p.0))
+    })
+    .is_zero())
 }
 
 /// Prime-order BLS12-381 pairing target. Abstract additive notation denotes
@@ -199,5 +202,5 @@ impl Gt {
 }
 /// Total bilinear map into the prime-order target, including final exponentiation.
 pub fn pairing(a: &G1, b: &G2) -> Gt {
-    Gt(Bls12_381::pairing(a.0, b.0))
+    Gt(crate::cpu::install(|| Bls12_381::pairing(a.0, b.0)))
 }

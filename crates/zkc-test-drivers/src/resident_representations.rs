@@ -1,5 +1,6 @@
 //! Execute checked compiler fixtures without constructing or rewriting a Program.
 //! Usage: resident_representations PROGRAM.json MODE
+mod halo2curves_fixture;
 use serde_json::{Value as Json, json};
 use zkc_native::{
     Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Sequence, Value, native_contracts,
@@ -475,6 +476,10 @@ fn main() {
     let bytes = std::fs::read(arguments.next().expect("compiler-produced Program JSON")).unwrap();
     let mode = arguments.next().expect("fixture mode");
     assert!(arguments.next().is_none());
+    if let Some(mode) = mode.strip_prefix("halo2curves/") {
+        halo2curves_fixture::run(&bytes, mode);
+        return;
+    }
     if matches!(mode.as_str(), "resident" | "ports" | "branch" | "loop") {
         run_flat(&bytes, &mode);
         return;

@@ -6,6 +6,7 @@ mod codec;
 mod contracts;
 pub use contracts::{native_contracts, native_contracts_with_policy};
 mod diagonal;
+mod fields;
 pub mod hash;
 pub mod matrix;
 pub mod merkle;
@@ -36,6 +37,7 @@ pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as Ristrett
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
+pub use zkc_kernels::cpu::CpuExecution;
 pub use zkc_kernels::{
     arkworks::{
         bls12_381::{G1, G2 as Bls12381G2, Gt as Bls12381Gt, Scalar},
@@ -43,7 +45,8 @@ pub use zkc_kernels::{
     },
     dalek::edwards25519::EdwardsPrime,
     plonky3::{
-        KoalaBear, KoalaBearExt4, KoalaBearExt8,
+        BabyBear, BabyBearExt4, Goldilocks, GoldilocksExt2, KoalaBear, KoalaBearExt4,
+        KoalaBearExt8,
         binary::{Binary64, Binary64Ext3},
     },
 };

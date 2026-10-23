@@ -115,7 +115,8 @@ pub fn run(
         authority.insert(child.id().into(), Default::default());
     }
     let options = FunctionOptions::default();
-    let entry = FunctionEntry::admit(package, options, authority).map_err(|e| e.to_string())?;
+    let entry = FunctionEntry::admit_with_cpu(package, options, authority, job.cpu()?.clone())
+        .map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
     let expected = match check {
         Check::Output { expected } => Some(
@@ -143,6 +144,7 @@ pub fn run(
             entry.interface(),
             ingress,
             options.limits.capacity,
+            entry.cpu(),
         )?;
         entry
             .check_inputs(make_request(&entry, owner.share()?))
@@ -304,10 +306,11 @@ mod tests {
         std::fs::write(directory.join("input.zkcv"), &payload).unwrap();
         for ingress in ["json", "wire", "native", "prepared"] {
             for file_backed in [false, true] {
-                let job: Request = serde_json::from_value(json!({"format":"zkc.benchmark-job/0",
+                let mut job: Request = serde_json::from_value(json!({"format":"zkc.benchmark-job/0",
                 "backend":{"kind":"run","ingress":ingress,"package":path,"sha256":hash(package.as_bytes()),
                     "arguments":arguments,"check":{"kind":"acceptance","role":"P"}},"operation":"run",
                 "plan":{"warmups":1,"samples":2,"iterations":2},"proof":directory.join("unused")})).unwrap();
+                job.cpu = Some(zkc::execution::CpuExecution::new(1).unwrap());
                 let input = if file_backed {
                     json!({"accepted":{"file":"input.zkcv","sha256":hash(&payload)}}).to_string()
                 } else {

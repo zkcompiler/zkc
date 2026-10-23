@@ -9,11 +9,12 @@ use zkc_runtime::{
     vm::{Action, Contracts, ExecutionPolicy, OperationBinding, PhysicalType, Usage, Value as _},
 };
 
-fn native(contracts: &Contracts) -> Result<NativeBackend> {
-    NativeBackend::new(
+fn native(contracts: &Contracts, cpu: &zkc::execution::CpuExecution) -> Result<NativeBackend> {
+    NativeBackend::new_with_cpu(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "benchmark", "main", None), None),
         Default::default(),
+        cpu.clone(),
     )
     .map_err(fail)?
     .with_contracts(contracts.clone())
@@ -21,10 +22,10 @@ fn native(contracts: &Contracts) -> Result<NativeBackend> {
 }
 
 pub(super) fn binding(provider: Provider, contract: &str, domain: &str) -> OperationBinding {
-    let owner = if provider == Provider::Blst {
-        "blst/resident"
-    } else {
-        "arkworks"
+    let owner = match provider {
+        Provider::Blst => "blst/resident",
+        Provider::Halo2curvesAxiom => "halo2curves-axiom/resident",
+        Provider::Arkworks => "arkworks",
     };
     OperationBinding {
         contract: contract.into(),
@@ -96,12 +97,11 @@ impl Builder<'_> {
             return Err("conversion changed the mathematical type".into());
         }
         let logical = source.logical().spelling();
-        let width = if logical.contains(".g2") {
-            96
-        } else if logical.contains(".g1") {
-            48
-        } else {
-            32
+        let width = match source.logical().identity() {
+            zkc_runtime::vm::Identity::Bls12381G2 => 96,
+            zkc_runtime::vm::Identity::Bls12381G1 => 48,
+            zkc_runtime::vm::Identity::Bn254G2 => 64,
+            _ => 32,
         };
         let conversion = OperationBinding {
             contract: "representation.convert".into(),
@@ -309,7 +309,7 @@ pub(super) fn run(
         allow_variable_time: kernel == Kernel::Msm,
     };
     let contracts = zkc_native::native_contracts_with_policy(policy);
-    let backend = native(&contracts)?;
+    let backend = native(&contracts, request.cpu()?)?;
     let fixture = fixture(
         &contracts,
         provider,
@@ -345,7 +345,7 @@ pub(super) fn run(
             "main",
             "P",
             "benchmark",
-            native(&contracts)?,
+            native(&contracts, request.cpu()?)?,
             values,
         )
         .map_err(|e| fail(e.error))
@@ -355,7 +355,7 @@ pub(super) fn run(
         drop(values);
         measure::measure(
             request.plan,
-            || native(&contracts),
+            || native(&contracts, request.cpu()?),
             |backend| {
                 let values = decode(&backend, &fixture.inputs, &input_bytes)?;
                 let mut runner = Runner::new(&program, "main", "P", "benchmark", backend, values)
@@ -409,12 +409,14 @@ pub(super) fn run(
             Kernel::PairingCheck => Some(zkc_kernels::blst::bls12_381::PAIRING_WORKSPACE_BYTES),
             _ => None,
         }
+    } else if provider == Provider::Halo2curvesAxiom {
+        super::bn254::workspace(kernel, n)?
     } else {
         None
     };
     let mut report = Report::new(boundary.name(), samples, 0);
     report.admission_ns = Some(admission_ns);
-    report.diagnostics = json!({"provider":if provider == Provider::Blst {"blst"} else {"arkworks"},
+    report.diagnostics = json!({"provider":provider.name(),
         "chain_length":chain_length, "arithmetic_calls":fixture.arithmetic_calls,
         "input_physical_types":fixture.inputs.iter().map(PhysicalType::spelling).collect::<Vec<_>>(),
         "output_physical_types":fixture.outputs.iter().map(PhysicalType::spelling).collect::<Vec<_>>(),
@@ -430,6 +432,32 @@ pub(super) fn run(
             "peak_observation":"not exposed by current public Runner/Native APIs; cumulative fresh charges are not a peak"},
         "provider_hidden_allocations":"not allocator-instrumented; process lifetime peak RSS includes setup and oracle",
         "program":fixture.carrier});
+    if domain.starts_with("bn254.") {
+        // Record the actual selected codec output, including nominal frame tags.
+        // A family name alone does not establish that a BN254 codec was used.
+        let tags = |frames: &[Vec<u8>]| -> Result<Vec<u8>> {
+            frames
+                .iter()
+                .map(|frame| {
+                    if frame.len() < 6 || &frame[..5] != b"ZKCV\x00" {
+                        return Err("provider codec did not produce a nominal ZKCV/0 frame".into());
+                    }
+                    Ok(frame[5])
+                })
+                .collect()
+        };
+        report.diagnostics["input_wire_tags"] = json!(tags(&input_bytes)?);
+        report.diagnostics["output_wire_tags"] = json!(tags(&expected)?);
+        report.diagnostics["provider_scheduling_work_units_per_arithmetic_call"] =
+            json!(if provider == Provider::Halo2curvesAxiom {
+                super::bn254::scheduling_work(kernel, n)?
+            } else {
+                None
+            });
+        report.diagnostics["work_observation"] = json!(
+            "provider public-shape scheduling score per primary arithmetic call; excludes chain additions and conversions; terminal_runner_usage.logical_bytes is the separately observed VM charge"
+        );
+    }
     Ok(report)
 }
 
@@ -488,17 +516,110 @@ mod tests {
             allow_unspecified_timing: true,
             allow_variable_time: false,
         });
-        assert!(
-            fixture(
-                &contracts,
-                Provider::Blst,
-                Boundary::ResidentInstalledChain,
-                Kernel::Msm,
-                "bls12-381.g1",
-                2,
-                4
-            )
-            .is_err()
+        for (provider, domain) in [
+            (Provider::Blst, "bls12-381.g1"),
+            (Provider::Halo2curvesAxiom, "bn254.g1"),
+        ] {
+            assert!(
+                fixture(
+                    &contracts,
+                    provider,
+                    Boundary::ResidentInstalledChain,
+                    Kernel::Msm,
+                    domain,
+                    2,
+                    4
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn bn254_installs_actual_resident_ports_and_decodes_nominal_frames() {
+        use zkc_kernels::arkworks::bn254 as ark;
+        let contracts =
+            zkc_native::native_contracts_with_policy(ExecutionPolicy::general_purpose());
+        let cpu = zkc::execution::CpuExecution::serial().unwrap();
+        let backend = native(&contracts, &cpu).unwrap();
+        let resident = fixture(
+            &contracts,
+            Provider::Halo2curvesAxiom,
+            Boundary::ResidentInstalledChain,
+            Kernel::Msm,
+            "bn254.g2",
+            2,
+            4,
+        )
+        .unwrap();
+        assert_eq!(resident.arithmetic_calls, 7);
+        assert!(resident.conversions.is_empty());
+        assert_eq!(
+            resident
+                .inputs
+                .iter()
+                .map(PhysicalType::spelling)
+                .collect::<Vec<_>>(),
+            [
+                "vector:bn254.fr@halo2curves-axiom/bn254.fr",
+                "groups:bn254.g2@halo2curves-axiom/bn254.g2"
+            ]
         );
+        let program = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&resident.carrier).unwrap(),
+            &contracts,
+        )
+        .unwrap();
+        program.check_installation(&backend).unwrap();
+        let inputs = [
+            Value::Bn254Vector(vec![ark::Scalar::from(0), ark::Scalar::from(7)].into()),
+            Value::Bn254G2Vector(vec![ark::G2::identity(), ark::G2::generator()].into()),
+        ];
+        let bytes: Vec<_> = inputs
+            .iter()
+            .map(|v| backend.encode_native_value(v).unwrap())
+            .collect();
+        assert_eq!(&bytes[0][..6], b"ZKCV\x00\x29");
+        assert_eq!(&bytes[1][..6], b"ZKCV\x00\x31");
+        let values = decode(&backend, &resident.inputs, &bytes).unwrap();
+        assert_eq!(
+            values.iter().map(Value::physical_type).collect::<Vec<_>>(),
+            resident.inputs
+        );
+        for (value, bytes) in values.iter().zip(&bytes) {
+            assert_eq!(backend.encode_native_value(value).unwrap(), *bytes);
+        }
+        let bls = contracts
+            .resolve(binding(Provider::Blst, "curve.msm", "bls12-381.g2"))
+            .unwrap();
+        assert!(
+            backend
+                .decode_native_value(&bls.signature().inputs[0], &bytes[0])
+                .is_err()
+        );
+        assert!(
+            backend
+                .decode_native_value(&bls.signature().inputs[1], &bytes[1])
+                .is_err()
+        );
+        let bridge = fixture(
+            &contracts,
+            Provider::Halo2curvesAxiom,
+            Boundary::Installed,
+            Kernel::Msm,
+            "bn254.g2",
+            2,
+            1,
+        )
+        .unwrap();
+        assert_eq!(
+            bridge
+                .conversions
+                .iter()
+                .map(|row| row["canonical_payload_bytes"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            [64, 128, 64]
+        );
+        assert!(bridge.conversions.iter().all(|row| row["calls"] == 1));
     }
 }

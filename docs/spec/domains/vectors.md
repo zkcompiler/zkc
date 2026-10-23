@@ -113,9 +113,9 @@ and [capacity accounting](../runtime/capacity.md) retain their own work.
 
 Bindings retain their explicit implementation choice and field identity:
 `arkworks` supports BLS12-381 Fr and BN254 Fr, `dalek` supports Ristretto255
-scalars, and `plonky3` supports KoalaBear and its installed octic and quartic
-extensions, and the [binary fields](values.md#binary-fields) GF(2^64) and its
-cubic extension.
+scalars, and `plonky3` supports the
+[registered residue fields](values.md#registered-residue-fields) and the
+[binary fields](values.md#binary-fields) GF(2^64) and its cubic extension.
 Native scalar output preflight reserves the existing 512-byte retained charge
 before arithmetic or shape/index checks, including zero results. Insufficient
 per-value or invocation output allowance reports `exhausted:output-bytes`.

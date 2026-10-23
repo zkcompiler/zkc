@@ -9,6 +9,37 @@ BOUNDARIES = {'resident': 'resident_kernel_call', 'converted': 'converted_kernel
               'installed': 'installed_operation_call',
               'resident_installed_chain': 'resident_installed_chain',
               'wire_resident_chain': 'wire_decode_resident_execute_wire_encode'}
+FAMILIES = {'bls12-381': ('arkworks', 'blst'), 'bn254': ('arkworks', 'halo2curves-axiom')}
+
+
+def validate_backend(backend, boundary=None, operation=None):
+    """Positive family/provider inventory shared by live and retained jobs."""
+    required = {'kind', 'provider', 'group', 'kernel', 'boundary', 'elements'}
+    require(isinstance(backend, dict) and backend.get('kind') == 'kernel'
+            and required <= backend.keys() and not backend.keys() - required - {'family', 'chain_length'},
+            'invalid backend fields')
+    family = backend.get('family', 'bls12-381')
+    require(isinstance(family, str) and family in FAMILIES
+            and backend['provider'] in FAMILIES[family], 'invalid provider family')
+    require(all(isinstance(backend[key], str) for key in ('provider', 'group', 'kernel', 'boundary'))
+            and backend['group'] in ('scalar', 'g1', 'g2', 'pairing')
+            and backend['kernel'] in ('field_mul', 'vector_mul', 'scale', 'scale_each', 'vector_scale', 'msm', 'pairing_check')
+            and backend['boundary'] in BOUNDARIES, 'invalid kernel control')
+    require(boundary is None or boundary == BOUNDARIES[backend['boundary']], 'invalid kernel boundary')
+    require(operation in (None, 'run'), 'invalid kernel operation')
+    require(type(backend['elements']) is int and 1 <= backend['elements'] <= 4096, 'invalid kernel length')
+    require((backend['group'] == 'pairing') == (backend['kernel'] == 'pairing_check')
+            and (backend['group'] == 'scalar') == (backend['kernel'] in ('field_mul', 'vector_mul'))
+            and (backend['kernel'] not in ('scale', 'field_mul') or backend['elements'] == 1)
+            and (backend['boundary'] not in ('import', 'export')
+                 or backend['provider'] == FAMILIES[family][1] and backend['group'] in ('g1', 'g2')),
+            'unsupported kernel control')
+    require(family != 'bn254' or backend['kernel'] in ('field_mul', 'vector_mul', 'scale', 'msm', 'pairing_check'),
+            'unsupported BN254 kernel control')
+    length = backend.get('chain_length', 1)
+    require(type(length) is int and 1 <= length <= 32
+            and (length == 1 or backend['boundary'] in ('resident', 'converted', 'resident_installed_chain', 'wire_resident_chain')),
+            'invalid provider chain length')
 
 
 @dataclass(frozen=True)
@@ -56,6 +87,31 @@ def catalog():
                              'boundary': boundary, 'chain_length': 4}
                     name = f'provider-{group}-{kernel.replace("_", "-")}-{boundary}-chain-{n}'
                     cases.append((name, Case(name, shape), shape))
+    return cases + _bn254_catalog()
+
+
+def _bn254_catalog():
+    cases = []
+    for group, kernel, sizes in (('scalar', 'field_mul', (1,)), ('scalar', 'vector_mul', (32, 256)),
+                                 ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
+                                 ('g1', 'msm', (32, 256)), ('g2', 'msm', (32, 256)),
+                                 ('pairing', 'pairing_check', (2, 8))):
+        for n in sizes:
+            for boundary, length in (('resident', 1), ('converted', 1), ('installed', 1),
+                                     ('resident', 4), ('converted', 4),
+                                     ('resident_installed_chain', 4), ('wire_resident_chain', 4)):
+                shape = dict(family='bn254', group=group, kernel=kernel, elements=n, boundary=boundary)
+                if length != 1:
+                    shape['chain_length'] = length
+                suffix = '-chain' if length != 1 and boundary in ('resident', 'converted') else ''
+                name = f'provider-bn254-{group}-{kernel.replace("_", "-")}-{boundary.replace("_", "-")}{suffix}-{n}'
+                cases.append((name, Case(name, shape, 'bn254_provider'), shape))
+    for group in ('g1', 'g2'):
+        for n in (1, 32, 256):
+            for boundary in ('import', 'export'):
+                shape = dict(family='bn254', group=group, kernel='msm', elements=n, boundary=boundary)
+                name = f'provider-bn254-{group}-{boundary}-{n}'
+                cases.append((name, Case(name, shape, 'bn254_provider'), shape))
     return cases
 
 
@@ -63,7 +119,9 @@ def prepare_case(args, output, capture, manifest, case):
     require(not args.execution_counts, 'provider controls require an ordinary timing worker')
     directory = output / 'cases' / case.identifier
     shape = case.shape
-    providers = ('blst',) if shape['boundary'] in ('import', 'export') else ('arkworks', 'blst')
+    family = shape.get('family', 'bls12-381')
+    pair = FAMILIES[family]
+    providers = pair[1:] if shape['boundary'] in ('import', 'export') else pair
     jobs = []
     for provider in providers:
         job = Job(case.identifier, provider, 'run', args.worker,
@@ -95,9 +153,29 @@ def prepare_case(args, output, capture, manifest, case):
                   'Input/output codecs use Native selected physical types; conversion diagnostics describe reached explicit program occurrences.',
                   'No protocol throughput or security claim.'],
     }
+    if family == 'bn254':
+        contract = manifest['contracts'][case.identifier]
+        contract['family'] = 'BN254 provider'
+        contract['input_policy'] = 'fixed domain-separated full-width SHA-256-derived nonzero scalars; nonidentity generator multiples'
+        if shape['boundary'] == 'installed':
+            contract['included'] = ('VM local call, Native publication and Runner teardown; halo2curves-axiom explicitly '
+                                    'imports Arkworks BN254 inputs, computes and exports output; Runner construction excluded')
+        contract['notes'] = [
+            'Arkworks BN254 and halo2curves-axiom BN254 receive the same mathematical values and operation chain.',
+            'Arkworks MSM stages affine bases; halo2curves-axiom resident MSM borrows upstream affine and scalar buffers.',
+            'Arkworks converted cases are a zero-conversion baseline; the foreign provider imports once and exports once.',
+            'halo2curves-axiom uses serial MSM; installed MSM explicitly authorizes variable-time execution.',
+            'MSM chains add repeated MSM outputs; pairing chains return and check every Boolean.',
+            'Single-call pairing controls use nontrivial false products; repeated even-size controls cancel nonidentity pairs.',
+            'Installed boundaries admit the actual Native physical types and use nominal BN254 ZKCV frames; no compiler path is measured.',
+            'Direct adapter receipts count per-element calls; installed conversion receipts count reached program occurrences.',
+            'Provider scheduling scores and workspace admission bounds are separate from observed VM logical bytes and unavailable scratch peaks.',
+            'Pairing includes preparation, Miller loop and final exponentiation on every call; no prepared cache is measured.',
+            'No protocol throughput, cross-curve equivalence or security claim.',
+        ]
     if len(jobs) == 2:
         manifest.setdefault('comparisons', []).append(
-            {'case': case.identifier, 'operation': 'run', 'numerator': 'blst', 'denominator': 'arkworks'})
+            {'case': case.identifier, 'operation': 'run', 'numerator': pair[1], 'denominator': 'arkworks'})
     manifest['checks'].append({'case': case.identifier, 'status': 'passed',
                                'oracle': 'every timed result compared with Arkworks outside timer'})
     return jobs, None
@@ -112,16 +190,24 @@ def _installed_fixture(backend):
     group, kernel = backend['group'], backend['kernel']
     length, n = backend.get('chain_length', 1), backend['elements']
     selected = backend['provider']
+    family = backend.get('family', 'bls12-381')
 
     def physical(kind, provider):
-        domain = 'bls12-381.fr' if kind in ('field', 'vector') else f'bls12-381.{group}'
+        domain = f'{family}.fr' if kind in ('field', 'vector') else f'{family}.{group}'
         if kind == 'bool':
             return 'bool@native.bool/0'
         if kind in ('g1s', 'g2s'):
-            domain, kind = f'bls12-381.{kind[:2]}', 'groups'
+            domain, kind = f'{family}.{kind[:2]}', 'groups'
         if provider == 'blst':
             representation = 'fr' if kind in ('field', 'vector') else domain.rsplit('.', 1)[1]
             representation = f'blst/{representation}'
+        elif provider == 'halo2curves-axiom':
+            representation = f'halo2curves-axiom/{domain}'
+        elif family == 'bn254':
+            suffix = {'field': 'fr', 'vector': 'fr-vector',
+                      'group': domain.rsplit('.', 1)[1],
+                      'groups': f'{domain.rsplit(".", 1)[1]}-vector'}[kind]
+            representation = f'arkworks.bn254-{suffix}/0'
         else:
             representation = {'field': 'fr', 'vector': 'fr-vector',
                               'group': 'g1' if domain.endswith('.g1') else 'bls12-381-g2',
@@ -138,8 +224,8 @@ def _installed_fixture(backend):
         'msm': ('curve.msm', ('vector', 'groups'), 'group'),
         'pairing_check': ('pairing.check', ('g1s', 'g2s'), 'bool'),
     }[kernel]
-    domain = 'bls12-381.fr' if group in ('scalar', 'pairing') else f'bls12-381.{group}'
-    owner = 'blst/resident' if selected == 'blst' else 'arkworks'
+    domain = f'{family}.fr' if group in ('scalar', 'pairing') else f'{family}.{group}'
+    owner = 'arkworks' if selected == 'arkworks' else f'{selected}/resident'
     port_provider = 'arkworks' if backend['boundary'] == 'installed' else selected
     inputs = [physical(kind, port_provider) for kind in kinds]
     selected_inputs = [physical(kind, selected) for kind in kinds]
@@ -161,7 +247,7 @@ def _installed_fixture(backend):
             return value
         logical = source.split('@')[0]
         elements = n if logical.startswith(('vector:', 'groups:')) else 1
-        width = 96 if logical.endswith('.g2') else 48 if logical.endswith('.g1') else 32
+        width = _payload_width(logical)
         conversions.append(dict(logical_type=logical, source=source, target=target,
                                 calls=1, elements=elements, canonical_payload_bytes=elements * width))
         return call('representation.convert', [logical], 'native/representation.convert', [source, target], [value])
@@ -195,9 +281,106 @@ def _installed_fixture(backend):
     return program, inputs, outputs, conversions
 
 
+def _payload_width(logical):
+    if logical.endswith('.g2'):
+        return 64 if ':bn254.' in logical else 96
+    if logical.endswith('.g1'):
+        return 32 if ':bn254.' in logical else 48
+    return 32
+
+
+def _direct_conversions(backend):
+    _, inputs, outputs, _ = _installed_fixture(backend | {'boundary': 'resident'})
+    _, canonical_inputs, canonical_outputs, _ = _installed_fixture(backend | {'provider': 'arkworks', 'boundary': 'resident'})
+    pairs = []
+    boundary = backend['boundary']
+    if backend['provider'] == 'halo2curves-axiom':
+        if boundary in ('converted', 'import'):
+            pairs.extend(zip(canonical_inputs, inputs))
+        if boundary == 'converted':
+            # Repeated pairing returns Booleans; arithmetic returns one value.
+            pairs.extend(zip(outputs, canonical_outputs))
+        if boundary == 'export':
+            pairs.extend((source, target) for source, target in zip(inputs, canonical_inputs)
+                         if source.startswith(('group:', 'groups:')))
+    conversions = []
+    for source, target in pairs:
+        if source == target:
+            continue
+        logical = source.split('@')[0]
+        n = backend['elements'] if logical.startswith(('vector:', 'groups:')) else 1
+        conversions.append(dict(logical_type=logical, source=source, target=target,
+                                calls=n, elements=n, canonical_payload_bytes=n * _payload_width(logical)))
+    return conversions
+
+
+def _validate_bn254(report, backend):
+    evidence = report.get('diagnostics')
+    require(isinstance(evidence, dict) and evidence.get('family') == 'bn254'
+            and evidence.get('provider') == backend['provider'], 'missing BN254 provider evidence')
+    length = backend.get('chain_length', 1)
+    conversion = backend['boundary'] in ('import', 'export')
+    calls = 0 if conversion else length + (length - 1 if backend['kernel'] == 'msm' else 0)
+    require(type(evidence.get('chain_length')) is int and evidence['chain_length'] == length
+            and type(evidence.get('arithmetic_calls')) is int and evidence['arithmetic_calls'] == calls,
+            'BN254 provider chain differs from the request')
+    installed = backend['boundary'] in ('installed', 'resident_installed_chain', 'wire_resident_chain')
+    if not installed:
+        observed = evidence.get('kernel_adapter_conversions')
+        require(observed == _direct_conversions(backend)
+                and all(all(type(row[name]) is int for name in ('calls', 'elements', 'canonical_payload_bytes'))
+                        for row in observed), 'BN254 adapter receipts differ from the requested boundary')
+    managed = evidence.get('managed')
+    require(isinstance(managed, dict), 'missing BN254 resource observations')
+    for key in ('peak_retained_payload_bytes', 'peak_scratch_bytes'):
+        require(key in managed and managed[key] is None,
+                'invalid BN254 managed high-water observation')
+    bounded = backend['provider'] == 'halo2curves-axiom' and backend['kernel'] in ('msm', 'pairing_check') and not conversion
+    bound = managed.get('provider_workspace_admission_bound_bytes_per_call')
+    score = evidence.get('provider_scheduling_work_units_per_arithmetic_call')
+    require('provider_workspace_admission_bound_bytes_per_call' in managed
+            and 'provider_scheduling_work_units_per_arithmetic_call' in evidence
+            and (type(bound) is int and bound > 0 and type(score) is int and score > 0
+                 if bounded else bound is None and score is None), 'invalid BN254 provider admission bounds')
+    if installed:
+        policy = evidence.get('trusted_timing_authorization')
+        require(isinstance(policy, dict) and all(type(value) is bool for value in policy.values()),
+                'invalid BN254 timing authorization')
+        usage = managed.get('terminal_runner_usage')
+        fields = {'instructions', 'iterations', 'live_values', 'live_retained_payload_bytes',
+                  'cumulative_fresh_payload_bytes', 'logical_bytes'}
+        require(isinstance(usage, dict) and usage.keys() == fields
+                and all(type(value) is int and value >= 0 for value in usage.values())
+                and usage['instructions'] > 0 and usage['logical_bytes'] > 0,
+                'missing BN254 terminal VM resource charges')
+        _, inputs, outputs, _ = _installed_fixture(backend)
+        def wire(physical):
+            logical = physical.split('@')[0]
+            if logical == 'bool':
+                return 5, 7
+            kind, domain = logical.split(':')
+            tag = {('field', 'bn254.fr'): 40, ('vector', 'bn254.fr'): 41,
+                   ('group', 'bn254.g1'): 46, ('groups', 'bn254.g1'): 47,
+                   ('group', 'bn254.g2'): 48, ('groups', 'bn254.g2'): 49}[kind, domain]
+            width = _payload_width(logical)
+            return tag, 10 + backend['elements'] * width if kind in ('vector', 'groups') else 6 + width
+        for name, types in (('input', inputs), ('output', outputs)):
+            frames = [wire(ty) for ty in types]
+            tags = evidence.get(f'{name}_wire_tags')
+            require(tags == [tag for tag, _ in frames] and all(type(tag) is int for tag in tags)
+                    and type(evidence.get(f'{name}_wire_bytes')) is int
+                    and evidence[f'{name}_wire_bytes'] == sum(size for _, size in frames),
+                    'BN254 wire evidence differs from nominal ZKCV frames')
+
+
 def validate_evidence(report, backend):
     """Check provider boundary receipts in live and retained worker results."""
-    if backend['kind'] != 'kernel' or backend['boundary'] not in (
+    if backend['kind'] != 'kernel':
+        return
+    validate_backend(backend)
+    if backend.get('family', 'bls12-381') == 'bn254':
+        _validate_bn254(report, backend)
+    if backend['boundary'] not in (
             'installed', 'resident_installed_chain', 'wire_resident_chain'):
         return
     evidence = report.get('diagnostics')

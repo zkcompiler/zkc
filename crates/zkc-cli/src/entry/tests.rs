@@ -363,6 +363,44 @@ fn checks_prepare_without_executing_and_failure_preserves_output() {
 }
 
 #[test]
+fn explicit_threads_run_and_dry_run_report_workers_without_changing_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let options = pinned(dir.path(), &boolean_package(false));
+    let arguments = dir.path().join("arguments.json");
+    std::fs::write(&arguments, r#"{"flag":false}"#).unwrap();
+    let results = dir.path().join("result.json");
+    let input = format!("--input={}", arguments.display());
+    let output = format!("--results={}", results.display());
+    for threads in [1, 2] {
+        let configured = format!("--threads={threads}");
+        let checked = run(
+            "run",
+            &options,
+            &[
+                "--dry-run".into(),
+                input.clone(),
+                output.clone(),
+                configured.clone(),
+            ],
+        );
+        assert_eq!(checked["status"], "inputs-checked", "{checked}");
+        assert_eq!(checked["cpu"]["workers"], threads);
+        assert!(checked.get("execution").is_none());
+        assert!(!results.exists());
+        let report = run(
+            "run",
+            &options,
+            &[input.clone(), output.clone(), configured],
+        );
+        assert_eq!(report["status"], "executed", "{report}");
+        assert_eq!(report["cpu"]["workers"], threads);
+        let value: Json = serde_json::from_slice(&std::fs::read(&results).unwrap()).unwrap();
+        assert_eq!(value, json!({"format":"zkc.entry-outputs/0","value":false}));
+        std::fs::remove_file(&results).unwrap();
+    }
+}
+
+#[test]
 fn exact_names_shape_pins_and_output_identity_are_enforced() {
     let dir = tempfile::tempdir().unwrap();
     let options = pinned(dir.path(), &boolean_package(false));

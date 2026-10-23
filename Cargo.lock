@@ -107,7 +107,6 @@ dependencies = [
  "num-bigint 0.4.8",
  "num-integer",
  "num-traits",
- "rayon",
  "zeroize",
 ]
 
@@ -188,8 +187,6 @@ dependencies = [
  "fnv",
  "merlin",
  "num-traits",
- "rand 0.8.8",
- "rayon",
 ]
 
 [[package]]
@@ -323,6 +320,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
 dependencies = [
  "digest 0.10.7",
+]
+
+[[package]]
+name = "blake2b_simd"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3560a7b1951efe814fcd721938313adc56753ca39f4b23847d7e9a2402f5dbff"
+dependencies = [
+ "arrayvec",
+ "constant_time_eq",
 ]
 
 [[package]]
@@ -823,6 +830,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2curves-axiom"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "276d6c463e0e8e70c1a221baae62b670453f6ef851dd1c73f0764e5215fda64d"
+dependencies = [
+ "blake2b_simd",
+ "digest 0.10.7",
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint 0.4.8",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.8",
+ "rand_core 0.6.4",
+ "rayon",
+ "sha2 0.10.9",
+ "static_assertions",
+ "subtle",
+ "unroll",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1024,6 +1056,9 @@ name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
+dependencies = [
+ "spin 0.9.9",
+]
 
 [[package]]
 name = "libc"
@@ -1159,6 +1194,21 @@ dependencies = [
  "p3-poseidon2 0.4.3",
  "p3-symmetric 0.4.3",
  "rand 0.9.5",
+]
+
+[[package]]
+name = "p3-baby-bear"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "923c206a5680448c97314ab1cd86064608988513535a5532e35e1da8258f4a0d"
+dependencies = [
+ "p3-field 0.8.0",
+ "p3-mds 0.8.0",
+ "p3-monty-31 0.8.0",
+ "p3-poseidon1 0.8.0",
+ "p3-poseidon2 0.8.0",
+ "p3-symmetric 0.8.0",
+ "rand 0.10.3",
 ]
 
 [[package]]
@@ -1329,6 +1379,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "p3-goldilocks"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "325a854e1232dd1ce270245d9c978b71897c286f072d2fa31740956a800e70c5"
+dependencies = [
+ "num-bigint 0.5.1",
+ "p3-dft 0.8.0",
+ "p3-field 0.8.0",
+ "p3-mds 0.8.0",
+ "p3-poseidon1 0.8.0",
+ "p3-poseidon2 0.8.0",
+ "p3-symmetric 0.8.0",
+ "p3-util 0.8.0",
+ "rand 0.10.3",
+ "serde",
+ "spin 0.12.3",
+]
+
+[[package]]
 name = "p3-keccak"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1432,6 +1501,9 @@ name = "p3-maybe-rayon"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe1d83295d958b3d098e11b7868ac35c866c9c0432ce5266b90f7844dad513de"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "p3-mds"
@@ -1698,6 +1770,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
  "group",
+]
+
+[[package]]
+name = "pasta_curves"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3437083215c505e867eea5478371feba43d7689d6d15ec0a209eb46fb0d4cda6"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "lazy_static",
+ "rand 0.8.8",
+ "static_assertions",
+ "subtle",
 ]
 
 [[package]]
@@ -2102,6 +2189,12 @@ checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 
 [[package]]
 name = "spin"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+
+[[package]]
+name = "spin"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
@@ -2155,6 +2248,12 @@ dependencies = [
  "turboshake",
  "zeroize",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strength_reduce"
@@ -2442,6 +2541,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "unroll"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ad948c1cb799b1a70f836077721a92a35ac177d4daddf4c20a633786d4cf618"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2696,20 +2805,25 @@ dependencies = [
  "blstrs",
  "curve25519-dalek",
  "group",
- "p3-baby-bear",
+ "halo2curves-axiom",
+ "p3-baby-bear 0.4.3",
+ "p3-baby-bear 0.8.0",
  "p3-binary-field",
  "p3-challenger 0.4.3",
  "p3-commit",
  "p3-dft 0.8.0",
  "p3-field 0.4.3",
  "p3-field 0.8.0",
+ "p3-goldilocks",
  "p3-keccak",
  "p3-koala-bear 0.8.0",
  "p3-matrix 0.8.0",
  "p3-merkle-tree",
+ "p3-monty-31 0.8.0",
  "p3-poseidon2 0.8.0",
  "p3-symmetric 0.4.3",
  "p3-symmetric 0.8.0",
+ "rayon",
  "serde_json",
  "sha2 0.11.0",
  "sha3 0.12.0",
@@ -2769,7 +2883,7 @@ dependencies = [
  "curve25519-dalek",
  "merlin",
  "num-bigint 0.5.1",
- "p3-baby-bear",
+ "p3-baby-bear 0.4.3",
  "p3-challenger 0.4.3",
  "p3-field 0.4.3",
  "p3-field 0.8.0",

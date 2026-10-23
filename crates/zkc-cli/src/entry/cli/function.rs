@@ -9,9 +9,10 @@ pub(super) fn execute(
     args: &Arguments<'_>,
     invocation: invocation::Invocation,
     mut destinations: Outputs,
-    checking: bool,
+    cpu: &CpuExecution,
     report: &mut Json,
 ) -> Result<()> {
+    let checking = args.has("--dry-run");
     let CheckedInterface::Function(interface) = interface else {
         return Err("source-entry-selection".into());
     };
@@ -71,7 +72,7 @@ pub(super) fn execute(
     let (authority, context, result_encoder) = bindings.into_parts();
     report["phase"] = json!("admission");
     let host = measured(args, report, "admission", |_| {
-        FunctionEntry::admit(
+        FunctionEntry::admit_with_cpu(
             package,
             FunctionOptions {
                 limits: options.run,
@@ -79,6 +80,7 @@ pub(super) fn execute(
                 ..Default::default()
             },
             authority,
+            cpu.clone(),
         )
     })?;
     if invocation.results.is_some() {
@@ -120,7 +122,7 @@ pub(super) fn execute(
         if invocation.results.is_some() {
             measured(args, report, "output_encoding_and_publication", |report| {
                 report["phase"] = json!("results");
-                let encoded = result_encoder.encode(&value.into_value())?;
+                let encoded = result_encoder.encode_with_cpu(&value.into_value(), cpu.clone())?;
                 report["phase"] = json!("publication");
                 crate::files::publication(
                     destinations.publish(&[("results", &encoded)]),

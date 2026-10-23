@@ -1,8 +1,8 @@
 //! Exact mathematical encodings, separate from native transport and observation.
-use crate::{
-    Binary64, Binary64Ext3, G1, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Scalar,
-    Value, ark, refused, value::size,
-};
+use crate::{Binary64, Binary64Ext3, G1, Policy, Result, Scalar, Value, ark, refused, value::size};
+#[cfg(test)]
+use crate::{KoalaBear, KoalaBearExt8};
+#[cfg(test)]
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
 use zkc_kernels::plonky3::words::{self, Form};
@@ -17,7 +17,11 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         [] => (Identity::None, "native"),
         [domain] => {
             let identity = Identity::parse(domain).ok()?;
-            (identity, identity.provider()?)
+            let provider = crate::domains::INSTALLED
+                .iter()
+                .find(|domain| domain.field == identity || domain.group == Some(identity))?
+                .provider;
+            (identity, provider)
         }
         _ => return None,
     };
@@ -50,22 +54,26 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
             (&[Bytes], &[Bool, Group])
         }
         ("encoding.cryptonote_map", Identity::Edwards25519Prime) => (&[Bytes], &[Group]),
-        (
-            "encoding.field_le" | "encoding.field_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-        ) => (&[Field], &[Bytes]),
-        (
-            "encoding.fields_le" | "encoding.fields_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-        ) => (&[Vector], &[Bytes]),
-        (
-            "encoding.field_from_le" | "encoding.field_from_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-        ) => (&[Bytes], &[Bool, Field]),
-        (
-            "encoding.fields_from_le" | "encoding.fields_from_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
-        ) => (&[Bytes], &[Bool, Vector]),
+        ("encoding.field_le", field) if crate::fields::contains(field) => (&[Field], &[Bytes]),
+        ("encoding.fields_le", field) if crate::fields::contains(field) => (&[Vector], &[Bytes]),
+        ("encoding.field_from_le", field) if crate::fields::contains(field) => {
+            (&[Bytes], &[Bool, Field])
+        }
+        ("encoding.fields_from_le", field) if crate::fields::contains(field) => {
+            (&[Bytes], &[Bool, Vector])
+        }
+        ("encoding.field_montgomery_le", field) if crate::fields::montgomery(field) => {
+            (&[Field], &[Bytes])
+        }
+        ("encoding.fields_montgomery_le", field) if crate::fields::montgomery(field) => {
+            (&[Vector], &[Bytes])
+        }
+        ("encoding.field_from_montgomery_le", field) if crate::fields::montgomery(field) => {
+            (&[Bytes], &[Bool, Field])
+        }
+        ("encoding.fields_from_montgomery_le", field) if crate::fields::montgomery(field) => {
+            (&[Bytes], &[Bool, Vector])
+        }
         // Binary fields have little-endian bit patterns and no Montgomery form.
         ("encoding.field_le", Identity::Binary64 | Identity::Binary64Ext3) => (&[Field], &[Bytes]),
         ("encoding.fields_le", Identity::Binary64 | Identity::Binary64Ext3) => {
@@ -124,7 +132,7 @@ fn encode_collection<T, const WIDTH: usize>(
     Ok(vec![Value::Bytes(bytes.into())])
 }
 
-/// Word form selected by a KoalaBear-family codec name, if it is one.
+/// Coordinate-word form selected by an installed prime-field codec name.
 fn word_form(name: &str) -> Option<Form> {
     match name {
         "encoding.field_le"
@@ -139,79 +147,12 @@ fn word_form(name: &str) -> Option<Form> {
     }
 }
 
-/// Carriers of KoalaBear and its installed extensions, for the word codecs.
-trait WordElement: BasedVectorSpace<KoalaBear> + Copy + Default {
-    fn field(value: &Value) -> Option<Self>;
-    fn vector(value: &Value) -> Option<&[Self]>;
-    fn field_value(self) -> Value;
-    fn vector_value(values: Arc<[Self]>) -> Value;
-}
-impl WordElement for KoalaBear {
-    fn field(value: &Value) -> Option<Self> {
-        match value {
-            Value::KoalaBearField(x) => Some(*x),
-            _ => None,
-        }
-    }
-    fn vector(value: &Value) -> Option<&[Self]> {
-        match value {
-            Value::KoalaBearVector(x) => Some(x),
-            _ => None,
-        }
-    }
-    fn field_value(self) -> Value {
-        Value::KoalaBearField(self)
-    }
-    fn vector_value(values: Arc<[Self]>) -> Value {
-        Value::KoalaBearVector(values)
-    }
-}
-impl WordElement for KoalaBearExt4 {
-    fn field(value: &Value) -> Option<Self> {
-        match value {
-            Value::KoalaBearExt4Field(x) => Some(*x),
-            _ => None,
-        }
-    }
-    fn vector(value: &Value) -> Option<&[Self]> {
-        match value {
-            Value::KoalaBearExt4Vector(x) => Some(x),
-            _ => None,
-        }
-    }
-    fn field_value(self) -> Value {
-        Value::KoalaBearExt4Field(self)
-    }
-    fn vector_value(values: Arc<[Self]>) -> Value {
-        Value::KoalaBearExt4Vector(values)
-    }
-}
-impl WordElement for KoalaBearExt8 {
-    fn field(value: &Value) -> Option<Self> {
-        match value {
-            Value::KoalaBearExt8Field(x) => Some(*x),
-            _ => None,
-        }
-    }
-    fn vector(value: &Value) -> Option<&[Self]> {
-        match value {
-            Value::KoalaBearExt8Vector(x) => Some(x),
-            _ => None,
-        }
-    }
-    fn field_value(self) -> Value {
-        Value::KoalaBearExt8Field(self)
-    }
-    fn vector_value(values: Arc<[Self]>) -> Value {
-        Value::KoalaBearExt8Vector(values)
-    }
-}
-
+use crate::fields::Registered;
 /// Four-byte coordinate words of KoalaBear and its installed extensions.
 /// Encoders preflight the whole output; decoders validate every word before
 /// allocating and return false with a zero or empty value on any invalid word
 /// or width.
-fn koala_bear_words<E: WordElement>(
+fn residue_words<E: Registered>(
     name: &str,
     form: Form,
     args: &[Value],
@@ -222,7 +163,7 @@ fn koala_bear_words<E: WordElement>(
     let element = std::mem::size_of::<E>();
     match (name, args) {
         ("encoding.field_le" | "encoding.field_montgomery_le", [value]) => {
-            let value = E::field(value).ok_or_else(|| refused("encoding-operands"))?;
+            let value = E::field(value)?;
             policy.bytes(width)?;
             policy.output(size(width, 1)?, available)?;
             let mut bytes = crate::operations::arithmetic::reserve(width)?;
@@ -230,7 +171,7 @@ fn koala_bear_words<E: WordElement>(
             Ok(vec![Value::Bytes(bytes.into())])
         }
         ("encoding.fields_le" | "encoding.fields_montgomery_le", [values]) => {
-            let values = E::vector(values).ok_or_else(|| refused("encoding-operands"))?;
+            let values = E::vector(values)?;
             policy.vector_width(values.len(), element)?;
             let length = values
                 .len()
@@ -249,7 +190,7 @@ fn koala_bear_words<E: WordElement>(
             let value = words::decode::<E>(bytes, form);
             Ok(vec![
                 Value::Bool(value.is_some()),
-                value.unwrap_or_default().field_value(),
+                E::field_value(value.unwrap_or_default()),
             ])
         }
         (
@@ -258,7 +199,7 @@ fn koala_bear_words<E: WordElement>(
         ) => {
             if !words::valid_elements::<E>(bytes) {
                 policy.output(512usize.saturating_add(size(0, element)?), available)?;
-                return Ok(vec![Value::Bool(false), E::vector_value(Arc::from([]))]);
+                return Ok(vec![Value::Bool(false), E::vector_value(Vec::new())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
@@ -273,7 +214,7 @@ fn koala_bear_words<E: WordElement>(
                 values
                     .push(words::decode::<E>(chunk, form).ok_or_else(|| refused("encoding-word"))?);
             }
-            Ok(vec![Value::Bool(true), E::vector_value(values.into())])
+            Ok(vec![Value::Bool(true), E::vector_value(values)])
         }
         _ => Err(refused("encoding-operands")),
     }
@@ -385,13 +326,13 @@ fn bit_patterns<E: BitPattern>(
             let value = E::decode(bytes);
             Ok(vec![
                 Value::Bool(value.is_some()),
-                value.unwrap_or_default().field_value(),
+                E::field_value(value.unwrap_or_default()),
             ])
         }
         ("encoding.fields_from_le", [Value::Bytes(bytes)]) => {
             if !bytes.len().is_multiple_of(width) {
                 policy.output(512usize.saturating_add(size(0, element)?), available)?;
-                return Ok(vec![Value::Bool(false), E::vector_value(Arc::from([]))]);
+                return Ok(vec![Value::Bool(false), E::vector_value(Vec::new().into())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
@@ -430,14 +371,13 @@ pub(crate) fn apply(
     }
     if let Some(form) = word_form(name) {
         match identity {
-            Identity::KoalaBear => {
-                return koala_bear_words::<KoalaBear>(name, form, args, policy, available);
-            }
-            Identity::KoalaBearExt8 => {
-                return koala_bear_words::<KoalaBearExt8>(name, form, args, policy, available);
-            }
-            Identity::KoalaBearExt4 => {
-                return koala_bear_words::<KoalaBearExt4>(name, form, args, policy, available);
+            field if crate::fields::contains(field) => {
+                if form == Form::Montgomery && !crate::fields::montgomery(field) {
+                    return Err(refused("encoding-operands"));
+                }
+                return crate::fields::with_residue!(field, |E| residue_words::<E>(
+                    name, form, args, policy, available
+                ));
             }
             Identity::Binary64 if form == Form::Canonical => {
                 return bit_patterns::<Binary64>(name, args, policy, available);

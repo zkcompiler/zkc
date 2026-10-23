@@ -25,6 +25,11 @@ pub enum Identity {
     MerkleKoalaBearExt8,
     MerklePoseidon2KoalaBear,
     MerklePoseidon2KoalaBearExt4,
+    MerklePoseidon2BabyBear,
+    MerklePoseidon2BabyBearExt4,
+    MerklePoseidon2Goldilocks,
+    MerklePoseidon2GoldilocksExt2,
+
     Merlin3KoalaBearExt8,
     Merlin3Fr64Be,
     Spongefish080KeccakFr64Be,
@@ -32,6 +37,12 @@ pub enum Identity {
     KoalaBear,
     KoalaBearExt8,
     KoalaBearExt4,
+    BabyBear,
+    BabyBearExt4,
+    Goldilocks,
+    GoldilocksExt2,
+    Merlin3BabyBearExt4,
+    Merlin3GoldilocksExt2,
     Ristretto255Group,
     Edwards25519Prime,
     Merlin3Ristretto64Le,
@@ -48,6 +59,8 @@ impl Identity {
     pub(crate) fn field_characteristic(self) -> Option<&'static str> {
         match self {
             Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("2130706433"),
+            Self::BabyBear | Self::BabyBearExt4 => Some("2013265921"),
+            Self::Goldilocks | Self::GoldilocksExt2 => Some("18446744069414584321"),
             Self::Binary64 | Self::Binary64Ext3 => Some("2"),
             Self::Bls12381Fr => Some(
                 "52435875175126190479447740508185965837690552500527637822603658699938581184513",
@@ -66,7 +79,12 @@ impl Identity {
     pub fn is_prime_field(self) -> bool {
         matches!(
             self,
-            Self::Bn254Fr | Self::Bls12381Fr | Self::Ristretto255Scalar | Self::KoalaBear
+            Self::Bn254Fr
+                | Self::Bls12381Fr
+                | Self::Ristretto255Scalar
+                | Self::KoalaBear
+                | Self::BabyBear
+                | Self::Goldilocks
         )
     }
     /// A prime field or a nominal extension of one: every coordinate is an
@@ -74,6 +92,29 @@ impl Identity {
     /// arenas use this presentation; binary fields do not have it.
     pub fn has_residue_coordinates(self) -> bool {
         self.is_prime_field() || self.base_field().is_some_and(Self::is_prime_field)
+    }
+    /// Closed installation of residue arithmetic, base-subgroup cosets and Ring.
+    pub fn is_plonky3_residue(self) -> bool {
+        matches!(
+            self,
+            Self::KoalaBear
+                | Self::KoalaBearExt4
+                | Self::KoalaBearExt8
+                | Self::BabyBear
+                | Self::BabyBearExt4
+                | Self::Goldilocks
+                | Self::GoldilocksExt2
+        )
+    }
+    pub fn has_montgomery_words(self) -> bool {
+        matches!(
+            self,
+            Self::KoalaBear
+                | Self::KoalaBearExt4
+                | Self::KoalaBearExt8
+                | Self::BabyBear
+                | Self::BabyBearExt4
+        )
     }
     /// Width in bits of a binary field's bit-pattern presentation: the number
     /// of its coordinates over GF(2) (docs/spec/domains/values.md).
@@ -114,6 +155,10 @@ impl Identity {
                 | Self::KoalaBear
                 | Self::KoalaBearExt8
                 | Self::KoalaBearExt4
+                | Self::BabyBear
+                | Self::BabyBearExt4
+                | Self::Goldilocks
+                | Self::GoldilocksExt2
         )
     }
     /// Installed associations, independent of the value kind.
@@ -142,6 +187,14 @@ impl Identity {
             Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
             Self::Binary64 => Some(Self::Binary64),
             Self::Binary64Ext3 => Some(Self::Binary64Ext3),
+            Self::BabyBear | Self::MerklePoseidon2BabyBear => Some(Self::BabyBear),
+            Self::BabyBearExt4 | Self::Merlin3BabyBearExt4 | Self::MerklePoseidon2BabyBearExt4 => {
+                Some(Self::BabyBearExt4)
+            }
+            Self::Goldilocks | Self::MerklePoseidon2Goldilocks => Some(Self::Goldilocks),
+            Self::GoldilocksExt2
+            | Self::Merlin3GoldilocksExt2
+            | Self::MerklePoseidon2GoldilocksExt2 => Some(Self::GoldilocksExt2),
             Self::None => None,
         }
     }
@@ -153,6 +206,10 @@ impl Identity {
                 | Self::MerkleKoalaBearExt8
                 | Self::MerklePoseidon2KoalaBear
                 | Self::MerklePoseidon2KoalaBearExt4
+                | Self::MerklePoseidon2BabyBear
+                | Self::MerklePoseidon2BabyBearExt4
+                | Self::MerklePoseidon2Goldilocks
+                | Self::MerklePoseidon2GoldilocksExt2
         )
     }
     /// A row commitment whose installed scheme opens several positions with
@@ -160,13 +217,20 @@ impl Identity {
     pub fn has_multi_opening(self) -> bool {
         matches!(
             self,
-            Self::MerklePoseidon2KoalaBear | Self::MerklePoseidon2KoalaBearExt4
+            Self::MerklePoseidon2KoalaBear
+                | Self::MerklePoseidon2KoalaBearExt4
+                | Self::MerklePoseidon2BabyBear
+                | Self::MerklePoseidon2BabyBearExt4
+                | Self::MerklePoseidon2Goldilocks
+                | Self::MerklePoseidon2GoldilocksExt2
         )
     }
     /// A nominal extension has an explicit base; other fields have no embedding contract.
     pub fn base_field(self) -> Option<Self> {
         match self {
             Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some(Self::KoalaBear),
+            Self::BabyBearExt4 => Some(Self::BabyBear),
+            Self::GoldilocksExt2 => Some(Self::Goldilocks),
             Self::Binary64Ext3 => Some(Self::Binary64),
             _ => None,
         }
@@ -196,6 +260,8 @@ impl Identity {
             | Self::Merlin3Ristretto64Le
             | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3KoalaBearExt8
+            | Self::Merlin3BabyBearExt4
+            | Self::Merlin3GoldilocksExt2
             | Self::HashChainKeccak256Fr64Be
             | Self::HashChainKeccak256KoalaBearExt8 => Some(self),
             _ => None,
@@ -206,7 +272,10 @@ impl Identity {
     pub fn has_index_transcript(self) -> bool {
         matches!(
             self,
-            Self::Merlin3KoalaBearExt8 | Self::HashChainKeccak256KoalaBearExt8
+            Self::Merlin3KoalaBearExt8
+                | Self::Merlin3BabyBearExt4
+                | Self::Merlin3GoldilocksExt2
+                | Self::HashChainKeccak256KoalaBearExt8
         )
     }
     pub fn provider(self) -> Option<&'static str> {
@@ -217,7 +286,12 @@ impl Identity {
             Self::Bls12381Fr | Self::Bn254Fr => Some("arkworks"),
             Self::Ristretto255Scalar => Some("dalek"),
             Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("plonky3"),
-            Self::Binary64 | Self::Binary64Ext3 => Some("plonky3"),
+            Self::Binary64
+            | Self::Binary64Ext3
+            | Self::BabyBear
+            | Self::BabyBearExt4
+            | Self::Goldilocks
+            | Self::GoldilocksExt2 => Some("plonky3"),
             _ => None,
         }
     }
@@ -229,6 +303,12 @@ impl Identity {
             Self::Bn254G2 => "bn254.g2",
             Self::Bn254Gt => "bn254.gt",
 
+            Self::BabyBear => "baby-bear",
+            Self::BabyBearExt4 => "baby-bear.ext4-binomial11",
+            Self::Goldilocks => "goldilocks",
+            Self::GoldilocksExt2 => "goldilocks.ext2-binomial7",
+            Self::Merlin3BabyBearExt4 => "merlin3.baby-bear.ext4-binomial11.rejection31le/0",
+            Self::Merlin3GoldilocksExt2 => "merlin3.goldilocks.ext2-binomial7.rejection64le/0",
             Self::KoalaBear => "koala-bear",
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
             Self::KoalaBearExt4 => "koala-bear.ext4-binomial3",
@@ -244,6 +324,14 @@ impl Identity {
             Self::MerklePoseidon2KoalaBear => "rows.merkle-poseidon2-16.koala-bear/0",
             Self::MerklePoseidon2KoalaBearExt4 => {
                 "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
+            }
+            Self::MerklePoseidon2BabyBear => "rows.merkle-poseidon2-16.baby-bear/0",
+            Self::MerklePoseidon2BabyBearExt4 => {
+                "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0"
+            }
+            Self::MerklePoseidon2Goldilocks => "rows.merkle-poseidon2-8.goldilocks/0",
+            Self::MerklePoseidon2GoldilocksExt2 => {
+                "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0"
             }
             Self::Ristretto255Scalar => "ristretto255.scalar",
             Self::Ristretto255Group => "ristretto255.group",
@@ -272,6 +360,10 @@ impl Identity {
             Self::MerkleKoalaBearExt8,
             Self::MerklePoseidon2KoalaBear,
             Self::MerklePoseidon2KoalaBearExt4,
+            Self::MerklePoseidon2BabyBear,
+            Self::MerklePoseidon2BabyBearExt4,
+            Self::MerklePoseidon2Goldilocks,
+            Self::MerklePoseidon2GoldilocksExt2,
             Self::Merlin3KoalaBearExt8,
             Self::Merlin3Fr64Be,
             Self::Spongefish080KeccakFr64Be,
@@ -279,6 +371,12 @@ impl Identity {
             Self::KoalaBear,
             Self::KoalaBearExt8,
             Self::KoalaBearExt4,
+            Self::BabyBear,
+            Self::BabyBearExt4,
+            Self::Goldilocks,
+            Self::GoldilocksExt2,
+            Self::Merlin3BabyBearExt4,
+            Self::Merlin3GoldilocksExt2,
             Self::Ristretto255Group,
             Self::Edwards25519Prime,
             Self::Merlin3Ristretto64Le,
@@ -360,6 +458,14 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
         Identity::MerklePoseidon2KoalaBear.name()
     } else if nominal == "rows-merkle-poseidon2-16.koala-bear.ext4-binomial3" {
         Identity::MerklePoseidon2KoalaBearExt4.name()
+    } else if nominal == "rows-merkle-poseidon2-16.baby-bear" {
+        Identity::MerklePoseidon2BabyBear.name()
+    } else if nominal == "rows-merkle-poseidon2-16.baby-bear.ext4-binomial11" {
+        Identity::MerklePoseidon2BabyBearExt4.name()
+    } else if nominal == "rows-merkle-poseidon2-8.goldilocks" {
+        Identity::MerklePoseidon2Goldilocks.name()
+    } else if nominal == "rows-merkle-poseidon2-8.goldilocks.ext2-binomial7" {
+        Identity::MerklePoseidon2GoldilocksExt2.name()
     } else {
         nominal
     };
@@ -407,13 +513,22 @@ impl LogicalType {
                         | KoalaBear
                         | KoalaBearExt8
                         | KoalaBearExt4
+                        | BabyBear
+                        | BabyBearExt4
+                        | Goldilocks
+                        | GoldilocksExt2
                         | Binary64
                         | Binary64Ext3
                 )
             }
             Type::Rng => matches!(
                 identity,
-                Bn254Fr | Bls12381Fr | Ristretto255Scalar | KoalaBearExt8
+                Bn254Fr
+                    | Bls12381Fr
+                    | Ristretto255Scalar
+                    | KoalaBearExt8
+                    | BabyBearExt4
+                    | GoldilocksExt2
             ),
             Type::Nonce => matches!(identity, Bls12381Fr | Ristretto255Scalar),
             Type::Table | Type::Point => identity == Bls12381Fr,
@@ -438,6 +553,8 @@ impl LogicalType {
                     | Merlin3Ristretto64Le
                     | Spongefish080KeccakFr64Be
                     | Merlin3KoalaBearExt8
+                    | Merlin3BabyBearExt4
+                    | Merlin3GoldilocksExt2
                     | HashChainKeccak256Fr64Be
                     | HashChainKeccak256KoalaBearExt8
             ),
@@ -475,6 +592,14 @@ impl LogicalType {
             Identity::MerklePoseidon2KoalaBear => ".rows-merkle-poseidon2-16.koala-bear".into(),
             Identity::MerklePoseidon2KoalaBearExt4 => {
                 ".rows-merkle-poseidon2-16.koala-bear.ext4-binomial3".into()
+            }
+            Identity::MerklePoseidon2BabyBear => ".rows-merkle-poseidon2-16.baby-bear".into(),
+            Identity::MerklePoseidon2BabyBearExt4 => {
+                ".rows-merkle-poseidon2-16.baby-bear.ext4-binomial11".into()
+            }
+            Identity::MerklePoseidon2Goldilocks => ".rows-merkle-poseidon2-8.goldilocks".into(),
+            Identity::MerklePoseidon2GoldilocksExt2 => {
+                ".rows-merkle-poseidon2-8.goldilocks.ext2-binomial7".into()
             }
             Identity::MerkleKoalaBearExt8 => {
                 ".rows-merkle-keccak256.koala-bear.ext8-binomial3".into()
@@ -539,6 +664,10 @@ impl LogicalType {
                         | Identity::KoalaBear
                         | Identity::KoalaBearExt8
                         | Identity::KoalaBearExt4
+                        | Identity::BabyBear
+                        | Identity::BabyBearExt4
+                        | Identity::Goldilocks
+                        | Identity::GoldilocksExt2
                         | Identity::Binary64
                         | Identity::Binary64Ext3
                 ) | (
@@ -560,6 +689,10 @@ impl LogicalType {
                         | Identity::MerkleKoalaBearExt8
                         | Identity::MerklePoseidon2KoalaBear
                         | Identity::MerklePoseidon2KoalaBearExt4
+                        | Identity::MerklePoseidon2BabyBear
+                        | Identity::MerklePoseidon2BabyBearExt4
+                        | Identity::MerklePoseidon2Goldilocks
+                        | Identity::MerklePoseidon2GoldilocksExt2
                 )
             )
     }
@@ -717,6 +850,26 @@ pub enum Representation {
     KoalaBearExt8Vector,
     KoalaBearExt8Polynomial,
     KoalaBearExt8Round,
+    BabyBear,
+    BabyBearVector,
+    BabyBearPolynomial,
+    BabyBearRound,
+    BabyBearSparseCoo,
+    BabyBearExt4,
+    BabyBearExt4Vector,
+    BabyBearExt4Polynomial,
+    BabyBearExt4Round,
+    BabyBearExt4SparseCoo,
+    Goldilocks,
+    GoldilocksVector,
+    GoldilocksPolynomial,
+    GoldilocksRound,
+    GoldilocksSparseCoo,
+    GoldilocksExt2,
+    GoldilocksExt2Vector,
+    GoldilocksExt2Polynomial,
+    GoldilocksExt2Round,
+    GoldilocksExt2SparseCoo,
     KoalaBearExt4SparseCoo,
     KoalaBearExt4Vector,
     KoalaBearExt4Polynomial,
@@ -824,6 +977,26 @@ impl Representation {
         KoalaBearExt8Polynomial => "plonky3.koala-bear.ext8-binomial3-polynomial/0",
         KoalaBearExt8Round => "plonky3.koala-bear.ext8-binomial3-quadratic/0",
         KoalaBearExt8SparseCoo => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0",
+        BabyBear => "plonky3.baby-bear/0",
+        BabyBearVector => "plonky3.baby-bear-vector/0",
+        BabyBearPolynomial => "plonky3.baby-bear-polynomial/0",
+        BabyBearRound => "plonky3.baby-bear-quadratic/0",
+        BabyBearSparseCoo => "plonky3.baby-bear-sparse-coo/0",
+        BabyBearExt4 => "plonky3.baby-bear.ext4-binomial11/0",
+        BabyBearExt4Vector => "plonky3.baby-bear.ext4-binomial11-vector/0",
+        BabyBearExt4Polynomial => "plonky3.baby-bear.ext4-binomial11-polynomial/0",
+        BabyBearExt4Round => "plonky3.baby-bear.ext4-binomial11-quadratic/0",
+        BabyBearExt4SparseCoo => "plonky3.baby-bear.ext4-binomial11-sparse-coo/0",
+        Goldilocks => "plonky3.goldilocks/0",
+        GoldilocksVector => "plonky3.goldilocks-vector/0",
+        GoldilocksPolynomial => "plonky3.goldilocks-polynomial/0",
+        GoldilocksRound => "plonky3.goldilocks-quadratic/0",
+        GoldilocksSparseCoo => "plonky3.goldilocks-sparse-coo/0",
+        GoldilocksExt2 => "plonky3.goldilocks.ext2-binomial7/0",
+        GoldilocksExt2Vector => "plonky3.goldilocks.ext2-binomial7-vector/0",
+        GoldilocksExt2Polynomial => "plonky3.goldilocks.ext2-binomial7-polynomial/0",
+        GoldilocksExt2Round => "plonky3.goldilocks.ext2-binomial7-quadratic/0",
+        GoldilocksExt2SparseCoo => "plonky3.goldilocks.ext2-binomial7-sparse-coo/0",
         KoalaBearExt4 => "plonky3.koala-bear.ext4-binomial3/0",
         KoalaBearExt4Vector => "plonky3.koala-bear.ext4-binomial3-vector/0",
         KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
@@ -979,6 +1152,26 @@ impl PhysicalType {
             (T::Polynomial, I::KoalaBearExt8) => R::KoalaBearExt8Polynomial,
             (T::Round, I::KoalaBearExt8) => R::KoalaBearExt8Round,
             (T::Matrix, I::KoalaBearExt8) => R::KoalaBearExt8SparseCoo,
+            (T::Field, I::BabyBear) => R::BabyBear,
+            (T::Vector, I::BabyBear) => R::BabyBearVector,
+            (T::Polynomial, I::BabyBear) => R::BabyBearPolynomial,
+            (T::Round, I::BabyBear) => R::BabyBearRound,
+            (T::Matrix, I::BabyBear) => R::BabyBearSparseCoo,
+            (T::Field, I::BabyBearExt4) => R::BabyBearExt4,
+            (T::Vector, I::BabyBearExt4) => R::BabyBearExt4Vector,
+            (T::Polynomial, I::BabyBearExt4) => R::BabyBearExt4Polynomial,
+            (T::Round, I::BabyBearExt4) => R::BabyBearExt4Round,
+            (T::Matrix, I::BabyBearExt4) => R::BabyBearExt4SparseCoo,
+            (T::Field, I::Goldilocks) => R::Goldilocks,
+            (T::Vector, I::Goldilocks) => R::GoldilocksVector,
+            (T::Polynomial, I::Goldilocks) => R::GoldilocksPolynomial,
+            (T::Round, I::Goldilocks) => R::GoldilocksRound,
+            (T::Matrix, I::Goldilocks) => R::GoldilocksSparseCoo,
+            (T::Field, I::GoldilocksExt2) => R::GoldilocksExt2,
+            (T::Vector, I::GoldilocksExt2) => R::GoldilocksExt2Vector,
+            (T::Polynomial, I::GoldilocksExt2) => R::GoldilocksExt2Polynomial,
+            (T::Round, I::GoldilocksExt2) => R::GoldilocksExt2Round,
+            (T::Matrix, I::GoldilocksExt2) => R::GoldilocksExt2SparseCoo,
             (T::Field, I::KoalaBearExt4) => R::KoalaBearExt4,
             (T::Vector, I::KoalaBearExt4) => R::KoalaBearExt4Vector,
             (T::Polynomial, I::KoalaBearExt4) => R::KoalaBearExt4Polynomial,
@@ -1034,7 +1227,15 @@ impl PhysicalType {
             },
             // Digest-generic Merkle schemes: each digest is the scheme's
             // fixed-width byte encoding, whatever its hash.
-            (kind, I::MerklePoseidon2KoalaBear | I::MerklePoseidon2KoalaBearExt4) => match kind {
+            (
+                kind,
+                I::MerklePoseidon2KoalaBear
+                | I::MerklePoseidon2KoalaBearExt4
+                | I::MerklePoseidon2BabyBear
+                | I::MerklePoseidon2BabyBearExt4
+                | I::MerklePoseidon2Goldilocks
+                | I::MerklePoseidon2GoldilocksExt2,
+            ) => match kind {
                 T::Commitment => R::MerkleDigest,
                 T::Proof => R::MerkleProof,
                 T::OpeningState => R::MerkleTree,

@@ -6,8 +6,10 @@ pub mod proof;
 pub mod run;
 pub mod source_names;
 
-/// Shared operational capacity, immutable input values and prover material.
+/// Shared CPU execution, operational capacity, immutable inputs and prover material.
 pub mod execution {
+    pub use zkc_native::CpuExecution;
+
     pub use crate::host::capacity::Capacity;
     pub use crate::host::data::PreparedData;
     pub use crate::host::input_file::InputFile;

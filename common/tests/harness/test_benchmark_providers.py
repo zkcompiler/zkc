@@ -21,7 +21,7 @@ def test_provider_catalog_has_matched_complete_and_resident_boundaries(modules):
     for name, case, shape in providers.catalog():
         assert name not in names
         names.add(name)
-        for provider in ('arkworks', 'blst'):
+        for provider in providers.FAMILIES[shape.get('family', 'bls12-381')]:
             if shape['boundary'] in ('import', 'export') and provider == 'arkworks':
                 continue
             results.validate_backend({'kind': 'kernel', 'provider': provider, **shape},
@@ -98,7 +98,8 @@ def test_execution_counts_preset_keeps_source_workloads(modules, monkeypatch, tm
 def test_resident_catalog_retains_repetition_and_full_wire_boundaries(modules, group, kernel):
     providers, results, _ = modules
     cases = [shape for _, _, shape in providers.catalog()
-             if shape['group'] == group and shape['kernel'] == kernel]
+             if shape.get('family', 'bls12-381') == 'bls12-381'
+             and shape['group'] == group and shape['kernel'] == kernel]
     for boundary in ('resident_installed_chain', 'wire_resident_chain'):
         selected = [shape for shape in cases if shape['boundary'] == boundary]
         assert selected
@@ -205,3 +206,179 @@ def test_retained_provider_program_cannot_contradict_workload(modules, resident_
             calls=1, elements=1, canonical_payload_bytes=32)]
     with pytest.raises(io.MeasurementError):
         providers.validate_evidence(resident_evidence, backend)
+
+
+def test_bn254_catalog_matches_explicit_family_and_provider_inventory(modules):
+    providers, _, _ = modules
+    shapes = [shape for _, case, shape in providers.catalog() if case.name == 'bn254_provider']
+    assert shapes and all(shape['family'] == 'bn254' for shape in shapes)
+    for group, kernel, sizes in [('g1', 'msm', (32, 256)), ('g2', 'msm', (32, 256)),
+                                 ('pairing', 'pairing_check', (2, 8)), ('scalar', 'field_mul', (1,)),
+                                 ('scalar', 'vector_mul', (32, 256)), ('g1', 'scale', (1,)), ('g2', 'scale', (1,))]:
+        for n in sizes:
+            selected = [shape for shape in shapes if (shape['group'], shape['kernel'], shape['elements']) == (group, kernel, n)]
+            assert {s['boundary'] for s in selected} >= {'resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain'}
+    for shape in shapes:
+        for provider in ('arkworks', 'halo2curves-axiom'):
+            if shape['boundary'] in ('import', 'export') and provider == 'arkworks':
+                continue
+            providers.validate_backend({'kind': 'kernel', 'provider': provider, **shape},
+                                       boundary=providers.BOUNDARIES[shape['boundary']], operation='run')
+
+
+@pytest.mark.parametrize('family,provider', [
+    ('bls12-381', 'halo2curves-axiom'), ('bn254', 'blst'), ('invented', 'arkworks'),
+    (None, 'arkworks'), (['bn254'], 'arkworks'), ('bn254', 'halo2curves'),
+])
+def test_provider_family_requires_positive_compatibility(modules, family, provider):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family=family, provider=provider, group='g1', kernel='msm', boundary='resident', elements=32)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_backend(backend)
+
+
+def test_foreign_bn254_provider_cannot_inherit_the_bls_default(modules):
+    providers, _, io = modules
+    backend = dict(kind='kernel', provider='halo2curves-axiom', group='g1', kernel='msm', boundary='resident', elements=32)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_backend(backend)
+    providers.validate_backend(backend | dict(provider='blst'))
+
+
+@pytest.mark.parametrize('group,kernel,inputs,output', [
+    ('scalar', 'field_mul', ['field:bn254.fr@halo2curves-axiom/bn254.fr'] * 2,
+     'field:bn254.fr@halo2curves-axiom/bn254.fr'),
+    ('scalar', 'vector_mul', ['vector:bn254.fr@halo2curves-axiom/bn254.fr'] * 2,
+     'vector:bn254.fr@halo2curves-axiom/bn254.fr'),
+    ('g1', 'msm', ['vector:bn254.fr@halo2curves-axiom/bn254.fr', 'groups:bn254.g1@halo2curves-axiom/bn254.g1'],
+     'group:bn254.g1@halo2curves-axiom/bn254.g1'),
+    ('g2', 'msm', ['vector:bn254.fr@halo2curves-axiom/bn254.fr', 'groups:bn254.g2@halo2curves-axiom/bn254.g2'],
+     'group:bn254.g2@halo2curves-axiom/bn254.g2'),
+    ('pairing', 'pairing_check', ['groups:bn254.g1@halo2curves-axiom/bn254.g1', 'groups:bn254.g2@halo2curves-axiom/bn254.g2'],
+     'bool@native.bool/0'),
+])
+def test_bn254_installed_fixture_has_actual_nominal_ports_and_chain(modules, group, kernel, inputs, output):
+    providers, _, _ = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group=group, kernel=kernel,
+                   boundary='resident_installed_chain', elements=1 if kernel == 'field_mul' else 32, chain_length=4)
+    program, actual_inputs, outputs, conversions = providers._installed_fixture(backend)
+    assert actual_inputs == inputs
+    assert outputs == [output] * (4 if group == 'pairing' else 1)
+    assert not conversions
+    assert program[1][0][3] == f'halo2curves-axiom/resident/{dict(field_mul="field.mul", vector_mul="vector.mul", msm="curve.msm", pairing_check="pairing.check")[kernel]}'
+    assert len(program[2][0][4]) == (8 if kernel == 'msm' else 5)
+
+
+def bn254_report(providers, backend):
+    """Synthetic receipts for harness checks; no provider execution is asserted."""
+    length = backend.get('chain_length', 1)
+    conversions = backend['boundary'] in ('import', 'export')
+    bounded = backend['provider'] == 'halo2curves-axiom' and backend['kernel'] in ('msm', 'pairing_check') and not conversions
+    evidence = dict(family='bn254', provider=backend['provider'], chain_length=length,
+                    arithmetic_calls=0 if conversions else length + (length - 1 if backend['kernel'] == 'msm' else 0),
+                    provider_scheduling_work_units_per_arithmetic_call=1000 if bounded else None,
+                    managed=dict(peak_retained_payload_bytes=None, peak_scratch_bytes=None,
+                                 provider_workspace_admission_bound_bytes_per_call=4096 if bounded else None))
+    if backend['boundary'] in ('resident', 'converted', 'import', 'export'):
+        evidence['kernel_adapter_conversions'] = providers._direct_conversions(backend)
+    else:
+        program, inputs, outputs, conversions = providers._installed_fixture(backend)
+        evidence.update(program=program, input_physical_types=inputs, output_physical_types=outputs,
+                        explicit_conversions=conversions,
+                        trusted_timing_authorization=dict(allow_unspecified_timing=True, allow_variable_time=backend['kernel'] == 'msm'))
+        evidence['managed'].update(input_retained_payload_bytes=512, terminal_runner_usage=dict(
+            instructions=10, iterations=0, live_values=1, live_retained_payload_bytes=512,
+            cumulative_fresh_payload_bytes=1024, logical_bytes=2048))
+        tags = {'field:bn254.fr': 40, 'vector:bn254.fr': 41, 'group:bn254.g1': 46,
+                'groups:bn254.g1': 47, 'group:bn254.g2': 48, 'groups:bn254.g2': 49, 'bool': 5}
+        for name, types in (('input', inputs), ('output', outputs)):
+            logical = [ty.split('@')[0] for ty in types]
+            evidence[f'{name}_wire_tags'] = [tags[ty] for ty in logical]
+            evidence[f'{name}_wire_bytes'] = sum(7 if ty == 'bool' else
+                (10 + backend['elements'] * (64 if ty.endswith('.g2') else 32)) if ty.startswith(('groups:', 'vector:'))
+                else (70 if ty.endswith('.g2') else 38) for ty in logical)
+    return dict(diagnostics=evidence)
+
+
+@pytest.mark.parametrize('boundary', list(('resident', 'converted', 'import', 'export', 'installed',
+                                          'resident_installed_chain', 'wire_resident_chain')))
+@pytest.mark.parametrize('group', ['g1', 'g2'])
+def test_bn254_evidence_distinguishes_each_conversion_boundary(modules, boundary, group):
+    providers, _, _ = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group=group, kernel='msm',
+                   boundary=boundary, elements=32, chain_length=1 if boundary in ('installed', 'import', 'export') else 4)
+    report = bn254_report(providers, backend)
+    providers.validate_evidence(report, backend)
+    conversions = report['diagnostics'].get('kernel_adapter_conversions', report['diagnostics'].get('explicit_conversions'))
+    if boundary in ('converted', 'installed', 'import', 'export'):
+        points = next(row for row in conversions if row['source'].startswith('groups:'))
+        assert points['canonical_payload_bytes'] == 32 * (64 if group == 'g2' else 32)
+        assert points['calls'] == (1 if boundary == 'installed' else 32)
+
+
+@pytest.mark.parametrize('boundary', ['resident', 'converted', 'wire_resident_chain'])
+@pytest.mark.parametrize('field,value', [
+    ('family', 'bls12-381'), ('provider', 'blst'), ('arithmetic_calls', 4), ('chain_length', True),
+    ('provider_scheduling_work_units_per_arithmetic_call', None),
+])
+def test_bn254_receipts_refuse_wrong_family_chain_or_work(modules, boundary, field, value):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group='g2', kernel='msm',
+                   boundary=boundary, elements=32, chain_length=4)
+    report = bn254_report(providers, backend)
+    report['diagnostics'][field] = value
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(report, backend)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('input_wire_tags', [66, 52]), ('output_wire_tags', [51]), ('input_wire_bytes', 100),
+    ('output_wire_bytes', 102), ('input_physical_types', ['field:bls12-381.fr@blst/fr']),
+    ('explicit_conversions', [dict(calls=32, elements=32, canonical_payload_bytes=3072)]),
+])
+def test_bn254_installed_receipts_refuse_bls_frames_ports_and_widths(modules, field, value):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group='g2', kernel='msm',
+                   boundary='installed', elements=32)
+    report = bn254_report(providers, backend)
+    report['diagnostics'][field] = value
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(report, backend)
+
+
+def test_bn254_direct_receipts_do_not_invent_arkworks_conversions_or_native_peaks(modules):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='arkworks', group='scalar', kernel='field_mul',
+                   boundary='converted', elements=1, chain_length=4)
+    report = bn254_report(providers, backend)
+    providers.validate_evidence(report, backend)
+    report['diagnostics']['managed']['peak_scratch_bytes'] = True
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(report, backend)
+
+
+@pytest.mark.parametrize('provider', ['arkworks', 'halo2curves-axiom'])
+@pytest.mark.parametrize('group,kernel,n', [('scalar', 'field_mul', 1), ('scalar', 'vector_mul', 32),
+                                         ('pairing', 'pairing_check', 2)])
+@pytest.mark.parametrize('boundary', ['resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain'])
+def test_bn254_scalar_and_pairing_receipts_keep_family_and_boundary(modules, provider, group, kernel, n, boundary):
+    providers, _, _ = modules
+    backend = dict(kind='kernel', family='bn254', provider=provider, group=group, kernel=kernel,
+                   boundary=boundary, elements=n, chain_length=1 if boundary == 'installed' else 4)
+    providers.validate_evidence(bn254_report(providers, backend), backend)
+
+
+@pytest.mark.parametrize('change', [
+    {'peak_scratch_bytes': 100}, {'terminal_runner_usage': {}},
+    {'terminal_runner_usage': dict(instructions=1, iterations=0, live_values=0, live_retained_payload_bytes=0,
+                                 cumulative_fresh_payload_bytes=0, logical_bytes=True)},
+    {'provider_workspace_admission_bound_bytes_per_call': True},
+])
+def test_bn254_resource_receipts_refuse_invented_peaks_or_missing_charges(modules, change):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group='g1', kernel='msm',
+                   boundary='wire_resident_chain', elements=32, chain_length=4)
+    report = bn254_report(providers, backend)
+    report['diagnostics']['managed'].update(change)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(report, backend)

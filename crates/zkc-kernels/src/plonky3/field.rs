@@ -79,3 +79,18 @@ impl Coefficient for Binary64Ext3 {
         p3_field::Field::try_inverse(&self)
     }
 }
+
+macro_rules! coefficient {
+    ($($field:ty),+ $(,)?) => { $(impl Coefficient for $field {
+        type Packing = super::packing::Native;
+        fn zero() -> Self { <Self as p3_field::PrimeCharacteristicRing>::ZERO }
+        fn one() -> Self { <Self as p3_field::PrimeCharacteristicRing>::ONE }
+        fn inverse(self) -> Option<Self> { p3_field::Field::try_inverse(&self) }
+    })+ };
+}
+coefficient!(
+    super::BabyBear,
+    super::BabyBearExt4,
+    super::Goldilocks,
+    super::GoldilocksExt2
+);

@@ -48,6 +48,7 @@ pub(super) fn admit(
     package: &Package,
     options: FunctionOptions,
     mut authority: BTreeMap<String, SetupAuthority>,
+    cpu: CpuExecution,
 ) -> Result<EntryHost> {
     options
         .limits
@@ -59,7 +60,7 @@ pub(super) fn admit(
     let mut validator = structure(&document, &interface)?;
     let mut native_calculations = BTreeMap::new();
     let mut references = Vec::new();
-    let backend = data::backend(options.limits.capacity)
+    let backend = data::backend(options.limits.capacity, cpu.clone())
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
     for c in &document.calculations {
         for s in c.parameters.iter().chain(&c.results) {
@@ -147,6 +148,7 @@ pub(super) fn admit(
                 child,
                 options.limits,
                 authority.clone(),
+                cpu.clone(),
             )?)),
             "prove" | "verify" => {
                 let operation = if d.operation == "prove" {
@@ -164,6 +166,7 @@ pub(super) fn admit(
                         },
                         authority.clone(),
                         operation,
+                        cpu.clone(),
                     )?),
                     operation,
                 }
@@ -236,6 +239,7 @@ pub(super) fn admit(
     let types = validator.schemas.finish();
     drop(validator.calls);
     Ok(EntryHost {
+        cpu,
         entry: document.entry,
         functions: document.functions,
         interface,

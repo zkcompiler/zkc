@@ -195,6 +195,30 @@ def cases():
                  'queries': 8, 'constraint': 'coupled', 'constraint_degree': degree},
                 'protocol', ('coupled columns', f'degree-{degree} AIR', 'quotients', 'FRI', 'Merkle', 'transcript'),
                 'Matched one-table AIR across both profiles; independent Python trace. Default capacities; not a production or multi-table scaling study.')
+    # The same recurrence families at fixed, bounded library configurations.
+    # Field/hash/transcript choices are authored shapes, never timed dispatch.
+    field_panel = [(h, w, 2, b, False) for h, w, b in
+                   ((8, 1, 4), (32, 1, 4), (128, 1, 4), (32, 4, 4), (32, 16, 4), (32, 4, 8))]
+    field_panel += [(8, 2, 2, 4, True), (32, 4, 2, 4, True), (128, 4, 2, 4, True),
+                    (32, 8, 2, 4, True), (32, 4, 3, 8, True)]
+    for field in ('baby-bear', 'goldilocks'):
+        profile = stark.LIBRARY_PROFILES[field]
+        label = profile.configuration.replace('_', '-')+f'-poseidon2-{profile.poseidon_width}'
+        for height, width, degree, blowup, coupled in field_panel:
+            shape = {'field': field, 'profile': profile.configuration, 'extension_field': profile.extension,
+                     'characteristic': profile.modulus, 'transcript': profile.transcript,
+                     'poseidon_width': profile.poseidon_width, 'coset_shift': profile.shift,
+                     'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8}
+            constraint = 'quadratic'
+            if coupled:
+                shape |= {'constraint': 'coupled', 'constraint_degree': degree}
+                constraint = f'coupled-d{degree}'
+            suffix = f'coupled-d{degree}-' if coupled else ''
+            add(f'stark-{label}-{suffix}h{height}-w{width}-b{blowup}', 'stark', shape,
+                'protocol', ('trace extension', constraint+' AIR', 'quotients', 'FRI', 'Poseidon2 multi-opening', 'transcript'),
+                'Same recurrence families as the KoalaBear controls, with an explicit field/hash/transcript profile. '
+                'Independent modular Python trace; same-stack proof verification. Default capacities; '
+                'not external proof compatibility, a field-only speed comparison or a production security profile.')
     for size in (0, 64, 8192):
         add(f'hash-sha256-{size}', 'hash_bytes', {'algorithm': 'sha256', 'payload_bytes': size},
             'operation', ('SHA-256', 'digest equality'),

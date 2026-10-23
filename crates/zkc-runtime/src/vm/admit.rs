@@ -271,13 +271,15 @@ fn attributes(
     }
     match rule {
         AttributeRule::None if attrs.is_empty() => Ok(()),
-        AttributeRule::Bn254Decimals
+        AttributeRule::ResidueLiterals(_)
+        | AttributeRule::Bn254Decimals
         | AttributeRule::FieldDecimals
         | AttributeRule::RistrettoDecimals
         | AttributeRule::KoalaBearDecimals
         | AttributeRule::Binary64Literals
         | AttributeRule::Binary64Ext3Literals => {
             let scalar = match rule {
+                AttributeRule::ResidueLiterals(field) => AttributeRule::ResidueLiteral(field),
                 AttributeRule::Bn254Decimals => AttributeRule::Bn254Decimal,
                 AttributeRule::RistrettoDecimals => AttributeRule::RistrettoDecimal,
                 AttributeRule::KoalaBearDecimals => AttributeRule::KoalaBearDecimal,
@@ -340,7 +342,8 @@ fn attributes(
                 ))
             }
         }
-        AttributeRule::Bn254Decimal
+        AttributeRule::ResidueLiteral(_)
+        | AttributeRule::Bn254Decimal
         | AttributeRule::FieldDecimal
         | AttributeRule::RistrettoDecimal
         | AttributeRule::KoalaBearDecimal
@@ -348,6 +351,7 @@ fn attributes(
         {
             natural_syntax(&attrs[0])?;
             let field = match rule {
+                AttributeRule::ResidueLiteral(field) => field,
                 AttributeRule::Bn254Decimal => super::Identity::Bn254Fr,
                 AttributeRule::KoalaBearDecimal => super::Identity::KoalaBear,
                 AttributeRule::RistrettoDecimal => super::Identity::Ristretto255Scalar,

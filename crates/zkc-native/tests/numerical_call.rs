@@ -2,7 +2,7 @@
 #[path = "domains/support.rs"]
 mod support;
 
-use p3_field::{ExtensionField, TwoAdicField};
+use p3_field::TwoAdicField;
 use std::{mem::size_of, sync::Arc};
 use support::{Controlled, backend, one};
 use zkc_native::{KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Scalar, Value};
@@ -109,66 +109,69 @@ fn asymmetric_fold_preserves_each_physical_order_and_input_aliases() {
 
 #[test]
 fn fold_limits_leave_no_published_result_or_changed_alias() {
-    let retained = 4 * size_of::<Scalar>() + 256;
-    let managed = 4 * size_of::<Scalar>() + retained;
-    for msb in [false, true] {
-        let input = table(msb, &[2, 5, 11, 19, 31, 47, 71, 101]);
-        for (policy, available, error) in [
-            (
-                Policy {
-                    max_numerical_work: 8 * 4,
-                    ..Policy::default()
-                },
-                retained,
-                Some("exhausted:numerical-work"),
-            ),
-            (
-                Policy {
-                    max_numerical_work: 8 * 4 + 1,
-                    ..Policy::default()
-                },
-                retained,
-                None,
-            ),
-            (
-                Policy {
-                    max_numerical_bytes: managed - 1,
-                    ..Policy::default()
-                },
-                retained,
-                Some("exhausted:numerical-bytes"),
-            ),
-            (
-                Policy {
-                    max_numerical_bytes: managed,
-                    ..Policy::default()
-                },
-                retained,
-                None,
-            ),
-            (
-                Policy::default(),
-                retained - 1,
-                Some("exhausted:output-bytes"),
-            ),
-        ] {
-            let mut driver = Controlled::new(backend(policy));
-            driver.output_limit = Some(available);
-            let (result, driver) = one(
-                driver,
-                fold_binding(msb),
-                &[],
-                vec![input.clone(), Value::Field(Scalar::from(3))],
-            );
-            if let Some(error) = error {
-                assert_eq!(result.unwrap_err(), error);
-                assert!(driver.outputs.is_empty());
-            } else {
-                assert_value(&result.unwrap()[0], &table(msb, &[89, 131, 191, 265]));
-                assert_eq!(driver.outputs.len(), 1);
+    for workers in [1, 4] {
+        let cpu = zkc_native::CpuExecution::new(workers).unwrap();
+        let retained = 4 * size_of::<Scalar>() + 256;
+        let managed = 4 * size_of::<Scalar>() + retained;
+        for msb in [false, true] {
+            let input = table(msb, &[2, 5, 11, 19, 31, 47, 71, 101]);
+            for (policy, available, error) in [
+                (
+                    Policy {
+                        max_numerical_work: 8 * 4,
+                        ..Policy::default()
+                    },
+                    retained,
+                    Some("exhausted:numerical-work"),
+                ),
+                (
+                    Policy {
+                        max_numerical_work: 8 * 4 + 1,
+                        ..Policy::default()
+                    },
+                    retained,
+                    None,
+                ),
+                (
+                    Policy {
+                        max_numerical_bytes: managed - 1,
+                        ..Policy::default()
+                    },
+                    retained,
+                    Some("exhausted:numerical-bytes"),
+                ),
+                (
+                    Policy {
+                        max_numerical_bytes: managed,
+                        ..Policy::default()
+                    },
+                    retained,
+                    None,
+                ),
+                (
+                    Policy::default(),
+                    retained - 1,
+                    Some("exhausted:output-bytes"),
+                ),
+            ] {
+                let mut driver = Controlled::new(backend(policy).with_cpu(cpu.clone()).unwrap());
+                driver.output_limit = Some(available);
+                let (result, driver) = one(
+                    driver,
+                    fold_binding(msb),
+                    &[],
+                    vec![input.clone(), Value::Field(Scalar::from(3))],
+                );
+                if let Some(error) = error {
+                    assert_eq!(result.unwrap_err(), error);
+                    assert!(driver.outputs.is_empty());
+                } else {
+                    assert_value(&result.unwrap()[0], &table(msb, &[89, 131, 191, 265]));
+                    assert_eq!(driver.outputs.len(), 1);
+                }
+                assert_eq!(driver.inner.active_frames(), 0);
+                assert_value(&input, &table(msb, &[2, 5, 11, 19, 31, 47, 71, 101]));
             }
-            assert_eq!(driver.inner.active_frames(), 0);
-            assert_value(&input, &table(msb, &[2, 5, 11, 19, 31, 47, 71, 101]));
         }
     }
 }
@@ -271,13 +274,16 @@ fn quotient_binding(field: Identity) -> OperationBinding {
     }
 }
 
-fn sample<E: ExtensionField<KoalaBear>>(seed: usize) -> E {
+fn sample<E: zkc_kernels::plonky3::residue::Residue<Base = KoalaBear>>(seed: usize) -> E {
     E::from_basis_coefficients_fn(|coordinate| {
         KoalaBear::new((seed * seed + 11 * seed + 7 * coordinate + 1) as u32)
     })
 }
 
-fn domain_points_checks<E: ExtensionField<KoalaBear>>(identity: Identity, field: fn(E) -> Value) {
+fn domain_points_checks<E: zkc_kernels::plonky3::residue::Residue<Base = KoalaBear>>(
+    identity: Identity,
+    field: fn(E) -> Value,
+) {
     let binding = |name: &str| OperationBinding {
         contract: name.into(),
         arguments: vec![identity.name().into()],
@@ -446,7 +452,7 @@ fn octic_installed_domain_points_and_allowances() {
     domain_points_checks::<KoalaBearExt8>(Identity::KoalaBearExt8, Value::KoalaBearExt8Field);
 }
 
-fn quotient_checks<E: ExtensionField<KoalaBear>>(
+fn quotient_checks<E: zkc_kernels::plonky3::residue::Residue<Base = KoalaBear>>(
     identity: Identity,
     field: fn(E) -> Value,
     vector: fn(Vec<E>) -> Value,

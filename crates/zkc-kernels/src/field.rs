@@ -36,7 +36,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// and the selected packing performs the same operations independently in each
 /// lane. Implementing this trait does not install a VM type or operation.
 pub trait Coefficient:
-    Copy + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Neg<Output = Self>
+    Copy
+    + Send
+    + Sync
+    + PartialEq
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Neg<Output = Self>
 {
     type Packing: crate::vector::Packing<Self>;
     /// Conservative setup work for the selected dot product, in the caller's

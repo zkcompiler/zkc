@@ -126,26 +126,30 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     if matches!(identity, Binary64 | Binary64Ext3) {
         return binary(identity, value, out);
     }
-    // A KoalaBear extension element: a base decimal embeds, or one decimal per
-    // coordinate in the ascending basis.
-    let degree = match identity {
-        KoalaBearExt8 => Some(8),
-        KoalaBearExt4 => Some(4),
-        _ => Option::None,
-    };
-    if let Some(degree) = degree {
-        if value.is_string() {
-            scalar(KoalaBear, value, out)?;
-            return out.put(&[0; 28][..4 * (degree - 1)]);
-        }
-        let values = array(value)?;
-        if values.len() != degree {
-            return Err("entry-input-shape");
-        }
-        for v in values {
-            scalar(KoalaBear, v, out)?;
-        }
-        return Ok(());
+    if crate::fields::contains(identity) {
+        return crate::fields::with_residue_or!(identity, Err("entry-input-codec"), |E| {
+            use p3_field::{BasedVectorSpace, PrimeField64};
+            use zkc_kernels::plonky3::residue::{PrimeWord, Residue};
+            type B = <E as Residue>::Base;
+            let modulus = B::ORDER_U64.to_string();
+            if value.is_string() {
+                let text = decimal(value, &modulus)?;
+                let element = zkc_kernels::plonky3::residue::parse_decimal::<E>(text)
+                    .map_err(|_| "entry-input-decimal")?;
+                out.put(&crate::fields::scalar_bytes(&element))
+            } else {
+                let coordinates = array(value)?;
+                if coordinates.len() != <E as BasedVectorSpace<B>>::DIMENSION {
+                    return Err("entry-input-shape");
+                }
+                for coordinate in coordinates {
+                    let text = decimal(coordinate, &modulus)?;
+                    let word: u64 = text.parse().map_err(|_| "entry-input-decimal")?;
+                    out.put(&word.to_le_bytes()[..B::WORD_BYTES])?;
+                }
+                Ok(())
+            }
+        });
     }
     let (modulus, width) = match identity {
         Bls12381Fr => (zkc_kernels::arkworks::bls12_381::SCALAR_MODULUS_DECIMAL, 32),
@@ -154,7 +158,6 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
             32,
         ),
         Ristretto255Scalar => (zkc_kernels::dalek::ristretto255::SCALAR_MODULUS_DECIMAL, 32),
-        KoalaBear => ("2130706433", 4),
         _ => return Err("entry-input-codec"),
     };
     let s = decimal(value, modulus)?;
@@ -365,8 +368,13 @@ impl serde::Serialize for Scalar<'_> {
     ) -> std::result::Result<S::Ok, S::Error> {
         use zkc_kernels::plonky3::binary;
         let word = |b: &[u8; binary::WIDTH]| binary::readable(binary::Binary64::from_le_bytes(*b));
-        if matches!(self.0, Identity::KoalaBearExt8 | Identity::KoalaBearExt4) {
-            serializer.collect_seq(self.1.as_chunks::<4>().0.iter().map(|b| decimal_text(b)))
+        if let Some(base) = self
+            .0
+            .base_field()
+            .filter(|_| crate::fields::contains(self.0))
+        {
+            let bytes = crate::fields::element_width(base).map_err(serde::ser::Error::custom)?;
+            serializer.collect_seq(self.1.chunks_exact(bytes).map(decimal_text))
         } else if self.0 == Identity::Binary64Ext3 {
             serializer.collect_seq(self.1.as_chunks::<{ binary::WIDTH }>().0.iter().map(word))
         } else if self.0 == Identity::Binary64 {

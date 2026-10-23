@@ -95,8 +95,10 @@ pub fn degree(field: Identity) -> Option<usize> {
         Some(1)
     } else if field == Identity::KoalaBearExt8 {
         Some(8)
-    } else if field == Identity::KoalaBearExt4 {
+    } else if matches!(field, Identity::KoalaBearExt4 | Identity::BabyBearExt4) {
         Some(4)
+    } else if field == Identity::GoldilocksExt2 {
+        Some(2)
     } else {
         None
     }

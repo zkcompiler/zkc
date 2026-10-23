@@ -1148,71 +1148,81 @@ fn binary_kernel_literals_match_independent_vm_admission() {
 
 #[test]
 fn resident_literal_cold_warm_failures_preserve_usage_and_typed_retained_facts() {
-    let binding = OperationBinding {
-        contract: "field.constant".into(),
-        arguments: vec!["bls12-381.fr".into()],
-        implementation: "blst/resident/field.constant".into(),
-        physical_arguments: vec![],
-    };
-    let operation = backend().prepare_binding(&binding).unwrap();
-    let bytes = program(
-        &[binding],
-        &[],
-        vec![json!(["op", "literal", "b0", ["7"], [], ["n"]])],
-        &operation.binding.signature.outputs,
-        &["n".into()],
-    );
-    let mut observations = Vec::new();
-    for prepared in [false, true] {
-        let mut caller = Caller::new(prepared);
-        LITERAL_DECODES.set(0);
-        let mut retained = None;
-        let mut usages = Vec::new();
-        for (visit, limit) in [511, 512, 511, 512].into_iter().enumerate() {
-            caller.output_limit = Some(limit);
-            let (result, usage, next) = run(
+    for (field, provider, expected) in [
+        (
+            "bls12-381.fr",
+            "blst",
+            Value::BlstField(zkc_kernels::blst::bls12_381::Scalar::from(7)),
+        ),
+        (
+            "bn254.fr",
+            "halo2curves-axiom",
+            Value::HaloField(zkc_kernels::halo2curves::bn254::Scalar::from(7)),
+        ),
+    ] {
+        let binding = OperationBinding {
+            contract: "field.constant".into(),
+            arguments: vec![field.into()],
+            implementation: format!("{provider}/resident/field.constant"),
+            physical_arguments: vec![],
+        };
+        let operation = backend().prepare_binding(&binding).unwrap();
+        let bytes = program(
+            &[binding],
+            &[],
+            vec![json!(["op", "literal", "b0", ["7"], [], ["n"]])],
+            &operation.binding.signature.outputs,
+            &["n".into()],
+        );
+        let mut observations = Vec::new();
+        for prepared in [false, true] {
+            let mut caller = Caller::new(prepared);
+            LITERAL_DECODES.set(0);
+            let mut retained = None;
+            let mut usages = Vec::new();
+            for (visit, limit) in [511, 512, 511, 512].into_iter().enumerate() {
+                caller.output_limit = Some(limit);
+                let (result, usage, next) = run(
+                    caller,
+                    &bytes,
+                    vec![],
+                    Default::default(),
+                    Default::default(),
+                );
+                caller = next;
+                assert_eq!(caller.inner.active_frames(), 0);
+                usages.push(usage);
+                if limit == 511 {
+                    assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
+                } else {
+                    equal(&result.unwrap()[0], &expected);
+                }
+                assert_eq!(LITERAL_DECODES.get(), if prepared { 1 } else { visit + 1 });
+                if prepared {
+                    let literal = caller.call.as_ref().unwrap().literal().unwrap();
+                    equal(literal, &expected);
+                    let pointer = std::ptr::from_ref(literal);
+                    assert_eq!(*retained.get_or_insert(pointer), pointer);
+                }
+            }
+            // A failed replacement retains old facts but must never execute them.
+            caller.attributes = Some(vec!["00".into()]);
+            let (result, _, caller) = run(
                 caller,
                 &bytes,
                 vec![],
                 Default::default(),
                 Default::default(),
             );
-            caller = next;
-            assert_eq!(caller.inner.active_frames(), 0);
-            usages.push(usage);
-            if limit == 511 {
-                assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
-            } else {
-                equal(
-                    &result.unwrap()[0],
-                    &Value::BlstField(zkc_kernels::blst::bls12_381::Scalar::from(7)),
+            assert_eq!(code(&result.unwrap_err()), "refused:noncanonical-scalar");
+            if prepared {
+                assert_eq!(
+                    std::ptr::from_ref(caller.call.as_ref().unwrap().literal().unwrap()),
+                    retained.unwrap()
                 );
             }
-            assert_eq!(LITERAL_DECODES.get(), if prepared { 1 } else { visit + 1 });
-            if prepared {
-                let literal = caller.call.as_ref().unwrap().literal().unwrap();
-                assert!(matches!(literal, Value::BlstField(_)));
-                let pointer = std::ptr::from_ref(literal);
-                assert_eq!(*retained.get_or_insert(pointer), pointer);
-            }
+            observations.push(usages);
         }
-        // A failed replacement retains old facts but must never execute them.
-        caller.attributes = Some(vec!["00".into()]);
-        let (result, _, caller) = run(
-            caller,
-            &bytes,
-            vec![],
-            Default::default(),
-            Default::default(),
-        );
-        assert_eq!(code(&result.unwrap_err()), "refused:noncanonical-scalar");
-        if prepared {
-            assert_eq!(
-                std::ptr::from_ref(caller.call.as_ref().unwrap().literal().unwrap()),
-                retained.unwrap()
-            );
-        }
-        observations.push(usages);
+        assert_eq!(observations[0], observations[1]);
     }
-    assert_eq!(observations[0], observations[1]);
 }

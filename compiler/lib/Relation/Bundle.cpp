@@ -186,20 +186,15 @@ Expected<Presentation> presentation(StringRef field) {
   if (primeField(field))
     return Presentation{field.str(), 1, ""};
   const auto &catalog = protocol::installedDomains();
-  // Closed reference table; see docs/spec/domains/values.md.
-  static const struct {
-    StringRef field, base;
-    unsigned degree;
-    StringRef nonresidue;
-  } extensions[] = {{"koala-bear.ext8-binomial3", "koala-bear", 8, "3"},
-                    {"koala-bear.ext4-binomial3", "koala-bear", 4, "3"}};
-  for (const auto &entry : extensions)
-    if (entry.field == field &&
-        catalog.hasFact("ExtensionField", {field.str()}) &&
-        catalog.associatedIdentity(field, "BaseField") == entry.base &&
-        primeField(entry.base))
-      return Presentation{entry.base.str(), entry.degree,
-                          entry.nonresidue.str()};
+  // Reuse the closed mathematical presentations, never provider membership
+  // or a matching coordinate count to authorize an extension lift.
+  const auto *entry = protocol::plonky3Field(field);
+  if (entry && entry->degree > 1 &&
+      catalog.hasFact("ExtensionField", {field.str()}) &&
+      catalog.associatedIdentity(field, "BaseField") == entry->base &&
+      primeField(entry->base))
+    return Presentation{entry->base.str(), entry->degree,
+                        std::to_string(entry->nonresidue)};
   return zkc::error("bundle-field-presentation", field);
 }
 

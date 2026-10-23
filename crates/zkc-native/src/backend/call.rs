@@ -77,6 +77,14 @@ impl NativeCall {
             crate::operations::field::literal::<zkc_kernels::blst::bls12_381::ScalarElement>(
                 attributes,
             )?
+        } else if signature
+            .outputs
+            .first()
+            .is_some_and(crate::operations::halo2curves::is_resident)
+        {
+            crate::operations::field::literal::<zkc_kernels::halo2curves::bn254::ScalarElement>(
+                attributes,
+            )?
         } else {
             crate::operations::field::decode_literal(field, attributes)?
         };
@@ -178,6 +186,7 @@ impl NativeCall {
     pub(super) fn check(rule: AttributeRule, attributes: &[String]) -> Result<()> {
         use zkc_runtime::vm::Identity;
         let field = match rule {
+            AttributeRule::ResidueLiteral(field) => Some(field),
             AttributeRule::FieldDecimal => Some(Identity::Bls12381Fr),
             AttributeRule::Bn254Decimal => Some(Identity::Bn254Fr),
             AttributeRule::RistrettoDecimal => Some(Identity::Ristretto255Scalar),
@@ -208,6 +217,11 @@ impl NativeCall {
                     && attributes
                         .iter()
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
+            AttributeRule::ResidueLiterals(field) => {
+                for literal in attributes {
+                    crate::operations::field::decode_literal(field, std::slice::from_ref(literal))?;
+                }
+            }
             AttributeRule::Bn254Decimals => {
                 for literal in attributes {
                     zkc_kernels::arkworks::bn254::parse_decimal(literal).map_err(ark)?;

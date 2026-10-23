@@ -60,8 +60,9 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
     assert all(any(s['height'] >= 1024 and s['width'] == width for s in air) for width in (1, 4))
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
-    # The parameterized library is measured on exactly the air cases' shapes.
-    assert sorted(map(str, air)) == sorted(str(c.shape) for c in cases if c.name == 'stark')
+    # Original KoalaBear library controls retain exactly the air cases' shapes.
+    assert sorted(map(str, air)) == sorted(str(c.shape) for c in cases
+                                         if c.name == 'stark' and 'field' not in c.shape)
 
 
 def test_generated_compilation_forwards_explicit_policy(modules, tmp_path):

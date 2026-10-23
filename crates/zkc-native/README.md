@@ -29,7 +29,7 @@ authorized. There is no implicit receive-site setup selector.
 
 `resource.rs` owns fresh affine RNG, nonce and transcript capabilities, their
 bounded counters, domain separation, generations and retirement. Local frames
-receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the four registered random
+receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the six registered random
 sampling service contracts to Host-owned providers. It does not install arbitrary
 request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
@@ -47,7 +47,9 @@ do not authorize a root or replace live lease, generation and owner checks.
 The Arkworks, Dalek and Plonky3 providers retain their nominal field, vector,
 polynomial, round, sparse matrix, group and pairing kernels where installed.
 This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight and
-degree-four extensions, and the binary fields GF(2^64) and GF(2^192). Multilinear KZG, row-oracle operations, external Monero/OpenVM
+degree-four extensions, BabyBear and its quartic `X^4 - 11` extension,
+Goldilocks and its quadratic `X^2 - 7` extension, and the binary fields
+GF(2^64) and GF(2^192). Multilinear KZG, row-oracle operations, external Monero/OpenVM
 primitives, sequences, variants, field arrays, fixed vectors and resource units
 retain their own type and capacity checks. Domain installation does not imply
 that every domain has every group, transcript or PCS operation.
@@ -55,13 +57,20 @@ that every domain has every group, transcript or PCS operation.
 `operations::poseidon2` installs the batched width-16 KoalaBear Poseidon2
 permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
 external-work permutation per state before computing. `zkc-kernels::plonky3::words` owns the
-canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
+canonical four/eight-byte residue coordinates and explicitly supported
+31-bit Montgomery words. `fields` registers typed value adaptation, codecs and
+dispatch once per residue field; `operations::plonky3` shares coset algorithms,
+base-field DFT caches and resource admission across all registered fields.
+Extension shifts retain every coordinate; the subgroup root always comes from
+the prime base. Decimal constants embed into the base coordinate and preserve
+full u64 Goldilocks values in scalar, packed, polynomial and relation paths.
 Bit reversal of vectors and table rows is a positional kernel of every field
 family. `merkle` installs row commitments backed by `zkc-kernels::plonky3::merkle`: an `Instance` names a
 leaf hash, compression, element type and canonical digest encoding over a
 Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
-Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
-flattened to base coordinates, add pruned multi-openings; `merkle_differential`
+Poseidon2 instances use width 16 for KoalaBear and BabyBear and width 8 for
+Goldilocks. Their quartic or quadratic extension rows flatten to base
+coordinates. They support pruned multi-openings; `merkle_differential`
 compares roots, rows and pruned proofs with Plonky3's `MerkleTreeMmcs` and
 `ExtensionMmcs` and with a reference model that makes each permutation call
 explicit. The `poseidon2_permutation` test compares the permutation with the
@@ -96,6 +105,19 @@ implement placeholder structured operations. Group algebra is separate from
 Native value projection, policy and error translation. Resident MSM borrows the
 typed provider buffers directly.
 
+BN254 also has an explicit `halo2curves-axiom/resident/` operation menu for
+field/vector arithmetic, G1/G2 algebra, MSM and `pairing.check`. Its six flat
+ports use `halo2curves-axiom/bn254.fr`, `halo2curves-axiom/bn254.g1` and
+`halo2curves-axiom/bn254.g2`; canonical ports and existing automatic preferences
+remain unchanged. Expected Contracts and actual handlers enumerate the allowed
+operations independently. Selected codecs use the existing BN254 mathematical
+bytes (tags 40/41, 46/47 and 48/49), including readable JSON. Explicit conversions
+own provider crossings; sharing a field identity does not grant an operation.
+There are no Halo GT, PCS, FFT, matrix, field-array or fixed-vector bindings.
+MSM requires variable-time permission for both operands. Pairing preparation is
+invocation-local, with kernel work and workspace admission. Provider-private
+infallible allocations remain outside recoverable allocation failure handling.
+
 `backend/registry.rs` assembles exact implementation ownership. Duplicate owners
 and alternatives of alternatives refuse. Alternative implementations inherit the
 installed family resolver and must match their primary domain. Constant-time
@@ -129,7 +151,7 @@ instance owns its preparation, including when instances share an admitted progra
 Private initialized destinations and scratch share checked memory and work
 limits. Exact field adapters and table storage owners supply interpretation;
 the scope grants no resource authority or mutation of published inputs.
-Dense matvec/split, BLS table fold, KoalaBear opening quotient and coefficient
+Dense matvec/split, BLS table fold, registered residue opening quotient and coefficient
 batch coset evaluation exercise this path. `poly.coset_evaluate_batch` builds
 one column-major result from coefficient blocks, with provider-owned transform
 workspace; it has its own authored work/storage contract as specified in the
@@ -201,7 +223,7 @@ Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data`,
-`transcript.native.indexed.challenge` and, for the octic Merlin and hash-chain
+`transcript.native.indexed.challenge` and, for installed residue Merlin and octic hash-chain
 suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
@@ -215,6 +237,15 @@ Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
 [their source pins and construction details](../zkc-kernels/src/interop/README.md).
+
+Explicit extension RNG and transcript installations include
+`random.baby-bear.ext4-binomial11/0`, `random.goldilocks.ext2-binomial7/0`,
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`. Rejection sampling checks
+ascending canonical base coordinates without reduction, with at most sixteen
+64-byte blocks. Only the new Merlin suites append their exact suite name under
+`b"suite"` before the existing root binding. Existing suite framing is unchanged.
+Hash and commitment constructions require their own explicit installation.
 
 ## Validation
 

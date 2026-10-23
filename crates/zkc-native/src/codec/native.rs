@@ -30,7 +30,28 @@ impl std::fmt::Display for NativeWireError {
 impl std::error::Error for NativeWireError {}
 
 fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
+    if crate::fields::contains(ty.logical().identity()) && ty.kind() == Type::Field {
+        if PhysicalType::default_for(ty.logical().clone())
+            .ok()
+            .as_ref()
+            != Some(ty)
+        {
+            return None;
+        }
+        return Some((
+            crate::fields::tags(ty.logical().identity()).ok()?[0],
+            6 + crate::fields::element_width(ty.logical().identity()).ok()?,
+        ));
+    }
     // Positive selected codec inventory. Canonical ZKCV tags are unchanged.
+    if crate::operations::halo2curves::is_resident(ty) {
+        return match (ty.kind(), ty.logical().identity()) {
+            (Type::Field, zkc_runtime::vm::Identity::Bn254Fr) => Some((40, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bn254G1) => Some((46, 38)),
+            (Type::Group, zkc_runtime::vm::Identity::Bn254G2) => Some((48, 70)),
+            _ => None,
+        };
+    }
     if crate::operations::blst::is_resident(ty) {
         return match (ty.kind(), ty.logical().identity()) {
             (Type::Field, zkc_runtime::vm::Identity::Bls12381Fr) => Some((1, 38)),
@@ -74,9 +95,6 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Group, Bn254G2) => Some((48, 70)),
             (Group, Bls12381G2) => Some((51, 102)),
             (Group, Bls12381Gt) => Some((53, 582)),
-            (Field, KoalaBear) => Some((19, 10)),
-            (Field, KoalaBearExt8) => Some((26, 38)),
-            (Field, KoalaBearExt4) => Some((21, 22)),
             (Field, Binary64) => Some((73, 14)),
             (Field, Binary64Ext3) => Some((76, 30)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
@@ -190,6 +208,11 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
     bytes.extend_from_slice(super::MAGIC);
     bytes.push(tag);
     let encoding = |e| NativeWireError::Backend(crate::ark(e));
+    if crate::fields::contains(value.physical_type().logical().identity()) {
+        crate::fields::encode_scalar(value, &mut bytes).map_err(NativeWireError::Backend)?;
+        return Ok(bytes);
+    }
+
     match value {
         Value::FieldArray(array) => {
             array.validate().map_err(NativeWireError::Backend)?;
@@ -211,8 +234,11 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::Index(v) => bytes.extend_from_slice(&v.to_le_bytes()),
         Value::Bool(v) => bytes.push(u8::from(*v)),
         Value::BlstField(v) => bytes.extend_from_slice(&v.to_bytes_le()),
+        Value::HaloField(v) => bytes.extend_from_slice(&v.to_bytes_le()),
         Value::BlstG1(v) => bytes.extend_from_slice(&v.to_bytes()),
+        Value::HaloG1(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::BlstG2(v) => bytes.extend_from_slice(&v.to_bytes()),
+        Value::HaloG2(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::Field(v) => bytes.extend_from_slice(
             &zkc_kernels::arkworks::bls12_381::encode_scalar(v).map_err(encoding)?,
         ),
@@ -224,15 +250,6 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::Bn254G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bls12381G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bls12381Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
-        Value::KoalaBearField(v) => {
-            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_scalar(*v))
-        }
-        Value::KoalaBearExt8Field(v) => {
-            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_extension(*v))
-        }
-        Value::KoalaBearExt4Field(v) => {
-            bytes.extend_from_slice(&zkc_kernels::plonky3::encode_quartic(*v))
-        }
         Value::Binary64Field(v) => {
             bytes.extend_from_slice(&zkc_kernels::plonky3::binary::encode(*v))
         }
@@ -353,6 +370,21 @@ impl NativeBackend {
                 .output(retained, usize::MAX)
                 .map_err(|_| Limit)?;
         }
+        if crate::operations::halo2curves::is_resident(ty) {
+            use zkc_kernels::halo2curves::bn254 as kernel;
+            return match tag {
+                40 => kernel::decode_scalar(&bytes[6..])
+                    .map(Value::HaloField)
+                    .map_err(|_| Invalid(DecodeReason::Scalar)),
+                46 => kernel::G1::from_bytes(&bytes[6..])
+                    .map(Value::HaloG1)
+                    .map_err(|_| Invalid(DecodeReason::Group)),
+                48 => kernel::G2::from_bytes(&bytes[6..])
+                    .map(|p| Value::HaloG2(std::sync::Arc::new(p)))
+                    .map_err(|_| Invalid(DecodeReason::Group)),
+                _ => Err(unsupported()),
+            };
+        }
         if crate::operations::blst::is_resident(ty) {
             use zkc_kernels::blst::bls12_381 as kernel;
             return match tag {
@@ -367,6 +399,10 @@ impl NativeBackend {
                     .map_err(|_| Invalid(DecodeReason::Group)),
                 _ => Err(unsupported()),
             };
+        }
+        if crate::fields::contains(ty.logical().identity()) {
+            return crate::fields::decode_scalar(ty.logical().identity(), &bytes[6..])
+                .map_err(|_| Invalid(DecodeReason::Scalar));
         }
         let value = match tag {
             64 => {
@@ -448,18 +484,6 @@ impl NativeBackend {
                 crate::Bls12381Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             )),
-            19 => Value::KoalaBearField(
-                zkc_kernels::plonky3::decode_scalar(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
-            ),
-            26 => Value::KoalaBearExt8Field(
-                zkc_kernels::plonky3::decode_extension(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
-            ),
-            21 => Value::KoalaBearExt4Field(
-                zkc_kernels::plonky3::decode_quartic(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
-            ),
             // Every bit pattern of the exact width is an element.
             73 => Value::Binary64Field(
                 zkc_kernels::plonky3::binary::decode(&bytes[6..])

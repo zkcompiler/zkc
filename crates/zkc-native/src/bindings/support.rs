@@ -31,6 +31,20 @@ pub(super) fn ports(
 // Independently authored here: do not import the runtime's literal refinement.
 fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
     match (field, rule) {
+        (
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+            AttributeRule::FieldDecimal,
+        ) => AttributeRule::ResidueLiteral(field),
+        (
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+            AttributeRule::FieldDecimals,
+        ) => AttributeRule::ResidueLiterals(field),
         (Identity::Ristretto255Scalar, AttributeRule::FieldDecimal) => {
             AttributeRule::RistrettoDecimal
         }

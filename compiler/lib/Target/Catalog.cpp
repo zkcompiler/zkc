@@ -88,6 +88,14 @@ Expected<BoundOperation> resolveDiagonal(const BindingApplication &application,
   return installed;
 }
 
+bool isResident(StringRef representation) {
+  return representation == "blst/fr" || representation == "blst/g1" ||
+         representation == "blst/g2" ||
+         representation == "halo2curves-axiom/bn254.fr" ||
+         representation == "halo2curves-axiom/bn254.g1" ||
+         representation == "halo2curves-axiom/bn254.g2";
+}
+
 class InstalledCandidates final : public CandidateCatalog {
 public:
   Expected<std::vector<std::string>>
@@ -142,8 +150,7 @@ public:
   conversions(const BoundType &from, const BoundType &to) const override {
     if (from.kind == to.kind && from.identity == to.identity &&
         from.arguments == to.arguments && !(from == to) &&
-        (StringRef(from.representation).starts_with("blst/") ||
-         StringRef(to.representation).starts_with("blst/"))) {
+        (isResident(from.representation) || isResident(to.representation))) {
       auto logical = erasePhysicalType(from);
       return {{"representation.convert",
                {logical.spelling()},

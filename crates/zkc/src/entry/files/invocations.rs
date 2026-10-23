@@ -68,6 +68,14 @@ impl FunctionResultEncoder {
     pub fn encode(&self, value: &crate::entry::Value) -> Result<Vec<u8>> {
         files::function_output(value, self.capacity, self.setups.clone())
     }
+    /// Share the execution owner's context through result serialization.
+    pub fn encode_with_cpu(
+        &self,
+        value: &crate::entry::Value,
+        cpu: crate::execution::CpuExecution,
+    ) -> Result<Vec<u8>> {
+        files::function_output_with_cpu(value, self.capacity, self.setups.clone(), cpu)
+    }
 }
 /// Input refusal with the checked document and logical input location, if known.
 #[derive(Debug)]

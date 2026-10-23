@@ -61,6 +61,9 @@ def validate_condition(host, threads):
 
 def validate_process(process, host, threads):
     require(process.get('rayon_num_threads') == str(threads), 'worker thread setting differs')
+    if 'cpu_workers' in process:
+        require(type(process['cpu_workers']) is int and process['cpu_workers'] == threads,
+                'shared CPU context differs from requested workers')
     requested = host.get('requested_cpus')
     if requested is None:
         return

@@ -17,9 +17,11 @@ publication. The VM and kernels do not depend on each other.
 | `blst::bls12_381` | Canonical scalar algebra, typed resident bulk storage, G1/G2, variable-time MSM and pairing products |
 | `arkworks::bn254` | BN254 scalars, G1/G2, pairings and polynomial transforms |
 | `arkworks::scaling` | Bounded affine-base multiplication and batch normalization |
-| `plonky3` | KoalaBear and binary fields, transforms, hashes and Merkle commitments |
+| `halo2curves::bn254` | Independent BN254 scalar/G1/G2 arithmetic, validated bulk storage, MSM and pairing-product checks |
+| `plonky3` | Registered prime/extension and binary fields, transforms, selected hashes and Merkle commitments |
 | `dalek` | Ristretto255 scalar/group arithmetic and checked Edwards25519 points |
 | `interop` | Exact pinned external constructions and their source provenance |
+| `cpu` | Shared application-owned workers for typed numerical phases |
 
 Concrete types are imported from their provider and mathematical family. There
 is no default scalar field or group at the crate root. Distinct construction
@@ -56,6 +58,24 @@ no new timing or authority permission. Existing compiler physical plans and
 installed backend bindings remain responsible for representation and contract
 selection.
 
+## CPU execution
+
+`cpu::CpuExecution::new(workers)` creates a fallible, clonable worker owner.
+Use `cpu.enter(|| kernel_call())` to supply it while keeping validation and
+partial effects on the caller. Parallel-capable numerical leaves install their
+work on those workers. `cpu.execute` is for an already isolated, `Send` numerical
+phase. Explicit clones share one pool across concurrent callers; these lexical
+scopes do not propagate across an asynchronous suspension.
+
+The pinned Arkworks curve and PCS `parallel` features stay disabled because
+their MSM implementation creates private pools. Field and FFT parallelism stays
+enabled and uses the supplied pool. Cargo feature unification is additive:
+applications adding other Arkworks dependencies must preserve that restriction.
+Tests check the resolved workspace and normal SDK consumer graphs. The worker
+ceiling covers this pool, not other contexts, caller threads or foreign code.
+Standalone typed calls without a supplied context retain upstream execution
+policy. Small element-wise phases avoid a worker hop.
+
 ## Alternative BLS12-381 provider
 
 `blst::bls12_381` owns private, validated subgroup points and scalars. Its exact
@@ -89,3 +109,24 @@ This module exposes pairing-product checking. A target-group output would requir
 a complete safe bridge to the shared GT representation; blstrs' torus encoding
 is a different format and does not cover identity through its compression API.
 It is not used as a substitute for the existing GT codec.
+
+## Registered Plonky3 residue fields
+
+`plonky3::residue::{PrimeWord, Residue}` supplies exact canonical coordinate
+words and the prime-base DFT cache for KoalaBear (base/quartic/octic), BabyBear
+(base/quartic `X^4 - 11`), and Goldilocks (base/quadratic `X^2 - 7`). The pinned
+Plonky3 family is 0.8.0; independent OpenVM adapter dependencies retain 0.4.3.
+
+`plonky3::polynomial::{Domain, Kernels}` shares the same numerical algorithms
+across these fields. A domain always uses the base field's two-adic generator,
+with maximum log size 24 for KoalaBear, 27 for BabyBear and 32 for Goldilocks.
+An extension-valued shift can have nonzero higher coordinates. Structural
+admission at the maximum size performs no allocation. Execution also requires
+caller-owned resource limits. Typed CPU leaf installation remains in place.
+
+Canonical coordinates are ascending basis coefficients, with exactly four
+little-endian bytes for KoalaBear/BabyBear or eight for Goldilocks. Decoding
+rejects each coordinate at or above the exact modulus. Decimal naturals embed
+in coordinate zero, preserving every u64 bit; they are not packed extension
+representations. Montgomery words are available only for explicitly supported
+31-bit bases. Field support alone installs no hash or commitment profile.

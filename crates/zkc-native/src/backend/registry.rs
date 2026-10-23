@@ -400,9 +400,37 @@ pub(super) fn installed() -> Result<&'static Registry> {
                     )?;
                 }
             }
+            for &contract in crate::operations::halo2curves::CONTRACTS {
+                r.insert(
+                    format!("halo2curves-axiom/resident/{contract}"),
+                    Implementation {
+                        contract,
+                        signature: Signature::Custom(crate::operations::halo2curves::signature),
+                        handler: Dispatch::Resolve(super::dispatch::halo2curves),
+                        prepared_handler: if contract == "field.constant" {
+                            Some(prepared_field_constant)
+                        } else {
+                            None
+                        },
+                        deterministic: true,
+                        requirements: zkc_runtime::vm::ImplementationRequirements {
+                            timing: if contract == "curve.msm" {
+                                zkc_runtime::vm::TimingRequirement::VariableTime
+                            } else {
+                                zkc_runtime::vm::TimingRequirement::Unspecified
+                            },
+                            timing_operands: if contract == "curve.msm" {
+                                &[0, 1]
+                            } else {
+                                &[]
+                            },
+                        },
+                    },
+                )?;
+            }
             r.pure_family(
                 &[("native/representation.convert", "representation.convert")],
-                Signature::Custom(crate::operations::blst::conversion_signature),
+                Signature::Custom(crate::operations::resident::conversion_signature),
                 resident_conversion,
             )?;
             for row in alternatives() {
@@ -515,7 +543,7 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
     if field(i) == Some(Identity::Bn254Fr) {
         crate::operations::bn254::apply(name, field(i), args, i, &b.core.policy)
     } else {
-        crate::operations::koala_bear::apply(
+        crate::operations::plonky3::apply(
             name,
             field(i),
             args,
@@ -636,5 +664,18 @@ fn resident_conversion(
     i: &Invocation<'_>,
     args: &[Value],
 ) -> Result<Vec<Value>> {
-    crate::operations::blst::convert(i, args, &b.core.policy)
+    crate::operations::resident::convert(i, args, &b.core.policy)
+}
+
+pub(super) fn halo2curves(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::halo2curves::apply(
+        &i.binding.declaration().contract,
+        i,
+        args,
+        &b.core.policy,
+    )
 }

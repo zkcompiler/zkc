@@ -2,6 +2,7 @@
 //! and an independent integer model of `koala-bear.ext8-binomial3`.
 use super::*;
 use crate::{KoalaBearExt4, KoalaBearExt8, ring::Budget};
+use p3_field::PrimeField32;
 use zkc_runtime::relation::{
     Assertion, Authority, Channel, ChannelKind, Columns, Group, Height, HeightAuthority, Input,
     Interaction, Locality, PolynomialInput, PolynomialShape, ReadModel, Scope, Slot, Table,

@@ -503,14 +503,18 @@ pub(super) fn context_check(
             }
             _ => return Err(error("entry-host-context-operation")),
         };
-        let keys = super::super::setups::check_pinned_material(
-            interface,
-            &deployment.authority,
-            material,
-            host.options.limits.capacity,
-            &mut imports,
-        )
-        .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
+        let keys = host
+            .cpu
+            .enter(|| {
+                super::super::setups::check_pinned_material(
+                    interface,
+                    &deployment.authority,
+                    material,
+                    host.options.limits.capacity,
+                    &mut imports,
+                )
+            })
+            .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
         match (&deployment.kind, value) {
             (DeploymentKind::Run(_), InvocationBinding::Run(v)) => {
                 for role in interface.roles() {
@@ -522,6 +526,7 @@ pub(super) fn context_check(
                             &keys,
                             host.options.limits.capacity,
                             ledger,
+                            host.cpu.clone(),
                         )
                         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
                     }
@@ -541,6 +546,7 @@ pub(super) fn context_check(
                     &keys,
                     host.options.limits.capacity,
                     ledger,
+                    host.cpu.clone(),
                 )
                 .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
             }
@@ -592,6 +598,7 @@ fn check_context_data(
     keys: &BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>,
     capacity: crate::execution::Capacity,
     ledger: &zkc_runtime::vm::ExecutionLedger,
+    cpu: CpuExecution,
 ) -> std::result::Result<(), String> {
     use crate::execution::InputValue;
     use crate::host::admission::{Admission, Input, KeySource};
@@ -601,7 +608,7 @@ fn check_context_data(
         &capacity.backend(),
     )
     .map_err(|e| e.to_string())?;
-    let backend = zkc_native::NativeBackend::new(
+    let backend = zkc_native::NativeBackend::new_with_cpu(
         capacity.backend(),
         zkc_native::EntryPolicy::new(
             zkc_native::Domain::new(
@@ -613,6 +620,7 @@ fn check_context_data(
             None,
         ),
         registry,
+        cpu.clone(),
     )
     .map_err(|e| e.to_string())?;
     let ports = interface.context_ports(role).collect::<Vec<_>>();
@@ -672,6 +680,6 @@ fn check_context_data(
             admission.data(id, ty.kind())?;
         }
     }
-    let _checked = admission.load_shared(&backend, &capacity.backend(), ledger, 0)?;
+    let _checked = cpu.enter(|| admission.load_shared(&backend, &capacity.backend(), ledger, 0))?;
     Ok(())
 }

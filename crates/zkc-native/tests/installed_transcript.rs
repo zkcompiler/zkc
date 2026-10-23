@@ -429,6 +429,8 @@ fn selected_installed_observations_preserve_canonical_bytes_successors_and_repea
         Identity::Merlin3Fr64Be,
         Identity::Merlin3Ristretto64Le,
         Identity::Merlin3KoalaBearExt8,
+        Identity::Merlin3BabyBearExt4,
+        Identity::Merlin3GoldilocksExt2,
         Identity::Spongefish080KeccakFr64Be,
         Identity::HashChainKeccak256Fr64Be,
         Identity::HashChainKeccak256KoalaBearExt8,

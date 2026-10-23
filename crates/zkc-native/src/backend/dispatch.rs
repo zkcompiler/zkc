@@ -72,3 +72,14 @@ pub(super) fn resident(binding: &OperationBinding, _signature: &BoundSignature) 
             .unwrap_or(super::registry::blst),
     )
 }
+
+// Keep the existing blst resolver monomorphized; Halo has its own typed leaves.
+pub(super) fn halo2curves(
+    binding: &OperationBinding,
+    _signature: &BoundSignature,
+) -> Option<Handler> {
+    Some(
+        scalar::<zkc_kernels::halo2curves::bn254::ScalarElement>(&binding.contract)
+            .unwrap_or(super::registry::halo2curves),
+    )
+}

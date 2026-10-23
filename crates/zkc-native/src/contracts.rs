@@ -26,6 +26,24 @@ fn installed() -> &'static Installation {
             ("blst/g1", Type::Groups, Identity::Bls12381G1),
             ("blst/g2", Type::Group, Identity::Bls12381G2),
             ("blst/g2", Type::Groups, Identity::Bls12381G2),
+            ("halo2curves-axiom/bn254.fr", Type::Field, Identity::Bn254Fr),
+            (
+                "halo2curves-axiom/bn254.fr",
+                Type::Vector,
+                Identity::Bn254Fr,
+            ),
+            ("halo2curves-axiom/bn254.g1", Type::Group, Identity::Bn254G1),
+            (
+                "halo2curves-axiom/bn254.g1",
+                Type::Groups,
+                Identity::Bn254G1,
+            ),
+            ("halo2curves-axiom/bn254.g2", Type::Group, Identity::Bn254G2),
+            (
+                "halo2curves-axiom/bn254.g2",
+                Type::Groups,
+                Identity::Bn254G2,
+            ),
         ] {
             layouts.push(
                 builder
@@ -74,6 +92,80 @@ fn installed() -> &'static Installation {
                         .expect("native resident contract");
                     identities.push((declaration, id));
                 }
+            }
+        }
+        // Expected installation inventory is deliberately authored here rather
+        // than inferred from the actual Registry or a nominal field match.
+        for contract in [
+            "field.constant",
+            "field.from_index",
+            "field.add",
+            "field.sub",
+            "field.neg",
+            "field.mul",
+            "field.inverse",
+            "field.equal",
+            "vector.empty",
+            "vector.constant",
+            "vector.splat",
+            "vector.append",
+            "vector.at",
+            "vector.get",
+            "vector.length",
+            "vector.length_check",
+            "vector.add",
+            "vector.sub",
+            "vector.mul",
+            "vector.dot",
+            "vector.scale",
+            "vector.sum",
+            "vector.product",
+            "vector.split",
+            "vector.concat",
+            "vector.slice",
+            "vector.equal",
+            "curve.generator",
+            "curve.identity",
+            "curve.add",
+            "curve.neg",
+            "curve.equal",
+            "curve.nonidentity",
+            "curve.scale",
+            "curve.empty",
+            "curve.append",
+            "curve.at",
+            "curve.get",
+            "curve.length",
+            "curve.vector_add",
+            "curve.scale_each",
+            "curve.vector_scale",
+            "curve.split",
+            "curve.concat",
+            "curve.msm",
+            "pairing.check",
+        ] {
+            let domains: &[&str] = if contract.starts_with("curve.") {
+                &["bn254.g1", "bn254.g2"]
+            } else {
+                &["bn254.fr"]
+            };
+            for domain in domains {
+                let declaration = OperationBinding {
+                    contract: contract.into(),
+                    arguments: vec![(*domain).into()],
+                    implementation: format!("halo2curves-axiom/resident/{contract}"),
+                    physical_arguments: vec![],
+                };
+                let signature = crate::operations::resident::signature_with(
+                    &declaration,
+                    "halo2curves-axiom",
+                    &physical,
+                )
+                .expect("expected BN254 resident ports");
+                let id = builder
+                    .add_implementation(declaration.clone(), signature, requirements(&declaration))
+                    .expect("expected BN254 resident contract");
+                identities.push((declaration, id));
             }
         }
         let scalar = physical(Type::Field, Identity::Bls12381Fr).expect("resident scalar");
@@ -169,12 +261,18 @@ fn installed() -> &'static Installation {
 }
 fn requirements(binding: &OperationBinding) -> ImplementationRequirements {
     ImplementationRequirements {
-        timing: if binding.implementation == "blst/resident/curve.msm" {
+        timing: if matches!(
+            binding.implementation.as_str(),
+            "blst/resident/curve.msm" | "halo2curves-axiom/resident/curve.msm"
+        ) {
             TimingRequirement::VariableTime
         } else {
             TimingRequirement::Unspecified
         },
-        timing_operands: if binding.implementation == "blst/resident/curve.msm" {
+        timing_operands: if matches!(
+            binding.implementation.as_str(),
+            "blst/resident/curve.msm" | "halo2curves-axiom/resident/curve.msm"
+        ) {
             &[0, 1]
         } else {
             &[]
@@ -193,11 +291,13 @@ pub fn native_contracts_with_policy(policy: ExecutionPolicy) -> Contracts {
 pub(crate) fn physical(kind: Type, identity: Identity) -> Option<&'static PhysicalType> {
     if !matches!(
         (kind, identity),
-        (Type::Field | Type::Vector, Identity::Bls12381Fr)
-            | (
-                Type::Group | Type::Groups,
-                Identity::Bls12381G1 | Identity::Bls12381G2
-            )
+        (
+            Type::Field | Type::Vector,
+            Identity::Bls12381Fr | Identity::Bn254Fr
+        ) | (
+            Type::Group | Type::Groups,
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Bn254G1 | Identity::Bn254G2
+        )
     ) {
         return None;
     }

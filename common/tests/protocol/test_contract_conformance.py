@@ -202,7 +202,9 @@ def test_atomic_representations(inventory, drivers, directory):
         requests.append({"physical_type": spelling})
         expected.append({"accepted": True, "canonical": spelling}
                         if (kind, domain, representation) in keys else {"accepted": False})
-    assert len(requests) <= 1024, "review atomic representation probe growth"
+    # BabyBear/Goldilocks and the resident BN254 ports bring this bounded
+    # cross-product to 1,223 probes; retain a ceiling for future catalog growth.
+    assert len(requests) <= 1536, "review atomic representation probe growth"
     replies = query(drivers, requests, directory)
     failures = agreements(replies, requests)
     for consumer, actual in replies.items():
@@ -314,7 +316,9 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    assert len(rows) < 1700, "review enumeration growth; avoid combinatorial testing"
+    # Field, oracle and transcript additions produce 2,320 closed candidates.
+    # Enumerate each operation's domain sort rather than all parameter products.
+    assert len(rows) < 2560, "review enumeration growth; avoid combinatorial testing"
     return rows
 
 
@@ -375,7 +379,8 @@ def implementation_arguments(inventory):
     # directions and identity/wrong-target refusals for every flat logical port.
     conversions = set()
     for row in inventory[1]["atomic_representations"]:
-        if row["representation"] not in {"blst/fr", "blst/g1", "blst/g2"}:
+        if (row["default"] or row["layout"] or
+                row["kind"] not in {"field", "vector", "group", "groups"}):
             continue
         logical = f"{row['kind']}:{row['domain']}"
         ordinary = next(r["representation"] for r in inventory[1]["atomic_representations"]
@@ -383,7 +388,7 @@ def implementation_arguments(inventory):
         resident = row["representation"]
         conversions.update((logical, source, target)
                            for source in (ordinary, resident)
-                           for target in (ordinary, resident, "blst/unknown"))
+                           for target in (ordinary, resident, "unknown.representation/0"))
     arguments["representation.convert"] = conversions
     return arguments
 

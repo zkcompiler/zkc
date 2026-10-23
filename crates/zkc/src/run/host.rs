@@ -1,5 +1,5 @@
 //! Application-owned loading and lifecycle for an authenticated native bundle.
-use crate::execution::Capacity;
+use crate::execution::{Capacity, CpuExecution};
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
     inputs::*,
@@ -94,6 +94,7 @@ impl HostLimits {
 /// Native admission proves supplied structure, not source-order correspondence.
 #[derive(Clone)]
 pub struct RunHost {
+    cpu: CpuExecution,
     ring_assets: zkc_native::ring::Registry,
     relation_assets: zkc_native::relation::Registry,
     ring_work_limit: u64,
@@ -112,7 +113,23 @@ impl RunHost {
         limits: HostLimits,
         authority: SetupAuthority,
     ) -> Result<Self> {
-        let backend = Self::admission_backend(limits)?;
+        Self::admit_with_cpu(
+            bytes,
+            expected_sha256,
+            limits,
+            authority,
+            CpuExecution::serial().map_err(|e| e.to_string())?,
+        )
+    }
+    /// Admit with one application-owned context shared by all participants.
+    pub fn admit_with_cpu(
+        bytes: &[u8],
+        expected_sha256: &[u8; 32],
+        limits: HostLimits,
+        authority: SetupAuthority,
+        cpu: CpuExecution,
+    ) -> Result<Self> {
+        let backend = Self::admission_backend(limits, cpu.clone())?;
         let bundle = Bundle::admit_pinned(
             bytes,
             expected_sha256,
@@ -121,14 +138,15 @@ impl RunHost {
             limits.bundle,
         )
         .map_err(|e| e.to_string())?;
-        Self::from_bundle(bundle, expected_sha256, limits, authority)
+        Self::from_bundle(bundle, expected_sha256, limits, authority, cpu)
     }
     pub(crate) fn admit_artifact(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         limits: HostLimits,
         authority: SetupAuthority,
+        cpu: CpuExecution,
     ) -> Result<Self> {
-        let backend = Self::admission_backend(limits)?;
+        let backend = Self::admission_backend(limits, cpu.clone())?;
         let bundle = Bundle::admit(
             artifact.bytes(),
             &backend,
@@ -136,17 +154,18 @@ impl RunHost {
             limits.bundle,
         )
         .map_err(|e| e.to_string())?;
-        Self::from_bundle(bundle, artifact.identity(), limits, authority)
+        Self::from_bundle(bundle, artifact.identity(), limits, authority, cpu)
     }
-    fn admission_backend(limits: HostLimits) -> Result<NativeBackend> {
+    fn admission_backend(limits: HostLimits, cpu: CpuExecution) -> Result<NativeBackend> {
         limits.validate()?;
-        NativeBackend::new(
+        NativeBackend::new_with_cpu(
             limits.capacity.backend(),
             EntryPolicy::new(
                 Domain::new("admission", "admission", "admission", None),
                 None,
             ),
             Default::default(),
+            cpu,
         )
         .map_err(|e| e.to_string())
     }
@@ -155,9 +174,11 @@ impl RunHost {
         identity: &[u8; 32],
         limits: HostLimits,
         authority: SetupAuthority,
+        cpu: CpuExecution,
     ) -> Result<Self> {
         authority.check(&bundle)?;
         Ok(Self {
+            cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
             ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
@@ -185,6 +206,14 @@ impl RunHost {
     }
     pub fn limits(&self) -> HostLimits {
         self.limits
+    }
+    /// Share one CPU context across every participant execution backend.
+    pub fn with_cpu(mut self, cpu: CpuExecution) -> Self {
+        self.cpu = cpu;
+        self
+    }
+    pub fn cpu(&self) -> &CpuExecution {
+        &self.cpu
     }
     pub(crate) fn with_retained_inputs(mut self) -> Self {
         self.retained_inputs = true;
@@ -251,7 +280,7 @@ impl RunHost {
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<PreparedRun<'_>> {
         imports.set_ledger(self.shared_ledger.clone());
-        inputs::prepare(self, request, imports)
+        self.cpu.enter(|| inputs::prepare(self, request, imports))
     }
 }
 struct PreparedRole {

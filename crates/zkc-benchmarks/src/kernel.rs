@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use zkc_kernels::{arkworks::bls12_381 as ark, blst::bls12_381 as blst};
 use zkc_native::Value;
 
+mod bn254;
 mod installed;
 
 pub fn single_call() -> usize {
@@ -20,6 +21,36 @@ pub fn single_call() -> usize {
 pub enum Provider {
     Arkworks,
     Blst,
+    #[serde(rename = "halo2curves-axiom")]
+    Halo2curvesAxiom,
+}
+impl Provider {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Arkworks => "arkworks",
+            Self::Blst => "blst",
+            Self::Halo2curvesAxiom => "halo2curves-axiom",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+pub enum Family {
+    #[default]
+    #[serde(rename = "bls12-381")]
+    Bls12381,
+    #[serde(rename = "bn254")]
+    Bn254,
+}
+impl Family {
+    fn supports(self, provider: Provider) -> bool {
+        matches!(
+            (self, provider),
+            (_, Provider::Arkworks)
+                | (Self::Bls12381, Provider::Blst)
+                | (Self::Bn254, Provider::Halo2curvesAxiom)
+        )
+    }
 }
 #[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -458,6 +489,42 @@ fn pairing_run(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub fn run_family(
+    request: &Request,
+    family: Family,
+    provider: Provider,
+    group: Group,
+    kernel: Kernel,
+    boundary: Boundary,
+    elements: usize,
+    chain_length: usize,
+) -> Result<Report> {
+    if !family.supports(provider) {
+        return Err("unsupported provider and curve family".into());
+    }
+    match family {
+        Family::Bls12381 => run(
+            request,
+            provider,
+            group,
+            kernel,
+            boundary,
+            elements,
+            chain_length,
+        ),
+        Family::Bn254 => bn254::run(
+            request,
+            provider,
+            group,
+            kernel,
+            boundary,
+            elements,
+            chain_length,
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     request: &Request,
     provider: Provider,
@@ -467,7 +534,8 @@ pub fn run(
     elements: usize,
     chain_length: usize,
 ) -> Result<Report> {
-    if request.operation != Operation::Run
+    if !Family::Bls12381.supports(provider)
+        || request.operation != Operation::Run
         || !(1..=4096).contains(&elements)
         || matches!(kernel, Kernel::Scale | Kernel::FieldMul) && elements != 1
         || !(1..=32).contains(&chain_length)
@@ -499,13 +567,21 @@ pub fn run(
         Group::Scalar => scalar_run(request, provider, boundary, kernel, elements, chain_length),
     }?;
     if report.diagnostics.is_null() {
-        report.diagnostics =
-            kernel_diagnostics(provider, group, kernel, boundary, elements, chain_length)?;
+        report.diagnostics = kernel_diagnostics(
+            Family::Bls12381,
+            provider,
+            group,
+            kernel,
+            boundary,
+            elements,
+            chain_length,
+        )?;
     }
     Ok(report)
 }
 
 fn kernel_diagnostics(
+    family: Family,
     provider: Provider,
     group: Group,
     kernel: Kernel,
@@ -518,10 +594,23 @@ fn kernel_diagnostics(
         allow_unspecified_timing: true,
         allow_variable_time: kernel == Kernel::Msm,
     });
-    let domain = match group {
-        Group::G1 => "bls12-381.g1",
-        Group::G2 => "bls12-381.g2",
-        _ => "bls12-381.fr",
+    let (domain, foreign_provider) = match family {
+        Family::Bls12381 => (
+            match group {
+                Group::G1 => "bls12-381.g1",
+                Group::G2 => "bls12-381.g2",
+                _ => "bls12-381.fr",
+            },
+            Provider::Blst,
+        ),
+        Family::Bn254 => (
+            match group {
+                Group::G1 => "bn254.g1",
+                Group::G2 => "bn254.g2",
+                _ => "bn254.fr",
+            },
+            Provider::Halo2curvesAxiom,
+        ),
     };
     let ark = contracts
         .resolve(installed::binding(
@@ -532,7 +621,7 @@ fn kernel_diagnostics(
         .map_err(fail)?;
     let foreign = contracts
         .resolve(installed::binding(
-            Provider::Blst,
+            foreign_provider,
             kernel.contract(),
             domain,
         ))
@@ -552,15 +641,18 @@ fn kernel_diagnostics(
         let width = match source.logical().identity() {
             zkc_runtime::vm::Identity::Bls12381G1 => 48,
             zkc_runtime::vm::Identity::Bls12381G2 => 96,
+            zkc_runtime::vm::Identity::Bn254G2 => 64,
             _ => 32,
         };
-        conversions.push(
-            json!({"source":source.spelling(), "target":target.spelling(),
+        let mut row = json!({"source":source.spelling(), "target":target.spelling(),
             "calls":elements(source), "elements":elements(source),
-            "canonical_payload_bytes":elements(source) * width}),
-        );
+            "canonical_payload_bytes":elements(source) * width});
+        if family == Family::Bn254 {
+            row["logical_type"] = json!(source.logical().spelling());
+        }
+        conversions.push(row);
     };
-    if provider == Provider::Blst {
+    if provider == foreign_provider {
         if matches!(boundary, Boundary::Converted | Boundary::Import) {
             for (source, target) in ark
                 .signature()
@@ -594,7 +686,7 @@ fn kernel_diagnostics(
             }
         }
     }
-    Ok(json!({"chain_length":chain_length,
+    let mut diagnostics = json!({"chain_length":chain_length,
         "arithmetic_calls":if matches!(boundary, Boundary::Import | Boundary::Export) { 0 }
             else { chain_length + if kernel == Kernel::Msm { chain_length - 1 } else { 0 } },
         "kernel_adapter_conversions":conversions,
@@ -605,7 +697,41 @@ fn kernel_diagnostics(
             "provider_workspace_admission_bound_bytes_per_call":if provider == Provider::Blst && kernel == Kernel::Msm {
                 Some(blst::msm_workspace_bytes(n).map_err(fail)?)
             } else if provider == Provider::Blst && kernel == Kernel::PairingCheck { Some(blst::PAIRING_WORKSPACE_BYTES) } else { None }},
-        "provider_hidden_allocations":"not allocator-instrumented; process peak RSS includes setup and mathematical oracle"}))
+        "provider_hidden_allocations":"not allocator-instrumented; process peak RSS includes setup and mathematical oracle"});
+    if family == Family::Bn254 {
+        let foreign_arithmetic = provider == foreign_provider
+            && !matches!(boundary, Boundary::Import | Boundary::Export);
+        diagnostics["provider"] = json!(provider.name());
+        diagnostics["conversion_observation"] = json!(
+            "direct checked canonical adapters; calls per element; bytes exclude ZKCV framing"
+        );
+        diagnostics["bulk_storage"] = json!(if provider == Provider::Arkworks {
+            "Arkworks owned scalar/affine buffers; resident calls borrow Arkworks mathematical storage"
+        } else {
+            "halo2curves-axiom owned Fr/G1Affine/G2Affine buffers; resident calls borrow upstream ABI storage"
+        });
+        diagnostics["construction_copies"] = json!(if provider == Provider::Arkworks {
+            "not allocator-instrumented; Arkworks MSM stages affine bases"
+        } else {
+            "not allocator-instrumented; imports allocate final upstream buffers"
+        });
+        diagnostics["managed"]["provider_workspace_admission_bound_bytes_per_call"] =
+            json!(if foreign_arithmetic {
+                bn254::workspace(kernel, n)?
+            } else {
+                None
+            });
+        diagnostics["provider_scheduling_work_units_per_arithmetic_call"] =
+            json!(if foreign_arithmetic {
+                bn254::scheduling_work(kernel, n)?
+            } else {
+                None
+            });
+        diagnostics["work_observation"] = json!(
+            "provider public-shape scheduling score only; direct calls do not charge Native/VM budgets; MSM chain additions excluded from this per-call score"
+        );
+    }
+    Ok(diagnostics)
 }
 
 fn scalar_run(
@@ -735,11 +861,14 @@ mod tests {
         n: usize,
         chain_length: usize,
     ) -> Request {
-        serde_json::from_value(json!({"format":"zkc.benchmark-job/0", "backend":{
+        let mut request: Request =
+            serde_json::from_value(json!({"format":"zkc.benchmark-job/0", "backend":{
             "kind":"kernel", "provider":"blst", "group":group, "kernel":kernel,
             "boundary":boundary, "elements":n, "chain_length":chain_length},
             "operation":"run", "plan":{"warmups":1,"samples":1,"iterations":1}, "proof":"unused"}))
-        .unwrap()
+            .unwrap();
+        request.cpu = Some(zkc::execution::CpuExecution::serial().unwrap());
+        request
     }
 
     #[test]

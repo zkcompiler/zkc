@@ -319,6 +319,14 @@ void installedInventory() {
        {"field", "vector", "polynomial", "round", "matrix", "rng", "nonce"}},
       {"bn254.fr", {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"koala-bear", {"field", "vector", "polynomial", "round", "matrix"}},
+      {"baby-bear", {"field", "vector", "polynomial", "round", "matrix"}},
+      {"baby-bear.ext4-binomial11",
+       {"field", "vector", "polynomial", "round", "matrix", "rng"}},
+      {"goldilocks", {"field", "vector", "polynomial", "round", "matrix"}},
+      {"goldilocks.ext2-binomial7",
+       {"field", "vector", "polynomial", "round", "matrix", "rng"}},
+      {"merlin3.baby-bear.ext4-binomial11.rejection31le/0", {"transcript"}},
+      {"merlin3.goldilocks.ext2-binomial7.rejection64le/0", {"transcript"}},
       {"koala-bear.ext8-binomial3",
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"koala-bear.ext4-binomial3",
@@ -355,6 +363,18 @@ void installedInventory() {
         "opening_states"}},
       {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
        {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-16.baby-bear/0",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-8.goldilocks/0",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0",
+       {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}}};
   std::set<std::pair<std::string, std::string>> pairs, actual;
   for (const auto &[domain, kinds] : expected)
@@ -364,7 +384,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 98 && actual == pairs,
+  require(pairs.size() == 142 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -407,6 +427,12 @@ void installedInventory() {
       {"merlin3.ristretto255.scalar64le/0", "dalek"},
       {"spongefish0.8.0.keccak.bls12-381.fr64be/0", "spongefish"},
       {"koala-bear", "plonky3"},
+      {"baby-bear", "plonky3"},
+      {"baby-bear.ext4-binomial11", "plonky3"},
+      {"merlin3.baby-bear.ext4-binomial11.rejection31le/0", "plonky3"},
+      {"goldilocks", "plonky3"},
+      {"goldilocks.ext2-binomial7", "plonky3"},
+      {"merlin3.goldilocks.ext2-binomial7.rejection64le/0", "plonky3"},
       {"koala-bear.ext8-binomial3", "plonky3"},
       {"koala-bear.ext4-binomial3", "plonky3"},
       {"gf2-64.pentanomial-4-3-1", "plonky3"},
@@ -417,7 +443,11 @@ void installedInventory() {
       {"rows.merkle-keccak256.koala-bear/0", "plonky3"},
       {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"},
       {"rows.merkle-poseidon2-16.koala-bear/0", "plonky3"},
-      {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "plonky3"}};
+      {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "plonky3"},
+      {"rows.merkle-poseidon2-16.baby-bear/0", "plonky3"},
+      {"rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0", "plonky3"},
+      {"rows.merkle-poseidon2-8.goldilocks/0", "plonky3"},
+      {"rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0", "plonky3"}};
   require(catalog.allDomains().size() == providers.size(),
           "the complete installed provider domain inventory is unchanged");
   for (const auto &identity : identities) {

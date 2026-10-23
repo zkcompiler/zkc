@@ -114,14 +114,16 @@ impl<'a> CoefficientBatch<'a> {
         }
         scratch.resize(self.output_size, F::zero());
         let count = self.height.min(self.output_size);
-        for (column, result) in destination.chunks_exact_mut(self.output_size).enumerate() {
-            scratch.fill(F::zero());
-            let begin = column * self.height;
-            scratch[..count].copy_from_slice(&self.coefficients[begin..begin + count]);
-            domain.fft_in_place(scratch);
-            result.copy_from_slice(scratch);
-        }
-        Ok(())
+        crate::cpu::install(|| {
+            for (column, result) in destination.chunks_exact_mut(self.output_size).enumerate() {
+                scratch.fill(F::zero());
+                let begin = column * self.height;
+                scratch[..count].copy_from_slice(&self.coefficients[begin..begin + count]);
+                domain.fft_in_place(scratch);
+                result.copy_from_slice(scratch);
+            }
+            Ok(())
+        })
     }
 }
 
@@ -156,24 +158,26 @@ pub fn coset_extend_into(
     if scratch.capacity() < input.size().max(output.size()) {
         return Err(BatchError::BatchShape);
     }
-    for (column, result) in values
-        .chunks_exact(input.size())
-        .zip(destination.chunks_exact_mut(output.size()))
-    {
-        scratch.clear();
-        scratch.extend_from_slice(column);
-        input.ifft_in_place(scratch);
-        if scratch
-            .get(output.size()..)
-            .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
+    crate::cpu::install(|| {
+        for (column, result) in values
+            .chunks_exact(input.size())
+            .zip(destination.chunks_exact_mut(output.size()))
         {
-            return Err(BatchError::CoefficientCount);
+            scratch.clear();
+            scratch.extend_from_slice(column);
+            input.ifft_in_place(scratch);
+            if scratch
+                .get(output.size()..)
+                .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
+            {
+                return Err(BatchError::CoefficientCount);
+            }
+            scratch.resize(output.size(), F::zero());
+            output.fft_in_place(scratch);
+            result.copy_from_slice(scratch);
         }
-        scratch.resize(output.size(), F::zero());
-        output.fft_in_place(scratch);
-        result.copy_from_slice(scratch);
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Serial Montgomery inversion with explicitly supplied prefix storage. Unlike

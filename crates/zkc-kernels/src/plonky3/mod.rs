@@ -1,11 +1,13 @@
-//! Typed KoalaBear arithmetic, canonical element encodings and provider primitives.
+//! Typed residue and binary arithmetic, canonical encodings and selected provider primitives.
 pub mod binary;
+pub mod dft;
 mod field;
 pub mod merkle;
 pub mod oracle;
 pub mod packing;
 pub mod polynomial;
 pub mod poseidon2;
+pub mod residue;
 pub mod words;
 
 use crate::field::{Error, Result};
@@ -121,3 +123,10 @@ pub fn dot(a: &[KoalaBear], b: &[KoalaBear]) -> Result<KoalaBear> {
 pub fn mul_into(a: &[KoalaBear], b: &[KoalaBear], out: &mut [KoalaBear]) -> Result<()> {
     crate::vector::mul::<KoalaBear>(a, b, out)
 }
+
+pub use p3_baby_bear::BabyBear;
+pub use p3_goldilocks::Goldilocks;
+/// Ascending basis modulo X^4 - 11 (Plonky3 0.8.0).
+pub type BabyBearExt4 = p3_field::extension::BinomialExtensionField<BabyBear, 4>;
+/// Ascending basis modulo X^2 - 7 (Plonky3 0.8.0).
+pub type GoldilocksExt2 = p3_field::extension::BinomialExtensionField<Goldilocks, 2>;

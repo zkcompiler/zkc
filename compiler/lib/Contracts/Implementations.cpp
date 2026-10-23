@@ -26,6 +26,9 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bls12-381.g1"},
     {"arkworks", "bls12-381.g2"},
     {"arkworks", "bls12-381.gt"},
+    {"halo2curves-axiom", "bn254.fr"},
+    {"halo2curves-axiom", "bn254.g1"},
+    {"halo2curves-axiom", "bn254.g2"},
     {"blst", "bls12-381.fr"},
     {"blst", "bls12-381.g1"},
     {"blst", "bls12-381.g2"},
@@ -40,29 +43,28 @@ constexpr ProviderDomain providerDomains[] = {
     {"dalek", "ristretto255.group"},
     {"dalek", "edwards25519.prime"},
     {"dalek", "merlin3.ristretto255.scalar64le/0"},
-    {"plonky3", "koala-bear"},
-    {"plonky3", "koala-bear.ext8-binomial3"},
-    {"plonky3", "koala-bear.ext4-binomial3"},
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
+    {"plonky3", "merlin3.baby-bear.ext4-binomial11.rejection31le/0"},
+    {"plonky3", "merlin3.goldilocks.ext2-binomial7.rejection64le/0"},
     {"plonky3",
      "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.baby-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0"},
+    {"plonky3", "rows.merkle-poseidon2-8.goldilocks/0"},
+    {"plonky3", "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0"},
+
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
     {"plonky3", "gf2-64.pentanomial-4-3-1"},
     {"plonky3", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"},
     {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
 
-// One provider can serve fields with different presentations. Rows whose
-// kernels read integer residue coordinates name the KoalaBear family, so the
-// binary fields under the same provider do not inherit them
-// (docs/spec/realization/external-constructions.md).
-constexpr StringRef koalaFamily[] = {"koala-bear", "koala-bear.ext8-binomial3",
-                                     "koala-bear.ext4-binomial3"};
-constexpr StringRef littleEndianFields[] = {
-    "koala-bear", "koala-bear.ext8-binomial3", "koala-bear.ext4-binomial3",
-    "gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"};
+// Residue arithmetic, canonical bytes and Montgomery words have distinct
+// applicability. Binary fields share canonical little-endian byte operations
+// but cannot inherit residue arithmetic; Goldilocks has no Montgomery32 form.
+enum class FieldSet { None, Residue, LittleEndian, Montgomery32 };
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -80,26 +82,25 @@ struct ContractRow {
   unsigned providers;
   Compatibility compatibility = Compatibility::Nominal;
   StringRef domain = {};
-  // Several domain restrictions of one row, as if listed one per row.
-  ArrayRef<StringRef> domains = {};
+  FieldSet fields = FieldSet::None;
 };
 constexpr auto Nominal = Compatibility::Nominal;
 constexpr ContractRow contractRows[] = {
-    {"ring.point", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.rows", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.coefficients", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.affine_sum", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_rows", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_shape", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_input", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_scope", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_point", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_points", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_widths", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_policy", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_interactions", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_interaction", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_record_points", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.point", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.rows", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.coefficients", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.affine_sum", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_rows", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_shape", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_input", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_scope", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_point", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_points", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_widths", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_policy", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_interactions", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_interaction", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_record_points", Plonky3, Nominal, {}, FieldSet::Residue},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},
@@ -152,16 +153,32 @@ constexpr ContractRow contractRows[] = {
      "edwards25519.prime"},
     {"encoding.cryptonote_map", Dalek, Compatibility::Nominal,
      "edwards25519.prime"},
-    // KoalaBear and its installed extensions: four-byte words per coordinate.
+    // Registered residue fields: four- or eight-byte words per coordinate.
     // Binary fields: little-endian bit patterns, with no Montgomery form.
-    {"encoding.field_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.field_from_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.fields_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.fields_from_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.field_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.field_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.fields_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.fields_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.field_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.field_from_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.fields_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.fields_from_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.field_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.field_from_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.fields_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.fields_from_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
     {"hash.keccak256", Native, Compatibility::Independent},
     {"hash.sha256", Native, Compatibility::Independent},
     {"hash.poseidon2_16", Plonky3, Compatibility::Nominal, "koala-bear"},
@@ -330,7 +347,7 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
-    // Only the octic suites grant IndexTranscript.
+    // Only explicitly installed sampling suites grant IndexTranscript.
     {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
@@ -355,6 +372,8 @@ bool knownProvider(StringRef provider) {
 } // namespace
 
 bool implementationProviderSupports(StringRef provider, StringRef domain) {
+  if (provider == "plonky3" && plonky3Field(domain))
+    return true;
   return any_of(providerDomains, [&](const auto &row) {
     return row.provider == provider && row.domain == domain;
   });
@@ -822,12 +841,64 @@ const ImplementationCatalog &installedImplementations() {
         }
     };
     for (const auto &row : contractRows) {
-      if (!row.domain.empty() && !row.domains.empty())
-        report_fatal_error("ambiguous installed implementation row", false);
-      if (row.domains.empty())
+      if (row.fields == FieldSet::None) {
         install(row, row.domain);
-      for (StringRef domain : row.domains)
-        install(row, domain);
+        continue;
+      }
+      if (!row.domain.empty() || row.providers != Plonky3)
+        report_fatal_error("ambiguous installed implementation row", false);
+      for (const auto &field : plonky3Fields())
+        if (row.fields != FieldSet::Montgomery32 || field.montgomery32)
+          install(row, field.identity);
+      if (row.fields == FieldSet::LittleEndian)
+        for (StringRef field : {"gf2-64.pentanomial-4-3-1",
+                                "gf2-64.pentanomial-4-3-1.ext3-trinomial1"})
+          install(row, field);
+    }
+    // Explicit BN254 provider menu. These positive operation and physical-port
+    // inventories do not add a canonical default or a protocol-specific route.
+    for (StringRef contract : {"field.constant",    "field.from_index",
+                               "field.add",         "field.sub",
+                               "field.neg",         "field.mul",
+                               "field.inverse",     "field.equal",
+                               "vector.empty",      "vector.constant",
+                               "vector.splat",      "vector.append",
+                               "vector.at",         "vector.get",
+                               "vector.length",     "vector.length_check",
+                               "vector.add",        "vector.sub",
+                               "vector.mul",        "vector.dot",
+                               "vector.scale",      "vector.sum",
+                               "vector.product",    "vector.split",
+                               "vector.concat",     "vector.slice",
+                               "vector.equal",      "curve.generator",
+                               "curve.identity",    "curve.add",
+                               "curve.neg",         "curve.equal",
+                               "curve.nonidentity", "curve.scale",
+                               "curve.empty",       "curve.append",
+                               "curve.at",          "curve.get",
+                               "curve.length",      "curve.vector_add",
+                               "curve.scale_each",  "curve.vector_scale",
+                               "curve.split",       "curve.concat",
+                               "curve.msm",         "pairing.check"}) {
+      std::string implementation =
+          ("halo2curves-axiom/resident/" + contract).str();
+      entries.push_back(
+          {contract.str(),
+           implementation,
+           "halo2curves-axiom",
+           Compatibility::Nominal,
+           contract.starts_with("curve.")
+               ? std::vector<std::string>{"bn254.g1", "bn254.g2"}
+               : std::vector<std::string>{"bn254.fr"},
+           {{"field", "bn254.fr", "halo2curves-axiom/bn254.fr"},
+            {"vector", "bn254.fr", "halo2curves-axiom/bn254.fr"},
+            {"group", "bn254.g1", "halo2curves-axiom/bn254.g1"},
+            {"groups", "bn254.g1", "halo2curves-axiom/bn254.g1"},
+            {"group", "bn254.g2", "halo2curves-axiom/bn254.g2"},
+            {"groups", "bn254.g2", "halo2curves-axiom/bn254.g2"}}});
+      entries.back().requiresExplicitSelection = true;
+      preferences.push_back(
+          {contract.str(), "halo2curves-axiom", implementation});
     }
     // Algorithm and layout alternatives do not add a default preference.
     // Resident alternatives have exact ports and deliberately no preference.

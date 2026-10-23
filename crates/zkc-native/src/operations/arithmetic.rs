@@ -113,6 +113,17 @@ pub(crate) fn apply(
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearVector(xs)]) => {
                 embed::<KoalaBear, KoalaBearExt8>(xs, p, i, Value::KoalaBearExt8Vector)
             }
+            (Some(Identity::BabyBearExt4), [Value::BabyBearVector(xs)]) => {
+                embed::<crate::BabyBear, crate::BabyBearExt4>(xs, p, i, Value::BabyBearExt4Vector)
+            }
+            (Some(Identity::GoldilocksExt2), [Value::GoldilocksVector(xs)]) => {
+                embed::<crate::Goldilocks, crate::GoldilocksExt2>(
+                    xs,
+                    p,
+                    i,
+                    Value::GoldilocksExt2Vector,
+                )
+            }
             (Some(Identity::KoalaBearExt4), [Value::KoalaBearVector(xs)]) => {
                 embed::<KoalaBear, KoalaBearExt4>(xs, p, i, Value::KoalaBearExt4Vector)
             }
@@ -127,6 +138,12 @@ pub(crate) fn apply(
         return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
+            }
+            (Some(Identity::BabyBearExt4), [Value::BabyBearField(x)]) => {
+                Ok(vec![Value::BabyBearExt4Field((*x).into())])
+            }
+            (Some(Identity::GoldilocksExt2), [Value::GoldilocksField(x)]) => {
+                Ok(vec![Value::GoldilocksExt2Field((*x).into())])
             }
             (Some(Identity::KoalaBearExt4), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt4Field((*x).into())])
@@ -765,6 +782,33 @@ impl Value {
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bls12381G2Vector(v.into()))
+    }
+    pub fn baby_bear_vector(values: &[crate::BabyBear], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::BabyBear>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::BabyBearVector(copied.into()))
+    }
+    pub fn baby_bear_ext4_vector(values: &[crate::BabyBearExt4], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::BabyBearExt4>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::BabyBearExt4Vector(copied.into()))
+    }
+    pub fn goldilocks_vector(values: &[crate::Goldilocks], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::Goldilocks>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::GoldilocksVector(copied.into()))
+    }
+    pub fn goldilocks_ext2_vector(
+        values: &[crate::GoldilocksExt2],
+        policy: &Policy,
+    ) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::GoldilocksExt2>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::GoldilocksExt2Vector(copied.into()))
     }
     pub fn koala_bear_ext8_vector(values: &[KoalaBearExt8], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt8>())?;

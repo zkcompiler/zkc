@@ -62,6 +62,26 @@ pub const KOALA_BEAR_EXT4: NativeDomain = NativeDomain {
     group: None,
     provider: "plonky3",
 };
+pub const BABY_BEAR: NativeDomain = NativeDomain {
+    field: Identity::BabyBear,
+    group: None,
+    provider: "plonky3",
+};
+pub const BABY_BEAR_EXT4: NativeDomain = NativeDomain {
+    field: Identity::BabyBearExt4,
+    group: None,
+    provider: "plonky3",
+};
+pub const GOLDILOCKS: NativeDomain = NativeDomain {
+    field: Identity::Goldilocks,
+    group: None,
+    provider: "plonky3",
+};
+pub const GOLDILOCKS_EXT2: NativeDomain = NativeDomain {
+    field: Identity::GoldilocksExt2,
+    group: None,
+    provider: "plonky3",
+};
 /// Characteristic-two fields from Plonky3 0.8.0's `p3-binary-field`.
 pub const BINARY64: NativeDomain = NativeDomain {
     field: Identity::Binary64,
@@ -80,6 +100,10 @@ pub const INSTALLED: &[NativeDomain] = &[
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
     KOALA_BEAR_EXT4,
+    BABY_BEAR,
+    BABY_BEAR_EXT4,
+    GOLDILOCKS,
+    GOLDILOCKS_EXT2,
     BINARY64,
     BINARY64_EXT3,
     BN254_G1,
@@ -136,6 +160,26 @@ impl NativeDomain {
             (Identity::KoalaBearExt8, Polynomial) => (self.field, R::KoalaBearExt8Polynomial),
             (Identity::KoalaBearExt8, Round) => (self.field, R::KoalaBearExt8Round),
             (Identity::KoalaBearExt8, Matrix) => (self.field, R::KoalaBearExt8SparseCoo),
+            (Identity::BabyBear, Field) => (self.field, R::BabyBear),
+            (Identity::BabyBear, Vector) => (self.field, R::BabyBearVector),
+            (Identity::BabyBear, Polynomial) => (self.field, R::BabyBearPolynomial),
+            (Identity::BabyBear, Round) => (self.field, R::BabyBearRound),
+            (Identity::BabyBear, Matrix) => (self.field, R::BabyBearSparseCoo),
+            (Identity::BabyBearExt4, Field) => (self.field, R::BabyBearExt4),
+            (Identity::BabyBearExt4, Vector) => (self.field, R::BabyBearExt4Vector),
+            (Identity::BabyBearExt4, Polynomial) => (self.field, R::BabyBearExt4Polynomial),
+            (Identity::BabyBearExt4, Round) => (self.field, R::BabyBearExt4Round),
+            (Identity::BabyBearExt4, Matrix) => (self.field, R::BabyBearExt4SparseCoo),
+            (Identity::Goldilocks, Field) => (self.field, R::Goldilocks),
+            (Identity::Goldilocks, Vector) => (self.field, R::GoldilocksVector),
+            (Identity::Goldilocks, Polynomial) => (self.field, R::GoldilocksPolynomial),
+            (Identity::Goldilocks, Round) => (self.field, R::GoldilocksRound),
+            (Identity::Goldilocks, Matrix) => (self.field, R::GoldilocksSparseCoo),
+            (Identity::GoldilocksExt2, Field) => (self.field, R::GoldilocksExt2),
+            (Identity::GoldilocksExt2, Vector) => (self.field, R::GoldilocksExt2Vector),
+            (Identity::GoldilocksExt2, Polynomial) => (self.field, R::GoldilocksExt2Polynomial),
+            (Identity::GoldilocksExt2, Round) => (self.field, R::GoldilocksExt2Round),
+            (Identity::GoldilocksExt2, Matrix) => (self.field, R::GoldilocksExt2SparseCoo),
             (Identity::KoalaBearExt4, Field) => (self.field, R::KoalaBearExt4),
             (Identity::KoalaBearExt4, Vector) => (self.field, R::KoalaBearExt4Vector),
             (Identity::KoalaBearExt4, Polynomial) => (self.field, R::KoalaBearExt4Polynomial),
@@ -168,7 +212,9 @@ impl NativeDomain {
             (Identity::Bls12381Fr, Commitment | Proof | ProverKey | VerifierKey | OpeningState) => {
                 (Identity::MultilinearKzgBls12381, R::Pcs)
             }
-            (Identity::KoalaBearExt8, Rng) => (self.field, R::Resource),
+            (Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2, Rng) => {
+                (self.field, R::Resource)
+            }
             (Identity::Bls12381Fr | Identity::Ristretto255Scalar, Rng | Nonce) => {
                 (self.field, R::Resource)
             }
@@ -205,6 +251,16 @@ pub struct NativeTranscript {
     pub provider: &'static str,
 }
 pub const TRANSCRIPTS: &[NativeTranscript] = &[
+    NativeTranscript {
+        suite: Identity::Merlin3BabyBearExt4,
+        domain: BABY_BEAR_EXT4,
+        provider: "plonky3",
+    },
+    NativeTranscript {
+        suite: Identity::Merlin3GoldilocksExt2,
+        domain: GOLDILOCKS_EXT2,
+        provider: "plonky3",
+    },
     NativeTranscript {
         suite: Identity::Merlin3KoalaBearExt8,
         domain: KOALA_BEAR_EXT8,

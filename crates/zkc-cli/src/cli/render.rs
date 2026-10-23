@@ -4,6 +4,9 @@ use std::fmt::Write;
 
 pub fn human(report: &Value) -> String {
     let mut text = String::new();
+    if let Some(workers) = report["cpu"]["workers"].as_u64() {
+        writeln!(text, "CPU workers: {workers}").unwrap();
+    }
     for (key, label) in [
         ("project", "Project"),
         ("entry", "Entry"),

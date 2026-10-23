@@ -33,6 +33,13 @@ pub struct RunEntry {
     native: RunHost,
 }
 impl RunEntry {
+    pub fn with_cpu(mut self, cpu: crate::execution::CpuExecution) -> Self {
+        self.native = self.native.with_cpu(cpu);
+        self
+    }
+    pub fn cpu(&self) -> &crate::execution::CpuExecution {
+        self.native.cpu()
+    }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
         self.native = self.native.with_ring_work_limit(limit)?;
         Ok(self)
@@ -42,20 +49,36 @@ impl RunEntry {
         limits: HostLimits,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
-        Self::admit_inner(package, limits, setups, false)
+        Self::admit_with_cpu(
+            package,
+            limits,
+            setups,
+            crate::execution::CpuExecution::serial().map_err(|e| E::new(P::Admission, e))?,
+        )
+    }
+    /// Supply CPU ownership before admitting any native backend.
+    pub fn admit_with_cpu(
+        package: Package,
+        limits: HostLimits,
+        setups: SetupAuthority,
+        cpu: crate::execution::CpuExecution,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, limits, setups, false, cpu)
     }
     pub(crate) fn admit_host(
         package: Package,
         limits: HostLimits,
         setups: SetupAuthority,
+        cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
-        Self::admit_inner(package, limits, setups, true)
+        Self::admit_inner(package, limits, setups, true, cpu)
     }
     fn admit_inner(
         package: Package,
         limits: HostLimits,
         setups: SetupAuthority,
         retained_inputs: bool,
+        cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
         let interface =
             crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
@@ -72,6 +95,7 @@ impl RunEntry {
             &package.authenticated_artifact(),
             limits,
             setups::run_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
+            cpu,
         )
         .map_err(|e| E::new(P::Admission, e))?;
         interface

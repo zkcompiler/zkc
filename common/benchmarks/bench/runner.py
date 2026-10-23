@@ -141,7 +141,7 @@ def run_suite(args, prepare):
         os.environ['RAYON_NUM_THREADS'] = str(args.threads)
         manifest['host'] = host_info()
         manifest['host']['requested_cpus'] = args.cpus
-        manifest['host']['thread_policy'] = 'RAYON_NUM_THREADS request; not a universal provider budget'
+        manifest['host']['thread_policy'] = 'Shared Native CPU workers; RAYON_NUM_THREADS transports benchmark request; foreign provider policy separate'
         manifest['threads'] = args.threads
         jobs, check = prepare(args, output, capture, manifest)
         require(jobs, 'empty benchmark matrix')

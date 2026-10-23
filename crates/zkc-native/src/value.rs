@@ -158,6 +158,13 @@ value_inventory! {
     /// Shared projective G2 keeps cloning inert and the universal slot bounded.
     BlstG2(Arc<zkc_kernels::blst::bls12_381::G2>),
     BlstG2Vector(Arc<zkc_kernels::blst::bls12_381::G2Vector>),
+    HaloField(zkc_kernels::halo2curves::bn254::Scalar),
+    HaloVector(Arc<zkc_kernels::halo2curves::bn254::ScalarVector>),
+    HaloG1(zkc_kernels::halo2curves::bn254::G1),
+    HaloG1Vector(Arc<zkc_kernels::halo2curves::bn254::G1Vector>),
+    /// Shared affine G2 keeps cloning inert and the universal slot bounded.
+    HaloG2(Arc<zkc_kernels::halo2curves::bn254::G2>),
+    HaloG2Vector(Arc<zkc_kernels::halo2curves::bn254::G2Vector>),
     Bn254Field(crate::Bn254Scalar),
     Bn254Vector(Arc<[crate::Bn254Scalar]>),
     Bn254Polynomial(Arc<[crate::Bn254Scalar]>),
@@ -198,10 +205,30 @@ value_inventory! {
     KoalaBearExt8Polynomial(Arc<[crate::KoalaBearExt8]>),
     KoalaBearExt8Round([crate::KoalaBearExt8; 3]),
     KoalaBearExt4Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt4>),
+    BabyBearMatrix(crate::matrix::SparseCoo<crate::BabyBear>),
+    BabyBearExt4Matrix(crate::matrix::SparseCoo<crate::BabyBearExt4>),
+    GoldilocksMatrix(crate::matrix::SparseCoo<crate::Goldilocks>),
+    GoldilocksExt2Matrix(crate::matrix::SparseCoo<crate::GoldilocksExt2>),
     KoalaBearExt4Field(crate::KoalaBearExt4),
+    BabyBearField(crate::BabyBear),
+    BabyBearExt4Field(crate::BabyBearExt4),
+    GoldilocksField(crate::Goldilocks),
+    GoldilocksExt2Field(crate::GoldilocksExt2),
     KoalaBearExt4Vector(Arc<[crate::KoalaBearExt4]>),
+    BabyBearVector(Arc<[crate::BabyBear]>),
+    BabyBearExt4Vector(Arc<[crate::BabyBearExt4]>),
+    GoldilocksVector(Arc<[crate::Goldilocks]>),
+    GoldilocksExt2Vector(Arc<[crate::GoldilocksExt2]>),
     KoalaBearExt4Polynomial(Arc<[crate::KoalaBearExt4]>),
+    BabyBearPolynomial(Arc<[crate::BabyBear]>),
+    BabyBearExt4Polynomial(Arc<[crate::BabyBearExt4]>),
+    GoldilocksPolynomial(Arc<[crate::Goldilocks]>),
+    GoldilocksExt2Polynomial(Arc<[crate::GoldilocksExt2]>),
     KoalaBearExt4Round([crate::KoalaBearExt4; 3]),
+    BabyBearRound([crate::BabyBear; 3]),
+    BabyBearExt4Round([crate::BabyBearExt4; 3]),
+    GoldilocksRound([crate::Goldilocks; 3]),
+    GoldilocksExt2Round([crate::GoldilocksExt2; 3]),
     Binary64Matrix(crate::matrix::SparseCoo<crate::Binary64>),
     Binary64Field(crate::Binary64),
     Binary64Vector(Arc<[crate::Binary64]>),
@@ -279,11 +306,17 @@ impl Value {
     fn resident_type(&self) -> Option<&'static PhysicalType> {
         let (kind, identity) = match self {
             Self::BlstField(_) => (Type::Field, Identity::Bls12381Fr),
+            Self::HaloField(_) => (Type::Field, Identity::Bn254Fr),
             Self::BlstVector(_) => (Type::Vector, Identity::Bls12381Fr),
+            Self::HaloVector(_) => (Type::Vector, Identity::Bn254Fr),
             Self::BlstG1(_) => (Type::Group, Identity::Bls12381G1),
+            Self::HaloG1(_) => (Type::Group, Identity::Bn254G1),
             Self::BlstG1Vector(_) => (Type::Groups, Identity::Bls12381G1),
+            Self::HaloG1Vector(_) => (Type::Groups, Identity::Bn254G1),
             Self::BlstG2(_) => (Type::Group, Identity::Bls12381G2),
+            Self::HaloG2(_) => (Type::Group, Identity::Bn254G2),
             Self::BlstG2Vector(_) => (Type::Groups, Identity::Bls12381G2),
+            Self::HaloG2Vector(_) => (Type::Groups, Identity::Bn254G2),
             _ => return None,
         };
         Some(crate::contracts::physical(kind, identity).expect("installed resident representation"))
@@ -306,11 +339,17 @@ impl Value {
                 Identity::None,
                 Representation::ResourceUnit,
             ),
-            Self::BlstField(_)
+            Self::HaloField(_)
+            | Self::BlstField(_)
+            | Self::HaloVector(_)
             | Self::BlstVector(_)
+            | Self::HaloG1(_)
             | Self::BlstG1(_)
+            | Self::HaloG1Vector(_)
             | Self::BlstG1Vector(_)
+            | Self::HaloG2(_)
             | Self::BlstG2(_)
+            | Self::HaloG2Vector(_)
             | Self::BlstG2Vector(_) => {
                 let ty = self.resident_type().expect("resident leaf");
                 (ty.kind(), ty.logical().identity(), ty.representation())
@@ -424,25 +463,121 @@ impl Value {
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4SparseCoo,
             ),
+            Self::BabyBearMatrix(_) => (
+                Type::Matrix,
+                Identity::BabyBear,
+                Representation::BabyBearSparseCoo,
+            ),
+            Self::BabyBearExt4Matrix(_) => (
+                Type::Matrix,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4SparseCoo,
+            ),
+            Self::GoldilocksMatrix(_) => (
+                Type::Matrix,
+                Identity::Goldilocks,
+                Representation::GoldilocksSparseCoo,
+            ),
+            Self::GoldilocksExt2Matrix(_) => (
+                Type::Matrix,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2SparseCoo,
+            ),
             Self::KoalaBearExt4Round(_) => (
                 Type::Round,
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4Round,
+            ),
+            Self::BabyBearRound(_) => (
+                Type::Round,
+                Identity::BabyBear,
+                Representation::BabyBearRound,
+            ),
+            Self::BabyBearExt4Round(_) => (
+                Type::Round,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Round,
+            ),
+            Self::GoldilocksRound(_) => (
+                Type::Round,
+                Identity::Goldilocks,
+                Representation::GoldilocksRound,
+            ),
+            Self::GoldilocksExt2Round(_) => (
+                Type::Round,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Round,
             ),
             Self::KoalaBearExt4Polynomial(_) => (
                 Type::Polynomial,
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4Polynomial,
             ),
+            Self::BabyBearPolynomial(_) => (
+                Type::Polynomial,
+                Identity::BabyBear,
+                Representation::BabyBearPolynomial,
+            ),
+            Self::BabyBearExt4Polynomial(_) => (
+                Type::Polynomial,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Polynomial,
+            ),
+            Self::GoldilocksPolynomial(_) => (
+                Type::Polynomial,
+                Identity::Goldilocks,
+                Representation::GoldilocksPolynomial,
+            ),
+            Self::GoldilocksExt2Polynomial(_) => (
+                Type::Polynomial,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Polynomial,
+            ),
             Self::KoalaBearExt4Vector(_) => (
                 Type::Vector,
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4Vector,
             ),
+            Self::BabyBearVector(_) => (
+                Type::Vector,
+                Identity::BabyBear,
+                Representation::BabyBearVector,
+            ),
+            Self::BabyBearExt4Vector(_) => (
+                Type::Vector,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Vector,
+            ),
+            Self::GoldilocksVector(_) => (
+                Type::Vector,
+                Identity::Goldilocks,
+                Representation::GoldilocksVector,
+            ),
+            Self::GoldilocksExt2Vector(_) => (
+                Type::Vector,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Vector,
+            ),
             Self::KoalaBearExt4Field(_) => (
                 Type::Field,
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4,
+            ),
+            Self::BabyBearField(_) => (Type::Field, Identity::BabyBear, Representation::BabyBear),
+            Self::BabyBearExt4Field(_) => (
+                Type::Field,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4,
+            ),
+            Self::GoldilocksField(_) => (
+                Type::Field,
+                Identity::Goldilocks,
+                Representation::Goldilocks,
+            ),
+            Self::GoldilocksExt2Field(_) => (
+                Type::Field,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2,
             ),
             Self::Binary64Matrix(_) => (
                 Type::Matrix,
@@ -693,20 +828,39 @@ impl Value {
         wire_len: usize,
         policy: &Policy,
     ) -> Result<usize> {
-        if !ty.is_serializable() && !crate::operations::blst::is_resident(&ty) {
+        if !ty.is_serializable() && !crate::operations::resident::is_resident(&ty) {
             return Err(refused("nonserializable"));
         }
-        if crate::operations::blst::is_resident(&ty) {
+        if crate::operations::resident::is_resident(&ty) {
             policy.wire(wire_len)?;
-            let (wire, memory) = match ty.kind() {
-                Type::Vector => (32, 32),
-                Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
-                    (48, std::mem::size_of::<zkc_kernels::blst::bls12_381::G1>())
+            let (wire, memory) = if crate::operations::halo2curves::is_resident(&ty) {
+                use zkc_kernels::halo2curves::bn254 as kernel;
+                match (ty.kind(), ty.logical().identity()) {
+                    (Type::Vector, Identity::Bn254Fr) => {
+                        (32, std::mem::size_of::<kernel::ScalarElement>())
+                    }
+                    (Type::Groups, Identity::Bn254G1) => {
+                        (32, std::mem::size_of::<kernel::G1Element>())
+                    }
+                    (Type::Groups, Identity::Bn254G2) => {
+                        (64, std::mem::size_of::<kernel::G2Element>())
+                    }
+                    _ => {
+                        policy.output(512, usize::MAX)?;
+                        return Ok(512);
+                    }
                 }
-                Type::Groups => (96, std::mem::size_of::<zkc_kernels::blst::bls12_381::G2>()),
-                _ => {
-                    policy.output(512, usize::MAX)?;
-                    return Ok(512);
+            } else {
+                match ty.kind() {
+                    Type::Vector => (32, 32),
+                    Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
+                        (48, std::mem::size_of::<zkc_kernels::blst::bls12_381::G1>())
+                    }
+                    Type::Groups => (96, std::mem::size_of::<zkc_kernels::blst::bls12_381::G2>()),
+                    _ => {
+                        policy.output(512, usize::MAX)?;
+                        return Ok(512);
+                    }
                 }
             };
             let bytes = size(wire_len / wire, memory)?;
@@ -743,52 +897,29 @@ impl Value {
             policy.output(bytes, usize::MAX)?;
             return Ok(bytes);
         }
+        if crate::fields::contains(ty.logical().identity()) {
+            policy.wire(wire_len)?;
+            let width = crate::fields::element_width(ty.logical().identity())?;
+            let bytes = match ty.kind() {
+                Type::Matrix => {
+                    // COO entries may contain alignment padding in memory.
+                    let entry = crate::fields::matrix_entry_width(ty.logical().identity())?;
+                    size(wire_len / (width + 8), entry)?
+                }
+                Type::Vector | Type::Polynomial => size(wire_len / width, width)?,
+                _ => 512,
+            };
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
         if ty.kind() == Type::Matrix {
             policy.wire(wire_len)?;
-            let width = if ty.logical().identity() == Identity::KoalaBear {
-                12
-            } else {
-                40
-            };
+            let width = 40;
             let bytes = size(wire_len / width, width)?;
             policy.output(bytes, usize::MAX)?;
             return Ok(bytes);
         }
-        if ty.logical().identity() == Identity::KoalaBear {
-            policy.wire(wire_len)?;
-            let bytes = match ty.kind() {
-                Type::Vector | Type::Polynomial => size(wire_len / 4, 4)?,
-                Type::Shake128State => return Err(refused("nonserializable")),
-                Type::Sequence
-                | Type::FieldArray
-                | Type::FixedVector
-                | Type::Variant
-                | Type::ResourceUnit
-                | Type::Field
-                | Type::Matrix
-                | Type::Round
-                | Type::Table
-                | Type::Point
-                | Type::Group
-                | Type::Groups
-                | Type::Bool
-                | Type::Index
-                | Type::Indices
-                | Type::Bytes
-                | Type::Rng
-                | Type::Commitment
-                | Type::OpeningState
-                | Type::Proof
-                | Type::ProverKey
-                | Type::VerifierKey
-                | Type::Nonce
-                | Type::Transcript
-                | Type::Commitments
-                | Type::OpeningStates => 512,
-            };
-            policy.output(bytes, usize::MAX)?;
-            Ok(bytes)
-        } else if matches!(
+        if matches!(
             ty.logical().identity(),
             Identity::Ristretto255Group | Identity::Edwards25519Prime
         ) && ty.kind() == Type::Groups
@@ -826,12 +957,20 @@ impl Value {
             Self::KoalaBearMatrix(m) => m.backing().ok()?,
             Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
             Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
+            Self::BabyBearMatrix(m) => m.backing().ok()?,
+            Self::BabyBearExt4Matrix(m) => m.backing().ok()?,
+            Self::GoldilocksMatrix(m) => m.backing().ok()?,
+            Self::GoldilocksExt2Matrix(m) => m.backing().ok()?,
             Self::Binary64Matrix(m) => m.backing().ok()?,
             Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
             Self::BlstVector(v) => Backing::of(v, bytes),
+            Self::HaloVector(v) => Backing::of(v, bytes),
             Self::BlstG1Vector(v) => Backing::of(v, bytes),
+            Self::HaloG1Vector(v) => Backing::of(v, bytes),
             Self::BlstG2Vector(v) => Backing::of(v, bytes),
+            Self::HaloG2Vector(v) => Backing::of(v, bytes),
             Self::BlstG2(v) => Backing::of(v, bytes),
+            Self::HaloG2(v) => Backing::of(v, bytes),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
@@ -844,6 +983,12 @@ impl Value {
                 Backing::of(v, bytes)
             }
             Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => {
+                Backing::of(v, bytes)
+            }
+            Self::BabyBearVector(v) | Self::BabyBearPolynomial(v) => Backing::of(v, bytes),
+            Self::BabyBearExt4Vector(v) | Self::BabyBearExt4Polynomial(v) => Backing::of(v, bytes),
+            Self::GoldilocksVector(v) | Self::GoldilocksPolynomial(v) => Backing::of(v, bytes),
+            Self::GoldilocksExt2Vector(v) | Self::GoldilocksExt2Polynomial(v) => {
                 Backing::of(v, bytes)
             }
             Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => Backing::of(v, bytes),
@@ -870,7 +1015,9 @@ impl Value {
             | Self::OracleStates(..)
             | Self::MerkleTrees(..)
             | Self::ResourceUnit(_)
+            | Self::HaloField(_)
             | Self::BlstField(_)
+            | Self::HaloG1(_)
             | Self::BlstG1(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
@@ -883,7 +1030,15 @@ impl Value {
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt4Field(_)
+            | Self::BabyBearField(_)
+            | Self::BabyBearExt4Field(_)
+            | Self::GoldilocksField(_)
+            | Self::GoldilocksExt2Field(_)
             | Self::KoalaBearExt4Round(_)
+            | Self::BabyBearRound(_)
+            | Self::BabyBearExt4Round(_)
+            | Self::GoldilocksRound(_)
+            | Self::GoldilocksExt2Round(_)
             | Self::Binary64Field(_)
             | Self::Binary64Round(_)
             | Self::Binary64Ext3Field(_)
@@ -911,11 +1066,17 @@ impl Value {
             Self::Variant(_) | Self::Sequence(_) => None,
             Self::FieldArray(..)
             | Self::FixedVector(..)
+            | Self::HaloField(..)
             | Self::BlstField(..)
+            | Self::HaloVector(..)
             | Self::BlstVector(..)
+            | Self::HaloG1(..)
             | Self::BlstG1(..)
+            | Self::HaloG1Vector(..)
             | Self::BlstG1Vector(..)
+            | Self::HaloG2(..)
             | Self::BlstG2(..)
+            | Self::HaloG2Vector(..)
             | Self::BlstG2Vector(..)
             | Self::Bn254Field(..)
             | Self::Bn254Vector(..)
@@ -953,10 +1114,30 @@ impl Value {
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
             | Self::KoalaBearExt4Matrix(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksExt2Matrix(..)
             | Self::KoalaBearExt4Field(..)
+            | Self::BabyBearField(..)
+            | Self::BabyBearExt4Field(..)
+            | Self::GoldilocksField(..)
+            | Self::GoldilocksExt2Field(..)
             | Self::KoalaBearExt4Vector(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksExt2Vector(..)
             | Self::KoalaBearExt4Polynomial(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Polynomial(..)
             | Self::KoalaBearExt4Round(..)
+            | Self::BabyBearRound(..)
+            | Self::BabyBearExt4Round(..)
+            | Self::GoldilocksRound(..)
+            | Self::GoldilocksExt2Round(..)
             | Self::Binary64Matrix(..)
             | Self::Binary64Field(..)
             | Self::Binary64Vector(..)
@@ -1063,7 +1244,7 @@ impl RuntimeValue for Value {
                 | Type::Proof => {
                     PhysicalType::default_for(ty.logical().clone())
                         .is_ok_and(|expected| expected == *ty)
-                        || crate::operations::blst::is_resident(ty)
+                        || crate::operations::resident::is_resident(ty)
                 }
                 _ => false,
             }
@@ -1083,6 +1264,7 @@ impl RuntimeValue for Value {
             Self::Index(value) => Some(value.to_le_bytes().to_vec()),
             Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
             Self::BlstField(value) => Some(value.to_bytes_le().to_vec()),
+            Self::HaloField(value) => Some(value.to_bytes_le().to_vec()),
             Self::Field(value) => zkc_kernels::arkworks::bls12_381::encode_scalar(value)
                 .ok()
                 .map(|v| v.to_vec()),
@@ -1098,6 +1280,10 @@ impl RuntimeValue for Value {
             Self::KoalaBearExt4Field(value) => {
                 Some(zkc_kernels::plonky3::encode_quartic(*value).to_vec())
             }
+            Self::BabyBearField(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::BabyBearExt4Field(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::GoldilocksField(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::GoldilocksExt2Field(value) => Some(crate::fields::scalar_bytes(value)),
             Self::Binary64Field(value) => {
                 Some(zkc_kernels::plonky3::binary::encode(*value).to_vec())
             }
@@ -1172,11 +1358,17 @@ impl RuntimeValue for Value {
             Self::FieldArray(v) => v.physical_type() == expected,
             Self::FixedVector(v) => v.physical_type() == expected,
             Self::Variant(v) => v.physical_type() == expected,
-            Self::BlstField(..)
+            Self::HaloField(..)
+            | Self::BlstField(..)
+            | Self::HaloVector(..)
             | Self::BlstVector(..)
+            | Self::HaloG1(..)
             | Self::BlstG1(..)
+            | Self::HaloG1Vector(..)
             | Self::BlstG1Vector(..)
+            | Self::HaloG2(..)
             | Self::BlstG2(..)
+            | Self::HaloG2Vector(..)
             | Self::BlstG2Vector(..)
             | Self::Bn254Field(..)
             | Self::Bn254Vector(..)
@@ -1214,10 +1406,30 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
             | Self::KoalaBearExt4Matrix(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksExt2Matrix(..)
             | Self::KoalaBearExt4Field(..)
+            | Self::BabyBearField(..)
+            | Self::BabyBearExt4Field(..)
+            | Self::GoldilocksField(..)
+            | Self::GoldilocksExt2Field(..)
             | Self::KoalaBearExt4Vector(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksExt2Vector(..)
             | Self::KoalaBearExt4Polynomial(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Polynomial(..)
             | Self::KoalaBearExt4Round(..)
+            | Self::BabyBearRound(..)
+            | Self::BabyBearExt4Round(..)
+            | Self::GoldilocksRound(..)
+            | Self::GoldilocksExt2Round(..)
             | Self::Binary64Matrix(..)
             | Self::Binary64Field(..)
             | Self::Binary64Vector(..)
@@ -1299,7 +1511,7 @@ impl RuntimeValue for Value {
 
     fn validate_serializable(&self) -> Result<()> {
         let ty = self.physical_type();
-        if !ty.is_serializable() && !crate::operations::blst::is_resident(&ty) {
+        if !ty.is_serializable() && !crate::operations::resident::is_resident(&ty) {
             return Err(refused("nonserializable"));
         }
         Ok(())
@@ -1328,11 +1540,23 @@ impl RuntimeValue for Value {
                 .storage_bytes()
                 .checked_add(256)
                 .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloVector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
             Self::BlstG1Vector(v) => v
                 .storage_bytes()
                 .checked_add(256)
                 .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloG1Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
             Self::BlstG2Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloG2Vector(v) => v
                 .storage_bytes()
                 .checked_add(256)
                 .ok_or_else(|| exhausted("size-overflow")),
@@ -1352,7 +1576,15 @@ impl RuntimeValue for Value {
             Self::KoalaBearExt8Matrix(m) => m.retained_bytes(),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => size(v.len(), 32),
             Self::KoalaBearExt4Matrix(m) => m.retained_bytes(),
+            Self::BabyBearMatrix(m) => m.retained_bytes(),
+            Self::BabyBearExt4Matrix(m) => m.retained_bytes(),
+            Self::GoldilocksMatrix(m) => m.retained_bytes(),
+            Self::GoldilocksExt2Matrix(m) => m.retained_bytes(),
             Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => size(v.len(), 16),
+            Self::BabyBearVector(v) | Self::BabyBearPolynomial(v) => size(v.len(), 4),
+            Self::BabyBearExt4Vector(v) | Self::BabyBearExt4Polynomial(v) => size(v.len(), 16),
+            Self::GoldilocksVector(v) | Self::GoldilocksPolynomial(v) => size(v.len(), 8),
+            Self::GoldilocksExt2Vector(v) | Self::GoldilocksExt2Polynomial(v) => size(v.len(), 16),
             Self::Binary64Matrix(m) => m.retained_bytes(),
             Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => size(v.len(), 8),
             Self::Binary64Ext3Matrix(m) => m.retained_bytes(),
@@ -1374,8 +1606,11 @@ impl RuntimeValue for Value {
             Self::Proof(p) => payload_bytes(Type::Proof, p.metadata().arity()),
             Self::ProverKey(k) => prover_key_bytes(k.metadata().arity()),
             Self::VerifierKey(k) => payload_bytes(Type::VerifierKey, k.metadata().arity()),
-            Self::BlstField(_)
+            Self::HaloField(_)
+            | Self::BlstField(_)
+            | Self::HaloG1(_)
             | Self::BlstG1(_)
+            | Self::HaloG2(_)
             | Self::BlstG2(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
@@ -1386,7 +1621,15 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt4Round(_)
+            | Self::BabyBearRound(_)
+            | Self::BabyBearExt4Round(_)
+            | Self::GoldilocksRound(_)
+            | Self::GoldilocksExt2Round(_)
             | Self::KoalaBearExt4Field(_)
+            | Self::BabyBearField(_)
+            | Self::BabyBearExt4Field(_)
+            | Self::GoldilocksField(_)
+            | Self::GoldilocksExt2Field(_)
             | Self::Binary64Round(_)
             | Self::Binary64Field(_)
             | Self::Binary64Ext3Round(_)

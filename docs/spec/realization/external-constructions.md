@@ -223,7 +223,7 @@ input byte before computation.
 The wire format may retain the original bytes for later observation; these
 operations impose no universal re-encoding policy on a protocol.
 
-### Four-byte coordinate words
+### Coordinate words
 
 For a prime field `F_p` whose canonical encoding has width `w` bytes, the
 Montgomery residue of `x` is `x * R mod p` with `R = 2^(8w)`. An element of a
@@ -240,6 +240,13 @@ word of `x` is the four-byte little-endian integer `x`; its Montgomery word is
 `koala-bear.ext4-binomial3` elements four. `field_le`, `field_from_le`,
 `fields_le`, `fields_from_le` and the four Montgomery operations are installed
 for `koala-bear` and both extensions; `field_reduce_le` is not.
+
+`baby-bear` and `baby-bear.ext4-binomial11` use the same operations with
+four-byte words modulo 2013265921 and Montgomery factor `2^32 mod p`.
+`goldilocks` and `goldilocks.ext2-binomial7` use canonical eight-byte
+little-endian words modulo 18446744069414584321; their Montgomery32 operations
+are absent. Extension coordinates follow the ascending basis in their nominal
+identities. Neither family installs byte reduction.
 
 A decoder never reduces. `field_from_le` and `field_from_montgomery_le` return
 `(false, 0)` unless the input has exactly one element's width and every word is

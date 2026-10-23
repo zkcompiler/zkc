@@ -79,6 +79,8 @@ enum Backend {
         check: run_entry::Check,
     },
     Kernel {
+        #[serde(default)]
+        family: kernel::Family,
         provider: kernel::Provider,
         group: kernel::Group,
         kernel: kernel::Kernel,
@@ -104,9 +106,16 @@ struct Request {
     operation: Operation,
     plan: Plan,
     proof: PathBuf,
+    #[serde(skip)]
+    cpu: Option<zkc::execution::CpuExecution>,
 }
 
 impl Request {
+    fn cpu(&self) -> Result<&zkc::execution::CpuExecution> {
+        self.cpu
+            .as_ref()
+            .ok_or_else(|| "benchmark CPU context missing".into())
+    }
     fn ingress(&self) -> Result<ingress::Ingress> {
         match &self.backend {
             Backend::Host { ingress, .. } | Backend::Run { ingress, .. } => Ok(*ingress),
@@ -170,7 +179,7 @@ fn run() -> Result<Report> {
     if args.len() != 1 {
         return Err("usage: zkc-benchmarks REQUEST.json".into());
     }
-    let request: Request =
+    let mut request: Request =
         serde_json::from_slice(&std::fs::read(&args[0]).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     if request.format != "zkc.benchmark-job/0" {
@@ -182,64 +191,79 @@ fn run() -> Result<Report> {
     {
         return Err("execution counts permit at most 128 calls per worker".into());
     }
-    let mut report = (match &request.backend {
-        Backend::Host {
-            ingress: _,
-            package,
-            sha256,
-            inputs,
-            preparation,
-            preparation_entries,
-            preparation_bytes,
-        } => host::run(
-            &request,
-            package,
-            sha256,
-            inputs,
-            *preparation,
-            *preparation_entries,
-            *preparation_bytes,
-        ),
-        Backend::Run {
-            ingress: _,
-            package,
-            sha256,
-            arguments,
-            check,
-        } => run_entry::run(&request, package, sha256, arguments, check),
-        Backend::Kernel {
-            provider,
-            group,
-            kernel,
-            boundary,
-            elements,
-            chain_length,
-        } => kernel::run(
-            &request,
-            *provider,
-            *group,
-            *kernel,
-            *boundary,
-            *elements,
-            *chain_length,
-        ),
-        Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
-            schnorr::run(&request, public, witness.as_deref())
-        }
-        Backend::Sumcheck { public } if request.operation != Operation::Run => {
-            sumcheck::run(&request, public)
-        }
-        _ => Err("backend does not support this operation".into()),
-    })
-    .map_err(|cause| match request.ingress() {
-        Ok(policy) => Failure::Ingress {
-            policy,
-            cause: Box::new(cause),
-        },
-        Err(_) => cause,
-    })?;
+    // The harness transports a worker request through this environment variable;
+    // production Hosts receive an explicit owner and do not read Rayon settings.
+    let workers: usize = std::env::var("RAYON_NUM_THREADS")
+        .unwrap_or_else(|_| "1".into())
+        .parse()
+        .map_err(|_| "invalid benchmark CPU worker count")?;
+    let start = std::time::Instant::now();
+    let cpu = zkc::execution::CpuExecution::new(workers).map_err(|e| e.to_string())?;
+    let cpu_initialization_ns = start.elapsed().as_nanos();
+    request.cpu = Some(cpu.clone());
+    let mut report = cpu
+        .enter(|| match &request.backend {
+            Backend::Host {
+                ingress: _,
+                package,
+                sha256,
+                inputs,
+                preparation,
+                preparation_entries,
+                preparation_bytes,
+            } => host::run(
+                &request,
+                package,
+                sha256,
+                inputs,
+                *preparation,
+                *preparation_entries,
+                *preparation_bytes,
+            ),
+            Backend::Run {
+                ingress: _,
+                package,
+                sha256,
+                arguments,
+                check,
+            } => run_entry::run(&request, package, sha256, arguments, check),
+            Backend::Kernel {
+                family,
+                provider,
+                group,
+                kernel,
+                boundary,
+                elements,
+                chain_length,
+            } => kernel::run_family(
+                &request,
+                *family,
+                *provider,
+                *group,
+                *kernel,
+                *boundary,
+                *elements,
+                *chain_length,
+            ),
+            Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
+                schnorr::run(&request, public, witness.as_deref())
+            }
+            Backend::Sumcheck { public } if request.operation != Operation::Run => {
+                sumcheck::run(&request, public)
+            }
+            _ => Err("backend does not support this operation".into()),
+        })
+        .map_err(|cause| match request.ingress() {
+            Ok(policy) => Failure::Ingress {
+                policy,
+                cause: Box::new(cause),
+            },
+            Err(_) => cause,
+        })?;
     report.process_peak_rss_bytes = peak_rss();
     report.process = evidence::process();
+    report.process["cpu_workers"] = json!(cpu.workers());
+    report.process["cpu_initialization_ns"] = json!(cpu_initialization_ns);
     report.timer_floor_ns = evidence::timer_floor_ns();
     Ok(report)
 }

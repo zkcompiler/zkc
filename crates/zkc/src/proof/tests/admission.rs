@@ -229,6 +229,61 @@ fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
     }
 }
 
+#[test]
+fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
+    let original = admit(&deployment()).unwrap();
+    let worker = |cpu: &CpuExecution| cpu.execute(|| std::thread::current().id());
+    let original_worker = worker(original.cpu());
+    let cpu = CpuExecution::new(1).unwrap();
+    let id = worker(&cpu);
+    assert_ne!(id, original_worker);
+    assert_eq!(worker(original.clone().cpu()), original_worker);
+    assert_ne!(worker(admit(&deployment()).unwrap().cpu()), original_worker);
+    assert_eq!(worker(original.clone().with_cpu(cpu.clone()).cpu()), id);
+    let bytes = serde_json::to_vec(&deployment()).unwrap();
+    let host = NativeDeployment::admit_with_cpu(
+        &bytes,
+        &Sha256::digest(&bytes).into(),
+        Default::default(),
+        cpu.clone(),
+    )
+    .unwrap();
+    assert_eq!(worker(host.clone().cpu()), id);
+    drop(cpu);
+    let ledger = zkc_runtime::vm::ExecutionLedger::new(host.capacity.values, host.capacity.work);
+    let mut child_capacity = host.capacity;
+    child_capacity.values.live_bytes /= 2;
+    let host = host
+        .clone()
+        .with_invocation_limits(
+            child_capacity,
+            host.external_work_limit,
+            host.ring_work_limit,
+            host.sequence_work_limit,
+            host.proof_bytes_limit,
+        )
+        .with_shared_ledger(ledger);
+    for producer in [true, false] {
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(host.capacity.backend().ark_bounds());
+        let prepared = host
+            .prepare_inputs(&request(producer, true, true), producer, &mut imports)
+            .unwrap();
+        assert_eq!(worker(prepared.backend.cpu()), id);
+    }
+    let produced = host
+        .execute(&request(true, true, true), Invocation::Prove)
+        .unwrap();
+    assert!(produced.cleanup_errors.is_empty());
+    let proof = produced.outcome.unwrap();
+    let verified = host
+        .execute(&request(false, true, true), Invocation::Verify(&proof))
+        .unwrap();
+    assert_eq!(verified.verification_result(), Some(true));
+    assert!(verified.cleanup_errors.is_empty());
+    assert_eq!(worker(original.cpu()), original_worker);
+}
+
 fn deployment_with_preparation(private: bool) -> Json {
     let mut value = deployment();
     let mut program: Json = serde_json::from_str(value[4].as_str().unwrap()).unwrap();
