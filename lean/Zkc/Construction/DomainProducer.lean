@@ -108,3 +108,8 @@ def executePair (model : Structured.DomainModel) (program : Structured.Program)
       pure ⟨produced, some validated⟩
 
 end Zkc.Construction.Domain
+
+-- Store the handler equations here, including their private proof helpers.
+-- Clients must not generate distinct providers for the same equation name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.handler

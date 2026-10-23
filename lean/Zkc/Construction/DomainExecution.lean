@@ -293,3 +293,6 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.Value.decode
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.decodeValues
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.encodeValues
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.dataType
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.step
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.evaluate

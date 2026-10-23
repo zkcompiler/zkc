@@ -129,3 +129,7 @@ def transform {carriers : Structured.Carriers} {m : Type → Type} [Monad m]
   Transcript.transform (interface context) oracle
 
 end Zkc.Construction.Domain
+
+-- Own the shared decoding equations before independent readers request them.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.receivedValue

@@ -147,3 +147,4 @@ end ZkcSecurity.Claims
 -- private proof helpers, leaving its stored provider ambiguous to an audit.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.Claims.Numeric.natural
+  discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.Claims.Numeric.naturalWith
