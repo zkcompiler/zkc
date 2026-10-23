@@ -2,10 +2,8 @@
 #include "../CollectionRealization.h"
 #include "../MathematicalSupport.h"
 #include "../RealizationTrace.h"
-#include "Schedule.h"
-#ifdef ZKC_ENABLE_HEIR
 #include "Quotient.h"
-#endif
+#include "Schedule.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -604,7 +602,6 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
   // infallible-after-mutation recipe contract.
   RealizationWork standalone;
   auto &realizationWork = work ? *work : standalone;
-#ifdef ZKC_ENABLE_HEIR
   auto proposed = proposeQuotientExecution(entry, realizationWork);
   if (failed(proposed))
     return diagnostics::emit(entry.emitError(),
@@ -624,7 +621,6 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
     entry.getBody().takeBody(function.getBody());
     return success();
   }
-#endif
   auto &finiteWork = realizationWork.finiteExpressions;
   llvm::DenseMap<Operation *, RealizationSubject> sourceSubjects;
   if (selection)

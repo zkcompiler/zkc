@@ -136,6 +136,37 @@ by [Local control accounting](../spec/ir/control.md#execution).
 Loop transformations and native arithmetic require their own representation and
 failure contracts; they are not implied by lifetime selection.
 
+## Numerical consumer boundaries
+
+Every numerical consumer enters the retained implementation plan and the same
+checked physical-selection transaction. The following subjects have distinct
+roles; their similar containers do not make their meanings interchangeable.
+
+| Consumer | Source meaning and implementation boundary | Current execution |
+|---|---|---|
+| Scalar field operations | Nominal field operations; reached division and decoding checks remain ordered | Installed field operations |
+| Pointwise maps and admitted lane formulas | Upstream Func/Tensor/Linalg regions, scalar broadcasts and exact field arithmetic; independent final payload comparison | Managed vector recipes, with eager shape checks outside the region |
+| Finite reductions and nested traversals | `finite` domains, bounds, witnesses, order and empty identities; pure lane subexpressions use the same field-region reader | Checked bulk recipes where admitted; ordered Local traversal elsewhere |
+| Formal polynomials and multilinear evaluations | `poly` retains coefficient meaning, variable arity and quotient observations; MLE tables retain their Boolean-cube interpretation | Native formal products, evaluations and specialized coset/MLE kernels |
+| Scalar quotient calculations | Formal `R(q,n)` source; HEIR Polynomial/ModArith placement is the default proposal inside the admitted full-NTT profile | Independently checked managed coefficient/transform operations; coefficient execution outside the profile or optimization capacity |
+| Exact quotient matrices | Explicit prepared matrix carrier, signed digit bound and strict CRT capacity | Managed RNS provider with retained preparation and caller-owned workspace |
+| Sparse matrices, curve contractions and provider leaves | Nominal domain, shape and current implementation contracts; these are not general dense tensor calculations | Existing checked implementations and managed invocation |
+| Ring assets | Captured reusable expressions with independent identity, degree and formal-product consumers | Ring provider; sharing here is separate from field-map CSE |
+
+The field-region boundary supports BLS12-381 Fr, BN254 Fr, Ristretto255 scalars,
+KoalaBear, its quartic and octic extensions, GF(2^64), and its cubic extension.
+Support for a field does not imply that every operation is defined for it:
+for example, fixed field arrays retain their installed domain restriction, and
+binary fields have no odd-characteristic halving or two-adic coset profile.
+No integer representation is inferred from the scalar's name.
+
+The required HEIR package belongs to the compiler's Transforms component.
+LLVM-only components and IR discovery remain independent of that dependency.
+Default CLI, Host and SDK builds use the same qualified source and patch pins;
+there is no alternate compiler switch that bypasses arithmetic qualification.
+See the [execution rationale](../rationale/numerical-execution.md) for the
+separate generated-kernel decision and current native alternatives.
+
 ## Execution and evidence
 
 The emitted `zkc.program/0` executes through the shared Runner. Logical data,

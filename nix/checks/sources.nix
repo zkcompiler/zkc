@@ -8,6 +8,12 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   set -x
   test -f ${sources.compiler}/compiler/CMakeLists.txt
   test -f ${sources.compiler}/common/unicode/generate.py
+  test -f ${sources.compiler}/compiler/external/heir/pins.json
+  test ! -e ${sources.compiler}/compiler/external/heir/Admission.cpp
+  test -f ${sources.heir}/compiler/external/heir/Admission.cpp
+  test -f ${sources.heir}/compiler/external/heir/tests/arithmetic.py
+  test ! -e ${sources.heir}/compiler/lib
+  test ! -e ${sources.heir}/crates
   test ! -e ${sources.compiler}/compiler/test
   test ! -e ${sources.compiler}/common/tests
   test ! -e ${sources.compiler}/lean

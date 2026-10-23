@@ -21,11 +21,12 @@ def main():
         consumer = root / 'consumer'
         log = args.work / 'installed-consumer.log'
         with log.open('w') as output:
-            def run(command):
+            def run(command, *, success=True):
                 output.write(' '.join(map(str, command)) + '\n')
                 output.flush()
-                subprocess.run(list(map(str, command)), stdout=output,
-                               stderr=subprocess.STDOUT, check=True, timeout=120)
+                result = subprocess.run(list(map(str, command)), stdout=output,
+                                        stderr=subprocess.STDOUT, timeout=120)
+                assert (result.returncode == 0) == success, command
             run(['cmake', '--install', args.build, '--prefix', stage])
             shutil.move(stage, relocated)
             for path in relocated.rglob('*'):
@@ -45,6 +46,24 @@ def main():
             assert str(args.build.resolve().parent / 'source') not in commands
             run(['cmake', '--build', consumer, '-j2'])
             run([consumer / 'consumer'])
+            for version in ('9.14.0', ''):
+                control = root / ('wrong-version' if version else 'missing-version')
+                control.mkdir()
+                (control / 'CMakeLists.txt').write_text(f'''
+cmake_minimum_required(VERSION 3.24)
+project(IncompatibleSolver LANGUAGES C CXX)
+add_library(ortools::ortools INTERFACE IMPORTED)
+{'set(ORTOOLS_VERSION ' + version + ')' if version else ''}
+find_package(ZkcHeirArithmetic 0.0.0 EXACT CONFIG QUIET)
+if(ZkcHeirArithmetic_FOUND OR TARGET ZkcHeir::Admission OR
+   NOT ZkcHeirArithmetic_NOT_FOUND_MESSAGE MATCHES "Loaded OR-Tools")
+  message(FATAL_ERROR "incompatible preloaded solver was accepted or replaced")
+endif()
+''')
+                run(['cmake', '-S', control, '-B', control / 'build',
+                     f'-DZkcHeirArithmetic_DIR={relocated}/lib/cmake/ZkcHeirArithmetic',
+                     f'-DLLVM_DIR={args.llvm_dir}', f'-DMLIR_DIR={args.mlir_dir}',
+                     f'-DCMAKE_C_COMPILER={args.cc}', f'-DCMAKE_CXX_COMPILER={args.cxx}'])
     print('Relocated HEIR SDK consumer passed')
 
 

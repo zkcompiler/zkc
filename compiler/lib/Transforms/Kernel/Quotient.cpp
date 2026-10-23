@@ -1,4 +1,3 @@
-#ifdef ZKC_ENABLE_HEIR
 #include "Quotient.h"
 #include "lib/Dialect/ModArith/IR/ModArithDialect.h"
 #include "lib/Dialect/ModArith/IR/ModArithOps.h"
@@ -17,6 +16,9 @@ using namespace llvm;
 namespace poly = mlir::heir::polynomial;
 namespace modular = mlir::heir::mod_arith;
 namespace zkc::kernel {
+void registerQuotientDialects(DialectRegistry &registry) {
+  registry.insert<poly::PolynomialDialect, modular::ModArithDialect>();
+}
 namespace {
 Value create(OpBuilder &builder, Location loc, StringRef name, Type result,
              ValueRange operands) {
@@ -267,5 +269,3 @@ proposeQuotientExecution(func::FuncOp source,
   return candidate;
 }
 } // namespace zkc::kernel
-
-#endif

@@ -6,6 +6,7 @@
   python3,
   llvm,
   utf8proc,
+  heirArithmetic,
   source,
   withTests ? false,
 }:
@@ -24,13 +25,17 @@ stdenv.mkDerivation {
     llvm.mlir
     llvm.llvm.dev
   ];
-  # Installed Language consumers need this exact NFC package for both static
-  # and shared builds; propagate its CMake discovery path to downstream SDKs.
-  propagatedBuildInputs = [ utf8proc ];
+  # Installed Language and Transforms consumers need these exact packages
+  # for both static and shared builds, including transitive CMake discovery.
+  propagatedBuildInputs = [
+    utf8proc
+    heirArithmetic
+  ];
   preConfigure = ''
     cmakeDir="$PWD/compiler"
   '';
   cmakeFlags = [
+    "-DPython3_EXECUTABLE=${python3.interpreter}"
     "-DMLIR_DIR=${lib.getDev llvm.mlir}/lib/cmake/mlir"
     "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
     "-DBUILD_TESTING=${if withTests then "ON" else "OFF"}"

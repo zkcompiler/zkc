@@ -142,7 +142,7 @@ if(_zkc_requested)
 endif()
 
 set(_zkc_heir_found TRUE)
-if("Transforms" IN_LIST _zkc_requested AND "@ZKC_ENABLE_HEIR@" STREQUAL "ON")
+if("Transforms" IN_LIST _zkc_requested)
   set(_zkc_heir_found FALSE)
   if(_zkc_native_found)
     find_package(ZkcHeirArithmetic 0.0.0 EXACT QUIET CONFIG)

@@ -21,6 +21,7 @@ let
   compiler = [
     "compiler/CMakeLists.txt"
     "compiler/cmake"
+    "compiler/external/heir/pins.json"
     "compiler/include"
     "compiler/lib"
     "compiler/tools"
@@ -46,6 +47,7 @@ let
   ];
   definitions = {
     compiler.paths = compiler;
+    heir.paths = [ "compiler/external/heir" ];
     compilerTests.paths =
       compiler
       ++ projects

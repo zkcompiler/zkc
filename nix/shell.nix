@@ -5,6 +5,7 @@
   python,
   environment,
   utf8proc,
+  heirArithmetic,
 }:
 pkgs.mkShell.override { stdenv = llvm.stdenv; } (
   environment.toolchain
@@ -15,6 +16,7 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       llvm.tblgen
       llvm.clang-tools
       utf8proc
+      heirArithmetic
       pkgs.cmake
       pkgs.ninja
       pkgs.just
@@ -28,7 +30,7 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
     ];
     shellHook = environment.development + ''
       # Select the compiler matching the main MLIR package explicitly.
-      export PATH="${llvm.clang}/bin:$PATH"
+      export PATH="${llvm.clang}/bin:${python}/bin:$PATH"
       if [ -z "''${TZ+x}" ] && [ ! -r /etc/localtime ]; then export TZ=UTC; fi
     '';
   }

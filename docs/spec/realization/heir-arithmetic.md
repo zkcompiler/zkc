@@ -1,6 +1,6 @@
 # External quotient arithmetic profile
 
-The optional [HEIR arithmetic package](../../../compiler/external/heir/README.md)
+The [HEIR arithmetic package](../../../compiler/external/heir/README.md)
 defines a compiler-internal comparison for arithmetic over
 `R(q,n) = (Z/qZ)[X]/(X^n+1)`. It does not replace the
 [checked coefficient operations](../domains/quotient-rings.md). The profile is
@@ -75,7 +75,7 @@ arithmetic to managed native operations through the separate boundary below.
 
 ## Managed quotient calculations
 
-An enabled compiler selects complete normalized Kernel entries containing only
+The default compiler selects complete normalized Kernel entries containing only
 formal quotient projection, coefficient observation, addition, subtraction and
 multiplication. Each selected entry has one admitted `q,n`, at most 512 source
 operations and at most 128 native coefficient inputs and outputs. At least one

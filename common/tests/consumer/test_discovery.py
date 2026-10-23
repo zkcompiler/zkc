@@ -61,6 +61,14 @@ endif()
 ''')
     for name in ("LLVM", "MLIR"):
         write_version(dependencies / f"lib/cmake/{name}/{name}ConfigVersion.cmake", "23.1.2")
+    write(dependencies / "lib/cmake/ZkcHeirArithmetic/ZkcHeirArithmeticConfig.cmake", '''
+set(ZkcHeirArithmetic_HEIR_REVISION fixture-revision)
+set(ZkcHeirArithmetic_PATCH_SHA256 fixture-patch)
+if(NOT TARGET ZkcHeir::Admission)
+  add_library(ZkcHeir::Admission INTERFACE IMPORTED)
+endif()
+''')
+    write_version(dependencies / "lib/cmake/ZkcHeirArithmetic/ZkcHeirArithmeticConfigVersion.cmake", "0.0.0")
     source = work / "source"
     parts = {
         "Support": ([], "1"),
@@ -77,6 +85,9 @@ endif()
     cmake = [f'''cmake_minimum_required(VERSION 3.21)
 project(SDKFixture VERSION 0.0.0 LANGUAGES CXX)
 find_package(MLIR REQUIRED CONFIG)
+find_package(ZkcHeirArithmetic REQUIRED CONFIG)
+set(ZKC_HEIR_REVISION fixture-revision)
+set(ZKC_HEIR_PATCH_SHA256 fixture-patch)
 include("{ROOT}/compiler/cmake/InstallSDK.cmake")
 add_library(VendorPublic STATIC VendorPublic.cpp)
 add_library(VendorPrivate STATIC VendorPrivate.cpp)
@@ -109,7 +120,7 @@ target_include_directories(Zkc{name} PUBLIC $<BUILD_INTERFACE:${{CMAKE_CURRENT_S
 target_link_libraries(ZkcSupport PUBLIC LLVM)
 target_link_libraries(ZkcIR PUBLIC MLIR VendorPublic)
 target_include_directories(ZkcIR PRIVATE ${MLIR_INCLUDE_DIRS})
-target_link_libraries(ZkcTransforms PRIVATE VendorPrivate)
+target_link_libraries(ZkcTransforms PRIVATE VendorPrivate ZkcHeir::Admission)
 add_library(ZkcFixture::Program ALIAS ZkcProgram)
 target_link_libraries(ZkcLanguage PRIVATE ZkcFixture::Program)
 ''')
@@ -415,3 +426,25 @@ add_library(Zkc::Program INTERFACE IMPORTED)
 find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Program)
 ''', success=False)
     assert "belongs to a different installation" in output
+
+
+@pytest.mark.parametrize('fault', ['missing', 'revision', 'patch'])
+def test_qualified_arithmetic_dependency_is_component_local(sdk, tmp_path, fault):
+    _, _, dependencies = sdk
+    options = []
+    if fault == 'missing':
+        options.append('-DCMAKE_DISABLE_FIND_PACKAGE_ZkcHeirArithmetic=TRUE')
+    else:
+        wrong = tmp_path / 'arithmetic'
+        original = dependencies / 'lib/cmake/ZkcHeirArithmetic'
+        for name in ('ZkcHeirArithmeticConfig.cmake', 'ZkcHeirArithmeticConfigVersion.cmake'):
+            write(wrong / name, (original / name).read_text().replace('fixture-' + fault, 'wrong'))
+        options.append(f'-DZkcHeirArithmetic_DIR={wrong}')
+    configure(sdk, tmp_path, '''
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS IR OPTIONAL_COMPONENTS Transforms Compiler)
+if(NOT ZkcCompiler_IR_FOUND OR ZkcCompiler_Transforms_FOUND OR ZkcCompiler_Compiler_FOUND
+    OR TARGET Zkc::Transforms OR TARGET Zkc::Compiler)
+  message(FATAL_ERROR "unqualified arithmetic crossed the Transforms boundary")
+endif()
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Program)
+''', options=options)

@@ -1,10 +1,10 @@
 # HEIR arithmetic
 
-This optional library reuses HEIR Polynomial, ModArith and RNS sources with the
+This compiler dependency reuses HEIR Polynomial, ModArith and RNS sources with the
 same LLVM/MLIR release as zkc. The admitted transformation boundary currently
 covers scalar-modulus negacyclic ring expressions and full NTT placement.
 [The arithmetic profile](../../../docs/spec/realization/heir-arithmetic.md)
-defines the inputs, comparison and limits. With `ZKC_ENABLE_HEIR=ON`, the
+defines the inputs, comparison and limits. The default
 `.zkc` compiler uses the installed package for admitted whole quotient
 calculations and emits checked operations for the managed native runtime.
 
@@ -25,16 +25,24 @@ Three tools expose different boundaries:
 ## Build
 
 [pins.json](pins.json) selects HEIR `v2026.10.01`, LLVM/MLIR `23.1.3` and
-OR-Tools `9.15.6755`. The [build helper](build.py) checks the archive and patch
-hashes, extracts a private source tree, applies the patch without fuzzy matches,
-and records prepared-source hashes and configuration. It refuses a changed
-prepared source or a different pin set. It does not download dependencies.
+the source-built OR-Tools `v9.15` package (CMake version `9.15.9999`).
+The default Nix compiler, developer shell and installed SDK include this
+qualified dependency. Build it independently with:
 
-Acquire the HEIR archive from the URL in the manifest. Provide LLVM/MLIR CMake
-packages and binaries, and a compatible OR-Tools C++ installation. The manifest
-also records the official Linux SDK used for qualification. That SDK and its
-compression dependencies remain part of the build environment; the helper does
-not establish source-to-binary correspondence for supplied packages.
+```sh
+nix build .#heir-arithmetic
+```
+
+The derivation verifies the HEIR archive and patch hashes, applies the patch
+without fuzzy matches, and runs arithmetic and relocated SDK checks. It reuses
+the pinned Nixpkgs OR-Tools source hash and its matching Abseil, Protobuf and
+solver dependency closure. It does not download a prebuilt vendor SDK.
+
+For a manually provisioned toolchain, the [build helper](build.py) verifies the
+archive and patch hashes, records prepared-source hashes and configuration,
+and refuses changed prepared sources or pins. It does not download dependencies.
+Acquire the HEIR archive from the manifest and provide the exact selected
+LLVM/MLIR and OR-Tools CMake packages with their transitive dependencies:
 
 ```sh
 python3 compiler/external/heir/build.py \
@@ -52,14 +60,12 @@ CMake finds `mlir-opt`, `mlir-runner` and `mlir_c_runner_utils` under the select
 MLIR installation for execution tests. They can be selected explicitly using
 `ZKC_HEIR_MLIR_OPT`, `ZKC_HEIR_MLIR_RUNNER` and `ZKC_HEIR_RUNNER_UTILS` when
 configuring CMake. Build outputs and downloaded sources remain outside source
-control. The main compiler does not acquire a dependency by building this
-optional package. To enable it in an existing compiler configuration:
+control. A manually provisioned compiler requires the same package:
 
 ```sh
-cmake -S compiler -B build/compiler -DZKC_ENABLE_HEIR=ON \
+cmake -S compiler -B build/compiler \
   -DZkcHeirArithmetic_DIR=/path/to/heir-sdk/lib/cmake/ZkcHeirArithmetic \
-  -DCMAKE_PREFIX_PATH=/path/to/ortools \
-  -Dortools_DIR=/path/to/ortools/lib/cmake/ortools
+  -DCMAKE_PREFIX_PATH=/path/to/qualified/dependencies
 cmake --build build/compiler --parallel 2
 ctest --test-dir build/compiler --output-on-failure
 ```
@@ -120,8 +126,9 @@ admission. The main compiler's `heir-quotients` checks exercise the separate
 managed recipe reader, input/output aliases, source preservation, transform
 sharing, optional capacity fallback and altered native candidates. The common
 formal quotient suite exercises `.zkc` compilation and managed execution for
-the large ring workloads. A coefficient-only compiler can be built with
-`ZKC_ENABLE_HEIR=OFF` for the same source programs.
+the large ring workloads. Coefficient execution remains the current realization
+for entries outside the admitted transform profile or available optimization
+capacity; no separate compiler build is needed.
 
 Checked placement selects roots with a bounded, charged search over the admitted
 prime/power-of-two profile. It then uses the upstream placement and cleanup

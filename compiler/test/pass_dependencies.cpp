@@ -219,8 +219,9 @@ int main() {
           logical, [&](ModuleOp candidate, MLIRContext &fresh) {
             require(!fresh.getLoadedDialect<algebra::AlgebraDialect>(),
                     "Kernel fixture unexpectedly loaded recipe dialect");
-            runChecked(candidate, kernel::createLowerKernelsPass(),
-                       {"algebra"});
+            runChecked(
+                candidate, kernel::createLowerKernelsPass(),
+                {"algebra", "linalg", "tensor", "polynomial", "mod_arith"});
             require(count(candidate, "algebra.exec.bool_and") &&
                         !count(candidate, "kernel.module") &&
                         !count(candidate, "kernel.call") &&

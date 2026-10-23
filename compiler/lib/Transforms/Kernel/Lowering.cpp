@@ -1,7 +1,9 @@
 #include "../AlgorithmSupport.h"
 #include "../CheckedCandidate.h"
+#include "../FieldRegion.h"
 #include "../RealizationSubject.h"
 #include "../RealizationTrace.h"
+#include "Quotient.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -279,6 +281,8 @@ struct LowerKernelsPass
       : PassWrapper(other), trace(other.trace),
         fallbackPolicy(other.fallbackPolicy) {}
   void getDependentDialects(DialectRegistry &registry) const final {
+    mathematical::registerFieldRegionDialects(registry);
+    registerQuotientDialects(registry);
     registry.insert<local::LocalDialect, algebra::AlgebraDialect,
                     kernel::KernelDialect, func::FuncDialect, scf::SCFDialect,
                     arith::ArithDialect>();

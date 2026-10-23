@@ -1,6 +1,5 @@
 #ifndef ZKC_TRANSFORMS_KERNEL_QUOTIENT_H
 #define ZKC_TRANSFORMS_KERNEL_QUOTIENT_H
-#ifdef ZKC_ENABLE_HEIR
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -8,6 +7,7 @@
 #include "zkc/heir/Admission.h"
 
 namespace zkc::kernel {
+void registerQuotientDialects(mlir::DialectRegistry &registry);
 // These readers interpret actual source/native SSA. Neither calls an importer,
 // placement pass, recipe producer or transformation replay.
 mlir::FailureOr<heir::ArithmeticMeaning>
@@ -26,5 +26,4 @@ mlir::FailureOr<mlir::OwningOpRef<mlir::ModuleOp>>
 proposeQuotientExecution(mlir::func::FuncOp source,
                          mathematical::RealizationWork &work);
 } // namespace zkc::kernel
-#endif
 #endif

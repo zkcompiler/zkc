@@ -30,8 +30,14 @@ let
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
   sources = import ./sources.nix { inherit lib; };
+  heirArithmetic = pkgs.callPackage ./heir.nix {
+    inherit llvm;
+    stdenv = llvm.stdenv;
+    python3 = python;
+    source = sources.heir;
+  };
   compiler = pkgs.callPackage ./compiler.nix {
-    inherit llvm utf8proc;
+    inherit llvm utf8proc heirArithmetic;
     source = sources.compiler;
     stdenv = llvm.stdenv;
     python3 = python;
@@ -168,6 +174,7 @@ in
       arklib
       llzk
       ;
+    heir-arithmetic = heirArithmetic;
     lake-sources = lakeSources;
     default = zkc;
     test-drivers = testDrivers;
@@ -305,6 +312,7 @@ in
       python
       environment
       utf8proc
+      heirArithmetic
       ;
     rust = rustDev;
   };

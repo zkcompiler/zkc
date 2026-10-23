@@ -1,4 +1,3 @@
-#ifdef ZKC_ENABLE_HEIR
 #include "Quotient.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
@@ -296,5 +295,3 @@ readQuotientExecution(func::FuncOp source, Operation *targetRoot,
   return outputs;
 }
 } // namespace zkc::kernel
-
-#endif
