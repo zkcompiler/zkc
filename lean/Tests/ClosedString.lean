@@ -46,8 +46,11 @@ check_data_string "α" equals "α"
 check_data_string metadata.label equals "source:5"
 check_data_string (([metadata] ++ [metadata])[1]).label equals "source:5"
 check_data_string selectedLabel equals "source:5"
+check_data_string s!"input[{(2 + 3 : Nat)}]" equals "input[5]"
+check_data_string (toString "source") equals "source"
 refuse_data_string unresolved
 refuse_data_string (@toString Nat ⟨fun _ => "forged"⟩ 7)
+refuse_data_string (@toString String ⟨fun _ => "forged"⟩ "actual")
 refuse_data_string (@HAppend.hAppend String String String ⟨fun _ _ => "forged"⟩ "a" "b")
 
 end Tests.ClosedString

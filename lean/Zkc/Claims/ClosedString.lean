@@ -26,6 +26,13 @@ def read : Nat → Expr → MetaM String
       unless ← isDefEq expression (← mkAppM ``String.append #[left, right]) do
         throwError "closed string uses a nonstandard append"
       return (← read fuel left) ++ (← read fuel right)
+    if expression.isAppOfArity ``toString 3 then
+      let value := arguments.back!
+      let ty ← withTransparency .all (whnf (← inferType value))
+      if ty.isConstOf ``String then
+        unless ← isDefEq expression value do
+          throwError "closed string uses a nonstandard string conversion"
+        return ← read fuel value
     if expression.isAppOfArity ``toString 3 || expression.isAppOfArity ``Nat.repr 1 then
       let natural := arguments.back!
       unless ← isDefEq expression (← mkAppM ``Nat.repr #[natural]) do
