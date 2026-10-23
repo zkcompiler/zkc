@@ -3,6 +3,7 @@
 
 namespace zkc::protocol::type_adapters {
 namespace {
+using QuotientMatrixAdapter = NullaryAdapter<zkc::poly::QuotientMatrixType>;
 using PolynomialAdapter = DomainAdapter<zkc::poly::UnivariateType>;
 using TableAdapter = DomainAdapter<zkc::poly::MultilinearType>;
 using PointAdapter = DomainAdapter<zkc::poly::PointType>;

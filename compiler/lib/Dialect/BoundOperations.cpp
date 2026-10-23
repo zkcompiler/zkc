@@ -40,7 +40,7 @@ bool detail::isLogicalOperationData(Type type) {
              algebra::IndicesType, algebra::FieldMatrixType,
              algebra::FieldArrayType, pcs::ObjectType, oracle::OracleObjectType,
              local::CapabilityType, local::VariantType,
-             crypto::Shake128StateType>(type) ||
+             crypto::Shake128StateType, poly::QuotientMatrixType>(type) ||
          type.isSignlessInteger(1) || type.isUnsignedInteger(64);
 }
 

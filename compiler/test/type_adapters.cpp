@@ -120,6 +120,7 @@ int main() {
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
       {"bytes", zkc::data::BytesType::get(&context)},
       {"shake128_state", zkc::crypto::Shake128StateType::get(&context)},
+      {"quotient_matrix", zkc::poly::QuotientMatrixType::get(&context)},
       {"indices", zkc::algebra::IndicesType::get(&context)},
       {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
       {"matrix:" + field, zkc::algebra::FieldMatrixType::get(&context, field)},
@@ -187,7 +188,8 @@ int main() {
       if (isa<zkc::algebra::FieldVectorType, zkc::algebra::GroupVectorType,
               zkc::algebra::IndicesType, zkc::algebra::FieldMatrixType,
               zkc::algebra::FieldArrayType, zkc::data::BytesType,
-              zkc::crypto::Shake128StateType>(native))
+              zkc::crypto::Shake128StateType, zkc::poly::QuotientMatrixType>(
+              native))
         roundTrip(context, take(defaultRepresentation(bound)), true);
     });
     if (spelling == "bool" || spelling == "index")

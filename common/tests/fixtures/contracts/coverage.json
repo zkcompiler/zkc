@@ -208,6 +208,8 @@
       "quotient.add",
       "quotient.subtract",
       "quotient.multiply",
+      "quotient.prepare_matrix",
+      "quotient.matvec",
       "quotient.norm_within",
       "quotient.project",
       "quotient.ntt",
@@ -261,6 +263,7 @@
     "atomic": [
       "bytes",
       "shake128_state",
+      "quotient_matrix",
       "bool",
       "index",
       "indices",

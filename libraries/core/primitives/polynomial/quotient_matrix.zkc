@@ -1,0 +1,16 @@
+module zkc::quotient_matrix;
+use zkc::primitives::indices::{Indices};
+
+// Immutable prepared matrix, private to local execution with no wire codec.
+pub type PreparedMatrix = builtin("quotient_matrix");
+
+// Canonical protocol residues, row-major, then column, then coefficient.
+// Preparation retains compute-prime transforms and a checked reconstruction plan.
+pub fn prepare(coefficients: Indices, modulus: index, degree: index,
+    rows: index, columns: index, digit_bound: index) -> PreparedMatrix
+  = primitive("quotient.prepare_matrix");
+
+// Canonical protocol residues encode signed digits via centered representatives.
+// Each coefficient is checked against the bound supplied at preparation.
+pub fn multiply(matrix: PreparedMatrix, digits: Indices) -> Indices
+  = primitive("quotient.matvec");

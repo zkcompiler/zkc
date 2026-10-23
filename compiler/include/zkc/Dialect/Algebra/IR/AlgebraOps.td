@@ -138,6 +138,8 @@ def IndicesLengthOp : BoundOp<AlgebraDialect, "exec.indices_length", [OpIndicesL
 def QuotientAddOp : BoundOp<AlgebraDialect, "exec.quotient_add", [OpQuotientAdd]>;
 def QuotientSubtractOp : BoundOp<AlgebraDialect, "exec.quotient_subtract", [OpQuotientSubtract]>;
 def QuotientMultiplyOp : BoundOp<AlgebraDialect, "exec.quotient_multiply", [OpQuotientMultiply]>;
+def QuotientPrepareMatrixOp : BoundOp<AlgebraDialect, "exec.quotient_prepare_matrix", [OpQuotientPrepareMatrix]>;
+def QuotientMatvecOp : BoundOp<AlgebraDialect, "exec.quotient_matvec", [OpQuotientMatvec]>;
 def QuotientNormWithinOp : BoundOp<AlgebraDialect, "exec.quotient_norm_within", [OpQuotientNormWithin]>;
 def QuotientProjectOp : BoundOp<AlgebraDialect, "exec.quotient_project", [OpQuotientProject]>;
 def QuotientNTTOp : BoundOp<AlgebraDialect, "exec.quotient_ntt", [OpQuotientNTT]>;

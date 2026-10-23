@@ -442,6 +442,8 @@ quotient.project 0
 quotient.ntt 0
 quotient.intt 0
 quotient.pointwise 0
+quotient.prepare_matrix 0
+quotient.matvec 0
 numerical.map 0
 numerical.sum 0
 numerical.product 0

@@ -100,6 +100,10 @@ common basis established by the calling algorithm. These contracts match the
 [qualified external arithmetic profile](../realization/heir-arithmetic.md),
 while ML-KEM's quadratic representation remains outside the full scalar profile.
 
+Prepared [quotient-ring matrices](quotient-matrices.md) extend these conventions
+to reusable bounded signed-digit module products with a distinct protocol and
+compute modulus.
+
 ## Source views
 
 [`zkc::quotient`](../../../libraries/core/polynomial/quotient.zkc) owns

@@ -128,6 +128,7 @@ impl NativeDomain {
             (_, Indices) => (Identity::None, R::Indices),
             (_, Bytes) => (Identity::None, R::Bytes),
             (_, Shake128State) => (Identity::None, R::Shake128State),
+            (_, QuotientMatrix) => (Identity::None, R::QuotientMatrix),
             (Identity::Bls12381Fr, Matrix) => (self.field, R::FrSparseCoo),
             (Identity::Ristretto255Scalar, Matrix) => (self.field, R::DalekSparseCoo),
             (Identity::KoalaBear, Matrix) => (self.field, R::KoalaBearSparseCoo),
