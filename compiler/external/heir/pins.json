@@ -1,0 +1,22 @@
+{
+  "heir": {
+    "version": "v2026.10.01",
+    "revision": "3db23ba27722b94aedd9d10ebdfad346fc3195fb",
+    "url": "https://codeload.github.com/google/heir/tar.gz/3db23ba27722b94aedd9d10ebdfad346fc3195fb",
+    "sha256": "9cb61bfae001a27bc3f4035ac239092c077e00f5a1c01078f9cee6f519497969"
+  },
+  "llvm": {
+    "version": "23.1.3"
+  },
+  "ortools": {
+    "version": "9.15.6755",
+    "url": "https://github.com/google/or-tools/releases/download/v9.15/or-tools_amd64_ubuntu-22.04_cpp_v9.15.6755.tar.gz",
+    "sha256": "0b30114d7c05f0596286bf3ef8d02adcf5f45be3b39273490e6bb74a2a9bd1ea"
+  },
+  "patches": [
+    {
+      "path": "patches/arithmetic.patch",
+      "sha256": "3bef8d3e506653ce65de8926ecd6871ab99973d74631fa47f7966cd4cf32584c"
+    }
+  ]
+}

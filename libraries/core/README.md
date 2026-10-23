@@ -8,7 +8,7 @@ your source uses directly; public facades retain concise source names.
 |---|---|
 | [Primitive collections](primitives/collections/zkc.toml) | `primitives::{vector,indices,bytes}`, `sequence`, `matrix`, `field_array` |
 | [Primitive algebra](primitives/algebra/zkc.toml) | `primitives::{curve,scalar}`, `pairing` |
-| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic` |
+| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::coset`, `polynomial`, `symbolic`, `quotient_math` |
 | [Primitive cryptography](primitives/cryptography/zkc.toml) | `primitives::hash`, `encoding`, `oracle`, `permutation`, `shake128`, `transcript` |
 | [Traversal](traversal/zkc.toml) | `accumulation`, `finite_domain`, `finite`, `finite_math` |
 | [Collections](collections/zkc.toml) | `vector`, `indices` |
@@ -127,6 +127,41 @@ products preserve every prefix, while ordinary sums and products return one
 value. `polynomial` stores univariate coefficients in increasing
 power order; an empty coefficient vector denotes zero.
 
+
+## Quotient-ring coefficients
+
+`quotient::polynomial<Q,N>(data)` checks exactly `N` canonical unsigned residues
+below `Q`, with static `Q >= 2` and `N >= 1`. Its private `Polynomial<Q,N>`
+retains both parameters in source type identity. `coefficients`, `add`,
+`subtract`, `multiply` and the paired `norm_within` predicate operate on this
+view. Multiplication reduces by `X^N+1`; the norm uses centered integer lifts
+and an inclusive bound. Composite moduli and non-two-adic degrees are supported.
+
+Receive raw `Indices` and construct the view locally. Native operations check
+the raw arrays independently and use exact unsigned modular arithmetic; the
+source wrapper does not install a field or a native refinement type. The
+[contract](../../docs/spec/domains/quotient-rings.md) states failures and resource
+admission. The [lattice library](../relations/lattice/README.md) composes these
+operations into a short-preimage predicate. The
+[rationale](../../docs/rationale/quotient-rings.md) explains the coefficient and
+external-dialect boundary.
+
+`zkc::quotient_math::Element<Q,N>` exposes total formal quotient calculations
+inside `math fn`. `project` reduces arbitrary unsigned sequences, `add`,
+`subtract`, and `multiply` compose elements of the same ring, and `coefficients`
+observes their canonical representatives. The operators are `+`, `-`, and `*`.
+These formal values have no native ingress or message encoding. They currently
+realize through the managed coefficient operations; automatic external transform
+selection remains separate integration work.
+
+The raw `zkc::primitives::quotient` module also exposes explicit `project`,
+`ntt`, `intt` and `pointwise` operations. Projection reduces arbitrary finite
+unsigned coefficient sequences; it does not validate a claimed canonical
+representation. Transforms use natural-order odd-root coordinates, with the
+inverse root supplied to `intt`. Their full scalar profile covers the Falcon
+and ML-DSA ring parameters; matching bases remains the caller's responsibility.
+These ordered native calls are execution building blocks, not an automatic
+source-region optimization.
 
 ## Linear group expressions
 

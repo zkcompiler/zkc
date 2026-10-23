@@ -23,10 +23,13 @@ int main() {
   using I = zkc::MathematicalIdentity;
   static_assert(unsigned(I::FieldAdd) == 0 &&
                 unsigned(I::FieldConstant) == 20 &&
-                unsigned(I::PolynomialFixTable) == 35);
-  require(zkc::mathematicalIntrinsics().size() == 31 &&
+                unsigned(I::PolynomialFixTable) == 35 &&
+                unsigned(I::QuotientMultiply) == 40);
+  require(zkc::mathematicalIntrinsics().size() == 36 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
               zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
+              zkc::mathematicalIntrinsics()[35].name ==
+                  "quotient.value.multiply" &&
               zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
                   "PolynomialMultiply",
           "mathematical source catalog identities changed");

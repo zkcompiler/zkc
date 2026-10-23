@@ -26,8 +26,8 @@ functions, recursive closures and arbitrary operations are refused. Admission
 checks every retained definition, including unused ones.
 
 The entry has total, non-affine native data ports and must discharge its own
-mathematical premises. Formal polynomials may occur internally but cannot cross
-the entry boundary. Private helper conditions are checked against their actual
+mathematical premises. Formal polynomials and quotient-ring elements may occur internally but cannot
+cross the entry boundary. Private helper conditions are checked against their actual
 arguments. The shared `TotalClosure` analysis checks the mathematical vocabulary,
 dependency closure, bounded access and polynomial observations. An installed
 backend implementation alone does not establish these properties.

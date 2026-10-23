@@ -83,7 +83,11 @@ foreach(owner IN LISTS header_owners)
   target_link_libraries(public-headers-${owner} PRIVATE Zkc::${owner})
   target_compile_options(public-headers-${owner} PRIVATE -Wall -Wextra -Werror)
 endforeach()
-foreach(mode required optional optional-native repeated default compiler tools
+set(heir_modes)
+if(TARGET ZkcHeir::Admission)
+  set(heir_modes heir-optional heir-required)
+endif()
+foreach(mode ${heir_modes} required optional optional-native repeated default compiler tools
     Support Contracts Program Relation Language)
   add_test(NAME package-${mode} COMMAND ${CMAKE_COMMAND}
     "-DPACKAGE_DIR=${ZkcCompiler_DIR}" "-DMLIR_DIR=${MLIR_DIR}" "-DLLVM_DIR=${LLVM_DIR}"

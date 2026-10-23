@@ -27,7 +27,7 @@ def test_every_native_compiler_test_source_has_a_build_target():
     import re
 
     directory = ROOT / "compiler/test"
-    declared = re.findall(r"^add_zkc_test\((\w+)(?:\s+[^)]*)?\)",
+    declared = re.findall(r"^[ \t]*add_zkc_test\((\w+)(?:\s+[^)]*)?\)",
                           (directory / "CMakeLists.txt").read_text(), re.MULTILINE)
     assert len(declared) == len(set(declared)), "duplicate native test target"
     assert set(declared) == {path.stem for path in directory.glob("*.cpp")}

@@ -767,6 +767,13 @@ math fn evaluate<F: Field, N: nat>(p: Poly<F, N>, point: [F; N]) -> F {
 }
 ```
 
+`formal("quotient",Q,N)` separately denotes a negacyclic quotient-ring element,
+with static naturals `2 <= Q` and `1 <= N`. Its projection, arithmetic and
+canonical coefficient observation are specified in
+[quotient rings](../domains/quotient-rings.md#formal-calculations). The same
+formal-value boundary rules below apply; it does not inherit field-polynomial
+laws or an executable representation.
+
 A formal polynomial denotes an expression over a field and an ordered list of
 variables. It is an SSA value in Protocol IR and has no executable value
 encoding. Its type carries the field and natural arity. It has Copy and Drop

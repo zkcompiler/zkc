@@ -6,6 +6,7 @@
 "zkc::opening" = "opening.zkc"
 "zkc::evaluation_domain" = "evaluation_domain.zkc"
 "zkc::opening_claims" = "opening_claims.zkc"
+"zkc::quotient" = "quotient.zkc"
 
 ["dependencies"]
 "algebra" = "../algebra"

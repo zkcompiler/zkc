@@ -1,7 +1,7 @@
 # Structured native mathematics
 
 This profile extends [mathematical protocols](protocols.md) with
-formal polynomial SSA and static field data. Mathematical meaning belongs to
+formal polynomial and quotient-ring SSA, and static field data. Mathematical meaning belongs to
 [tables and polynomials](../domains/polynomials.md). It retains
 the profiles `protocol → participant → exec → physical`; an analysis or
 lowering does not introduce another editable mathematical graph.
@@ -14,6 +14,12 @@ This is a compile-time mathematical value. Transparent, acyclic private helpers
 may produce it; protocol inputs, outputs, messages and executable bindings may
 not contain it. Helper preparation exposes constructors before degree analysis.
 It is distinct from the existing normalized concrete `!poly.univariate` object.
+
+`!algebra.quotient<Q,N>` denotes `(Z/QZ)[X]/(X^N+1)`, with unsigned 64-bit
+parameters `Q >= 2` and `N >= 1`. It is a formal mathematical value under the
+same executable-boundary restrictions. It does not denote an ordinary field
+polynomial or a selected transform representation. Its exact projection and
+observation meanings are defined by the [quotient-ring contract](../domains/quotient-rings.md#formal-calculations).
 
 Concrete field arrays use `!algebra.field_array<"F", N>`, with exact nominal
 field identity and `0 ≤ N ≤ 1048576`. Logical encoding remains
@@ -28,6 +34,9 @@ The following flat operations are total on their verified types:
 
 | Operation | Signature and judgment |
 |---|---|
+| `algebra.quotient_project` | Arbitrary finite `!algebra.indices` to the quotient element given by polynomial reduction |
+| `algebra.quotient_coefficients` | Quotient element to exactly `N` canonical ascending residues in `!algebra.indices` |
+| `algebra.quotient_add`, `algebra.quotient_subtract`, `algebra.quotient_multiply` | Two quotient elements and one result with identical `Q,N`; ring sum, difference and product |
 | `algebra.group_identity` | No operands; identity of the nominal result group with scalar action |
 | `algebra.constant` | Canonical field literal string to scalar |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
@@ -84,6 +93,13 @@ installed `field.constant` contract to validate canonical literals; a separate
 domain literal contract is not part of this implementation.
 
 ## Realization
+
+Quotient expressions currently realize as canonical coefficient arrays under the
+managed native quotient contracts. The independent recipe reader binds exact
+modulus/degree constants, ordered operands and observations. Projection performs
+reduction; observation aliases the canonical result. There is no executable
+quotient type, and no automatic transform placement in this coefficient path.
+
 
 The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
 `algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads

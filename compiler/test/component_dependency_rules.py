@@ -19,6 +19,9 @@ for area in ("include", "lib", "tools", "examples"):
 original_manifest = Path(os.environ["ZKC_CTEST_COMPONENTS"])
 manifest = Path(directory) / "component-dependencies.txt"
 manifest.write_text(original_manifest.read_text())
+heir = original_manifest.parent / "heir-dependency.txt"
+if heir.is_file():
+    shutil.copyfile(heir, manifest.parent / heir.name)
 # Relocate the exact extension inventory too, when this runs on an extended
 # installation. Never drop its sources to manufacture a base-only fixture.
 contribution_manifest = manifest.parent / "contribution-dependencies.txt"
@@ -359,3 +362,10 @@ rejects("independent reader boundary is transitive",
         root / "lib/Transforms/MathematicalComparison.h",
         lambda text: '#include "ComputationSelection.h"\n' + text,
         "independent reader imports producer machinery")
+
+rejects("public compiler API cannot expose HEIR implementation", root / "include/zkc/Transforms/Finite.h",
+        lambda text: '#include "zkc/heir/Admission.h"\n' + text,
+        "HEIR package API outside its private bridge")
+rejects("IR cannot use HEIR transformation dialects", root / "lib/Dialect/Algebra/IR/Mathematical.cpp",
+        lambda text: '#include "lib/Dialect/Polynomial/IR/PolynomialOps.h"\n' + text,
+        "HEIR dialect API outside its private producer")

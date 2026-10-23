@@ -1,0 +1,262 @@
+--- a/lib/Dialect/LWE/IR/LWEDialect.td
++++ b/lib/Dialect/LWE/IR/LWEDialect.td
+@@ -36,7 +36,6 @@
+ 
+   let useDefaultTypePrinterParser = 1;
+   let useDefaultAttributePrinterParser = 1;
+-  let useStrictPropertiesInAssemblyFormat = 1;
+ }
+ 
+ #endif  // LIB_DIALECT_LWE_IR_LWEDIALECT_TD_
+--- a/lib/Dialect/ModArith/IR/ModArithDialect.td
++++ b/lib/Dialect/ModArith/IR/ModArithDialect.td
+@@ -13,7 +13,6 @@
+   let cppNamespace = "::mlir::heir::mod_arith";
+   let useDefaultTypePrinterParser = 1;
+   let useDefaultAttributePrinterParser = 1;
+-  let useStrictPropertiesInAssemblyFormat = 1;
+   let hasConstantMaterializer = 1;
+ 
+   let dependentDialects = [
+--- a/lib/Dialect/Polynomial/Conversions/PolynomialToModArith/PolynomialToModArith.cpp
++++ b/lib/Dialect/Polynomial/Conversions/PolynomialToModArith/PolynomialToModArith.cpp
+@@ -686,6 +686,7 @@
+     auto initIndex = arith::ConstantOp::create(
+         b, b.getIndexAttr(tensorType.getShape()[0] - 1));
+ 
++    auto zeroIndex = arith::ConstantOp::create(b, b.getIndexAttr(0));
+     auto degreeOp = scf::WhileOp::create(
+         b,
+         /*resultTypes=*/
+@@ -720,7 +721,11 @@
+             isZero = arith::CmpIOp::create(b, arith::CmpIPredicate::eq,
+                                            extractedCoeff, c0);
+           }
+-          scf::ConditionOp::create(b, isZero, index);
++          // Stop at index zero, including for the zero polynomial.
++          auto positive = arith::CmpIOp::create(
++              b, arith::CmpIPredicate::sgt, index, zeroIndex);
++          auto continueScan = arith::AndIOp::create(b, isZero, positive);
++          scf::ConditionOp::create(b, continueScan, index);
+         },
+         /*afterBuilder=*/
+         [&](OpBuilder& nestedBuilder, Location nestedLoc, ValueRange args) {
+--- a/lib/Dialect/Polynomial/IR/PolynomialCanonicalization.td
++++ b/lib/Dialect/Polynomial/IR/PolynomialCanonicalization.td
+@@ -5,18 +5,18 @@
+ include "mlir/IR/OpBase.td"
+ include "mlir/IR/PatternBase.td"
+ 
+-def Equal : Constraint<CPred<"$0 == $1">>;
++def InverseRoots : Constraint<CPred<"haveInverseRoots($0, $1)">>;
+ 
+ def INTTAfterNTT : Pat<
+   (Polynomial_INTTOp (Polynomial_NTTOp $poly, $r1), $r2),
+   (replaceWithValue $poly),
+-  [(Equal $r1, $r2)]
++  [(InverseRoots $r1, $r2)]
+ >;
+ 
+ def NTTAfterINTT : Pat<
+   (Polynomial_NTTOp (Polynomial_INTTOp $tensor, $r1), $r2),
+   (replaceWithValue $tensor),
+-  [(Equal $r1, $r2)]
++  [(InverseRoots $r1, $r2)]
+ >;
+ 
+ #endif  // LIB_DIALECT_POLYNOMIAL_IR_POLYNOMIALCANONICALIZATION_TD_
+--- a/lib/Dialect/Polynomial/IR/PolynomialDialect.td
++++ b/lib/Dialect/Polynomial/IR/PolynomialDialect.td
+@@ -43,7 +43,6 @@
+ 
+   let useDefaultTypePrinterParser = 1;
+   let useDefaultAttributePrinterParser = 1;
+-  let useStrictPropertiesInAssemblyFormat = 1;
+   let hasConstantMaterializer = 1;
+ }
+ 
+--- a/lib/Dialect/Polynomial/IR/PolynomialOps.cpp
++++ b/lib/Dialect/Polynomial/IR/PolynomialOps.cpp
+@@ -15,6 +15,8 @@
+ #include "lib/Dialect/RNS/IR/RNSAttributes.h"
+ #include "lib/Dialect/RNS/IR/RNSOps.h"
+ #include "lib/Dialect/RNS/IR/RNSTypes.h"
++#include "lib/Utils/APIntUtils.h"
++#include "lib/Utils/Polynomial/NTT.h"
+ #include "lib/Utils/Polynomial/Polynomial.h"
+ #include "lib/Utils/Polynomial/RNSPolynomial.h"
+ #include "llvm/include/llvm/ADT/APInt.h"                 // from @llvm-project
+@@ -566,6 +568,20 @@
+ // TableGen'd canonicalization patterns
+ //===----------------------------------------------------------------------===//
+ 
++// Cancel only explicit inverse roots in the same ring.
++// RNS cancellation is conservatively left to ordinary execution.
++static bool haveInverseRoots(PrimitiveRootAttr a, PrimitiveRootAttr b) {
++  if (!a || !b || a.getDegree() != b.getDegree()) return false;
++  auto left = dyn_cast<mod_arith::ModArithAttr>(a.getValue());
++  auto right = dyn_cast<mod_arith::ModArithAttr>(b.getValue());
++  if (!left || !right || left.getType() != right.getType()) return false;
++  APInt q = cast<mod_arith::ModArithType>(left.getType()).getModulus().getValue();
++  if (q.isZero()) return false;
++  unsigned width = 2 * q.getBitWidth();
++  return (left.getValue().getValue().zextOrTrunc(width) *
++          right.getValue().getValue().zextOrTrunc(width)).urem(q.zext(width)).isOne();
++}
++
+ namespace {
+ #include "lib/Dialect/Polynomial/IR/PolynomialCanonicalization.cpp.inc"
+ }  // namespace
+@@ -1120,6 +1136,55 @@
+   return nullptr;
+ }
+ 
++// The RNS utility keeps bit-reversed slots and accepts a forward root for
++// both transforms. Convert only at the IR operation boundary.
++static RNSPolynomial reverseEvaluationOrder(const RNSPolynomial& poly) {
++  unsigned n = poly.getNumCoeffs();
++  unsigned width = 0;
++  for (unsigned extent = n; extent > 1; extent >>= 1) ++width;
++  SmallVector<uint64_t> data(poly.getData().begin(), poly.getData().end());
++  for (size_t limb = 0; limb < poly.getNumLimbs(); ++limb)
++    for (unsigned i = 0; i < n; ++i)
++      data[limb * n + i] = poly.getElement(limb, reverseBits(i, width));
++  return RNSPolynomial(std::move(data),
++                       SmallVector<uint64_t>(poly.getModuli()),
++                       poly.getRepresentation());
++}
++
++static std::optional<RNSPolynomial> foldTransform(
++    const RNSPolynomial& poly, ArrayRef<uint64_t> roots, bool inverse) {
++  unsigned n = poly.getNumCoeffs();
++  if (!n || (n & (n - 1)) || roots.size() != poly.getNumLimbs())
++    return std::nullopt;
++  if (poly.getRepresentation() != (inverse ? Form::EVAL : Form::COEFF))
++    return std::nullopt;
++  if (!inverse) {
++    auto result = poly.toNtt(roots);
++    if (!result) return std::nullopt;
++    return reverseEvaluationOrder(*result);
++  }
++  SmallVector<uint64_t> forwardRoots;
++  for (size_t i = 0; i < roots.size(); ++i) {
++    APInt root = multiplicativeInverse(APInt(64, roots[i]),
++                                      APInt(64, poly.getModuli()[i]));
++    if (root.isZero()) return std::nullopt;
++    forwardRoots.push_back(root.getZExtValue());
++  }
++  return reverseEvaluationOrder(poly).toCoefficient(forwardRoots);
++}
++
++static std::optional<RNSPolynomial> foldTransform(
++    const RNSPolynomial& poly, rns::RNSAttr root, bool inverse) {
++  if (!root) return std::nullopt;
++  SmallVector<uint64_t> roots;
++  for (Attribute value : root.getValues()) {
++    auto modular = dyn_cast<mod_arith::ModArithAttr>(value);
++    if (!modular) return std::nullopt;
++    roots.push_back(modular.getValue().getValue().getZExtValue());
++  }
++  return foldTransform(poly, roots, inverse);
++}
++
+ OpFoldResult NTTOp::fold(FoldAdaptor adaptor) {
+   auto inputAttr = dyn_cast_or_null<RNSPolynomialAttr>(adaptor.getInput());
+   auto rootAttr = adaptor.getRoot();
+@@ -1130,7 +1195,7 @@
+     if (!rnsRootAttr) return nullptr;
+ 
+     RNSPolynomial poly = inputAttr.getPolynomial();
+-    std::optional<RNSPolynomial> resultPolyOpt = poly.toNtt(rnsRootAttr);
++    std::optional<RNSPolynomial> resultPolyOpt = foldTransform(poly, rnsRootAttr, false);
+     if (!resultPolyOpt) return nullptr;
+     RNSPolynomial resultPoly = *resultPolyOpt;
+ 
+@@ -1157,7 +1222,7 @@
+   if (!poly) return nullptr;
+   SmallVector<uint64_t> roots = {
+       modArithRootAttr.getValue().getValue().getZExtValue()};
+-  std::optional<RNSPolynomial> resultPolyOpt = poly->toNtt(roots);
++  std::optional<RNSPolynomial> resultPolyOpt = foldTransform(*poly, roots, false);
+   if (!resultPolyOpt) return nullptr;
+   RNSPolynomial resultPoly = *resultPolyOpt;
+   return getTypedIntPolynomialAttr(getContext(), resultPoly.getData(),
+@@ -1175,7 +1240,7 @@
+ 
+     RNSPolynomial poly = inputAttr.getPolynomial();
+     std::optional<RNSPolynomial> resultPolyOpt =
+-        poly.toCoefficient(rnsRootAttr);
++        foldTransform(poly, rnsRootAttr, true);
+     if (!resultPolyOpt) return nullptr;
+     RNSPolynomial resultPoly = *resultPolyOpt;
+ 
+@@ -1202,7 +1267,7 @@
+   if (!poly) return nullptr;
+   SmallVector<uint64_t> roots = {
+       modArithRootAttr.getValue().getValue().getZExtValue()};
+-  std::optional<RNSPolynomial> resultPolyOpt = poly->toCoefficient(roots);
++  std::optional<RNSPolynomial> resultPolyOpt = foldTransform(*poly, roots, true);
+   if (!resultPolyOpt) return nullptr;
+   RNSPolynomial resultPoly = *resultPolyOpt;
+   return getTypedIntPolynomialAttr(getContext(), resultPoly.getData(),
+--- a/lib/Dialect/Polynomial/IR/PolynomialOps.td
++++ b/lib/Dialect/Polynomial/IR/PolynomialOps.td
+@@ -147,6 +147,7 @@
+     this op represents as a pair of results. The first is the degree `k` as an
+     index, and the second is the coefficient, whose type matches the
+     coefficient type of the polynomial's ring attribute.
++    The zero polynomial returns degree zero and coefficient zero.
+ 
+     Example:
+ 
+@@ -337,7 +338,9 @@
+     degree `n`, and a primitive `2n`-th root of unity `omega_{2n}`, the output is
+     the list of $n$ evaluations
+ 
+-      `f[k] = F(omega_{2n}^k) ; k = {0, ..., n-1}`
++      `f[k] = F(omega_{2n}^{2k+1}) ; k = {0, ..., n-1}`
++
++    Coordinates are in natural k order.
+ 
+     The choice of primitive root may be optionally specified.
+   }];
+@@ -360,7 +363,7 @@
+     `polynomial.ntt` operation.
+ 
+     The input tensor is interpreted as a point-value representation of the
+-    output polynomial at powers of a primitive `n`-th root of unity (see
++    output polynomial at odd powers of a primitive `2n`-th root of unity (see
+     `polynomial.ntt`). The ring of the polynomial is taken from the required
+     encoding attribute of the tensor.
+ 
+--- a/lib/Dialect/Polynomial/Transforms/NTTSolver.cpp
++++ b/lib/Dialect/Polynomial/Transforms/NTTSolver.cpp
+@@ -182,7 +182,7 @@
+ 
+ CPSATSolution NTTSolver::solve() {
+   model.Minimize(objective);
+-  const CpSolverResponse resp = Solve(model.Build());
++  const CpSolverResponse resp = SolveWithParameters(model.Build(), "num_workers: 1 max_time_in_seconds: 10");
+   return CPSATSolution(*this, resp);
+ }
+ 
+--- a/lib/Dialect/RNS/IR/RNSDialect.td
++++ b/lib/Dialect/RNS/IR/RNSDialect.td
+@@ -24,7 +24,6 @@
+ 
+   let useDefaultTypePrinterParser = 1;
+   let useDefaultAttributePrinterParser = 1;
+-  let useStrictPropertiesInAssemblyFormat = 1;
+   let hasConstantMaterializer = 1;
+ }
+ 
+--- a/lib/Dialect/TfheRust/IR/TfheRustDialect.td
++++ b/lib/Dialect/TfheRust/IR/TfheRustDialect.td
+@@ -17,7 +17,6 @@
+   let cppNamespace = "::mlir::heir::tfhe_rust";
+ 
+   let useDefaultTypePrinterParser = 1;
+-  let useStrictPropertiesInAssemblyFormat = 1;
+ }
+ 
+ #endif  // LIB_DIALECT_TFHERUST_IR_TFHERUSTDIALECT_TD_

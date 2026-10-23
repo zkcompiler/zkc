@@ -20,6 +20,12 @@ struct RealizationWork {
   unsigned helperOperations = 100000;
   uint64_t helperSlots = 1000000;
   uint64_t polynomial = 100000;
+  // Optional whole-quotient planning is cumulative across entries and retries.
+  // It never borrows the mandatory coefficient construction/checking reserve.
+  unsigned quotientPlacements = 16;
+  uint64_t quotientInspection = 1000000;
+  uint64_t quotientConstruction = 100000;
+  uint64_t quotientSiteBytes = 16 * 1024 * 1024;
   unsigned finiteExpressions = 100000;
   // Separate cumulative reserve for discarded Kernel recipe construction.
   // Cap speculative copying/site construction by this reserve before copying.

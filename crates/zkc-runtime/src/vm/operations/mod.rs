@@ -13,6 +13,7 @@ pub(super) mod numerical;
 mod oracle;
 mod pcs;
 mod poly;
+mod quotient;
 mod random;
 mod relation;
 mod support;
@@ -206,6 +207,7 @@ fn installed() -> Result<&'static Registry> {
                 &external::CONTRIBUTION,
                 &field::CONTRIBUTION,
                 &index::CONTRIBUTION,
+                &quotient::CONTRIBUTION,
                 &matrix::CONTRIBUTION,
                 &numerical::CONTRIBUTION,
                 &oracle::CONTRIBUTION,

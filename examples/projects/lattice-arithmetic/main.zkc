@@ -1,0 +1,16 @@
+module example;
+use zkc::indices::{Indices};
+use zkc::quotient as quotient;
+use lattice;
+
+// A small arithmetic example. These parameters define no signature scheme.
+protocol Run roles(P)(public_key: Indices@P, challenge: Indices@P,
+    response: Indices@P, bound: index@P) -> (product: Indices@P, accepted: bool@P) {
+  let h = quotient::polynomial<17,4>(public_key);
+  let c = quotient::polynomial<17,4>(challenge);
+  let s = quotient::polynomial<17,4>(response);
+  return (product = quotient::coefficients(quotient::multiply(h, s)),
+    accepted = lattice::short_preimage(h, c, s, bound));
+}
+
+entry fn Arithmetic(inputs: Run::Inputs) { return Run::run(inputs); }

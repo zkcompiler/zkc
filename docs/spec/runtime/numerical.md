@@ -173,6 +173,13 @@ without interpreting an unused domain. Managed storage includes result staging/f
 loop steps, as for the single-opening operation; it is not elapsed time or a
 constant-time claim. This authored operation has its own admission profile.
 
+The [quotient-ring operations](../domains/quotient-rings.md) use the same private
+output scope over canonical `u64` coefficients. They admit complete ring,
+shape and residue checks before numerical work or destination allocation.
+Their owning contract defines the linear and quadratic work scores and exact
+managed payloads. The integer norm predicate has a scalar result and consumes
+no coefficient workspace. Published input aliases remain immutable.
+
 ## Pointwise expressions
 
 The compiler-generated `numerical.map`, `numerical.sum` and

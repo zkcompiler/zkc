@@ -4,6 +4,9 @@
 #include "../MathematicalSupport.h"
 #include "../RealizationSubject.h"
 #include "Support.h"
+#ifdef ZKC_ENABLE_HEIR
+#include "Quotient.h"
+#endif
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
@@ -39,6 +42,11 @@ class RecipeReader {
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            "numerical recipes differ"};
+  static bool representation(Type source, Type actual) {
+    return isa<algebra::QuotientType>(source)
+               ? isa<algebra::IndicesType>(actual)
+               : source == actual;
+  }
   bool charge(uint64_t amount = 1) {
     if (amount > remaining)
       return false;
@@ -149,7 +157,7 @@ class RecipeReader {
       } else {
         auto value = recipe(&op, at, operands);
         if (!value || op.getNumResults() != 1 ||
-            value.getType() != op.getResult(0).getType())
+            !representation(op.getResult(0).getType(), value.getType()))
           return failure();
         values[op.getResult(0)] = value;
       }
@@ -229,6 +237,31 @@ class RecipeReader {
       cursor = cursor->getNextNode();
       return value;
     };
+    if (isa<algebra::ObserveQuotientOp>(source))
+      return inputs[0];
+    if (isa<algebra::ProjectQuotientOp, algebra::AddQuotientOp,
+            algebra::SubtractQuotientOp, algebra::MultiplyQuotientOp>(source)) {
+      auto ring = cast<algebra::QuotientType>(source->getResult(0).getType());
+      const auto modulus = std::to_string(ring.getModulus());
+      auto q = take("index.constant", {}, {}, {modulus});
+      if (!q)
+        return {};
+      SmallVector<Value> args(inputs);
+      args.push_back(q);
+      if (isa<algebra::ProjectQuotientOp>(source)) {
+        const auto degree = std::to_string(ring.getDegree());
+        auto n = take("index.constant", {}, {}, {degree});
+        if (!n)
+          return {};
+        args.push_back(n);
+        return take("quotient.project", args);
+      }
+      if (isa<algebra::AddQuotientOp>(source))
+        return take("quotient.add", args);
+      if (isa<algebra::SubtractQuotientOp>(source))
+        return take("quotient.subtract", args);
+      return take("quotient.multiply", args);
+    }
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(source)) {
       auto col = interpretCollection(inputs[0].getType());
       SmallVector<StringRef> args;
@@ -498,6 +531,26 @@ public:
     };
     if (arguments.size() != entry.getNumArguments())
       return finish(false);
+#ifdef ZKC_ENABLE_HEIR
+    auto firstSite =
+        cursor ? cursor->getAttrOfType<StringAttr>("site") : StringAttr();
+    if (firstSite && firstSite.getValue().ends_with("_recipe_quotient_begin")) {
+      auto root = protocol::algorithmSite({{callSite.str(), "kernel"}}, "0",
+                                          remainingBytes);
+      if (!root) {
+        consumeError(root.takeError());
+        return finish(false);
+      }
+      bool exhausted = false;
+      auto result =
+          readQuotientExecution(entry, symbols.getOp(), *root, arguments,
+                                cursor, remaining, &exhausted, &remainingBytes);
+      if (failed(result) && exhausted)
+        finiteOutcome = {finite::VerificationStatus::RequiredCapacity,
+                         "quotient execution checking capacity"};
+      return succeeded(result) ? finish(true, *result) : finish(false);
+    }
+#endif
     llvm::DenseMap<Value, Value> values;
     for (auto [source, actual] : zip(entry.getArguments(), arguments)) {
       if (source.getType() != actual.getType())
@@ -624,14 +677,15 @@ public:
         return finish(false);
       // Primitive roots keep the original occurrence, while a finite recipe
       // has its documented traversal suffixes. No label establishes meaning.
-      if (!finite && !results.empty()) {
+      if (!finite && !results.empty() &&
+          !isa<algebra::ObserveQuotientOp>(resultSource)) {
         auto rootSite =
             results.back().getDefiningOp()->getAttrOfType<StringAttr>("site");
         if (!rootSite || rootSite.getValue() != *site)
           return finish(false);
       }
       for (auto [source, actual] : zip(resultSource->getResults(), results)) {
-        if (source.getType() != actual.getType())
+        if (!representation(source.getType(), actual.getType()))
           return finish(false);
         values[source] = actual;
       }

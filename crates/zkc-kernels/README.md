@@ -12,6 +12,7 @@ publication. The VM and kernels do not depend on each other.
 |---|---|
 | `field` | Minimal coefficient arithmetic shared by mathematical algorithms |
 | `vector`, `matrix`, `polynomial` | Provider-independent algorithms and checked views |
+| `polynomial::quotient` | Checked negacyclic rings, canonical coefficient arithmetic and exact paired integer norms |
 | `numerical`, `allocation` | Scoped work, managed payload reservations and fallible destinations |
 | `arkworks::bls12_381` | BLS12-381 scalars, G1/G2, pairings and nonhiding multilinear PCS |
 | `arkworks::bn254` | BN254 scalars, G1/G2, pairings and polynomial transforms |

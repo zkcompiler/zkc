@@ -102,6 +102,12 @@ native executable merely by being built. Optional ArkLib, generic
 [OpenVM relation](../../compiler/adapters/openvm/README.md) integrations keep their
 own manifests and toolchains. LLZK remains separate from the main compiler process.
 
+The optional [HEIR arithmetic library](../../compiler/external/heir/README.md)
+uses the main LLVM/MLIR version with pinned arithmetic sources and independent
+transform comparison. Its relocatable CMake package supports optional whole
+quotient calculations in the compiler and managed native execution. The package
+guide provides installation, compiler selection and regression commands.
+
 ## Contributor references
 
 | Task | Owner |

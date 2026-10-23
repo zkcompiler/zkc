@@ -199,7 +199,7 @@ bool emitMathematicalDeclarations(raw_ostream &os,
             intrinsic->getValueAsInt("naturals") >= 0 &&
             is_contained(identities, intrinsic->getValueAsDef("identity")) &&
             is_contained(ArrayRef<StringRef>{"Boolean", "Index", "Collection",
-                                             "Field", "Group"},
+                                             "Field", "Group", "Quotient"},
                          intrinsic->getValueAsString("domainKind")),
         intrinsic, "invalid mathematical intrinsic");
   os << "// Generated from neutral mathematical declarations. Do not edit.\n"

@@ -5,6 +5,15 @@ include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Algebra/IR/AlgebraDialect.td"
 include "zkc/Interfaces/Collection.td"
 
+// A mathematical quotient value has no native port or serialized encoding.
+def Quotient : TypeDef<AlgebraDialect, "Quotient"> {
+  let mnemonic = "quotient";
+  let summary = "formal element of (Z/qZ)[X]/(X^n+1)";
+  let parameters = (ins "uint64_t":$modulus, "uint64_t":$degree);
+  let assemblyFormat = "`<` $modulus `,` $degree `>`";
+  let genVerifyDecl = 1;
+}
+
 def Field : TypeDef<AlgebraDialect, "Field"> {
   let mnemonic = "field";
   let summary = "resolved field element";

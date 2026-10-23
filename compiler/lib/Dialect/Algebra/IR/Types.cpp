@@ -5,6 +5,14 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc {
+LogicalResult zkc::algebra::QuotientType::verify(
+    llvm::function_ref<InFlightDiagnostic()> emit, uint64_t modulus,
+    uint64_t degree) {
+  if (modulus < 2 || degree == 0)
+    return emit()
+           << "quotient requires modulus at least two and positive degree";
+  return success();
+}
 LogicalResult
 zkc::algebra::FieldType::verify(llvm::function_ref<InFlightDiagnostic()> e,
                                 StringRef d) {

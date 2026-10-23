@@ -131,6 +131,12 @@ def main():
     extra_includes, extra_libraries, extra_private = extra.includes, extra.libraries, extra.private
     extra_namespaces = {item.split("/")[0] for item in extra_includes}
     extra_libraries["ZkcLanguage"].add("utf8proc::utf8proc")
+    heir = manifest.parent / "heir-dependency.txt"
+    if heir.is_file():
+        enabled = heir.read_text().strip()
+        assert enabled in {"ON", "OFF"}, "invalid HEIR dependency selection"
+        if enabled == "ON":
+            extra_libraries["ZkcTransforms"].add("ZkcHeir::Admission")
     targets = {}
     owners = {}
     for line in manifest.read_text().splitlines():
@@ -209,7 +215,7 @@ def main():
     }
     private_headers["ZkcTransforms"].update(
         ROOT / f"lib/Transforms/Kernel/{name}.h"
-        for name in ("Support", "FrontierVerification", "NormalizationVerification", "Schedule")
+        for name in ("Support", "FrontierVerification", "NormalizationVerification", "Schedule", "Quotient")
     )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
@@ -348,6 +354,12 @@ def main():
                         assert extra.packages.get(path) == extra.packages[contribution], f"cross-package generated definitions: {path} -> {include}"
                     allowed = (implementation_owner == generated_owner if generated_owner else implementation_owner == "ZkcIR")
                     assert neutral or (allowed and path.suffix == ".cpp"), f"generated implementation outside its owner: {path} -> {include}"
+                if include == "zkc/heir/Admission.h":
+                    assert name == "ZkcTransforms" and path == ROOT / "lib/Transforms/Kernel/Quotient.h", "HEIR package API outside its private bridge"
+                    continue
+                if include.startswith("lib/Dialect/"):
+                    assert name == "ZkcTransforms" and path == ROOT / "lib/Transforms/Kernel/Quotient.cpp", "HEIR dialect API outside its private producer"
+                    continue
                 if include.startswith("zkc/"):
                     if path in supported_public:
                         assert "/detail/" not in include, f"public header exposes unsupported detail: {path} -> {include}"
@@ -388,7 +400,7 @@ def main():
     for reader in ("FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison", "NestedContractionVerification",
                    "HelperNormalizationVerification", "AlgorithmVerification",
-                   "Kernel/RecipeVerification"):
+                   "Kernel/RecipeVerification", "Kernel/QuotientVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

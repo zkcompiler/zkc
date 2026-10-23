@@ -1,0 +1,32 @@
+module zkc::quotient_math;
+
+use zkc::primitives::indices::{Indices};
+
+// A formal element of (Z/QZ)[X]/(X^N+1), with no native message encoding.
+pub type Element<Q: nat, N: nat> = formal("quotient", Q, N);
+
+// Total reduction, including empty inputs, long polynomials and large residues.
+pub math fn project<Q: nat, N: nat>(data: Indices) -> Element<Q, N>
+    where 2 <= Q, 1 <= N {
+  return intrinsic<Q,N>("quotient.value.project", data);
+}
+pub math fn coefficients<Q: nat, N: nat>(value: Element<Q, N>) -> Indices
+    where 2 <= Q, 1 <= N {
+  return intrinsic<Q,N>("quotient.value.coefficients", value);
+}
+pub math fn add<Q: nat, N: nat>(left: Element<Q,N>, right: Element<Q,N>) -> Element<Q,N>
+    where 2 <= Q, 1 <= N {
+  return intrinsic<Q,N>("quotient.value.add", left, right);
+}
+pub math fn subtract<Q: nat, N: nat>(left: Element<Q,N>, right: Element<Q,N>) -> Element<Q,N>
+    where 2 <= Q, 1 <= N {
+  return intrinsic<Q,N>("quotient.value.subtract", left, right);
+}
+pub math fn multiply<Q: nat, N: nat>(left: Element<Q,N>, right: Element<Q,N>) -> Element<Q,N>
+    where 2 <= Q, 1 <= N {
+  return intrinsic<Q,N>("quotient.value.multiply", left, right);
+}
+
+pub operator + = add;
+pub operator - = subtract;
+pub operator * = multiply;
