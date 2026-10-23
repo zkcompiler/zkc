@@ -506,7 +506,35 @@ def entries : List Entry := [
   ⟨"wellformed.gkr-rounds-representation", .wellFormedness,
     some `ZkcSecurity.Examples.Components.GkrRoundsGateRealization.Represents,
     "All four raw vectors decode to the retained factors, the reference is admissible for \
-    every future challenge prefix, and its cube size is below the logical index limit."⟩
+    every future challenge prefix, and its cube size is below the logical index limit."⟩,
+  ⟨"wellformed.canonical-model-admission", .wellFormedness,
+    some `ZkcSecurity.Claims.CanonicalModelAdmission,
+    "The request selects the authority's complete model entry and model elaboration \
+    succeeds for the same subject and application."⟩,
+  ⟨"wellformed.canonical-property-admission", .wellFormedness,
+    some `ZkcSecurity.Claims.CanonicalAdmission,
+    "Subject admission succeeds and the resolved property entry is exactly the \
+    authority's entry for the selected canonical property key."⟩,
+  ⟨"wellformed.author-extension-admission", .wellFormedness,
+    some `ZkcSecurity.Claims.AuthorExtensionAdmission,
+    "Subject admission succeeds and the requested author property identifier is not \
+    reserved by the canonical security authority."⟩,
+  ⟨"wellformed.gkr-rounds-prefix", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsResidual.Prefix,
+    "The state is reached from the fixed caller state by successive factor restrictions \
+    under arbitrary received coefficient triples and challenges."⟩,
+  ⟨"event.gkr-rounds-false-residual", .event,
+    some `ZkcSecurity.Examples.Components.GkrRoundsResidual.NoReturn,
+    "The complete returned ABI encodes a state at the fixed residual dimension that \
+    retains the caller-anchored prefix, factor representation and false residual."⟩,
+  ⟨"wellformed.round-occurrence-template", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.RoundDescriptor.templateValid,
+    "The template belongs to the selected Entry, has one repeat coordinate and contains \
+    only apply and repeat path steps."⟩,
+  ⟨"wellformed.round-origin-bases", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.RoundDescriptor.OriginBases.Valid,
+    "The four valid occurrence templates resolve to the exact low, high, challenge and \
+    delivery origins, with the selected field request and random-service contract."⟩
 ]
 
 /-- The registry as data of core types, for the declaration-record emitter:
