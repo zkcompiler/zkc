@@ -132,7 +132,9 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
     · trivial
 
 /-- A return is incompatible with terminal acceptance if either its original
-shape or its represented scalar is wrong. The premise permits every raw shape. -/
+shape or its represented scalar is wrong. The same contract retains the
+all-return length invariant, so consumers may use a source-normalized terminal
+expression. The premise permits every raw shape. -/
 noncomputable def run_rejecting
     [∀ event : Domain.Event (uniformCarriers F G), SampleableType (Domain.Raw event)]
     (field : String) (sites : Nominal.Schedule field)
@@ -143,26 +145,35 @@ noncomputable def run_rejecting
     (initial history : Domain.History (uniformCarriers F G))
     (wrong : raw.length = 2 ^ count → claim ≠ raw.sum) :
     Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
+      (fun _ final => (raw.length ≠ 2 ^ final.point.length ∨
+        final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum) ∧
+        final.point.length = count)
+      history (run field sites (List.range count) ⟨[], claim, initial⟩) := by
+  have residual : Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
       (fun _ final => raw.length ≠ 2 ^ final.point.length ∨
         final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum)
       history (run field sites (List.range count) ⟨[], claim, initial⟩) := by
-  by_cases shape : raw.length = 2 ^ count
-  · let state : ReferenceState F G (0 + count) := ⟨raw, [], claim, initial, by simpa using shape⟩
-    have head := run_residual field sites charge sampling (n := 0) count state history (by simpa only [state, PrefixState.entries, Zkc.Polynomial.Multilinear.restrictPrefixValues_nil] using wrong shape)
-    have sameRange : List.range' 0 count = List.range count := List.range_eq_range'.symm
-    simpa only [state, project, List.length_nil, sameRange] using
-      head.consequence (Weaker := fun _ final => raw.length ≠ 2 ^ final.point.length ∨
-        final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum) (fun reached final post => by
-        obtain ⟨last, originalEq, different, rfl⟩ := post
-        exact Or.inr (by simpa only [project, PrefixState.entries, originalEq] using different))
-  · let interaction : PIR.Interaction (Nominal.signature F field) :=
-      ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
-    have head := (ZkcSecurity.Obligations.unrestricted (absorb := Nominal.interface (G := G) field)
-      (charge := charge) (run field sites (List.range count) ⟨[], claim, initial⟩) history).frameReturns
-        interaction (fun final => final.point.length = count) () (by
-          simpa only [List.length_nil, Nat.zero_add, List.length_range] using
-            run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
-    exact head.consequence fun reached final post => Or.inl (by simpa only [post.2] using shape)
-
+    by_cases shape : raw.length = 2 ^ count
+    · let state : ReferenceState F G (0 + count) := ⟨raw, [], claim, initial, by simpa using shape⟩
+      have head := run_residual field sites charge sampling (n := 0) count state history (by simpa only [state, PrefixState.entries, Zkc.Polynomial.Multilinear.restrictPrefixValues_nil] using wrong shape)
+      have sameRange : List.range' 0 count = List.range count := List.range_eq_range'.symm
+      simpa only [state, project, List.length_nil, sameRange] using
+        head.consequence (Weaker := fun _ final => raw.length ≠ 2 ^ final.point.length ∨
+          final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum) (fun reached final post => by
+          obtain ⟨last, originalEq, different, rfl⟩ := post
+          exact Or.inr (by simpa only [project, PrefixState.entries, originalEq] using different))
+    · let interaction : PIR.Interaction (Nominal.signature F field) :=
+        ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
+      have head := (ZkcSecurity.Obligations.unrestricted (absorb := Nominal.interface (G := G) field)
+        (charge := charge) (run field sites (List.range count) ⟨[], claim, initial⟩) history).frameReturns
+          interaction (fun final => final.point.length = count) () (by
+            simpa only [List.length_nil, Nat.zero_add, List.length_range] using
+              run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
+      exact head.consequence fun reached final post => Or.inl (by simpa only [post.2] using shape)
+  let interaction : PIR.Interaction (Nominal.signature F field) :=
+    ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
+  exact residual.frameReturns interaction (fun final => final.point.length = count) () (by
+    simpa only [List.length_nil, Nat.zero_add, List.length_range] using
+      run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
 
 end ZkcSecurity.Families.Sumcheck.CompiledValidator

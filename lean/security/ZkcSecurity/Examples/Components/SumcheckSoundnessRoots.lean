@@ -43,16 +43,16 @@ open ZkcSecurity.Examples.Generated.SmallSumcheck
 abbrev Statement := validatorArtifacts.Statement blsScalarModel
 
 def presented (statement : Statement) : Domain.History carriers →
-    PIR.Process (Nominal.signature Scalar SmallSumcheck.Validator.field) (Domain.Result carriers) :=
+    PIR.Process (Nominal.signature Scalar ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field) (Domain.Result carriers) :=
   TypedABI.apply (Value := blsScalarModel.Value) (types := validatorArtifacts.publics)
-    (SmallSumcheck.Validator.presented (F := Scalar) (G := Scalar)) statement
+    (ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented (F := Scalar) (G := Scalar)) statement
 
 theorem bridge (statement : Statement) (initial : Domain.History carriers) :
-    DomainReduction.Bridge (Nominal.interface (G := Scalar) SmallSumcheck.Validator.field) (fun _ _ => True) initial
+    DomainReduction.Bridge (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field) (fun _ _ => True) initial
       (Domain.participant blsScalarModel validatorCompiled.imported.program validatorCompiled.selection.context
         validatorArtifacts.participant ((Domain.encodeValues statement).getD [] ++ [.transcript validatorCompiled.selection.context.suite initial]))
       (presented statement initial) := by
-  bind_subject_abi using SmallSumcheck.Validator.bridge
+  bind_subject_abi using ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.bridge
 
 /-- The source formula supplies the mathematical false-input condition. Shape
 and the source round guard are internal cases, not adversary restrictions. -/
@@ -60,33 +60,33 @@ noncomputable def false_input (raw : List Scalar) (claim : Scalar) (count : Nat)
     (falseStatement : validatorSubject.FalseStatement
       (ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.statement raw claim count))
     (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) SmallSumcheck.Validator.field)
+    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field)
       (boundedEscape (fun _ _ => price)) (fun _ result => SmallSumcheck.Soundness.Rejected result)
-      initial (SmallSumcheck.Validator.presented raw claim count initial) := by
+      initial (ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented raw claim count initial) := by
   by_cases allowed : count ≤ 2
   · exact SmallSumcheck.Soundness.derivation (fun _ _ => price)
-      (TableComponent.PrimeField.conditionalWithFrame blsModulus SmallSumcheck.Validator.field
-        (CompiledValidator.frameUpdate (F := Scalar) (G := Scalar) SmallSumcheck.Validator.field))
+      (TableComponent.PrimeField.conditionalWithFrame blsModulus ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field
+        (CompiledValidator.frameUpdate (F := Scalar) (G := Scalar) ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field))
       raw claim count initial (fun shape => by
         have bounded : raw.length < indexLimit := by
           rw [shape]
           exact lt_of_le_of_lt (Nat.pow_le_pow_right (by decide) allowed) (by decide +kernel)
         exact fun correct => ((SmallSumcheck.DomainTarget.false_iff raw claim count bounded).mp falseStatement) correct.symm)
-  · change Zkc.Obligations.Derivation _ _ _ _ (SmallSumcheck.Validator.presented raw claim count initial)
-    simp only [SmallSumcheck.Validator.presented, allowed, ite_false]
+  · change Zkc.Obligations.Derivation _ _ _ _ (ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented raw claim count initial)
+    simp only [ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented, allowed, ite_false]
     exact .halt .refused
 
 noncomputable def rejected (statement : Statement)
     (falseStatement : validatorSubject.FalseStatement statement) (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) SmallSumcheck.Validator.field)
+    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field)
       (boundedEscape (fun _ _ => price)) (fun _ result => SmallSumcheck.Soundness.Rejected result)
       initial (presented statement initial) := by
   bind_subject_abi using false_input
 
 noncomputable def installation : Claims.CompiledSoundness.Installation validatorSubject :=
   Claims.CompiledSoundness.Installation.typed
-    (Nominal.signature Scalar SmallSumcheck.Validator.field)
-    (Nominal.interface (G := Scalar) SmallSumcheck.Validator.field) (by rfl) presented bridge
+    (Nominal.signature Scalar ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field)
+    (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.field) (by rfl) presented bridge
 
 theorem costs (statement : Statement) (initial : Domain.History carriers) :
     Typed.ChargedCostBound installation.absorb (fun _ _ => price)
@@ -172,16 +172,16 @@ open ZkcSecurity.Examples.Generated.TwoSums
 abbrev Statement := validatorArtifacts.Statement blsScalarModel
 
 def presented (statement : Statement) : Domain.History carriers →
-    PIR.Process (Nominal.signature Scalar TwoSums.Validator.field) (Domain.Result carriers) :=
+    PIR.Process (Nominal.signature Scalar ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field) (Domain.Result carriers) :=
   TypedABI.apply (Value := blsScalarModel.Value) (types := validatorArtifacts.publics)
-    (TwoSums.Validator.presented (F := Scalar) (G := Scalar)) statement
+    (ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented (F := Scalar) (G := Scalar)) statement
 
 theorem bridge (statement : Statement) (initial : Domain.History carriers) :
-    DomainReduction.Bridge (Nominal.interface (G := Scalar) TwoSums.Validator.field) (fun _ _ => True) initial
+    DomainReduction.Bridge (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field) (fun _ _ => True) initial
       (Domain.participant blsScalarModel validatorCompiled.imported.program validatorCompiled.selection.context
         validatorArtifacts.participant ((Domain.encodeValues statement).getD [] ++ [.transcript validatorCompiled.selection.context.suite initial]))
       (presented statement initial) := by
-  bind_subject_abi using TwoSums.Validator.bridge
+  bind_subject_abi using ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.bridge
 
 /-- The source formula supplies the mathematical false-input condition. Shape
 and the source round guard are internal cases, not adversary restrictions. -/
@@ -189,13 +189,13 @@ noncomputable def false_input (left right : List Scalar) (leftClaim rightClaim :
     (falseStatement : validatorSubject.FalseStatement
       (ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement left right leftClaim rightClaim count))
     (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) TwoSums.Validator.field)
+    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field)
       (boundedEscape (fun _ _ => price)) (fun _ result => TwoSums.Soundness.Rejected result)
-      initial (TwoSums.Validator.presented left right leftClaim rightClaim count initial) := by
+      initial (ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented left right leftClaim rightClaim count initial) := by
   by_cases allowed : count ≤ 4
   · exact TwoSums.Soundness.derivation (fun _ _ => price)
-      (TableComponent.PrimeField.conditionalWithFrame blsModulus TwoSums.Validator.field
-        (CompiledValidator.frameUpdate (F := Scalar) (G := Scalar) TwoSums.Validator.field))
+      (TableComponent.PrimeField.conditionalWithFrame blsModulus ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field
+        (CompiledValidator.frameUpdate (F := Scalar) (G := Scalar) ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field))
       left right leftClaim rightClaim count initial (fun leftShape rightShape => by
         have leftBounded : left.length < indexLimit := by
           rw [leftShape]
@@ -205,21 +205,21 @@ noncomputable def false_input (left right : List Scalar) (leftClaim rightClaim :
           exact lt_of_le_of_lt (Nat.pow_le_pow_right (by decide) allowed) (by decide +kernel)
         have wrong := (TwoSums.DomainTarget.false_iff left right leftClaim rightClaim count leftBounded rightBounded).mp falseStatement
         simpa only [ne_eq, eq_comm] using wrong)
-  · change Zkc.Obligations.Derivation _ _ _ _ (TwoSums.Validator.presented left right leftClaim rightClaim count initial)
-    simp only [TwoSums.Validator.presented, allowed, ite_false]
+  · change Zkc.Obligations.Derivation _ _ _ _ (ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented left right leftClaim rightClaim count initial)
+    simp only [ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented, allowed, ite_false]
     exact .halt .refused
 
 noncomputable def rejected (statement : Statement)
     (falseStatement : validatorSubject.FalseStatement statement) (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) TwoSums.Validator.field)
+    Zkc.Obligations.Derivation (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field)
       (boundedEscape (fun _ _ => price)) (fun _ result => TwoSums.Soundness.Rejected result)
       initial (presented statement initial) := by
   bind_subject_abi using false_input
 
 noncomputable def installation : Claims.CompiledSoundness.Installation validatorSubject :=
   Claims.CompiledSoundness.Installation.typed
-    (Nominal.signature Scalar TwoSums.Validator.field)
-    (Nominal.interface (G := Scalar) TwoSums.Validator.field) (by rfl) presented bridge
+    (Nominal.signature Scalar ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field)
+    (Nominal.interface (G := Scalar) ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.field) (by rfl) presented bridge
 
 theorem costs (statement : Statement) (initial : Domain.History carriers) :
     Typed.ChargedCostBound installation.absorb (fun _ _ => price)

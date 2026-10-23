@@ -73,4 +73,14 @@ theorem terminal_rejects (raw point : List F) (scalar : F)
   · exact bad (by simpa only [Nat.mul_one] using shape.length)
   · exact bad same.symm
 
+/-- Source normalization may use the proved iteration count in the terminal
+shape test. Retain the loop length fact when transporting its rejection law. -/
+theorem terminal_rejects_at (raw point : List F) (scalar : F) (count : Nat)
+    (wrong : (raw.length ≠ 2 ^ point.length ∨
+      scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum) ∧ point.length = count) :
+    decide (PrimitiveLibrary.HasShape raw count 1 ∧
+      (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = scalar) = false := by
+  rw [← wrong.2]
+  exact terminal_rejects raw point scalar wrong.1
+
 end ZkcSecurity.Examples.Components.SumcheckValidatorHelpers

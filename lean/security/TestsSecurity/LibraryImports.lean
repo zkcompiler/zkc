@@ -81,8 +81,6 @@ import ZkcSecurity.Examples.Components.SmallSumcheckOrigins
 import ZkcSecurity.Examples.Components.SmallSumcheckReadback
 import ZkcSecurity.Examples.Components.SmallSumcheckReadbackRound
 import ZkcSecurity.Examples.Components.SmallSumcheckSoundness
-import ZkcSecurity.Examples.Components.SmallSumcheckValidator
-import ZkcSecurity.Examples.Components.SmallSumcheckValidatorRound
 import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
 import ZkcSecurity.Examples.Components.SumcheckSoundnessRoots
 import ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
@@ -96,9 +94,6 @@ import ZkcSecurity.Examples.Components.TwoSumsReadback
 import ZkcSecurity.Examples.Components.TwoSumsReadbackRounds
 import ZkcSecurity.Examples.Components.TwoSumsSoundness
 import ZkcSecurity.Examples.Components.TwoSumsTarget
-import ZkcSecurity.Examples.Components.TwoSumsValidator
-import ZkcSecurity.Examples.Components.TwoSumsValidatorLeftRound
-import ZkcSecurity.Examples.Components.TwoSumsValidatorRightRound
 import ZkcSecurity.Examples.EmbeddingEquality
 import ZkcSecurity.Examples.EmbeddingEqualityCapabilities
 import ZkcSecurity.Examples.EmbeddingEqualityClaims
@@ -108,8 +103,10 @@ import ZkcSecurity.Examples.EmbeddingEqualitySoundness
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 import ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds
+import ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView
 import ZkcSecurity.Examples.Generated.Components.TwoSumsABI
 import ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
+import ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView
 import ZkcSecurity.Examples.Generated.SmallSumcheck
 import ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims
 import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
@@ -202,6 +199,7 @@ import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.DomainAdaptive
 import ZkcSecurity.FiatShamir.DomainBinding
 import ZkcSecurity.FiatShamir.DomainCoherence
+import ZkcSecurity.FiatShamir.DomainComposition
 import ZkcSecurity.FiatShamir.DomainReading
 import ZkcSecurity.FiatShamir.DomainReduction
 import ZkcSecurity.FiatShamir.DomainUniform
@@ -226,6 +224,7 @@ import ZkcSecurity.FiatShamir.Typed
 import ZkcSecurity.Generation.RoundDescriptors
 import ZkcSecurity.Generation.SubjectABI.Command
 import ZkcSecurity.Generation.SubjectABI
+import ZkcSecurity.Generation.SumcheckViews
 import ZkcSecurity.HashChain.Bound
 import ZkcSecurity.HashChain.Bridge
 import ZkcSecurity.HashChain.Bytes
@@ -254,8 +253,10 @@ import ZkcSecurity.Stage.Joint
 import ZkcSecurity.Stage.Provider
 import ZkcSecurity.Stage.Relation
 import ZkcSecurity.Tools.ClaimConstruction
+import ZkcSecurity.Tools.ComponentBridge
 import ZkcSecurity.Tools.ComponentCost
 import ZkcSecurity.Tools.ComponentDerivation
+import ZkcSecurity.Tools.ComponentView
 import ZkcSecurity.Tools.PairConstruction
 import ZkcSecurity.Tools.SubjectABI
 import ZkcSecurity.VCVio.Composition
@@ -285,8 +286,10 @@ import TestsSecurity.Claims
 import TestsSecurity.CompiledRound
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompletenessClaimConstruction
+import TestsSecurity.ComponentBridge
 import TestsSecurity.ComponentCost
 import TestsSecurity.ComponentDerivation
+import TestsSecurity.ComponentView
 import TestsSecurity.Counterexamples.Couplings
 import TestsSecurity.Counterexamples.Encodings
 import TestsSecurity.Counterexamples.Gates
@@ -310,6 +313,7 @@ import TestsSecurity.GenerateCompletenessClaims
 import TestsSecurity.GenerateRoundDescriptors
 import TestsSecurity.GenerateSubjectABI
 import TestsSecurity.GenerateSubjects
+import TestsSecurity.GenerateSumcheckViews
 import TestsSecurity.GkrRoundsRealization
 import TestsSecurity.GkrRoundsReference
 import TestsSecurity.GkrRoundsResidual

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.SmallSumcheckValidator
+public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView
 public meta import ZkcSecurity.Tools.ComponentCost
 public meta import ZkcSecurity.Tools.ComponentDerivation
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness
@@ -24,7 +24,8 @@ open ZkcSecurity.Families.Sumcheck ZkcSecurity.Families.Sumcheck.TableComponent
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-abbrev field := Validator.field
+open ZkcSecurity.Examples.Generated.Components
+abbrev field := SmallSumcheckValidatorView.field
 abbrev compiled := ZkcSecurity.Examples.Generated.SmallSumcheck.validatorCompiled
 
 def Rejected (result : Domain.Result (uniformCarriers F G)) : Prop :=
@@ -39,10 +40,10 @@ noncomputable def derivation
     (raw : List F) (claim : F) (count : Nat) (initial : Domain.History (uniformCarriers F G))
     (wrong : raw.length = 2 ^ count → claim ≠ raw.sum) :
     Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
-      (fun _ result => Rejected result) initial (Validator.presented raw claim count initial) := by
-  derive_component_rejection [CompiledValidator.run_rejecting field ValidatorRound.sites charge sampling raw]
-    unfolding [Validator.presented, Validator.finish, CompiledValidator.carried, CompiledValidator.decode]
-    finishing (change some _ ≠ some true; simp (disch := assumption) only [SumcheckValidatorHelpers.terminal_rejects, Bool.false_and, Bool.and_false]; decide)
+      (fun _ result => Rejected result) initial (SmallSumcheckValidatorView.presented raw claim count initial) := by
+  derive_component_rejection [CompiledValidator.run_rejecting field SmallSumcheckRounds.round0.schedule charge sampling raw]
+    unfolding [SmallSumcheckValidatorView.presented]
+    finishing (change some _ ≠ some true; simp (disch := tauto) only [SumcheckValidatorHelpers.terminal_rejects_at, Bool.false_and, Bool.and_false]; decide)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
  theorem cost
@@ -50,9 +51,9 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
     (price : ENNReal) (priced : ∀ history origin, charge history (.challenge origin) ≤ price)
     (raw : List F) (claim : F) (count : Nat) (initial : Domain.History (uniformCarriers F G)) :
     Typed.ChargedCostBound (Nominal.interface (G := G) field) charge
-      (Validator.presented raw claim count initial) initial (2 • price) := by
+      (SmallSumcheckValidatorView.presented raw claim count initial) initial (2 • price) := by
   derive_component_cost [CompiledValidator.run_cost _ _ charge price priced] unfolding
-    [Validator.presented, Validator.finish, CompiledValidator.carried, CompiledValidator.decode]
+    [SmallSumcheckValidatorView.presented]
 
 #print axioms derivation
 #print axioms cost
