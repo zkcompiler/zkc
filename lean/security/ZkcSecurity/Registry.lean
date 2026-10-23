@@ -41,6 +41,8 @@ schemas are proposition-valued, and that every proposition-valued declaration of
 this package heading a premise of one of its theorems is registered. Schema
 names are written as plain names so that this module imports nothing that
 defines them; the audit, not elaboration, finds a stale name.
+Registration describes a theorem premise; it neither proves that premise nor
+authorizes its use as an assumption in a claim receipt.
 
 Registered endpoints map a covered semantic endpoint, a property and a statement
 form to the theorem that states that property for artifact-indexed evidence. An
@@ -394,7 +396,117 @@ def entries : List Entry := [
     "Calls that belong to one concrete attempt of a provider simulator."⟩,
   ⟨"wellformed.provider-runs", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Provider.Simulator.Runs,
-    "The runs of a provider simulator from a tape."⟩
+    "The runs of a provider simulator from a tape."⟩,
+  ⟨"family.sumcheck-message-laws", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.MessageLaws,
+    "Every wire message denotes a polynomial within the stated degree bound, with boundary \
+    and challenge evaluation equal to the wire operations."⟩,
+  ⟨"family.sumcheck-reference-laws", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.ReferenceLaws,
+    "At every admissible reference state, the round polynomial has the stated degree bound, \
+    its boundary is the current total, and evaluation gives the restricted total; every \
+    challenge preserves admissibility."⟩,
+  ⟨"family.sumcheck-honest-message", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.HonestMessageLaw,
+    "Every message satisfying the caller's delivery predicate denotes the reference round \
+    polynomial at the represented state."⟩,
+  ⟨"family.sumcheck-honest-execution", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.HonestRunLaws,
+    "At reached invariant states, message receipt succeeds and establishes delivery; the \
+    actual query and challenge delivery both return, preserving the next invariant with \
+    their full handler states and observations."⟩,
+  ⟨"family.sumcheck-conditional-agreement", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.QueryInterface.ConditionalBound,
+    "For every admissible represented state, arbitrary message and history, agreement of \
+    distinct polynomials within the two degree bounds under the actual decoded raw challenge \
+    has probability at most the charge of that history and query event."⟩,
+  ⟨"event.sumcheck-true-claim", .event,
+    some `ZkcSecurity.Families.Sumcheck.Representation.Yes,
+    "The represented reference state is admissible and the implementation's scalar claim \
+    equals its reference total."⟩,
+  ⟨"event.sumcheck-false-claim", .event,
+    some `ZkcSecurity.Families.Sumcheck.Representation.No,
+    "The represented reference state is admissible and the implementation's scalar claim \
+    differs from its reference total."⟩,
+  ⟨"event.honest-pair-relation", .event,
+    some `ZkcSecurity.Claims.HonestPair.Subject.Relation,
+    "The retained target's selectors read the subject's source inputs and its selected \
+    formula returns true on those arguments; a stopped formula does not satisfy this relation."⟩,
+  ⟨"event.honest-pair-success", .event,
+    some `ZkcSecurity.Claims.HonestPair.Subject.Success,
+    "Input preparation produces an observed pair execution in which both phases return, \
+    the validator consumes the entire generated proof, and its selected Boolean result is true."⟩,
+  ⟨"wellformed.sumcheck-admissible", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.Representation.Allowed,
+    "The mathematical reference state represented by the implementation state is admissible."⟩,
+  ⟨"wellformed.sumcheck-active-independent", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.FactorReference.ActiveIndependent,
+    "At every Boolean vertex, the caller's weight is independent of the active field \
+    challenge, including challenges outside the Boolean cube."⟩,
+  ⟨"wellformed.domain-reading", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.DomainReduction.ReadingTo,
+    "A derivation relates an actual Domain process to its typed transcript presentation \
+    at the given history, retaining query keys, typed replies and decoding, and establishing \
+    the specified postcondition on returned values."⟩,
+  ⟨"wellformed.domain-coherence", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.DomainReduction.CoherentTo,
+    "Every actual Domain query uses the reached observation history and a supported draw \
+    request; the derivation establishes the specified postcondition at each returned value."⟩,
+  ⟨"wellformed.domain-bridge", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.DomainReduction.Bridge,
+    "The actual Domain process has both the specified typed reading with its return \
+    postcondition and observation-history coherence with that same postcondition; \
+    source-to-artifact binding is separate."⟩,
+  ⟨"wellformed.sumcheck-round-connection", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.CompiledValidator.RoundConnection,
+    "At every round index, the actual low, high, challenge and delivery origins resolve \
+    to the selected schedule, and the admitted append helper returns the extended point."⟩,
+  ⟨"family.sumcheck-readback-helpers", .familyProperty,
+    some `ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound.HelperLaws,
+    "The actual admitted message, fold, projection and append helpers compute their \
+    specified mathematical results on every input admitted by their stated laws."⟩,
+  ⟨"wellformed.sumcheck-readback-loop", .wellFormedness,
+    some `ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound.loopInvariant,
+    "Both carried environments encode the same dimension-indexed prefix state and \
+    original table, with the remaining dimension bounded and the scalar equal to the residual sum."⟩,
+  ⟨"wellformed.sumcheck-source-helper-bodies", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.SumcheckDomainHelpers.Bodies,
+    "The admitted source program contains the exact sumcheck, prefix, terminal-check \
+    and table-check helper bodies with their complete checked dependencies."⟩,
+  ⟨"wellformed.honest-readback", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.Readback,
+    "A derivation aligns producer sends with typed validator receives and identical \
+    history/origin queries for every shared reply, retaining checkpoints and observations \
+    and requiring both processes to return values satisfying the paired postcondition."⟩,
+  ⟨"wellformed.honest-pair-input", .wellFormedness,
+    some `ZkcSecurity.Claims.HonestPair.Subject.HonestInput,
+    "The fixed request input policy and all retained source input clauses hold, and the \
+    exact source input projections encode both selected runtime ABIs with matching sorts."⟩,
+  ⟨"wellformed.honest-pair-nonvacuous", .wellFormedness,
+    some `ZkcSecurity.Claims.HonestPair.Nonvacuous,
+    "Some source input satisfies both the subject's retained target relation and its \
+    fixed honest input contract."⟩,
+  ⟨"wellformed.gkr-rounds-active-independent", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsReference.independent,
+    "At least one of the two retained wire factors is independent of the active challenge \
+    at every Boolean vertex."⟩,
+  ⟨"wellformed.gkr-rounds-admissible", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsReference.admissible,
+    "At every positive remaining dimension and after every possible future challenge \
+    prefix, at least one retained wire factor is independent of the active challenge; \
+    dimension zero has no further condition."⟩,
+  ⟨"wellformed.gkr-rounds-caller-layout", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsLayout.CallerLayout,
+    "The retained left and right wire factors are respectively a replicated table on the \
+    leading variables and a tiled table on the trailing variables at the stated split."⟩,
+  ⟨"wellformed.gkr-rounds-decoding", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsRealization.Decodes,
+    "The four raw vectors decode at the exact remaining dimension to the retained add, \
+    multiply, left-wire and right-wire factors separately."⟩,
+  ⟨"wellformed.gkr-rounds-representation", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrRoundsGateRealization.Represents,
+    "All four raw vectors decode to the retained factors, the reference is admissible for \
+    every future challenge prefix, and its cube size is below the logical index limit."⟩
 ]
 
 /-- The registry as data of core types, for the declaration-record emitter:
