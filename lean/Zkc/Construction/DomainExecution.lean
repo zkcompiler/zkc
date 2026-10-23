@@ -285,3 +285,11 @@ def participant (model : Structured.DomainModel) (program : Structured.Program)
     else .halt .refused
 
 end Zkc.Construction.Domain
+
+-- Equation lemmas belong to their defining module. Materializing them here
+-- prevents independent clients from storing different private proofs under
+-- the same public equation name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.Value.decode
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.decodeValues
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.encodeValues
