@@ -2,6 +2,7 @@
 #include "../Transforms/Kernel/Support.h"
 #include "../Transforms/NumericalLowering.h"
 #include "../Transforms/NumericalSelection.h"
+#include "ImplementationPlan.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Operations.h"
@@ -20,49 +21,6 @@ using namespace llvm;
 using namespace mlir;
 using namespace zkc::protocol;
 namespace zkc::target {
-namespace {
-std::string structure(ModuleOp module) {
-  std::string result;
-  raw_string_ostream out(result);
-  module->print(out, OpPrintingFlags().printGenericOpForm().enableDebugInfo());
-  return result;
-}
-SmallVector<const void *> identities(ModuleOp module) {
-  SmallVector<const void *> result;
-  module->walk<WalkOrder::PreOrder>([&](Operation *op) {
-    result.push_back(op);
-    for (auto &region : op->getRegions())
-      for (auto &block : region) {
-        result.push_back(&block);
-        for (auto arg : block.getArguments())
-          result.push_back(arg.getAsOpaquePointer());
-      }
-    for (auto value : op->getResults())
-      result.push_back(value.getAsOpaquePointer());
-  });
-  return result;
-}
-} // namespace
-struct InputSnapshot {
-  ModuleOp subject;
-  std::string contents;
-  SmallVector<const void *> addresses;
-  protocol::Assignments selections;
-  bool linearContractions;
-  MathematicalSelectionPolicy numericalPolicy;
-  // This owned payload is the numerical decision, including actual recipes,
-  // generated bindings, sites and SSA. Policy flags are not a replay format.
-  // Accessible only inside Target; callers can obtain independent clones.
-  OwningOpRef<ModuleOp> numerical;
-  Error check(ModuleOp module) const {
-    // Compare only fresh live IR against opaque saved addresses. Never walk or
-    // dereference a saved operation/value, including after erasure/replacement.
-    if (module != subject || identities(module) != addresses ||
-        structure(module) != contents)
-      return error("binding-stale-selection");
-    return Error::success();
-  }
-};
 SmallVector<Operation *> physicalPlanOperations(ModuleOp module) {
   SmallVector<Operation *> result;
   module->walk<WalkOrder::PreOrder>(
@@ -70,14 +28,14 @@ SmallVector<Operation *> physicalPlanOperations(ModuleOp module) {
   return result;
 }
 Error CheckedPhysicalPlan::checkInput(ModuleOp module) const {
-  return plan.input->check(module);
+  return plan.implementation->checkInput(module);
 }
 Expected<ModuleOp> PhysicalPlan::selectedSubject(ModuleOp source) const {
-  if (!input)
+  if (!implementation)
     return error("binding-stale-selection");
-  if (auto e = input->check(source))
+  if (auto e = implementation->checkInput(source))
     return e;
-  return input->numerical ? *input->numerical : source;
+  return implementation->subject(source);
 }
 Expected<OwningOpRef<ModuleOp>>
 PhysicalPlan::cloneSelectedSubject(ModuleOp source) const {
@@ -726,14 +684,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   }
   if (!requests.empty())
     return error("binding-unknown-selection");
-  auto input = std::make_shared<InputSnapshot>(
-      InputSnapshot{module,
-                    structure(module),
-                    identities(module),
-                    protocol::Assignments(selections.begin(), selections.end()),
-                    options.linearContractions,
-                    options.numericalPolicy,
-                    {}});
+  auto implementation = std::make_shared<ImplementationPlan>(
+      module, selections, options.numericalPolicy);
   bool hasKernels = false, hasMaps = false;
   root.walk([&](Operation *op) {
     hasKernels |= isa<kernel::ModuleOp, kernel::CallOp>(op);
@@ -884,7 +836,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
           return error("binding-operation");
       }
     }
-    if (auto e = input->check(module))
+    if (auto e = implementation->checkInput(module))
       return e;
     selection.failure = {};
     selection.bindingCursors.clear();
@@ -939,11 +891,12 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       refusal = error("mathematical-analysis-limit");
     }
     if (!refusal) {
-      if (auto e = input->check(module))
+      if (auto e = implementation->checkInput(module))
         return e;
       selection.numerical.origins.clear();
-      input->numerical = std::move(candidate);
-      plan.input = input;
+      implementation->realization = std::move(candidate);
+      plan.implementation = implementation;
+      plan.linearContractions = options.linearContractions;
       return plan;
     }
     const auto &failure = selection.failure;
@@ -1128,23 +1081,12 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
                                                const CandidateCatalog &catalog,
                                                Location *failureLocation) {
   locate(failureLocation, module);
-  if (!plan.input)
+  if (!plan.implementation)
     return error("binding-stale-selection");
-  if (auto e = plan.input->check(module))
+  // Validate the source-to-implementation edge before physical choices.
+  if (auto e = plan.implementation->verifyRealization(module))
     return e;
-  // Check the original Kernel-bearing source independently against the exact
-  // retained Local payload, before checking any installed physical choices.
-  // This reader does not emit or select numerical recipes.
-  if (failed(verify(module)))
-    return error("binding-operation");
-  ModuleOp selected = module;
-  if (plan.input->numerical) {
-    selected = *plan.input->numerical;
-    if (failed(mathematical::verifyNumericalLowering(
-            module, selected, plan.input->numericalPolicy,
-            plan.input->selections)))
-      return error("numerical-lowering-correspondence");
-  }
+  ModuleOp selected = plan.implementation->subject(module);
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());
   auto operations = physicalPlanOperations(selected);
@@ -1159,7 +1101,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-plan-coverage");
 
   std::map<std::string, std::string> requests;
-  for (const auto &[key, implementation] : plan.input->selections)
+  for (const auto &[key, implementation] : plan.implementation->selections())
     if (!requests.emplace(key, implementation).second)
       return error("binding-duplicate-selection");
   std::set<std::string> symbols;
@@ -1360,9 +1302,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   LinearContractionStats stats;
   for (const auto &group : plan.contractions) {
     locate(failureLocation, root);
-    if (!plan.input->linearContractions ||
-        group.producer >= operations.size() || group.producer <= previous ||
-        group.consumers.empty())
+    if (!plan.linearContractions || group.producer >= operations.size() ||
+        group.producer <= previous || group.consumers.empty())
       return error("binding-contraction");
     previous = group.producer;
     auto actual = checkAllUses(operations[group.producer], plan, indices,
@@ -1408,13 +1349,13 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-plan-coverage");
   // Statistics use the existing opportunity analysis, never as the validator's
   // all-uses or group-completeness oracle above.
-  if (plan.input->linearContractions)
+  if (plan.linearContractions)
     for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
       (void)findLinearContractions(function, stats);
   if (auto e = validateStorage(selected, plan.operations, plan.releases,
                                failureLocation))
     return e;
-  if (auto e = plan.input->check(module))
+  if (auto e = plan.implementation->checkInput(module))
     return e;
   return CheckedPhysicalPlan(plan, stats);
 }

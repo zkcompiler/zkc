@@ -8,6 +8,7 @@ the alternatives, the reason for choosing, and the cost that remains.
 | Question | Record |
 |---|---|
 | Why separate the MLIR compiler, Rust runtime and Lean models? | [System boundaries](architecture.md) |
+| Why consolidate operations across profiles while retaining domain dialects? | [Dialect ownership](dialect-ownership.md) |
 | Why keep mathematics in ordinary SSA? | [Mathematical IR](mathematical-ir.md) |
 | Why check actual transformation results? | [Validation](validation.md) |
 | Why must projection preserve explicit communication? | [Participant generation](participant-generation.md) |

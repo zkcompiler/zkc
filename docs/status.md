@@ -51,7 +51,7 @@ computation authority remain in `zkc`. The
 
 Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
 ordered Local invocations. Preparation and participant demand lowering form
-units; the physical plan retains those units alongside the selected Local
+units; a retained implementation owner keeps those units alongside the selected Local
 candidate until independent numerical and physical checks permit publication.
 Export receives the resulting physical program without Kernel operations.
 Normalization and numerical recipe checking consume Kernel-owned standard

@@ -19,7 +19,7 @@ llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp, mlir::ModuleOp,
                                           const target::CheckedPhysicalPlan &);
 }
 namespace zkc::target {
-struct InputSnapshot;
+class ImplementationPlan;
 class PhysicalPlan;
 using OperationIndex = size_t;
 using BindingIndex = size_t;
@@ -92,11 +92,13 @@ struct PhysicalPlanOptions {
   MathematicalSelectionPolicy numericalPolicy = {};
 };
 class PhysicalPlan {
-  // Own the original identity/content snapshot and, for numerical input, the
-  // actual selected Local payload. Copies share private immutable state; no
+  // Share the source-bound implementation independently of physical bindings.
+  // It owns original identity and the selected executable realization.
+  // Copies share private immutable state; no
   // public MLIR handle can mutate the retained payload. The original module
   // and its MLIR context must remain live when checking or materializing.
-  std::shared_ptr<const InputSnapshot> input;
+  std::shared_ptr<const ImplementationPlan> implementation;
+  bool linearContractions = false;
   friend llvm::Expected<PhysicalPlan>
   proposePhysical(mlir::ModuleOp, const CandidateCatalog &,
                   llvm::ArrayRef<std::pair<std::string, std::string>>,

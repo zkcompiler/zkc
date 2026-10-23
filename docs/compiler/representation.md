@@ -80,6 +80,25 @@ policy can reorder or withhold them. Registration order grants no preference.
 Adding implementations can change an automatically selected artifact, whose
 recorded physical choices determine execution costs and limits.
 
+## Retained implementation ownership
+
+The source-to-implementation edge has one internal owner, `ImplementationPlan`.
+It retains the exact source identity and contents, numerical selection policy,
+explicit implementation requests and the actual selected executable realization.
+Physical proposals share that immutable owner and separately record bindings,
+ports, conversions, contractions and storage releases. Inspection returns owned
+copies; modifying an inspection copy cannot change a checked implementation.
+
+Validation first checks source freshness and independently compares the retained
+numerical realization, then checks physical decisions against that same subject.
+Materialization applies the checked decisions without selecting numerical recipes
+again. The present realization is a Local/provider program. This boundary does
+not define a foreign ABI or admit generated machine code. Synchronous calls use
+the existing [managed numerical contract](../spec/runtime/numerical.md).
+
+See [dialect ownership](../rationale/dialect-ownership.md) for why semantic
+boundaries and physical representations do not need separate copies of every op.
+
 ## Scheduled lifetimes
 
 Structured Local control and selected Plan operations form the executable
