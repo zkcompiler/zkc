@@ -35,7 +35,7 @@ Expected<ModuleOp> PhysicalPlan::selectedSubject(ModuleOp source) const {
     return error("binding-stale-selection");
   if (auto e = implementation->checkInput(source))
     return e;
-  return implementation->subject(source);
+  return implementation->subject();
 }
 Expected<OwningOpRef<ModuleOp>>
 PhysicalPlan::cloneSelectedSubject(ModuleOp source) const {
@@ -1086,7 +1086,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // Validate the source-to-implementation edge before physical choices.
   if (auto e = plan.implementation->verifyRealization(module))
     return e;
-  ModuleOp selected = plan.implementation->subject(module);
+  ModuleOp selected = plan.implementation->subject();
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());
   auto operations = physicalPlanOperations(selected);

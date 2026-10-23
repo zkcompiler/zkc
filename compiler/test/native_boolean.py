@@ -55,6 +55,21 @@ for optimize in (False, True):
         return re.findall(r'"local.bool_constant"\(\) <\{([^}]+)\}>', text)
     logical_literals = literals(bound)
     assert logical_literals and logical_literals == literals(physical)
+    # Even unused literals are reached work, so generic simplification must
+    # preserve their values, sites and order in both executable profiles.
+    for subject, literal_type in ((bound, "i1"),
+                                  (physical, '!plan.data<i1, "native.bool/0">')):
+        with_unused, changed = re.subn(
+            r'(local\.func[^\n]+\{\n)',
+            r'\1      %unused_literal = "local.bool_constant"() '
+            '{site="unused_literal", value=true} : () -> ' + literal_type + '\n',
+            subject, count=1)
+        assert changed == 1
+        admitted = commands.verified(with_unused)
+        before = literals(admitted)
+        assert len(before) == len(logical_literals) + 1
+        simplified = commands.verified(admitted, None, "--canonicalize", "--cse")
+        assert literals(simplified) == before
     # Each representation is valid alone, but not in the opposite profile.
     # An unused literal isolates admission from operand/signature mismatches.
     for subject, wrong_type in ((bound, '!plan.data<i1, "native.bool/0">'),
@@ -92,7 +107,6 @@ for predicate in ("ult", "ule", "ugt", "uge", "slt", "sle", "sgt", "sge"):
     commands.verified(source.replace("cmpi eq", "cmpi " + predicate), "mathematical-dependencies", "--canonicalize", "--cse")
 commands.verified(source.replace("%true = arith.constant true", "%unused = arith.constant 0 : i32\n    %true = arith.constant true"), "mathematical-dependencies", "--canonicalize", "--cse")
 commands.verified(source.replace("arith.andi %a, %b : i1", "arith.andi %a, %b {trusted=true} : i1"), "mathematical-formation")
-print(f"Boolean truth tables and native carrier boundaries: {commands.save()}")
 
 # Exercise recipes on already projected participant programs, bypassing common folding.
 endpoint = commands.verified(source, None, "--zkc-project-protocol")
@@ -129,7 +143,6 @@ for label, parameters, signature, roles, expression, expected in [
     c = json.loads(commands.source("protocol-export", commands.verified(bound, None, "--zkc-select-physical")))
     assert evaluate(c, [] if not parameters else [False]) == [expected]
     (out / (label + ".json")).write_text(json.dumps(c))
-print(f"Direct binding and generated literal checks: {commands.save()}")
 
 # Reusing the Boolean condition as a selected arm is legal even without folding.
 mutant, changed = re.subn(r"arith.select (%[a-zA-Z0-9_]+), %[a-zA-Z0-9_]+, (%[a-zA-Z0-9_]+) : i1", r"arith.select \1, \1, \2 : i1", endpoint, count=1)
@@ -148,10 +161,13 @@ for length in (128, 129):
     canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name')
 
 # Operation verification admits only logical Boolean or its exact native port.
-for wrong_type in ("i8", "i64", "f32", "si1", "ui1"):
+for wrong_type in ("i8", "i64", "f32", "si1", "ui1",
+                   '!plan.data<i1, "native.index/0">',
+                   '!plan.data<i64, "native.bool/0">'):
     commands.verified(
         'module { %v = "local.bool_constant"() {value=true, site="literal"}'
         f' : () -> {wrong_type} }}', "native-boolean-type")
 # A removed operation spelling is not a compatibility input.
 commands.verified(physical.replace("local.bool_constant", "plan.bool_constant"),
                   "unregistered operation")
+print(f"Boolean execution and representation checks: {commands.save()}")

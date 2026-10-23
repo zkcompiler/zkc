@@ -46,8 +46,8 @@ Error ImplementationPlan::checkInput(ModuleOp module) const {
     return error("binding-stale-selection");
   return Error::success();
 }
-ModuleOp ImplementationPlan::subject(ModuleOp original) const {
-  return realization ? *realization : original;
+ModuleOp ImplementationPlan::subject() const {
+  return realization ? *realization : source;
 }
 Error ImplementationPlan::verifyRealization(ModuleOp original) const {
   if (auto e = checkInput(original))

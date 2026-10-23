@@ -88,6 +88,10 @@ explicit implementation requests and the actual selected executable realization.
 Physical proposals share that immutable owner and separately record bindings,
 ports, conversions, contractions and storage releases. Inspection returns owned
 copies; modifying an inspection copy cannot change a checked implementation.
+The owner borrows the original module and owns the selected realization when
+there is one. The original module and its MLIR context must remain live through
+validation and materialization. Source identity and contents are freshness
+guards, not a replacement for that lifetime requirement.
 
 Validation first checks source freshness and independently compares the retained
 numerical realization, then checks physical decisions against that same subject.
@@ -95,6 +99,11 @@ Materialization applies the checked decisions without selecting numerical recipe
 again. The present realization is a Local/provider program. This boundary does
 not define a foreign ABI or admit generated machine code. Synchronous calls use
 the existing [managed numerical contract](../spec/runtime/numerical.md).
+
+Numerical proposal and physical feasibility remain one selection transaction.
+Separating their retained state does not create a second search or a separately
+committed numerical choice: a physical refusal can still change the implicated
+numerical realization within the shared work budget.
 
 See [dialect ownership](../rationale/dialect-ownership.md) for why semantic
 boundaries and physical representations do not need separate copies of every op.

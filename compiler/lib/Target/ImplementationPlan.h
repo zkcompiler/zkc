@@ -32,8 +32,8 @@ class ImplementationPlan {
   friend llvm::Expected<CheckedPhysicalPlan>
   validatePhysical(mlir::ModuleOp, const PhysicalPlan &,
                    const CandidateCatalog &, mlir::Location *);
-  /// Borrow only inside the selection/validation owner after checking input.
-  mlir::ModuleOp subject(mlir::ModuleOp original) const;
+  /// Borrow the retained realization or original source after checking input.
+  mlir::ModuleOp subject() const;
 
 public:
   ImplementationPlan(mlir::ModuleOp,
