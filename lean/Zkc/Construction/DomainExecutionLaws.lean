@@ -50,6 +50,31 @@ theorem service_refused (contract : String) (value : Value carriers) :
 
 end Value
 
+/-- Every declared data coordinate has a nominal runtime encoding. Service
+handles are excluded by the admitted ABI, not by a protocol truth premise. -/
+theorem Value.encode_exists {ty : Structured.Ty} (data : dataType ty = true)
+    (input : carriers.Value ty) : ∃ encoded, Value.encode ty input = some encoded := by
+  cases ty <;> simp_all [dataType, Value.encode, Payload.ofValue]
+
+theorem encodeValues_exists {tys : List Structured.Ty}
+    (input : Values carriers.Value tys) (data : tys.all dataType = true) :
+    ∃ encoded, encodeValues input = some encoded := by
+  induction input with
+  | nil => exact ⟨[], rfl⟩
+  | cons head tail ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at data
+    obtain ⟨encodedHead, headEq⟩ := Value.encode_exists data.1 head
+    obtain ⟨encodedTail, tailEq⟩ := ih data.2
+    exact ⟨encodedHead :: encodedTail, by simp [encodeValues, headEq, tailEq]⟩
+
+/-- A total presentation of an admitted public row, with its exact partial
+encoder equation. No fallback branch can occur under the checked type list. -/
+theorem encodeValues_getD {tys : List Structured.Ty}
+    (input : Values carriers.Value tys) (data : tys.all dataType = true) :
+    encodeValues input = some ((encodeValues input).getD []) := by
+  obtain ⟨encoded, found⟩ := encodeValues_exists input data
+  simp only [found, Option.getD_some]
+
 theorem decodeValues_encodeValues {tys : List Structured.Ty}
     {input : Values carriers.Value tys} {encoded : Environment carriers}
     (ok : encodeValues input = some encoded) : decodeValues tys encoded = some input := by

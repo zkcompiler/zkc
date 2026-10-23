@@ -3,6 +3,7 @@ import Zkc
 import Zkc.Algebra.RingExpression.Basic
 import Zkc.Algebra.RingExpression
 import Zkc.Claims.Capability
+import Zkc.Claims.ClosedString
 import Zkc.Claims.Expressions
 import Zkc.Claims.Interactive
 import Zkc.Claims.Methods
@@ -20,6 +21,7 @@ import Zkc.Construction.DomainCorrespondence
 import Zkc.Construction.DomainExecution
 import Zkc.Construction.DomainExecutionLaws
 import Zkc.Construction.DomainProducer
+import Zkc.Construction.DomainPublicBinding
 import Zkc.Construction.DomainTranscript
 import Zkc.Construction.DomainView
 import Zkc.Construction.DomainViewLaws
@@ -159,6 +161,7 @@ import Zkc.Source.Structured.Availability
 import Zkc.Source.Structured.Bindings.Assembly
 import Zkc.Source.Structured.Bindings.Component
 import Zkc.Source.Structured.Bindings.Selection
+import Zkc.Source.Structured.BodyBindings
 import Zkc.Source.Structured.Catalogue
 import Zkc.Source.Structured.CatalogueJustification
 import Zkc.Source.Structured.Checked
@@ -242,6 +245,7 @@ import Zkc.Source.Structured.ReplyScript
 import Zkc.Source.Structured.Table
 import Zkc.Source.Structured.UnitViews
 import Zkc.Source.Structured.Vocabulary
+import Zkc.Source.TypedABI
 import Zkc.Specification
 import Zkc.Transcript.Budget
 import Zkc.Transcript.Interface
@@ -252,6 +256,7 @@ import Tests.AuthoredPairSnapshots
 import Tests.ClaimReporting
 import Tests.Claims
 import Tests.ClaimsInteractive
+import Tests.ClosedString
 import Tests.CommonRegion
 import Tests.Component
 import Tests.Constructed.Generate
@@ -317,6 +322,7 @@ import Tests.StructuredBindings
 import Tests.StructuredBindingsGenerator
 import Tests.StructuredBindingsGeneric
 import Tests.StructuredBindingsSources
+import Tests.StructuredBodyBindings
 import Tests.StructuredBounds
 import Tests.StructuredCatalogue
 import Tests.StructuredComponents

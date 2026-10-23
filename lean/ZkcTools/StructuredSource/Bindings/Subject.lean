@@ -110,4 +110,49 @@ def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
     "#print axioms completeReceipt", "",
     "end " ++ output.moduleName, ""]
 
+/-- Physical registration for a domain subject. The descriptor chooses existing
+exports, not a security proposition, numerical bound, schedule or proof script.
+Those come from the fixed request and registered theorem, checked by Lean. -/
+structure DomainClaimLibraryOutput where
+  moduleName : String
+  imports : List String
+  subjectExpression : String
+  artifactsExpression : String
+  capabilitiesExpression : String
+  applicationParameter : Option String := none
+  theoremMethods : List (String × Nat × String)
+  theoremNormalization : List String := []
+
+def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
+  let parameter := if output.applicationParameter.isSome then " (application : String)" else ""
+  let argument := if output.applicationParameter.isSome then " application" else ""
+  let context := match output.applicationParameter with
+    | none => "ModelContext.empty"
+    | some name => "ModelContext.parameter " ++ Presentation.quoted name ++ " application"
+  "\n".intercalate (["module", ""] ++
+    output.imports.map ("public import " ++ ·) ++ [
+    "public import ZkcSecurity.Tools.ClaimConstruction", "",
+    "@[expose] public section", "",
+    "/-! Generated physical registration. Canonical authority fixes the meaning;",
+    "theorem exports are applied without per-request proof wrappers. -/",
+    "set_option autoImplicit false", "noncomputable section", "",
+    "namespace " ++ output.moduleName,
+    "open Zkc.Claims ZkcSecurity.Claims", "",
+    "abbrev subject := " ++ output.subjectExpression,
+    "abbrev capabilities := " ++ output.capabilitiesExpression,
+    "def authority := CanonicalAuthority.domains " ++
+      Presentation.paren output.artifactsExpression ++ " capabilities", "",
+    "def modelContext" ++ parameter ++ " : ModelContext := " ++ context,
+    "def models" ++ parameter ++ " : Registry authority.ModelExport :=",
+    "  ⟨[authority.modelEntry (modelContext" ++ argument ++ ")]⟩",
+    "def properties" ++ parameter ++ " := authority.properties (models" ++ argument ++ ")", "",
+    "def library : ZkcSecurity.Tools.ClaimConstruction.Library where",
+    "  subject := ``subject", "  authority := some ``authority",
+    "  context := some ``modelContext", "  properties := ``properties", "  models := ``models",
+    "  normalization := [``authority, ``modelContext, ``properties, ``models]",
+    "  theoremNormalization := [" ++ ", ".intercalate (output.theoremNormalization.map ("``" ++ ·)) ++ "]",
+    "  theoremMethods := [" ++ ",\n    ".intercalate (output.theoremMethods.map fun (name, version, theoremName) =>
+      "(⟨" ++ Presentation.quoted name ++ ", " ++ toString version ++ "⟩, ``" ++ theoremName ++ ")") ++ "]",
+    "", "end " ++ output.moduleName, ""])
+
 end ZkcTools.StructuredSource.Bindings

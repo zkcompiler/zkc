@@ -33,12 +33,18 @@ theorem publicValue_injective : ∀ ty : Ty,
   | .group _, _, _, same => by simpa [publicValue] using same
   | .service _, _, _, same => by simpa [publicValue] using same
 
+/-- Decimal source coordinates cover every Nat, without bounded-port truncation. -/
+theorem coordinate_injective : Function.Injective (toString : Nat → String) := by
+  intro first second same
+  have decoded := congrArg (fun text : String => Nat.ofDigitChars 10 text.toList 0) same
+  simpa only [Nat.toString_eq_repr, Nat.toList_repr, Nat.ofDigitChars_ten_toDigits] using decoded
+
 /-- Mandatory arity prevents truncation, including when the last value is absent. -/
 def row : (positions : List Nat) → {tys : List Ty} → (values : Values carriers.Value tys) →
     positions.length = tys.length → Row (Payload carriers)
   | [], [], .nil, _ => []
   | position :: positions, _ :: _, .cons value rest, arity =>
-      (decimal position, publicValue _ value) :: row positions rest (by simpa using arity)
+      (toString position, publicValue _ value) :: row positions rest (by simpa using arity)
 
 theorem row_injective : ∀ (positions : List Nat) {tys : List Ty}
     (arity : positions.length = tys.length),

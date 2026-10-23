@@ -7,7 +7,7 @@ public meta import Lean
 /-! Read closed string data from checked expressions. Only standard string
 concatenation and natural-number formatting are interpreted; unresolved terms
 are refused. Pretty-printed text is never treated as a semantic identifier. -/
-namespace ZkcTools.ClosedString
+namespace Zkc.Claims.ClosedString
 open Lean Meta
 
 /-- Reduction can discard irrelevant semantic fields of a noncomputable record.
@@ -33,13 +33,15 @@ def read : Nat → Expr → MetaM String
       let some value ← getNatValue? (← withTransparency .all (whnf natural))
         | throwError "closed string contains an unresolved natural"
       return toString value
-    let reduced ← withTransparency .all <| withCanUnfoldPred (fun config info => do
-      if [``HAppend.hAppend, ``String.append, ``toString, ``Nat.repr].contains info.name then
-        return false
-      canUnfoldDefault config info)
-      (whnf expression)
+    -- Stop only at the selected field's formatting operation. Internal
+    -- reductions still compare computed lookup keys before selecting a field.
+    -- A global unfolding ban would also block those comparisons; unrestricted
+    -- root reduction would instead expose String's byte-array implementation.
+    let reduced ← withTransparency .all <| whnfHeadPred expression fun term =>
+      pure (!(term.isAppOf ``HAppend.hAppend || term.isAppOf ``String.append ||
+        term.isAppOf ``toString || term.isAppOf ``Nat.repr))
     if reduced == expression then
       throwError "claim data contains an unresolved string: {expression}"
     read fuel reduced
 
-end ZkcTools.ClosedString
+end Zkc.Claims.ClosedString
