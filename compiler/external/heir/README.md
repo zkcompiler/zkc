@@ -58,6 +58,7 @@ optional package. To enable it in an existing compiler configuration:
 ```sh
 cmake -S compiler -B build/compiler -DZKC_ENABLE_HEIR=ON \
   -DZkcHeirArithmetic_DIR=/path/to/heir-sdk/lib/cmake/ZkcHeirArithmetic \
+  -DCMAKE_PREFIX_PATH=/path/to/ortools \
   -Dortools_DIR=/path/to/ortools/lib/cmake/ortools
 cmake --build build/compiler --parallel 2
 ctest --test-dir build/compiler --output-on-failure

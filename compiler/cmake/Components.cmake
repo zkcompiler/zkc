@@ -274,6 +274,7 @@ add_zkc_component(Transforms
   lib/Transforms/NumericalLowering.cpp
   lib/Transforms/MathematicalRecipes.cpp
   lib/Transforms/LaneRealization.cpp
+  lib/Transforms/FieldRegion.cpp
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/NestedContractions.cpp
   lib/Transforms/NestedContractionVerification.cpp
@@ -363,7 +364,8 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect
+  MLIRLinalgDialect MLIRTensorDialect)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)

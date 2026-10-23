@@ -56,7 +56,7 @@ template <typename... InputDialects> std::string project(StringRef source) {
   std::string result;
   withSource<InputDialects...>(source, [&](ModuleOp module, MLIRContext &) {
     runChecked(module, protocol::createProjectProtocolPass(false),
-               {"local", "algebra"});
+               {"local", "algebra", "linalg", "tensor"});
     llvm::raw_string_ostream stream(result);
     module.print(stream);
   });
@@ -185,7 +185,8 @@ int main() {
                 auto pass = projection
                                 ? protocol::createProjectProtocolPass(false)
                                 : protocol::createPrepareProtocolPass(false);
-                runChecked(module, std::move(pass), {"local", "algebra"});
+                runChecked(module, std::move(pass),
+                           {"local", "algebra", "linalg", "tensor"});
                 require(
                     context.getLoadedDialect<algebra::AlgebraDialect>() &&
                         count(module, "algebra.exec.index_constant") &&

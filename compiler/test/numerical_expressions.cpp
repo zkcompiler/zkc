@@ -580,14 +580,7 @@ int main(int argc, char **argv) {
         auto slots = std::vector<ring::Input>(1024, {"koala-bear"});
         auto body = take(ring::Expression::create(std::move(slots),
                                                   {ring::Node::slot(0)}, {0}));
-        LaneFormula formula{std::move(body),
-                            nullptr,
-                            llvm::DenseMap<Value, LaneInput>(),
-                            llvm::DenseMap<Value, uint32_t>(),
-                            {},
-                            {},
-                            {},
-                            MathematicalIdentity::FieldAdd};
+        LaneFormula formula{std::move(body), {}, {}};
         formula.slots.assign(1024, LaneInput{total.getArgument(2), false});
         unsigned emitted = 0;
         auto result = take(

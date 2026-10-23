@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "FieldRegion.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
 #include "PreparedProtocol.h"
@@ -1143,6 +1144,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
            "their callers";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
+    mathematical::registerFieldRegionDialects(registry);
     // Preparation can form numerical units and realize partial Local work even
     // when the source has no Algebra operations or types.
     registry.insert<local::LocalDialect, kernel::KernelDialect,
@@ -1237,6 +1239,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
            "programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
+    mathematical::registerFieldRegionDialects(registry);
     registry.insert<zkc::protocol_ir::ProtocolDialect, zkc::local::LocalDialect,
                     zkc::kernel::KernelDialect, zkc::algebra::AlgebraDialect,
                     func::FuncDialect>();

@@ -136,6 +136,8 @@ add_zkc_test(vector_reductions Transforms vector-reductions)
 target_compile_definitions(zkc-vector_reductions-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
 mlir_target_link_libraries(zkc-vector_reductions-test PRIVATE MLIRParser)
+add_zkc_test(field_regions Transforms field-regions)
+mlir_target_link_libraries(zkc-field_regions-test PRIVATE MLIRParser MLIRLinalgDialect)
 add_zkc_test(numerical_expressions Transforms)
 add_test(NAME numerical-expressions COMMAND zkc-numerical_expressions-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")

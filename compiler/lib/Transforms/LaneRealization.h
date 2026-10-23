@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_LANEREALIZATION_H
 #define ZKC_TRANSFORMS_LANEREALIZATION_H
 
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LogicalResult.h"
 #include "zkc/Contracts/Mathematical.h"
@@ -37,18 +38,13 @@ struct LaneRealizationResult {
   OptimizationOutcome outcome = OptimizationOutcome::success();
 };
 
-/// An admitted source formula, independent of any executable choice. The
-/// borrowed block and values must outlive emission. The input inventory retains
-/// unused slots in deterministic source order; expression sharing is checked.
+/// An admitted source meaning and its retained structured implementation.
+/// Only the external bindings are borrowed. Both native consumers read the
+/// checked region; no source-SSA emission plan is retained alongside it.
 struct LaneFormula {
   ring::Expression expression;
-  mlir::Block *source;
-  llvm::DenseMap<mlir::Value, LaneInput> bindings;
-  llvm::DenseMap<mlir::Value, uint32_t> meanings;
-  llvm::DenseSet<mlir::Value> live;
-  llvm::SmallVector<mlir::Value> terms;
   llvm::SmallVector<LaneInput> slots;
-  MathematicalIdentity combine;
+  mlir::OwningOpRef<mlir::ModuleOp> region;
 };
 struct LaneFormulaResult {
   LaneRealizationStatus status;
@@ -79,8 +75,9 @@ emitNumericalLanes(const LaneFormula &, mlir::Type vector, mlir::Value rows,
                    LaneResultMode, NumericalEmitter);
 
 /// Realize a field-ring payload using the same scalar/broadcast/packed rules
-/// for maps and finite collections. Structural sharing is checked through
-/// RingSharing. The caller owns ordered admission and binding construction;
+/// for maps and finite collections. Upstream CSE provides scalar sharing;
+/// the independent region reader checks its result. The caller owns ordered
+/// admission and binding construction;
 /// an independent semantic reader must check the actual candidate afterwards.
 /// Unsupported/capacity results emit nothing, so an optional caller can retain
 /// its ordered implementation. Errors indicate a failed construction/check,

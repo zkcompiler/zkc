@@ -1,3 +1,4 @@
+#include "FieldRegion.h"
 #include "HelperNormalization.h"
 #include "Kernel/Support.h"
 #include "MathematicalSupport.h"
@@ -353,6 +354,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
+    mathematical::registerFieldRegionDialects(registry);
     registry.insert<local::LocalDialect, algebra::AlgebraDialect,
                     kernel::KernelDialect, func::FuncDialect>();
   }

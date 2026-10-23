@@ -455,3 +455,5 @@ dependency query covering free captures, plus positive totality and bounds
 rules. The current direct-operand interface is sufficient only for its admitted
 scope. [Roadmap](../roadmap.md#extend-on-demonstrated-demand) records the
 triggers for extending these contracts.
+
+Pure field payloads can use private [Tensor/Linalg implementation regions](../spec/realization/field-regions.md). Upstream CSE acts on nominal field SSA; native pointwise expressions are emitted only after the actual region passes independent profile and correspondence checks. Ordered input admission remains outside those regions.
