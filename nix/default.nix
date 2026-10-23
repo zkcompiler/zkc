@@ -134,9 +134,9 @@ let
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };
   fetchSource = pkgs.callPackage ./external-source.nix { };
   llzk = pkgs.callPackage ./llzk.nix {
-    inherit fetchSource;
-    llvm = pkgs.llvmPackages_20;
-    stdenv = pkgs.llvmPackages_20.stdenv;
+    inherit fetchSource llvm;
+    nativeCompiler = compiler;
+    stdenv = llvm.stdenv;
     python3 = python;
     source = sources.llzk;
   };

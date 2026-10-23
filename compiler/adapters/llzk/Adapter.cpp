@@ -1,11 +1,11 @@
-// Standalone, bounded LLZK relation ingress. LLVM 20 lives in this process
-// only.
+// Standalone, bounded LLZK relation ingress. Upstream parsing and normalization
+// remain in this process even when the main compiler shares its LLVM version.
 #include "Adapter.h"
 #include "llzk/Dialect/Bool/IR/Ops.h"
 #include "llzk/Dialect/Constrain/IR/Ops.h"
+#include "llzk/Dialect/DialectRegistration.h"
 #include "llzk/Dialect/Felt/IR/Ops.h"
 #include "llzk/Dialect/Function/IR/Ops.h"
-#include "llzk/Dialect/InitDialects.h"
 #include "llzk/Dialect/LLZK/IR/Attrs.h"
 #include "llzk/Dialect/Struct/IR/Ops.h"
 #include "llzk/Transforms/LLZKTransformationPassPipelines.h"
@@ -20,6 +20,7 @@
 #include "r1cs/Transforms/TransformationPasses.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/SHA256.h"
@@ -129,7 +130,7 @@ std::optional<DynamicAPInt> constant(Value v) {
   if (auto op = v.getDefiningOp<llzk::felt::FeltConstantOp>()) {
     auto ty = dyn_cast<llzk::felt::FeltType>(v.getType());
     if (ty && ty.hasField())
-      return ty.getField().reduce(op.getValueAPInt());
+      return ty.getField().reduce(op.getValue().getReducedValueOrRaw());
   }
   return std::nullopt;
 }
@@ -231,8 +232,8 @@ void fieldGuard(ModuleOp module, StringRef name, StringRef prime) {
     for (auto attr : op->getAttrs())
       attr.getValue().walk([&](Attribute a) {
         if (auto spec = dyn_cast<llzk::felt::FieldSpecAttr>(a)) {
-          SmallString<100> declared;
-          spec.getPrime().toString(declared, 10, false);
+          std::string declared;
+          raw_string_ostream(declared) << spec.getPrime();
           require(spec.getFieldName().getValue() == name && declared == prime,
                   "llzk-field", "conflicting field annotation");
         }
@@ -328,7 +329,8 @@ size_t validateScalarModule(ModuleOp module) {
 int run(int argc, char **argv) {
   try {
     if (argc == 2 && StringRef(argv[1]) == "--version") {
-      outs() << "zkc-llzk/v0 LLVM/20.1.8 LLZK/" ZKC_LLZK_REVISION "\n";
+      outs() << "zkc-llzk/v0 LLVM/" LLVM_VERSION_STRING
+                " LLZK/" ZKC_LLZK_REVISION "\n";
       return 0;
     }
     require(argc == 12, "llzk-cli",
@@ -353,8 +355,9 @@ int run(int argc, char **argv) {
     std::string source = readSource(argv[1]);
     require(zkc::mlirNestingWithinLimit(source), "llzk-depth-limit");
     DialectRegistry registry;
-    llzk::registerAllDialects(registry);
-    r1cs::registerAllDialects(registry);
+    llzk::registerDialects(registry);
+    llzk::registerPasses(registry);
+    r1cs::registerDialects(registry);
     MLIRContext context(registry, MLIRContext::Threading::DISABLED);
     MLIRContext lowerContext(registry, MLIRContext::Threading::DISABLED);
     // LLZK caches field specs globally, and reports even identical
@@ -463,9 +466,11 @@ int run(int argc, char **argv) {
           {"public", bool(constrain.getArgAttr(i, "llzk.pub"))}});
     }
     if (field == "bls12381")
-      (*module)->setAttr(
-          "llzk.fields",
-          llzk::felt::FieldSpecAttr::get(&lowerContext, "bls12381", 256, bls));
+      (*module)->setAttr("llzk.fields",
+                         llzk::felt::FieldSpecAttr::get(
+                             &lowerContext,
+                             StringAttr::get(&lowerContext, "bls12381"),
+                             llzk::Field::getField("bls12381").prime()));
     auto normalized = print(*module);
     PassManager r1csPM(&lowerContext);
     r1csPM.addPass(r1cs::createR1CSLoweringPass());
@@ -485,7 +490,7 @@ int run(int argc, char **argv) {
         {"schema", "zkc-llzk-receipt/v0"},
         {"status", "Exported"},
         {"llzk_revision", ZKC_LLZK_REVISION},
-        {"llvm_version", "20.1.8"},
+        {"llvm_version", LLVM_VERSION_STRING},
         {"source_sha256", hash(source)},
         {"normalized_sha256", hash(normalized)},
         {"r1cs_sha256", hash(binary)},

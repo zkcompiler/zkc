@@ -1,16 +1,16 @@
 # LLZK relation adapter
 
-This standalone LLVM 20 executable imports a bounded LLZK constraint subset into
+This standalone LLVM 23 executable imports a bounded LLZK constraint subset into
 ordinary R1CS. The main compiler consumes the binary through its independently
-bounded `relation-read` command. The two LLVM versions run in separate processes.
+bounded `relation-read` command. Import and native admission run in separate processes.
 The normal compiler build neither builds nor links this adapter.
 
 ## Build and use
 
 Use the exact source and toolchain tuple in [pins.json](pins.json).
 The [Nix package](../../../nix/llzk.nix) fetches hash-checked sources, builds the
-library and adapter with their separate LLVM 20 toolchain, and runs the adapter
-tests. From the repository root:
+library and adapter with LLVM/MLIR/Clang 23.1.3, and runs both the adapter and
+independent native-relation tests. From the repository root:
 
 ```sh
 nix develop
@@ -26,15 +26,58 @@ python3 compiler/adapters/llzk/import_relation.py circuit.llzk \
 
 The output directory must not exist. Nix binaries carry their runtime library
 paths. For independently supplied builds without the runtime search path, supply
-`--adapter-library-path`; this setting applies only to the LLVM20 process.
+`--adapter-library-path`; this setting applies only to the adapter process.
 `cmake -S compiler/adapters/llzk -B OTHER_BUILD` also works with the pinned
 `LLVM_DIR`, `MLIR_DIR`, and installed or build-tree `LLZK_DIR`. Direct CMake defaults
-to an `unverified` revision label. The existing `build.py --study PATH --work PATH`
-helper builds against a read-only, pinned external LLZK toolchain tree (`--study`)
-into a separate directory (`--work`). It checks the selected source and
-exported package paths, supplies the declared revision, and hashes actual linked
-libraries and generated headers. Those hashes do not prove source-to-binary
-provenance.
+to an `unverified` revision label. Set `ZKC_NATIVE_COMPILER` to the built
+`zkc-compile` executable to include native relation checks in CTest.
+
+The archive build helper needs no prebuilt LLZK installation or private working
+directory. Download the exact archive URL in `pins.json`, then provide the
+selected toolchain explicitly:
+
+```sh
+python3 compiler/adapters/llzk/build.py --archive /tmp/llzk.tar.gz \
+  --work build/llzk-qualified --llvm-dir "$LLVM_DIR" --mlir-dir "$MLIR_DIR" \
+  --clang-dir "$Clang_DIR" --mlir-tblgen "$MLIR_TABLEGEN_EXE" \
+  --cc "$CC" --cxx "$CXX" --native build/compiler/zkc-compile
+```
+
+The helper checks archive and patch hashes, extracts a private source tree,
+builds the required library closure and adapter, and runs CTest. Reuse requires
+identical source bytes and pins. Explicit `--cmake-arg=-DNAME=VALUE` options can
+select platform dependency locations. The helper records configure commands,
+source hashes, linked archives and the resulting executable in its work
+directory. These records identify build inputs and outputs under the host's
+build trust; they are not a source-to-binary proof.
+
+## Dependency and reuse boundary
+
+The selected LLZK revision is `fb2ccc34097ff8a74b34b680c4c848bccedd084d`.
+The latest reviewed stable release,
+[v2.1.2](https://github.com/project-llzk/llzk-lib/releases/tag/v2.1.2), lacks the
+R1CS binary exporter this adapter requires. The previous adapter also depended
+on post-release code. This is a concrete exception to preferring stable
+releases: the selected development revision supplies that API on the compiler's
+LLVM 23 toolchain. The version override is upstream's `3.0.0`; the exact source
+revision, archive hash and Nix source hash determine the dependency.
+
+The local patch enables LLZK's degree-computation exceptions and supplies
+LLVM/Clang headers for split installations. It changes build configuration,
+not arithmetic or constraint semantics. PCL and Python bindings are disabled.
+Upstream registration, signed constant attributes, and field specification
+builders are qualified through the adapter's admitted corpus. Static assertion
+checks compare canonical field representatives, including negative and
+unreduced constants.
+
+Sharing the main compiler's LLVM version does not justify in-process import.
+LLZK field registration has process-global state, while its parser and lowering
+remain a separate trust and resource boundary. Isolation permits version
+updates without registering the full upstream dialect stack in the main
+compiler. Internal reuse of `felt` is also a separate choice: its prime-field
+constraint operations do not replace zkc's nominal extension/binary fields,
+provider encodings, mathematical functions or protocol bindings. The selected
+reuse is constraint ingestion and normalization through this adapter.
 
 The lower-level CLI is:
 
@@ -73,7 +116,7 @@ change a conflicting source type or field declaration.
 3. Check the source main and its ordered public interface against the explicit
    configuration. Fully inline components before demoting their public members:
    component public visibility also controls access inside LLZK.
-4. Print the adapter's own inlined IR and reparse it into a fresh LLVM20 context.
+4. Print the adapter's own inlined IR and reparse it into a fresh MLIR context.
    Same-context normalization leaves unresolved array reads on the transfer
    fixture. Validated field registration survives at process scope. The final
    normalized BLS snapshot receives a typed, exact field declaration.
@@ -115,6 +158,13 @@ Even zero equations require `ONE = 1` and equality between the supplied statemen
 and the public prefix. `compute` is witness-generation code and cannot supply
 acceptance constraints. The zero-equation test deliberately accepts a bound
 assignment that disagrees with its compute function.
+
+The cubic fixture exercises actual degree reduction and auxiliary wires. Native
+checks distinguish honest witness extension from mutations of the auxiliary,
+output, ONE and public prefix. A small enumeration also checks arbitrary target
+assignments for that fixture. An unused public input retains its ordered wire;
+changing source comments changes source identity while leaving the target
+identity unchanged. These controls do not establish general source projection.
 
 Trust still includes the pinned frontend, parser/verifier, LLZK normalization,
 R1CS conversion/export, native reader and the explicit source/interface binding.

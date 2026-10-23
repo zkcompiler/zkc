@@ -1,163 +1,126 @@
 #!/usr/bin/env python3
-"""Opt-in build using a read-only, pinned external LLZK worker toolchain."""
+"""Build the isolated LLZK adapter from a verified archive and explicit toolchain."""
 
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
-import re
+import shutil
 import subprocess
+import tarfile
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]  # compiler/adapters/llzk -> repository root
+TARGETS = ['LLZKDialectRegistration', 'LLZKTransforms',
+           'R1CSDialectRegistration', 'R1CSTransforms', 'R1CSTarget']
 
 
-def sha(path):
+def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify_snapshot(repository, revision, snapshot):
-    """Compare every tracked blob to git's pinned tree; never change that tree."""
-    listing = subprocess.check_output(
-        ["git", "-C", str(repository), "ls-tree", "-r", "-z", revision]
-    )
-    count = 0
-    for record in listing.split(b"\0"):
-        if not record:
-            continue
-        meta, name = record.split(b"\t", 1)
-        mode, kind, expected = meta.split()
-        if kind != b"blob":
-            raise ValueError("unexpected git submodule in pinned source")
-        path = snapshot / os.fsdecode(name)
-        data = (
-            os.fsencode(os.readlink(path)) if mode == b"120000" else path.read_bytes()
-        )
-        actual = hashlib.sha1(
-            b"blob " + str(len(data)).encode() + b"\0" + data
-        ).hexdigest()
-        if actual != expected.decode():
-            raise ValueError(f"pin mismatch: {path}")
-        count += 1
-    return count
+def manifest(source):
+    result = {}
+    for path in sorted(source.rglob('*')):
+        if path.is_symlink():
+            raise ValueError('prepared source contains a symbolic link')
+        if path.is_file():
+            result[str(path.relative_to(source))] = digest(path)
+    return result
 
 
-def environment(study):
-    llvm = study / "bootstrap/sysroot/usr/lib/llvm-20"
-    env = os.environ.copy()
-    env["LD_LIBRARY_PATH"] = (
-        f"{llvm}/lib:{study}/bootstrap/sysroot/usr/lib/x86_64-linux-gnu"
-    )
-    return llvm, env
-
-
-def verify_package(study, llvm):
-    """Check the actual exported package paths, not just a nearby Git checkout.
-
-    This checks custody and records build inputs. It does not prove that those
-    sources produced the prebuilt libraries.
-    """
-    package = study / "current-build"
-    source = study / "sources/llzk-current"
-    cache = (package / "CMakeCache.txt").read_text()
-    home = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$", cache, re.M)
-    if not home or Path(home[1]).resolve() != source.resolve():
-        raise ValueError("LLZK package source directory mismatch")
-    exports = (package / "LLZKTargets.cmake").read_text()
-    paths = re.findall(
-        r'(?:IMPORTED_LOCATION_RELEASE|INTERFACE_INCLUDE_DIRECTORIES) "([^"]+)"',
-        exports,
-    )
-    if not paths:
-        raise ValueError("missing LLZK package exports")
-    roots = [p.resolve() for p in (source, package, llvm)]
-    for group in paths:
-        for name in group.split(";"):
-            path = Path(name)
-            # The exported package also lists optional executables that this
-            # adapter neither builds nor links. Linked archives and includes
-            # must exist; missing optional bin targets are harmless.
-            optional_tool = path.parent == package / "bin"
-            if (
-                not path.is_absolute()
-                or (not path.exists() and not optional_tool)
-                or not any(path.resolve().is_relative_to(root) for root in roots)
-            ):
-                raise ValueError(f"LLZK package path mismatch: {name}")
-    return {
-        name: sha(package / name)
-        for name in ("LLZKConfig.cmake", "LLZKTargets.cmake", "CMakeCache.txt")
-    }
+def prepare(archive, work, pins):
+    pin = pins['llzk-current']
+    if digest(archive) != pin['sha256']:
+        raise ValueError('LLZK archive does not match pins.json')
+    for patch in pins['patches']:
+        if digest(HERE / patch['path']) != patch['sha256']:
+            raise ValueError('LLZK patch does not match pins.json')
+    source = work / 'source'
+    inputs = {'llzk': pin, 'llvm': pins['llvm'], 'patches': pins['patches']}
+    inputs_file, manifest_file = work / 'source-inputs.json', work / 'source-manifest.json'
+    if source.exists():
+        if not inputs_file.is_file() or not manifest_file.is_file():
+            raise ValueError('existing source has no manifest; choose a fresh work directory')
+        if inputs != json.loads(inputs_file.read_text()):
+            raise ValueError('prepared source uses different pins; choose a fresh work directory')
+        if manifest(source) != json.loads(manifest_file.read_text()):
+            raise ValueError('prepared source has changed; choose a fresh work directory')
+        return source
+    prefix = 'llzk-lib-' + pin['revision'] + '/'
+    with tarfile.open(archive) as package:
+        for member in package.getmembers():
+            if ((member.name != prefix[:-1] and not member.name.startswith(prefix))
+                    or member.issym() or member.islnk()):
+                raise ValueError('unexpected LLZK archive member')
+        package.extractall(work / 'unpacked', filter='data')
+    shutil.move(work / 'unpacked' / prefix, source)
+    for patch in pins['patches']:
+        subprocess.run(['patch', '--batch', '--fuzz=0', '-p1', '-i',
+                        str(HERE / patch['path'])], cwd=source, check=True)
+    inputs_file.write_text(json.dumps(inputs, indent=2) + '\n')
+    manifest_file.write_text(json.dumps(manifest(source), indent=2) + '\n')
+    return source
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--study", type=Path, required=True)
-    parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument('--archive', type=Path, required=True)
+    parser.add_argument('--work', type=Path, required=True)
+    for name in ['llvm-dir', 'mlir-dir', 'clang-dir', 'mlir-tblgen']:
+        parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--cc', required=True)
+    parser.add_argument('--cxx', required=True)
+    parser.add_argument('--native', type=Path, help='Enable the independent native relation corpus')
+    parser.add_argument('--cmake-arg', action='append', default=[],
+                        help='Additional explicit build input, recorded in build-inputs.json')
+    parser.add_argument('--jobs', type=int, default=2)
     args = parser.parse_args()
-    study, work = args.study.resolve(), args.work.resolve()
-    if work == study or study in work.parents:
-        parser.error("work must be outside the read-only worker tree")
+    if args.jobs < 1:
+        parser.error('jobs must be positive')
+    work = args.work.resolve()
+    if work == HERE or work in HERE.parents:
+        parser.error('work must not contain the adapter sources')
     work.mkdir(parents=True, exist_ok=True)
-    pins = json.loads((HERE / "pins.json").read_text())
-    revision = pins["llzk-current"]["revision"]
-    blobs = verify_snapshot(
-        study / "sources/llzk-lib", revision, study / "sources/llzk-current"
-    )
-    llvm, env = environment(study)
-    package_inputs = verify_package(study, llvm)
-    command = [
-        "cmake",
-        "-S",
-        str(REPO / "compiler/adapters/llzk"),
-        "-B",
-        str(work / "build"),
-        "-G",
-        "Ninja",
-        "-DCMAKE_BUILD_TYPE=Release",
-        f"-DCMAKE_C_COMPILER={llvm}/bin/clang",
-        f"-DCMAKE_CXX_COMPILER={llvm}/bin/clang++",
-        f"-DLLVM_DIR={llvm}/lib/cmake/llvm",
-        f"-DMLIR_DIR={llvm}/lib/cmake/mlir",
-        f"-DLLZK_DIR={study}/current-build",
-        f"-DZKC_LLZK_REVISION={revision}",
-    ]
-    for cmd in [
-        command,
-        ["cmake", "--build", str(work / "build"), "-j", "2"],
-        ["ctest", "--test-dir", str(work / "build"), "--output-on-failure"],
-    ]:
-        subprocess.run(cmd, env=env, check=True)
-    # Static library origin and generated headers remain part of build trust.
-    libraries = {
-        str(p.relative_to(study)): sha(p)
-        for p in sorted((study / "current-build").rglob("*.a"))
-    }
-    generated = {
-        str(p.relative_to(study)): sha(p)
-        for p in sorted((study / "current-build").rglob("*.inc"))
-    }
-    sources = {
-        p.name: sha(p)
-        for p in (REPO / "compiler/adapters/llzk").glob("*")
-        if p.is_file()
-    }
-    record = dict(
-        llzk_revision=revision,
-        tracked_blobs_verified=blobs,
-        package_inputs=package_inputs,
-        libraries=libraries,
-        generated_headers=generated,
-        adapter_sources=sources,
-        shared_parser_guard_sha256=sha(
-            REPO / "compiler/include/zkc/Support/MLIRInput.h"
-        ),
-        binary_sha256=sha(work / "build/zkc-llzk"),
-        llvm_library_sha256=sha(llvm / "lib/libLLVM.so.20.1"),
-    )
-    (work / "build-inputs.json").write_text(json.dumps(record, indent=2) + "\n")
+    pins = json.loads((HERE / 'pins.json').read_text())
+    try:
+        source = prepare(args.archive, work, pins)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    upstream, adapter = work / 'upstream', work / 'adapter'
+    common = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', *args.cmake_arg,
+              f'-DCMAKE_C_COMPILER={args.cc}', f'-DCMAKE_CXX_COMPILER={args.cxx}',
+              f'-DLLVM_DIR={args.llvm_dir.resolve()}',
+              f'-DMLIR_DIR={args.mlir_dir.resolve()}']
+    configure_upstream = ['cmake', '-S', str(source), '-B', str(upstream), *common,
+        f'-DClang_DIR={args.clang_dir.resolve()}',
+        f'-DMLIR_TABLEGEN_EXE={args.mlir_tblgen.resolve()}',
+        f"-DLLZK_VERSION_OVERRIDE={pins['llzk-current']['version']}",
+        '-DLLZK_WITH_PCL=OFF', '-DLLZK_ENABLE_BINDINGS_PYTHON=OFF',
+        '-DLLZK_TBLGEN_USE_LIBCLANGCPP=ON', '-DBUILD_TESTING=OFF']
+    configure_adapter = ['cmake', '-S', str(HERE), '-B', str(adapter), *common,
+        f'-DLLZK_DIR={upstream}', '-DBUILD_TESTING=ON',
+        f"-DZKC_LLZK_REVISION={pins['llzk-current']['revision']}"]
+    configure_adapter.append(
+        f'-DZKC_NATIVE_COMPILER={args.native.resolve() if args.native else ""}')
+    commands = [configure_upstream,
+        ['cmake', '--build', str(upstream), '-j', str(args.jobs), '--target', *TARGETS],
+        configure_adapter, ['cmake', '--build', str(adapter), '-j', str(args.jobs)],
+        ['ctest', '--test-dir', str(adapter), '--output-on-failure']]
+    # Record inputs even if compilation or validation fails.
+    (work / 'build-inputs.json').write_text(json.dumps({
+        'pins': pins, 'commands': commands,
+        'source_manifest_sha256': digest(work / 'source-manifest.json'),
+    }, indent=2) + '\n')
+    for command in commands:
+        subprocess.run(command, check=True)
+    (work / 'build-results.json').write_text(json.dumps({
+        'binary_sha256': digest(adapter / 'zkc-llzk'),
+        'adapter_sources': {str(p.relative_to(HERE)): digest(p)
+                            for p in sorted(HERE.rglob('*')) if p.is_file()},
+        'upstream_libraries': {str(p.relative_to(upstream)): digest(p)
+                               for p in sorted(upstream.rglob('*.a'))},
+    }, indent=2) + '\n')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

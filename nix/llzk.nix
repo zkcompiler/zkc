@@ -8,6 +8,7 @@
   llvm,
   source,
   fetchSource,
+  nativeCompiler,
   pin ? (builtins.fromJSON (builtins.readFile ../compiler/adapters/llzk/pins.json)).llzk-current,
 }:
 let
@@ -27,17 +28,11 @@ let
       llvm.llvm.dev
       llvm.libclang
     ];
-    postPatch = ''
-      # LLZKPolyLoweringPass.cpp throws/catches DegreeComputationError locally.
-      # LLVMConfig exports EH=OFF for LLVM itself; LLZK needs it for its code.
-      substituteInPlace CMakeLists.txt --replace-fail \
-        'include(HandleLLVMOptions)' \
-        'set(LLVM_ENABLE_EH ON)
-      include(HandleLLVMOptions)'
-    '';
+    # Enable local degree-computation exceptions and support split LLVM headers.
+    patches = [ ../compiler/adapters/llzk/toolchain.patch ];
     cmakeFlags = [
       # The pinned upstream nix/llzk.nix declares 3.0.0; shallow sources have no tags.
-      "-DLLZK_VERSION_OVERRIDE=3.0.0"
+      "-DLLZK_VERSION_OVERRIDE=${pin.version}"
       "-DLLVM_DIR=${lib.getDev llvm.llvm}/lib/cmake/llvm"
       "-DMLIR_DIR=${lib.getDev llvm.mlir}/lib/cmake/mlir"
       "-DClang_DIR=${lib.getDev llvm.libclang}/lib/cmake/clang"
@@ -70,6 +65,7 @@ stdenv.mkDerivation {
     "-DMLIR_DIR=${lib.getDev llvm.mlir}/lib/cmake/mlir"
     "-DLLZK_DIR=${upstream}/lib/cmake/LLZK"
     "-DZKC_LLZK_REVISION=${pin.revision}"
+    "-DZKC_NATIVE_COMPILER=${nativeCompiler}/bin/zkc-compile"
     "-DBUILD_TESTING=ON"
   ];
   doCheck = true;
@@ -80,7 +76,7 @@ stdenv.mkDerivation {
   '';
   passthru = { inherit upstream; };
   meta = {
-    description = "Standalone LLZK adapter with its separate LLVM 20 toolchain";
+    description = "Isolated LLZK relation adapter with a pinned LLVM 23 toolchain";
     license = lib.licenses.asl20;
     platforms = [ "x86_64-linux" ];
     mainProgram = "zkc-llzk";

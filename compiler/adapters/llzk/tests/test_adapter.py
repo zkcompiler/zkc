@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable boundary tests; requires the separately built pinned LLVM20 tool."""
+"""Executable boundary tests; requires the separately built pinned LLZK tool."""
 
 import json
 import pathlib
@@ -130,6 +130,20 @@ class Adapter(unittest.TestCase):
 
     def test_true_assert(self):
         self.run_case(source("%true = arith.constant true\nbool.assert %true"))
+
+    def test_constant_assertions_use_field_representatives(self):
+        for left, right in [(-1, int(PRIME) - 1), (int(PRIME) + 1, 1)]:
+            with self.subTest(left=left):
+                self.run_case(source(
+                    f'%left = felt.const {left} : {FIELD}\n'
+                    f'%right = felt.const {right} : {FIELD}\n'
+                    f'%equal = bool.cmp eq(%left, %right) : {FIELD}, {FIELD}\n'
+                    'bool.assert %equal'))
+        self.run_case(source(
+            f'%negative = felt.const -1 : {FIELD}\n'
+            f'%zero = felt.const 0 : {FIELD}\n'
+            f'%less = bool.cmp lt(%negative, %zero) : {FIELD}, {FIELD}\n'
+            'bool.assert %less'), 'llzk-source-assert')
 
     def test_compute_cannot_add_constraint(self):
         self.run_case(

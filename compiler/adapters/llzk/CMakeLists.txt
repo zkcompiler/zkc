@@ -1,16 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 project(ZkcLLZKAdapter LANGUAGES C CXX)
 
-# Standalone by design: never add_subdirectory this into the LLVM 23 compiler.
+# Standalone by design: process isolation is independent of the LLVM version.
 if(NOT PROJECT_IS_TOP_LEVEL)
   message(FATAL_ERROR "Configure the LLZK adapter as a separate project")
 endif()
-# Match LLZK's minimum version without rejecting compatible patch releases.
-find_package(LLVM 20.1.8 REQUIRED CONFIG)
-find_package(MLIR REQUIRED CONFIG)
-if(NOT LLVM_VERSION_MAJOR EQUAL 20)
-  message(FATAL_ERROR "The LLZK adapter requires its separate LLVM/MLIR 20 toolchain")
-endif()
+find_package(LLVM 23.1.3 EXACT REQUIRED CONFIG)
+find_package(MLIR 23.1.3 EXACT REQUIRED CONFIG)
 find_package(LLZK REQUIRED CONFIG)
 set(ZKC_LLZK_REVISION "unverified" CACHE STRING
   "Declared LLZK source revision; the verified build helper supplies this value")
@@ -30,9 +26,17 @@ target_link_libraries(zkc-llzk PRIVATE zkc-llzk-admission)
 include(CTest)
 if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME llzk-build-custody COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_build.py)
   add_test(NAME llzk-adapter COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_adapter.py $<TARGET_FILE:zkc-llzk>)
   add_executable(zkc-llzk-guard-test tests/guard.cpp)
   target_link_libraries(zkc-llzk-guard-test PRIVATE zkc-llzk-admission)
   add_test(NAME llzk-final-guard COMMAND zkc-llzk-guard-test)
+  set(ZKC_NATIVE_COMPILER "" CACHE FILEPATH "Native compiler for relation integration checks")
+  if(ZKC_NATIVE_COMPILER)
+    add_test(NAME llzk-native-relation COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_native.py $<TARGET_FILE:zkc-llzk>
+      ${ZKC_NATIVE_COMPILER})
+  endif()
 endif()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run LLVM20 LLZK ingress and LLVM23 native validation in separate processes.
+"""Run LLZK ingress and independent native validation in separate processes.
 
 The final directory is published only after both tools succeed. A receipt binds
 bytes and an explicit interface; it is not evidence of frontend adequacy.

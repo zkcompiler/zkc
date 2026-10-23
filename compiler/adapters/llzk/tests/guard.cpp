@@ -2,7 +2,7 @@
 // leaving/introducing a constraint operation that its R1CS successor would
 // drop.
 #include "../Adapter.h"
-#include "llzk/Dialect/InitDialects.h"
+#include "llzk/Dialect/DialectRegistration.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Parser/Parser.h"
 #include "llvm/ADT/StringRef.h"
@@ -12,7 +12,7 @@ using namespace llvm;
 
 int main() {
   DialectRegistry registry;
-  llzk::registerAllDialects(registry);
+  llzk::registerDialects(registry);
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
   const char *text = R"mlir(
 module attributes {llzk.lang, llzk.main = !struct.type<@Main>} {
