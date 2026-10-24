@@ -37,11 +37,11 @@ def compiled : Compiled artifacts where
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/
 def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
-  ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "example::Proof", stage,
+  ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", stage,
     match stage with
     | .interactive => []
-    | .compiledIdeal => [⟨"constructed-participant", "sha256:839344e7237df77f17e008298831f93b04eb4a6ef9c41413dc42b085e0c25430"⟩]
-    | .executableBytes => [⟨"constructed-participant", "sha256:839344e7237df77f17e008298831f93b04eb4a6ef9c41413dc42b085e0c25430"⟩]⟩
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:50a1ba771f35a6d0a8d362e89aeb9720e39cc985d82778e2b1b4b35e6ad8e7e2"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:50a1ba771f35a6d0a8d362e89aeb9720e39cc985d82778e2b1b4b35e6ad8e7e2"⟩]⟩
 
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=

@@ -108,6 +108,13 @@ abbrev Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbo
   rw [← ENNReal.coe_nnratCast]
   simp
 
+/-- Rational reciprocals agree with extended-real reciprocals only for a
+nonzero denominator. Keep this premise explicit: the two inverses differ at zero. -/
+@[simp] theorem ennreal_nnrat_inv (value : ℚ≥0) (nonzero : value ≠ 0) :
+    ((value⁻¹ : ℚ≥0) : ENNReal) = (value : ENNReal)⁻¹ := by
+  rw [← ENNReal.coe_nnratCast, ← ENNReal.coe_nnratCast]
+  simp [ENNReal.coe_inv, nonzero]
+
 @[simp] theorem Bound.value_natural (value queries : Nat) :
     (Bound.constant (value : ℚ≥0)).value queries = (value : ENNReal) := by
   simp [Bound.value]

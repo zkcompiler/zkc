@@ -80,6 +80,33 @@ finite enumeration. The selected carrier still supplies the cardinality. -/
   | ok count =>
     simp [Numeric.nonnegativeWith_cardinality cardinality identity count selected, Except.map]
 
+/-- Keep a natural-over-cardinality bound symbolic. Unadmitted carriers and
+zero denominators retain the arithmetic interpreter's refusal; no carrier is
+enumerated merely to construct the checked rational value. -/
+@[simp] theorem nonnegativeDivideCardinality
+    (cardinality : String → Except Incomplete Nat) (identity : String) (numerator : Nat) :
+    Numeric.nonnegativeWith cardinality
+      (.binary .div (.natural numerator)
+        (.application "cardinality" none [(none, .reference identity)])) = (do
+          let count ← cardinality identity
+          if count = 0 then .error ⟨["nonzero denominator"]⟩
+          else .ok ((numerator : ℚ≥0) / (count : ℚ≥0))) := by
+  cases selected : cardinality identity with
+  | error missing =>
+    simp [Numeric.nonnegativeWith, Numeric.normalizeWith, selected, evaluateNonnegative]
+    rfl
+  | ok count =>
+    by_cases zero : count = 0
+    · subst count
+      simp [Numeric.nonnegativeWith, Numeric.normalizeWith, selected,
+        evaluateNonnegative, evaluate]
+      rfl
+    · simp [Numeric.nonnegativeWith, Numeric.normalizeWith, selected,
+        evaluateNonnegative, evaluate, zero,
+        div_nonneg (Nat.cast_nonneg numerator : (0 : ℚ) ≤ numerator)
+          (Nat.cast_nonneg count : (0 : ℚ) ≤ count)]
+      rfl
+
 /-- Evaluate concrete diagnostic Strings without treating pretty-printed terms
 as identifiers. Literal concatenation and natural versions use their actual
 standard operations; other unresolved values are refused. -/
@@ -376,7 +403,8 @@ elab "claim_apply_theorem " theoremTerm:term " normalizing "
   let proof ← instantiateMVars proof
   let names := declarations.getElems ++ #[``Bound.value, ``Domain.SoundnessArguments.meaning,
     ``ennreal_nnrat_zero, ``ennreal_nnrat_one, ``ennreal_nnrat_natural,
-    ``ennreal_nnrat_ofNat, ``nsmul_eq_mul, ``mul_one_div, ``div_eq_mul_inv].map mkIdent
+    ``ennreal_nnrat_ofNat, ``ennreal_nnrat_inv,
+    ``nsmul_eq_mul, ``mul_one_div, ``div_eq_mul_inv].map mkIdent
   let lemmas ← names.mapM fun id => `(Parser.Tactic.simpLemma| $id:term)
   let configuration ← mkSimpContext (← `(tactic| simp [$lemmas,*])) false
   let normalize (expression : Expr) : TacticM Simp.Result := do

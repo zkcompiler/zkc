@@ -53,16 +53,16 @@ def lowering : LoweringEvidence artifacts compiled F G where
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/
 def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
-  ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", stage,
+  ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", stage,
     match stage with
     | .interactive => []
-    | .compiledIdeal => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]
-    | .executableBytes => [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩, ⟨"verifier-program", "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"⟩]⟩
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:06815be04bad322a8148c076445cbf9d981b16c9cde0996b3af7ccb8e47c1ca4"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:06815be04bad322a8148c076445cbf9d981b16c9cde0996b3af7ccb8e47c1ca4"⟩, ⟨"verifier-program", "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"⟩]⟩
 
 /-- Independently bound bytes for the separately admitted interactive protocol subject. -/
 def interactiveReference : Zkc.Claims.SubjectRef :=
   ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc",
-    "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
+    "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .interactive, []⟩
 
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=

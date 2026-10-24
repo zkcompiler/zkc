@@ -420,11 +420,11 @@ def entries : List Entry := [
     "For every admissible represented state, arbitrary message and history, agreement of \
     distinct polynomials within the two degree bounds under the actual decoded raw challenge \
     has probability at most the charge of that history and query event."⟩,
-  ⟨"event.sumcheck-true-claim", .event,
+  ⟨"event.sumcheck-reference-true-claim", .event,
     some `ZkcSecurity.Families.Sumcheck.Representation.Yes,
     "The represented reference state is admissible and the implementation's scalar claim \
     equals its reference total."⟩,
-  ⟨"event.sumcheck-false-claim", .event,
+  ⟨"event.sumcheck-reference-false-claim", .event,
     some `ZkcSecurity.Families.Sumcheck.Representation.No,
     "The represented reference state is admissible and the implementation's scalar claim \
     differs from its reference total."⟩,
@@ -478,6 +478,22 @@ def entries : List Entry := [
     "A derivation aligns producer sends with typed validator receives and identical \
     history/origin queries for every shared reply, retaining checkpoints and observations \
     and requiring both processes to return values satisfying the paired postcondition."⟩,
+  ⟨"wellformed.honest-sampling-prefix", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.SamplingPrefix,
+    "Every authorized private reply follows the actual producer prefix to its stated \
+    postcondition, retaining checkpoints and ordered local requests."⟩,
+  ⟨"wellformed.honest-sampled-readback", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.SampledReadback,
+    "An authorized producer-private prefix aligns with the actual deterministic paired \
+    continuation for every reply, including its exact public transcript and returned values."⟩,
+  ⟨"law.honest-private-service-return", .law,
+    some `ZkcSecurity.FiatShamir.SampledReadback.Returns,
+    "Every supported outcome of an allowed producer-local service invocation returns a \
+    reply; this handler law does not restrict the sampled value or honest input."⟩,
+  ⟨"wellformed.honest-private-service-allowed", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.SampledReadback.Allowed,
+    "The reached local request is authorized by the fixed subject context and actual \
+    admitted participant service ports."⟩,
   ⟨"wellformed.honest-pair-input", .wellFormedness,
     some `ZkcSecurity.Claims.HonestPair.Subject.HonestInput,
     "The fixed request input policy and all retained source input clauses hold, and the \

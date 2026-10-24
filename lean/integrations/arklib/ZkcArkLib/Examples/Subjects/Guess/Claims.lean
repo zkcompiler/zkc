@@ -18,7 +18,7 @@ set_option maxHeartbeats 2000000
 /-- Exact source request; attachment and method are separate. -/
 def request0Data : Wire.Request :=
 {
-  subject := ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "example::Proof", .compiledIdeal, [⟨"constructed-participant", "sha256:839344e7237df77f17e008298831f93b04eb4a6ef9c41413dc42b085e0c25430"⟩]⟩
+  subject := ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", .compiledIdeal, [⟨"constructed-participant", "sha256:50a1ba771f35a6d0a8d362e89aeb9720e39cc985d82778e2b1b4b35e6ad8e7e2"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.adaptive")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.binary .div (.natural 1) (.application "cardinality" none [(none, (.reference "bls12-381.fr"))]))), (some "application", (.reference "application"))]⟩
@@ -35,7 +35,7 @@ claim_request request0Data using Registration.library method request0Method
 /-- Exact source request; attachment and method are separate. -/
 def request1Data : Wire.Request :=
 {
-  subject := ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "example::Proof", .compiledIdeal, [⟨"constructed-participant", "sha256:839344e7237df77f17e008298831f93b04eb4a6ef9c41413dc42b085e0c25430"⟩]⟩
+  subject := ⟨"sha256:a8d1bea6d483deced3f3bf980562590465f706ddf0a35141b00487c43f1bdeca", "zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", .compiledIdeal, [⟨"constructed-participant", "sha256:50a1ba771f35a6d0a8d362e89aeb9720e39cc985d82778e2b1b4b35e6ad8e7e2"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.adaptive")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.binary .div (.natural 1) (.application "cardinality" none [(none, (.reference "bls12-381.fr"))]))), (some "application", (.reference "application"))]⟩
