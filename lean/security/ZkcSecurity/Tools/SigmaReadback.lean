@@ -7,12 +7,15 @@ public import ZkcSecurity.Claims.SubjectABI
 public meta import ZkcSecurity.Tools.InputLaws
 public meta import ZkcSecurity.Tools.ProcessView
 public meta import Lean.Elab.Tactic
+public meta import Mathlib.Tactic.Linter.UnusedTactic
+public meta import Batteries.Linter.UnreachableTactic
 
 @[expose] public meta section
 
 /-! Installed Sigma proof search over actual constructed Process terms.
-Private prefixes require the request-fixed capability predicate. The public
-tail uses existing Readback rules, with exact histories and nominal origins.
+Private requests require the request-fixed capability predicate. Communication
+and queries retain that capability through the entire derivation, with exact
+histories and nominal origins; subsequent private draws remain permitted.
 There is no alternate evaluator and no protocol-name or source-hash dispatch. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Tools.SigmaReadback
@@ -130,7 +133,8 @@ elab "prepare_sigma_relation " "for " subject:term " reading " read:term : tacti
   evalTactic (← `(tactic| subst_vars))
 
 /-- Fail-closed recursion: only checked constructor rules may advance a goal.
-The deterministic leaf is selected only after all producer-private draws. -/
+The deterministic constructor closes returned leaves. All communication rules
+retain the sampled relation so a later private request can be certified. -/
 partial def prove (goal : MVarId) (normalize : TSyntax `tactic)
     (allowed finish : TSyntax `tactic) : TacticM Unit :=
   goal.withContext <| Term.withoutErrToSorry <| withoutRecover do
@@ -156,7 +160,21 @@ partial def prove (goal : MVarId) (normalize : TSyntax `tactic)
           pure #[← `(SampledReadback.checkpointLeft)]
         else if leftEffect == some ``Domain.Effect.localService then
           pure #[← `(SampledReadback.localServiceLeft)]
-        else pure #[← `(SampledReadback.deterministic)]
+        else if rightEffect == some ``Domain.Effect.checkpoint then
+          pure #[← `(SampledReadback.checkpointRight)]
+        else if leftEffect == some ``Domain.Effect.observe then
+          pure #[← `(SampledReadback.observeLeft)]
+        else if rightEffect == some ``Domain.Effect.observe then
+          pure #[← `(SampledReadback.observeRight)]
+        else if leftEffect == some ``Domain.Effect.send && rightEffect == some ``Domain.Effect.receive then
+          pure #[← `(SampledReadback.sendReceive)]
+        else if rightEffect == some ``Domain.Effect.send then
+          pure #[← `(SampledReadback.sendRight)]
+        else if leftEffect == some ``Domain.Effect.query && rightEffect == some ``Domain.Effect.query then
+          pure #[← `(SampledReadback.query)]
+        else if left.isAppOf ``PIR.Process.done && right.isAppOf ``PIR.Process.done then
+          pure #[← `(SampledReadback.deterministic)]
+        else throwError "unmatched effect or stopped sampled execution: {← ppGoal goal}"
       else if left.isAppOf ``PIR.Process.done && right.isAppOf ``PIR.Process.done then
         pure #[← `(Readback.done)]
       else if leftEffect == some ``Domain.Effect.checkpoint then pure #[← `(Readback.checkpointLeft)]
@@ -186,10 +204,15 @@ partial def prove (goal : MVarId) (normalize : TSyntax `tactic)
               else evalTactic allowed
               unless (← getGoals).isEmpty do throwError "Sigma side condition remains: {← ppGoal body}"
 
-elab "prove_sigma_readback " " normalizing " normalize:tactic
+elab (name := proveSigmaReadback) "prove_sigma_readback " " normalizing " normalize:tactic
     " authorizing " allowed:tactic " finishing " finish:tactic : tactic => withMainContext do
   let pending := (← getGoals).tail
   prove (← getMainGoal) normalize allowed finish
   setGoals pending
+
+-- These callbacks are conditional proof-search inputs, like simp dischargers.
+-- Keep linting the enclosing tactic and all surrounding proof steps.
+initialize Mathlib.Linter.UnusedTactic.addIgnoreTacticKind ``proveSigmaReadback
+initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``proveSigmaReadback
 
 end ZkcSecurity.Tools.SigmaReadback

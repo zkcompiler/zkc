@@ -2,6 +2,7 @@ import ZkcSecurity.Examples.Generated.SchnorrRandomizedCompletenessClaims
 import ZkcSecurity.Examples.Generated.SchnorrAndRandomizedCompletenessClaims
 import ZkcSecurity.Examples.Generated.SchnorrAndAliasedCompletenessClaims
 import ZkcSecurity.Examples.Generated.SampledAbortCompletenessClaims
+import ZkcSecurity.Examples.Generated.SequentialSigmaCompletenessClaims
 
 /-! The actual admitted sampled roots use one canonical receipt path. Changing
 only the aborting source's error to zero must resolve its meaning successfully
@@ -20,6 +21,9 @@ example : SchnorrAndRandomizedCompletenessClaims.completeEvaluated.proposition :
   SchnorrAndRandomizedCompletenessClaims.completeReceipt.receipt.proof
 example : SchnorrAndAliasedCompletenessClaims.completeEvaluated.proposition :=
   SchnorrAndAliasedCompletenessClaims.completeReceipt.receipt.proof
+example : SequentialSigmaCompletenessClaims.completeEvaluated.proposition :=
+  SequentialSigmaCompletenessClaims.completeReceipt.receipt.proof
+
 example : SampledAbortCompletenessClaims.completeEvaluated.proposition :=
   SampledAbortCompletenessClaims.completeReceipt.receipt.proof
 
@@ -46,4 +50,5 @@ end ZeroError
 #print axioms SchnorrAndRandomizedCompletenessClaims.completeReceipt
 #print axioms SchnorrAndAliasedCompletenessClaims.completeReceipt
 #print axioms SampledAbortCompletenessClaims.completeReceipt
+#print axioms SequentialSigmaCompletenessClaims.completeReceipt
 end TestsSecurity.SampledRootClaims

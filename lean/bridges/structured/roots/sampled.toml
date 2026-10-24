@@ -41,3 +41,11 @@ method = "direct"
 proof_module = "ZkcSecurity.Examples.SampledAbort"
 proof_name = "ZkcSecurity.Examples.SampledAbort.compiled_ideal_complete"
 error_expression = '.binary .div (.natural 1) (.application "cardinality" none [(none, .reference "bls12-381.fr")])'
+
+[[root]]
+name = "SequentialSigma"
+source = "lean/bridges/structured/fixtures/sequential-sigma.zkc"
+entry = "example::Proof"
+modules = { schnorr = "libraries/protocols/sigma/schnorr/lib.zkc", sigma = "libraries/protocols/sigma/compositions/lib.zkc" }
+target = "equality"
+method = "sigma"
