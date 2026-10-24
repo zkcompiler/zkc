@@ -59,7 +59,10 @@ import json,sys
 request=json.load(open(sys.argv[1]))
 plan=request['plan']
 samples=[dict(index=i,iterations=plan['iterations'],phase='warmup' if i<plan['warmups'] else 'sample',elapsed_ns=100,cpu_ns=90,first_call_ns=50) for i in range(plan['warmups']+plan['samples'])]
-print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='resident_kernel_call',samples=samples,proof_bytes=0,proofs=[],admission_ns=None,process_peak_rss_bytes=None,build=dict(optimized=True,debug_assertions=False,execution_counts=False),process=dict(rayon_num_threads='1'),timer_floor_ns=1,diagnostics=None,lifecycle=None)))
+provider=request['backend']['provider']
+storage={providers.DIRECT_STORAGE!r}
+diagnostics=dict(family='bls12-381',provider=provider,chain_length=1,arithmetic_calls=1,kernel_adapter_conversions=[],bulk_storage=storage[provider],managed=dict(peak_retained_payload_bytes=None,peak_scratch_bytes=None,provider_workspace_admission_bound_bytes_per_call=None))
+print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='resident_kernel_call',samples=samples,proof_bytes=0,proofs=[],admission_ns=None,process_peak_rss_bytes=None,build=dict(optimized=True,debug_assertions=False,execution_counts=False),process=dict(rayon_num_threads='1'),timer_floor_ns=1,diagnostics=diagnostics,lifecycle=None)))
 ''')
     worker.chmod(0o755)
     args = SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=1,
@@ -77,6 +80,45 @@ print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='
     assert summary['comparisons'][0]['boundaries'] == {
         'arkworks': 'resident_kernel_call', 'blst': 'resident_kernel_call'}
     assert 'Arkworks uses existing' in (args.output / 'report.md').read_text()
+
+
+@pytest.mark.parametrize('provider,boundary', [
+    ('arkworks', 'resident'), ('arkworks', 'converted'), ('blst', 'resident'),
+    ('blst', 'converted'), ('blst', 'import'), ('blst', 'export'),
+])
+def test_direct_bls_receipts_validate_provider_storage_and_conversions(modules, provider, boundary):
+    providers, _, io = modules
+    backend = dict(kind='kernel', provider=provider, group='g1', kernel='scale',
+                   elements=1, boundary=boundary)
+    conversions = []
+    if provider == 'blst' and boundary in ('converted', 'import'):
+        conversions = [
+            dict(source='group:bls12-381.g1@arkworks.g1/0', target='group:bls12-381.g1@blst/g1',
+                 calls=1, elements=1, canonical_payload_bytes=48),
+            dict(source='field:bls12-381.fr@arkworks.fr/0', target='field:bls12-381.fr@blst/fr',
+                 calls=1, elements=1, canonical_payload_bytes=32),
+        ]
+    if provider == 'blst' and boundary == 'converted':
+        conversions.append(dict(source='group:bls12-381.g1@blst/g1', target='group:bls12-381.g1@arkworks.g1/0',
+                                calls=1, elements=1, canonical_payload_bytes=48))
+    if provider == 'blst' and boundary == 'export':
+        conversions = [dict(source='group:bls12-381.g1@blst/g1', target='group:bls12-381.g1@arkworks.g1/0',
+                            calls=1, elements=1, canonical_payload_bytes=48)]
+    evidence = dict(family='bls12-381', provider=provider, chain_length=1,
+                    arithmetic_calls=0 if boundary in ('import', 'export') else 1,
+                    kernel_adapter_conversions=conversions,
+                    bulk_storage=providers.DIRECT_STORAGE[provider],
+                    managed=dict(peak_retained_payload_bytes=None, peak_scratch_bytes=None,
+                                 provider_workspace_admission_bound_bytes_per_call=None))
+    providers.validate_evidence(dict(diagnostics=evidence), backend)
+    for change in (dict(provider='other'), dict(family='bn254'), dict(chain_length=True),
+                   dict(arithmetic_calls=99), dict(bulk_storage=providers.DIRECT_STORAGE[
+                       'blst' if provider == 'arkworks' else 'arkworks']),
+                   dict(kernel_adapter_conversions=[dict(calls=999)]), dict(managed={})):
+        with pytest.raises(io.MeasurementError):
+            providers.validate_evidence(dict(diagnostics=evidence | change), backend)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(dict(diagnostics=None), backend)
 
 
 def test_execution_counts_preset_keeps_source_workloads(modules, monkeypatch, tmp_path):
@@ -281,6 +323,7 @@ def bn254_report(providers, backend):
                                  provider_workspace_admission_bound_bytes_per_call=4096 if bounded else None))
     if backend['boundary'] in ('resident', 'converted', 'import', 'export'):
         evidence['kernel_adapter_conversions'] = providers._direct_conversions(backend)
+        evidence['bulk_storage'] = providers.DIRECT_STORAGE[backend['provider']]
     else:
         program, inputs, outputs, conversions = providers._installed_fixture(backend)
         evidence.update(program=program, input_physical_types=inputs, output_physical_types=outputs,

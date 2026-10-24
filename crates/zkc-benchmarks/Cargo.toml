@@ -19,6 +19,9 @@ zkc-runtime.workspace = true
 zkc-native.workspace = true
 zkc-kernels.workspace = true
 
+[dev-dependencies]
+zkc-test-support.workspace = true
+
 [lints]
 workspace = true
 

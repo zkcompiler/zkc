@@ -36,6 +36,7 @@ fn check_output(
     check: &Check,
     expected: Option<&serde_json::Value>,
     options: FunctionOptions,
+    cpu: &zkc::execution::CpuExecution,
 ) -> Result<()> {
     let correct = match check {
         Check::Acceptance { role } => {
@@ -50,10 +51,11 @@ fn check_output(
             accepted(acceptance)
         }
         Check::Output { .. } => {
-            let bytes = zkc::entry::files::function_output(
+            let bytes = zkc::entry::files::function_output_with_cpu(
                 value,
                 options.limits.capacity,
                 Default::default(),
+                cpu.clone(),
             )?;
             let actual: serde_json::Value =
                 serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
@@ -196,7 +198,7 @@ pub fn run(
                 return Err(format!("function failed: {}", report.diagnostics()).into());
             }
             let value = report.value.as_ref().unwrap().clone().into_value();
-            check_output(&value, check, expected.as_ref(), options)?;
+            check_output(&value, check, expected.as_ref(), options, entry.cpu())?;
             observed += 1;
             if observed == total {
                 last = Some(report);
@@ -237,6 +239,52 @@ mod tests {
         )))));
         assert!(!accepted(Some(&Value::Unit)));
         assert!(!accepted(None));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires strace and ptrace permission; run this focused gate explicitly"]
+    fn output_checks_create_no_additional_workers() {
+        let evidence = zkc_test_support::evidence("benchmark-output-threads");
+        for workers in [1, 4] {
+            let directory = evidence.nested(&format!("workers-{workers}"));
+            let tasks = zkc_test_support::task_trace::test(
+                directory.path(),
+                "run_entry::tests::output_check_workload_child",
+                &[
+                    ("ZKC_BENCHMARK_OUTPUT_WORKERS", workers.to_string()),
+                    ("RAYON_NUM_THREADS", "7".into()),
+                ],
+            );
+            // libtest adds one runner. Repeated encodings must use the owner
+            // supplied by the admitted entry, without transient serial pools.
+            assert_eq!(tasks, 1 + workers);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "child entry point for the output-check CPU ownership gate"]
+    fn output_check_workload_child() {
+        let Ok(workers) = std::env::var("ZKC_BENCHMARK_OUTPUT_WORKERS") else {
+            return;
+        };
+        let cpu = zkc::execution::CpuExecution::new(workers.parse().unwrap()).unwrap();
+        let value = Value::from(zkc_native::Value::Bool(true));
+        let expected = serde_json::json!({"format":"zkc.entry-outputs/0", "value":true});
+        let check = Check::Output {
+            expected: PathBuf::new(),
+        };
+        for _ in 0..3 {
+            check_output(
+                &value,
+                &check,
+                Some(&expected),
+                FunctionOptions::default(),
+                &cpu,
+            )
+            .unwrap();
+        }
     }
 
     // Independently authored Function carrier: acceptance is ordinary source

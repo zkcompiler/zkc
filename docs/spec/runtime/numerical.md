@@ -90,10 +90,11 @@ bit-operation complexity or a constant-time guarantee.
 
 The scoped path covers dense vector addition, subtraction, multiplication,
 scaling, filling, geometric sequences, sums, products, dot products, matrix-vector
-products and splitting over all eight installed field families. It also covers
+products and splitting over all installed field families. It also covers
 ordinary and fixed-vector dot products (including resident scalar storage),
 `poly.fold` for BLS LSB/MSB tables and
-`poly.opening_quotient` for KoalaBear and its degree-four/eight extensions.
+`poly.opening_quotient` for the
+[registered residue fields](../domains/values.md#registered-residue-fields).
 The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
@@ -129,8 +130,8 @@ Canonical ports and Contracts defaults remain Arkworks; the compiler's
 [Target preferences](../../compiler/representation.md#resident-providers) may
 select resident G2 scaling and pairing checks with explicit conversions.
 
-`poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
-quartic/octic extensions. Shape and domain checks precede numerical admission;
+`poly.coset_extend` also uses this scope on BN254 Fr and the registered residue
+fields. Shape and domain checks precede numerical admission;
 the whole input/output vectors must fit the element policy. Work admission
 counts both transform lengths, base coordinates, complete extension shift
 arithmetic and construction. Adapter-owned transform payloads are reserved
@@ -141,7 +142,7 @@ Every column must succeed before publication, including when a later column
 fails a shrinking-degree check. The operation has its own resource profile;
 the library's use of it does not promise the exhaustion point of separate calls.
 
-`poly.coset_evaluate_batch` uses this scope on the same four fields for exact
+`poly.coset_evaluate_batch` uses this scope on the same fields for exact
 column-major coefficient blocks. Let `w` be the number of columns, `h` the
 coefficient height, `n` the output height, `I=w*h`, `O=w*n`, `d` the extension
 degree over the installed base field and `e=sizeof(F)`. Retained output is
@@ -169,7 +170,7 @@ the call. Source quotient splitting supplies its own interpolation, capacity
 check and coefficient padding, then calls this authored operation once; this
 does not assert identical exhaustion behavior to the former sequence of calls.
 
-`poly.coset_evaluate_at` uses the same scoped output ownership on those four
+`poly.coset_evaluate_at` uses the same scoped output ownership on those
 fields. Its exact column-major shape and domain are checked before numerical
 admission. One result per column is constructed privately; point-dependent
 weights and adapter-owned inversion scratch are call-local and charged before
@@ -182,7 +183,7 @@ it is a mathematical case of the operation, not a constant-time guarantee.
 The operation does not retain values or weights across invocations.
 
 `poly.opening_quotient_sum` constructs one weighted sum of selected off-domain
-column quotients on those same four fields. All descriptors, including zero
+column quotients on those same fields. All descriptors, including zero
 weights, must pass column and pole checks before result construction. Complete
 input vectors pass element and byte admission first. Domain construction and the
 ordered column/pole scan then precede numerical work admission; a zero work

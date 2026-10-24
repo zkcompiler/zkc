@@ -4,8 +4,8 @@ use crate::field::{Error, Result};
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 
-/// A checked exact radix-two coset. The upstream domain has public fields;
-/// this wrapper admits construction and exposes only immutable provider access.
+/// A checked exact radix-two coset. Numerical methods use the supplied CPU
+/// context; upstream scheduling and mutable domain fields stay private.
 #[derive(Clone, Copy, Debug)]
 pub struct Domain(Radix2EvaluationDomain<F>);
 impl Domain {
@@ -18,12 +18,48 @@ impl Domain {
             .get_coset(shift)
             .map(Self)
     }
-}
-impl std::ops::Deref for Domain {
-    type Target = Radix2EvaluationDomain<F>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+
+    pub fn size(&self) -> usize {
+        self.0.size()
     }
+
+    pub fn generator(&self) -> F {
+        self.0.group_gen
+    }
+
+    pub fn generator_inverse(&self) -> F {
+        self.0.group_gen_inv
+    }
+
+    pub fn shift_inverse(&self) -> F {
+        self.0.offset_inv
+    }
+
+    pub fn element(&self, index: usize) -> F {
+        self.0.element(index)
+    }
+
+    pub fn elements(&self) -> impl Iterator<Item = F> {
+        self.0.elements()
+    }
+
+    pub fn evaluate_vanishing_polynomial(&self, point: F) -> F {
+        self.0.evaluate_vanishing_polynomial(point)
+    }
+
+    pub fn fft_in_place(&self, values: &mut Vec<F>) {
+        crate::cpu::install(|| self.0.fft_in_place(values));
+    }
+
+    pub fn ifft_in_place(&self, values: &mut Vec<F>) {
+        crate::cpu::install(|| self.0.ifft_in_place(values));
+    }
+}
+
+/// Invert nonzero elements using the supplied CPU context. Zero entries retain
+/// Arkworks' zero-preserving semantics; provider scratch remains provider-owned.
+pub fn batch_inverse_in_place(values: &mut [F]) {
+    crate::cpu::install(|| ark_ff::batch_inversion(values));
 }
 
 /// Invalid batch or workspace extents, or nonzero discarded coefficients.
@@ -119,7 +155,7 @@ impl<'a> CoefficientBatch<'a> {
                 scratch.fill(F::zero());
                 let begin = column * self.height;
                 scratch[..count].copy_from_slice(&self.coefficients[begin..begin + count]);
-                domain.fft_in_place(scratch);
+                domain.0.fft_in_place(scratch);
                 result.copy_from_slice(scratch);
             }
             Ok(())
@@ -165,7 +201,7 @@ pub fn coset_extend_into(
         {
             scratch.clear();
             scratch.extend_from_slice(column);
-            input.ifft_in_place(scratch);
+            input.0.ifft_in_place(scratch);
             if scratch
                 .get(output.size()..)
                 .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
@@ -173,7 +209,7 @@ pub fn coset_extend_into(
                 return Err(BatchError::CoefficientCount);
             }
             scratch.resize(output.size(), F::zero());
-            output.fft_in_place(scratch);
+            output.0.fft_in_place(scratch);
             result.copy_from_slice(scratch);
         }
         Ok(())
@@ -230,8 +266,8 @@ pub fn coset_evaluate_at_into(
     }
     ark_ff::serial_batch_inversion_and_mul(weights, &F::one());
     let scale = domain.evaluate_vanishing_polynomial(point)
-        * domain.size_inv
-        * domain.offset_inv.pow([domain.size() as u64]);
+        * domain.0.size_inv
+        * domain.0.offset_inv.pow([domain.size() as u64]);
     for (inverse, x) in weights.iter_mut().zip(domain.elements()) {
         *inverse *= scale * x;
     }
@@ -247,6 +283,43 @@ pub fn coset_evaluate_at_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn single_transforms_and_zero_preserving_inversion_share_the_supplied_owner() {
+        for workers in [1, 4] {
+            let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
+            cpu.enter(|| {
+                for size in [1, 2, 32, 1024] {
+                    let domain = Domain::new(size, F::from(7)).unwrap();
+                    let coefficients = vec![F::from(3); size.min(2)];
+                    let expected = evaluations(&coefficients, domain);
+                    let mut values = coefficients.clone();
+                    domain.fft_in_place(&mut values);
+                    assert_eq!(values, expected);
+                    domain.ifft_in_place(&mut values);
+                    assert_eq!(&values[..coefficients.len()], coefficients);
+                    assert!(values[coefficients.len()..].iter().all(Zero::is_zero));
+                }
+                for original in [
+                    vec![],
+                    vec![F::zero()],
+                    vec![F::from(3), F::zero(), F::from(5)],
+                ] {
+                    let mut inverses = original.clone();
+                    batch_inverse_in_place(&mut inverses);
+                    for (value, inverse) in original.iter().zip(inverses) {
+                        assert_eq!(
+                            *value * inverse,
+                            if value.is_zero() { F::zero() } else { F::one() }
+                        );
+                        if value.is_zero() {
+                            assert!(inverse.is_zero());
+                        }
+                    }
+                }
+            });
+        }
+    }
 
     fn horner(coefficients: &[F], point: F) -> F {
         coefficients

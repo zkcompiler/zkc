@@ -327,6 +327,9 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     {
         return serde_json::json!({"status":"refused","phase":"arguments","code":"instrument-unavailable"});
     }
+    // Include worker readiness and report-directory preparation in the command
+    // observation. Argument parsing precedes this boundary; publication follows it.
+    let started = std::time::Instant::now();
     let cpu = if matches!(
         name,
         "run" | "prove" | "verify" | "bundle run" | "bundle prove" | "bundle verify"
@@ -356,7 +359,6 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
             return serde_json::json!({"status":"refused","phase":"observation","code":code});
         }
     };
-    let started = std::time::Instant::now();
     let dispatch = || match name {
         "test" => crate::project::testing::run(&args),
         "inspect" if args.value("--view").is_some_and(|view| view != "entry") => {

@@ -294,7 +294,7 @@ def _direct_conversions(backend):
     _, canonical_inputs, canonical_outputs, _ = _installed_fixture(backend | {'provider': 'arkworks', 'boundary': 'resident'})
     pairs = []
     boundary = backend['boundary']
-    if backend['provider'] == 'halo2curves-axiom':
+    if backend['provider'] != 'arkworks':
         if boundary in ('converted', 'import'):
             pairs.extend(zip(canonical_inputs, inputs))
         if boundary == 'converted':
@@ -309,9 +309,47 @@ def _direct_conversions(backend):
             continue
         logical = source.split('@')[0]
         n = backend['elements'] if logical.startswith(('vector:', 'groups:')) else 1
-        conversions.append(dict(logical_type=logical, source=source, target=target,
-                                calls=n, elements=n, canonical_payload_bytes=n * _payload_width(logical)))
+        row = dict(source=source, target=target, calls=n, elements=n,
+                   canonical_payload_bytes=n * _payload_width(logical))
+        if backend.get('family', 'bls12-381') == 'bn254':
+            row['logical_type'] = logical
+        conversions.append(row)
     return conversions
+
+
+DIRECT_STORAGE = {
+    'arkworks': 'Arkworks owned scalar/affine buffers; resident calls borrow Arkworks mathematical storage',
+    'blst': 'blst resident upstream ScalarVector/G1Vector/G2Vector; no wrapper-vector reconstruction in timed resident calls',
+    'halo2curves-axiom': 'halo2curves-axiom owned Fr/G1Affine/G2Affine buffers; resident calls borrow upstream ABI storage',
+}
+
+
+def _validate_direct(report, backend):
+    evidence = report.get('diagnostics')
+    require(isinstance(evidence, dict)
+            and evidence.get('family') == backend.get('family', 'bls12-381')
+            and evidence.get('provider') == backend['provider'], 'missing direct provider evidence')
+    length = backend.get('chain_length', 1)
+    conversion = backend['boundary'] in ('import', 'export')
+    calls = 0 if conversion else length + (length - 1 if backend['kernel'] == 'msm' else 0)
+    require(type(evidence.get('chain_length')) is int and evidence['chain_length'] == length
+            and type(evidence.get('arithmetic_calls')) is int and evidence['arithmetic_calls'] == calls,
+            'direct provider chain differs from the request')
+    observed = evidence.get('kernel_adapter_conversions')
+    require(observed == _direct_conversions(backend)
+            and all(all(type(row[name]) is int for name in ('calls', 'elements', 'canonical_payload_bytes'))
+                    for row in observed), 'adapter receipts differ from the requested boundary')
+    require(evidence.get('bulk_storage') == DIRECT_STORAGE[backend['provider']],
+            'direct provider storage differs from the request')
+    managed = evidence.get('managed')
+    require(isinstance(managed, dict) and all(key in managed and managed[key] is None
+            for key in ('peak_retained_payload_bytes', 'peak_scratch_bytes')),
+            'invalid direct managed high-water observation')
+    bounded = backend['provider'] != 'arkworks' and backend['kernel'] in ('msm', 'pairing_check') and not conversion
+    bound = managed.get('provider_workspace_admission_bound_bytes_per_call')
+    require('provider_workspace_admission_bound_bytes_per_call' in managed
+            and (type(bound) is int and bound > 0 if bounded else bound is None),
+            'invalid direct provider admission bound')
 
 
 def _validate_bn254(report, backend):
@@ -382,6 +420,7 @@ def validate_evidence(report, backend):
         _validate_bn254(report, backend)
     if backend['boundary'] not in (
             'installed', 'resident_installed_chain', 'wire_resident_chain'):
+        _validate_direct(report, backend)
         return
     evidence = report.get('diagnostics')
     require(isinstance(evidence, dict), 'missing installed provider evidence')

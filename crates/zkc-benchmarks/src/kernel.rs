@@ -686,35 +686,36 @@ fn kernel_diagnostics(
             }
         }
     }
+    let foreign_arithmetic =
+        provider == foreign_provider && !matches!(boundary, Boundary::Import | Boundary::Export);
+    let bulk_storage = match provider {
+        Provider::Arkworks => {
+            "Arkworks owned scalar/affine buffers; resident calls borrow Arkworks mathematical storage"
+        }
+        Provider::Blst => {
+            "blst resident upstream ScalarVector/G1Vector/G2Vector; no wrapper-vector reconstruction in timed resident calls"
+        }
+        Provider::Halo2curvesAxiom => {
+            "halo2curves-axiom owned Fr/G1Affine/G2Affine buffers; resident calls borrow upstream ABI storage"
+        }
+    };
     let mut diagnostics = json!({"chain_length":chain_length,
+        "family":match family { Family::Bls12381 => "bls12-381", Family::Bn254 => "bn254" },
+        "provider":provider.name(),
         "arithmetic_calls":if matches!(boundary, Boundary::Import | Boundary::Export) { 0 }
             else { chain_length + if kernel == Kernel::Msm { chain_length - 1 } else { 0 } },
         "kernel_adapter_conversions":conversions,
-        "conversion_observation":"direct canonical provider adapter calls; counts per element; bytes exclude framing",
-        "bulk_storage":"blst resident upstream ScalarVector/G1Vector/G2Vector; no wrapper-vector reconstruction in timed resident calls",
-        "construction_copies":"not allocator-instrumented; converted/import boundaries build owned bulk storage explicitly",
+        "conversion_observation":"equivalent logical ports; direct canonical adapter calls counted per element; bulk inputs may contain one element; bytes exclude framing",
+        "bulk_storage":bulk_storage,
+        "construction_copies":if provider == Provider::Arkworks {
+            "not allocator-instrumented; Arkworks MSM stages affine bases"
+        } else { "not allocator-instrumented; imports allocate final upstream buffers" },
         "managed":{"peak_retained_payload_bytes":null,"peak_scratch_bytes":null,
-            "provider_workspace_admission_bound_bytes_per_call":if provider == Provider::Blst && kernel == Kernel::Msm {
+            "provider_workspace_admission_bound_bytes_per_call":if foreign_arithmetic && provider == Provider::Blst && kernel == Kernel::Msm {
                 Some(blst::msm_workspace_bytes(n).map_err(fail)?)
-            } else if provider == Provider::Blst && kernel == Kernel::PairingCheck { Some(blst::PAIRING_WORKSPACE_BYTES) } else { None }},
+            } else if foreign_arithmetic && provider == Provider::Blst && kernel == Kernel::PairingCheck { Some(blst::PAIRING_WORKSPACE_BYTES) } else { None }},
         "provider_hidden_allocations":"not allocator-instrumented; process peak RSS includes setup and mathematical oracle"});
     if family == Family::Bn254 {
-        let foreign_arithmetic = provider == foreign_provider
-            && !matches!(boundary, Boundary::Import | Boundary::Export);
-        diagnostics["provider"] = json!(provider.name());
-        diagnostics["conversion_observation"] = json!(
-            "direct checked canonical adapters; calls per element; bytes exclude ZKCV framing"
-        );
-        diagnostics["bulk_storage"] = json!(if provider == Provider::Arkworks {
-            "Arkworks owned scalar/affine buffers; resident calls borrow Arkworks mathematical storage"
-        } else {
-            "halo2curves-axiom owned Fr/G1Affine/G2Affine buffers; resident calls borrow upstream ABI storage"
-        });
-        diagnostics["construction_copies"] = json!(if provider == Provider::Arkworks {
-            "not allocator-instrumented; Arkworks MSM stages affine bases"
-        } else {
-            "not allocator-instrumented; imports allocate final upstream buffers"
-        });
         diagnostics["managed"]["provider_workspace_admission_bound_bytes_per_call"] =
             json!(if foreign_arithmetic {
                 bn254::workspace(kernel, n)?
@@ -948,7 +949,16 @@ mod tests {
                 for length in [1, 3] {
                     let request = request(name, op, spelling, n, length);
                     for provider in [Provider::Arkworks, Provider::Blst] {
-                        run(&request, provider, group, kernel, boundary, n, length).unwrap();
+                        let report =
+                            run(&request, provider, group, kernel, boundary, n, length).unwrap();
+                        assert_eq!(report.diagnostics["provider"], provider.name());
+                        assert_eq!(report.diagnostics["family"], "bls12-381");
+                        let storage = report.diagnostics["bulk_storage"].as_str().unwrap();
+                        assert!(storage.starts_with(if provider == Provider::Arkworks {
+                            "Arkworks "
+                        } else {
+                            "blst "
+                        }));
                     }
                 }
             }

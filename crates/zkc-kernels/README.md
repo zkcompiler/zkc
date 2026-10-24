@@ -64,8 +64,9 @@ selection.
 Use `cpu.enter(|| kernel_call())` to supply it while keeping validation and
 partial effects on the caller. Parallel-capable numerical leaves install their
 work on those workers. `cpu.execute` is for an already isolated, `Send` numerical
-phase. Explicit clones share one pool across concurrent callers; these lexical
-scopes do not propagate across an asynchronous suspension.
+phase. Explicit clones share one pool across concurrent callers. Lexical context
+does not propagate across asynchronous suspension or application-created Rayon
+tasks. Capture a clone and enter it inside each such task that calls zkc kernels.
 
 The pinned Arkworks curve and PCS `parallel` features stay disabled because
 their MSM implementation creates private pools. Field and FFT parallelism stays

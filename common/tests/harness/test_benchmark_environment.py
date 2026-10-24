@@ -109,3 +109,76 @@ def test_saved_measurements_require_their_placement_policy(env, removed):
     document = deepcopy(json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())['reference'])
     del (document if removed == 'threads' else document['host'])[removed]
     with pytest.raises(MeasurementError): validate_manifest(document)
+
+
+@pytest.mark.parametrize('workers', [4, 1, None, True])
+def test_cli_observations_request_and_check_workers(env, tmp_path, workers):
+    import sys
+    from types import SimpleNamespace
+    from bench.io import MeasurementError
+    from bench.suites import observe_cli
+
+    runtime = tmp_path/'runtime'
+    cpu = {'workers': workers} if workers is not None else {}
+    runtime.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+assert '--threads=4' in sys.argv
+operation=sys.argv[2]
+if operation == 'prove':
+    Path(next(v.split('=',1)[1] for v in sys.argv if v.startswith('--output='))).write_bytes(b'proof')
+cpu={cpu!r}
+print(json.dumps({{'status':'produced' if operation == 'prove' else 'accepted','cpu':cpu}}))
+''')
+    runtime.chmod(0o755)
+    package = tmp_path/'proof.zkpkg'
+    package.write_bytes(b'package')
+    args = SimpleNamespace(runtime=runtime, source=tmp_path, timeout=5, threads=4)
+    if type(workers) is int and workers == 4:
+        proof, observations = observe_cli(args, tmp_path, package, 'public.json', 'witness.json')
+        assert proof.read_bytes() == b'proof'
+        assert observations['workers'] == 4
+        assert all(observations[f'{operation}_wall_seconds'] > 0 for operation in ('prove', 'verify'))
+    else:
+        with pytest.raises(MeasurementError, match='CLI worker count'):
+            observe_cli(args, tmp_path, package, 'public.json', 'witness.json')
+
+
+@pytest.mark.parametrize('fault', ['workers', 'missing_workers', 'boolean_workers', 'nan', 'negative', 'extra'])
+def test_saved_cli_observations_recheck_policy_and_times(env, fault):
+    from copy import deepcopy
+    import json
+    from pathlib import Path
+    from bench.io import MeasurementError
+    from bench.results import validate_manifest
+
+    document = deepcopy(json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())['reference'])
+    value = {'workers': document['threads'], 'prove_wall_seconds': 0.1, 'verify_wall_seconds': 0.2}
+    document['cli'] = {'case': value}
+    validate_manifest(document)
+    if fault == 'workers': value['workers'] += 1
+    elif fault == 'missing_workers': del value['workers']
+    elif fault == 'boolean_workers': value['workers'] = True
+    elif fault == 'extra': value['extra'] = 1
+    else: value['prove_wall_seconds'] = float('nan') if fault == 'nan' else -1
+    with pytest.raises(MeasurementError): validate_manifest(document)
+
+
+@pytest.mark.parametrize('status', ['failed', 'interrupted', 'running'])
+@pytest.mark.parametrize('threads', [0, -1, 257, True, 1.0, None])
+def test_incomplete_cli_observations_require_a_valid_thread_request(env, status, threads):
+    from copy import deepcopy
+    import json
+    from pathlib import Path
+    from bench.io import MeasurementError
+    from bench.results import validate_manifest
+
+    document = deepcopy(json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())['reference'])
+    document.update(status=status, matrix=[], results=[])
+    observation = {'workers': 256, 'prove_wall_seconds': 0.1, 'verify_wall_seconds': 0.2}
+    document.update(threads=256, cli={'case': observation})
+    validate_manifest(document)
+    document['threads'] = threads
+    observation['workers'] = threads if type(threads) is int else 1
+    with pytest.raises(MeasurementError, match='invalid CLI thread setting'):
+        validate_manifest(document)

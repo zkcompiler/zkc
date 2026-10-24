@@ -292,6 +292,20 @@ def validate_manifest(manifest):
     if successful or any(r['status'] != 'failed' for r in results):
         from .environment import validate_condition
         validate_condition(manifest.get('host'), manifest.get('threads'))
+    cli = manifest.get('cli', {})
+    require(isinstance(cli, dict), 'invalid CLI observations')
+    if cli:
+        require(type(manifest.get('threads')) is int and 1 <= manifest['threads'] <= 256,
+                'invalid CLI thread setting')
+    for case, value in cli.items():
+        require(isinstance(case, str) and bool(case), 'invalid CLI case')
+        validate_fields(value, {'workers', 'prove_wall_seconds', 'verify_wall_seconds'},
+                        set(), 'CLI observation')
+        require(type(value['workers']) is int and value['workers'] == manifest.get('threads'),
+                'CLI worker count differs from request')
+        for name in ('prove_wall_seconds', 'verify_wall_seconds'):
+            require(type(value[name]) in (int, float) and math.isfinite(value[name])
+                    and value[name] > 0, 'invalid CLI wall time')
     if successful:
         require(matrix, 'missing measurement matrix')
     jobs = {}
@@ -596,9 +610,9 @@ def publish(directory, manifest):
         for family, records in manifest.get('compilation', {}).items():
             value = distribution([r['wall_seconds']*1000 for r in records])
             lines.append(f"| {family} | {value['median']:.3f} | {value['min']:.3f}–{value['max']:.3f} |")
-        lines += ['', '| Case | CLI prove (ms) | CLI verify (ms) |', '|---|---:|---:|']
+        lines += ['', '| Case | Workers | CLI prove (ms) | CLI verify (ms) |', '|---|---:|---:|---:|']
         for case, value in manifest.get('cli', {}).items():
-            lines.append(f"| {case} | {value['prove_wall_seconds']*1000:.3f} | {value['verify_wall_seconds']*1000:.3f} |")
+            lines.append(f"| {case} | {value['workers']} | {value['prove_wall_seconds']*1000:.3f} | {value['verify_wall_seconds']*1000:.3f} |")
     lines += ['', '## Paired comparisons', '',
               'Ratios compare complete implementation stacks in adjacent process pairs. They are descriptive, not significance tests.', '',
               '| Case | Operation | Numerator / denominator | Median ratio | Range |', '|---|---|---|---:|---:|']

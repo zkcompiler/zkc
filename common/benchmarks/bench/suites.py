@@ -160,6 +160,26 @@ def compile_projects(args, output, capture, manifest, suites, journal):
     return packages
 
 
+def observe_cli(args, directory, package, public, witness):
+    """Observe complete proof processes under the requested worker policy."""
+    cli = Journal(directory / 'cli', args.timeout)
+    proof = directory / 'cli.proof'
+    flags = [f'--package={package}', f'--sha256={digest(package)}',
+             f'--public={public}', '--allow-authored', f'--threads={args.threads}']
+    times = {}
+    for operation, status, extra in (
+        ('prove', 'produced', [f'--witness={witness}', f'--output={proof}']),
+        ('verify', 'accepted', [f'--proof={proof}']),
+    ):
+        report, record = cli.report([args.runtime, '--json', operation, *flags, *extra],
+                                    cwd=args.source.resolve(), status=status)
+        cpu = report.get('cpu')
+        require(isinstance(cpu, dict) and type(cpu.get('workers')) is int
+                and cpu['workers'] == args.threads, 'CLI worker count differs from request')
+        times[f'{operation}_wall_seconds'] = record['wall_seconds']
+    return proof, times | {'workers': args.threads}
+
+
 def prepare_case(args, output, capture, manifest, name, protocol, size, package):
     root = args.source.resolve()
     suite = protocol.name
@@ -216,12 +236,8 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
         refuse(replace(job, backend=changed_backend),
                directory / f'{job.implementation}-changed', args.timeout)
     # CLI execution is retained as a different, separately named boundary.
-    cli = Journal(directory / 'cli', args.timeout)
-    flags = [f'--package={package}', f'--sha256={digest(package)}', f'--public={public_path}', '--allow-authored']
-    cli_proof = directory / 'cli.proof'
-    produced = cli.command([args.runtime, '--json', 'prove', *flags, f'--witness={witness_path}', f'--output={cli_proof}'], cwd=root)
-    verified = cli.report([args.runtime, '--json', 'verify', *flags, f'--proof={cli_proof}'], cwd=root, status='accepted')[1]
-    manifest.setdefault('cli', {})[name] = {'prove_wall_seconds': produced['wall_seconds'], 'verify_wall_seconds': verified['wall_seconds']}
+    cli_proof, observations = observe_cli(args, directory, package, public_path, witness_path)
+    manifest.setdefault('cli', {})[name] = observations
     capture.add(cli_proof)
     gate = ProofChecks(protocol.randomized)
     controls = [j.proof for j in jobs if j.operation == 'prove'] + [cli_proof]

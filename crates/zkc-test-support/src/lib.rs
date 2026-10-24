@@ -282,3 +282,7 @@ pub mod variants;
 
 /// Bounded transport for independent conformance probes.
 pub mod json_lines;
+
+/// Linux task-creation evidence for explicitly selected CPU confinement gates.
+#[cfg(target_os = "linux")]
+pub mod task_trace;

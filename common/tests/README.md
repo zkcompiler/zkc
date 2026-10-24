@@ -58,6 +58,23 @@ The `harness`, `sdk` and `integration` selections are disjoint. `checks.project`
 
 `python3 common/tests/run.py style` checks source formatting and syntax without project builds. `lint` adds C++ formatting and Clippy. Install checks live in `check_sdk.py` and `check_domain.py`; `check_install.py` exercises the packaged application outside the checkout. Domain checks prepare isolated base/domain builds or validate explicitly selected existing builds with `--skip-build`.
 
+### CPU worker confinement
+
+Portable Cargo checks cover numerical agreement under different worker counts.
+The explicit Linux gates also require `strace` and ptrace permission:
+
+```sh
+cargo test --locked -p zkc-kernels --test cpu_thread_creation provider_workloads_create_only_owned_workers -- --ignored
+cargo test --locked -p zkc-native --test cpu_thread_creation installed_polynomial_operations_create_only_owned_workers -- --ignored
+cargo test --locked -p zkc-benchmarks output_checks_create_no_additional_workers -- --ignored
+```
+
+They count successful task creation over each child process's full lifetime,
+including workers that exit before the numerical call returns. Known caller and
+test threads are included separately from the owner budget. These gates check
+the selected installed/provider workloads; the owner does not limit foreign code
+or total process CPU use.
+
 ## Coverage and ownership
 
 The [native validation map](native.md) connects compiler boundaries to

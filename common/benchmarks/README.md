@@ -63,7 +63,9 @@ instruction count does not by itself establish a timing improvement.
 `--threads` selects the shared Native CPU context (default one). The development
 worker transports this request through `RAYON_NUM_THREADS`; SDK and CLI execution
 receive an explicit context. Worker reports separate pool initialization from
-admission and timed calls. Foreign reference providers retain their own policy;
+admission and timed calls. Separate CLI proof observations pass `--threads`
+explicitly, check the CLI's reported worker count and retain it beside their
+process wall times. Foreign reference providers retain their own policy;
 this is not a universal process thread limit.
 `--cpus 2,4-7` pins the suite and children to a set within the current affinity;
 `--cpus 2` selects one CPU. Workers check the requested environment, main-thread
@@ -513,10 +515,10 @@ floor is recorded and never subtracted.
 ## Execution counts
 
 For runtime attribution, build a separate worker with execution observations.
-Function jobs require aggregate native execution observations from the shared
-Host; while that API is unavailable, the worker refuses these jobs explicitly.
-It does not publish zero counters or time an unwrapped native child. Native proof
-jobs retain their existing observation support.
+Function jobs report native execution counts merged across reached numerical
+calculations and child runs/proofs. Host control and non-native work are outside
+those counts. Native proof jobs report their native invocation counts. These
+instrumented builds are separate from release timing runs.
 
 Build the observation worker with:
 

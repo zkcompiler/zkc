@@ -54,7 +54,7 @@ impl zkc_runtime::vm::InstalledOperation for NativeOperation {
     }
 }
 
-/// Production Arkworks/Dalek field, group, PCS and challenge adapter. Private committed originals are
+/// Installed mathematical operations and challenge adapter. Private committed originals are
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
