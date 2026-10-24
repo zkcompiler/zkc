@@ -904,17 +904,19 @@ fn scalar_run(
             Ok(ScalarOutput::ForeignVector(out))
         }
     };
-    let export = |out: ScalarOutput| -> Result<Vec<ark::Scalar>> {
+    // Keep scalar conversion inline, like the BN254 controls. A singleton
+    // vector belongs only to a vector result, not to the converted-field timer.
+    let export = |out: ScalarOutput| -> Result<ScalarOutput> {
         match out {
-            ScalarOutput::NativeField(value) => Ok(vec![value]),
-            ScalarOutput::NativeVector(value) => Ok(value),
-            ScalarOutput::ForeignField(value) => {
-                Ok(vec![blst::arkworks::export_scalar(value).map_err(fail)?])
-            }
+            ScalarOutput::ForeignField(value) => Ok(ScalarOutput::NativeField(
+                blst::arkworks::export_scalar(value).map_err(fail)?,
+            )),
             ScalarOutput::ForeignVector(values) => values
                 .iter()
                 .map(|v| blst::arkworks::export_scalar(v).map_err(fail))
-                .collect(),
+                .collect::<Result<Vec<_>>>()
+                .map(ScalarOutput::NativeVector),
+            canonical => Ok(canonical),
         }
     };
     let samples = measure::measure(
@@ -941,14 +943,19 @@ fn scalar_run(
             } else if boundary == Boundary::Converted {
                 let a = import_scalars(&left)?;
                 let b = import_scalars(&right)?;
-                Ok(ScalarOutput::NativeVector(export(compute(&a, &b)?)?))
+                export(compute(&a, &b)?)
             } else {
                 let (a, b) = resident.as_ref().unwrap();
                 compute(a, b)
             }
         },
         |out| {
-            if export(out)? == expected {
+            let equal = match export(out)? {
+                ScalarOutput::NativeField(value) => expected.as_slice() == [value],
+                ScalarOutput::NativeVector(values) => values == expected,
+                _ => unreachable!("export returns canonical values"),
+            };
+            if equal {
                 Ok(())
             } else {
                 Err(Failure::IncorrectResult)

@@ -20,7 +20,7 @@ def bench(monkeypatch, tmp_path):
 def report(plan):
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'test_call',
             'proof_bytes': 3, 'admission_ns': None, 'process_peak_rss_bytes': None,
-            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1, 'diagnostics': None, 'lifecycle': None,
+            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1', 'cpu_workers': 1}, 'timer_floor_ns': 1, 'diagnostics': None, 'lifecycle': None,
             'samples': [{'phase': 'warmup' if i < plan['warmups'] else 'sample',
                          'index': i, 'iterations': plan['iterations'], 'elapsed_ns': 100,
                          'cpu_ns': 90, 'first_call_ns': 50}
@@ -258,13 +258,15 @@ def test_pairs_are_adjacent_and_order_alternates(bench, tmp_path):
     assert [i for _, i in manifest['schedule'][:2]] == [i for _, i in reversed(manifest['schedule'][2:])]
 
 
-@pytest.mark.parametrize('setting', ['threads', 'affinity'])
+@pytest.mark.parametrize('setting', ['threads', 'affinity', 'missing_workers', 'wrong_workers'])
 def test_worker_must_observe_requested_settings(bench, tmp_path, monkeypatch, setting):
     import os
     args = arguments(tmp_path)
     plan = {'samples': 2, 'warmups': 1, 'iterations': 1}
     value = report(plan)
     if setting == 'threads': value['process']['rayon_num_threads'] = '99'
+    elif setting == 'missing_workers': del value['process']['cpu_workers']
+    elif setting == 'wrong_workers': value['process']['cpu_workers'] = 2
     else:
         args.cpus = [0]
         value['process']['affinity'] = None

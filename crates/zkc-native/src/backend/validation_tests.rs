@@ -286,3 +286,6 @@ fn inline_result_before_fresh_backing_keeps_its_owned_charge() {
         832,
     );
 }
+
+#[path = "validation_inventory_tests.rs"]
+mod inventory;

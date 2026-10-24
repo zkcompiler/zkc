@@ -81,21 +81,7 @@ impl Instance for Base {
     fn mmcs() -> &'static BaseMmcs {
         base_mmcs()
     }
-    fn root(c: &MerkleCap<Goldilocks, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<Goldilocks, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<Goldilocks, 4>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<Goldilocks, 4>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(Goldilocks, 4);
 }
 
 /// Rows of `goldilocks.ext2-binomial7`, hashed as ascending base coordinates.
@@ -107,19 +93,5 @@ impl Instance for Quadratic {
     fn mmcs() -> &'static QuadraticMmcs {
         quadratic_mmcs()
     }
-    fn root(c: &MerkleCap<Goldilocks, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<Goldilocks, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<Goldilocks, 4>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<Goldilocks, 4>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(Goldilocks, 4);
 }

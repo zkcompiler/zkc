@@ -38,17 +38,17 @@ def test_cpu_lists_refuse_invalid_ranges(env, text):
 def test_every_surviving_thread_must_stay_inside_selected_set(env):
     from bench.io import MeasurementError
     host = {'requested_cpus': [2,4,5], 'affinity': [2,4,5]}
-    process = {'affinity': '2,4-5', 'rayon_num_threads': '2',
+    process = {'affinity': '2,4-5', 'rayon_num_threads': '2', 'cpu_workers': 2,
                'thread_observation_errors': [],
                'thread_affinities': [{'tid': 12, 'cpus': '2,4-5'}, {'tid': 13, 'cpus': '4-5'}]}
-    env.validate_process(process, host, 2)
+    env.validate_process(process, host, 2, {'kind': 'host'})
     process['thread_observation_errors'] = ['permission denied']
-    with pytest.raises(MeasurementError, match='incomplete'): env.validate_process(process, host, 2)
+    with pytest.raises(MeasurementError, match='incomplete'): env.validate_process(process, host, 2, {'kind': 'host'})
     process['thread_observation_errors'] = []
     process['thread_affinities'][1]['cpus'] = '0-5'
-    with pytest.raises(MeasurementError, match='escaped'): env.validate_process(process, host, 2)
+    with pytest.raises(MeasurementError, match='escaped'): env.validate_process(process, host, 2, {'kind': 'host'})
     process['thread_affinities'] = []
-    with pytest.raises(MeasurementError, match='missing'): env.validate_process(process, host, 2)
+    with pytest.raises(MeasurementError, match='missing'): env.validate_process(process, host, 2, {'kind': 'host'})
 
 
 def test_runtime_isa_is_the_intersection_of_selected_cpus(env):
@@ -91,7 +91,7 @@ def test_saved_success_rechecks_worker_placement(env):
     document['host']['requested_cpus'] = [2,4]
     document['host']['affinity'] = [2,4]
     for row in document['results']:
-        row['worker']['process'] = {'affinity':'2,4', 'rayon_num_threads':'2',
+        row['worker']['process'] = {'affinity':'2,4', 'rayon_num_threads':'2', 'cpu_workers':2,
                                     'thread_observation_errors': [],
                                     'thread_affinities':[{'tid':1,'cpus':'2,4'}]}
     validate_manifest(document)
@@ -181,4 +181,36 @@ def test_incomplete_cli_observations_require_a_valid_thread_request(env, status,
     document['threads'] = threads
     observation['workers'] = threads if type(threads) is int else 1
     with pytest.raises(MeasurementError, match='invalid CLI thread setting'):
+        validate_manifest(document)
+
+
+@pytest.mark.parametrize('kind', ['host', 'run', 'kernel', 'schnorr', 'sumcheck'])
+@pytest.mark.parametrize('workers', [None, True, 0, 1, '2', 3])
+def test_native_workers_require_the_observed_owner_count(env, kind, workers):
+    from bench.io import MeasurementError
+    process = {'rayon_num_threads': '2'}
+    if workers is not None:
+        process['cpu_workers'] = workers
+    with pytest.raises(MeasurementError, match='shared CPU context'):
+        env.validate_process(process, {'requested_cpus': None}, 2, {'kind': kind})
+    process['cpu_workers'] = 2
+    env.validate_process(process, {'requested_cpus': None}, 2, {'kind': kind})
+
+
+@pytest.mark.parametrize('kind', ['monero', 'c_kzg'])
+def test_foreign_workers_have_a_separate_thread_policy(env, kind):
+    env.validate_process({'rayon_num_threads': '2'}, {'requested_cpus': None}, 2, {'kind': kind})
+
+
+@pytest.mark.parametrize('fixture', ['ingress', 'reference'])
+def test_saved_native_measurements_require_owner_evidence(env, fixture):
+    from copy import deepcopy
+    import json
+    from pathlib import Path
+    from bench.io import MeasurementError
+    from bench.results import validate_manifest
+    document = deepcopy(json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())[fixture])
+    validate_manifest(document)
+    del document['results'][0]['worker']['process']['cpu_workers']
+    with pytest.raises(MeasurementError, match='shared CPU context'):
         validate_manifest(document)

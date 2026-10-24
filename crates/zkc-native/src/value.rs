@@ -954,13 +954,28 @@ impl Value {
             Self::Bn254Matrix(m) => m.backing().ok()?,
             Self::Matrix(m) => m.backing().ok()?,
             Self::RistrettoMatrix(m) => m.backing().ok()?,
-            Self::KoalaBearMatrix(m) => m.backing().ok()?,
-            Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
-            Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
-            Self::BabyBearMatrix(m) => m.backing().ok()?,
-            Self::BabyBearExt4Matrix(m) => m.backing().ok()?,
-            Self::GoldilocksMatrix(m) => m.backing().ok()?,
-            Self::GoldilocksExt2Matrix(m) => m.backing().ok()?,
+            // Keep dispatch exhaustive; registration owns collection backings.
+            Self::KoalaBearVector(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::GoldilocksExt2Polynomial(..) => crate::fields::collection_backing(self, bytes)?,
             Self::Binary64Matrix(m) => m.backing().ok()?,
             Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
             Self::BlstVector(v) => Backing::of(v, bytes),
@@ -979,15 +994,8 @@ impl Value {
             Self::Indices(v) => v.backing(bytes),
             Self::Bytes(v) => Backing::of(v, bytes),
             Self::Shake128State(v) => Backing::of(v, bytes),
-            Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => v.backing(bytes),
-            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => v.backing(bytes),
-            Self::BabyBearVector(v) | Self::BabyBearPolynomial(v) => v.backing(bytes),
-            Self::BabyBearExt4Vector(v) | Self::BabyBearExt4Polynomial(v) => v.backing(bytes),
-            Self::GoldilocksVector(v) | Self::GoldilocksPolynomial(v) => v.backing(bytes),
-            Self::GoldilocksExt2Vector(v) | Self::GoldilocksExt2Polynomial(v) => v.backing(bytes),
             Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => v.backing(bytes),
             Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => v.backing(bytes),
-            Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => v.backing(bytes),
             Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => v.backing(bytes),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => v.backing(bytes),
             Self::RistrettoGroups(v) => v.backing(bytes),
@@ -1573,37 +1581,33 @@ impl RuntimeValue for Value {
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
             Self::Matrix(m) => m.retained_bytes(),
             Self::RistrettoMatrix(m) => m.retained_bytes(),
-            Self::KoalaBearMatrix(m) => m.retained_bytes(),
-            Self::KoalaBearExt8Matrix(m) => m.retained_bytes(),
-            Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => {
-                size(v.storage_capacity(), 32)
-            }
-            Self::KoalaBearExt4Matrix(m) => m.retained_bytes(),
-            Self::BabyBearMatrix(m) => m.retained_bytes(),
-            Self::BabyBearExt4Matrix(m) => m.retained_bytes(),
-            Self::GoldilocksMatrix(m) => m.retained_bytes(),
-            Self::GoldilocksExt2Matrix(m) => m.retained_bytes(),
-            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => {
-                size(v.storage_capacity(), 16)
-            }
-            Self::BabyBearVector(v) | Self::BabyBearPolynomial(v) => size(v.storage_capacity(), 4),
-            Self::BabyBearExt4Vector(v) | Self::BabyBearExt4Polynomial(v) => {
-                size(v.storage_capacity(), 16)
-            }
-            Self::GoldilocksVector(v) | Self::GoldilocksPolynomial(v) => {
-                size(v.storage_capacity(), 8)
-            }
-            Self::GoldilocksExt2Vector(v) | Self::GoldilocksExt2Polynomial(v) => {
-                size(v.storage_capacity(), 16)
-            }
+            Self::KoalaBearVector(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::GoldilocksExt2Polynomial(..) => crate::fields::collection_retained_bytes(self)
+                .expect("registered residue collection"),
             Self::Binary64Matrix(m) => m.retained_bytes(),
             Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => size(v.storage_capacity(), 8),
             Self::Binary64Ext3Matrix(m) => m.retained_bytes(),
             Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => {
                 size(v.storage_capacity(), 24)
-            }
-            Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => {
-                size(v.storage_capacity(), 4)
             }
             Self::Vector(v) | Self::Polynomial(v) => size(v.storage_capacity(), 32),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => {

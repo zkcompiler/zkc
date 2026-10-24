@@ -200,7 +200,7 @@ def lifecycle_worker(times=(10, 100, 30, 300)):
     calls = [{'input_index': i % 2, 'decode_ns': 5, 'request_ns': 2, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'admitted_entry_call',
         'proof_bytes': 4, 'admission_ns': 3, 'process_peak_rss_bytes': 100, 'proofs': [],
-        'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1,
+        'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1', 'cpu_workers': 1}, 'timer_floor_ns': 1,
         'diagnostics': {}, 'lifecycle': {'ingress': 'json', 'input_setup': [], 'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
             'peak_rss_before_diagnostics': 80, 'peak_rss_after_diagnostics': 100, 'calls': calls},
         'samples': [{'phase': 'warmup' if i < 2 else 'sample', 'index': i, 'iterations': 1,

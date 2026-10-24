@@ -46,6 +46,27 @@ llvm::Error validateAppliedTypeRepresentations(
         break;
       }
     }
+    std::vector<std::string> arguments;
+    for (const auto &pattern : entry.arguments)
+      arguments.push_back(pattern.kind == TypeArgument::Kind::Nat
+                              ? std::to_string(pattern.minimum)
+                              : pattern.exact.str());
+    auto logical = applyBoundType(entry.constructor, arguments);
+    if (!logical) {
+      llvm::consumeError(logical.takeError());
+      return error("representation-pattern");
+    }
+    auto schemas = logicalChildren(*logical);
+    if (!schemas)
+      return schemas.takeError();
+    auto child = parseBoundType(entry.childType, true);
+    if (!child) {
+      llvm::consumeError(child.takeError());
+      return error("representation-pattern");
+    }
+    if (schemas->size() != 1 ||
+        !(erasePhysicalType(*child) == schemas->front()))
+      return error("representation-pattern");
   }
   for (auto [index, entry] : llvm::enumerate(representations)) {
     for (const auto &other : representations.take_front(index)) {
@@ -80,10 +101,14 @@ llvm::ArrayRef<AppliedTypeRepresentation> appliedTypeRepresentations() {
       {TypeArgument::Kind::Type, "field:bls12-381.fr", 0},
       {TypeArgument::Kind::Nat, {}, 1048576}};
   static const AppliedTypeRepresentation values[] = {
-      {"field_array", fieldArray, "arkworks.field-array/0", true},
-      {"field_array", fieldArray, "blst/field-array", false},
-      {"fixed_vector", blsVector, "blst/fixed-vector", false},
-      {"fixed_vector", koalaBearVector, "plonky3.fixed-vector/0", true}};
+      {"field_array", fieldArray, "arkworks.field-array/0", true,
+       "field:bls12-381.fr@arkworks.fr/0"},
+      {"field_array", fieldArray, "blst/field-array", false,
+       "field:bls12-381.fr@blst/fr"},
+      {"fixed_vector", blsVector, "blst/fixed-vector", false,
+       "field:bls12-381.fr@blst/fr"},
+      {"fixed_vector", koalaBearVector, "plonky3.fixed-vector/0", true,
+       "field:koala-bear@plonky3.koala-bear/0"}};
   static const bool validated = [] {
     if (auto e = validateAppliedTypeRepresentations(values))
       llvm::report_fatal_error(

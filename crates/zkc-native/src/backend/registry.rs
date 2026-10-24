@@ -500,7 +500,7 @@ fn prepared_literal(
     _args: &[Value],
     call: &super::NativeCall,
 ) -> Result<Vec<Value>> {
-    crate::operations::arithmetic::publish_literal(call.literal()?, i, &b.core.policy)
+    crate::operations::literal::publish(call.literal()?, i, &b.core.policy)
 }
 fn expression(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::numerical::expression::prepare(

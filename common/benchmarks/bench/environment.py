@@ -59,10 +59,13 @@ def validate_condition(host, threads):
             'recorded host affinity differs from CPU selection')
 
 
-def validate_process(process, host, threads):
+def validate_process(process, host, threads, backend):
     require(process.get('rayon_num_threads') == str(threads), 'worker thread setting differs')
-    if 'cpu_workers' in process:
-        require(type(process['cpu_workers']) is int and process['cpu_workers'] == threads,
+    # Native owns a shared numerical context; foreign references report their
+    # own threading policies and must not invent a Native owner count.
+    native = backend['kind'] in ('host', 'run', 'kernel', 'schnorr', 'sumcheck')
+    if native or 'cpu_workers' in process:
+        require(type(process.get('cpu_workers')) is int and process['cpu_workers'] == threads,
                 'shared CPU context differs from requested workers')
     requested = host.get('requested_cpus')
     if requested is None:

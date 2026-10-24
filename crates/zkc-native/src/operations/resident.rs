@@ -256,6 +256,7 @@ pub(crate) fn convert_value(
     }
     let (len, width) = shape(value);
     let retained = conversion_output(value, len, width, policy)?;
+    policy.output(retained, invocation.max_output_bytes)?;
     let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
     call.work_items(len.max(1), 4096, 1)?;
     let output = call.scalar(retained)?;

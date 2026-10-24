@@ -138,11 +138,24 @@ paths keep the existing work charges and mandatory destination bounds.
 
 Resident field/vector arithmetic uses the shared dense adapter. Resident curve
 arithmetic uses the shared curve adapter; it does not inherit the admission
-weights of the earlier bridge-per-operation implementation. MSM admits
-`256 * points + 1` work units and explicit provider workspace; pairing checks
-admit `8,192 * (pairs + 1)` units and their workspace. Conversion admits
-`4,096 * max(elements, 1) + 1` units. These are conservative admission scores,
-not runtime predictions. Input aliases remain immutable and any refusal
+weights of the earlier bridge-per-operation implementation. Both providers
+admit explicit MSM and pairing workspace. Their work scores are:
+
+| Provider | MSM, `n` points | Pairing check, `n` pairs |
+|---|---|---|
+| BLST | `256*n + 1` | `8192*(n + 1)` |
+| Halo2curves | `32*n + (n + 2*b + w)*q + 1` for `n > 0`; zero for empty input | `182*n + 8192` for `n > 0`; zero for empty input |
+
+For Halo2curves MSM, `w` is 1 when `n < 4`, 3 when `4 <= n < 32`,
+and `ceil(ln(n))` otherwise; `b = 2^(w-1)` and `q = floor(256/w) + 1`.
+The input length must fit `u32`. The score bounds scalar-byte scanning and the
+pinned serial Pippenger schedule independently of scalar values. Pairing counts
+91 preparation and 91 Miller coefficient steps per pair, plus the fixed
+final-exponentiation allowance. For one point, the Halo2curves MSM score is
+1061; for one pair, its pairing score is 8374.
+
+Conversion admits `4096 * max(elements, 1) + 1` units. These are conservative
+admission scores, not runtime predictions. Input aliases remain immutable and any refusal
 publishes no result. Provider-internal allocation failure can still abort the
 process. Every invocation checks current implementation permission before
 charging work, including a retained prepared handle after idle policy changes.

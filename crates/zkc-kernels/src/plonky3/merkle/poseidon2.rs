@@ -11,6 +11,28 @@
 //!
 //! BabyBear and Goldilocks have separately selected profiles in the modules
 //! below. Arithmetic support alone does not select a Merkle instance.
+
+// Share only forwarding; each profile keeps its codec helpers and validation.
+macro_rules! delegate_instance_codec {
+    ($base:ty, $words:literal) => {
+        fn root(c: &MerkleCap<$base, Digest>) -> Vec<u8> {
+            root(c)
+        }
+        fn commitment(bytes: &[u8]) -> Result<MerkleCap<$base, Digest>, DecodeError> {
+            commitment(bytes)
+        }
+        fn proof_bytes(p: &PrunedMerklePaths<$base, $words>) -> Vec<u8> {
+            proof_bytes(p)
+        }
+        fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<$base, $words>, DecodeError> {
+            proof(bytes)
+        }
+        fn valid_digests(bytes: &[u8]) -> bool {
+            valid_digests(bytes)
+        }
+    };
+}
+
 pub mod baby_bear;
 pub mod goldilocks;
 
@@ -80,21 +102,7 @@ impl Instance for Base {
     fn mmcs() -> &'static BaseMmcs {
         base_mmcs()
     }
-    fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(KoalaBear, 8);
 }
 
 /// Rows of `koala-bear.ext4-binomial3` elements, hashed as base coordinates.
@@ -106,19 +114,5 @@ impl Instance for Quartic {
     fn mmcs() -> &'static QuarticMmcs {
         quartic_mmcs()
     }
-    fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(KoalaBear, 8);
 }

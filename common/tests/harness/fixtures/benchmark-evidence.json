@@ -245,6 +245,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 15740928,
@@ -497,6 +498,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 15773696,
@@ -761,6 +763,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 12869632,
@@ -938,6 +941,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 3952640,
@@ -1079,6 +1083,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 3944448,

@@ -84,6 +84,43 @@ macro_rules! register {
                 _ => None,
             }
         }
+
+        /// Collection checks only; callers retain common byte and capability
+        /// checks. In particular, element policy precedes normalization.
+        pub(crate) fn validate_collection(value: &Value, policy: &crate::Policy) -> Option<Result<()>> {
+            Some(match value {
+                $(Value::$v(v) => policy.vector_width(v.len(), std::mem::size_of::<$s>()),
+                  Value::$p(v) => policy.vector_width(v.len(), std::mem::size_of::<$s>()).and_then(|()| {
+                      if zkc_kernels::polynomial::normalized(v) {
+                          Ok(())
+                      } else {
+                          Err(refused("polynomial-normalization"))
+                      }
+                  }),
+                  Value::$m(m) => m.policy(policy),)*
+                _ => return None,
+            })
+        }
+
+        /// Dense buffers retain spare capacity; COO storage owns its entry
+        /// charge. Inline scalars and rounds keep their conservative charge.
+        pub(crate) fn collection_retained_bytes(value: &Value) -> Option<Result<usize>> {
+            Some(match value {
+                $(Value::$v(v) | Value::$p(v) => crate::value::size(v.storage_capacity(), std::mem::size_of::<$s>()),
+                  Value::$m(m) => m.retained_bytes(),)*
+                _ => return None,
+            })
+        }
+
+        /// Preserve the immutable owner across vector/polynomial aliases and
+        /// matrix clones, including owners of empty dense buffers.
+        pub(crate) fn collection_backing(value: &Value, bytes: usize) -> Option<zkc_runtime::vm::Backing> {
+            Some(match value {
+                $(Value::$v(v) | Value::$p(v) => v.backing(bytes),
+                  Value::$m(m) => m.backing().ok()?,)*
+                _ => return None,
+            })
+        }
     };
 }
 inventory!([register], ());
@@ -121,7 +158,7 @@ pub(crate) fn contains(identity: Identity) -> bool {
 }
 pub(crate) fn montgomery(identity: Identity) -> bool {
     crate::fields::with_residue_or!(identity, false, |S| {
-        <<S as Residue>::Base as PrimeWord>::MONTGOMERY
+        <<S as Residue>::Base as PrimeWord>::MONTGOMERY_INVERSE.is_some()
     })
 }
 pub(crate) fn element_width(identity: Identity) -> Result<usize> {

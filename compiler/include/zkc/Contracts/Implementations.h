@@ -35,6 +35,12 @@ struct ImplementationDescriptor {
   Family family = Family::Exact;
   /// A preference or automatic search cannot authorize this implementation.
   bool requiresExplicitSelection = false;
+  struct DenseLayout {
+    std::string container, vector;
+  };
+  /// Exact container and vector port layouts for a dense family. The selected
+  /// applied representation owns the scalar child's complete physical type.
+  std::optional<DenseLayout> denseLayout = {};
 };
 
 /// Preference is independent of descriptor applicability. No entry means no

@@ -1,7 +1,6 @@
 #include "Bindings.h"
 #include "../Target/PhysicalPlan.h"
 #include "Storage.h"
-#include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -14,19 +13,11 @@ namespace zkc::protocol {
 static Error applyCheckedSignature(Block &block, ArrayRef<Type> types) {
   if (block.getNumArguments() != types.size())
     return error("binding-operation-signature");
-  TypeConverter::SignatureConversion conversion(block.getNumArguments());
-  for (auto [index, type] : enumerate(types))
-    conversion.addInputs(index, {type});
   // The checked plan preserves argument positions and cardinality. Apply its
   // explicit one-to-one signature without asking a converter to materialize
   // casts for uses whose exact conversions are recorded separately.
-  for (auto [index, argument] : enumerate(block.getArguments())) {
-    auto mapping = conversion.getInputMapping(index);
-    if (!mapping || mapping->inputNo != index || mapping->size != 1 ||
-        mapping->replacedWithValues())
-      return error("binding-operation-signature");
-    argument.setType(conversion.getConvertedTypes()[mapping->inputNo]);
-  }
+  for (auto [argument, type] : zip(block.getArguments(), types))
+    argument.setType(type);
   return Error::success();
 }
 static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {

@@ -74,8 +74,7 @@ impl NativeCall {
             .outputs
             .first()
             .ok_or_else(|| refused("kernel-operands"))?;
-        let value =
-            crate::operations::arithmetic::prepare_literal(output, attributes, policy, available)?;
+        let value = crate::operations::literal::prepare(output, attributes, policy, available)?;
         // Failed decoding must neither publish a partial replacement nor use
         // the previous successful literal for this invocation.
         *slot = Some(Self {

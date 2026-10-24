@@ -556,6 +556,227 @@ fn selected_public_operation_specific_packages_resolve_present_role_ports() {
     }
 }
 
+fn verifier_only_public_fixture(projected: bool) -> (Value, Value) {
+    let (mut doc, artifact) = unicode::proof_fixture();
+    doc["protocols"][0]["inputs"][0]["roles"] = json!(["検証者"]);
+    doc["protocols"][0]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(port(
+            "extra",
+            2,
+            json!([2]),
+            json!(["検証者"]),
+            schema("boolean", "bool", json!(["bool"])),
+        ));
+    doc["job"]["public"] = json!([0, 2]);
+    let mut artifact: Value = serde_json::from_str(&artifact).unwrap();
+    let mut program: Value = serde_json::from_str(artifact[4].as_str().unwrap()).unwrap();
+    program[3][1][4].as_array_mut().unwrap().remove(0);
+    artifact[6][1][2].as_array_mut().unwrap().remove(0);
+    program[3][0][4]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["extra", "bool@native.bool/0"]));
+    artifact[6][0][2]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["2", "bool"]));
+    artifact[2][1][7] = json!(["0", "2"]);
+    artifact[2][4].as_array_mut().unwrap().push(json!([
+        "role00000000",
+        "2",
+        "bool",
+        "zkcv.bool/0"
+    ]));
+    if projected {
+        program[3].as_array_mut().unwrap().remove(0);
+        program[4][0][2].as_array_mut().unwrap().remove(0);
+        artifact[6].as_array_mut().unwrap().remove(0);
+    }
+    artifact[4] = json!(program.to_string());
+    seal(&mut artifact);
+    (doc, artifact)
+}
+
+fn admit_producer(doc: &Value, artifact: &Value) -> std::result::Result<ProofEntry, String> {
+    ProofEntry::admit_operation(
+        package(doc, artifact),
+        ProofOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        },
+        Default::default(),
+        ProofOperation::Prove,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[test]
+fn projected_producer_binds_every_verifier_only_public_boolean() {
+    let (doc, combined) = verifier_only_public_fixture(false);
+    let (_, projected) = verifier_only_public_fixture(true);
+    let request = |extra: bool, producer: bool| ProofRequest {
+        public: [("公開".into(), true.into()), ("extra".into(), extra.into())].into(),
+        private: RoleInputs {
+            inputs: if producer {
+                [("秘密".into(), false.into())].into()
+            } else {
+                Default::default()
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let producer = admit_producer(&doc, &projected).unwrap();
+    let combined_entry = entry(&doc, &combined);
+    let mut previous = None;
+    for extra in [false, true] {
+        let report = producer.prove(request(extra, true)).unwrap();
+        let proof = report.native.outcome.unwrap();
+        assert_eq!(
+            combined_entry
+                .prove(request(extra, true))
+                .unwrap()
+                .native
+                .outcome
+                .unwrap(),
+            proof
+        );
+        assert_eq!(
+            combined_entry
+                .verify(request(extra, false), &proof)
+                .unwrap()
+                .verification_result(),
+            Some(true)
+        );
+        assert_eq!(
+            combined_entry
+                .verify(request(!extra, false), &proof)
+                .unwrap()
+                .native
+                .outcome
+                .unwrap_err(),
+            "proof-header"
+        );
+        if let Some(previous) = previous.replace(proof.clone()) {
+            assert_ne!(
+                previous, proof,
+                "the unused verifier input also binds the proof"
+            );
+        }
+    }
+    let mut missing = request(true, true);
+    missing.public.remove("extra");
+    assert!(producer.prove(missing).is_err());
+}
+
+#[test]
+fn projected_producer_refuses_malformed_public_metadata() {
+    let (doc, artifact) = verifier_only_public_fixture(true);
+    for (field, replacement, expected) in [
+        (0, json!("role00000001"), "native-proof-public-map"),
+        (1, json!("1"), "native-proof-public-map"),
+        (
+            2,
+            json!("bool@native.bool/0"),
+            "Type: explicit nominal identity required",
+        ),
+        (3, json!("zkc.native-data/0"), "native-proof-public-map"),
+    ] {
+        let mut malformed = artifact.clone();
+        malformed[2][4][0][field] = replacement;
+        seal(&mut malformed);
+        let error = admit_producer(&doc, &malformed).err().unwrap();
+        assert!(error.contains(expected), "field {field}: {error}");
+    }
+    // A valid wire type still must match the authenticated source interface.
+    let mut wrong_source = artifact;
+    wrong_source[2][4][0][2] = json!("index");
+    wrong_source[2][4][0][3] = json!("zkcv.index/0");
+    seal(&mut wrong_source);
+    assert_eq!(
+        admit_producer(&doc, &wrong_source).err().unwrap(),
+        "entry-interface-native-binding"
+    );
+}
+
+#[test]
+fn verifier_only_public_storage_uses_only_the_canonical_default() {
+    for (source, selected) in [sequence(7), variant()] {
+        let (mut doc, mut artifact) = verifier_only_public_fixture(true);
+        doc["protocols"][0]["inputs"][2]["schema"] = source.clone();
+        doc["protocols"][0]["inputs"][2]["type"] = source["type"].clone();
+        let logical = selected.physical_type().logical().clone();
+        artifact[2][4][1][2] = json!(logical.spelling());
+        artifact[2][4][1][3] = json!("zkc.native-data/0");
+        seal(&mut artifact);
+        let producer = admit_producer(&doc, &artifact).unwrap();
+        let package = package(&doc, &artifact);
+        let native = NativeDeployment::admit_artifact_operation(
+            &package.authenticated_artifact(),
+            Default::default(),
+            Some(true),
+            crate::execution::CpuExecution::serial().unwrap(),
+        )
+        .unwrap();
+        let default = PhysicalType::default_for(logical).unwrap();
+        assert_ne!(default, selected.physical_type());
+        let canonical = if source["kind"] == "variant" {
+            NativeValue::pack_variant(default, 0, vec![]).unwrap()
+        } else {
+            NativeValue::Sequence(Sequence::new(default, vec![], &Policy::default()).unwrap())
+        };
+        let request = |extra| ProofInputs {
+            public: vec![NativeValue::Bool(true).into(), extra],
+            inputs: vec![NativeValue::Bool(false).into()],
+            context: vec![],
+            services: vec![],
+            transcript_budget: 0,
+        };
+        for form in ["native", "prepared", "wire"] {
+            assert!(
+                native
+                    .execute(&request(input(&canonical, form)), Invocation::Prove)
+                    .unwrap()
+                    .outcome
+                    .is_ok()
+            );
+        }
+        for form in ["native", "prepared"] {
+            assert_eq!(
+                native
+                    .execute(&request(input(&selected, form)), Invocation::Prove)
+                    .err()
+                    .unwrap()
+                    .to_string(),
+                "native-input-type"
+            );
+        }
+        let extra = if source["kind"] == "variant" {
+            entry::Value::Variant {
+                alternative: "Empty".into(),
+                fields: Default::default(),
+            }
+        } else {
+            input(&canonical, "prepared").into()
+        };
+        assert!(
+            producer
+                .prove(ProofRequest {
+                    public: [("公開".into(), true.into()), ("extra".into(), extra)].into(),
+                    private: RoleInputs {
+                        inputs: [("秘密".into(), false.into())].into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .unwrap()
+                .is_success()
+        );
+    }
+}
+
 #[test]
 fn selected_public_named_mismatch_and_nested_constructor_controls() {
     for (source, value) in [sequence(7), variant()] {

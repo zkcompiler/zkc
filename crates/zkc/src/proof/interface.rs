@@ -275,6 +275,9 @@ impl RoleInterface {
         // Source maps authenticate logical ports; storage belongs to the
         // admitted Program. Preserve the complete selection, including inactive
         // variant children, and require agreement at every shared occurrence.
+        // A projected producer can bind inputs used only by the absent validator.
+        // Without a retained endpoint selecting storage, the descriptor's logical
+        // type and codec admit only its canonical default, never a guessed layout.
         let mut public_types = Vec::with_capacity(public.len());
         for public_port in &public {
             let mut selected = None;
@@ -292,7 +295,11 @@ impl RoleInterface {
                     selected = Some(ty);
                 }
             }
-            public_types.push(selected.ok_or("native-proof-public-map")?.clone());
+            public_types.push(match selected {
+                Some(ty) => ty.clone(),
+                None => PhysicalType::default_for(public_port.logical.clone())
+                    .map_err(|e| e.to_string())?,
+            });
         }
         Ok(Self {
             maps,

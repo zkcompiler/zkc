@@ -183,7 +183,7 @@ def run_suite(args, prepare):
             try:
                 result.update(execute_job(job, directory, manifest['plan'], args.timeout))
                 process = result['worker']['process']
-                validate_process(process, manifest['host'], args.threads)
+                validate_process(process, manifest['host'], args.threads, job.backend)
                 result['status'] = 'measured'
                 measured.append((job, directory, result))
             except Exception as error:

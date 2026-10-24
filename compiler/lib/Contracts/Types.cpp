@@ -451,14 +451,10 @@ Expected<BoundType> formPhysicalType(const BoundType &logical,
                                                       : "logical.variant/0"))
       return error("binding-representation");
   } else if (logical.kind == "field_array" || logical.kind == "fixed_vector") {
-    if (!appliedTypeRepresentation(logical, representation))
+    const auto *descriptor = appliedTypeRepresentation(logical, representation);
+    if (!descriptor)
       return error("binding-representation");
-    StringRef element = representation.starts_with("blst/")
-                            ? "field:bls12-381.fr@blst/fr"
-                        : logical.kind == "field_array"
-                            ? "field:bls12-381.fr@arkworks.fr/0"
-                            : "field:koala-bear@plonky3.koala-bear/0";
-    auto expected = parseBoundType(element, true);
+    auto expected = parseBoundType(descriptor->childType, true);
     if (!expected)
       return expected.takeError();
     if (children.size() != 1 || !(children[0] == *expected))

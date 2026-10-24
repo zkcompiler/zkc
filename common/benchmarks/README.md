@@ -63,7 +63,9 @@ instruction count does not by itself establish a timing improvement.
 `--threads` selects the shared Native CPU context (default one). The development
 worker transports this request through `RAYON_NUM_THREADS`; SDK and CLI execution
 receive an explicit context. Worker reports separate pool initialization from
-admission and timed calls. Separate CLI proof observations pass `--threads`
+admission and timed calls. Native workers must report their actual owned worker
+count; live and saved-result validation require it to match the request.
+Separate CLI proof observations pass `--threads`
 explicitly, check the CLI's reported worker count and retain it beside their
 process wall times. Foreign reference providers retain their own policy;
 this is not a universal process thread limit.

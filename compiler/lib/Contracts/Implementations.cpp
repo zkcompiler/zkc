@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -15,6 +16,29 @@ using namespace llvm;
 namespace zkc::protocol {
 namespace {
 using Compatibility = ImplementationDescriptor::Compatibility;
+using Family = ImplementationDescriptor::Family;
+
+// Closed dense family support. These exact tuples supply descriptor facts and
+// validate provider/layout agreement; implementation identities stay opaque.
+struct DenseLayoutRow {
+  Family family;
+  StringRef provider, domain, container, vector;
+};
+const DenseLayoutRow denseLayouts[] = {
+    {Family::FieldArray, "arkworks", "bls12-381.fr", "arkworks.field-array/0",
+     "arkworks.fr-vector/0"},
+    {Family::FieldArray, "blst", "bls12-381.fr", "blst/field-array", "blst/fr"},
+    {Family::FixedVector, "blst", "bls12-381.fr", "blst/fixed-vector",
+     "blst/fr"},
+    {Family::FixedVector, "plonky3", "koala-bear", "plonky3.fixed-vector/0",
+     "plonky3.koala-bear-vector/0"}};
+
+const DenseLayoutRow *denseLayoutRow(const ImplementationDescriptor &entry) {
+  auto row = find_if(denseLayouts, [&](const auto &row) {
+    return row.family == entry.family && row.provider == entry.provider;
+  });
+  return row == std::end(denseLayouts) ? nullptr : row;
+}
 
 // Applicability is deliberately independent of DefaultProvider in Domains.
 // Changing a preference cannot grant a backend a new nominal domain.
@@ -399,6 +423,35 @@ Expected<ImplementationCatalog> ImplementationCatalog::create(
       return error("implementation-catalog-entry");
     if (auto e = checkImplementationScope(entry, logical->signature.scope))
       return e;
+    if (entry.family == Family::FieldArray ||
+        entry.family == Family::FixedVector) {
+      const auto *row = denseLayoutRow(entry);
+      if (!row || !entry.denseLayout ||
+          entry.denseLayout->container != row->container ||
+          entry.denseLayout->vector != row->vector ||
+          entry.domains != std::vector<std::string>{row->domain.str()})
+        return error("implementation-catalog-representation");
+      auto vector = installedDomains().representation(
+          "vector", row->domain, entry.denseLayout->vector);
+      if (!vector)
+        return error("implementation-catalog-representation");
+      StringRef kind =
+          entry.family == Family::FieldArray ? "field_array" : "fixed_vector";
+      std::string argument = entry.family == Family::FieldArray
+                                 ? row->domain.str()
+                                 : ("field:" + row->domain).str();
+      for (StringRef size : {"0", "1048576"}) {
+        auto type = applyBoundType(kind, {argument, size.str()});
+        if (!type)
+          return type.takeError();
+        const auto *representation =
+            appliedTypeRepresentation(*type, entry.denseLayout->container);
+        if (!representation)
+          return error("implementation-catalog-representation");
+      }
+    } else if (entry.denseLayout) {
+      return error("implementation-catalog-representation");
+    }
     if (entry.family != ImplementationDescriptor::Family::Exact) {
       StringRef prefix =
           entry.family == ImplementationDescriptor::Family::Sequence
@@ -650,11 +703,20 @@ defaultPhysicalArguments(const BindingApplication &binding) {
         container = &port;
   if (!container)
     return error("binding-representation");
-  if (descriptor->provider == "blst")
-    return std::vector<std::string>{
-        container->spelling() + "@blst/" +
-        (kind == "field_array" ? "field-array" : "fixed-vector") + "[blst/fr]"};
-  auto physical = defaultRepresentation(*container);
+  auto physical = [&]() -> Expected<BoundType> {
+    if (!descriptor->denseLayout)
+      return defaultRepresentation(*container);
+    // Select this implementation's layout explicitly. Admission of omitted
+    // physical arguments below still requests the independent logical default.
+    const auto *representation = appliedTypeRepresentation(
+        *container, descriptor->denseLayout->container);
+    if (!representation)
+      return error("binding-representation");
+    auto child = parseBoundType(representation->childType, true);
+    if (!child)
+      return child.takeError();
+    return physicalType(*container, representation->representation, {*child});
+  }();
   if (!physical)
     return physical.takeError();
   return std::vector<std::string>{physical->spelling()};
@@ -748,12 +810,8 @@ Error applyImplementationFamily(const ImplementationDescriptor &entry,
     return error("binding-representation");
   const auto &element = selected->physicalChildren->front();
   if (entry.family != Family::Sequence) {
-    StringRef expected =
-        entry.provider == "blst"
-            ? (kind == "field_array" ? "blst/field-array" : "blst/fixed-vector")
-        : entry.provider == "arkworks" ? "arkworks.field-array/0"
-                                       : "plonky3.fixed-vector/0";
-    if (selected->representation != expected)
+    if (!entry.denseLayout ||
+        selected->representation != entry.denseLayout->container)
       return error("binding-representation");
   }
   auto select = [&](BoundType &port, bool output, unsigned index) -> Error {
@@ -774,12 +832,7 @@ Error applyImplementationFamily(const ImplementationDescriptor &entry,
       return Error::success();
     }
     if (entry.family != Family::Sequence && port.kind == "vector") {
-      auto physical = parseBoundType(port.spelling() + "@" +
-                                         (entry.provider == "blst" ? "blst/fr"
-                                          : entry.provider == "arkworks"
-                                              ? "arkworks.fr-vector/0"
-                                              : "plonky3.koala-bear-vector/0"),
-                                     true);
+      auto physical = physicalType(port, entry.denseLayout->vector, {});
       if (!physical)
         return physical.takeError();
       port = std::move(*physical);
@@ -1035,6 +1088,9 @@ const ImplementationCatalog &installedImplementations() {
         entry.family = ImplementationDescriptor::Family::FieldArray;
       if (StringRef(entry.contract).starts_with("fixed_vector."))
         entry.family = ImplementationDescriptor::Family::FixedVector;
+      if (const auto *row = denseLayoutRow(entry))
+        entry.denseLayout = ImplementationDescriptor::DenseLayout{
+            row->container.str(), row->vector.str()};
     }
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));

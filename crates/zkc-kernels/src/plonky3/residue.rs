@@ -11,7 +11,8 @@ use p3_field::{ExtensionField, PrimeField64, TwoAdicField};
 pub trait PrimeWord: PrimeField64 + TwoAdicField {
     const WORD_BYTES: usize;
     const CANDIDATE_MASK: u64;
-    const MONTGOMERY: bool;
+    /// The inverse of `2^32` for supported Montgomery32 words; `None` otherwise.
+    const MONTGOMERY_INVERSE: Option<Self>;
     type Dft: TwoAdicSubgroupDft<Self>;
     fn dft(kernels: &super::polynomial::Kernels) -> &Self::Dft;
 }
@@ -20,7 +21,7 @@ macro_rules! base {
         impl PrimeWord for $base {
             const WORD_BYTES: usize = $bytes;
             const CANDIDATE_MASK: u64 = $mask;
-            const MONTGOMERY: bool = $montgomery;
+            const MONTGOMERY_INVERSE: Option<Self> = $montgomery;
             type Dft = $dft;
             fn dft(kernels: &super::polynomial::Kernels) -> &Self::Dft {
                 &kernels.$cache
@@ -32,7 +33,7 @@ base!(
     KoalaBear,
     4,
     0x7fff_ffff,
-    true,
+    Some(KoalaBear::new(1_057_030_144)),
     koala,
     super::dft::Monty31<Self>
 );
@@ -40,7 +41,7 @@ base!(
     BabyBear,
     4,
     0x7fff_ffff,
-    true,
+    Some(BabyBear::new(943_718_400)),
     baby,
     super::dft::Monty31<Self>
 );
@@ -48,7 +49,7 @@ base!(
     Goldilocks,
     8,
     u64::MAX,
-    false,
+    None,
     goldilocks,
     Radix2DFTSmallBatch<Self>
 );

@@ -39,6 +39,10 @@ production correctness theorem.
 only the compiler and default-feature CLI. `just build-test-drivers` separately
 builds integration drivers with test providers; `just test-integration` builds both. No default build, test or installation invokes a Lean checker. `just test-sanitize` selects the compiler sanitizer profile.
 
+The Rust scope checks the all-features workspace, then the benchmark worker's
+normal build and the runtime's disabled execution collector. Provider timing
+controls reject instrumented builds; both configurations need their own checks.
+
 The driver uses existing project tools. Cargo tests and SDK checks compile their own test targets and consumers:
 
 ```sh

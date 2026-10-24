@@ -8,7 +8,7 @@
 //! docs/spec/domains/values.md for the exchanged encodings.
 use super::residue::{PrimeWord, Residue};
 use super::{KoalaBear, MODULUS};
-use p3_field::{Field, PrimeCharacteristicRing, PrimeField32};
+use p3_field::{PrimeCharacteristicRing, PrimeField32};
 
 /// The residue that a word carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub fn encode_into<E: Residue>(value: &E, form: Form, out: &mut Vec<u8>) {
     let factor = match form {
         Form::Canonical => E::Base::ONE,
         Form::Montgomery => {
-            assert!(E::Base::MONTGOMERY);
+            assert!(E::Base::MONTGOMERY_INVERSE.is_some());
             E::Base::from_u64(1 << 32)
         }
     };
@@ -68,12 +68,7 @@ pub fn decode<E: Residue>(bytes: &[u8], form: Form) -> Option<E> {
     let value = super::residue::decode::<E>(bytes).ok()?;
     Some(match form {
         Form::Canonical => value,
-        Form::Montgomery => {
-            if !E::Base::MONTGOMERY {
-                return None;
-            }
-            value * E::Base::from_u64(1 << 32).inverse()
-        }
+        Form::Montgomery => value * E::Base::MONTGOMERY_INVERSE?,
     })
 }
 pub fn valid_elements<E: Residue>(bytes: &[u8]) -> bool {

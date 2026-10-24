@@ -81,21 +81,7 @@ impl Instance for Base {
     fn mmcs() -> &'static BaseMmcs {
         base_mmcs()
     }
-    fn root(c: &MerkleCap<BabyBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<BabyBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<BabyBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<BabyBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(BabyBear, 8);
 }
 
 /// Rows of `baby-bear.ext4-binomial11`, hashed as ascending base coordinates.
@@ -107,19 +93,5 @@ impl Instance for Quartic {
     fn mmcs() -> &'static QuarticMmcs {
         quartic_mmcs()
     }
-    fn root(c: &MerkleCap<BabyBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<BabyBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<BabyBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<BabyBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(BabyBear, 8);
 }

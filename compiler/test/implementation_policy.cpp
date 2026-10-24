@@ -221,11 +221,137 @@ void selectorPolicies(const ImplementationCatalog &installed) {
          "binding-implementation");
 }
 
+void denseLayoutPolicies(const ImplementationCatalog &installed) {
+  using Family = ImplementationDescriptor::Family;
+  struct Layout {
+    Family family;
+    StringRef provider, field, container, child, vector;
+  };
+  const Layout layouts[] = {
+      {Family::FieldArray, "arkworks", "bls12-381.fr", "arkworks.field-array/0",
+       "arkworks.fr/0", "arkworks.fr-vector/0"},
+      {Family::FieldArray, "blst", "bls12-381.fr", "blst/field-array",
+       "blst/fr", "blst/fr"},
+      {Family::FixedVector, "blst", "bls12-381.fr", "blst/fixed-vector",
+       "blst/fr", "blst/fr"},
+      {Family::FixedVector, "plonky3", "koala-bear", "plonky3.fixed-vector/0",
+       "plonky3.koala-bear/0", "plonky3.koala-bear-vector/0"}};
+  for (const auto &entry : installed.all()) {
+    bool dense = entry.family == Family::FieldArray ||
+                 entry.family == Family::FixedVector;
+    require(bool(entry.denseLayout) == dense,
+            "missing or extraneous dense layout");
+    if (!dense)
+      continue;
+    const Layout *layout = nullptr;
+    for (const auto &row : layouts)
+      if (row.family == entry.family && row.provider == entry.provider)
+        layout = &row;
+    require(layout && entry.denseLayout->container == layout->container &&
+                entry.denseLayout->vector == layout->vector,
+            "dense descriptor layout changed");
+    auto renamed = entry;
+    renamed.identity = "unrelated.dense-choice/0";
+    auto catalog = accept(ImplementationCatalog::create({renamed}, {}));
+    require(!catalog.preferred(entry.contract, entry.provider),
+            "dense applicability manufactured a preference");
+    for (StringRef size : {"0", "4", "1048576"}) {
+      StringRef kind =
+          entry.family == Family::FieldArray ? "field_array" : "fixed_vector";
+      std::string logical = (kind + "<" +
+                             (entry.family == Family::FieldArray
+                                  ? layout->field
+                                  : ("field:" + layout->field).str()) +
+                             "," + size + ">")
+                                .str();
+      std::string selected = (logical + "@" + layout->container).str();
+      if (layout->provider == "blst")
+        selected += "[blst/fr]";
+      BindingApplication binding{
+          entry.contract, {layout->field.str(), size.str()}, entry.identity};
+      require(accept(defaultPhysicalArguments(binding)) ==
+                  std::vector<std::string>{selected},
+              "selected implementation's physical arguments changed");
+      binding.physicalArguments = {selected};
+      auto ports = accept(resolveBinding(binding, true));
+      binding.implementation = renamed.identity;
+      auto custom = accept(resolveBinding(binding, true, catalog));
+      require(ports.inputs == custom.inputs && ports.outputs == custom.outputs,
+              "dense layout inferred from implementation identity");
+      for (const auto *side : {&ports.inputs, &ports.outputs})
+        for (const auto &port : *side) {
+          if (port.kind == kind)
+            require(port.spelling() == selected,
+                    "dense container layout changed");
+          if (port.kind == "field")
+            require(port.representation == layout->child,
+                    "dense scalar layout changed");
+          if (port.kind == "vector")
+            require(port.representation == layout->vector,
+                    "dense vector layout changed");
+        }
+      binding.implementation = entry.identity;
+      if (entry.family == Family::FieldArray) {
+        binding.physicalArguments = {logical +
+                                     (entry.provider == "blst"
+                                          ? "@arkworks.field-array/0"
+                                          : "@blst/field-array[blst/fr]")};
+        refuse(resolveBinding(binding, true), "binding-representation");
+      }
+      binding.physicalArguments.clear();
+      if (entry.provider == "blst")
+        refuse(resolveBinding(binding, true), "binding-representation");
+      else
+        accept(resolveBinding(binding, true));
+    }
+    auto bad = entry;
+    if (layout->field == "bls12-381.fr") {
+      bad.provider = entry.provider == "blst" ? "arkworks" : "blst";
+      refuse(ImplementationCatalog::create({bad}, {}),
+             "implementation-catalog-representation");
+      bad = entry;
+    }
+    bad.denseLayout.reset();
+    refuse(ImplementationCatalog::create({bad}, {}),
+           "implementation-catalog-representation");
+    for (StringRef container :
+         {"unknown.dense/0", "blst/field-array", "arkworks.field-array/0",
+          "blst/fixed-vector", "plonky3.fixed-vector/0"}) {
+      if (container == entry.denseLayout->container)
+        continue;
+      bad = entry;
+      bad.denseLayout->container = container.str();
+      refuse(ImplementationCatalog::create({bad}, {}),
+             "implementation-catalog-representation");
+    }
+    for (StringRef vector :
+         {"unknown.vector/0", "blst/fr", "arkworks.fr/0",
+          "arkworks.fr-vector/0", "plonky3.koala-bear-vector/0"}) {
+      if (vector == entry.denseLayout->vector)
+        continue;
+      bad = entry;
+      bad.denseLayout->vector = vector.str();
+      refuse(ImplementationCatalog::create({bad}, {}),
+             "implementation-catalog-representation");
+    }
+    bad = entry;
+    bad.domains.clear();
+    refuse(ImplementationCatalog::create({bad}, {}),
+           "implementation-catalog-representation");
+  }
+  auto bad = *installed.find("field.add", "arkworks/field.add");
+  bad.denseLayout = ImplementationDescriptor::DenseLayout{
+      "arkworks.field-array/0", "arkworks.fr-vector/0"};
+  refuse(ImplementationCatalog::create({bad}, {}),
+         "implementation-catalog-representation");
+}
+
 } // namespace
 
 int main() {
   const auto &catalog = installedImplementations();
   selectorPolicies(catalog);
+  denseLayoutPolicies(catalog);
   require(&catalog == &installedImplementations(), "installation not retained");
   for (StringRef name : {"field.future", "index.future", "indices.future",
                          "transcript.future", "external.future"}) {

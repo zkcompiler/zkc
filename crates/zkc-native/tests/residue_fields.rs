@@ -701,3 +701,49 @@ fn registered_round_wrapping_and_substitution_keep_nonbase_coordinates() {
     check!(Goldilocks, Goldilocks, Goldilocks);
     check!(GoldilocksExt2, GoldilocksExt2, Goldilocks);
 }
+
+#[test]
+fn word_codec_bindings_preserve_montgomery_capabilities() {
+    let backend = backend(Policy::default());
+    for (field, montgomery) in [
+        (Identity::KoalaBear, true),
+        (Identity::KoalaBearExt4, true),
+        (Identity::KoalaBearExt8, true),
+        (Identity::BabyBear, true),
+        (Identity::BabyBearExt4, true),
+        (Identity::Goldilocks, false),
+        (Identity::GoldilocksExt2, false),
+    ] {
+        for operation in [
+            "encoding.field_le",
+            "encoding.fields_le",
+            "encoding.field_from_le",
+            "encoding.fields_from_le",
+        ] {
+            let bind = binding(field, operation);
+            assert!(bind.signature().is_ok(), "{field:?}/{operation}");
+            assert!(
+                backend.binding_signature(&bind).is_some(),
+                "{field:?}/{operation}"
+            );
+        }
+        for operation in [
+            "encoding.field_montgomery_le",
+            "encoding.fields_montgomery_le",
+            "encoding.field_from_montgomery_le",
+            "encoding.fields_from_montgomery_le",
+        ] {
+            let bind = binding(field, operation);
+            assert_eq!(
+                bind.signature().is_ok(),
+                montgomery,
+                "{field:?}/{operation}"
+            );
+            assert_eq!(
+                backend.binding_signature(&bind).is_some(),
+                montgomery,
+                "{field:?}/{operation}"
+            );
+        }
+    }
+}

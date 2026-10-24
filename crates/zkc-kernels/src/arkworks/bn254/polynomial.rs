@@ -209,7 +209,11 @@ pub fn coset_extend_into(
             {
                 return Err(BatchError::CoefficientCount);
             }
-            scratch.resize(output.size(), F::zero());
+            // Retain the interpolated coefficient prefix when growing. The
+            // provider selects its degree-aware FFT and supplies zero padding
+            // within the already admitted reusable capacity. Shrinkage still
+            // discards only the zero tail checked above.
+            scratch.truncate(output.size());
             output.0.fft_in_place(scratch);
             result.copy_from_slice(scratch);
         }
@@ -447,64 +451,71 @@ mod tests {
 
     #[test]
     fn extension_interpolates_horner_values_without_reallocating_scratch() {
-        for width in [1, 3, 16] {
-            for (height, size) in [
-                (1, 1),
-                (1, 8),
-                (4, 1),
-                (4, 2),
-                (4, 8),
-                (8, 4),
-                (8, 8),
-                (8, 16),
-            ] {
-                let input = Domain::new(height, F::from(7)).unwrap();
-                let output = Domain::new(size, F::from(11)).unwrap();
-                let mut values = Vec::new();
-                let mut expected = Vec::new();
-                for column in 0..width {
-                    let count = if column == 0 && width > 1 {
-                        0
-                    } else {
-                        (column + height.min(size)) % (height.min(size) + 1)
-                    };
-                    let coefficients: Vec<_> = (0..count)
-                        .map(|row| F::from((17 * column + 5 * row + 1) as u64))
-                        .collect();
-                    values.extend(evaluations(&coefficients, input));
-                    expected.extend(evaluations(&coefficients, output));
-                }
-                let original = values.clone();
-                let workspace = height.max(size);
-                for (capacity, initial_len) in [
-                    (workspace, 0),
-                    (workspace, workspace),
-                    (workspace + 3, workspace + 3),
-                ] {
-                    let mut scratch = Vec::with_capacity(capacity);
-                    scratch.resize(initial_len, F::from(97));
-                    let pointer = scratch.as_ptr();
-                    let capacity = scratch.capacity();
-                    let mut destination = vec![F::from(101); width * size];
-                    for _ in 0..2 {
-                        coset_extend_into(
-                            &values,
-                            width,
-                            input,
-                            output,
-                            &mut scratch,
-                            &mut destination,
-                        )
-                        .unwrap();
-                        assert_eq!(destination, expected);
-                        assert_eq!(scratch.len(), size);
-                        assert_eq!(scratch.capacity(), capacity);
-                        assert_eq!(scratch.as_ptr(), pointer);
-                        assert_eq!(values, original);
-                        destination.fill(F::from(101));
+        for workers in [1, 4] {
+            let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
+            cpu.enter(|| {
+                for width in [1, 3, 16] {
+                    for (height, size) in [
+                        (1, 1),
+                        (1, 8),
+                        (4, 1),
+                        (4, 2),
+                        (4, 8),
+                        (4, 16),
+                        (4, 32),
+                        (8, 4),
+                        (8, 8),
+                        (8, 16),
+                    ] {
+                        let input = Domain::new(height, F::from(7)).unwrap();
+                        let output = Domain::new(size, F::from(11)).unwrap();
+                        let mut values = Vec::new();
+                        let mut expected = Vec::new();
+                        for column in 0..width {
+                            let count = if column == 0 && width > 1 {
+                                0
+                            } else {
+                                (column + height.min(size)) % (height.min(size) + 1)
+                            };
+                            let coefficients: Vec<_> = (0..count)
+                                .map(|row| F::from((17 * column + 5 * row + 1) as u64))
+                                .collect();
+                            values.extend(evaluations(&coefficients, input));
+                            expected.extend(evaluations(&coefficients, output));
+                        }
+                        let original = values.clone();
+                        let workspace = height.max(size);
+                        for (capacity, initial_len) in [
+                            (workspace, 0),
+                            (workspace, workspace),
+                            (workspace + 3, workspace + 3),
+                        ] {
+                            let mut scratch = Vec::with_capacity(capacity);
+                            scratch.resize(initial_len, F::from(97));
+                            let pointer = scratch.as_ptr();
+                            let capacity = scratch.capacity();
+                            let mut destination = vec![F::from(101); width * size];
+                            for _ in 0..2 {
+                                coset_extend_into(
+                                    &values,
+                                    width,
+                                    input,
+                                    output,
+                                    &mut scratch,
+                                    &mut destination,
+                                )
+                                .unwrap();
+                                assert_eq!(destination, expected);
+                                assert_eq!(scratch.len(), size);
+                                assert_eq!(scratch.capacity(), capacity);
+                                assert_eq!(scratch.as_ptr(), pointer);
+                                assert_eq!(values, original);
+                                destination.fill(F::from(101));
+                            }
+                        }
                     }
                 }
-            }
+            });
         }
     }
 

@@ -62,7 +62,7 @@ samples=[dict(index=i,iterations=plan['iterations'],phase='warmup' if i<plan['wa
 provider=request['backend']['provider']
 storage={providers.DIRECT_STORAGE!r}
 diagnostics=dict(family='bls12-381',provider=provider,chain_length=1,arithmetic_calls=1,kernel_adapter_conversions=[],bulk_storage=storage[provider],managed=dict(peak_retained_payload_bytes=None,peak_scratch_bytes=None,provider_workspace_admission_bound_bytes_per_call=None))
-print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='resident_kernel_call',samples=samples,proof_bytes=0,proofs=[],admission_ns=None,process_peak_rss_bytes=None,build=dict(optimized=True,debug_assertions=False,execution_counts=False),process=dict(rayon_num_threads='1'),timer_floor_ns=1,diagnostics=diagnostics,lifecycle=None)))
+print(json.dumps(dict(format='zkc.benchmark-worker/0',status='passed',boundary='resident_kernel_call',samples=samples,proof_bytes=0,proofs=[],admission_ns=None,process_peak_rss_bytes=None,build=dict(optimized=True,debug_assertions=False,execution_counts=False),process=dict(rayon_num_threads='1',cpu_workers=1),timer_floor_ns=1,diagnostics=diagnostics,lifecycle=None)))
 ''')
     worker.chmod(0o755)
     args = SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=1,

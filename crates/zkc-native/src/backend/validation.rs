@@ -133,83 +133,30 @@ impl Core {
                 m.policy(&self.policy)?;
                 None
             }
-            Value::KoalaBearExt8Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearExt4Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::BabyBearMatrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::BabyBearExt4Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::GoldilocksMatrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::GoldilocksExt2Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearExt4Vector(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                None
-            }
-            Value::BabyBearVector(a) => {
-                self.policy.vector_width(a.len(), 4)?;
-                None
-            }
-            Value::BabyBearExt4Vector(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                None
-            }
-            Value::GoldilocksVector(a) => {
-                self.policy.vector_width(a.len(), 8)?;
-                None
-            }
-            Value::GoldilocksExt2Vector(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                None
-            }
-            Value::KoalaBearExt4Polynomial(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::BabyBearPolynomial(a) => {
-                self.policy.vector_width(a.len(), 4)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::BabyBearExt4Polynomial(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::GoldilocksPolynomial(a) => {
-                self.policy.vector_width(a.len(), 8)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::GoldilocksExt2Polynomial(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
+            // Keep dispatch exhaustive; registration owns collection checks.
+            Value::KoalaBearVector(..)
+            | Value::KoalaBearMatrix(..)
+            | Value::KoalaBearPolynomial(..)
+            | Value::KoalaBearExt4Vector(..)
+            | Value::KoalaBearExt4Matrix(..)
+            | Value::KoalaBearExt4Polynomial(..)
+            | Value::KoalaBearExt8Vector(..)
+            | Value::KoalaBearExt8Matrix(..)
+            | Value::KoalaBearExt8Polynomial(..)
+            | Value::BabyBearVector(..)
+            | Value::BabyBearMatrix(..)
+            | Value::BabyBearPolynomial(..)
+            | Value::BabyBearExt4Vector(..)
+            | Value::BabyBearExt4Matrix(..)
+            | Value::BabyBearExt4Polynomial(..)
+            | Value::GoldilocksVector(..)
+            | Value::GoldilocksMatrix(..)
+            | Value::GoldilocksPolynomial(..)
+            | Value::GoldilocksExt2Vector(..)
+            | Value::GoldilocksExt2Matrix(..)
+            | Value::GoldilocksExt2Polynomial(..) => {
+                crate::fields::validate_collection(v, &self.policy)
+                    .expect("registered residue collection")?;
                 None
             }
             Value::Binary64Matrix(m) => {
@@ -237,32 +184,6 @@ impl Core {
             }
             Value::Binary64Ext3Polynomial(a) => {
                 self.policy.vector_width(a.len(), 24)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::KoalaBearExt8Vector(a) => {
-                self.policy.vector_width(a.len(), 32)?;
-                None
-            }
-            Value::KoalaBearExt8Polynomial(a) => {
-                self.policy.vector_width(a.len(), 32)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::KoalaBearMatrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearVector(a) => {
-                self.policy.vector_width(a.len(), 4)?;
-                None
-            }
-            Value::KoalaBearPolynomial(a) => {
-                self.policy.vector_width(a.len(), 4)?;
                 if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }

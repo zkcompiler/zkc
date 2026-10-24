@@ -712,6 +712,29 @@ fn true_pairing_equation_requires_final_exponentiation_of_miller_product() {
 }
 
 #[test]
+fn admission_scores_match_documented_empty_and_window_boundaries() {
+    // Fixed examples from the public-shape contract, independent of the helpers
+    // used by Native to choose its actual admission limits.
+    for (points, work) in [
+        (0, 0),
+        (1, 1061),
+        (3, 1639),
+        (4, 1419),
+        (31, 4605),
+        (32, 4405),
+        (54, 6539),
+        (55, 6545),
+        (148, 14357),
+        (149, 14186),
+    ] {
+        assert_eq!(halo::msm_work(points), Ok(work), "points={points}");
+    }
+    for (pairs, work) in [(0, 0), (1, 8374), (3, 8738), (32, 14016)] {
+        assert_eq!(halo::pairing_work(pairs), Ok(work), "pairs={pairs}");
+    }
+}
+
+#[test]
 fn workspace_and_work_bounds_use_only_public_shape_and_refuse_overflow() {
     assert_eq!(halo::msm_workspace_bytes(0), Ok(0));
     assert_eq!(halo::msm_work(0), Ok(0));

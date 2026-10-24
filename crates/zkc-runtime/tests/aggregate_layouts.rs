@@ -238,6 +238,7 @@ struct Control {
     scalar: PhysicalType,
     fixed: PhysicalType,
     constant_id: ImplementationId,
+    outer_sequence: Option<(PhysicalType, [ImplementationId; 4])>,
     frames: Vec<FrameId>,
     calls: u64,
     generation: u64,
@@ -270,6 +271,27 @@ impl Backend for Control {
                 AttributeRule::KoalaBearDecimal,
                 Some(self.constant_id),
             )
+        } else if b.implementation == format!("control/{}", b.contract)
+            && b.arguments == ["field:koala-bear"]
+        {
+            let (sequence, ids) = self.outer_sequence.as_ref()?;
+            if b.physical_arguments != [sequence.spelling()] {
+                return None;
+            }
+            let element = self.scalar.clone();
+            let index = PhysicalType::parse(INDEX).ok()?;
+            let (inputs, outputs, id) = match b.contract.as_str() {
+                "sequence.empty" => (vec![], vec![sequence.clone()], ids[0]),
+                "sequence.append" => (
+                    vec![sequence.clone(), element],
+                    vec![sequence.clone()],
+                    ids[1],
+                ),
+                "sequence.length" => (vec![sequence.clone()], vec![index], ids[2]),
+                "sequence.at" => (vec![sequence.clone(), index], vec![element], ids[3]),
+                _ => return None,
+            };
+            (inputs, outputs, AttributeRule::None, Some(id))
         } else if b.implementation == format!("native/{}", b.contract)
             && b.arguments == ["field:koala-bear"]
         {
@@ -414,7 +436,14 @@ struct Deployment {
     variant: PhysicalType,
 }
 fn deployment() -> Deployment {
-    let mut builder = ContractsBuilder::standard();
+    deployment_with_sequence(false)
+}
+fn deployment_with_sequence(contributed: bool) -> Deployment {
+    let mut builder = if contributed {
+        ContractsBuilder::empty()
+    } else {
+        ContractsBuilder::standard()
+    };
     let scalar = builder
         .add_representation(SCALAR, LogicalType::parse("field:koala-bear").unwrap())
         .unwrap();
@@ -455,13 +484,64 @@ fn deployment() -> Deployment {
             ImplementationRequirements::default(),
         )
         .unwrap();
+    let sequence_representation = if contributed {
+        builder
+            .add_aggregate_representation(
+                "control/sequence",
+                Type::Sequence,
+                AggregateChildRule::AnyAdmitted,
+            )
+            .unwrap()
+    } else {
+        Representation::Sequence
+    };
     let sequence = builder
         .aggregate_type(
             LogicalType::sequence(scalar.logical().clone()).unwrap(),
-            Representation::Sequence,
+            sequence_representation,
             vec![scalar.clone()],
         )
         .unwrap();
+    let outer_sequence = contributed.then(|| {
+        let index = PhysicalType::parse(INDEX).unwrap();
+        let ids = [
+            ("sequence.empty", vec![], vec![sequence.clone()]),
+            (
+                "sequence.append",
+                vec![sequence.clone(), scalar.clone()],
+                vec![sequence.clone()],
+            ),
+            (
+                "sequence.length",
+                vec![sequence.clone()],
+                vec![index.clone()],
+            ),
+            (
+                "sequence.at",
+                vec![sequence.clone(), index],
+                vec![scalar.clone()],
+            ),
+        ]
+        .map(|(contract, inputs, outputs)| {
+            builder
+                .add_implementation(
+                    binding(
+                        contract,
+                        &format!("control/{contract}"),
+                        &["field:koala-bear"],
+                        vec![sequence.spelling()],
+                    ),
+                    BoundSignature {
+                        inputs,
+                        outputs,
+                        attributes: AttributeRule::None,
+                    },
+                    ImplementationRequirements::default(),
+                )
+                .unwrap()
+        });
+        (sequence.clone(), ids)
+    });
     let logical = LogicalType::parse(&zkc_test_support::variants::logical(
         "Control",
         json!([
@@ -483,6 +563,7 @@ fn deployment() -> Deployment {
             scalar,
             fixed,
             constant_id,
+            outer_sequence,
             frames: vec![],
             calls: 0,
             generation: 1,
@@ -1228,6 +1309,464 @@ fn empty_catalog_wire_requires_parent_authority_and_every_child() {
         }
         let contracts = b.finish(ExecutionPolicy::general_purpose());
         assert_eq!(contracts.permits_wire(&sequence, WireCodec::Native), grant);
+    }
+}
+
+#[test]
+fn contributed_outer_sequence_executes_all_exact_operations_without_wire_permission() {
+    let d = deployment_with_sequence(true);
+    assert!(!d.contracts.permits_wire(&d.sequence, WireCodec::Native));
+    let declarations: Vec<_> = ["empty", "append", "length", "at"]
+        .map(|name| {
+            json!([
+                name,
+                format!("sequence.{name}"),
+                ["field:koala-bear"],
+                format!("control/sequence.{name}"),
+                [d.sequence.spelling()]
+            ])
+        })
+        .into();
+    let carrier = json!([
+        "zkc.program/0",
+        declarations,
+        [[
+            "function",
+            "build",
+            [["scalar", d.backend.scalar.spelling()], ["index", INDEX]],
+            [d.sequence.spelling(), INDEX, d.backend.scalar.spelling()],
+            [
+                ["op", "empty", "empty", [], [], ["initial"]],
+                [
+                    "op",
+                    "append",
+                    "append",
+                    [],
+                    ["initial", "scalar"],
+                    ["values"]
+                ],
+                ["op", "length", "length", [], ["values"], ["size"]],
+                ["op", "at", "at", [], ["values", "index"], ["element"]],
+                ["return", ["values", "size", "element"]]
+            ],
+            ["build", []]
+        ]],
+        [],
+        []
+    ]);
+    let p = Program::decode(&serde_json::to_vec(&carrier).unwrap(), &d.contracts).unwrap();
+    p.check_installation(&d.backend).unwrap();
+    let scalar = Datum::Scalar(Arc::new(Scalar {
+        ty: d.backend.scalar.clone(),
+        value: 7,
+    }));
+    let mut runner = LocalRunner::new(
+        &p,
+        "build",
+        "session",
+        d.backend.clone(),
+        vec![scalar.clone(), Datum::Index(0)],
+    )
+    .ok()
+    .unwrap();
+    assert!(matches!(runner.execute(), Action::Returned(_)));
+    assert_eq!(
+        runner.returned_values().unwrap(),
+        [
+            Datum::sequence(d.sequence.clone(), vec![scalar.clone()]).unwrap(),
+            Datum::Index(1),
+            scalar.clone()
+        ]
+    );
+    assert_eq!(runner.backend().calls, 4);
+    let mut invalid_index = LocalRunner::new(
+        &p,
+        "build",
+        "session",
+        d.backend.clone(),
+        vec![scalar, Datum::Index(1)],
+    )
+    .ok()
+    .unwrap();
+    assert!(matches!(invalid_index.execute(), Action::Stopped(stop)
+        if matches!(&stop.kind, StopKind::Backend(error) if error.code == "sequence-index")));
+    // Actual adapter claims are independently checked against admitted ports and IDs.
+    let mut wrong_backend = d.backend.clone();
+    wrong_backend.outer_sequence.as_mut().unwrap().0 =
+        PhysicalType::default_for(d.sequence.logical().clone()).unwrap();
+    assert_eq!(
+        p.check_installation(&wrong_backend).unwrap_err().code,
+        ErrorCode::Backend
+    );
+    let mut wrong_backend = d.backend.clone();
+    wrong_backend.scalar = PhysicalType::default_for(d.backend.scalar.logical().clone()).unwrap();
+    assert_eq!(
+        p.check_installation(&wrong_backend).unwrap_err().code,
+        ErrorCode::Backend
+    );
+    let mut wrong_backend = d.backend.clone();
+    wrong_backend.outer_sequence.as_mut().unwrap().1.swap(0, 1);
+    assert_eq!(
+        p.check_installation(&wrong_backend).unwrap_err().code,
+        ErrorCode::Backend
+    );
+}
+
+#[test]
+fn exact_aggregate_registration_checks_selected_ports_without_standard_providers() {
+    for domain in ["koala-bear", "bls12-381.fr"] {
+        let mut b = ContractsBuilder::empty();
+        let scalar = b
+            .add_representation(
+                "control/scalar",
+                LogicalType::parse(&format!("field:{domain}")).unwrap(),
+            )
+            .unwrap();
+        let other_scalar = b
+            .add_representation("control/other-scalar", scalar.logical().clone())
+            .unwrap();
+        let vector = b
+            .add_representation(
+                "control/vector",
+                LogicalType::parse(&format!("vector:{domain}")).unwrap(),
+            )
+            .unwrap();
+        let index = PhysicalType::parse(INDEX).unwrap();
+        let mut admitted = Vec::new();
+        for (kind, name, logical) in [
+            (
+                Type::Sequence,
+                "control/sequence",
+                LogicalType::sequence(scalar.logical().clone()).unwrap(),
+            ),
+            (
+                Type::FieldArray,
+                "control/array",
+                LogicalType::field_array(scalar.logical().identity(), 2).unwrap(),
+            ),
+            (
+                Type::FixedVector,
+                "control/fixed",
+                LogicalType::fixed_vector(scalar.logical().clone(), 2).unwrap(),
+            ),
+        ] {
+            let children = if kind == Type::Sequence {
+                AggregateChildRule::AnyAdmitted
+            } else {
+                AggregateChildRule::Repeated {
+                    element: scalar.clone(),
+                    maximum_length: 2,
+                }
+            };
+            let other_name = match kind {
+                Type::Sequence => "control/other-sequence",
+                Type::FieldArray => "control/other-array",
+                Type::FixedVector => "control/other-fixed",
+                _ => unreachable!(),
+            };
+            let other_representation = b
+                .add_aggregate_representation(other_name, kind, children.clone())
+                .unwrap();
+            let wrong_container = b
+                .aggregate_type(logical.clone(), other_representation, vec![scalar.clone()])
+                .unwrap();
+            let representation = b
+                .add_aggregate_representation(name, kind, children)
+                .unwrap();
+            let container = b
+                .aggregate_type(logical.clone(), representation, vec![scalar.clone()])
+                .unwrap();
+            let cases = match kind {
+                Type::Sequence => vec![
+                    (
+                        "sequence.empty",
+                        vec![],
+                        vec![container.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "sequence.append",
+                        vec![container.clone(), scalar.clone()],
+                        vec![container.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "sequence.length",
+                        vec![container.clone()],
+                        vec![index.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "sequence.at",
+                        vec![container.clone(), index.clone()],
+                        vec![scalar.clone()],
+                        AttributeRule::None,
+                    ),
+                ],
+                Type::FieldArray => vec![
+                    (
+                        "field_array.from_vector",
+                        vec![vector.clone()],
+                        vec![container.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "field_array.at",
+                        vec![container.clone()],
+                        vec![scalar.clone()],
+                        AttributeRule::Unsigned64,
+                    ),
+                    (
+                        "field_array.get",
+                        vec![container.clone(), index.clone()],
+                        vec![scalar.clone()],
+                        AttributeRule::None,
+                    ),
+                ],
+                Type::FixedVector => vec![
+                    (
+                        "fixed_vector.from_vector",
+                        vec![vector.clone()],
+                        vec![container.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "fixed_vector.to_vector",
+                        vec![container.clone()],
+                        vec![vector.clone()],
+                        AttributeRule::None,
+                    ),
+                    (
+                        "fixed_vector.dot",
+                        vec![container.clone(), container.clone()],
+                        vec![scalar.clone()],
+                        AttributeRule::None,
+                    ),
+                ],
+                _ => unreachable!(),
+            };
+            for (contract, inputs, outputs, attributes) in cases {
+                let args = if kind == Type::Sequence {
+                    vec![scalar.logical().spelling()]
+                } else {
+                    vec![domain.into(), "2".into()]
+                };
+                let declaration = OperationBinding {
+                    contract: contract.into(),
+                    arguments: args,
+                    implementation: format!("control/{contract}"),
+                    physical_arguments: vec![container.spelling()],
+                };
+                let signature = BoundSignature {
+                    inputs,
+                    outputs,
+                    attributes,
+                };
+                // Matching logical erasure alone cannot select another container.
+                let mut wrong = signature.clone();
+                let port = wrong
+                    .inputs
+                    .iter_mut()
+                    .chain(&mut wrong.outputs)
+                    .find(|ty| **ty == container)
+                    .unwrap();
+                *port = wrong_container.clone();
+                let error = b
+                    .add_implementation(
+                        declaration.clone(),
+                        wrong,
+                        ImplementationRequirements::default(),
+                    )
+                    .unwrap_err();
+                assert_eq!(
+                    (error.code, error.detail.as_str()),
+                    (ErrorCode::Signature, "implementation-physical-ports"),
+                    "{contract}"
+                );
+                // A scalar result/argument must be the selected container's child.
+                if signature
+                    .inputs
+                    .iter()
+                    .chain(&signature.outputs)
+                    .any(|ty| ty == &scalar)
+                {
+                    let mut wrong = signature.clone();
+                    *wrong
+                        .inputs
+                        .iter_mut()
+                        .chain(&mut wrong.outputs)
+                        .find(|ty| **ty == scalar)
+                        .unwrap() = other_scalar.clone();
+                    assert_eq!(
+                        b.add_implementation(
+                            declaration.clone(),
+                            wrong,
+                            ImplementationRequirements::default()
+                        )
+                        .unwrap_err()
+                        .detail,
+                        "implementation-physical-ports",
+                        "{contract}"
+                    );
+                }
+                for physical in [
+                    vec![],
+                    vec![scalar.spelling()],
+                    vec![container.spelling(), container.spelling()],
+                ] {
+                    let mut wrong = declaration.clone();
+                    wrong.physical_arguments = physical;
+                    assert!(
+                        b.add_implementation(
+                            wrong,
+                            signature.clone(),
+                            ImplementationRequirements::default()
+                        )
+                        .is_err(),
+                        "{contract}"
+                    );
+                }
+                let mut wrong = signature.clone();
+                wrong.outputs[0] = PhysicalType::parse(BOOL).unwrap();
+                assert_eq!(
+                    b.add_implementation(
+                        declaration.clone(),
+                        wrong,
+                        ImplementationRequirements::default()
+                    )
+                    .unwrap_err()
+                    .detail,
+                    "implementation-logical-ports"
+                );
+                let mut wrong = signature.clone();
+                wrong.attributes = if attributes == AttributeRule::None {
+                    AttributeRule::Unsigned64
+                } else {
+                    AttributeRule::None
+                };
+                assert_eq!(
+                    b.add_implementation(
+                        declaration.clone(),
+                        wrong,
+                        ImplementationRequirements::default()
+                    )
+                    .unwrap_err()
+                    .detail,
+                    "implementation-logical-ports"
+                );
+                let id = b
+                    .add_implementation(
+                        declaration.clone(),
+                        signature.clone(),
+                        ImplementationRequirements::default(),
+                    )
+                    .unwrap();
+                admitted.push((declaration, signature, id, container.clone()));
+            }
+        }
+        let contracts = b.finish(ExecutionPolicy::general_purpose());
+        for (declaration, signature, id, container) in admitted {
+            let resolved = contracts.resolve(declaration).unwrap();
+            assert_eq!(resolved.signature(), &signature);
+            assert_eq!(resolved.implementation_id(), Some(id));
+            assert_eq!(
+                resolved.physical_arguments(),
+                std::slice::from_ref(&container)
+            );
+            assert!(!contracts.permits_wire(&container, WireCodec::Native));
+        }
+    }
+}
+
+#[test]
+fn standard_aggregate_implementations_keep_their_provider_restrictions() {
+    let mut b = ContractsBuilder::standard();
+    let scalar = b
+        .add_representation(
+            "control/scalar",
+            LogicalType::parse("field:koala-bear").unwrap(),
+        )
+        .unwrap();
+    let sequence_representation = b
+        .add_aggregate_representation(
+            "control/sequence",
+            Type::Sequence,
+            AggregateChildRule::AnyAdmitted,
+        )
+        .unwrap();
+    let sequence = b
+        .aggregate_type(
+            LogicalType::sequence(scalar.logical().clone()).unwrap(),
+            sequence_representation,
+            vec![scalar.clone()],
+        )
+        .unwrap();
+    let array = b.aggregate_type(
+        LogicalType::field_array(scalar.logical().identity(), 2).unwrap(),
+        Representation::FieldArray,
+        vec![scalar.clone()],
+    );
+    // Standard array formation itself is provider-specific.
+    assert!(array.is_err());
+    let array_representation = b
+        .add_aggregate_representation(
+            "control/array",
+            Type::FieldArray,
+            AggregateChildRule::Repeated {
+                element: scalar.clone(),
+                maximum_length: 2,
+            },
+        )
+        .unwrap();
+    let array = b
+        .aggregate_type(
+            LogicalType::field_array(scalar.logical().identity(), 2).unwrap(),
+            array_representation,
+            vec![scalar.clone()],
+        )
+        .unwrap();
+    let fixed_representation = b
+        .add_aggregate_representation(
+            "control/fixed",
+            Type::FixedVector,
+            AggregateChildRule::Repeated {
+                element: scalar.clone(),
+                maximum_length: 2,
+            },
+        )
+        .unwrap();
+    let fixed = b
+        .aggregate_type(
+            LogicalType::fixed_vector(scalar.logical().clone(), 2).unwrap(),
+            fixed_representation,
+            vec![scalar.clone()],
+        )
+        .unwrap();
+    let contracts = b.finish(ExecutionPolicy::general_purpose());
+    for declaration in [
+        binding(
+            "sequence.append",
+            "native/sequence.append",
+            &["field:koala-bear"],
+            vec![sequence.spelling()],
+        ),
+        binding(
+            "fixed_vector.dot",
+            "plonky3/fixed_vector.dot",
+            &["koala-bear", "2"],
+            vec![fixed.spelling()],
+        ),
+        binding(
+            "field_array.at",
+            "arkworks/field_array.at",
+            &["koala-bear", "2"],
+            vec![array.spelling()],
+        ),
+    ] {
+        assert_eq!(
+            contracts.resolve(declaration).unwrap_err().detail,
+            "aggregate-specialization"
+        );
     }
 }
 

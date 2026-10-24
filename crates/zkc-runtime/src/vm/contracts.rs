@@ -571,9 +571,12 @@ impl ContractsBuilder {
                     "conversion-physical-ports",
                 ));
             }
-        } else if let Some(expected) =
-            super::aggregate_bindings::standard_signature(&declaration, &logical, &physical)
-        {
+        } else if let Some(expected) = super::aggregate_bindings::exact_signature(
+            &declaration,
+            &logical,
+            &physical,
+            &signature,
+        ) {
             if expected? != signature {
                 return Err(AdmissionError::new(
                     ErrorCode::Signature,

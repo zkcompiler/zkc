@@ -332,7 +332,7 @@ def validate_manifest(manifest):
         worker = validate_worker(result['worker'], plan, job['boundary'])
         if result['status'] != 'failed':
             from .environment import validate_process
-            validate_process(worker['process'], manifest['host'], manifest['threads'])
+            validate_process(worker['process'], manifest['host'], manifest['threads'], job['backend'])
         from .providers import validate_evidence
         validate_evidence(worker, job['backend'])
         if job['backend']['kind'] == 'c_kzg':

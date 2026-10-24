@@ -88,22 +88,7 @@ impl AggregateImplementationFamily {
         if !self.supports(&binding.contract) {
             return Err(fail());
         }
-        let logical_container = logical
-            .inputs
-            .iter()
-            .chain(&logical.outputs)
-            .find(|t| t.kind() == self.kind())
-            .ok_or_else(fail)?;
-        let container = match physical {
-            [] if binding.physical_arguments.is_empty() => {
-                PhysicalType::default_for(logical_container.clone())?
-            }
-            [selected] => selected.clone(),
-            _ => return Err(fail()),
-        };
-        if container.logical() != logical_container {
-            return Err(fail());
-        }
+        let container = selected_container(binding, logical, physical, self.kind())?;
         let element = container
             .children()
             .and_then(|c| c.first())
@@ -127,29 +112,95 @@ impl AggregateImplementationFamily {
                 Some(vector)
             }
         };
-        let port = |ty: &LogicalType| -> Result<PhysicalType> {
-            if ty == logical_container {
-                return Ok(container.clone());
-            }
-            if ty == element.logical() {
-                return Ok(element.clone());
-            }
-            if let Some(vector) = vector
-                && ty == vector.logical()
-            {
-                return Ok(vector.clone());
-            }
-            if ty.kind() == Type::Index {
-                return PhysicalType::default_for(ty.clone());
-            }
-            Err(fail())
-        };
-        Ok(OperationSignature {
-            inputs: logical.inputs.iter().map(port).collect::<Result<_>>()?,
-            outputs: logical.outputs.iter().map(port).collect::<Result<_>>()?,
-            attributes: logical.attributes,
-        })
+        physical_signature(logical, &container, vector)
     }
+}
+
+fn selected_container(
+    binding: &OperationBinding,
+    logical: &OperationSignature<LogicalType>,
+    physical: &[PhysicalType],
+    kind: Type,
+) -> Result<PhysicalType> {
+    let fail = || AdmissionError::new(ErrorCode::Signature, "aggregate-specialization");
+    let logical_container = logical
+        .inputs
+        .iter()
+        .chain(&logical.outputs)
+        .find(|ty| ty.kind() == kind)
+        .ok_or_else(fail)?;
+    let container = match physical {
+        [] if binding.physical_arguments.is_empty() => {
+            PhysicalType::default_for(logical_container.clone())?
+        }
+        [selected] => selected.clone(),
+        _ => return Err(fail()),
+    };
+    if container.logical() != logical_container {
+        return Err(fail());
+    }
+    Ok(container)
+}
+
+fn physical_signature(
+    logical: &OperationSignature<LogicalType>,
+    container: &PhysicalType,
+    vector: Option<&PhysicalType>,
+) -> Result<BoundSignature> {
+    let fail = || AdmissionError::new(ErrorCode::Signature, "aggregate-specialization");
+    let element = container
+        .children()
+        .and_then(|children| children.first())
+        .ok_or_else(fail)?;
+    let port = |ty: &LogicalType| -> Result<PhysicalType> {
+        if ty == container.logical() {
+            Ok(container.clone())
+        } else if ty == element.logical() {
+            Ok(element.clone())
+        } else if let Some(vector) = vector
+            && ty == vector.logical()
+        {
+            Ok(vector.clone())
+        } else if ty.kind() == Type::Index {
+            PhysicalType::default_for(ty.clone())
+        } else {
+            Err(fail())
+        }
+    };
+    Ok(OperationSignature {
+        inputs: logical.inputs.iter().map(port).collect::<Result<_>>()?,
+        outputs: logical.outputs.iter().map(port).collect::<Result<_>>()?,
+        attributes: logical.attributes,
+    })
+}
+
+/// Exact trusted contributions select their container and child layouts. Their
+/// vector adapter, when present, is an independently admitted port; standard
+/// provider restrictions belong only to the standard implementation families.
+pub(super) fn exact_signature(
+    binding: &OperationBinding,
+    logical: &OperationSignature<LogicalType>,
+    physical: &[PhysicalType],
+    signature: &BoundSignature,
+) -> Option<Result<BoundSignature>> {
+    let kind = match binding.contract.as_str() {
+        "sequence.empty" | "sequence.append" | "sequence.length" | "sequence.at" => Type::Sequence,
+        "field_array.from_vector" | "field_array.at" | "field_array.get" => Type::FieldArray,
+        "fixed_vector.from_vector" | "fixed_vector.to_vector" | "fixed_vector.dot" => {
+            Type::FixedVector
+        }
+        _ => return None,
+    };
+    Some(
+        selected_container(binding, logical, physical, kind).and_then(|container| {
+            let vector = signature
+                .inputs
+                .iter()
+                .chain(&signature.outputs)
+                .find(|ty| ty.kind() == Type::Vector);
+            physical_signature(logical, &container, vector)
+        }),
+    )
 }
 
 fn standard_family(binding: &OperationBinding) -> Option<AggregateImplementationFamily> {
