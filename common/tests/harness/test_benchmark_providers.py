@@ -256,10 +256,16 @@ def test_bn254_catalog_matches_explicit_family_and_provider_inventory(modules):
     assert shapes and all(shape['family'] == 'bn254' for shape in shapes)
     for group, kernel, sizes in [('g1', 'msm', (32, 256)), ('g2', 'msm', (32, 256)),
                                  ('pairing', 'pairing_check', (2, 8)), ('scalar', 'field_mul', (1,)),
-                                 ('scalar', 'vector_mul', (32, 256)), ('g1', 'scale', (1,)), ('g2', 'scale', (1,))]:
+                                 ('scalar', 'vector_mul', (32, 256)), ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
+                                 ('g1', 'scale_each', (1, 32, 1024)), ('g2', 'scale_each', (1, 32, 1024)),
+                                 ('g1', 'vector_scale', (1, 32, 1024)), ('g2', 'vector_scale', (1, 32, 1024))]:
         for n in sizes:
             selected = [shape for shape in shapes if (shape['group'], shape['kernel'], shape['elements']) == (group, kernel, n)]
             assert {s['boundary'] for s in selected} >= {'resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain'}
+            if kernel in ('scale_each', 'vector_scale'):
+                assert {(s['boundary'], s.get('chain_length', 1)) for s in selected} == {
+                    ('resident', 1), ('converted', 1), ('installed', 1), ('resident', 4),
+                    ('converted', 4), ('resident_installed_chain', 4), ('wire_resident_chain', 4)}
     for shape in shapes:
         for provider in ('arkworks', 'halo2curves-axiom'):
             if shape['boundary'] in ('import', 'export') and provider == 'arkworks':
@@ -296,6 +302,14 @@ def test_foreign_bn254_provider_cannot_inherit_the_bls_default(modules):
      'group:bn254.g1@halo2curves-axiom/bn254.g1'),
     ('g2', 'msm', ['vector:bn254.fr@halo2curves-axiom/bn254.fr', 'groups:bn254.g2@halo2curves-axiom/bn254.g2'],
      'group:bn254.g2@halo2curves-axiom/bn254.g2'),
+    ('g1', 'scale_each', ['vector:bn254.fr@halo2curves-axiom/bn254.fr', 'groups:bn254.g1@halo2curves-axiom/bn254.g1'],
+     'groups:bn254.g1@halo2curves-axiom/bn254.g1'),
+    ('g2', 'scale_each', ['vector:bn254.fr@halo2curves-axiom/bn254.fr', 'groups:bn254.g2@halo2curves-axiom/bn254.g2'],
+     'groups:bn254.g2@halo2curves-axiom/bn254.g2'),
+    ('g1', 'vector_scale', ['groups:bn254.g1@halo2curves-axiom/bn254.g1', 'field:bn254.fr@halo2curves-axiom/bn254.fr'],
+     'groups:bn254.g1@halo2curves-axiom/bn254.g1'),
+    ('g2', 'vector_scale', ['groups:bn254.g2@halo2curves-axiom/bn254.g2', 'field:bn254.fr@halo2curves-axiom/bn254.fr'],
+     'groups:bn254.g2@halo2curves-axiom/bn254.g2'),
     ('pairing', 'pairing_check', ['groups:bn254.g1@halo2curves-axiom/bn254.g1', 'groups:bn254.g2@halo2curves-axiom/bn254.g2'],
      'bool@native.bool/0'),
 ])
@@ -307,8 +321,16 @@ def test_bn254_installed_fixture_has_actual_nominal_ports_and_chain(modules, gro
     assert actual_inputs == inputs
     assert outputs == [output] * (4 if group == 'pairing' else 1)
     assert not conversions
-    assert program[1][0][3] == f'halo2curves-axiom/resident/{dict(field_mul="field.mul", vector_mul="vector.mul", msm="curve.msm", pairing_check="pairing.check")[kernel]}'
+    contract = dict(field_mul='field.mul', vector_mul='vector.mul', msm='curve.msm', pairing_check='pairing.check',
+                    scale_each='curve.scale_each', vector_scale='curve.vector_scale')[kernel]
+    assert program[1][0][3] == f'halo2curves-axiom/resident/{contract}'
     assert len(program[2][0][4]) == (8 if kernel == 'msm' else 5)
+    if kernel in ('scale_each', 'vector_scale'):
+        calls = program[2][0][4][:-1]
+        point_operand = 1 if kernel == 'scale_each' else 0
+        for previous, following in zip(calls, calls[1:]):
+            assert following[4][point_operand] == previous[5][0]
+            assert following[4][1 - point_operand] == calls[0][4][1 - point_operand]
 
 
 def bn254_report(providers, backend):
@@ -346,9 +368,10 @@ def bn254_report(providers, backend):
 @pytest.mark.parametrize('boundary', list(('resident', 'converted', 'import', 'export', 'installed',
                                           'resident_installed_chain', 'wire_resident_chain')))
 @pytest.mark.parametrize('group', ['g1', 'g2'])
-def test_bn254_evidence_distinguishes_each_conversion_boundary(modules, boundary, group):
+@pytest.mark.parametrize('kernel', ['msm', 'scale_each', 'vector_scale'])
+def test_bn254_evidence_distinguishes_each_conversion_boundary(modules, boundary, group, kernel):
     providers, _, _ = modules
-    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group=group, kernel='msm',
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group=group, kernel=kernel,
                    boundary=boundary, elements=32, chain_length=1 if boundary in ('installed', 'import', 'export') else 4)
     report = bn254_report(providers, backend)
     providers.validate_evidence(report, backend)
@@ -357,6 +380,57 @@ def test_bn254_evidence_distinguishes_each_conversion_boundary(modules, boundary
         points = next(row for row in conversions if row['source'].startswith('groups:'))
         assert points['canonical_payload_bytes'] == 32 * (64 if group == 'g2' else 32)
         assert points['calls'] == (1 if boundary == 'installed' else 32)
+        if boundary in ('converted', 'installed', 'import'):
+            scalar = next(row for row in conversions if ':bn254.fr@' in row['source'])
+            assert scalar['elements'] == (1 if kernel == 'vector_scale' else 32)
+            assert scalar['canonical_payload_bytes'] == scalar['elements'] * 32
+
+
+@pytest.mark.parametrize('provider', ['arkworks', 'halo2curves-axiom'])
+@pytest.mark.parametrize('group', ['g1', 'g2'])
+@pytest.mark.parametrize('kernel', ['scale_each', 'vector_scale'])
+@pytest.mark.parametrize('n', [1, 32, 1024])
+@pytest.mark.parametrize('boundary', ['resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain'])
+def test_bn254_bulk_scaling_receipts_preserve_vector_results(modules, provider, group, kernel, n, boundary):
+    providers, _, _ = modules
+    backend = dict(kind='kernel', family='bn254', provider=provider, group=group, kernel=kernel,
+                   boundary=boundary, elements=n, chain_length=1 if boundary == 'installed' else 4)
+    report = bn254_report(providers, backend)
+    providers.validate_evidence(report, backend)
+    evidence = report['diagnostics']
+    assert evidence['arithmetic_calls'] == backend['chain_length']
+    if boundary in ('installed', 'resident_installed_chain', 'wire_resident_chain'):
+        assert evidence['output_physical_types'][0].startswith(f'groups:bn254.{group}@')
+        assert evidence['output_wire_tags'] == [49 if group == 'g2' else 47]
+        assert evidence['output_wire_bytes'] == 10 + n * (64 if group == 'g2' else 32)
+        assert evidence['input_wire_tags'] == ([47 if group == 'g1' else 49, 40]
+                                               if kernel == 'vector_scale' else [41, 47 if group == 'g1' else 49])
+
+
+@pytest.mark.parametrize('kernel', ['scale_each', 'vector_scale'])
+@pytest.mark.parametrize('change', [dict(group='scalar'), dict(group='pairing'), dict(elements=0),
+                                    dict(elements=True), dict(chain_length=33), dict(boundary='installed', chain_length=4),
+                                    dict(provider='arkworks', boundary='import')])
+def test_bn254_bulk_scaling_refuses_invalid_shapes(modules, kernel, change):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group='g1', kernel=kernel,
+                   boundary='resident', elements=32)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_backend(backend | change)
+
+
+@pytest.mark.parametrize('kernel', ['scale_each', 'vector_scale'])
+@pytest.mark.parametrize('change', [dict(output_wire_tags=[46]), dict(output_wire_bytes=38),
+                                    dict(output_physical_types=['group:bn254.g1@halo2curves-axiom/bn254.g1']),
+                                    dict(arithmetic_calls=7)])
+def test_bn254_bulk_scaling_refuses_single_point_or_msm_receipts(modules, kernel, change):
+    providers, _, io = modules
+    backend = dict(kind='kernel', family='bn254', provider='halo2curves-axiom', group='g1', kernel=kernel,
+                   boundary='wire_resident_chain', elements=32, chain_length=4)
+    report = bn254_report(providers, backend)
+    report['diagnostics'].update(change)
+    with pytest.raises(io.MeasurementError):
+        providers.validate_evidence(report, backend)
 
 
 @pytest.mark.parametrize('boundary', ['resident', 'converted', 'wire_resident_chain'])

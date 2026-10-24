@@ -34,8 +34,6 @@ def validate_backend(backend, boundary=None, operation=None):
             and (backend['boundary'] not in ('import', 'export')
                  or backend['provider'] == FAMILIES[family][1] and backend['group'] in ('g1', 'g2')),
             'unsupported kernel control')
-    require(family != 'bn254' or backend['kernel'] in ('field_mul', 'vector_mul', 'scale', 'msm', 'pairing_check'),
-            'unsupported BN254 kernel control')
     length = backend.get('chain_length', 1)
     require(type(length) is int and 1 <= length <= 32
             and (length == 1 or backend['boundary'] in ('resident', 'converted', 'resident_installed_chain', 'wire_resident_chain')),
@@ -94,6 +92,8 @@ def _bn254_catalog():
     cases = []
     for group, kernel, sizes in (('scalar', 'field_mul', (1,)), ('scalar', 'vector_mul', (32, 256)),
                                  ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
+                                 ('g1', 'scale_each', (1, 32, 1024)), ('g2', 'scale_each', (1, 32, 1024)),
+                                 ('g1', 'vector_scale', (1, 32, 1024)), ('g2', 'vector_scale', (1, 32, 1024)),
                                  ('g1', 'msm', (32, 256)), ('g2', 'msm', (32, 256)),
                                  ('pairing', 'pairing_check', (2, 8))):
         for n in sizes:
@@ -139,13 +139,13 @@ def prepare_case(args, output, capture, manifest, case):
             'converted': 'input import once, complete arithmetic chain, output export once and temporary destruction',
             'installed': 'VM local call, Native publication and Runner teardown; blst explicitly converts Ark inputs to resident, computes, converts output back; Runner construction excluded',
             'resident_installed_chain': 'repeated resident operations and Native publication through VM plus Runner teardown; selected values and Runner constructed before timer',
-            'wire_resident_chain': 'selected wire decode, Runner construction, repeated resident execution, selected output wire encode and Runner teardown',
+            'wire_resident_chain': 'selected wire decode, Runner construction and installation linking, repeated resident execution, selected output wire encode and Runner teardown',
             'import': 'canonical point and scalar import including subgroup checks; no arithmetic',
             'export': 'canonical point export including subgroup checks; no arithmetic',
         }[shape['boundary']],
         'chain_length': shape.get('chain_length', 1),
         'memory_observation': 'managed retained payload and unavailable scratch peaks are separate from process lifetime peak RSS',
-        'excluded': ['program admission and installation', 'backend construction', 'deterministic input generation', 'correctness oracle', 'JSON I/O', 'independent result check', 'returned result destruction'],
+        'excluded': ['initial program admission and preflight', 'backend construction', 'deterministic input generation', 'correctness oracle', 'JSON I/O', 'independent result check', 'returned result destruction'],
         'notes': ['Arkworks uses existing automatic batch normalization.',
                   'blst internal threads disabled; MSM explicitly authorizes variable-time execution in trusted deployment policy.',
                   'MSM chains accumulate repeated MSM outputs using resident curve.add; pairing chains return and check every Boolean.',
@@ -162,6 +162,9 @@ def prepare_case(args, output, capture, manifest, case):
                                     'imports Arkworks BN254 inputs, computes and exports output; Runner construction excluded')
         contract['notes'] = [
             'Arkworks BN254 and halo2curves-axiom BN254 receive the same mathematical values and operation chain.',
+            'Bulk scaling returns every point, including length-one vectors; each chain step scales the previous vector.',
+            'vector_scale uses one shared scalar; direct scale_each borrows one scalar per point without a staging vector.',
+            'Direct bulk scaling prepares an automatic typed plan per call inside the timer; element-wise Arkworks checks run outside it.',
             'Arkworks MSM stages affine bases; halo2curves-axiom resident MSM borrows upstream affine and scalar buffers.',
             'Arkworks converted cases are a zero-conversion baseline; the foreign provider imports once and exports once.',
             'halo2curves-axiom uses serial MSM; installed MSM explicitly authorizes variable-time execution.',
