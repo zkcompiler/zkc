@@ -403,7 +403,7 @@ elab "claim_apply_theorem " theoremTerm:term " normalizing "
   let proof ← instantiateMVars proof
   let names := declarations.getElems ++ #[``Bound.value, ``Domain.SoundnessArguments.meaning,
     ``ennreal_nnrat_zero, ``ennreal_nnrat_one, ``ennreal_nnrat_natural,
-    ``ennreal_nnrat_ofNat, ``ennreal_nnrat_inv,
+    ``ennreal_nnrat_ofNat, ``ennreal_nnrat_inv, ``NeZero.ne,
     ``nsmul_eq_mul, ``mul_one_div, ``div_eq_mul_inv].map mkIdent
   let lemmas ← names.mapM fun id => `(Parser.Tactic.simpLemma| $id:term)
   let configuration ← mkSimpContext (← `(tactic| simp [$lemmas,*])) false
