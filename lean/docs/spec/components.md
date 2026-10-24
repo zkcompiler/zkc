@@ -201,13 +201,34 @@ experiment runs both actual participants with one initially empty random-oracle
 cache and counts input preparation failure, stops, decoding failures, rejection
 and unread proof as failures. It has no adversary query parameter.
 
-This honest-execution vocabulary has memoized history-keyed challenges and no
-private-coin instruction. Private values supplied as inputs are fixed inputs,
-not automatically sampled coins. The canonical honest model refuses a
-`private_coins` argument. The maintained Sumcheck roots need no private coins;
-completeness for a protocol that does needs an explicit fresh-sampling operation,
-its artifact correspondence and a joint handler law. Resetting the ROM cache
-does not supply that operation.
+The canonical model `models.honest_fiat_shamir@1` installs fresh uniform
+field draws at the actual producer's admitted owner-local service ports. The
+source spelling remains `Random.draw()`. Service handles retain their source
+root, owner, contract and native port position separately from data inputs.
+Admission checks exact source occurrences, application aliases, nominal result
+types and loop coordinates. Unsupported methods and validator-local requests
+remain refused by the current admission rules.
+
+`TranscriptOracle.Spec` is the shared public oracle interface. The honest
+`HonestSampling.Spec` adds a uniform summand; it does not enlarge the adversary
+interface. One outer ROM cache encloses both actual participants. Local draws
+emit no public query event and preserve that cache. The shared interpreter
+threads the returned service state across calls and participants. The installed
+ideal sampler is stateless, while the interpreter also supports explicit
+stateful service models. Native entropy and failure behavior require a separate
+realization theorem.
+
+The model accepts no evidence-selected sampler or `private_coins` parameter.
+Private inputs remain fixed inputs. For pairs with no installed local service
+ports, `SampledCompiled.computation_no_services` and
+`HonestSampling.run_transcript` preserve the complete old experiment, including
+its failures and final cache. A fixed public answer table leaves private draws
+probabilistic. `SamplingPrefix` and `SampledReadback` prove producer-only sampled
+prefixes followed by exact deterministic readback; each reached local request
+must be authorized and every possible sampled continuation must succeed. This
+is a sufficient proof method, not the definition of completeness. A direct
+kernel proof may establish a nonzero failure bound for a sample-dependent
+abort. Such a failure is not removed by a new honest-input premise.
 
 The soundness projection reuses that subject's actual validator and retained
 target. It does **not** inherit the honest input policy. Adaptive adversaries

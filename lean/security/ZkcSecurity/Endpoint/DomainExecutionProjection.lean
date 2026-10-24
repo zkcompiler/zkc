@@ -27,6 +27,7 @@ def readExecution (query : Construction.Domain.History carriers →
           match payload.value ty with
           | none => pure (.stopped .refused, payload :: unread)
           | some value => readExecution query (next value) unread
+  | .call (.localService ..) _, proof => pure (.stopped .refused, proof)
   | .call (.query history origin) next, proof =>
       if Construction.Domain.drawRequest origin then do
         let answer ← query history (.challenge origin)
@@ -59,6 +60,7 @@ theorem readExecution_eq (query : Construction.Domain.History carriers →
     | send => simp [Construction.Domain.validateDirect, readExecution, ih]
     | checkpoint => simp [Construction.Domain.validateDirect, readExecution, ih]
     | observe => simp [Construction.Domain.validateDirect, readExecution, ← ih]
+    | localService => simp [Construction.Domain.validateDirect, readExecution]
     | query history origin =>
       simp only [Construction.Domain.validateDirect, readExecution]
       split

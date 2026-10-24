@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.HonestReadback
-public import ZkcSecurity.Claims.Completeness
+public import ZkcSecurity.FiatShamir.SampledReadbackCompleteness
 public import ZkcSecurity.Claims.SubjectABI
 
 @[expose] public section
@@ -35,13 +35,9 @@ theorem perfect (subject : Subject model original imported selected)
         (Domain.participant model imported.program subject.selection.context
           selected.artifacts.validator validator)) :
     CanonicalCompleteness subject 0 := by
-  apply perfect_of_all_tables subject nonvacuous
-  intro inputs related honest answers
-  obtain ⟨producer, validator, prepared, _⟩ := honest.2.2
-  refine ⟨_, ?_, (readback inputs related honest producer validator prepared).pair_success
-    model imported.program subject.selection.context selected.artifacts.producer
-      selected.artifacts.validator producer validator subject.selection.position answers⟩
-  simp only [Subject.computation, prepared, evalWithAnswerFn_map, HonestCompiled.eval_computation]
+  apply SampledReadback.perfect subject nonvacuous
+  intro inputs related honest producer validator prepared
+  exact .deterministic (readback inputs related honest producer validator prepared)
 
 /-- Transport a mathematical read-back law through a checked generated source
 ABI. Input elimination, exact runtime preparation and both environment

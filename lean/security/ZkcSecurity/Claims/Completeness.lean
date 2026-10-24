@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.HonestModel
+public import ZkcSecurity.FiatShamir.SampledCompiled
 
 @[expose] public section
 
@@ -26,12 +27,14 @@ def targetReference (subject : Subject model original imported selected) : Wire.
   .retained subject.target.owner.contract.owner subject.target.clauseIndex.val selected.target.name
 
 /-- Failed preparation is an unsuccessful observation, never discarded mass. -/
-def computation (subject : Subject model original imported selected) (inputs : subject.Inputs) :
-    OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
+def computation (subject : Subject model original imported selected)
+    [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
+    (inputs : subject.Inputs) :
+    OracleComp (SampledCompiled.Spec model.toCarriers)
       (Option (Domain.PairExecution model.toCarriers Unit)) :=
   match subject.runtimeInputs inputs with
   | none => pure none
-  | some (producer, validator) => some <$> HonestCompiled.computation model imported.program
+  | some (producer, validator) => some <$> SampledCompiled.computation model imported.program
       subject.selection.context selected.artifacts.producer selected.artifacts.validator producer validator
 
 def Success (subject : Subject model original imported selected)
@@ -45,13 +48,13 @@ noncomputable def experiment (subject : Subject model original imported selected
     (inputs : subject.Inputs) : ProbComp
       (Option (Domain.PairExecution model.toCarriers Unit) × (TranscriptOracle.DomainSpec model.toCarriers).QueryCache) := by
   classical
-  exact Honest.run (subject.computation inputs)
+  exact HonestSampling.run (subject.computation inputs)
 
 noncomputable def failure (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (inputs : subject.Inputs) : ENNReal := by
   classical
-  exact Honest.failure (subject.computation inputs) subject.Success
+  exact HonestSampling.failure (subject.computation inputs) subject.Success
 
 theorem failure_eq_complement (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
@@ -95,23 +98,23 @@ theorem perfect_of_all_tables (subject : Subject model original imported selecte
     (nonvacuous : Nonvacuous subject)
     (agreement : ∀ inputs, subject.Relation inputs → subject.HonestInput inputs →
       ∀ answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id,
-        subject.Success (evalWithAnswerFn answers (subject.computation inputs))) :
+        Pr{let observed ← simulateQ (unifFwdAnswerImpl answers) (subject.computation inputs)}[subject.Success observed] = 1) :
     CanonicalCompleteness subject 0 := by
   classical
   refine ⟨nonvacuous, ?_⟩
   intro inputs related honest
-  exact (Honest.failure_zero_of_all_tables _ _ (agreement inputs related honest)).le
+  exact (HonestSampling.failure_zero_of_all_tables _ _ (agreement inputs related honest)).le
 
 theorem not_perfect_of_failed_input (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (inputs : subject.Inputs) (related : subject.Relation inputs) (honest : subject.HonestInput inputs)
     (failed : ∀ answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id,
-      ¬ subject.Success (evalWithAnswerFn answers (subject.computation inputs))) :
+      Pr{let observed ← simulateQ (unifFwdAnswerImpl answers) (subject.computation inputs)}[¬ subject.Success observed] = 1) :
     ¬ CanonicalCompleteness subject 0 := by
   classical
   rintro ⟨_, complete⟩
   have bound := complete inputs related honest
-  have failure : subject.failure inputs = 1 := Honest.failure_one_of_all_tables _ _ failed
+  have failure : subject.failure inputs = 1 := HonestSampling.failure_one_of_all_tables _ _ failed
   rw [failure] at bound
   exact (not_le_of_gt zero_lt_one) bound
 

@@ -90,7 +90,7 @@ def unrelatedModel : Export HonestPair.ModelExport :=
   ⟨⟨"example.unrelated", 0⟩, "example/0", none⟩
 
 example : HonestPair.resolveModel ⟨[unrelatedModel, HonestPair.modelEntry]⟩
-    ⟨HonestPair.honestModelIdentifier, []⟩ = .ok .typedHistory := rfl
+    ⟨HonestPair.honestModelIdentifier, []⟩ = .ok .privateUniform := rfl
 
 example : HonestPair.resolveModel ⟨[HonestPair.modelEntry, HonestPair.modelEntry]⟩
     ⟨HonestPair.honestModelIdentifier, []⟩ = .error (.conflict HonestPair.honestModelIdentifier) := rfl

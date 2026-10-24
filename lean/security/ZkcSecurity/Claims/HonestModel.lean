@@ -7,28 +7,28 @@ public import ZkcSecurity.Claims.AuthoredPair
 @[expose] public section
 
 /-! Fixed honest-execution policy. It has no adversary, query allowance or
-evidence-selected handler. Private coins are unsupported by this vocabulary;
-uniform sampling happens only at the first query of each typed history key. -/
+evidence-selected handler. Private field draws use the admitted owner-local service ports. Public
+queries share one typed-history ROM cache across both participants. -/
 
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.HonestPair
 open Zkc.Claims Zkc.Source.Structured
 
 inductive HonestExecutionModel where
-  | typedHistory
+  | privateUniform
   deriving DecidableEq, Repr
 
-def honestModelIdentifier : Identifier := ⟨"models.honest_fiat_shamir", 0⟩
+def honestModelIdentifier : Identifier := ⟨"models.honest_fiat_shamir", 1⟩
 
 def honestModelSchema (application : Wire.Application) :
     Except ResolutionError HonestExecutionModel :=
-  if application.arguments.isEmpty then .ok .typedHistory
-  else .error (.schema "honest typed-history model accepts no arguments")
+  if application.arguments.isEmpty then .ok .privateUniform
+  else .error (.schema "honest private-uniform model accepts no arguments")
 
 abbrev HonestModelRegistry := Registry (Wire.Application → Except ResolutionError HonestExecutionModel)
 
 def honestModelEntry : Export (Wire.Application → Except ResolutionError HonestExecutionModel) :=
-  ⟨honestModelIdentifier, "honest-typed-history/0", some honestModelSchema⟩
+  ⟨honestModelIdentifier, "honest-private-uniform/1", some honestModelSchema⟩
 
 def resolveHonestModel (registry : HonestModelRegistry) (application : Wire.Application) :
     Except ResolutionError HonestExecutionModel := do
@@ -40,7 +40,7 @@ def resolveHonestModel (registry : HonestModelRegistry) (application : Wire.Appl
 handler does not implement the canonical honest model. -/
 structure HonestModelAdmission (registry : HonestModelRegistry) (application : Wire.Application) : Prop where
   selected : registry.lookup application.identifier = .ok honestModelEntry
-  admitted : resolveHonestModel registry application = .ok .typedHistory
+  admitted : resolveHonestModel registry application = .ok .privateUniform
 
 /-- Capabilities belong to the actual model and admitted catalogue. These
 mathematical laws do not assert producer success or source/native execution. -/

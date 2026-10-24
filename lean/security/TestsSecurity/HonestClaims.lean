@@ -64,10 +64,10 @@ example (subject : Subject model original imported selected)
   exact falseOnly inputs honest
 
 example : honestModelSchema ⟨honestModelIdentifier, [(some "private_coins", .natural 1)]⟩ =
-    .error (.schema "honest typed-history model accepts no arguments") := by rfl
+    .error (.schema "honest private-uniform model accepts no arguments") := by rfl
 
 example : resolveHonestModel ⟨[honestModelEntry]⟩ ⟨honestModelIdentifier, []⟩ =
-    .ok .typedHistory := by rfl
+    .ok .privateUniform := by rfl
 
 -- A same-name export with an undefined implementation fails complete-entry
 -- association, independently of whether its key is recognized.
