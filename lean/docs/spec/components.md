@@ -111,6 +111,29 @@ equation and mathematical family contract must all meet at the same consumer.
 An installed source body's realization belongs with implementation bindings;
 the abstract mathematical family must not import the selected example roots.
 
+The property consumers reuse this full simulation in two ways.
+`Readback.original` transports an honest source interaction through independent
+producer and validator simulations, retaining both full return relations. The
+existing completeness theorem then interprets that interaction in the shared
+oracle-cache experiment and counts every failure outcome. Soundness instead
+transports an all-reply source reading, its rejection derivation and its
+history-dependent cost into the existing charged endpoint. An honest input
+contract supplies completeness premises; it never restricts the adversary.
+
+A nominal reading may erase information that remains in the artifact's final
+SSA environment. Therefore acceptance agreement alone cannot construct the
+full-result presentation required by a charged receipt. `LosslessInterface`
+states the local reply laws that suffice: receive and query reply maps are
+bijective, received values have a proof-payload representation, and a send has
+only its selected reply. The actual field interface proves these laws once,
+including nominal field identity and the exact decoded payload. The generic
+transport then reconstructs the target presentation, preserves the source
+postcondition, and transfers the same rejection derivation and cost bound. It
+does not require the final environment to be a function of the source's final
+return value. A collapsing decoder or an unreachable extra send reply fails
+these laws. Such an interface needs an explicit different realization; it does
+not receive a weaker receipt.
+
 Generated callee dispatch uses one checked actual-callee table and dependent
 updates for selected views. All roles of a declaration see the completed table
 of earlier declarations; omitted views keep their actual invocation. This
@@ -204,8 +227,8 @@ even when the oracle returns a cached value.
 stop, bind and the actual conditional branches. Each continuation bound must
 cover every returned value and reached history. The resulting proof uses the
 existing charged walk semantics; an omitted component bound or an insufficient
-requested total cannot produce a certificate. Both compiled table roots use
-this composer.
+requested total cannot produce a certificate. Installed clients may use this tactic or apply the same composition rules
+directly.
 
 `derive_component_rejection` composes installed residual contracts over the
 same process structure. It carries their postconditions into continuations,
@@ -216,51 +239,72 @@ must still follow from the other components. Propositional reasoning handles
 false-child selection, while implementation-specific terminal laws remain at
 the helper-realization boundary. The tactic never chooses a protocol by name.
 
-Both compiled table roots use these shared cost and rejection composers.
+The table source realization applies the same generic bind and cost rules.
 Independent opaque-component controls reject an OR final check when only one
 child is known false, a missing contract and a continuation law restricted to
-the initial history. Source-driven generation now supplies both full validator presentations and
-their bridges from admitted inputs and every discovered round. The checked
-constructor preserves complete returned data and stopped paths.
-`Generation.SumcheckSoundness` also generates the fixed security-subject export:
-typed statement transport, rejection, cost, installation, schedule and canonical
-scalar/charged consumers. Its budgets come from the retained loop maxima and
-still require a checked cost derivation.
+the initial history. Neither these rules nor their optional proof tactics select
+a protocol by name.
 
-`compose_component_readback` assembles the honest producer–validator connection
-from installed paired component rules. Each continuation receives the complete
-returned representation and its invariant. A stopped execution, unknown component,
-unproved side premise or false terminal condition cannot establish completion.
-The table adapter uses the same discovered whole-body correspondences as the
-adversarial view, retaining both environments and the shared history.
+For SmallSumcheck and TwoSums, the production binding starts at the admitted
+original `Reduce`, its actual helper bodies and its original callback. The
+source contract and its mathematical reference do not name a compiled round
+length. Each call supplies its checked original context, substitution and
+occurrence schedule. The complete original root is assembled in source order;
+TwoSums runs the second call even when the first terminal returns false, and
+combines the returned values only afterwards. A stop suppresses exactly the
+remaining suffix.
 
-For the two actual table roots, `Generation.SumcheckCompleteness` derives input
-projection and all occurrence setup from the admitted subject/pair. Configuration
-selects domain carriers, sampling, a formula equation and a nonvacuity proof. It does
-not supply captures, source offsets, loop counts or a root-specific proof script.
+Soundness uses an all-input source presentation. Table shape, scalar truth,
+capacity and round limits are cases in its proof, not restrictions on the
+adversary. Excessive counts retain the actual refusal; malformed tables retain
+the preceding interactions and actual terminal failure. Source and artifact
+bindings preserve the six optional Reduce results and the actual final result
+and environment. The two unchanged validator charge budgets are 2 and 8.
+The field's sampling and reference laws supply the per-query escape charge;
+the ordinary `Claims.Domain.ChargedExport` and existing compiled-soundness
+consumers supply the fixed scalar and charged meanings.
+
+Completeness has an additional original producer proof, with the retained
+honest table policy and source relation as premises. Its round induction uses
+the same table restriction mathematics as adversarial soundness and covers
+zero rounds and arbitrary public challenge replies. Source readback transports
+through the two independent artifact simulations into the actual registered
+pair. The existing honest experiment supplies the single oracle cache, exact
+proof consumption and failure accounting. A verifier simulation alone cannot
+establish completeness.
+
+`Generation.Roots.Catalogue` owns the selected sources, actual pairs, targets,
+domains and mathematical installations. Generators derive source aliases,
+occurrence schedules, ABI positions, artifact loop metadata and structural
+instantiations from these admitted selections. Output references are data of
+the actual selected artifact, not facts about the mathematical family.
+Candidate source assembly, artifact correspondence and receipt instantiation
+remain ordinary Lean terms that must check. Unsupported source compositions
+refuse; this is an installed family route, not automatic theorem discovery for
+every protocol.
+
 `prepare_target_readback` combines the checked policy and argument read with
-that formula equation. `prove_retained_target` uses the same equation on the
-adversarial side; there, all evaluation premises must follow from verifier
-guards and component guarantees. Honest policy is not an adversary restriction.
-The resulting generated theorems directly feed canonical receipts. Authors
-supply formula mathematics, admissible witnesses and the selected library/domain
-configuration. Structural authoring remains: the subject descriptors contain
-positional honest-input policies, export digests and charge-site lists, and
-root-specific helper associations instantiate the library realizations. Some
-authored proofs still refer to generated helper identities. These are
-instantiation costs, including descriptors currently housed in the test package.
-Tests also retain independent target characterizations as controls; neither
-root imports them. Shared tools and test work remain part of the cost inventory.
+the authored formula equation. `prove_retained_target` uses the same equation
+on the adversarial side, where every premise must follow from verifier guards
+and component guarantees. Formula mathematics, representation laws and a new
+library realization remain author work. Source, target, domain and installed-law
+selections are instantiation work even when stored in a production catalogue.
+Generated size, generator implementation and checking cost are recorded
+separately; generating a wrapper does not eliminate an upstream handwritten
+proof obligation.
 
-The current table binding recognizes a particular compiled round layout.
-Binding the admitted original component and transporting its contract to the
-compiled participants is planned. The existing `compiled_transform` theorem
-uses the uniform interpreter; it does not yet supply the nominal/domain
-construction theorem needed by these requests. Raw source repeat sites also
-omit the dynamic coordinates present in nominal compiled oracle keys; the new
-source view needs a checked occurrence correspondence. Producer correspondence is a
-separate obligation: `AuthoredPair.checkProducer` supplies structural admission,
-not a source-producer execution theorem.
+The current roots have no retained source input clauses. Their existing typed
+honest-input policies are preserved as part of the fixed request meaning;
+source types and admitted maxima derive their positions, rather than silently
+discarding the policies. Moving these conditions into source `input` clauses
+and the registered relation meaning is a separately coordinated semantic and
+identity migration. Evidence-only migration does not reissue those requests.
+
+The old compiled-round descriptor and view fixtures remain only where they
+have independent regression consumers. They do not supply the canonical
+receipts of these migrated roots. The maintained interpreted-bytes Sumcheck
+leaf is a different stage and remains supported until its stage transport
+and claim-preservation obligations are discharged.
 
 `Generation.SumcheckInputs` traces each producer loop's initial table through
 the def-use graph to propose a public reference input. This is an untrusted

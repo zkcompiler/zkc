@@ -1,5 +1,6 @@
 import Zkc.Construction.OriginalCorrespondence
 import Zkc.Construction.AuthoredPairProducer
+import Zkc.Construction.ArtifactBindingTactic
 import Zkc.Source.KernelRfl
 import Mathlib.Data.ZMod.Basic
 
@@ -179,6 +180,32 @@ private def producer_certificate (value : Bool) :
   apply Simulation.done
   exact ⟨⟨rfl, trivial⟩, rfl, rfl⟩
 
+-- Move administrative index construction before the message. The admitted
+-- original and its mathematical equation remain unchanged; the independent
+-- artifact certificate accounts for the different checkpoint frames.
+private def regroupedProducer : Participant :=
+  { producer with instructions := [
+    ⟨.indicesEmpty, [], [.indices], []⟩,
+    ⟨.send "m" "m" "V", [0], [], []⟩,
+    ⟨.observe "suite" message, [1, 0, 2], [.transcript "suite"], []⟩] }
+
+example : AuthoredPair.checkProducer program context regroupedProducer = .ok () := by
+  kernel_rfl
+
+-- This concrete pair needs no normalization between structural rules.
+set_option linter.unusedTactic false in
+private def regrouped_certificate (value : Bool) :
+    Simulation producerReturns (producerLive value) (originalProducer value)
+      (Domain.participant model program context regroupedProducer (producerInputs value)) := by
+  rw [producer_original]
+  unfold producerNormal Domain.participant
+  dsimp only [regroupedProducer, producer]
+  derive_artifact_binding
+    normalizing (skip)
+    solving (first
+      | exact ⟨⟨rfl, trivial⟩, rfl, rfl⟩
+      | simp [producerLive, producerInputs])
+
 private def validatorFrame (value : Bool) : Domain.Environment model.toCarriers :=
   validatorInputs ++ [.data (.boolean value), .indices [],
     .transcript "suite" [.message (context.message "m" 0 1) (.boolean value)]]
@@ -299,6 +326,7 @@ example (value : OriginalResult) :
 
 #print axioms Tests.OriginalConstruction.pair_correspondence
 #print axioms Tests.OriginalConstruction.rejecting_producer_impossible
+#print axioms Tests.OriginalConstruction.regrouped_certificate
 #print axioms Zkc.Construction.Original.Simulation.runM
 #print axioms Zkc.Construction.Original.executePair_eq
 

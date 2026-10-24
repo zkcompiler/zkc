@@ -543,6 +543,42 @@ def entries : List Entry := [
     some `ZkcSecurity.Examples.Components.GkrRoundsResidual.NoReturn,
     "The complete returned ABI encodes a state at the fixed residual dimension that \
     retains the caller-anchored prefix, factor representation and false residual."⟩,
+  ⟨"wellformed.original-presentation-alignment", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.Original.Alignment,
+    "The source and target presentations have the same operations and all reply branches, \
+    retain stops, and satisfy the fixed relation at every return."⟩,
+  ⟨"law.original-lossless-interface", .law,
+    some `ZkcSecurity.FiatShamir.Original.LosslessInterface,
+    "Receive and query reply maps are bijective with representable payloads, and send \
+    operations have only the selected reply, permitting full-result presentation transport."⟩,
+  ⟨"wellformed.sumcheck-original-validator-routes", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.Routes,
+    "The validator's source message, draw and delivery sites resolve at the given frames \
+    to the selected nominal origins, service handle and validator mode."⟩,
+  ⟨"wellformed.sumcheck-original-validator-return", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.VerifierReturns,
+    "The full optional validator callback ABI agrees with the selected live point and \
+    scalar slots, transcript history and source occurrence frames."⟩,
+  ⟨"wellformed.sumcheck-original-root-return", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.ArtifactRoot.ValidatorReturns,
+    "The original Boolean return agrees with the artifact's complete returned values, \
+    selected live Boolean and transcript slots, reached history and empty source frames."⟩,
+  ⟨"wellformed.sumcheck-original-producer-return", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns,
+    "The complete optional producer callback ABI agrees with its five selected live \
+    carried slots, reached transcript history and source occurrence frames."⟩,
+  ⟨"wellformed.sumcheck-original-producer-routes", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Routes,
+    "The producer's source message and challenge-delivery sites resolve at the given \
+    frames to the selected nominal origins and producer mode."⟩,
+  ⟨"wellformed.sumcheck-original-pair-postcondition", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.OriginalRoot.ActualPost,
+    "The actual producer and validator results satisfy their complete original return \
+    relations and the accepting honest source-pair postcondition."⟩,
+  ⟨"wellformed.sumcheck-original-security-routes", .wellFormedness,
+    some `ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.Routes,
+    "At every reached source loop index and outer frame, source messages, draw and \
+    delivery resolve to the selected schedule and service handle in validator mode."⟩,
   ⟨"wellformed.round-occurrence-template", .wellFormedness,
     some `ZkcSecurity.Families.Sumcheck.RoundDescriptor.templateValid,
     "The template belongs to the selected Entry, has one repeat coordinate and contains \

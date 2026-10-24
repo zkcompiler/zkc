@@ -102,6 +102,41 @@ full-size BLS12-381 scalar values with direct SSA execution and selected product
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
 
+## Original-component construction transport
+
+The SmallSumcheck and TwoSums canonical typed-history roots bind the admitted
+Sumcheck `Reduce` implementation, then use separate original-to-artifact
+certificates for the producer and validator. Their scalar and charged soundness
+and honest completeness receipts use that route. The full charged presentation
+retains the actual result and runtime state; accepting-event agreement alone is
+insufficient. Soundness covers all typed statements, including malformed table
+shapes and counts. Shape and capacity premises restrict only the fixed honest
+experiment. The existing query budgets remain two and eight.
+
+One production catalogue emits the source call equations, typed artifact output
+coordinates, role simulations, source presentations, ABI installations and
+endpoint wrappers. Source dependency aliases remove ordinal helper names from
+the authored mathematical clients. The installed generator supports one or two
+sequential `Reduce`/check calls with the selected field and message interface;
+other families require checked library realizations. Boolean, nonlinear
+polynomial, stopped-prefix and shifted-layout clients exercise the shared
+construction interfaces, not complete security endpoints for those protocols.
+
+Pure table execution belongs to `Families.Sumcheck.TableComponent.Execution`;
+source/artifact adapters belong to `Realizations.Sumcheck`. The retained
+compiled-round recognizer remains a regression client and is not the canonical
+roots' binding authority. The existing interpreted executable-bytes Sumcheck
+leaf remains necessary until a separate stage-transport theorem replaces it.
+Current request, target, honest-policy and artifact identities are preserved.
+The agreed source-input-clause and honest-model wire amendments require a
+separate semantic migration and receipt reissuance.
+
+Final source-claim status is selected in Lean from freshly extracted declaration
+types, binder and axiom audits, and required links. Python joins and renders the
+exported decision and refuses missing or corrupt envelopes. See
+[components](spec/components.md) and [assurance reports](spec/assurance-report.md)
+for the responsibility and trust boundaries.
+
 ## Compiled subjects
 
 One row per selected canonical security claim, or per subject with no selected

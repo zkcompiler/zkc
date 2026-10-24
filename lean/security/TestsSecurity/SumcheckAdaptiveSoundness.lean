@@ -24,7 +24,7 @@ local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event) :=
   ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus
 
-abbrev origin := ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round0.schedule.query 0
+abbrev origin := ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0.query 0
 
 def chooseStatement (value : Scalar) : TwoSumsSoundness.Statement :=
   if value = 0 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [] [] 1 1 0
@@ -36,7 +36,8 @@ def adaptiveProver : OracleComp (TranscriptOracle.DomainSpec carriers) (TwoSumsS
   let first ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let _ ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let value : Scalar := by
-    simpa only [origin, Domain.Raw, ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round0.schedule.request, Request.draw] using first
+    simpa only [origin, Domain.Raw,
+      ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0.request, Request.draw] using first
   pure (chooseStatement value, [.field "bls12-381.fr" value, .field "bls12-381.fr" (1 - value)])
 
 theorem repeated_log (table : (key : Domain.History carriers) → Typed.ByLast Domain.Raw key) :
@@ -55,11 +56,11 @@ theorem undercount_rejected : ¬ IsTotalQueryBound adaptiveProver 1 := by
   simp [adaptiveProver, Typed.ask, Typed.answer, map_eq_bind_pure_comp, isTotalQueryBound_query_bind_iff]
 
 example (history : Domain.History carriers) :
-    ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented ([0, 0, 0, 0, 0, 0] : List Scalar) 1 99 history =
+    ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.presented ([0, 0, 0, 0, 0, 0] : List Scalar) 1 99 history =
       .halt .refused := rfl
 
 example (history : Domain.History carriers) :
-    ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented ([0] : List Scalar) [0] 1 1 99 history = .halt .refused := rfl
+    ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.presented ([0] : List Scalar) [0] 1 1 99 history = .halt .refused := rfl
 
 /-- The proved actual adaptive bound is applied to a prover that queries twice
 before selecting even malformed public statements and a malicious proof. -/

@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
+public import ZkcExamples.Structured.Generated.Mathematics.TwoSums
 public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
 public import Zkc.Source.Structured.BodyBindings
@@ -17,6 +17,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Examples.Components.TwoSums
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open ZkcExamples.Structured.Generated.Bindings
+open ZkcExamples.Structured.Generated.Mathematics.TwoSums
 open PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
 
 /-- Install the reusable mathematical body templates against this actual unit.
@@ -36,7 +37,7 @@ theorem helper_bodies : SumcheckUnitContracts.Bodies TwoSumsInputs.unit.definiti
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-noncomputable abbrev helperMeanings : Meanings F G := closedMeanings TwoSumsInputs.unit.definitions
+noncomputable abbrev helperMeanings : Meanings F G := closedMeanings imported.program.payload.definitions
 
 theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G)) :=
   MapPrefixContracts.laws_of_bodies TwoSumsInputs.unit.linked prefix_bodies first_bodies
@@ -68,11 +69,10 @@ theorem check_equation (raw point : List F) (claim : F)
 
 /-- The actual final math function is conjunction, for arbitrary inputs. -/
 theorem both_equation (left right : Bool) :
-    invoke (helperMeanings (F := F) (G := G)) TwoSumsInputs.helper30Helper
+    invoke (helperMeanings (F := F) (G := G)) public_sums.entryFinal.helper
       (.cons left (.cons right .nil)) = .done (.cons (left && right) .nil) :=
-  ((show BodyIn TwoSumsInputs.unit.definitions TwoSumsInputs.helper30Helper
-      TwoSumsInputs.helper30Body from by bind_structured_bodies).invoke
-      TwoSumsInputs.unit.linked (.cons left (.cons right .nil))).trans
+  (public_sums.entryFinal.association.invoke
+    TwoSumsInputs.unit.linked (.cons left (.cons right .nil))).trans
     (by rfl)
 
 end ZkcSecurity.Examples.Components.TwoSums

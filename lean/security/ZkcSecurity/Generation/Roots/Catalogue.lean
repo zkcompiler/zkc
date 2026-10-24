@@ -65,6 +65,9 @@ def Selection.subjectModule (root : Selection) : String :=
   "ZkcSecurity.Examples.Generated." ++ root.name
 def Selection.componentModule (root : Selection) (suffix : String) : String :=
   "ZkcSecurity.Examples.Generated.Components." ++ root.name ++ suffix
+/-- Naming follows the generated binding; it selects no handwritten root proof. -/
+def Selection.securityModule (root : Selection) : String :=
+  "ZkcSecurity.Examples.Generated.OriginalSecurity." ++ root.name
 def Selection.constructedModule (root : Selection) (role : String) : String :=
   "ZkcExamples.Structured.Generated.Constructed." ++ root.name ++ role
 

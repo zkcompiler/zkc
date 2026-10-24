@@ -26,7 +26,7 @@ theorem equation (left right : List Scalar) (leftClaim rightClaim : Scalar)
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       .done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) := by
   change invoke (closedMeaningsOn (ringModel Scalar Scalar) imported.program.payload.definitions)
-    ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper3Helper
+    ZkcExamples.Structured.Generated.Mathematics.TwoSums.public_sums.helper
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       (.done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) :
         Closed (Values (assignment Scalar Scalar) [.boolean]))
@@ -36,7 +36,7 @@ theorem equation (left right : List Scalar) (leftClaim rightClaim : Scalar)
     Zkc.Verification.Imported.unique _ _
   rw [same]
   change invoke (helperMeanings (F := Scalar) (G := Scalar))
-    ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper3Helper
+    ZkcExamples.Structured.Generated.Mathematics.TwoSums.public_sums.helper
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       (.done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) :
         Closed (Values (assignment Scalar Scalar) [.boolean]))

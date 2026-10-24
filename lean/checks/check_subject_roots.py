@@ -184,8 +184,8 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
             generation.compile(module)
 
     # The actual default entry point must exercise the production catalogue.
-    drivers = ["ClaimLibraries", "CompletenessClaims", "RoundDescriptors", "SubjectABI",
-               "SumcheckCompleteness", "SumcheckSoundness", "SumcheckViews"]
+    drivers = ["ClaimLibraries", "CompletenessClaims", "SubjectABI",
+               "SumcheckCompleteness", "SumcheckSoundness"]
     for name in drivers:
         generation.compile("TestsSecurity.Generate" + name)
     default_output = run_directory / "default-regenerated"
@@ -200,6 +200,7 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
     calls = "\n".join("  TestsSecurity.Generate" + name + ".main [" + json.dumps(str(default_output)) + "]"
                       for name in drivers)
     generation.printer("GenerateRootDrivers", imports + "\n\ndef main : IO Unit := do\n" + calls + "\n")
+    generation.execute([generation.lean, "--run", "checks/RunGenerators.lean", "bindings", default_output], generation.package)
     default_paths = sorted(default_output.rglob("*.lean"))
     if {path.relative_to(default_output) for path in default_paths} != {path.relative_to(regenerated) for path in regenerated.rglob("*.lean")}:
         raise AssertionError("default downstream output inventory differs")
