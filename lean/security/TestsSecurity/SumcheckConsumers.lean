@@ -6,6 +6,7 @@ import Mathlib.Algebra.Field.ZMod
 set_option autoImplicit false
 noncomputable section
 namespace TestsSecurity.SumcheckConsumers
+open ZkcSecurity.Algebra.Polynomial
 open ZkcSecurity.Families.Sumcheck ZkcSecurity.Families.Sumcheck.Consumers
 open Zkc.Transcript Zkc.Obligations ZkcSecurity.Obligations OracleComp OracleSpec
 

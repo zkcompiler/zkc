@@ -11,6 +11,7 @@ proved decoder, with the arbitrary received message fixed before the query. -/
 
 set_option autoImplicit false
 namespace ZkcSecurity.Families.Sumcheck
+open ZkcSecurity.Algebra.Polynomial
 open OracleComp OracleSpec Zkc.Transcript Zkc.Obligations
 open ZkcSecurity.Obligations
 

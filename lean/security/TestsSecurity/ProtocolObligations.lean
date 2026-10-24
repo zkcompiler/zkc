@@ -1,5 +1,5 @@
 import Zkc.Obligations.TokenRules
-import ZkcSecurity.Families.Sumcheck.Round
+import ZkcSecurity.Algebra.Polynomial
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic
 
@@ -126,7 +126,7 @@ theorem false_left_probability [Fintype F] [DecidableEq F] [SampleableType F]
     (x y : Instance F) (cross : F) (bad : residual x ≠ 0) :
     Pr{let challenge ← $ᵗ F}[residual (fold x y cross challenge) = 0] ≤
       (2 : ENNReal) / Fintype.card F := by
-  have bound := ZkcSecurity.Families.Sumcheck.root_uniform_le
+  have bound := ZkcSecurity.Algebra.Polynomial.root_uniform_le
     (residualPolynomial x y cross) (false_left_nonzero x y cross bad) (degree_le x y cross)
   simpa only [residualPolynomial_eval, Nat.cast_ofNat] using bound
 

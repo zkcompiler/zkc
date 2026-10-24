@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Families.Sumcheck.Reference
-public import VCVio.OracleComp.Constructions.SampleableType.Measure
+public import ZkcSecurity.Algebra.Polynomial
 public import VCVio.EvalDist.ProbabilityBounds
 
 @[expose] public section
@@ -16,6 +16,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Families.Sumcheck
 
 open Polynomial OracleComp OracleSpec
+open ZkcSecurity.Algebra.Polynomial
 open scoped ENNReal
 
 variable {F : Type} [Field F]
@@ -67,36 +68,6 @@ theorem false_round (referenceLaws : ReferenceLaws reference referenceDegree)
       reference.admissible (reference.restrict s r) :=
   ⟨fun escaped => noCollision ((escape_iff referenceLaws messageLaws s allowed m r).mp escaped),
     referenceLaws.restriction_closed s r allowed⟩
-
-/-- Mathlib's root bound, with both polynomial degrees exposed independently. -/
-theorem agreement_card_le [Fintype F] [DecidableEq F] (p q : Polynomial F)
-    (different : p ≠ q) {leftDegree rightDegree : Nat}
-    (left : p.natDegree ≤ leftDegree) (right : q.natDegree ≤ rightDegree) :
-    (Finset.univ.filter (fun r => p.eval r = q.eval r)).card ≤
-      max leftDegree rightDegree := by
-  have nonzero : p - q ≠ 0 := sub_ne_zero.mpr different
-  have roots : (Finset.univ.filter (fun r => p.eval r = q.eval r)).val ⊆ (p - q).roots := by
-    intro r member
-    apply (mem_roots nonzero).mpr
-    rw [IsRoot, eval_sub, sub_eq_zero]
-    exact (Finset.mem_filter.mp member).2
-  exact (card_le_degree_of_subset_roots roots).trans
-    ((natDegree_sub_le p q).trans (max_le_max left right))
-
-theorem agreement_uniform_le [Fintype F] [DecidableEq F] [SampleableType F]
-    (p q : Polynomial F) (different : p ≠ q) {leftDegree rightDegree : Nat}
-    (left : p.natDegree ≤ leftDegree) (right : q.natDegree ≤ rightDegree) :
-    Pr{let r ← $ᵗ F}[p.eval r = q.eval r] ≤
-      ((max leftDegree rightDegree : Nat) : ℝ≥0∞) / Fintype.card F := by
-  rw [SampleableType.prEvent_uniformSample]
-  refine ENNReal.div_le_div_right ?_ _
-  exact_mod_cast agreement_card_le p q different left right
-
-theorem root_uniform_le [Fintype F] [DecidableEq F] [SampleableType F]
-    (p : Polynomial F) (nonzero : p ≠ 0) {degree : Nat} (bounded : p.natDegree ≤ degree) :
-    Pr{let r ← $ᵗ F}[p.eval r = 0] ≤ (degree : ℝ≥0∞) / Fintype.card F := by
-  simpa only [eval_zero, max_self] using
-    agreement_uniform_le p 0 nonzero bounded (show (0 : Polynomial F).natDegree ≤ degree by simp)
 
 /-- Transport a proved bound for the actual conditional challenge distribution.
 The distribution premise is an obligation, never an authorized assumption or a
