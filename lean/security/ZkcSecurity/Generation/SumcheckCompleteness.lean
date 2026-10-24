@@ -52,7 +52,7 @@ def source (input : Input) : Except String String := do
     let helpers := "helpers" ++ toString index
     let rule := "sourceRule" ++ toString index
     rules := rules ++ [rule]
-    text := text ++ "  have " ++ helpers ++ " := SumcheckDomainHelpers.round_helpers (K := Scalar) (H := Group)\n" ++
+    text := text ++ "  have " ++ helpers ++ " := DomainHelpers.round_helpers (K := Scalar) (H := Group)\n" ++
       "    " ++ subject ++ ".imported.program " ++ view ++ ".helper_bodies " ++ round ++ ".plan rfl rfl rfl rfl\n" ++
       "  have " ++ rule ++ " := ReadbackRound.sourceLoopBind\n" ++
       "    (A := Domain.Result (ringModel Scalar Group).toCarriers) (B := Domain.Result (ringModel Scalar Group).toCarriers)\n" ++
@@ -75,10 +75,10 @@ def source (input : Input) : Except String String := do
   RootCompleteness.source metadata output.toUniform.toOutput {
     imports := [view, output.roundsModule, output.mathematicsModule,
       "ZkcSecurity.Families.Sumcheck.TableComponentReadbackExecution",
-      "ZkcSecurity.Examples.Components.SumcheckReadbackHelpers",
+      "ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers",
       "ZkcSecurity.FiatShamir.HonestReadbackCompleteness"]
     metaImports := ["ZkcSecurity.Tools.ComponentReadback", "ZkcSecurity.Tools.TargetEvaluation"]
-    opens := ["ZkcSecurity.Domains.PrimeField", "ZkcSecurity.Examples.Components ZkcExamples.Structured",
+    opens := ["ZkcSecurity.Domains.PrimeField", "ZkcSecurity.Realizations.Sumcheck ZkcExamples.Structured",
       "ZkcSecurity.Families.Sumcheck.TableComponent",
       "ZkcSecurity.Families.Sumcheck.TableComponent.Execution ReadbackRound", output.roundsModule]
     description := "Installed table mathematics and realization laws are explicit."

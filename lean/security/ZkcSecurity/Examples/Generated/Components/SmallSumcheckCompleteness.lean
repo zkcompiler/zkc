@@ -8,7 +8,7 @@ public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorVi
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds
 public import ZkcSecurity.Examples.Components.SmallSumcheckFormula
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackExecution
-public import ZkcSecurity.Examples.Components.SumcheckReadbackHelpers
+public import ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers
 public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
 public meta import ZkcSecurity.Tools.ComponentReadback
 public meta import ZkcSecurity.Tools.TargetEvaluation
@@ -29,7 +29,7 @@ namespace ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.Claims.HonestPair ZkcSecurity.FiatShamir
 open ZkcSecurity.Domains.PrimeField
-open ZkcSecurity.Examples.Components ZkcExamples.Structured
+open ZkcSecurity.Realizations.Sumcheck ZkcExamples.Structured
 open ZkcSecurity.Families.Sumcheck.TableComponent
 open ZkcSecurity.Families.Sumcheck.TableComponent.Execution ReadbackRound
 open ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds
@@ -61,7 +61,7 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
     reading (application_read input0 input1 input2 input3)
     evaluating ZkcSecurity.Examples.Components.SmallSumcheck.Formula.equation
   have indexCapacity : 64 < indexLimit := by decide +kernel
-  have helpers0 := SumcheckDomainHelpers.round_helpers (K := Scalar) (H := Group)
+  have helpers0 := DomainHelpers.round_helpers (K := Scalar) (H := Group)
     ZkcSecurity.Examples.Generated.SmallSumcheck.imported.program ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.helper_bodies round0.plan rfl rfl rfl rfl
   have sourceRule0 := ReadbackRound.sourceLoopBind
     (A := Domain.Result (ringModel Scalar Group).toCarriers) (B := Domain.Result (ringModel Scalar Group).toCarriers)

@@ -28,7 +28,7 @@ open OracleComp OracleSpec
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Claims
 open ZkcSecurity.Claims ZkcSecurity.FiatShamir ZkcSecurity.Obligations
 open ZkcSecurity.Families.Sumcheck ZkcSecurity.Families.Sumcheck.TableComponent
-open ZkcSecurity.Examples.Components ZkcSecurity.Domains.PrimeField
+open ZkcSecurity.Realizations.Sumcheck ZkcSecurity.Domains.PrimeField
 open ZkcSecurity.Examples.Generated.TwoSums
 open ZkcSecurity.Examples.Generated.Components.TwoSumsABI
 
@@ -63,7 +63,7 @@ noncomputable def rejectedInputs (input0 : List Scalar) (input1 : List Scalar) (
          prove_retained_target [Scalar, Group] reading (validator_application_read input0 input1 input2 input3 input4 _)
            evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation solving prove_table_capacity)
       | (change some _ ≠ some true
-         simp (disch := tauto) only [SumcheckValidatorHelpers.terminal_rejects_at, Bool.false_and, Bool.and_false]
+         simp (disch := tauto) only [ValidatorHelpers.terminal_rejects_at, Bool.false_and, Bool.and_false]
          decide))
 
 theorem inputCosts (input0 : List Scalar) (input1 : List Scalar) (input2 : Scalar) (input3 : Scalar) (input4 : Nat) (initial : Domain.History carriers) :

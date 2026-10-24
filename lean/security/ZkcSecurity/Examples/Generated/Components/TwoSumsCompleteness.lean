@@ -8,7 +8,7 @@ public import ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView
 public import ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
 public import ZkcSecurity.Examples.Components.TwoSumsFormula
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackExecution
-public import ZkcSecurity.Examples.Components.SumcheckReadbackHelpers
+public import ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers
 public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
 public meta import ZkcSecurity.Tools.ComponentReadback
 public meta import ZkcSecurity.Tools.TargetEvaluation
@@ -29,7 +29,7 @@ namespace ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.Claims.HonestPair ZkcSecurity.FiatShamir
 open ZkcSecurity.Domains.PrimeField
-open ZkcSecurity.Examples.Components ZkcExamples.Structured
+open ZkcSecurity.Realizations.Sumcheck ZkcExamples.Structured
 open ZkcSecurity.Families.Sumcheck.TableComponent
 open ZkcSecurity.Families.Sumcheck.TableComponent.Execution ReadbackRound
 open ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
@@ -63,7 +63,7 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
     reading (application_read input0 input1 input2 input3 input4 input5)
     evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation
   have indexCapacity : 64 < indexLimit := by decide +kernel
-  have helpers0 := SumcheckDomainHelpers.round_helpers (K := Scalar) (H := Group)
+  have helpers0 := DomainHelpers.round_helpers (K := Scalar) (H := Group)
     ZkcSecurity.Examples.Generated.TwoSums.imported.program ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.helper_bodies round0.plan rfl rfl rfl rfl
   have sourceRule0 := ReadbackRound.sourceLoopBind
     (A := Domain.Result (ringModel Scalar Group).toCarriers) (B := Domain.Result (ringModel Scalar Group).toCarriers)
@@ -73,7 +73,7 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
     (round0.validator_block Scalar Group _ subject.selection.context rfl)
   dsimp only [round0.producerCapture, round0.validatorCapture, round0.descriptor] at sourceRule0
   simp only [ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.context_suite, Nat.reduceAdd] at sourceRule0
-  have helpers1 := SumcheckDomainHelpers.round_helpers (K := Scalar) (H := Group)
+  have helpers1 := DomainHelpers.round_helpers (K := Scalar) (H := Group)
     ZkcSecurity.Examples.Generated.TwoSums.imported.program ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.helper_bodies round1.plan rfl rfl rfl rfl
   have sourceRule1 := ReadbackRound.sourceLoopBind
     (A := Domain.Result (ringModel Scalar Group).toCarriers) (B := Domain.Result (ringModel Scalar Group).toCarriers)

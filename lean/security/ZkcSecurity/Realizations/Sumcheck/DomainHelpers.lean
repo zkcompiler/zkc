@@ -16,7 +16,7 @@ Domain binding also exposes failed lookup, decoding and stopped outcomes.
 -/
 
 set_option autoImplicit false
-namespace ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+namespace ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
 
@@ -193,4 +193,4 @@ theorem terminal_condition {K Frame : Type} [Field K]
   simpa only [ZkcSecurity.Families.Sumcheck.TableComponent.PrefixState.entries, original]
     using honest.symm
 
-end ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+end ZkcSecurity.Realizations.Sumcheck.DomainHelpers

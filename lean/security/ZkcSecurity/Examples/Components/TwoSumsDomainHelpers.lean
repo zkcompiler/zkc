@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.Components.TwoSumsTarget
-public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 
 @[expose] public section
 
@@ -15,7 +15,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured ZkcExamples.Structured.Generated.Bindings
 open ZkcSecurity.Families.Sumcheck.TableComponent
 
-theorem domain_bodies : SumcheckDomainHelpers.Bodies TwoSumsInputs.imported.program :=
+theorem domain_bodies : ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies TwoSumsInputs.imported.program :=
   source_bodies
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -26,7 +26,7 @@ theorem call_both (left right : Bool) :
       TwoSumsInputs.helper30Helper.name [.data .boolean]
       [.data (.boolean left), .data (.boolean right)] =
       .returned [.data (.boolean (left && right))] :=
-  SumcheckDomainHelpers.call_return _ TwoSumsInputs.helper30Helper
+  ZkcSecurity.Realizations.Sumcheck.DomainHelpers.call_return _ TwoSumsInputs.helper30Helper
     (.cons left (.cons right .nil)) (.cons (left && right) .nil)
     (both_equation left right) _ _ rfl rfl
 
@@ -39,7 +39,7 @@ theorem call_target (left right : List F) (leftClaim rightClaim : F)
       [.data (.vector "bls12-381.fr" left), .data (.vector "bls12-381.fr" right),
         .data (.field "bls12-381.fr" leftClaim), .data (.field "bls12-381.fr" rightClaim)] =
       .returned [.data (.boolean (decide (left.sum = leftClaim ∧ right.sum = rightClaim)))] :=
-  SumcheckDomainHelpers.call_return _ TwoSumsInputs.helper3Helper
+  ZkcSecurity.Realizations.Sumcheck.DomainHelpers.call_return _ TwoSumsInputs.helper3Helper
     (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil))))
     (.cons (decide (left.sum = leftClaim ∧ right.sum = rightClaim)) .nil)
     (target_equation left right leftClaim rightClaim leftBound rightBound) _ _ rfl rfl

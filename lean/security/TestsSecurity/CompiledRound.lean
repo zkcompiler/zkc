@@ -139,7 +139,7 @@ theorem actual_round
         [.data (.vector field point), .data (.field field challenge)] =
         .returned [.data (.vector field (point ++ [challenge]))] := by
     intro point challenge
-    exact ZkcSecurity.Examples.Components.SumcheckDomainHelpers.append (F := F) (G := G) program
+    exact ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append (F := F) (G := G) program
       ZkcSecurity.Examples.Components.SmallSumcheck.helper_bodies.sumcheck point challenge
   constructor
   · exact CompiledRound.reading plan program context field captured index point claim history

@@ -470,7 +470,7 @@ def entries : List Entry := [
     "Both carried environments encode the same dimension-indexed prefix state and \
     original table, with the remaining dimension bounded and the scalar equal to the residual sum."⟩,
   ⟨"wellformed.sumcheck-source-helper-bodies", .wellFormedness,
-    some `ZkcSecurity.Examples.Components.SumcheckDomainHelpers.Bodies,
+    some `ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies,
     "The admitted source program contains the exact sumcheck, prefix, terminal-check \
     and table-check helper bodies with their complete checked dependencies."⟩,
   ⟨"wellformed.honest-readback", .wellFormedness,

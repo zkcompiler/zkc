@@ -3,7 +3,7 @@ module
 public import ZkcSecurity.Examples.Generated.TwoSums
 public import ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator
 public import ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
-public import ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
+public import ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorOrigins
 public import ZkcSecurity.Families.Sumcheck.CompiledValidatorExecution
 public import Zkc.Source.Structured.BodyBindings
@@ -27,7 +27,7 @@ open ZkcSecurity.Families.Sumcheck ZkcSecurity.Families.Sumcheck.TableComponent
 open ZkcSecurity.Families.Sumcheck.TableComponent.Execution
 open ZkcSecurity.Families.Sumcheck.CompiledValidator.Execution
 open ZkcSecurity.FiatShamir.DomainReduction
-open ZkcSecurity.Examples.Components
+open ZkcSecurity.Realizations.Sumcheck
 open ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
 
 abbrev program := ZkcSecurity.Examples.Generated.TwoSums.imported.program
@@ -36,7 +36,7 @@ abbrev field := ("bls12-381.fr")
 abbrev suite := ("merlin3.bls12-381.fr64be/0")
 theorem context_suite : context.suite = suite := rfl
 
-theorem helper_bodies : SumcheckDomainHelpers.Bodies program := by
+theorem helper_bodies : DomainHelpers.Bodies program := by
   bind_structured_bodies
 
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
@@ -50,21 +50,21 @@ theorem round0_connection : CompiledValidator.RoundConnection (F := F) (G := G)
     round0.plan.field program context round0.plan.toPlan round0.schedule := by
   apply CompiledValidator.connectionOfOrigins round0.plan program context round0.bases round0.origins_checked
   intro point challenge
-  exact SumcheckDomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge
+  exact DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge
 
 theorem round1_field : round1.plan.field = field := rfl
 theorem round1_connection : CompiledValidator.RoundConnection (F := F) (G := G)
     round1.plan.field program context round1.plan.toPlan round1.schedule := by
   apply CompiledValidator.connectionOfOrigins round1.plan program context round1.bases round1.origins_checked
   intro point challenge
-  exact SumcheckDomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge
+  exact DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge
 
 noncomputable def assembled (input0 : List F) (input1 : List F) (input2 : F) (input3 : F) (input4 : Nat) (input5 : Domain.History (uniformCarriers F G)) :
     {presented : PIR.Process (Nominal.signature F field) (Domain.Result (uniformCarriers F G)) //
       Bridge (Nominal.interface (G := G) field) (fun _ _ => True) input5
         (Domain.participant (ringModel F G) program context ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.artifact
           (inputs input0 input1 input2 input3 input4 input5)) presented} := by
-  have emptyLaw := SumcheckDomainHelpers.empty (F := F) (G := G) program helper_bodies.sumcheck
+  have emptyLaw := DomainHelpers.empty (F := F) (G := G) program helper_bodies.sumcheck
   have round0Rule := sourceLoopBind (B := Domain.Result (uniformCarriers F G))
     round0.plan.field program context round0.plan.toPlan round0.schedule
     round0_connection _ _ (round0.validator_block F G program context rfl)
@@ -86,7 +86,7 @@ noncomputable def assembled (input0 : List F) (input1 : List F) (input2 : F) (in
         unfold_component_bodies [ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.view])
       try simp only [List.length_nil, List.length_range, Nat.zero_add] at *
       repeat first
-        | fail_if_no_progress (simp (disch := omega) only [SumcheckValidatorHelpers.terminal_all program helper_bodies])
+        | fail_if_no_progress (simp (disch := omega) only [ValidatorHelpers.terminal_all program helper_bodies])
         | fail_if_no_progress (
             normalize_table_validator [emptyLaw] unfolding
               [CompiledValidator.carried, round0_field, round1_field, field, suite, context_suite,

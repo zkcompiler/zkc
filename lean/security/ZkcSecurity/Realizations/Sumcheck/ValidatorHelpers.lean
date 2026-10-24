@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 
 @[expose] public section
 
@@ -8,7 +8,7 @@ public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
 by compiled validators. Oversized vectors exhaust in the actual helper before
 acceptance; their absence from honest input policies is irrelevant here. -/
 set_option autoImplicit false
-namespace ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
+namespace ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
 open ZkcSecurity.Families.Sumcheck.TableComponent
@@ -39,7 +39,7 @@ theorem call_exhausted (program : Structured.Program) (helper : Helper)
 
 /-- Every raw length is included. The sole prefix bound is supplied by the
 actual Max guard plus successful loop output, never by a receipt premise. -/
-theorem terminal_all (program : Structured.Program) (bodies : SumcheckDomainHelpers.Bodies program)
+theorem terminal_all (program : Structured.Program) (bodies : DomainHelpers.Bodies program)
     (raw point : List F) (claim : F) (pointSmall : point.length < 64) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
       [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" point),
@@ -50,7 +50,7 @@ theorem terminal_all (program : Structured.Program) (bodies : SumcheckDomainHelp
       else .stopped .exhausted := by
   by_cases bounded : raw.length < indexLimit
   · rw [ite_eq_left bounded]
-    exact SumcheckDomainHelpers.check program bodies.prefixBodies bodies.sumcheck.first bodies.check bodies.checkTable
+    exact DomainHelpers.check program bodies.prefixBodies bodies.sumcheck.first bodies.check bodies.checkTable
       raw point claim bounded (pointSmall.trans (by decide +kernel))
   · rw [ite_eq_right bounded]
     apply call_exhausted program checkHelper (checkInputs raw point claim) _ rfl
@@ -83,4 +83,4 @@ theorem terminal_rejects_at (raw point : List F) (scalar : F) (count : Nat)
   rw [← wrong.2]
   exact terminal_rejects raw point scalar wrong.1
 
-end ZkcSecurity.Examples.Components.SumcheckValidatorHelpers
+end ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers

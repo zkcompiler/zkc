@@ -61,7 +61,7 @@ def source (producer validator : Participant) (output : Output) : Except String 
   let suite := literal first.suite
   let mut text := "module\n\npublic import " ++ output.subjectModule ++
     "\npublic import " ++ view ++ "\npublic import " ++ output.roundsModule ++
-    "\npublic import ZkcSecurity.Examples.Components.SumcheckValidatorHelpers\n" ++
+    "\npublic import ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers\n" ++
     "public import ZkcSecurity.Families.Sumcheck.CompiledValidatorOrigins\n" ++
     "public import ZkcSecurity.Families.Sumcheck.CompiledValidatorExecution\n" ++
     "public import Zkc.Source.Structured.BodyBindings\n" ++
@@ -81,14 +81,14 @@ def source (producer validator : Participant) (output : Output) : Except String 
     "open ZkcSecurity.Families.Sumcheck.TableComponent.Execution\n" ++
     "open ZkcSecurity.Families.Sumcheck.CompiledValidator.Execution\n" ++
     "open ZkcSecurity.FiatShamir.DomainReduction\n" ++
-    "open ZkcSecurity.Examples.Components\n" ++
+    "open ZkcSecurity.Realizations.Sumcheck\n" ++
     "open " ++ output.roundsModule ++ "\n\n" ++
     "abbrev program := " ++ output.subjectModule ++ ".imported.program\n" ++
     "abbrev context := " ++ output.subjectModule ++ ".subject.selection.context\n" ++
     "abbrev field := " ++ field ++ "\n" ++
     "abbrev suite := " ++ suite ++ "\n" ++
     "theorem context_suite : context.suite = suite := rfl\n\n" ++
-    "theorem helper_bodies : SumcheckDomainHelpers.Bodies program := by\n  bind_structured_bodies\n\n" ++
+    "theorem helper_bodies : DomainHelpers.Bodies program := by\n  bind_structured_bodies\n\n" ++
     "variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]\n" ++
     "  [DecidableEq F] [DecidableEq G]\n\n" ++
     "def inputs" ++ String.join binders ++ " : Domain.Environment (uniformCarriers F G) :=\n  [" ++
@@ -101,13 +101,13 @@ def source (producer validator : Participant) (output : Output) : Except String 
       "  apply CompiledValidator.connectionOfOrigins " ++ round ++ ".plan program context " ++
       round ++ ".bases " ++ round ++ ".origins_checked\n" ++
       "  intro point challenge\n" ++
-      "  exact SumcheckDomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge\n\n"
+      "  exact DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck point challenge\n\n"
   text := text ++ "noncomputable def assembled" ++ String.join binders ++ " :\n" ++
     "    {presented : PIR.Process (Nominal.signature F field) (Domain.Result (uniformCarriers F G)) //\n" ++
     "      Bridge (Nominal.interface (G := G) field) (fun _ _ => True) " ++ history ++ "\n" ++
     "        (Domain.participant (ringModel F G) program context " ++ view ++ ".artifact\n" ++
     "          (inputs " ++ arguments ++ ")) presented} := by\n" ++
-    "  have emptyLaw := SumcheckDomainHelpers.empty (F := F) (G := G) program helper_bodies.sumcheck\n"
+    "  have emptyLaw := DomainHelpers.empty (F := F) (G := G) program helper_bodies.sumcheck\n"
   let mut rules : List String := []
   let mut fields : List String := []
   for index in List.range rounds.length do
@@ -130,7 +130,7 @@ def source (producer validator : Participant) (output : Output) : Except String 
     "        unfold_component_bodies [" ++ view ++ ".view])\n" ++
     "      try simp only [List.length_nil, List.length_range, Nat.zero_add] at *\n" ++
     "      repeat first\n" ++
-    "        | fail_if_no_progress (simp (disch := omega) only [SumcheckValidatorHelpers.terminal_all program helper_bodies])\n" ++
+    "        | fail_if_no_progress (simp (disch := omega) only [ValidatorHelpers.terminal_all program helper_bodies])\n" ++
     "        | fail_if_no_progress (\n" ++
     "            normalize_table_validator [emptyLaw] unfolding\n" ++
     "              [CompiledValidator.carried, " ++ ", ".intercalate fields ++ ", field, suite, context_suite,\n" ++

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
 
 @[expose] public section
@@ -9,7 +9,7 @@ public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
 invariant. Its index bounds are consequences of that invariant and the input
 capacity law, rather than extra caller-specific transport obligations. -/
 set_option autoImplicit false
-namespace ZkcSecurity.Examples.Components.SumcheckReadbackHelpers
+namespace ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.Families.Sumcheck.TableComponent
 open ZkcExamples.Structured.SumcheckHelperBodies
@@ -17,15 +17,15 @@ open ZkcExamples.Structured.SumcheckHelperBodies
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-theorem terminal (program : Structured.Program) (bodies : SumcheckDomainHelpers.Bodies program)
+theorem terminal (program : Structured.Program) (bodies : DomainHelpers.Bodies program)
     (raw : List F) (state : PrefixState F (Domain.History (ringModel F G).toCarriers) 0)
     (original : state.original = raw) (bounded : raw.length < indexLimit)
     (honest : state.scalar = state.entries.sum) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
       [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" state.point),
         .data (.field "bls12-381.fr" state.scalar)] = .returned [.data (.boolean true)] := by
-  have truth := SumcheckDomainHelpers.terminal_condition raw state original bounded honest
-  have law := SumcheckDomainHelpers.check (G := G) program bodies.prefixBodies bodies.sumcheck.first
+  have truth := DomainHelpers.terminal_condition raw state original bounded honest
+  have law := DomainHelpers.check (G := G) program bodies.prefixBodies bodies.sumcheck.first
     bodies.check bodies.checkTable raw state.point state.scalar bounded
     (truth.1.2.1.trans (by decide +kernel))
   simpa only [truth, and_self, decide_true] using law
@@ -40,13 +40,13 @@ macro "normalize_sumcheck_readback " "[" F:term ", " G:term ", " program:term ",
         [terminal $program $bodies])
     | fail_if_no_progress (simp (disch := first | assumption | omega |
           (apply ZkcExamples.Structured.PrimitiveLibrary.hasShape_of_length <;> omega)) only
-        [SumcheckDomainHelpers.table (G := $G) $program ($bodies).sumcheck,
-          SumcheckDomainHelpers.empty (F := $F) (G := $G) $program ($bodies).sumcheck,
-          SumcheckDomainHelpers.less (F := $F) (G := $G) $program ($bodies).sumcheck])
+        [DomainHelpers.table (G := $G) $program ($bodies).sumcheck,
+          DomainHelpers.empty (F := $F) (G := $G) $program ($bodies).sumcheck,
+          DomainHelpers.less (F := $F) (G := $G) $program ($bodies).sumcheck])
     | fail_if_no_progress (
         normalize_table_readback [] unfolding
           [ReadbackRound.producerCarried, ReadbackRound.validatorCarried, $definitions,*]
         try simp (disch := omega) only [ite_eq_left, ite_eq_right])
     | fail_if_no_progress (simp only [PIR.Process.bind_assoc]))
 
-end ZkcSecurity.Examples.Components.SumcheckReadbackHelpers
+end ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers

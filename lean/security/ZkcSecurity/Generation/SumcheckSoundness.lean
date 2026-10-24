@@ -70,7 +70,7 @@ def source (input : Input) : Except String String := do
     "open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Claims\n" ++
     "open ZkcSecurity.Claims ZkcSecurity.FiatShamir ZkcSecurity.Obligations\n" ++
     "open ZkcSecurity.Families.Sumcheck ZkcSecurity.Families.Sumcheck.TableComponent\n" ++
-    "open ZkcSecurity.Examples.Components ZkcSecurity.Domains.PrimeField\n" ++
+    "open ZkcSecurity.Realizations.Sumcheck ZkcSecurity.Domains.PrimeField\n" ++
     "open " ++ subject ++ "\nopen " ++ output.abiModule ++ "\n\n" ++
     "abbrev Scalar := " ++ output.fieldType ++ "\nabbrev Group := " ++ output.groupType ++ "\n" ++
     "abbrev model := subject.domainModel\nabbrev carriers := model.toCarriers\n" ++
@@ -100,7 +100,7 @@ def source (input : Input) : Except String String := do
     "         prove_retained_target [Scalar, Group] reading (validator_application_read " ++ arguments ++ " _)\n" ++
     "           evaluating " ++ output.formulaLaw ++ " solving prove_table_capacity)\n" ++
     "      | (change some _ ≠ some true\n" ++
-    "         simp (disch := tauto) only [SumcheckValidatorHelpers.terminal_rejects_at, Bool.false_and, Bool.and_false]\n" ++
+    "         simp (disch := tauto) only [ValidatorHelpers.terminal_rejects_at, Bool.false_and, Bool.and_false]\n" ++
     "         decide))\n\n" ++
     "theorem inputCosts" ++ binders ++ " (initial : Domain.History carriers) :\n" ++
     "    Typed.ChargedCostBound (Nominal.interface (G := Group) field) (fun _ _ => price)\n" ++

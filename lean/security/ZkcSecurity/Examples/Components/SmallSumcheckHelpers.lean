@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import Zkc.Source.Structured.BodyBindings
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 
@@ -16,7 +16,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured
 open ZkcSecurity.Families.Sumcheck.TableComponent
 
-theorem helper_bodies : SumcheckDomainHelpers.Bodies Generated.Bindings.SmallSumcheckInputs.imported.program := by
+theorem helper_bodies : ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies Generated.Bindings.SmallSumcheckInputs.imported.program := by
   bind_structured_bodies
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -31,7 +31,7 @@ theorem call_check (raw point : List F) (claim : F)
         .data (.field "bls12-381.fr" claim)] =
       .returned [.data (.boolean (decide (PrimitiveLibrary.HasShape raw point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))] :=
-  SumcheckDomainHelpers.check _ helper_bodies.prefixBodies helper_bodies.sumcheck.first
+  ZkcSecurity.Realizations.Sumcheck.DomainHelpers.check _ helper_bodies.prefixBodies helper_bodies.sumcheck.first
     helper_bodies.check helper_bodies.checkTable raw point claim rawBound pointBound
 
 end ZkcSecurity.Examples.Components.SmallSumcheck

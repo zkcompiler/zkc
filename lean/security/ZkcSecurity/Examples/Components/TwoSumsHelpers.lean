@@ -4,7 +4,7 @@ public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
 public import Zkc.Source.Structured.BodyBindings
-public import ZkcSecurity.Examples.Components.SumcheckDomainHelpers
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 
 @[expose] public section
 
@@ -21,7 +21,7 @@ open PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
 
 /-- Install the reusable mathematical body templates against this actual unit.
 The tactic searches full signatures and bodies; no helper-number table is supplied. -/
-theorem source_bodies : SumcheckDomainHelpers.Bodies TwoSumsInputs.imported.program := by
+theorem source_bodies : ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies TwoSumsInputs.imported.program := by
   bind_structured_bodies
 
 theorem first_bodies : MapFirstContracts.Bodies TwoSumsInputs.unit.definitions :=
