@@ -225,7 +225,10 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "theorem policy_iff" ++ dataBinders ++ " :\n" ++
     "    subject.inputPolicy.Holds " ++ present ++ " ↔ (" ++ policy ++ ") := by\n" ++
     "  change inputPolicy.Holds " ++ presentSource ++ " ↔ _\n" ++
-    "  simp [inputPolicy, InputPolicy.Holds, InputRule.Holds, sourceInputs, TypedABI.get_cons_here, TypedABI.get_cons_there, and_assoc]\n\n" ++
+    (if metadata.inputPolicy.rules.isEmpty then
+      "  simp [inputPolicy, InputPolicy.Holds]\n\n"
+    else
+      "  simp [inputPolicy, InputPolicy.Holds, InputRule.Holds, sourceInputs, TypedABI.get_cons_here, TypedABI.get_cons_there, and_assoc]\n\n") ++
     "theorem honestInput_iff" ++ dataBinders ++ " :\n" ++
     "    subject.HonestInput " ++ present ++ " ↔ (" ++ policy ++ ") := by\n" ++
     "  exact (abi.honest_pack_iff " ++ call "data" n ++ ").trans\n" ++

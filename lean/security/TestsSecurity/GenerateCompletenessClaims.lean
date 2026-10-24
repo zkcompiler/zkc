@@ -1,10 +1,10 @@
-import ZkcTools.StructuredSource.Bindings.Subject
+import ZkcTools.StructuredSource.Root
 
 namespace TestsSecurity.GenerateCompletenessClaims
 
 /-! Select existing closed subjects and proved endpoint theorems. The printer
 supplies uniform structural/receipt assembly for each descriptor. -/
-open ZkcTools.StructuredSource.Bindings
+open ZkcTools.StructuredSource.Root
 
 def descriptors : List FixedCompletenessOutput :=
   ["SmallSumcheck", "TwoSums"].map fun name => {

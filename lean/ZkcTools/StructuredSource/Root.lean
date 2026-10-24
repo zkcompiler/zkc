@@ -1,6 +1,6 @@
 module
 
-public import ZkcTools.StructuredSource.Bindings.Generate
+public import Lean
 
 @[expose] public section
 
@@ -8,7 +8,10 @@ public import ZkcTools.StructuredSource.Bindings.Generate
 The existing security builder proves source/pair/occurrence associations. The
 descriptor selects request data, never probability or successful execution. -/
 
-namespace ZkcTools.StructuredSource.Bindings
+namespace ZkcTools.StructuredSource.Root
+
+def quoted (value : String) : String := reprStr value
+def paren (value : String) : String := "(" ++ value ++ ")"
 
 structure FixedSubjectOutput where
   moduleName : String
@@ -27,7 +30,7 @@ structure FixedSubjectOutput where
   chargeSites : List String := []
 
 def fixedSubjectSource (output : FixedSubjectOutput) : String :=
-  let target := Presentation.quoted output.targetName
+  let target := quoted output.targetName
   "module\n\npublic import " ++ output.sourceModule ++ "\npublic import " ++ output.pairModule ++
   "\npublic import " ++ output.modelModule ++ "\npublic import ZkcSecurity.Tools.PairConstruction\n" ++
   "public import ZkcSecurity.Claims.SourceChargeSites\n\n" ++
@@ -42,7 +45,7 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   "def inputPolicy : ZkcSecurity.Claims.HonestPair.InputPolicy imported.program.payload.entry.inputs :=\n" ++
   "  " ++ output.inputPolicyExpression ++ "\n\n" ++
   "def subject : ZkcSecurity.Claims.HonestPair.Subject\n" ++
-  "    " ++ Presentation.paren output.modelExpression ++ " original imported selected := by\n" ++
+  "    " ++ paren output.modelExpression ++ " original imported selected := by\n" ++
   "  bind_authored_subject " ++ target ++ " using inputPolicy\n" ++
   "    exports " ++ output.originalExportExpression ++ ", " ++ output.producerExportExpression ++ ", " ++
   output.validatorExportExpression ++ "\n\n" ++
@@ -51,7 +54,7 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   "def validatorSites : List (ZkcSecurity.Claims.Domain.ChargeSite validatorCompiled) :=\n  [" ++
     ",\n   ".intercalate (output.chargeSites.map fun label =>
       "(ZkcSecurity.Claims.Domain.ChargeSite.selectLabel validatorCompiled " ++
-      Presentation.quoted label ++
+      quoted label ++
       ").toOption.get (by decide +kernel)") ++ "]\n\n" ++
   "def validatorSubject := subject.validatorSubject validatorSites\n\n" ++
   "end\nend " ++ output.moduleName ++ "\n"
@@ -66,7 +69,9 @@ structure FixedCompletenessOutput where
   proofModule : String
   proofName : String
   capabilitiesExpression : String
-  error : Nat := 0
+  errorExpression : String := ".natural 0"
+  normalization : List String := []
+  theoremNormalization : List String := []
 
 def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
   "\n".intercalate [
@@ -96,14 +101,16 @@ def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
     "  model := ⟨HonestPair.honestModelIdentifier, []⟩",
     "  target := subject.down.targetReference",
     "  accept := subject.down.acceptance",
-    "  quantity := .scalar (.natural " ++ toString output.error ++ ")",
+    "  quantity := .scalar (" ++ output.errorExpression ++ ")",
     "  capabilities := [] }", "",
     "def library : ZkcSecurity.Tools.ClaimConstruction.Library where",
     "  subject := ``subject",
     "  authority := some ``authority",
     "  properties := ``properties",
     "  models := ``models",
-    "  normalization := [``subject, ``authority, ``properties, ``models, ``capabilities]",
+    "  normalization := [" ++ ", ".intercalate
+      ((["subject", "authority", "properties", "models", "capabilities"] ++ output.normalization).map ("``" ++ ·)) ++ "]",
+    "  theoremNormalization := [" ++ ", ".intercalate (output.theoremNormalization.map ("``" ++ ·)) ++ "]",
     "  theoremMethods := [(⟨\"fs.honest_completeness\", 0⟩, ``" ++ output.proofName ++ ")]", "",
     "claim_request completeData using library method",
     "  (some (⟨⟨\"fs.honest_completeness\", 0⟩, []⟩ : Wire.Application))", "",
@@ -128,7 +135,7 @@ def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
   let argument := if output.applicationParameter.isSome then " application" else ""
   let context := match output.applicationParameter with
     | none => "ModelContext.empty"
-    | some name => "ModelContext.parameter " ++ Presentation.quoted name ++ " application"
+    | some name => "ModelContext.parameter " ++ quoted name ++ " application"
   "\n".intercalate (["module", ""] ++
     output.imports.map ("public import " ++ ·) ++ [
     "public import ZkcSecurity.Tools.ClaimConstruction", "",
@@ -141,7 +148,7 @@ def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
     "abbrev subject := " ++ output.subjectExpression,
     "abbrev capabilities := " ++ output.capabilitiesExpression,
     "def authority := CanonicalAuthority.domains " ++
-      Presentation.paren output.artifactsExpression ++ " capabilities", "",
+      paren output.artifactsExpression ++ " capabilities", "",
     "def modelContext" ++ parameter ++ " : ModelContext := " ++ context,
     "def models" ++ parameter ++ " : Registry authority.ModelExport :=",
     "  ⟨[authority.modelEntry (modelContext" ++ argument ++ ")]⟩",
@@ -152,7 +159,7 @@ def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
     "  normalization := [``authority, ``modelContext, ``properties, ``models]",
     "  theoremNormalization := [" ++ ", ".intercalate (output.theoremNormalization.map ("``" ++ ·)) ++ "]",
     "  theoremMethods := [" ++ ",\n    ".intercalate (output.theoremMethods.map fun (name, version, theoremName) =>
-      "(⟨" ++ Presentation.quoted name ++ ", " ++ toString version ++ "⟩, ``" ++ theoremName ++ ")") ++ "]",
+      "(⟨" ++ quoted name ++ ", " ++ toString version ++ "⟩, ``" ++ theoremName ++ ")") ++ "]",
     "", "end " ++ output.moduleName, ""])
 
-end ZkcTools.StructuredSource.Bindings
+end ZkcTools.StructuredSource.Root

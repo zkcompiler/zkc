@@ -1,7 +1,7 @@
-import ZkcTools.StructuredSource.Bindings.Subject
+import ZkcTools.StructuredSource.Root
 
 namespace TestsSecurity.GenerateClaimLibraries
-open ZkcTools.StructuredSource.Bindings
+open ZkcTools.StructuredSource.Root
 
 /-! Protocol choices are source subject and installed theorem exports. No
 selected-model record, error expression, proof script or schedule is repeated. -/

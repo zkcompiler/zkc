@@ -1,6 +1,6 @@
 import Tests.Generators.SumcheckBindings
 import ZkcTools.StructuredSource.Bindings.Gkr
-import ZkcTools.StructuredSource.Bindings.Subject
+import ZkcTools.StructuredSource.Root
 import ZkcTools.StructuredSource.Bindings.Inputs
 import ZkcTools.StructuredSource.Bindings.Ledger
 import Tests.StructuredBindingsGeneric
@@ -70,7 +70,7 @@ def main (args : List String) : IO Unit := do
     IO.FS.writeFile (path.withExtension "obligations.json") ((obligationLedger program output).pretty ++ "\n")
     IO.println s!"generated {output.moduleName}"
 
-private def subjectDescriptor : FixedSubjectOutput := {
+private def subjectDescriptor : ZkcTools.StructuredSource.Root.FixedSubjectOutput := {
   moduleName := "Generated.Subject", sourceModule := "Source", pairModule := "Pair", modelModule := "Model"
   originalExpression := "snapshot", importedExpression := "imported", artifactsExpression := "artifacts"
   modelExpression := "model", targetName := "fixed_target", inputPolicyExpression := "policy"
@@ -78,7 +78,7 @@ private def subjectDescriptor : FixedSubjectOutput := {
   producerExportExpression := "producerExport", validatorExportExpression := "validatorExport" }
 
 -- The existing builder fills the fixed Subject; exports remain request data.
-#guard ((fixedSubjectSource subjectDescriptor).splitOn "bind_authored_subject").length = 2
-#guard ((fixedSubjectSource subjectDescriptor).splitOn "exports sourceExport, producerExport, validatorExport").length = 2
+#guard ((ZkcTools.StructuredSource.Root.fixedSubjectSource subjectDescriptor).splitOn "bind_authored_subject").length = 2
+#guard ((ZkcTools.StructuredSource.Root.fixedSubjectSource subjectDescriptor).splitOn "exports sourceExport, producerExport, validatorExport").length = 2
 
 end Tests.StructuredBindingsGenerator

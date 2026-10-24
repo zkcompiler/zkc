@@ -5,6 +5,7 @@ public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackLoop
 public import Zkc.Construction.DomainCalculations
 public import Mathlib.Tactic.FailIfNoProgress
 public meta import Lean.Elab.Tactic
+public meta import ZkcSecurity.Tools.ProcessView
 
 @[expose] public section
 
@@ -25,38 +26,6 @@ theorem booleanAnd {F G : Type} [Field F] [AddCommGroup G] [Module F G]
 
 meta section
 open Lean Meta Elab Tactic
-
-partial def collectSpine (scope : Name) (expression : Expr) :
-    StateT (NameSet × Array Name) MetaM Unit := do
-  if expression.isAppOf ``Domain.View.loop then return
-  match expression with
-  | .const name _ =>
-      if scope.isPrefixOf name && !(← get).1.contains name then
-        modify fun (seen, names) => (seen.insert name, names.push name)
-        if let .defnInfo definition ← getConstInfo name then
-          collectSpine scope definition.value
-  | .app function argument =>
-      collectSpine scope function
-      collectSpine scope argument
-  | .lam _ _ body _ | .forallE _ _ body _ => collectSpine scope body
-  | .letE _ _ value body _ => collectSpine scope value; collectSpine scope body
-  | .mdata _ body => collectSpine scope body
-  | .proj _ _ body => collectSpine scope body
-  | _ => pure ()
-
-/-- Unfold the selected View sequence spines without enumerating generated
-step names or opening a loop's installed component body. -/
-elab "unfold_component_bodies " "[" bodies:ident,* "]" : tactic => withMainContext do
-  let mut names : Array Name := #[]
-  for body in bodies.getElems do
-    let expression ← Elab.Term.elabTerm body none
-    let some name := expression.getAppFn.constName?
-      | throwErrorAt body "expected a selected generated View body"
-    let (_, (_, found)) ← (collectSpine name.getPrefix expression).run ({}, #[])
-    names := names ++ found
-  let lemmas ← (names.push ``Domain.View.sequence).mapM fun name =>
-    `(Parser.Tactic.simpLemma| $(mkIdent name):term)
-  evalTactic (← `(tactic| simp only [$lemmas,*]))
 
 partial def firstIteration (expression : Expr) : Option Expr :=
   if expression.isAppOfArity ``Domain.iterate 7 then

@@ -1,4 +1,4 @@
-import ZkcTools.StructuredSource.Bindings.Subject
+import ZkcTools.StructuredSource.Root
 
 namespace TestsSecurity.GenerateSubjects
 
@@ -6,7 +6,7 @@ namespace TestsSecurity.GenerateSubjects
 model, retained target, honest-input policy and exact exported artifacts. They
 contain no structural proof fields or mathematical/security proof scripts. -/
 
-open ZkcTools.StructuredSource.Bindings
+open ZkcTools.StructuredSource.Root
 
 def descriptors : List FixedSubjectOutput := [
   { moduleName := "ZkcSecurity.Examples.Generated.SmallSumcheck"

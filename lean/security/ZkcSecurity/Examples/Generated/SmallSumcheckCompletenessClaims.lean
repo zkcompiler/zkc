@@ -39,6 +39,7 @@ def library : ZkcSecurity.Tools.ClaimConstruction.Library where
   properties := ``properties
   models := ``models
   normalization := [``subject, ``authority, ``properties, ``models, ``capabilities]
+  theoremNormalization := []
   theoremMethods := [(⟨"fs.honest_completeness", 0⟩, ``ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete)]
 
 claim_request completeData using library method
