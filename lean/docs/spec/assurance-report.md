@@ -383,11 +383,42 @@ current source build and cannot certify a request.
 
 ## Status and report fields
 
+`Zkc.Claims.ReceiptAudit` owns the total finite receipt classifier and the
+whole-scope aggregate. Its input distinguishes kernel observations, external
+admissions, and resolver diagnostics. The production `declaration-records
+--receipt-status` command imports the stored providers, re-extracts the named
+request and receipt facts and actual axiom closures, and checks the mandatory
+export against those fresh observations. Optional method attribution is absent
+from this comparison. A supplied proof flag cannot replace the extraction.
+
+Each request/receipt root is imported using its physical provider's own Lake
+search path. Independent package groups are checked in separate environments;
+their paths are never concatenated to choose whichever module happens to win.
+Aggregating their status records does not construct a theorem across those
+environments. The exchange carries a fresh invocation identifier and the digest
+of its complete input, including the provider partition. A mismatched response
+is a transport failure. These identifiers bind the reporting exchange; they
+are not kernel proofs of filesystem identity.
+
+The positive characterization theorem states exactly which audit conditions
+certification requires. It proves the finite policy, not the correctness of
+external hashing, source-to-IR correspondence, or filesystem-to-built-object
+association. Those admissions remain visible. Python supplies byte identities
+and joins and renders the Lean export; it has no fallback receipt classifier.
+Each requested source occurrence must have exactly one associated status row.
+The report renders the same dependency observation that the Lean audit received,
+without taking a second potentially different filesystem snapshot. An unaudited
+scope cannot contain a certified item, even when its aggregate status is open.
+Missing, corrupt, stale or inconsistent exports produce `transport-failure` and
+`outcome: unresolved`, with the transport diagnostic. This is a reporting failure,
+not a Lean decision that a mathematical interpretation is incomplete.
+
 | Per-request `status` | Meaning |
 |---|---|
 | `incomplete` | A required interpretation is reported missing; no checked receipt proves it |
 | `open` | A proof, required link, artifact association or audit check is missing or invalid |
 | `certified` | The exact requested meaning and capabilities have checked receipts, with all required stage links and audits |
+| `transport-failure` | No valid, freshly checked Lean status export was received for the request |
 
 Proof attempts retain their method, result and diagnostics separately;
 `unsupported`, `timeout` and `refused` are attempt results, not semantic states.

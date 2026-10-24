@@ -1,5 +1,8 @@
 """Request/receipt joins and Lean-owned assurance reporting controls."""
 from copy import deepcopy
+import json
+from pathlib import Path
+import subprocess
 
 import pytest
 from harness import load
@@ -14,9 +17,36 @@ EXPORTED_STAGE_LINKS = {
 }
 
 
+@pytest.fixture(scope="module")
+def pure_classifier():
+    """Run the actual Lean policy on mock exports, without claiming provenance."""
+    root = Path(__file__).resolve().parents[3] / "lean"
+    process = subprocess.Popen(["lake", "env", "lean", "--run", "Tests/ReceiptStatus.lean"], cwd=root,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def invoke(payload, _packages):
+        process.stdin.write(json.dumps(payload) + "\n")
+        process.stdin.flush()
+        line = process.stdout.readline()
+        # #print axioms is emitted by the test driver before its JSON loop.
+        while line and not line.startswith("{"):
+            line = process.stdout.readline()
+        assert line, process.stderr.read()
+        result = json.loads(line)
+        assert "error" not in result, result
+        return result
+
+    yield invoke
+    process.stdin.close()
+    process.wait(timeout=15)
+    assert process.returncode == 0, process.stderr.read()
+
+
 @pytest.fixture
-def api():
-    return load("receipt_reporting_cli", "lean/checks/check_records.py").reports
+def api(monkeypatch, pure_classifier):
+    api = load("receipt_reporting_cli", "lean/checks/check_records.py").reports
+    monkeypatch.setattr(api, "_invoke_receipt_classifier", pure_classifier)
+    return api
 
 
 @pytest.fixture
@@ -601,3 +631,307 @@ def test_registered_provenance_note_does_not_invent_assumptions(api, receipt_cas
 def test_fixed_meaning_still_refuses_nonstandard_axioms(api, receipt_case):
     receipt_case[2]["axioms"].append("Demo.unprovedAxiom")
     assert any("Demo.unprovedAxiom" in reason for reason in audit(api, receipt_case)[3])
+
+
+@pytest.mark.parametrize("change,diagnostic", [
+    ("wrong-model", "wrong request"),
+    ("unknown-property", "wrong registered property"),
+    ("missing-link", "unproved registered obligation"),
+])
+def test_lean_policy_refuses_changed_meaning_controls(api, receipt_case, change, diagnostic):
+    if change == "wrong-model":
+        receipt_case[3]["wire_request"]["model"]["version"] = 99
+    elif change == "unknown-property":
+        receipt_case[3]["registered_property"] = {"name": "unknown.property", "version": 0}
+    else:
+        receipt_case[3]["required_links"][0]["proved"] = False
+    assert any(diagnostic in reason for reason in audit(api, receipt_case)[3])
+
+
+@pytest.mark.parametrize("change,diagnostic", [
+    ("missing", "source-node association"), ("duplicate-mapping", "source-node association"),
+    ("duplicate-source", "duplicate bound source claim node"),
+    ("wrong-artifact", "differs from pipeline bytes"),
+])
+def test_lean_scope_refuses_exact_association_controls(api, scoped_report, change, diagnostic):
+    manifest, records, evidence = scoped_report
+    if change == "missing":
+        evidence["claim_receipts"] = []
+    elif change == "duplicate-mapping":
+        evidence["claim_receipts"] *= 2
+    elif change == "duplicate-source":
+        evidence["source_claims"]["claims"] *= 2
+    else:
+        evidence["artifacts"]["interactive_export"] = "sha256:other"
+    report = api.build(manifest, records)
+    assert all(row["status"] != "certified" for row in report["claims"])
+    assert any(diagnostic in reason for row in report["claims"] for reason in row["reasons"])
+
+
+@pytest.mark.parametrize("failure", ["missing", "corrupt", "duplicate", "wrong-node", "missing-audit"])
+def test_transport_failure_never_falls_back_to_resolution(api, scoped_report, monkeypatch, failure):
+    manifest, records, evidence = scoped_report
+    invoke = api._invoke_receipt_classifier
+
+    def broken(payload, packages):
+        if failure in {"missing", "corrupt"}:
+            raise api.ReceiptTransportError(f"{failure} Lean export")
+        export = invoke(payload, packages)
+        if failure == "duplicate":
+            export["claims"] *= 2
+        elif failure == "wrong-node":
+            export["claims"][0]["node"] = {"wrong": True}
+        else:
+            export["claims"][0].pop("audit")
+        return export
+
+    monkeypatch.setattr(api, "_invoke_receipt_classifier", broken)
+    report = api.build(manifest, records)
+    # The visible trial has a registered-undefined resolution. A failed Lean
+    # export must still be a transport failure, never an incomplete fallback.
+    assert report["status"] == "transport-failure"
+    assert report["source_claim_trials"][0]["status"] == "transport-failure"
+    assert all(row["status"] == "transport-failure" for row in report["claims"])
+    assert "transport failure" in report["reasons"][0]
+
+
+@pytest.fixture(scope="module")
+def kernel_records(tmp_path_factory):
+    """Capture only the affected Lean control module, without a package build."""
+    root = Path(__file__).resolve().parents[3] / "lean"
+    subprocess.run(["lake", "build", "declaration-records", "+Tests.ClaimReporting"], cwd=root,
+                   check=True, capture_output=True, text=True)
+    path = tmp_path_factory.mktemp("receipt-kernel") / "main.jsonl"
+    subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
+                    str(path), "Tests/ClaimReporting.lean"], cwd=root,
+                   check=True, capture_output=True, text=True)
+    declarations = load("kernel_receipt_declarations", "lean/checks/records/declarations.py")
+    return declarations.Records.load({"main": path})
+
+
+@pytest.mark.parametrize("name,diagnostic", [
+    ("clean", None), ("genericDirect", None), ("provedLink", None),
+    ("forgedDischarger", None), ("forgedDependency", None), ("forgedRoute", None),
+    ("explicitFalse", "omitted premise"), ("implicitFalse", "omitted premise"),
+    ("inhabitedFalse", "hidden parameter"), ("liftedFalse", "hidden parameter"),
+    ("omittedLink", "unproved registered obligation"),
+])
+def test_production_classifier_reextracts_kernel_receipts(kernel_records, name, diagnostic):
+    api = load("production_receipt_cli", "lean/checks/check_records.py").reports
+    request_record = kernel_records.get("Tests.ClaimReporting.request0Data")
+    request = request_record["detail"]["claim_data"]["wire_request"]
+    record = kernel_records.get("Tests.ClaimReporting." + name)
+    _, _, _, reasons = api.audit_receipt(record, request_record, request, api.Registry([], []), kernel_records)
+    if diagnostic is None:
+        assert reasons == []
+    else:
+        assert any(diagnostic in reason for reason in reasons), reasons
+
+
+def test_python_verified_flag_cannot_override_kernel_audit(kernel_records):
+    api = load("production_receipt_flags", "lean/checks/check_records.py").reports
+    request_record = kernel_records.get("Tests.ClaimReporting.request0Data")
+    record = deepcopy(kernel_records.get("Tests.ClaimReporting.explicitFalse"))
+    record["detail"]["claim_data"]["receipt"].update(
+        verified=True, telescope={"accepted": True, "binders": [], "conditions": []})
+    declarations = load("kernel_receipt_corruption", "lean/checks/records/declarations.py")
+    modified = declarations.Records(kernel_records.headers, [request_record, record])
+    _, _, _, reasons = api.audit_receipt(record, request_record,
+        request_record["detail"]["claim_data"]["wire_request"], api.Registry([], []), modified)
+    assert any("transport failure" in reason and "corrupt kernel export" in reason for reason in reasons)
+
+
+@pytest.fixture(scope="module")
+def security_kernel_records(tmp_path_factory):
+    root = Path(__file__).resolve().parents[3] / "lean"
+    subprocess.run(["lake", "build", "+TestsSecurity.ClaimReporting"], cwd=root / "security",
+                   check=True, capture_output=True, text=True)
+    prefix = "TestsSecurity.ClaimReporting."
+    names = ["idealData", "HigherOrder.unattributedReceipt", "Canonical.checkedReceipt",
+             "HigherOrder.extraPremiseReceipt", "omittedReceipt", "replacedModelReceipt", "artifacts"]
+    payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
+               "records": [{"name": prefix + name, "module": "TestsSecurity.ClaimReporting"} for name in names]}
+    result = subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
+                             "--receipt-status"], cwd=root / "security", input=json.dumps(payload) + "\n",
+                            check=True, capture_output=True, text=True)
+    export = json.loads(result.stdout)
+    assert export["format"] == "zkc.receipt-kernel-export/0"
+    declarations = load("security_kernel_receipt_declarations", "lean/checks/records/declarations.py")
+    return declarations.Records({"security": export["headers"][0]}, export["records"])
+
+
+
+@pytest.mark.parametrize("name,diagnostic", [
+    ("HigherOrder.unattributedReceipt", None), ("Canonical.checkedReceipt", None),
+    ("HigherOrder.extraPremiseReceipt", "omitted premise"),
+    ("omittedReceipt", "missing required interpreted-stage link"),
+    ("replacedModelReceipt", "unrecognized property/model registry"),
+])
+def test_production_security_kernel_controls(security_kernel_records, name, diagnostic):
+    api = load("production_security_receipt_cli", "lean/checks/check_records.py").reports
+    record = security_kernel_records.get("TestsSecurity.ClaimReporting." + name)
+    assert record
+    request_record = security_kernel_records.get("TestsSecurity.ClaimReporting.idealData")
+    request = request_record["detail"]["claim_data"]["wire_request"]
+    _, _, _, reasons = api.audit_receipt(record, request_record, request, api.Registry([], []), security_kernel_records)
+    if diagnostic is None:
+        assert reasons == []
+    else:
+        assert any(diagnostic in reason for reason in reasons), reasons
+
+
+def test_production_report_consumes_final_lean_scope_status(security_kernel_records, tmp_path, monkeypatch):
+    api = load("production_final_scope_cli", "lean/checks/check_records.py").reports
+    records = security_kernel_records
+    request_record = records.get("TestsSecurity.ClaimReporting.idealData")
+    record = records.get("TestsSecurity.ClaimReporting.HigherOrder.unattributedReceipt")
+    proof = record["detail"]["claim_data"]["receipt"]
+    request = request_record["detail"]["claim_data"]["wire_request"]
+    module_path = api.owned_module_path(record["module"])
+    relative = str(module_path.relative_to(api.ROOT))
+    entry = request["subject"]["entry"]
+    manifest = tmp_path / "control.toml"
+    manifest.write_text(f'name="control"\n[entries]\nproof={json.dumps(entry)}\n[generated]\nclaims={json.dumps(relative)}\n')
+    node = {"owner": "kernel-report-control", "claim": 0}
+    digest = api.data_digest(request)
+    item = {"request": request, "request_digest": digest, "attachment": {"node": node}}
+    mapping = {"node": node, "request_digest": digest, "request_declaration": request_record["name"],
+               "receipt_declaration": record["name"]}
+    typed = proof["subject"]
+    artifacts = {"original_export": request["subject"]["unit"], "source": typed["original_source"],
+                 "constructed_candidate": typed["participant_candidate"]}
+    for role in proof["stage_links"]["artifact_roles"]:
+        artifacts[role["pipeline_artifact"]] = next(
+            row["digest"] for row in request["subject"]["artifacts"] if row["role"] == role["role"])
+    evidence = {"format": api.EVIDENCE_FORMAT, "subject": "control", "manifest_sha256": api.sha256(manifest),
+        "artifacts": artifacts, "generated": {relative: {"sha256": api.sha256(module_path)}},
+        "source_claim_scope": {"entries": [entry], "selection": "proof-entry"},
+        "source_claims": {"format": api.BOUND_CLAIMS_FORMAT, "entries": [entry], "claims": [item]},
+        "claim_receipts": [mapping], "checks": [{"name": "claim-receipt", "outcome": "accepted",
+            "module": record["module"], "request": request_record["name"], "receipt": record["name"]}]}
+    monkeypatch.setattr(api, "load_evidence", lambda *_: evidence)
+    # These are explicit external fixture admissions. Kernel extraction and the
+    # complete final Lean classifier remain the production path.
+    monkeypatch.setattr(api, "verified_environment", lambda *_: ({"fixture_admission": True}, []))
+    report = api.build(manifest, records)
+    assert report["status"] == "certified", report
+    assert report["claims"][0]["root_route"] == "unattributed"
+    assert report["claims"][0]["audit_checks"]
+    mapping["resolution"] = {"status": "incomplete", "kind": "registered-undefined", "definitions": ["meaning"]}
+    changed = api.build(manifest, records)
+    assert changed["status"] == "open"
+    assert "inconsistent resolution" in " ".join(changed["claims"][0]["reasons"])
+    # A current invocation can still carry a corrupt outer status. Preserve
+    # its nonce and real positive item while making the scope unaudited.
+    mapping.pop("resolution")
+    invoke = api._invoke_receipt_classifier
+
+    def unaudited_item(*args):
+        exported = invoke(*args)
+        assert exported["claims"][0]["audit"]["status"] == "certified"
+        exported.update(status="open", outcome="unresolved", audit_status="unaudited")
+        return exported
+
+    monkeypatch.setattr(api, "_invoke_receipt_classifier", unaudited_item)
+    refused = api.build(manifest, records)
+    assert refused["status"] == "transport-failure"
+    assert refused["claims"][0]["status"] == "transport-failure"
+
+
+def test_production_optional_attribution_never_vetoes_receipt(kernel_records):
+    api = load("production_optional_notes", "lean/checks/check_records.py").reports
+    request_record = kernel_records.get("Tests.ClaimReporting.request0Data")
+    record = deepcopy(kernel_records.get("Tests.ClaimReporting.genericDirect"))
+    proof = record["detail"]["claim_data"]["receipt"]
+    for key in ("provenance", "provenance_error", "root_route", "discharger", "evidence_attribution", "proof_dependencies"):
+        proof.pop(key, None)
+    result, _, _, reasons = api.audit_receipt(record, request_record,
+        request_record["detail"]["claim_data"]["wire_request"], api.Registry([], []), kernel_records)
+    assert reasons == []
+    assert result["root_route"] == "unattributed"
+
+
+def test_transport_response_is_bound_to_each_invocation(monkeypatch):
+    api = load("receipt_exchange_cli", "lean/checks/check_records.py").reports
+    saved = []
+
+    def subprocess_result(command, **kwargs):
+        if "printenv" in command:
+            return subprocess.CompletedProcess(command, 0, ".lake/build/lib/lean\n", "")
+        if "--receipt-status" not in command:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        payload = json.loads(kwargs["input"])
+        if not saved:
+            saved.append({"format": "zkc.receipt-status/0", "authority": "fresh-kernel-audit/0",
+                          "exchange": payload["exchange"]})
+        return subprocess.CompletedProcess(command, 0, json.dumps(saved[0]), "")
+
+    monkeypatch.setattr(api.subprocess, "run", subprocess_result)
+    api._invoke_receipt_classifier({"operation": "scope", "reasons": []}, {"main"})
+    with pytest.raises(api.ReceiptTransportError, match="another audit invocation"):
+        api._invoke_receipt_classifier({"operation": "scope", "reasons": ["changed dependency"]}, {"main"})
+
+
+def test_rendering_retains_the_audited_dependency_observation(api, scoped_report, monkeypatch):
+    manifest, records, _evidence = scoped_report
+    actual = api.semantic_dependencies
+    observations = []
+
+    def observe(*args):
+        value, reasons = actual(*args)
+        value = {**value, "observation": len(observations)}
+        observations.append(value)
+        return value, reasons
+
+    monkeypatch.setattr(api, "semantic_dependencies", observe)
+    report = api.build(manifest, records)
+    rows = [*report["claims"], *(row for trial in report["source_claim_trials"] for row in trial["claims"])]
+    assert len(observations) == len(rows)
+    assert [row["semantic_dependencies"] for row in rows] == observations
+
+
+def test_unaudited_positive_status_is_a_transport_failure(api, scoped_report, monkeypatch):
+    manifest, records, _ = scoped_report
+    invoke = api._invoke_receipt_classifier
+
+    def corrupt(*args):
+        result = invoke(*args)
+        result.update(status="certified", outcome="established", audit_status="unaudited")
+        result["claims"][0]["claim_kind"] = "canonical"
+        return result
+
+    monkeypatch.setattr(api, "_invoke_receipt_classifier", corrupt)
+    report = api.build(manifest, records)
+    assert report["status"] == "transport-failure"
+
+
+def test_request_identity_is_independent_of_extra_registry_imports(kernel_records, security_kernel_records):
+    api = load("mixed_registry_receipt_cli", "lean/checks/check_records.py").reports
+    original = kernel_records.get("Tests.ClaimReporting.request0Data")
+    extra = security_kernel_records.get("TestsSecurity.ClaimReporting.idealData")
+    assert original["detail"]["claim_data"]["claim_kind"] == "generic"
+    payload = {"format": "zkc.receipt-audit-input/0", "operation": "scope",
+               "records": [original, extra], "source": {"claims": []},
+               "mappings": [{"request_declaration": row["name"]} for row in [original, extra]]}
+    result = api._invoke_receipt_classifier(payload, {"main", "security"})
+    assert result["status"] == "open"
+    assert result["authority"] == "fresh-kernel-audit/0"
+
+
+@pytest.mark.parametrize("modules,expected", [
+    (["TestsSecurity.ClaimReporting"], {"main", "security"}),
+    (["ZkcClean", "TestsSecurity.ClaimReporting"], {"main", "clean", "security"}),
+])
+def test_receipt_search_paths_follow_actual_providers(modules, expected, monkeypatch):
+    api = load("receipt_provider_cli", "lean/checks/check_records.py").reports
+    declarations = load("receipt_provider_declarations", "lean/checks/records/declarations.py")
+    # Use actual library source providers; the Clean package need not be built.
+    if "ZkcClean" in modules:
+        clean = next(path for path in (api.LEAN / "integrations/clean/ZkcClean").rglob("*.lean"))
+        modules = [str(clean.relative_to(api.LEAN / "integrations/clean").with_suffix("")).replace("/", ".")
+                   if module == "ZkcClean" else module for module in modules]
+    rows = [{"name": f"root{index}", "module": module} for index, module in enumerate(modules)]
+    payload = {"operation": "scope", "records": rows,
+               "mappings": [{"request_declaration": row["name"]} for row in rows]}
+    assert set(api._receipt_provider_groups(payload)) | {"main"} == expected
+    assert set(declarations.PACKAGES) >= expected

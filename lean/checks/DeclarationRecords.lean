@@ -1,5 +1,6 @@
 import ZkcTools.DeclarationAudit
 import Zkc.Claims.ClosedString
+import Zkc.Claims.ReceiptAudit
 
 /-! Declaration records for package-owned code.
 
@@ -29,6 +30,11 @@ Each `DIRECTORY` is a source directory or a single `.lean` file relative to the
 current directory, such as `Zkc` or `ZkcTools/JsonSupport.lean`; every module
 below it is imported and selected. Executable roots, which each define `main`,
 cannot be imported together and are selected by their library directories.
+
+`--receipt-status` instead reads one finite audit input from stdin. It rechecks
+stored request/receipt exports, runs `ReceiptAudit.run`, and emits one JSON status
+export. Its `extract` operation emits only the named kernel observations, which
+is useful for narrow receipt audits without scanning a whole module family.
 
 Options:
 - `--check BASELINE`: compare the fresh records with an earlier output and fail,
@@ -1417,10 +1423,111 @@ def differences (expected actual : Array String) : Array String := Id.run do
       found := found.push ("removed: " ++ key line)
   return found
 
+/-- Optional proof-use notes do not participate in receipt authority or the
+transport identity of its mandatory kernel observations. -/
+def claimAuditIdentity (row : Json) : Json := Id.run do
+  let data := ReceiptAudit.claimData row
+  -- Request classification depends on the available registry, not on the
+  -- stored declaration. Fresh classification is authoritative below; an
+  -- additional imported provider must not make an unchanged request stale.
+  let fields := data.getObj?.toOption.map (·.toArray.toList) |>.getD []
+  let data := Json.mkObj (fields.filter (fun pair => pair.1 != "claim_kind"))
+  let receipt := ReceiptAudit.get data "receipt"
+  if receipt == .null then return data
+  let notes := ["provenance", "provenance_error", "root_route", "discharger",
+    "evidence_attribution", "proof_dependencies"]
+  let fields := receipt.getObj?.toOption.map (·.toArray.toList) |>.getD []
+  let receipt := Json.mkObj (fields.filter (fun pair => !notes.contains pair.1))
+  let fields := data.getObj?.toOption.map (·.toArray.toList) |>.getD []
+  return Json.mkObj ((fields.filter (fun pair => pair.1 != "receipt")) ++ [("receipt", receipt)])
+
+/-- Reconstruct kernel observations in the reporting process. Supplied flags are
+never evidence: actual stored declarations, providers and axiom bodies are read
+again. Missing/corrupt/stale exports fail transport, with no fallback policy. -/
+unsafe def receiptStatus : IO UInt32 := do
+  let input ← IO.ofExcept (Json.parse (← (← IO.getStdin).getLine))
+  let supplied := ReceiptAudit.arr (ReceiptAudit.get input "records")
+  let operation := ReceiptAudit.str (ReceiptAudit.get input "operation")
+  let roots := if operation == "extract" then supplied else if operation == "receipt" then
+      #[ReceiptAudit.get input "record", ReceiptAudit.get input "request_record"]
+    else (ReceiptAudit.arr (ReceiptAudit.get input "mappings")).flatMap fun mapping =>
+      #[ReceiptAudit.lookup supplied (ReceiptAudit.get mapping "request_declaration"),
+        ReceiptAudit.lookup supplied (ReceiptAudit.get mapping "receipt_declaration")]
+  let modules := (roots.filter ReceiptAudit.has).map fun row =>
+    (ReceiptAudit.str (ReceiptAudit.get row "module")).toName
+  let sysroot ← findSysroot
+  let requestedProviders := ReceiptAudit.arr (ReceiptAudit.get input "providers")
+  let groups := if requestedProviders.isEmpty then #[Json.mkObj [
+      ("modules", Lean.toJson (modules.map Name.toString |>.toList.eraseDups)), ("search_paths", .arr #[])]]
+    else requestedProviders
+  let groupedModules := groups.flatMap fun group => ReceiptAudit.strings (ReceiptAudit.get group "modules")
+  unless groupedModules.toList.eraseDups.length == groupedModules.size &&
+      groupedModules.toList.eraseDups.all (fun name => modules.contains name.toName) &&
+      modules.all (fun name => groupedModules.contains name.toString) do
+    throw <| IO.userError "receipt status transport: invalid provider partition"
+  let mut fresh := #[]
+  -- A scope aggregates independent proofs; it does not construct a theorem by
+  -- mixing constants from sibling package environments. Every root is checked
+  -- with its own stored provider closure before the finite policy sees it.
+  for group in groups do
+    let groupModules := ReceiptAudit.strings (ReceiptAudit.get group "modules")
+    let paths := ReceiptAudit.strings (ReceiptAudit.get group "search_paths")
+    initSearchPath sysroot (paths.toList.map System.FilePath.mk)
+    enableInitializersExecution
+    let env ← importModules (groupModules.map fun module =>
+      { module := module.toName, importAll := true }) {} (loadExts := true)
+    let sources := providers env
+    let owners := resolvedOwners env
+    let mut cache : DeclarationRecords.Cache := {}
+    for row in supplied do
+      let name := (ReceiptAudit.str (ReceiptAudit.get row "name")).toName
+      let isRoot := roots.any (fun root => ReceiptAudit.get root "name" == ReceiptAudit.get row "name")
+      if isRoot && !groupModules.contains (ReceiptAudit.str (ReceiptAudit.get row "module")) then continue
+      if fresh.any (fun current => ReceiptAudit.get current "name" == ReceiptAudit.get row "name") then continue
+      let some info := env.find? name | continue
+      let module ← provider sources name
+      unless module.toString == ReceiptAudit.str (ReceiptAudit.get row "module") do
+        throw <| IO.userError s!"receipt status transport: wrong provider for {name}"
+      let (axioms, updated) ← storedAxioms env sources owners {} info cache
+      cache := updated
+      let actual ← runMeta env (record env {} {} name info module axioms isRoot)
+      -- Optional attribution and context-dependent request classification do
+      -- not determine identity. Stored type/meaning/link facts still do.
+      if operation != "extract" && isRoot && claimAuditIdentity row != claimAuditIdentity actual then
+        let diagnostics := ReceiptAudit.reasons (ReceiptAudit.auditReceipt
+          (ReceiptAudit.arr (ReceiptAudit.get input "headers")) supplied row
+          (ReceiptAudit.get input "request_record")
+          (ReceiptAudit.get (ReceiptAudit.claimData row) "wire_request")).envelope
+        throw <| IO.userError (s!"receipt status transport: stale or corrupt kernel export for {name}; " ++
+          String.intercalate "; " diagnostics.toList)
+      fresh := fresh.push actual
+  for row in supplied do
+    unless fresh.any (fun current => ReceiptAudit.get current "name" == ReceiptAudit.get row "name") do
+      throw <| IO.userError s!"receipt status transport: missing stored declaration {ReceiptAudit.text (ReceiptAudit.get row "name")}"
+  if operation == "extract" then
+    IO.println (Json.mkObj [("format", .str "zkc.receipt-kernel-export/0"),
+      ("headers", .arr #[Json.mkObj [("axiom_provenance", .str "resolved-constant-info/0"),
+        ("reference_provenance", .str "checked-stored-module/0")]]),
+      ("records", .arr fresh)]).compress
+    return 0
+  let fields := input.getObj?.toOption.map (·.toArray.toList) |>.getD []
+  let fields := fields.filter (fun pair => !["records", "record", "request_record"].contains pair.1)
+  let input := Json.mkObj (fields ++ [("records", .arr fresh)] ++
+    if operation == "receipt" then [
+      ("record", ReceiptAudit.lookup fresh (ReceiptAudit.get (ReceiptAudit.get input "record") "name")),
+      ("request_record", ReceiptAudit.lookup fresh (ReceiptAudit.get (ReceiptAudit.get input "request_record") "name"))]
+    else [])
+  let output ← IO.ofExcept (ReceiptAudit.run input)
+  let fields := output.getObj?.toOption.map (·.toArray.toList) |>.getD []
+  IO.println (Json.mkObj (fields ++ [("authority", .str "fresh-kernel-audit/0"),
+    ("exchange", ReceiptAudit.get input "exchange")])).compress
+  return 0
+
 end DeclarationRecords
 
 open DeclarationRecords in
 unsafe def main (arguments : List String) : IO UInt32 := do
+  if arguments == ["--receipt-status"] then return ← receiptStatus
   let options ← match parse arguments {} with
     | .ok options => pure options
     | .error message => IO.eprintln message; return 2
