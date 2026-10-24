@@ -197,6 +197,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     })
 }
 
+/// Operands have passed the common Native invocation boundary's validation.
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -227,16 +228,11 @@ pub(crate) fn apply(
             policy.output(owned, invocation.max_output_bytes)?;
             Value::FixedVector(FixedVector::from_resident(ty, elements.clone())?)
         }
-        ("fixed_vector.to_vector", [Value::FixedVector(value)]) => {
-            value.validate()?;
-            match &value.storage {
-                Storage::KoalaBear(v) => Value::KoalaBearVector(v.clone()),
-                Storage::Blst(v) => Value::BlstVector(v.clone()),
-            }
-        }
+        ("fixed_vector.to_vector", [Value::FixedVector(value)]) => match &value.storage {
+            Storage::KoalaBear(v) => Value::KoalaBearVector(v.clone()),
+            Storage::Blst(v) => Value::BlstVector(v.clone()),
+        },
         ("fixed_vector.dot", [Value::FixedVector(a), Value::FixedVector(b)]) => {
-            a.validate()?;
-            b.validate()?;
             if a.physical_type != b.physical_type {
                 return Err(refused("fixed-vector-type"));
             }

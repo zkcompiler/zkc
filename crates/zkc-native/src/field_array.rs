@@ -211,6 +211,8 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         attributes,
     })
 }
+
+/// Operands have passed the common Native invocation boundary's validation.
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -247,7 +249,6 @@ pub(crate) fn apply(
             Value::FieldArray(FieldArray::from_resident(ty, elements.clone())?)
         }
         ("field_array.at", [Value::FieldArray(array)]) => {
-            array.validate()?;
             let [index] = invocation.attributes else {
                 return Err(refused("field-array-index"));
             };
@@ -260,7 +261,6 @@ pub(crate) fn apply(
                 .ok_or_else(|| refused("field-array-index"))?
         }
         ("field_array.get", [Value::FieldArray(array), Value::Index(index)]) => {
-            array.validate()?;
             let index = usize::try_from(*index).map_err(|_| refused("field-array-index"))?;
             policy.output(512, invocation.max_output_bytes)?;
             array

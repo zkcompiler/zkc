@@ -593,7 +593,6 @@ fn vector<S: Family>(
                 i.max_output_bytes,
             )?;
             p.vector_width(half, width)?;
-            let call = crate::numerical::Call::new(p, i.max_output_bytes);
             call.work(
                 (a.len() as u64)
                     .checked_mul(2)
@@ -712,7 +711,6 @@ fn vector<S: Family>(
             p.vector_width(outer, width)?;
             let bytes = size(outer, width)?;
             p.output(bytes, i.max_output_bytes)?;
-            let call = crate::numerical::Call::new(p, i.max_output_bytes);
             let work = (a.len() as u64)
                 .checked_mul(2)
                 .and_then(|n| n.checked_add(outer as u64))
