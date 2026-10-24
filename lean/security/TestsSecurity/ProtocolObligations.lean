@@ -1,5 +1,6 @@
 import Zkc.Obligations.TokenRules
 import ZkcSecurity.Algebra.Polynomial
+import ZkcSecurity.Obligations.Derivation
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic
 
@@ -52,6 +53,45 @@ theorem identity_frame : Bundle.Backward [token] [token]
   intro old new same safe
   subst new
   exact safe
+
+/-- An actual query checks one coordinate. A gap word is intentionally outside
+the soundness promise; the contract must not silently strengthen No to not Yes. -/
+abbrev signature : PIR.Signature := ⟨Unit, fun _ => Fin 4⟩
+def interface : Interface signature Unit Unit (fun _ => Fin 4) :=
+  fun _ => .query () some
+def checkWord (word : Word) : PIR.Process signature Bool :=
+  .call () fun index => .done (!word index)
+
+theorem far_agreement_count (word : Word) (far : token.No word) :
+    (Finset.univ.filter fun index => word index = false).card ≤ 2 := by
+  have finiteLaw : ∀ word : Word, 1 < distance word zero →
+      (Finset.univ.filter fun index => word index = false).card ≤ 2 := by
+    decide +kernel
+  exact finiteLaw word far
+
+theorem far_acceptance (word : Word) (far : token.No word) :
+    Pr{let index ← $ᵗ (Fin 4)}[word index = false] ≤ 2 / 4 := by
+  rw [SampleableType.prEvent_uniformSample, Fintype.card_fin]
+  exact ENNReal.div_le_div_right (by exact_mod_cast far_agreement_count word far) _
+
+noncomputable def far_derivation (word : Word) (far : token.No word) (history : List Unit) :
+    Derivation interface (ZkcSecurity.Obligations.boundedEscape (fun _ _ => 2 / 4))
+      (fun reached accepted => reached = history ++ [()] ∧ accepted = false)
+      history (checkWord word) := by
+  refine .query rfl (fun index => word index = false) (far_acceptance word far) ?_
+  intro index value decoded outside
+  cases decoded
+  exact .done ⟨rfl, by simpa using outside⟩
+
+/-- The promise gap really matters for the sampled check, not just its token. -/
+theorem gap_exceeds_far_bound :
+    ¬ Pr{let index ← $ᵗ (Fin 4)}[oneError index = false] ≤ 2 / 4 := by
+  rw [SampleableType.prEvent_uniformSample, Fintype.card_fin]
+  have count : (Finset.univ.filter fun index => oneError index = false).card = 3 := by
+    decide +kernel
+  rw [count]
+  norm_num
+  exact (ENNReal.div_lt_div_iff_left (by norm_num) (by norm_num)).mpr (by norm_num)
 
 end Proximity
 
@@ -119,6 +159,15 @@ theorem false_left_nonzero (x y : Instance F) (cross : F) (bad : residual x ≠ 
   simp [residualPolynomial] at atZero
   exact bad atZero
 
+theorem false_input_nonzero (x y : Instance F) (cross : F)
+    (bad : residual x ≠ 0 ∨ residual y ≠ 0) : residualPolynomial x y cross ≠ 0 := by
+  rcases bad with left | right
+  · exact false_left_nonzero x y cross left
+  · intro zero
+    have coefficient := congrArg (fun p : Polynomial F => p.coeff 2) zero
+    simp [residualPolynomial] at coefficient
+    exact right coefficient
+
 /-- The same polynomial bound library applies to a folding residual. Choosing
 the cross term after seeing this challenge would violate this fixed-polynomial
 premise and needs a different analysis. -/
@@ -128,6 +177,14 @@ theorem false_left_probability [Fintype F] [DecidableEq F] [SampleableType F]
       (2 : ENNReal) / Fintype.card F := by
   have bound := ZkcSecurity.Algebra.Polynomial.root_uniform_le
     (residualPolynomial x y cross) (false_left_nonzero x y cross bad) (degree_le x y cross)
+  simpa only [residualPolynomial_eval, Nat.cast_ofNat] using bound
+
+theorem false_input_probability [Fintype F] [DecidableEq F] [SampleableType F]
+    (x y : Instance F) (cross : F) (bad : residual x ≠ 0 ∨ residual y ≠ 0) :
+    Pr{let challenge ← $ᵗ F}[residual (fold x y cross challenge) = 0] ≤
+      (2 : ENNReal) / Fintype.card F := by
+  have bound := ZkcSecurity.Algebra.Polynomial.root_uniform_le
+    (residualPolynomial x y cross) (false_input_nonzero x y cross bad) (degree_le x y cross)
   simpa only [residualPolynomial_eval, Nat.cast_ofNat] using bound
 
 private instance : Fact (Nat.Prime 7) := ⟨by decide⟩
@@ -159,6 +216,46 @@ def private_residual_preserved (value : F) (witness : List F) (frame : Nat) :
     Derivation silentInterface noEscape
       (fun _ result => result.residual = value ∧ result.privateWitness = witness ∧ result.callerFrame = frame)
       [] (returnResidual value witness frame) := .done ⟨rfl, rfl, rfl⟩
+
+/-- A sampled fold returns the residual and the caller's private data. The
+reduction proves a residual contract; acceptance belongs to the later decider. -/
+abbrev signature (F : Type) : PIR.Signature := ⟨Unit, fun _ => F⟩
+def interface : Interface (signature F) Unit Unit (fun _ => F) := fun _ => .query () some
+def sampleFold (x y : Instance F) (cross : F) (witness : List F) (frame : Nat) :
+    PIR.Process (signature F) (Result F) :=
+  .call () fun challenge => .done ⟨residual (fold x y cross challenge), witness, frame⟩
+
+noncomputable def sampled_residual [Fintype F] [DecidableEq F] [SampleableType F]
+    (x y : Instance F) (cross : F) (bad : residual x ≠ 0 ∨ residual y ≠ 0)
+    (witness : List F) (frame : Nat) (history : List Unit) :
+    Derivation interface
+      (ZkcSecurity.Obligations.boundedEscape (fun _ _ => (2 : ENNReal) / Fintype.card F))
+      (fun reached result => result.residual ≠ 0 ∧ result.privateWitness = witness ∧
+        result.callerFrame = frame ∧ reached = history ++ [()])
+      history (sampleFold x y cross witness frame) := by
+  refine .query rfl (fun challenge => residual (fold x y cross challenge) = 0)
+    (false_input_probability x y cross bad) ?_
+  intro challenge value decoded outside
+  cases decoded
+  exact .done ⟨outside, rfl, rfl, rfl⟩
+
+/-- The caller consumes the actual residual; no accepting Boolean is invented
+by forgetting the private return. This is a local fresh-query reduction, not a
+commitment, knowledge or Fiat–Shamir security theorem. -/
+noncomputable def final_decider [Fintype F] [DecidableEq F] [SampleableType F]
+    (x y : Instance F) (cross : F) (bad : residual x ≠ 0 ∨ residual y ≠ 0)
+    (witness : List F) (frame : Nat) (history : List Unit) :
+    Derivation interface
+      (ZkcSecurity.Obligations.boundedEscape (fun _ _ => (2 : ENNReal) / Fintype.card F))
+      (fun reached accepted => reached = history ++ [()] ∧ accepted = false)
+      history ((sampleFold x y cross witness frame).bind fun result =>
+        .done (decide (result.residual = 0))) := by
+  apply (sampled_residual x y cross bad witness frame history).bind
+  intro reached result preserved
+  exact .done ⟨preserved.2.2.2, by simp [preserved.1]⟩
+
+#print axioms sampled_residual
+#print axioms final_decider
 
 end Folding
 end TestsSecurity.ProtocolObligations
