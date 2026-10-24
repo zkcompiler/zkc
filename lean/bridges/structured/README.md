@@ -533,6 +533,26 @@ export, assembly, proof or receipt. `--dependency-path PATH` supplies another
 prechecked dependency tree when collaborators use separate output directories;
 serialize writers to a single output tree.
 
+The `zkc.component-roots/0` descriptor requires nonempty strings `schema`,
+`model_module`, `model`, `sampling`, `field_type`, `group_type`, and
+`capabilities`, plus a nonempty `root` array. Optional top-level
+`receipt_normalization` and `theorem_normalization` values are lists of nonempty
+strings naming Lean declarations. Every root requires nonempty strings `name`,
+`source`, `entry`, `target`, and `method`, and a `modules` map from nonempty
+module names to nonempty source paths. Root names must be unique identifiers.
+
+The installed `sigma` method accepts an optional `error_expression`; it generates
+its own proof module and theorem. The `direct` method additionally requires
+`proof_module` and permits `proof_name`, defaulting to
+`<proof_module>.compiled_ideal_complete`. Both methods default an omitted
+`error_expression` to `.natural 0`. These optional values must be nonempty
+strings. Unknown keys, missing required keys, wrong value shapes, duplicate
+names, unsupported methods and invalid selections fail before constructing the
+generator, invoking native/Lean tools or creating output directories. Validation
+includes unselected roots. A misspelled bound never activates the zero default.
+Run the focused production-entry refusal checks with
+`python3 lean/bridges/structured/component_roots_tests.py`.
+
 `ZkcTools.StructuredSource.Root` owns common Subject and receipt assembly.
 `Generation.RootCompleteness` owns the common actual-pair theorem shell used by
 both maintained table roots and Sigma roots. Family extensions supply their

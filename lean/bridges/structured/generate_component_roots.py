@@ -26,6 +26,69 @@ def quoted(value):
     return json.dumps(value, ensure_ascii=False)
 
 
+def validate_config(config):
+    """Refuse malformed persisted descriptors before any generation starts."""
+    def shape(value, required, optional, location):
+        if not isinstance(value, dict):
+            raise ValueError(f"{location}: expected a table")
+        unknown = value.keys() - required - optional
+        missing = required - value.keys()
+        if unknown:
+            raise ValueError(f"{location}: unknown keys: {', '.join(sorted(unknown))}")
+        if missing:
+            raise ValueError(f"{location}: missing keys: {', '.join(sorted(missing))}")
+
+    def string(value, location):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{location}: expected a nonempty string")
+
+    strings = {"schema", "model_module", "model", "sampling", "field_type",
+               "group_type", "capabilities"}
+    lists = {"receipt_normalization", "theorem_normalization"}
+    shape(config, strings | {"root"}, lists, "component roots")
+    for key in strings:
+        string(config[key], key)
+    if config["schema"] != "zkc.component-roots/0":
+        raise ValueError("unsupported component root configuration")
+    for key in lists:
+        values = config.get(key, [])
+        if not isinstance(values, list):
+            raise ValueError(f"{key}: expected a list of strings")
+        for value in values:
+            string(value, key)
+    roots = config["root"]
+    if not isinstance(roots, list) or not roots:
+        raise ValueError("root: expected a nonempty list of tables")
+    common = {"name", "source", "entry", "modules", "target", "method"}
+    names = set()
+    for index, root in enumerate(roots):
+        location = f"root[{index}]"
+        shape(root, common, {"error_expression", "proof_module", "proof_name"}, location)
+        for key in common - {"modules"}:
+            string(root[key], f"{location}.{key}")
+        method = root["method"]
+        if method not in {"sigma", "direct"}:
+            raise ValueError(f"{location}: uninstalled proof method: {method}")
+        required = common | ({"proof_module"} if method == "direct" else set())
+        optional = {"error_expression"} | ({"proof_name"} if method == "direct" else set())
+        shape(root, required, optional, location)
+        for key in (required | optional) - {"modules"}:
+            if key in root:
+                string(root[key], f"{location}.{key}")
+        name = root["name"]
+        if not name.isidentifier():
+            raise ValueError(f"{location}: invalid root name: {name}")
+        if name in names:
+            raise ValueError(f"{location}: duplicate root name: {name}")
+        names.add(name)
+        modules = root["modules"]
+        if not isinstance(modules, dict):
+            raise ValueError(f"{location}.modules: expected a string map")
+        for key, value in modules.items():
+            string(key, f"{location}.modules key")
+            string(value, f"{location}.modules.{key}")
+
+
 class Generation:
     def __init__(self, args):
         self.args = args
@@ -288,7 +351,7 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (fixedCompletenessSo
         self.retain(module, output.read_text())
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--config", type=Path, default=Path(__file__).parent / "roots/sampled.toml")
@@ -298,18 +361,15 @@ def main():
                         help="additional prechecked Lean dependency tree (repeatable)")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--phase", choices=["all", "export", "assembly", "proof", "receipt"], default="all")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     config = tomllib.loads(args.config.read_text())
-    if config["schema"] != "zkc.component-roots/0":
-        raise ValueError("unsupported component root configuration")
-    generation = Generation(args)
-    phases = ["export", "assembly", "proof", "receipt"] if args.phase == "all" else [args.phase]
+    validate_config(config)
     roots = [root for root in config["root"] if not args.only or root["name"] in args.only]
     if not roots or any(name not in [root["name"] for root in roots] for name in args.only):
         raise ValueError("unknown or empty root selection")
+    generation = Generation(args)
+    phases = ["export", "assembly", "proof", "receipt"] if args.phase == "all" else [args.phase]
     for root in roots:
-        if not root["name"].isidentifier() or root["method"] not in ("sigma", "direct"):
-            raise ValueError("invalid root name or uninstalled proof method")
         for phase in phases:
             if phase == "export":
                 generation.export(root)
