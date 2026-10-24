@@ -58,6 +58,7 @@ partial def derive (goal : MVarId) (leaves definitions : Array (TSyntax `term))
     throwError "no installed structural derivation for {process.getAppFn}"
   let original ← saveState
   let mut missing : Option Expr := none
+  let mut errors : Array MessageData := #[]
   for leaf in leaves do
     original.restore
     try
@@ -80,7 +81,7 @@ partial def derive (goal : MVarId) (leaves definitions : Array (TSyntax `term))
         evalTactic (← `(tactic| intro reached value holds))
         derive (← getMainGoal) leaves definitions finish
         return
-    catch _ => pure ()
+    catch error => errors := errors.push error.toMessageData
   original.restore
   if let some premise := missing then
     -- Splitting a mathematical admission condition supplies no new assumption:
@@ -99,7 +100,10 @@ partial def derive (goal : MVarId) (leaves definitions : Array (TSyntax `term))
   evalTactic (← `(tactic| exact ZkcSecurity.Obligations.unrestricted _ _))
   setGoals [continuation]
   evalTactic (← `(tactic| intro reached value holds))
-  derive (← getMainGoal) leaves definitions finish
+  try
+    derive (← getMainGoal) leaves definitions finish
+  catch error =>
+    throwError "component derivation failed: {error.toMessageData}\ninstalled rules: {errors}"
 
 elab "derive_component_rejection " "[" leaves:term,* "]" " unfolding " "[" definitions:term,* "]" " finishing " finish:tactic : tactic =>
     withMainContext <| withoutRecover do

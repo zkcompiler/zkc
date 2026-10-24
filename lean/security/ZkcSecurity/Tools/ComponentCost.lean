@@ -16,21 +16,24 @@ open ZkcSecurity.FiatShamir
 open Lean Meta Elab Tactic
 
 partial def inferCost (goal : MVarId) (leaves : Array (TSyntax `term))
-    (definitions : Array (TSyntax `term)) : TacticM Unit := goal.withContext <| withoutRecover do
+    (definitions : Array (TSyntax `term)) : TacticM Unit := goal.withContext <| Term.withoutErrToSorry <| withoutRecover do
   setGoals [goal]
+  let mut errors : Array MessageData := #[]
   -- Installed component rules are tried before opening their process bodies.
   for leaf in leaves do
     let saved ← saveState
     try
       evalTactic (← `(tactic| apply $leaf))
       if (← getGoals).isEmpty then return
-    catch _ => pure ()
+    catch error => errors := errors.push error.toMessageData
     saved.restore
   let saved ← saveState
   try
     evalTactic (← `(tactic| first | exact ZkcSecurity.FiatShamir.CostComposition.done _ | exact ZkcSecurity.FiatShamir.CostComposition.halt _))
     return
-  catch _ => saved.restore
+  catch error =>
+    errors := errors.push error.toMessageData
+    saved.restore
   let target ← instantiateMVars (← goal.getType)
   let args := target.getAppArgs
   let process := args[args.size - 3]!
@@ -45,7 +48,9 @@ partial def inferCost (goal : MVarId) (leaves : Array (TSyntax `term))
     evalTactic (← `(tactic| intro value reached))
     inferCost (← getMainGoal) leaves definitions
     return
-  catch _ => saved.restore
+  catch error =>
+    errors := errors.push error.toMessageData
+    saved.restore
   let saved ← saveState
   try
     unless process.isAppOf ``ite do throwError "not a branch"
@@ -57,17 +62,22 @@ partial def inferCost (goal : MVarId) (leaves : Array (TSyntax `term))
       evalTactic (← `(tactic| intro branchCondition))
       inferCost (← getMainGoal) leaves definitions
     return
-  catch _ => saved.restore
+  catch error =>
+    errors := errors.push error.toMessageData
+    saved.restore
   let before ← instantiateMVars (← goal.getType)
   let terms := definitions ++ #[← `(PIR.Process.bind_assoc), ← `(PIR.Process.bind)]
   let simplifiers ← terms.mapM fun term => `(Parser.Tactic.simpLemma| $term:term)
-  evalTactic (← `(tactic| simp only [$simplifiers,*]))
+  try
+    evalTactic (← `(tactic| simp only [$simplifiers,*]))
+  catch error =>
+    throwError "cost normalization failed: {error.toMessageData}\ninstalled/structural rules: {errors}"
   let [after] ← getGoals | throwError "unexpected normalization goals"
   if (← instantiateMVars (← after.getType)) == before then
-    throwError "no installed cost rule or structural composition applies"
+    throwError "no installed cost rule or structural composition applies: {errors}"
   inferCost after leaves definitions
 
-elab "derive_component_cost " "[" leaves:term,* "]" " unfolding " "[" definitions:term,* "]" : tactic => withMainContext <| withoutRecover do
+elab "derive_component_cost " "[" leaves:term,* "]" " unfolding " "[" definitions:term,* "]" : tactic => withMainContext <| Term.withoutErrToSorry <| withoutRecover do
   let pending := (← getGoals).tail
   let original ← getMainGoal
   let target ← instantiateMVars (← original.getType)

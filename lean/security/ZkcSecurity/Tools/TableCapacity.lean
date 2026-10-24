@@ -23,6 +23,7 @@ open Lean Meta Elab Tactic in
 elab "prove_table_capacity" : tactic => withMainContext <| Term.withoutErrToSorry <| withoutRecover do
   let pending := (← getGoals).tail
   let original ← saveState
+  let mut errors : Array MessageData := #[]
   for declaration in ← getLCtx do
     unless declaration.isImplementationDetail do
       let type ← instantiateMVars declaration.type
@@ -37,8 +38,8 @@ elab "prove_table_capacity" : tactic => withMainContext <| Term.withoutErrToSorr
           if (← getGoals).isEmpty then
             setGoals pending
             return
-        catch _ => pure ()
+        catch error => errors := errors.push error.toMessageData
   original.restore
-  throwError "no checked source guard and shape establish table capacity"
+  throwError "no checked source guard and shape establish table capacity: {errors}"
 
 end ZkcSecurity.Tools.TableCapacity

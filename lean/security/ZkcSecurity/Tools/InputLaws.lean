@@ -52,6 +52,7 @@ def forwardIff (law : TSyntax `term) (side : Option (TSyntax `tactic) := none) :
   let goal ← getMainGoal
   let proof ← Term.elabTerm law none
   let original ← saveState
+  let mut errors : Array MessageData := #[]
   for declaration in ← getLCtx do
     unless declaration.isImplementationDetail do
       original.restore
@@ -73,7 +74,9 @@ def forwardIff (law : TSyntax `term) (side : Option (TSyntax `tactic) := none) :
         if applied.hasExprMVar then return none
         let derived ← mkAppM ``Iff.mp #[applied, declaration.toExpr]
         return some derived : TacticM (Option Expr))
-      catch _ => pure none
+      catch error =>
+        errors := errors.push error.toMessageData
+        pure none
       if let some derived := found then
         setGoals callerGoals
         let type ← normalizeCarrierTypes (← inferType derived)
@@ -81,7 +84,7 @@ def forwardIff (law : TSyntax `term) (side : Option (TSyntax `tactic) := none) :
         replaceMainGoal [next]
         return fact
   original.restore
-  throwError "the supplied input law does not apply with proved premises"
+  throwError "the supplied input law does not apply with proved premises: {errors}"
 
 /-- Transport an available input assertion through a selected mathematical
 law, proving every extra premise by the supplied checked tactic. -/

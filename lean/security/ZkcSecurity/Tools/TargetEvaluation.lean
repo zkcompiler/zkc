@@ -28,24 +28,30 @@ elab "prove_retained_target " "[" scalar:term "," group:term "]"
   for goal in ← getGoals do
     setGoals [goal]
     let saved ← saveState
+    let mut sideError : MessageData := m!"side tactic left goals"
     let solved ← try
       evalTactic side
       pure (← getGoals).isEmpty
-    catch _ => pure false
+    catch error =>
+      sideError := error.toMessageData
+      pure false
     if !solved then
       saved.restore
-      evalTactic (← `(tactic|
-        change _ = (PIR.Process.done (.cons true .nil) :
-          Zkc.Source.Structured.Closed (Zkc.Source.Values
-            (Zkc.Source.Structured.assignment $scalar $group) [.boolean]))))
-      let steps ← #[
-        `(tactic| simp only [PIR.Process.done.injEq]),
-        `(tactic| change ((Zkc.Source.Values.cons _ .nil : Zkc.Source.Values
-          (Zkc.Source.Structured.assignment $scalar $group) [.boolean]) = .cons true .nil)),
-        `(tactic| simp only [Zkc.Source.Values.cons.injEq, and_true, Bool.and_eq_true, decide_eq_true_eq]),
-        `(tactic| first | rfl | tauto)].mapM id
-      for step in steps do
-        unless (← getGoals).isEmpty do evalTactic step
+      try
+        evalTactic (← `(tactic|
+          change _ = (PIR.Process.done (.cons true .nil) :
+            Zkc.Source.Structured.Closed (Zkc.Source.Values
+              (Zkc.Source.Structured.assignment $scalar $group) [.boolean]))))
+        let steps ← #[
+          `(tactic| simp only [PIR.Process.done.injEq]),
+          `(tactic| change ((Zkc.Source.Values.cons _ .nil : Zkc.Source.Values
+            (Zkc.Source.Structured.assignment $scalar $group) [.boolean]) = .cons true .nil)),
+          `(tactic| simp only [Zkc.Source.Values.cons.injEq, and_true, Bool.and_eq_true, decide_eq_true_eq]),
+          `(tactic| first | rfl | tauto)].mapM id
+        for step in steps do
+          unless (← getGoals).isEmpty do evalTactic step
+      catch error =>
+        throwError "target evaluation failed: {error.toMessageData}\nside condition: {sideError}"
     unless (← getGoals).isEmpty do throwError "target evaluation remains unproved"
   setGoals pending
 
