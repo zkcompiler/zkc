@@ -69,6 +69,17 @@ example : honestModelSchema ⟨honestModelIdentifier, [(some "private_coins", .n
 example : resolveHonestModel ⟨[honestModelEntry]⟩ ⟨honestModelIdentifier, []⟩ =
     .ok .privateUniform := by rfl
 
+-- Version zero is pinned by the export/dependency identity. A surface version
+-- bump is not a substitute for that pin while the registry is still pre-v1.
+example : honestModelIdentifier = ⟨"models.honest_fiat_shamir", 0⟩ := by rfl
+
+example : resolveHonestModel ⟨[honestModelEntry]⟩
+    ⟨⟨"models.honest_fiat_shamir", 0⟩, []⟩ = .ok .privateUniform := by rfl
+
+example : resolveHonestModel ⟨[honestModelEntry]⟩
+    ⟨⟨"models.honest_fiat_shamir", 1⟩, []⟩ =
+    .error (.unknownIdentifier ⟨"models.honest_fiat_shamir", 1⟩) := by rfl
+
 -- A same-name export with an undefined implementation fails complete-entry
 -- association, independently of whether its key is recognized.
 def undefinedModel : Export (Wire.Application → Except ResolutionError HonestExecutionModel) :=

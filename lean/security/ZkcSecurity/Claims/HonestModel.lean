@@ -18,7 +18,7 @@ inductive HonestExecutionModel where
   | privateUniform
   deriving DecidableEq, Repr
 
-def honestModelIdentifier : Identifier := ⟨"models.honest_fiat_shamir", 1⟩
+def honestModelIdentifier : Identifier := ⟨"models.honest_fiat_shamir", 0⟩
 
 def honestModelSchema (application : Wire.Application) :
     Except ResolutionError HonestExecutionModel :=
@@ -28,7 +28,7 @@ def honestModelSchema (application : Wire.Application) :
 abbrev HonestModelRegistry := Registry (Wire.Application → Except ResolutionError HonestExecutionModel)
 
 def honestModelEntry : Export (Wire.Application → Except ResolutionError HonestExecutionModel) :=
-  ⟨honestModelIdentifier, "honest-private-uniform/1", some honestModelSchema⟩
+  ⟨honestModelIdentifier, "honest-private-uniform/0", some honestModelSchema⟩
 
 def resolveHonestModel (registry : HonestModelRegistry) (application : Wire.Application) :
     Except ResolutionError HonestExecutionModel := do

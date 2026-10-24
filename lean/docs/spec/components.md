@@ -190,10 +190,23 @@ adversarial side; there, all evaluation premises must follow from verifier
 guards and component guarantees. Honest policy is not an adversary restriction.
 The resulting generated theorems directly feed canonical receipts. Authors
 supply formula mathematics, admissible witnesses and the selected library/domain
-configuration. The two roots require no authored structural or security-subject
-assembly. Tests retain independent target characterizations as controls; neither
-root imports them. Shared tools, selection configuration and test work remain
-part of the authoring-cost inventory.
+configuration. Structural authoring remains: the subject descriptors contain
+positional honest-input policies, export digests and charge-site lists, and
+root-specific helper associations instantiate the library realizations. Some
+authored proofs still refer to generated helper identities. These are
+instantiation costs, including descriptors currently housed in the test package.
+Tests also retain independent target characterizations as controls; neither
+root imports them. Shared tools and test work remain part of the cost inventory.
+
+The current table binding recognizes a particular compiled round layout.
+Binding the admitted original component and transporting its contract to the
+compiled participants is planned. The existing `compiled_transform` theorem
+uses the uniform interpreter; it does not yet supply the nominal/domain
+construction theorem needed by these requests. Raw source repeat sites also
+omit the dynamic coordinates present in nominal compiled oracle keys; the new
+source view needs a checked occurrence correspondence. Producer correspondence is a
+separate obligation: `AuthoredPair.checkProducer` supplies structural admission,
+not a source-producer execution theorem.
 
 `Generation.SumcheckInputs` traces each producer loop's initial table through
 the def-use graph to propose a public reference input. This is an untrusted
@@ -273,7 +286,7 @@ experiment runs both actual participants with one initially empty random-oracle
 cache and counts input preparation failure, stops, decoding failures, rejection
 and unread proof as failures. It has no adversary query parameter.
 
-The canonical model `models.honest_fiat_shamir@1` installs fresh uniform
+The canonical model `models.honest_fiat_shamir@0` installs fresh uniform
 field draws at the actual producer's admitted owner-local service ports. The
 source spelling remains `Random.draw()`. Service handles retain their source
 root, owner, contract and native port position separately from data inputs.
@@ -321,12 +334,20 @@ subject shape. Receipt status depends on exact meaning, authorized telescope,
 standard axioms and proved request-side links. Proof method or evidence
 attribution never selects the meaning and may be `unattributed`. An author
 extension is reported separately from a canonical security property.
+The final per-claim status is currently assembled by the Python report audit;
+Lean supplies the checked receipt indices and audit records. Moving that whole
+decision into Lean, while preserving the artifact, premise and link checks,
+remains open.
 
 Authored-pair selection currently has a typed Lean request API. Its source
 language declaration surface remains a coordinated language decision; the
 validator-only source-claim artifact binder is not an authored-pair binder.
 Compiled-ideal completeness does not establish byte-level completeness or the
 aggregate deployed authored-pair certification.
+The maintained `sumcheck` leaf retains its interpreted executable-bytes claim.
+The compiled-ideal component route cannot replace it until the corresponding
+stage transport and claim preservation are established. Report these as two
+routes of one protocol, with their distinct stages and assumptions.
 
 ## Model and implementation boundaries
 
