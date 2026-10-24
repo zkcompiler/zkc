@@ -5,7 +5,7 @@ import ZkcExamples.Construction.Generated.SmallSumcheckPair
 import ZkcExamples.Construction.Generated.TwoSumsPair
 
 /-! Configuration supplies subject/pair identities, installed domain mathematics
-and the selected relation proof. It supplies no arity, bound, capture, loop
+and the selected formula proof. It supplies no arity, bound, capture, loop
 occurrence, return projection, or root-specific proof script. -/
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
@@ -21,7 +21,7 @@ def output (name : String) : Output where
   validatorViewModule := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "ValidatorView"
   abiModule := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "ABI"
   mathematicsModule := "ZkcSecurity.Examples.Components." ++ name ++ "Formula"
-  relationLaw := "ZkcSecurity.Examples.Components." ++ name ++ ".Formula.relation_iff"
+  formulaLaw := "ZkcSecurity.Examples.Components." ++ name ++ ".Formula.equation"
   nonvacuityLaw := "ZkcSecurity.Examples.Components." ++ name ++ ".Formula.nonvacuous"
   fieldType := "ZMod blsModulus"
   groupType := "ZMod blsModulus"

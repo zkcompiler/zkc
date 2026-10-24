@@ -144,9 +144,11 @@ Independent opaque-component controls reject an OR final check when only one
 child is known false, a missing contract and a continuation law restricted to
 the initial history. Source-driven generation now supplies both full validator presentations and
 their bridges from admitted inputs and every discovered round. The checked
-constructor preserves complete returned data and stopped paths. Fixed security
-subject export assembly remains authored; these examples do not yet demonstrate
-zero authored structural glue.
+constructor preserves complete returned data and stopped paths.
+`Generation.SumcheckSoundness` also generates the fixed security-subject export:
+typed statement transport, rejection, cost, installation, schedule and canonical
+scalar/charged consumers. Its budgets come from the retained loop maxima and
+still require a checked cost derivation.
 
 `compose_component_readback` assembles the honest producer–validator connection
 from installed paired component rules. Each continuation receives the complete
@@ -157,13 +159,31 @@ adversarial view, retaining both environments and the shared history.
 
 For the two actual table roots, `Generation.SumcheckCompleteness` derives input
 projection and all occurrence setup from the admitted subject/pair. Configuration
-selects domain carriers, sampling, a relation law and a nonvacuity proof. It does
+selects domain carriers, sampling, a formula equation and a nonvacuity proof. It does
 not supply captures, source offsets, loop counts or a root-specific proof script.
-`prepare_honest_readback` applies those checked input laws and exposes carrier
-types for arithmetic reasoning; it does not establish relation mathematics.
-The resulting generated theorem directly feeds the canonical completeness
-receipt. Mathematical target equations and security-subject assembly remain
-separately owned and counted as author work.
+`prepare_target_readback` combines the checked policy and argument read with
+that formula equation. `prove_retained_target` uses the same equation on the
+adversarial side; there, all evaluation premises must follow from verifier
+guards and component guarantees. Honest policy is not an adversary restriction.
+The resulting generated theorems directly feed canonical receipts. Authors
+supply formula mathematics, admissible witnesses and the selected library/domain
+configuration. The two roots require no authored structural or security-subject
+assembly. Tests retain independent target characterizations as controls; neither
+root imports them. Shared tools, selection configuration and test work remain
+part of the authoring-cost inventory.
+
+`Generation.SumcheckInputs` traces each producer loop's initial table through
+the def-use graph to propose a public reference input. This is an untrusted
+hint: a helper may transform its input, so the generated execution and target
+proofs must still validate the candidate. Ambiguous dependencies, unknown
+sources and private tables remain unresolved. This bounded table-family search
+is not a generic invariant-inference procedure.
+
+The maintained root producer is `security/checks/RunComponentRoots.lean`:
+from `lean/security`, run `lake env lean --run checks/RunComponentRoots.lean
+<output-directory>` after building the two generation configuration modules.
+Freshness checking compares a detached output directory with the checked files;
+running the printer alone does not check the emitted theorems.
 
 ## Fixed experiments and receipts
 

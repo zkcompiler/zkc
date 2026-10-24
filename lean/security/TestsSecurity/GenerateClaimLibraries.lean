@@ -6,19 +6,18 @@ open ZkcTools.StructuredSource.Bindings
 /-! Protocol choices are source subject and installed theorem exports. No
 selected-model record, error expression, proof script or schedule is repeated. -/
 def descriptors : List DomainClaimLibraryOutput :=
-  [("SmallSumcheck", "Small"), ("TwoSums", "Two")].map fun (name, endpoint) =>
+  ["SmallSumcheck", "TwoSums"].map fun name =>
     let subject := "ZkcSecurity.Examples.Generated." ++ name
-    let roots := "ZkcSecurity.Examples.Components.SumcheckSoundnessRoots"
-    let proofs := roots ++ "." ++ endpoint
+    let proofs := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "Soundness"
     { moduleName := subject ++ "SoundnessRegistration"
-      imports := [subject, roots]
+      imports := [subject, proofs]
       subjectExpression := subject ++ ".validatorSubject"
       artifactsExpression := subject ++ ".validatorArtifacts"
       capabilitiesExpression := proofs ++ ".capabilities"
       applicationParameter := some "application"
       theoremMethods := [("fs.keyed_soundness", 0, proofs ++ ".scalar_meaning"),
         ("fs.keyed_charged", 0, proofs ++ ".charged_meaning")]
-      theoremNormalization := [roots ++ ".price", roots ++ ".priceBound", proofs ++ ".schedule",
+      theoremNormalization := [proofs ++ ".price", proofs ++ ".priceBound", proofs ++ ".budget", proofs ++ ".schedule",
         "ZkcSecurity.Claims.CompiledSoundness.uniformSchedule"] }
 
 def main (args : List String) : IO Unit := do

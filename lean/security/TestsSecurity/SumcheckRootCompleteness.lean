@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness
 public import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
+public import TestsSecurity.SumcheckSubjectInputs
 
 @[expose] public section
 
@@ -39,13 +40,13 @@ example (service : Option Nat) :
 example (service : Option Nat) :
     ¬ Generated.SmallSumcheck.subject.Relation
       (Generated.Components.SmallSumcheckABI.inputs [0] 1 0 service) := by
-  rw [Components.SmallSumcheck.Formula.relation_iff _ _ _ _ (by decide +kernel)]
+  rw [TestsSecurity.SumcheckSubjectInputs.Small.relation_iff _ _ _ _ (by decide +kernel)]
   simp
 
 example (service : Option Nat) :
     ¬ Generated.TwoSums.subject.Relation
       (Generated.Components.TwoSumsABI.inputs [0] [0] 0 1 0 service) := by
-  rw [Components.TwoSums.Formula.relation_iff _ _ _ _ _ _
+  rw [TestsSecurity.SumcheckSubjectInputs.Two.relation_iff _ _ _ _ _ _
     (by decide +kernel) (by decide +kernel)]
   simp
 

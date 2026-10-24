@@ -5,7 +5,7 @@ public import ZkcSecurity.Generation.SumcheckViews
 @[expose] public section
 
 /-! Produce honest-pair assembly from admitted source metadata and installed
-mathematics. The author selects a mathematical relation law and nonvacuity proof;
+mathematics. The author selects a mathematical formula law and nonvacuity proof;
 input projection, every round occurrence and all structural proof composition
 come from the retained pair. Generated proofs are checked independently. -/
 set_option autoImplicit false
@@ -22,7 +22,7 @@ structure Output where
   validatorViewModule : String
   abiModule : String
   mathematicsModule : String
-  relationLaw : String
+  formulaLaw : String
   nonvacuityLaw : String
   fieldType : String
   groupType : String
@@ -69,10 +69,10 @@ def source (input : Input) : Except String String := do
     "ZkcSecurity.FiatShamir.HonestReadbackCompleteness"]
   let mut text := "module\n\n" ++ String.join (imports.map fun name => "public import " ++ name ++ "\n") ++
     "public meta import ZkcSecurity.Tools.ComponentReadback\n" ++
-    "public meta import ZkcSecurity.Tools.HonestAssembly\n\n" ++
+    "public meta import ZkcSecurity.Tools.TargetEvaluation\n\n" ++
     "@[expose] public section\nnoncomputable section\n\n" ++
     "/-! Generated from the admitted pair by Generation.SumcheckCompleteness.\n" ++
-    "Installed relation mathematics is explicit; input and execution assembly\n" ++
+    "Installed formula mathematics is explicit; input and execution assembly\n" ++
     "is source driven and kernel checked. Regenerate; do not hand edit. -/\n" ++
     "set_option autoImplicit false\nset_option backward.isDefEq.respectTransparency false\n" ++
     "set_option maxRecDepth 20000\nset_option maxHeartbeats 8000000\n" ++
@@ -104,7 +104,9 @@ def source (input : Input) : Except String String := do
       SubjectABI.call "producerInputs" producerNames ++ ")\n" ++
     "    (Domain.participant (ringModel Scalar Group) _ _ " ++ validator ++ ".artifact " ++
       SubjectABI.call "validatorInputs" validatorNames ++ ")\n" ++
-    "  prepare_honest_readback using honestInput_iff and " ++ output.relationLaw ++ "\n" ++
+    "  prepare_target_readback [Scalar, Group] for subject using honestInput_iff\n" ++
+    "    reading (application_read " ++ " ".intercalate allNames ++ ")\n" ++
+    "    evaluating " ++ output.formulaLaw ++ "\n" ++
     "  have indexCapacity : 64 < indexLimit := by decide +kernel\n"
   let mut rules := []
   for index in List.range rounds.length do

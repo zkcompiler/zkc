@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.Examples.Generated.SmallSumcheck
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 public import ZkcSecurity.Claims.Completeness
+public meta import ZkcSecurity.Tools.TargetEvaluation
 public import ZkcExamples.Structured.SumcheckContractBindings
 
 @[expose] public section
@@ -33,21 +34,10 @@ theorem equation (raw : List Scalar) (claim : Scalar) (bounded : raw.length < in
   exact ZkcExamples.Structured.SumcheckContractBindings.public_formula_equation raw claim bounded
 
 
-/-- Truth is the actual retained formula, without an honest-input assumption. -/
-theorem relation_iff (raw : List Scalar) (claim : Scalar) (count : Nat) (service : Option Nat)
-    (bounded : raw.length < indexLimit) :
-    subject.Relation (inputs raw claim count service) ↔ raw.sum = claim := by
-  refine (Subject.relation_iff_of_read subject _ _ (application_read raw claim count service)).trans ?_
-  change subject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
-    (.cons raw (.cons claim .nil)) =
-      (.done (.cons true .nil) : Closed (Values (assignment Scalar Scalar) [.boolean])) ↔ _
-  rw [equation raw claim bounded]
-  simp [eq_comm]
-
 theorem nonvacuous : Nonvacuous subject := by
   refine ⟨inputs [0] 0 0 (some 0), ?_, ?_⟩
-  · rw [relation_iff _ _ _ _ (by decide +kernel)]
-    simp
+  · prove_retained_target [Scalar, Scalar] reading (application_read [0] 0 0 (some 0))
+      evaluating equation solving (decide +kernel)
   · rw [honestInput_iff]
     decide +kernel
 

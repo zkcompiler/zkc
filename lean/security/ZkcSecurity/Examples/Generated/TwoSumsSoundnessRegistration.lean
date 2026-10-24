@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.Generated.TwoSums
-public import ZkcSecurity.Examples.Components.SumcheckSoundnessRoots
+public import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
 public import ZkcSecurity.Tools.ClaimConstruction
 
 @[expose] public section
@@ -15,7 +15,7 @@ namespace ZkcSecurity.Examples.Generated.TwoSumsSoundnessRegistration
 open Zkc.Claims ZkcSecurity.Claims
 
 abbrev subject := ZkcSecurity.Examples.Generated.TwoSums.validatorSubject
-abbrev capabilities := ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.Two.capabilities
+abbrev capabilities := ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.capabilities
 def authority := CanonicalAuthority.domains (ZkcSecurity.Examples.Generated.TwoSums.validatorArtifacts) capabilities
 
 def modelContext (application : String) : ModelContext := ModelContext.parameter "application" application
@@ -30,8 +30,8 @@ def library : ZkcSecurity.Tools.ClaimConstruction.Library where
   properties := ``properties
   models := ``models
   normalization := [``authority, ``modelContext, ``properties, ``models]
-  theoremNormalization := [``ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.price, ``ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.priceBound, ``ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.Two.schedule, ``ZkcSecurity.Claims.CompiledSoundness.uniformSchedule]
-  theoremMethods := [(⟨"fs.keyed_soundness", 0⟩, ``ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.Two.scalar_meaning),
-    (⟨"fs.keyed_charged", 0⟩, ``ZkcSecurity.Examples.Components.SumcheckSoundnessRoots.Two.charged_meaning)]
+  theoremNormalization := [``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.price, ``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.priceBound, ``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.budget, ``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.schedule, ``ZkcSecurity.Claims.CompiledSoundness.uniformSchedule]
+  theoremMethods := [(⟨"fs.keyed_soundness", 0⟩, ``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.scalar_meaning),
+    (⟨"fs.keyed_charged", 0⟩, ``ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.charged_meaning)]
 
 end ZkcSecurity.Examples.Generated.TwoSumsSoundnessRegistration

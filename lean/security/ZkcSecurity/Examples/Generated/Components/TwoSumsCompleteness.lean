@@ -9,13 +9,13 @@ public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackExecution
 public import ZkcSecurity.Examples.Components.SumcheckReadbackHelpers
 public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
 public meta import ZkcSecurity.Tools.ComponentReadback
-public meta import ZkcSecurity.Tools.HonestAssembly
+public meta import ZkcSecurity.Tools.TargetEvaluation
 
 @[expose] public section
 noncomputable section
 
 /-! Generated from the admitted pair by Generation.SumcheckCompleteness.
-Installed relation mathematics is explicit; input and execution assembly
+Installed formula mathematics is explicit; input and execution assembly
 is source driven and kernel checked. Regenerate; do not hand edit. -/
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
@@ -56,7 +56,9 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
   change Readback _
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.TwoSumsProducer.artifact (producerInputs input0 input1 input2 input3 input4))
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.artifact (validatorInputs input0 input1 input2 input3 input4))
-  prepare_honest_readback using honestInput_iff and ZkcSecurity.Examples.Components.TwoSums.Formula.relation_iff
+  prepare_target_readback [Scalar, Group] for subject using honestInput_iff
+    reading (application_read input0 input1 input2 input3 input4 input5)
+    evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation
   have indexCapacity : 64 < indexLimit := by decide +kernel
   have helpers0 := SumcheckDomainHelpers.round_helpers (K := Scalar) (H := Group)
     ZkcSecurity.Examples.Generated.TwoSums.imported.program ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.helper_bodies round0.plan rfl rfl rfl rfl

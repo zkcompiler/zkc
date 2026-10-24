@@ -1,6 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Components.SumcheckSoundnessRoots
+public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness
+public import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
 public import ZkcSecurity.Claims.CompiledSoundness
 
 @[expose] public section
@@ -16,7 +17,8 @@ namespace TestsSecurity.SumcheckAdaptiveSoundness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction OracleComp OracleSpec
 open ZkcSecurity.FiatShamir
 open ZkcSecurity.Examples.Components
-open SumcheckSoundnessRoots
+open ZkcSecurity.Examples.Generated.Components
+open TwoSumsSoundness (Scalar carriers price)
 open ZkcSecurity.Families.Sumcheck
 local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event) :=
@@ -24,13 +26,13 @@ local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw e
 
 abbrev origin := ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round0.schedule.query 0
 
-def chooseStatement (value : Scalar) : Two.Statement :=
+def chooseStatement (value : Scalar) : TwoSumsSoundness.Statement :=
   if value = 0 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [] [] 1 1 0
   else if value = 1 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [0, 0, 0, 0, 0, 0] [0] 1 1 2
   else if value = 2 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [0, 0, 0, 0] [0, 0, 0, 0] 1 1 1
   else ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [0] [0] 1 1 99
 
-def adaptiveProver : OracleComp (HonestCompiled.Spec carriers) (Two.Statement × Domain.Proof carriers) := do
+def adaptiveProver : OracleComp (HonestCompiled.Spec carriers) (TwoSumsSoundness.Statement × Domain.Proof carriers) := do
   let first ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let _ ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let value : Scalar := by
@@ -70,7 +72,7 @@ example (application : String) :
       ZkcSecurity.Examples.Generated.TwoSums.validatorSubject.FalseStatement result.1 ∧
       ZkcSecurity.Endpoint.Domain.CompleteAccepted result.2] ≤
         ((2 : ENNReal) + 8) / (Fintype.card Scalar : ENNReal) :=
-  Two.adaptive application 2 adaptiveProver counted
+  TwoSumsSoundness.adaptive application 2 adaptiveProver counted
 
 example : chooseStatement 0 = ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [] [] 1 1 0 := by
   simp [chooseStatement]
@@ -82,13 +84,13 @@ example : chooseStatement 2 = ZkcSecurity.Examples.Generated.Components.TwoSumsA
   simp [chooseStatement, zero, one]
 
 example (history : Domain.History carriers) :
-    Two.schedule.charge 2 history (.challenge { origin with entry := "unmapped" }) = price := by
-  rw [ZkcSecurity.Claims.CompiledSoundness.charge_constant Two.schedule 2 price (Two.schedule_prices 2)]
+    TwoSumsSoundness.schedule.charge 2 history (.challenge { origin with entry := "unmapped" }) = price := by
+  rw [ZkcSecurity.Claims.CompiledSoundness.charge_constant TwoSumsSoundness.schedule 2 price (TwoSumsSoundness.schedule_prices 2)]
 
-#print axioms Two.reductionExport
-#print axioms Small.reductionExport
-#print axioms Two.adaptive
-#print axioms Small.adaptive
+#print axioms TwoSumsSoundness.reductionExport
+#print axioms SmallSumcheckSoundness.reductionExport
+#print axioms TwoSumsSoundness.adaptive
+#print axioms SmallSumcheckSoundness.adaptive
 #print axioms repeated_log
 #print axioms undercount_rejected
 end TestsSecurity.SumcheckAdaptiveSoundness
