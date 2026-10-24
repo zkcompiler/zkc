@@ -29,6 +29,7 @@ flowchart TD
 | `Zkc.Construction` | Constructed participant/pair admission, nominal values, execution, views and source-occurrence correspondence |
 | `Zkc.Obligations` | Yes/No promises, contexts, frames and structural derivations without a probability dependency |
 | `ZkcSecurity.Obligations` | Actual-distribution escape laws and interpretation into the existing reduction engine |
+| `ZkcSecurity.Algebra` | Shared algebraic probability lemmas independent of a protocol family |
 | `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
 | `ZkcSecurity.Examples` | Exact source-body instances, selected subjects and root proof applications |
 | `ZkcSecurity.Claims` | Request-owned models and canonical meanings, stage links and receipt admission |
@@ -86,6 +87,11 @@ uses the difference between their polynomial and the reference. Its local
 probability bound refers to the actual sampling distribution. Uniform
 finite-field root counting is one instance, not an assumption for every
 challenge kind.
+
+`ZkcSecurity.Algebra.Polynomial` owns the general univariate root and
+agreement bounds. Sumcheck consumes those lemmas alongside its reference and
+message laws. Other algebraic protocols can use the same probability library
+without importing Sumcheck's reference semantics.
 
 For table Sumcheck, `TableReference` uses the sum of the table after the current
 prefix restriction. Shape closure justifies every subsequent restriction;
@@ -195,6 +201,14 @@ experiment runs both actual participants with one initially empty random-oracle
 cache and counts input preparation failure, stops, decoding failures, rejection
 and unread proof as failures. It has no adversary query parameter.
 
+This honest-execution vocabulary has memoized history-keyed challenges and no
+private-coin instruction. Private values supplied as inputs are fixed inputs,
+not automatically sampled coins. The canonical honest model refuses a
+`private_coins` argument. The maintained Sumcheck roots need no private coins;
+completeness for a protocol that does needs an explicit fresh-sampling operation,
+its artifact correspondence and a joint handler law. Resetting the ROM cache
+does not supply that operation.
+
 The soundness projection reuses that subject's actual validator and retained
 target. It does **not** inherit the honest input policy. Adaptive adversaries
 may query before selecting any typed statement, including malformed table
@@ -222,6 +236,20 @@ histories and requests. Algebra and embedding laws are proved against the
 actual operational model. A field's cardinality is derived from its carrier;
 an extension field does not inherit its base field's size. Model admission
 checks the exported catalogue and fixed capability package.
+
+Heterogeneous mathematical controls include a sampled proximity test with a
+genuine promise gap and a sampled relaxed quadratic fold. The fold's charged
+derivation covers either false input, preserves the private residual and caller
+frame, and composes with a final residual decider. These exercise the generic
+derivation interface; they are not compiled FRI/STARK, commitment, extraction or
+recursion endpoints. The two complete generated roots remain in the same
+Sumcheck family.
+
+Proof-search failure diagnostics retain failed mathematical premises and kernel
+errors. Lean's tagged elaborator resource errors propagate through ordinary
+catch clauses; kernel timeouts arrive as ordinary diagnostics and remain in the
+reported candidate failures. Resource exhaustion is unresolved proof search,
+never a semantic counterexample or a successful refusal control.
 
 These theorems concern interpreted IR and selected exact exports. The native
 frontend/exporter association remains an explicit trusted source link until
