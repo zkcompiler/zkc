@@ -144,7 +144,7 @@ def source (input : Input) : Except String String := do
     "  Claims.CompiledSoundness.assembled installation price (budget • price) rejected costs\n" ++
     "    schedule queries (schedule_prices queries)\n\n" ++
     "theorem adaptive (application : String) (queries : Nat)\n" ++
-    "    (prover : OracleComp (HonestCompiled.Spec carriers) (Statement × Domain.Proof carriers))\n" ++
+    "    (prover : OracleComp (TranscriptOracle.DomainSpec carriers) (Statement × Domain.Proof carriers))\n" ++
     "    (bounded : IsTotalQueryBound prover queries) :\n" ++
     "    Claims.CompiledSoundness.probability validatorSubject application prover ≤\n" ++
     "      ((queries : ENNReal) + budget) / (Fintype.card Scalar : ENNReal) :=\n" ++

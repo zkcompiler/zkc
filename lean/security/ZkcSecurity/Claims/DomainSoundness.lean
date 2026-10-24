@@ -93,7 +93,7 @@ noncomputable def FixedSoundness (capabilities : Capabilities model art.original
   classical
   letI := capabilities.samples
   exact ∀ statement, subject.FalseStatement statement → ∀ initial
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers)
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
       (Zkc.Construction.Domain.Proof model.toCarriers)) (queries : Nat),
     selected.queries.allows queries → IsTotalQueryBound prover queries →
     Pr{let result ← (simulateQ randomOracle
@@ -105,7 +105,7 @@ noncomputable def AdaptiveSoundness (capabilities : Capabilities model art.origi
     (subject : Subject model art) (selected : Model) (error : Nat → ENNReal) : Prop := by
   classical
   letI := capabilities.samples
-  exact ∀ (prover : OracleComp (HonestCompiled.Spec model.toCarriers)
+  exact ∀ (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
       (art.Statement model × Zkc.Construction.Domain.Proof model.toCarriers)) (queries : Nat),
     selected.queries.allows queries → IsTotalQueryBound prover queries →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
@@ -128,7 +128,7 @@ noncomputable def WeightedFixedSoundness (capabilities : Capabilities model art.
   letI := capabilities.samples
   exact ∀ queries, selected.queries.allows queries → ∀ statement,
     subject.FalseStatement statement → ∀ initial
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers)
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
       (Zkc.Construction.Domain.Proof model.toCarriers)) (cost : ENNReal),
     WorstCaseCostBound prover ⟨Typed.keyCharge (schedule.charge queries)⟩ cost →
     Pr{let result ← (simulateQ randomOracle
@@ -142,7 +142,7 @@ noncomputable def WeightedAdaptiveSoundness (capabilities : Capabilities model a
   classical
   letI := capabilities.samples
   exact ∀ queries, selected.queries.allows queries →
-    ∀ (prover : OracleComp (HonestCompiled.Spec model.toCarriers)
+    ∀ (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
       (art.Statement model × Zkc.Construction.Domain.Proof model.toCarriers)) (cost : ENNReal),
     WorstCaseCostBound prover ⟨Typed.keyCharge (schedule.charge queries)⟩ cost →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>

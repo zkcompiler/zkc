@@ -77,19 +77,19 @@ private def environment (value : Bool) : Domain.Environment model.toCarriers :=
 private def run (actual : Artifacts) (value : Bool) :=
   executePrepared model program context actual (environment value) (environment value) oracle 0
 
-example : succeeds 0 (run artifacts true) = true := by rfl
-example : succeeds 0 (run artifacts false) = false := by rfl
+example : Domain.PairExecution.succeeds 0 (run artifacts true) = true := by rfl
+example : Domain.PairExecution.succeeds 0 (run artifacts false) = false := by rfl
 example : (run artifacts true).producer.state.oracle = 0 := by rfl
 example : observations (run artifacts true) = [] := by rfl
 
 -- A source-related stopped producer remains failed and validation is skipped.
 example : (run ⟨stoppedProducer, validator⟩ false).validator = none := by rfl
-example : succeeds 0 (run ⟨stoppedProducer, validator⟩ false) = false := by rfl
+example : Domain.PairExecution.succeeds 0 (run ⟨stoppedProducer, validator⟩ false) = false := by rfl
 
 private def extraProof : Participant := { producer with instructions :=
   [⟨.send "m" "m" "V", [0], [], []⟩] }
 example : (run ⟨extraProof, validator⟩ true).producer.state.proof = [.boolean true] := by rfl
-example : succeeds 0 (run ⟨extraProof, validator⟩ true) = false := by rfl
+example : Domain.PairExecution.succeeds 0 (run ⟨extraProof, validator⟩ true) = false := by rfl
 
 -- All-reply artifact transport uses actual instruction equality, not a name.
 #print axioms Zkc.Construction.AuthoredPair.admitted_producer_process

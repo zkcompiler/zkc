@@ -117,7 +117,7 @@ noncomputable def reductionExport (queries : Nat) :
     schedule queries (schedule_prices queries)
 
 theorem adaptive (application : String) (queries : Nat)
-    (prover : OracleComp (HonestCompiled.Spec carriers) (Statement × Domain.Proof carriers))
+    (prover : OracleComp (TranscriptOracle.DomainSpec carriers) (Statement × Domain.Proof carriers))
     (bounded : IsTotalQueryBound prover queries) :
     Claims.CompiledSoundness.probability validatorSubject application prover ≤
       ((queries : ENNReal) + budget) / (Fintype.card Scalar : ENNReal) :=

@@ -41,7 +41,7 @@ local instance : ∀ event : Domain.Event subject.domainModel.toCarriers,
 theorem readback (values : Data) (related : subject.Relation (abi.pack values))
     (honest : subject.HonestInput (abi.pack values)) :
     Readback
-      (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)
+      (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)
       (Domain.participant subject.domainModel ZkcSecurity.Examples.Generated.TwoSums.imported.program
         subject.selection.context ZkcSecurity.Examples.Generated.TwoSums.selected.artifacts.producer (abi.producer values))
       (Domain.participant subject.domainModel ZkcSecurity.Examples.Generated.TwoSums.imported.program

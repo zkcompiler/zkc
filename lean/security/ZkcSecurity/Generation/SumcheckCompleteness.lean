@@ -91,7 +91,7 @@ def source (input : Input) : Except String String := do
     "theorem readback (values : Data) (related : subject.Relation (abi.pack values))\n" ++
     "    (honest : subject.HonestInput (abi.pack values)) :\n" ++
     "    Readback\n" ++
-    "      (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)\n" ++
+    "      (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)\n" ++
     "      (Domain.participant subject.domainModel " ++ subject ++ ".imported.program\n" ++
     "        subject.selection.context " ++ subject ++ ".selected.artifacts.producer (abi.producer values))\n" ++
     "      (Domain.participant subject.domainModel " ++ subject ++ ".imported.program\n" ++

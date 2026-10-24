@@ -27,7 +27,7 @@ def targetReference (subject : Subject model original imported selected) : Wire.
 
 /-- Failed preparation is an unsuccessful observation, never discarded mass. -/
 def computation (subject : Subject model original imported selected) (inputs : subject.Inputs) :
-    OracleComp (HonestCompiled.Spec model.toCarriers)
+    OracleComp (TranscriptOracle.DomainSpec model.toCarriers)
       (Option (Domain.PairExecution model.toCarriers Unit)) :=
   match subject.runtimeInputs inputs with
   | none => pure none
@@ -36,14 +36,14 @@ def computation (subject : Subject model original imported selected) (inputs : s
 
 def Success (subject : Subject model original imported selected)
     (observed : Option (Domain.PairExecution model.toCarriers Unit)) : Prop :=
-  ∃ execution, observed = some execution ∧ HonestCompiled.Success subject.selection.position execution
+  ∃ execution, observed = some execution ∧ Domain.PairExecution.Success subject.selection.position execution
 
 /-- Observe both complete executions and the one final cache. Failed input
 preparation remains a returned unsuccessful observation. -/
 noncomputable def experiment (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (inputs : subject.Inputs) : ProbComp
-      (Option (Domain.PairExecution model.toCarriers Unit) × (HonestCompiled.Spec model.toCarriers).QueryCache) := by
+      (Option (Domain.PairExecution model.toCarriers Unit) × (TranscriptOracle.DomainSpec model.toCarriers).QueryCache) := by
   classical
   exact Honest.run (subject.computation inputs)
 
@@ -94,7 +94,7 @@ theorem perfect_of_all_tables (subject : Subject model original imported selecte
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (nonvacuous : Nonvacuous subject)
     (agreement : ∀ inputs, subject.Relation inputs → subject.HonestInput inputs →
-      ∀ answers : QueryImpl (HonestCompiled.Spec model.toCarriers) Id,
+      ∀ answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id,
         subject.Success (evalWithAnswerFn answers (subject.computation inputs))) :
     CanonicalCompleteness subject 0 := by
   classical
@@ -105,7 +105,7 @@ theorem perfect_of_all_tables (subject : Subject model original imported selecte
 theorem not_perfect_of_failed_input (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (inputs : subject.Inputs) (related : subject.Relation inputs) (honest : subject.HonestInput inputs)
-    (failed : ∀ answers : QueryImpl (HonestCompiled.Spec model.toCarriers) Id,
+    (failed : ∀ answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id,
       ¬ subject.Success (evalWithAnswerFn answers (subject.computation inputs))) :
     ¬ CanonicalCompleteness subject 0 := by
   classical

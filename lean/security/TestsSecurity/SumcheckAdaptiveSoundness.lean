@@ -32,7 +32,7 @@ def chooseStatement (value : Scalar) : TwoSumsSoundness.Statement :=
   else if value = 2 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [0, 0, 0, 0] [0, 0, 0, 0] 1 1 1
   else ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [0] [0] 1 1 99
 
-def adaptiveProver : OracleComp (HonestCompiled.Spec carriers) (TwoSumsSoundness.Statement × Domain.Proof carriers) := do
+def adaptiveProver : OracleComp (TranscriptOracle.DomainSpec carriers) (TwoSumsSoundness.Statement × Domain.Proof carriers) := do
   let first ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let _ ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let value : Scalar := by

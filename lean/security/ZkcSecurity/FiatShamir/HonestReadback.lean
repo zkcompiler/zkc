@@ -102,7 +102,7 @@ theorem run {Post : A → B → Prop}
     {left : PIR.Process (Domain.effects carriers) A}
     {right : PIR.Process (Domain.effects carriers) B}
     (aligned : Readback Post left right)
-    (answers : QueryImpl (HonestCompiled.Spec carriers) Id)
+    (answers : QueryImpl (TranscriptOracle.DomainSpec carriers) Id)
     (leftEnvironment rightEnvironment : Domain.Environment carriers)
     (preceding suffix : Domain.Proof carriers) :
     ∃ leftValue rightValue leftFinal rightFinal leftEvents rightEvents emitted,
@@ -195,11 +195,11 @@ theorem Readback.pair_success (model : Structured.DomainModel) (program : Struct
     (producerInputs validatorInputs : Domain.Environment model.toCarriers)
     (position : Nat)
     (aligned : Readback
-      (fun _ result => HonestCompiled.acceptanceAt position result.values = some true)
+      (fun _ result => Domain.acceptanceAt position result.values = some true)
       (Domain.participant model program context producer producerInputs)
       (Domain.participant model program context validator validatorInputs))
-    (answers : QueryImpl (HonestCompiled.Spec model.toCarriers) Id) :
-    HonestCompiled.Success position
+    (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
+    Domain.PairExecution.Success position
       (Domain.executePair model program context producer validator producerInputs validatorInputs
         (HonestCompiled.tableOracle answers) ()) := by
   obtain ⟨left, right, leftFinal, rightFinal, leftEvents, rightEvents, proof,

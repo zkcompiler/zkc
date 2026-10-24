@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Construction.AuthoredPair
-public import Zkc.Construction.DomainProducer
+public import Zkc.Construction.PairAcceptance
 
 @[expose] public section
 
@@ -16,20 +16,6 @@ namespace Zkc.Construction.AuthoredPair
 open Zkc.Source Zkc.Source.Structured
 
 abbrev Execution := Domain.PairExecution
-
-/-- Both stages return, the selected Boolean is true, and no proof remains.
-A producer stop is a failure even if its preceding proof would be accepted. -/
-def succeeds {carriers : Carriers} {S : Type} (position : Nat)
-    (execution : Execution carriers S) : Bool :=
-  match execution.producer.outcome, execution.validator with
-  | .returned _, some checked =>
-      match checked.outcome with
-      | .returned result =>
-          (match result.values[position]? with
-          | some (.data (.boolean true)) => true
-          | _ => false) && checked.state.proof.isEmpty
-      | .stopped _ => false
-  | _, _ => false
 
 /-- Retain the two stage traces separately; this concatenation exposes the
 full execution order, including prefixes on a stop. -/
@@ -89,24 +75,24 @@ def execute {original : Snapshot} (imported : Imported original) (selected : Sel
 def selectedSucceeds {original : Snapshot} (selected : Selection original)
     {carriers : Carriers} {S : Type} (execution : Execution carriers S) : Bool :=
   match exportAcceptance original selected.artifacts.validator with
-  | some position => succeeds position execution
+  | some position => Domain.PairExecution.succeeds position execution
   | none => false
 
 theorem stopped_fails {carriers : Carriers} {S : Type} (position : Nat)
     (execution : Execution carriers S) (reason : PIR.Stop)
     (stopped : execution.producer.outcome = .stopped reason) :
-    succeeds position execution = false := by simp [succeeds, stopped]
+    Domain.PairExecution.succeeds position execution = false := by simp [Domain.PairExecution.succeeds, stopped]
 
 theorem leftover_fails {carriers : Carriers} {S : Type} (position : Nat)
     (execution : Execution carriers S)
     (checked : PIR.Execution (Domain.RuntimeState carriers S) (Domain.Event carriers)
       (Domain.Result carriers))
     (validator : execution.validator = some checked) (leftover : checked.state.proof ≠ []) :
-    succeeds position execution = false := by
+    Domain.PairExecution.succeeds position execution = false := by
   have unread : checked.state.proof.isEmpty = false := by
     cases found : checked.state.proof <;> simp_all
   cases hp : execution.producer.outcome <;> cases hv : checked.outcome <;>
-    simp [succeeds, validator, hp, hv, unread]
+    simp [Domain.PairExecution.succeeds, validator, hp, hv, unread]
 
 /-- Kernel-checked association transports the whole open producer process,
 including all replies, final environments and stopped prefixes. This theorem

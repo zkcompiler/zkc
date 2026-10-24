@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Construction.DomainProducer
+public import Zkc.Construction.PairAcceptance
+public import ZkcSecurity.FiatShamir.TranscriptOracle
 public import ZkcSecurity.FiatShamir.Honest
 
 @[expose] public section
@@ -13,11 +14,9 @@ namespace ZkcSecurity.FiatShamir.HonestCompiled
 open Zkc.Source Zkc.Construction
 open OracleComp OracleSpec
 
-abbrev Spec (carriers : Structured.Carriers) := Honest.Spec (@Domain.Raw carriers)
-
 /-- Domain's explicit oracle-state parameter is Unit because the coherent
 cache belongs to the outer StateT simulation, not to either participant. -/
-def oracle {carriers : Structured.Carriers} : Domain.Oracle (OracleComp (Spec carriers)) carriers Unit :=
+def oracle {carriers : Structured.Carriers} : Domain.Oracle (OracleComp (TranscriptOracle.DomainSpec carriers)) carriers Unit :=
   fun history event state => do
     let answer ← Typed.ask (R := Typed.ByLast Domain.Raw) history event
     pure (.returned answer, state)
@@ -46,17 +45,17 @@ theorem eval_runM {I : PIR.Signature} {S E A K : Type} {spec : OracleSpec K}
       funext value state
       exact ih value state
 
-def tableOracle {carriers : Structured.Carriers} (answers : QueryImpl (Spec carriers) Id) :
+def tableOracle {carriers : Structured.Carriers} (answers : QueryImpl (TranscriptOracle.DomainSpec carriers) Id) :
     Domain.Oracle Id carriers Unit := fun history event state =>
   (.returned (Typed.readTable (R := Typed.ByLast Domain.Raw) answers history event), state)
 
-theorem eval_oracle {carriers : Structured.Carriers} (answers : QueryImpl (Spec carriers) Id)
+theorem eval_oracle {carriers : Structured.Carriers} (answers : QueryImpl (TranscriptOracle.DomainSpec carriers) Id)
     (history : Domain.History carriers) (event : Domain.Event carriers) (state : Unit) :
     evalWithAnswerFn answers (oracle history event state) = tableOracle answers history event state := by
   simp only [oracle, Typed.ask, Typed.answer, evalWithAnswerFn_bind, evalWithAnswerFn_map,
     evalWithAnswerFn_liftM_query, evalWithAnswerFn_pure, tableOracle, Typed.readTable]
 
-theorem eval_handler {carriers : Structured.Carriers} (answers : QueryImpl (Spec carriers) Id)
+theorem eval_handler {carriers : Structured.Carriers} (answers : QueryImpl (TranscriptOracle.DomainSpec carriers) Id)
     (mode : Domain.Mode) (operation : Domain.Effect carriers) (state : Domain.RuntimeState carriers Unit) :
     evalWithAnswerFn answers (Domain.handler mode oracle operation state) =
       Domain.handler mode (tableOracle answers) operation state := by
@@ -82,13 +81,13 @@ theorem eval_handler {carriers : Structured.Carriers} (answers : QueryImpl (Spec
 def computation (model : Structured.DomainModel) (program : Structured.Program)
     (context : Context) (producer validator : Participant)
     (producerInputs validatorInputs : Domain.Environment model.toCarriers) :
-    OracleComp (Spec model.toCarriers) (Domain.PairExecution model.toCarriers Unit) :=
+    OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (Domain.PairExecution model.toCarriers Unit) :=
   Domain.executePair model program context producer validator producerInputs validatorInputs oracle ()
 
 theorem eval_computation (model : Structured.DomainModel) (program : Structured.Program)
     (context : Context) (producer validator : Participant)
     (producerInputs validatorInputs : Domain.Environment model.toCarriers)
-    (answers : QueryImpl (Spec model.toCarriers) Id) :
+    (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
     evalWithAnswerFn answers (computation model program context producer validator producerInputs validatorInputs) =
       Domain.executePair model program context producer validator producerInputs validatorInputs (tableOracle answers) () := by
   have handlerEquality (mode : Domain.Mode) :
@@ -118,51 +117,5 @@ theorem eval_computation (model : Structured.DomainModel) (program : Structured.
   case stopped =>
     rfl
 
-def acceptanceAt {carriers : Structured.Carriers} (position : Nat)
-    (values : Domain.Environment carriers) : Option Bool :=
-  match values[position]? with
-  | some (.data (.boolean decision)) => some decision
-  | _ => none
-
-/-- Every phase must return, the exact generated proof must be exhausted, and
-the selected Boolean return must be true. Stops cannot satisfy this event. -/
-def Success {carriers : Structured.Carriers} (position : Nat)
-    (observed : Domain.PairExecution carriers Unit) : Prop :=
-  ∃ produced validated result,
-    observed.producer.outcome = .returned produced ∧
-    observed.validator = some validated ∧ validated.outcome = .returned result ∧
-    validated.state.proof = [] ∧ acceptanceAt position result.values = some true
-
-theorem stopped_fails {carriers : Structured.Carriers} (position : Nat)
-    (observed : Domain.PairExecution carriers Unit) (reason : PIR.Stop)
-    (stopped : observed.producer.outcome = .stopped reason) : ¬ Success position observed := by
-  rintro ⟨_, _, _, returned, _⟩
-  rw [stopped] at returned
-  cases returned
-
-theorem unread_fails {carriers : Structured.Carriers} (position : Nat)
-    (observed : Domain.PairExecution carriers Unit)
-    (validated : PIR.Execution (Domain.RuntimeState carriers Unit) (Domain.Event carriers)
-      (Domain.Result carriers))
-    (selected : observed.validator = some validated) (unread : validated.state.proof ≠ []) :
-    ¬ Success position observed := by
-  rintro ⟨_, _, _, _, same, _, consumed, _⟩
-  rw [selected] at same
-  cases Option.some.inj same
-  exact unread consumed
-
-theorem false_fails {carriers : Structured.Carriers} (position : Nat)
-    (observed : Domain.PairExecution carriers Unit)
-    (validated : PIR.Execution (Domain.RuntimeState carriers Unit) (Domain.Event carriers)
-      (Domain.Result carriers)) (selected : observed.validator = some validated)
-    (result : Domain.Result carriers) (returned : validated.outcome = .returned result)
-    (rejected : acceptanceAt position result.values = some false) : ¬ Success position observed := by
-  rintro ⟨_, actual, value, _, same, completed, _, accepted⟩
-  rw [selected] at same
-  cases Option.some.inj same
-  rw [returned] at completed
-  cases PIR.Outcome.returned.inj completed
-  rw [rejected] at accepted
-  cases accepted
 
 end ZkcSecurity.FiatShamir.HonestCompiled

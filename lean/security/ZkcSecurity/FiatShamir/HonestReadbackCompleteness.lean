@@ -29,7 +29,7 @@ theorem perfect (subject : Subject model original imported selected)
     (readback : ∀ inputs, subject.Relation inputs → subject.HonestInput inputs →
       ∀ producer validator, subject.runtimeInputs inputs = some (producer, validator) →
       Readback
-        (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)
+        (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)
         (Domain.participant model imported.program subject.selection.context
           selected.artifacts.producer producer)
         (Domain.participant model imported.program subject.selection.context
@@ -51,7 +51,7 @@ theorem of_abi (subject : Subject model original imported selected)
     (run : ∀ data, subject.Relation (abi.pack data) →
       subject.HonestInput (abi.pack data) →
       Readback
-        (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)
+        (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)
         (Domain.participant model imported.program subject.selection.context
           selected.artifacts.producer (abi.producer data))
         (Domain.participant model imported.program subject.selection.context
@@ -61,7 +61,7 @@ theorem of_abi (subject : Subject model original imported selected)
     (producer validator : Domain.Environment model.toCarriers)
     (prepared : subject.runtimeInputs inputs = some (producer, validator)) :
     Readback
-      (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)
+      (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)
       (Domain.participant model imported.program subject.selection.context
         selected.artifacts.producer producer)
       (Domain.participant model imported.program subject.selection.context
@@ -79,7 +79,7 @@ theorem perfect_abi (subject : Subject model original imported selected)
     (run : ∀ data, subject.Relation (abi.pack data) →
       subject.HonestInput (abi.pack data) →
       Readback
-        (fun _ result => HonestCompiled.acceptanceAt subject.selection.position result.values = some true)
+        (fun _ result => Domain.acceptanceAt subject.selection.position result.values = some true)
         (Domain.participant model imported.program subject.selection.context
           selected.artifacts.producer (abi.producer data))
         (Domain.participant model imported.program subject.selection.context

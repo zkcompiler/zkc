@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Interface
+public import ZkcSecurity.FiatShamir.TranscriptOracle
 public import VCVio.OracleComp.QueryTracking.RandomOracle.Simulation
 
 @[expose] public section
@@ -16,48 +16,46 @@ open OracleComp OracleSpec
 
 variable {E A : Type} {Raw : E → Type}
 
-abbrev Spec (Raw : E → Type) := OracleSpec.ofFn (Typed.ByLast Raw)
-
 section Experiment
 variable [DecidableEq E] [∀ event, SampleableType (Raw event)]
 
 /-- The complete observation includes the final oracle cache. There is exactly
 one initially empty cache, outside all phases of the supplied computation. -/
-def run (computation : OracleComp (Spec Raw) A) : ProbComp (A × (Spec Raw).QueryCache) :=
+def run (computation : OracleComp (TranscriptOracle.Spec Raw) A) : ProbComp (A × (TranscriptOracle.Spec Raw).QueryCache) :=
   (simulateQ randomOracle computation).run ∅
 
 /-- The complement counts all mass not assigned to successful acceptance.
 It remains the intended definition if a later interpreter is partial. -/
-noncomputable def failure (computation : OracleComp (Spec Raw) A) (success : A → Prop) : ENNReal :=
+noncomputable def failure (computation : OracleComp (TranscriptOracle.Spec Raw) A) (success : A → Prop) : ENNReal :=
   1 - Pr{let observed ← run computation}[success observed.1]
 
 /-- The present OracleComp experiment is lossless; explicit PIR stops are
 returned observations, not missing probability mass. -/
-theorem lossless (computation : OracleComp (Spec Raw) A) :
+theorem lossless (computation : OracleComp (TranscriptOracle.Spec Raw) A) :
     Pr{let _ ← run computation}[True] = 1 := prEvent_true_eq_one _
 
 /-- Only after normalization has been established may the complement be read
 as the probability of a returned unsuccessful observation. -/
-theorem failure_eq_unsuccessful (computation : OracleComp (Spec Raw) A) (success : A → Prop) :
+theorem failure_eq_unsuccessful (computation : OracleComp (TranscriptOracle.Spec Raw) A) (success : A → Prop) :
     failure computation success = Pr{let observed ← run computation}[¬ success observed.1] := by
   exact (prEvent_not_eq_one_sub _ _).symm
 
 /-- The all-table law is connected to the actual cached experiment, rather
 than serving as an alternative definition of completeness. -/
-theorem success_probability_one_iff (computation : OracleComp (Spec Raw) A) (success : A → Prop) :
+theorem success_probability_one_iff (computation : OracleComp (TranscriptOracle.Spec Raw) A) (success : A → Prop) :
     Pr{let observed ← run computation}[success observed.1] = 1 ↔
-      ∀ answers : QueryImpl (Spec Raw) Id, success (evalWithAnswerFn answers computation) := by
+      ∀ answers : QueryImpl (TranscriptOracle.Spec Raw) Id, success (evalWithAnswerFn answers computation) := by
   rw [run, prEvent_eq_one_simulateQ_randomOracle_run_iff]
   simp [QueryCache.AgreesWithFn]
 
-theorem failure_zero_of_all_tables (computation : OracleComp (Spec Raw) A) (success : A → Prop)
-    (agreement : ∀ answers : QueryImpl (Spec Raw) Id,
+theorem failure_zero_of_all_tables (computation : OracleComp (TranscriptOracle.Spec Raw) A) (success : A → Prop)
+    (agreement : ∀ answers : QueryImpl (TranscriptOracle.Spec Raw) Id,
       success (evalWithAnswerFn answers computation)) : failure computation success = 0 := by
   unfold failure
   rw [(success_probability_one_iff computation success).mpr agreement, tsub_self]
 
-theorem failure_one_of_all_tables (computation : OracleComp (Spec Raw) A) (success : A → Prop)
-    (failureEverywhere : ∀ answers : QueryImpl (Spec Raw) Id,
+theorem failure_one_of_all_tables (computation : OracleComp (TranscriptOracle.Spec Raw) A) (success : A → Prop)
+    (failureEverywhere : ∀ answers : QueryImpl (TranscriptOracle.Spec Raw) Id,
       ¬ success (evalWithAnswerFn answers computation)) : failure computation success = 1 := by
   rw [failure_eq_unsuccessful]
   exact (success_probability_one_iff computation (fun value => ¬ success value)).mpr failureEverywhere

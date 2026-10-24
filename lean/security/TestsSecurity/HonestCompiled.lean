@@ -89,8 +89,8 @@ theorem fieldEqual_calculates (left right : model.toCarriers.Field "field") :
     Domain.calculate model (.fieldEqual "field") [.data (.field "field" left), .data (.field "field" right)] =
       .returned [.data (.boolean (decide (left = right)))] := by rfl
 
-theorem accepts_all_tables (answers : QueryImpl (FiatShamir.HonestCompiled.Spec model.toCarriers) Id) :
-    FiatShamir.HonestCompiled.Success 0 (evalWithAnswerFn answers computation) := by
+theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.DomainSpec model.toCarriers) Id) :
+    Domain.PairExecution.Success 0 (evalWithAnswerFn answers computation) := by
   unfold computation
   rw [FiatShamir.HonestCompiled.eval_computation]
   simp [executePair, produce, validate, run, participant, producer, validator,
@@ -103,8 +103,8 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.HonestCompiled.Spec 
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
     Domain.Payload.value, bind, pure,
-    FiatShamir.HonestCompiled.Success, FiatShamir.HonestCompiled.acceptanceAt]
-theorem perfect : Honest.failure computation (FiatShamir.HonestCompiled.Success 0) = 0 := by
+    Domain.PairExecution.Success, Domain.acceptanceAt]
+theorem perfect : Honest.failure computation (Domain.PairExecution.Success 0) = 0 := by
   classical
   exact Honest.failure_zero_of_all_tables _ _ accepts_all_tables
 
@@ -136,19 +136,19 @@ example : stopped.producer.state.proof = [.boolean false] := by rfl
 example : stopped.producer.events = [.message (context.message "m" 0 1) (.boolean false)] := by rfl
 example : stopped.producer.state.environment.length = 4 := by rfl
 example : stopped.validator = none := by rfl
-example : ¬ FiatShamir.HonestCompiled.Success 0 stopped :=
-  FiatShamir.HonestCompiled.stopped_fails _ _ .reject rfl
+example : ¬ Domain.PairExecution.Success 0 stopped :=
+  Domain.PairExecution.stopped_fails _ _ .reject rfl
 
 def stoppedComputation := FiatShamir.HonestCompiled.computation model program context
   stoppedProducer validator inputs inputs
 
-theorem stopped_all_tables (answers : QueryImpl (FiatShamir.HonestCompiled.Spec model.toCarriers) Id) :
-    ¬ FiatShamir.HonestCompiled.Success 0 (evalWithAnswerFn answers stoppedComputation) := by
+theorem stopped_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.DomainSpec model.toCarriers) Id) :
+    ¬ Domain.PairExecution.Success 0 (evalWithAnswerFn answers stoppedComputation) := by
   unfold stoppedComputation
   rw [FiatShamir.HonestCompiled.eval_computation]
-  exact FiatShamir.HonestCompiled.stopped_fails _ _ .reject rfl
+  exact Domain.PairExecution.stopped_fails _ _ .reject rfl
 
-theorem stopped_failure : Honest.failure stoppedComputation (FiatShamir.HonestCompiled.Success 0) = 1 :=
+theorem stopped_failure : Honest.failure stoppedComputation (Domain.PairExecution.Success 0) = 1 :=
   Honest.failure_one_of_all_tables _ _ stopped_all_tables
 
 def extraProducer : Participant := { producer with instructions := queryInstructions ++
@@ -163,8 +163,8 @@ def unreadValidation := validate model program context validator inputs
 example : unreadPair.producer.state.proof = [.field "field" 0, .field "field" 0] := by rfl
 example : unreadPair.validator = some unreadValidation := by rfl
 example : unreadValidation.state.proof = [.field "field" 0] := by rfl
-example : ¬ FiatShamir.HonestCompiled.Success 0 unreadPair :=
-  FiatShamir.HonestCompiled.unread_fails _ _ unreadValidation rfl (by decide +kernel)
+example : ¬ Domain.PairExecution.Success 0 unreadPair :=
+  Domain.PairExecution.unread_fails _ _ unreadValidation rfl (by decide +kernel)
 
 def constantProducer : Participant := constructed
   [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] [1, 0]
@@ -181,16 +181,16 @@ def falseResult : Result model.toCarriers :=
 
 example : falsePair.validator = some falseValidation := by rfl
 example : falseValidation.outcome = .returned falseResult := by rfl
-example : FiatShamir.HonestCompiled.acceptanceAt 1 falseResult.values = some true := by rfl
-example : ¬ FiatShamir.HonestCompiled.Success 0 falsePair :=
-  FiatShamir.HonestCompiled.false_fails _ _ falseValidation rfl falseResult rfl rfl
+example : Domain.acceptanceAt 1 falseResult.values = some true := by rfl
+example : ¬ Domain.PairExecution.Success 0 falsePair :=
+  Domain.PairExecution.false_fails _ _ falseValidation rfl falseResult rfl rfl
 
 -- A successful verifier return cannot hide an unread generated payload.
 example (execution : PairExecution model.toCarriers Unit)
     (checked : PIR.Execution (RuntimeState model.toCarriers Unit) (Event model.toCarriers)
       (Result model.toCarriers)) (selected : execution.validator = some checked)
-    (leftover : checked.state.proof ≠ []) : ¬ FiatShamir.HonestCompiled.Success 0 execution :=
-  FiatShamir.HonestCompiled.unread_fails _ _ _ selected leftover
+    (leftover : checked.state.proof ≠ []) : ¬ Domain.PairExecution.Success 0 execution :=
+  Domain.PairExecution.unread_fails _ _ _ selected leftover
 
 -- Completed but false selected returns are failures, even when another
 -- Boolean returned by the same verifier is true.
@@ -198,8 +198,8 @@ example (execution : PairExecution model.toCarriers Unit)
     (checked : PIR.Execution (RuntimeState model.toCarriers Unit) (Event model.toCarriers)
       (Result model.toCarriers)) (selected : execution.validator = some checked)
     (result : Result model.toCarriers) (returned : checked.outcome = .returned result)
-    (rejected : FiatShamir.HonestCompiled.acceptanceAt 0 result.values = some false) :
-    ¬ FiatShamir.HonestCompiled.Success 0 execution := by
+    (rejected : Domain.acceptanceAt 0 result.values = some false) :
+    ¬ Domain.PairExecution.Success 0 execution := by
   rintro ⟨_, actual, value, _, same, completed, _, accepted⟩
   rw [selected] at same
   cases Option.some.inj same
@@ -212,5 +212,5 @@ example (execution : PairExecution model.toCarriers Unit)
 #print axioms perfect
 #print axioms stopped_failure
 #print axioms FiatShamir.HonestCompiled.eval_computation
-#print axioms FiatShamir.HonestCompiled.false_fails
+#print axioms Domain.PairExecution.false_fails
 end TestsSecurity.HonestCompiled

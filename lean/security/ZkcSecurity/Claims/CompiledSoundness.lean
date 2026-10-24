@@ -145,7 +145,7 @@ noncomputable abbrev binding (subject : Claims.Domain.Subject model art) (applic
 /-- Full acceptance includes the absence of unread proof values. -/
 noncomputable def probability (subject : Claims.Domain.Subject model art) (application : String)
     [DecidableEq (Domain.Event model.toCarriers)]
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers)) : ENNReal :=
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers)) : ENNReal :=
   Pr{let result ← (simulateQ randomOracle
     (prover >>= fun claimed => (fun result => (claimed.1, result)) <$>
       subject.compiled.verifier model (Typed.ask (R := Typed.ByLast Domain.Raw)) claimed.1
@@ -159,7 +159,7 @@ and the subsequent compiled validator execution. -/
 theorem adaptive_charged {schedule : Claims.Domain.ChargeSchedule subject} {queries : Nat} {cost : ENNReal}
     (exported : Claims.Domain.ChargedExport subject schedule queries cost)
     (application : String)
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
     (proverCost : ENNReal)
     (bounded : WorstCaseCostBound prover ⟨Typed.keyCharge (schedule.charge queries)⟩ proverCost) :
     probability subject application prover ≤ proverCost + cost := by
@@ -177,7 +177,7 @@ theorem adaptive {schedule : Claims.Domain.ChargeSchedule subject} {queries : Na
     (exported : Claims.Domain.ChargedExport subject schedule queries cost)
     (value : ENNReal) (prices : ∀ entry ∈ schedule.entries, entry.2.value queries = value)
     (application : String)
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
     (bounded : IsTotalQueryBound prover queries) :
     probability subject application prover ≤ (queries : ENNReal) * value + cost := by
   have priced : ∀ history event, schedule.charge queries history event ≤ value := by
@@ -193,7 +193,7 @@ theorem adaptive_fraction {schedule : Claims.Domain.ChargeSchedule subject} {que
     (exported : Claims.Domain.ChargedExport subject schedule queries (budget • (1 / divisor)))
     (prices : ∀ entry ∈ schedule.entries, entry.2.value queries = 1 / divisor)
     (application : String)
-    (prover : OracleComp (HonestCompiled.Spec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
+    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
     (bounded : IsTotalQueryBound prover queries) :
     probability subject application prover ≤ ((queries : ENNReal) + budget) / divisor := by
   have result := adaptive exported (1 / divisor) prices application prover bounded
