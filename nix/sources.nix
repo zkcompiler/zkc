@@ -67,12 +67,22 @@ let
       paths = [ "common/tests/consumer" ];
       exclude = [ "common/tests/consumer/test_discovery.py" ];
     };
-    rustConsumer.paths = rust ++ [
-      "common/tests/check_rust_sdk.py"
-      "common/tests/consumer/rust"
-    ];
-    rust.paths = rust;
-    rustTests.paths = rust ++ runner ++ rustFixtures ++ projects;
+    # Crate documentation can be a compilation input through include_str!.
+    rustConsumer = {
+      paths = rust ++ [
+        "common/tests/check_rust_sdk.py"
+        "common/tests/consumer/rust"
+      ];
+      markdown = true;
+    };
+    rust = {
+      paths = rust;
+      markdown = true;
+    };
+    rustTests = {
+      paths = rust ++ runner ++ rustFixtures ++ projects;
+      markdown = true;
+    };
     application.paths = [
       "zkc.workspace.toml"
       "common/tests/check_install.py"
