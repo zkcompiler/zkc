@@ -61,6 +61,12 @@ def receive (routing : Routing) (state : State carriers) (ty : Structured.Ty)
         | none => .halt .refused
         | some payload => (record state origin payload).bind fun (_, final) => .done (value, final)
 
+-- Keep one stored provider for the receive equations used by both roles.
+-- This materializes their proofs without adding global simplifier rules.
+section
+attribute [local simp] receive
+end
+
 def send (routing : Routing) (state : State carriers) (ty : Structured.Ty)
     (site : String) (receiver : Nat) (value : carriers.Value ty) :
     PIR.Process (effects carriers) (Unit × State carriers) :=
