@@ -95,8 +95,9 @@ soundness, randomness or transcript encoding.
 
 ## Compiled subjects
 
-One row per selected source claim, or per subject with no selected claim, from its
-generated [assurance report](spec/assurance-report.md). A certified row establishes
+One row per selected canonical security claim, or per subject with no selected
+security claim, from its generated [assurance report](spec/assurance-report.md).
+Author claims remain separate in that report. A certified row establishes
 the requested interpreted claim under its recorded assumptions; native execution
 correspondence remains open. Other Entry trials stay visible in the full report.
 
@@ -114,8 +115,6 @@ correspondence remains open. Other Entry trials stay visible in the full report.
 | schnorr-and | `example::AndProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
 | schnorr | `example::Proof` | interpreted-executable-bytes | knowledge |  | `source.correspondence` | certified |
 | schnorr | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
-| schnorr | `example::Proof` | ideal-meaning | user.view_equal |  | `source.correspondence` | certified |
-| schnorr | `example::Proof` | ideal-meaning | user.view_equal |  | `source.correspondence` | certified |
 | sumcheck | `example::Proof` | interpreted-executable-bytes | soundness |  | `source.correspondence` | certified |
 | sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 | sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
