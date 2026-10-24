@@ -1,0 +1,10 @@
+format = "zkc.project/0"
+
+[modules]
+polynomial_restriction = "main.zkc"
+
+[dependencies]
+polynomial = { workspace = "core.polynomial" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

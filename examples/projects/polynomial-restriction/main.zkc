@@ -1,0 +1,16 @@
+module polynomial_restriction;
+use zkc::bilinear_restriction::{Bilinear, restrict_first, evaluate};
+domain F = field("bls12-381.fr");
+
+// Return the changed storage as well as a future evaluation and private frame.
+// No current scalar claim or Boolean-domain agreement authorizes the update.
+protocol Restriction roles(V)
+    (c00: F @V, c10: F @V, c01: F @V, c11: F @V,
+     first: F @V, future: F @V, frame: F @V)
+    -> (constant: F @V, linear: F @V, value: F @V, saved: F @V) {
+  let polynomial @V = Bilinear<F> { c00: c00, c10: c10, c01: c01, c11: c11 };
+  let restricted @V = restrict_first(polynomial, first);
+  let evaluated @V = evaluate(restricted, future);
+  return (constant = restricted.constant, linear = restricted.linear,
+          value = evaluated, saved = frame);
+}
