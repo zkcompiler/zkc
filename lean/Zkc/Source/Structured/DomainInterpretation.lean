@@ -255,7 +255,7 @@ theorem componentOperationOn_interpret (operations : PIR.OperationInterpretation
   cases op <;> try exact strictComponentOn_interpret operations sites tables.closed _ args bodies
   case exec primitive =>
     cases bodies
-    simp only [componentOperationOn, RegionFunctions.translate]
+    dsimp only [componentOperationOn, RegionFunctions.translate]
     cases present : RoleFamily.sequence args with
     | none => rfl
     | some values =>
@@ -269,7 +269,7 @@ theorem componentOperationOn_interpret (operations : PIR.OperationInterpretation
   case map spec =>
     cases bodies
     dsimp only [Op.arguments] at args
-    simp only [componentOperationOn, RegionFunctions.translate]
+    dsimp only [componentOperationOn, RegionFunctions.translate]
     cases present : RoleFamily.sequence args with
     | none => rfl
     | some values =>
@@ -278,9 +278,11 @@ theorem componentOperationOn_interpret (operations : PIR.OperationInterpretation
   case invoke helper =>
     cases bodies
     by_cases math : helper.kind = .math
-    · simp only [componentOperationOn, math, ↓reduceIte, RegionFunctions.translate]
+    · dsimp only [componentOperationOn, RegionFunctions.translate]
+      simp only [math, ↓reduceIte]
       exact tables.components helper args
-    · simp only [componentOperationOn, math, ↓reduceIte, RegionFunctions.translate]
+    · dsimp only [componentOperationOn, RegionFunctions.translate]
+      simp only [math, ↓reduceIte]
       exact strictComponentOn_interpret operations sites tables.closed (.invoke helper) args .nil
 
 theorem componentOn_interpret (operations : PIR.OperationInterpretation I J)
