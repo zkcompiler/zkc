@@ -9,7 +9,8 @@ public import Zkc.Semantics.MonadExecution
 
 /-! One constructed-program evaluator over the admitted nominal carriers.
 Arithmetic and helpers use the structured domain evaluator, including failures.
-Private coins are unsupported and refuse. Source correspondence is separate. -/
+Owner-local services remain explicit effects interpreted by the selected handler;
+the default runner refuses them. Source correspondence is separate. -/
 set_option autoImplicit false
 
 namespace Zkc.Construction.Domain
