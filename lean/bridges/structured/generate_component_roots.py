@@ -63,18 +63,25 @@ def validate_config(config):
     names = set()
     for index, root in enumerate(roots):
         location = f"root[{index}]"
-        shape(root, common, {"error_expression", "proof_module", "proof_name"}, location)
+        shape(root, common, {"error_expression", "proof_module", "proof_name",
+                             "method_imports", "nonvacuity_law"}, location)
         for key in common - {"modules"}:
             string(root[key], f"{location}.{key}")
         method = root["method"]
         if method not in {"sigma", "direct"}:
             raise ValueError(f"{location}: uninstalled proof method: {method}")
         required = common | ({"proof_module"} if method == "direct" else set())
-        optional = {"error_expression"} | ({"proof_name"} if method == "direct" else set())
+        optional = {"error_expression"} | ({"proof_name"} if method == "direct" else
+                                         {"method_imports", "nonvacuity_law"})
         shape(root, required, optional, location)
-        for key in (required | optional) - {"modules"}:
+        for key in (required | optional) - {"modules", "method_imports"}:
             if key in root:
                 string(root[key], f"{location}.{key}")
+        method_imports = root.get("method_imports", [])
+        if not isinstance(method_imports, list):
+            raise ValueError(f"{location}.method_imports: expected a list of strings")
+        for module in method_imports:
+            string(module, f"{location}.method_imports")
         name = root["name"]
         if not name.isidentifier():
             raise ValueError(f"{location}: invalid root name: {name}")
@@ -211,7 +218,8 @@ class Generation:
         flags = ["--source-format=zkc", "--entry=" + root["entry"],
                  "--module=example=" + root["source"],
                  *["--module=" + key + "=" + value for key, value in root["modules"].items()]]
-        native = lambda *args: self.execute([self.args.compiler, *args])
+        def native(*args):
+            return self.execute([self.args.compiler, *args])
         original = native("language-emit", *flags)
         (directory / "original.mlir").write_text(original)
         bundle = json.loads(native("language-bundle", *flags))
@@ -285,6 +293,8 @@ def main : IO Unit := do
 ''')
         for module in (inputs, producer, validator, subject):
             self.retain(module, paths[module].read_text())
+        self.prepare(["ZkcSecurity.Generation.SubjectABI",
+                      "ZkcSecurity.Generation.SubjectABI.Command"])
         abi = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
         abi_path = directory / "ABI.lean"
         self.printer("GenerateABI" + name, f'''import ZkcSecurity.Generation.SubjectABI.Command
@@ -303,6 +313,7 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
         if root["method"] == "direct":
             self.compile(root["proof_module"])
             return
+        self.prepare(root.get("method_imports", []))
         self.prepare([
             "ZkcSecurity.Tools.ProcessView", "ZkcSecurity.Families.Sigma.Algebra",
             "ZkcSecurity.Families.Sigma.Realization", "ZkcSecurity.Tools.SigmaReadback",
@@ -318,6 +329,8 @@ set_option maxHeartbeats 16000000
 open ZkcSecurity.Generation
 derive_sigma_completeness generated from {{
   metadata := SubjectABI.metadata {subject}.subject
+  imports := [{', '.join(map(quoted, root.get('method_imports', [])))}]
+  nonvacuityLaw := {('some ' + quoted(root['nonvacuity_law'])) if 'nonvacuity_law' in root else 'none'}
   output := {{
     moduleName := {quoted(module)}, subjectModule := {quoted(subject)},
     producerModule := "ZkcExamples.Structured.Generated.Constructed.{name}Producer",

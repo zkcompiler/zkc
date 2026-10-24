@@ -82,6 +82,22 @@ class ComponentRootDescriptors(unittest.TestCase):
             with self.subTest(diagnostic=diagnostic, descriptor=descriptor):
                 self.assert_refused(descriptor, diagnostic)
 
+    def test_method_inputs_are_typed_and_method_specific(self):
+        for suffix, diagnostic in [
+            ('method_imports = "Example.Laws"\n', "method_imports: expected a list"),
+            ('method_imports = ["Example.Laws", 1]\n', "method_imports: expected a nonempty string"),
+            ('nonvacuity_law = false\n', "nonvacuity_law: expected"),
+        ]:
+            with self.subTest(suffix=suffix):
+                self.assert_refused(DESCRIPTOR + suffix, diagnostic)
+        direct = DESCRIPTOR.replace('method = "sigma"',
+                                    'method = "direct"\nproof_module = "Example.Proof"')
+        self.assert_refused(direct + 'nonvacuity_law = "Example.nonvacuous"\n',
+                            "unknown keys: nonvacuity_law")
+        valid = tomllib.loads(DESCRIPTOR + 'method_imports = ["Example.Laws"]\n'
+                             'nonvacuity_law = "Example.Laws.nonvacuous"\n')
+        driver.validate_config(valid)
+
     def test_selection_cannot_hide_malformed_roots(self):
         invalid_root = DESCRIPTOR.split("[[root]]")[1].replace('"Example"', '"Other"')
         self.assert_refused(DESCRIPTOR + "[[root]]" + invalid_root + 'error_expresion = "x"\n',

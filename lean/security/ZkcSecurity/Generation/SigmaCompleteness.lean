@@ -15,6 +15,11 @@ open Zkc.Source.Structured
 structure Input where
   metadata : SubjectABI.Metadata
   output : UniformRoot.Output
+  /-- Additional installation modules supplying the checked law below. -/
+  imports : List String := []
+  /-- A term checked as `Nonvacuous subject`, for the already fixed subject.
+  Without one, generation proposes the usual all-default witness. -/
+  nonvacuityLaw : Option String := none
 
 def zeroInput : Ty → String
   | .boolean => "false"
@@ -23,26 +28,27 @@ def zeroInput : Ty → String
   | .service _ => "none"
 
 def source (input : Input) : Except String String := do
-  let { metadata, output } := input
-  if !metadata.inputPolicy.rules.isEmpty then throw "sigma-input-policy-requires-installed-law"
-  if !metadata.clausesEmpty then throw "sigma-input-clause-requires-installed-law"
+  let metadata := input.metadata
+  let output := input.output
   let names := SubjectABI.names metadata.types
   let zeros := metadata.types.map zeroInput
   let presentation ← UniformRoot.presentation metadata output "SampledReadback (SampledReadback.Allowed subject)"
   RootCompleteness.source metadata output.toOutput {
-    imports := ["ZkcSecurity.FiatShamir.SampledReadbackCompleteness"]
+    imports := ["ZkcSecurity.FiatShamir.SampledReadbackCompleteness"] ++ input.imports
     metaImports := ["ZkcSecurity.Tools.SigmaReadback"]
     opens := ["ZkcSecurity.Domains.PrimeField", "ZkcSecurity.Tools.SigmaReadback"]
-    description := "Installed Sigma module algebra and actual authorized sampling prefixes."
+    description := "Installed Sigma module algebra and actual authorized private sampling."
     relation := "SampledReadback (SampledReadback.Allowed subject)"
     adapter := "SampledReadback.perfect_abi"
     nonvacuityLaw := "nonvacuous"
     declarations := UniformRoot.declarations output ++
-      "theorem nonvacuous : Nonvacuous subject := by\n" ++
+      (match input.nonvacuityLaw with
+      | some law => "theorem nonvacuous : Nonvacuous subject :=\n  " ++ law ++ "\n\n"
+      | none => "theorem nonvacuous : Nonvacuous subject := by\n" ++
       "  refine ⟨" ++ SubjectABI.call "inputs" zeros ++ ", ?_, ?_⟩\n" ++
       "  · apply (Subject.relation_iff_of_read subject _ _ " ++
         SubjectABI.call "application_read" zeros ++ ").mpr\n    rfl\n" ++
-      "  · rw [honestInput_iff]\n    trivial\n\n"
+      "  · rw [honestInput_iff]\n    trivial\n\n")
     body := presentation ++
       "  prepare_sigma_relation for subject reading " ++ SubjectABI.call "application_read" names ++ "\n" ++
       "  rw [" ++ output.producerModule ++ ".participant_eq, " ++ output.validatorModule ++ ".participant_eq]\n" ++

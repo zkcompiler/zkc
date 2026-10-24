@@ -103,6 +103,8 @@ theorem source_clauses (values : subject.Inputs) :
     ∀ index isInput, subject.inputClause values index isInput :=
   Subject.no_input_clauses subject (by decide +kernel) values
 
+-- The shared policy normalization basis covers different input layouts.
+set_option linter.unusedSimpArgs false in
 set_option backward.isDefEq.respectTransparency false in
 theorem policy_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.inputPolicy.Holds (inputs input0 input1 input2 input3 input4 input5) ↔ (0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input0.length < indexLimit ∧ input0.length = 1 * 2 ^ input4 ∧ 0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input1.length < indexLimit ∧ input1.length = 1 * 2 ^ input4 ∧ input4 ≤ 4 ∧ input4 < indexLimit) := by

@@ -14,9 +14,19 @@ open ZkcSecurity.Claims.HonestPair
 open ZkcSecurity.Tools.SubjectABI
 open ZkcTools.StructuredSource.Constructed (literal)
 
+/-- An optional presentation of the fixed retained input clauses. The emitted
+law is checked at `∀ values, (∀ index isInput, subject.inputClause values index
+isInput) ↔ condition values`; it cannot replace the subject's input contract. -/
+structure ClauseInterpretation where
+  condition : String
+  law : String
+
 structure Output where
   moduleName : String
   subjectModule : String
+  /-- Optional installation modules; the fixed subject need not import proofs. -/
+  imports : List String := []
+  clauseInterpretation : Option ClauseInterpretation := none
 
 def inputName (index : Nat) : String := "input" ++ toString index
 def call (name : String) (arguments : List String) : String :=
@@ -28,8 +38,10 @@ def binder (index : Nat) (ty : Ty) (optional : Bool) : String :=
     "(model.Value " ++ literal ty ++ "))"
 def binders (types : List Ty) (optional : Ty → Bool) : String :=
   String.join ((types.zipIdx).map fun (ty, index) => binder index ty (optional ty))
+def existentialBinders (declarations : String) : String :=
+  if declarations.isEmpty then "" else "∃" ++ declarations ++ ", "
 def existential (types : List Ty) (optional : Ty → Bool) : String :=
-  "∃" ++ binders types optional ++ ", "
+  existentialBinders (binders types optional)
 def names (types : List Ty) : List String := (List.range types.length).map inputName
 def isService (ty : Ty) : Bool := !Domain.dataType ty
 
@@ -138,8 +150,11 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let producerNames := producerArgumentPositions.map inputName
   let producerBinders := String.join (producerArgumentPositions.map fun index => binder index types[index]! false)
   let targetNames := targetPositions.map inputName
-  let targetBinders := String.join ((types.zipIdx).filterMap fun (ty, index) =>
-    if targetPositions.contains index then some (binder index ty false) else none)
+  -- Declaration/call binders are distinct and in source order. The payload
+  -- above remains in selector order, including every repeated selector.
+  let targetBinderPositions := (List.range types.length).filter targetPositions.contains
+  let targetBinderNames := targetBinderPositions.map inputName
+  let targetBinders := String.join (targetBinderPositions.map fun index => binder index types[index]! false)
   let history := call "initialHistory" publicNames
   let producer ← environment types producerPositions history metadata.suite
   let validator ← environment types publicPositions history metadata.suite
@@ -147,13 +162,34 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let validatorData ← rawEnvironment types publicPositions
   let pair := "(" ++ call "producerInputs" producerNames ++ ", " ++ call "validatorInputs" publicNames ++ ")"
   let policy := if metadata.inputPolicy.rules.isEmpty then "True" else policyProposition metadata.inputPolicy
-  if !metadata.clausesEmpty then throw "subject-abi-input-formula-law-required"
+  let automaticClauses := metadata.clausesEmpty && output.clauseInterpretation.isNone
+  let clauseDeclarations := if automaticClauses then
+    "theorem source_clauses (values : subject.Inputs) :\n" ++
+    "    ∀ index isInput, subject.inputClause values index isInput :=\n" ++
+    "  Subject.no_input_clauses subject (by decide +kernel) values\n\n"
+    else
+      let condition := match output.clauseInterpretation with
+        | some interpretation => "(" ++ interpretation.condition ++ ") values"
+        | none => "∀ index isInput, subject.inputClause values index isInput"
+      let proof := match output.clauseInterpretation with
+        | some interpretation => "(" ++ interpretation.law ++ ") values"
+        | none => "Iff.rfl"
+      "def inputCondition (values : subject.Inputs) : Prop :=\n  " ++ condition ++ "\n\n" ++
+      "theorem source_clauses (values : subject.Inputs) :\n" ++
+      "    (∀ index isInput, subject.inputClause values index isInput) ↔ inputCondition values :=\n  " ++
+      proof ++ "\n\n"
+  let honestCondition := if automaticClauses then policy
+    else "(" ++ policy ++ ") ∧ inputCondition " ++ present
   let unpacked := (List.range types.length).map fun index =>
     "(TypedABI.unpack data)" ++ String.join (List.replicate index ".2") ++ ".1"
   let dataPair := "(" ++ call "producerInputs" (producerArgumentPositions.map (fun index => unpacked[index]!)) ++ ", " ++
     call "validatorInputs" (publicPositions.map (fun index => unpacked[index]!)) ++ ")"
-  let mut text := "module\n\npublic import " ++ output.subjectModule ++
-    "\npublic import ZkcSecurity.Tools.SubjectABI\n\n@[expose] public section\nnoncomputable section\n\n" ++
+  let producerDataName := if producerArgumentPositions.isEmpty then "_data" else "data"
+  let validatorDataName := if publicPositions.isEmpty then "_data" else "data"
+  let pairDataName := if producerArgumentPositions.isEmpty && publicPositions.isEmpty then "_data" else "data"
+  let imports := ([output.subjectModule, "ZkcSecurity.Tools.SubjectABI"] ++ output.imports).eraseDups
+  let mut text := "module\n\n" ++ String.join (imports.map ("public import " ++ · ++ "\n")) ++
+    "\n@[expose] public section\nnoncomputable section\n\n" ++
     "/-! Generated from the actual admitted subject, source ABI, request policy\n" ++
     "and retained selectors. Regenerate; do not hand edit. Formula mathematics\n" ++
     "is deliberately absent. Every presentation equation is kernel checked. -/\n" ++
@@ -179,8 +215,8 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "theorem data_surjective (values : Data) :\n    " ++ existential types isService ++
       "values = " ++ call "data" n ++ " := by subject_abi_surjective\n\n" ++
     "def statement" ++ publicBinders ++ " : validatorArtifacts.Statement model :=\n  " ++ values publicNames ++ "\n\n" ++
-    "theorem statement_surjective (values : validatorArtifacts.Statement model) :\n    ∃" ++ publicBinders ++
-      ", values = " ++ call "statement" publicNames ++ " := by subject_abi_surjective\n\n" ++
+    "theorem statement_surjective (values : validatorArtifacts.Statement model) :\n    " ++
+      existentialBinders publicBinders ++ "values = " ++ call "statement" publicNames ++ " := by subject_abi_surjective\n\n" ++
     "abbrev StatementData := TypedABI.Fields model.Value validatorArtifacts.publics\n\n" ++
     "def statementData (values : validatorArtifacts.Statement model) : StatementData := TypedABI.unpack values\n" ++
     "def statementOfData (fields : StatementData) : validatorArtifacts.Statement model := TypedABI.pack fields\n\n" ++
@@ -206,21 +242,22 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   -- extensional elimination; it never duplicates a per-root case script.
   text := text ++ "theorem preparation (values : subject.Inputs) :\n" ++
     "    subject.runtimeInputs values = (TypedABI.complete Domain.dataType values).map\n" ++
-    "      (fun (data : Data) => " ++ dataPair ++ ") := by\n" ++
+    "      (fun (" ++ pairDataName ++ " : Data) => " ++ dataPair ++ ") := by\n" ++
     "  rw [Subject.runtime_layout subject values " ++ literal producerPositions ++ " (by rfl)]\n" ++
     "  subject_abi_options\n\n" ++
     "def abi : Subject.ABI subject where\n" ++
     "  Data := Data\n  pack := TypedABI.optional Domain.dataType\n" ++
     "  complete := TypedABI.complete Domain.dataType\n" ++
     "  complete_iff := TypedABI.complete_eq_some_iff Domain.dataType\n" ++
-    "  producer := fun data => " ++ call "producerInputs" (producerArgumentPositions.map (fun index => unpacked[index]!)) ++ "\n" ++
-    "  validator := fun data => " ++ call "validatorInputs" (publicPositions.map (fun index => unpacked[index]!)) ++ "\n" ++
+    "  producer := fun " ++ producerDataName ++ " => " ++ call "producerInputs" (producerArgumentPositions.map (fun index => unpacked[index]!)) ++ "\n" ++
+    "  validator := fun " ++ validatorDataName ++ " => " ++ call "validatorInputs" (publicPositions.map (fun index => unpacked[index]!)) ++ "\n" ++
     "  preparation := preparation\n" ++
-    "  producerSorts := fun data => producer_sorts" ++ String.join (producerArgumentPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n" ++
-    "  validatorSorts := fun data => validator_sorts" ++ String.join (publicPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n\n" ++
-    "theorem source_clauses (values : subject.Inputs) :\n" ++
-    "    ∀ index isInput, subject.inputClause values index isInput :=\n" ++
-    "  Subject.no_input_clauses subject (by decide +kernel) values\n\n" ++
+    "  producerSorts := fun " ++ producerDataName ++ " => producer_sorts" ++ String.join (producerArgumentPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n" ++
+    "  validatorSorts := fun " ++ validatorDataName ++ " => validator_sorts" ++ String.join (publicPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n\n" ++
+    clauseDeclarations ++
+    (if metadata.inputPolicy.rules.isEmpty then "" else
+      "-- The shared policy normalization basis covers different input layouts.\n" ++
+      "set_option linter.unusedSimpArgs false in\n") ++
     "set_option backward.isDefEq.respectTransparency false in\n" ++
     "theorem policy_iff" ++ dataBinders ++ " :\n" ++
     "    subject.inputPolicy.Holds " ++ present ++ " ↔ (" ++ policy ++ ") := by\n" ++
@@ -230,9 +267,12 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     else
       "  simp [inputPolicy, InputPolicy.Holds, InputRule.Holds, sourceInputs, TypedABI.get_cons_here, TypedABI.get_cons_there, and_assoc]\n\n") ++
     "theorem honestInput_iff" ++ dataBinders ++ " :\n" ++
-    "    subject.HonestInput " ++ present ++ " ↔ (" ++ policy ++ ") := by\n" ++
+    "    subject.HonestInput " ++ present ++ " ↔ (" ++ honestCondition ++ ") := by\n" ++
     "  exact (abi.honest_pack_iff " ++ call "data" n ++ ").trans\n" ++
-    "    ((and_iff_left (source_clauses _)).trans " ++ call "policy_iff" n ++ ")\n\n" ++
+    (if automaticClauses then
+      "    ((and_iff_left (source_clauses _)).trans " ++ call "policy_iff" n ++ ")\n\n"
+    else
+      "    (and_congr " ++ call "policy_iff" n ++ " (source_clauses _))\n\n") ++
     "theorem honestInput_exists (values : subject.Inputs) (honest : subject.HonestInput values) :\n" ++
     "    " ++ existential types isService ++ "values = " ++ present ++ " := by\n" ++
     "  obtain ⟨data, rfl⟩ := abi.honest_exists values honest\n" ++
@@ -241,7 +281,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     values targetNames ++ "\n\n" ++
     "theorem application_read" ++ dataBinders ++ " :\n" ++
     "    subject.target.application.read {} (subject.boundary " ++ present ++ ")\n" ++
-    "      (subject.assignments " ++ present ++ ") = some " ++ call "arguments" targetNames ++ " := rfl\n\n" ++
+    "      (subject.assignments " ++ present ++ ") = some " ++ call "arguments" targetBinderNames ++ " := rfl\n\n" ++
     "def validatorArguments" ++ targetPublicBinders ++ " (" ++ (if hasPrivate then "witness" else "_witness") ++ " : validatorSubject.Witness) :\n" ++
     "    Option (Values model.Value validatorSubject.target.application.relation.declaration.inputs) :=\n" ++
     "  RoleFamily.sequence " ++ values validatorComponents ++ "\n\n" ++

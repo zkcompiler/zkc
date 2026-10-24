@@ -58,7 +58,8 @@ def source (metadata : SubjectABI.Metadata) (output : Output) (method : Method) 
     "        subject.selection.context " ++ subject ++ ".selected.artifacts.producer (abi.producer values))\n" ++
     "      (Domain.participant subject.domainModel " ++ subject ++ ".imported.program\n" ++
     "        subject.selection.context " ++ subject ++ ".selected.artifacts.validator (abi.validator values)) := by\n" ++
-    "  obtain ⟨" ++ ", ".intercalate (allNames ++ ["rfl"]) ++ "⟩ := data_surjective values\n"
+    "  obtain " ++ (if allNames.isEmpty then "rfl" else
+      "⟨" ++ ", ".intercalate (allNames ++ ["rfl"]) ++ "⟩") ++ " := data_surjective values\n"
   text := text ++ method.body ++
     "\ntheorem compiled_ideal_complete : CanonicalCompleteness subject 0 :=\n  " ++
     method.adapter ++ " subject abi " ++ method.nonvacuityLaw ++ " readback\n\n" ++
