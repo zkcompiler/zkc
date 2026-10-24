@@ -4,6 +4,8 @@ mod backend;
 mod bindings;
 mod codec;
 mod contracts;
+#[cfg(test)]
+mod resident_contract_tests;
 pub use contracts::{native_contracts, native_contracts_with_policy};
 mod diagonal;
 mod fields;

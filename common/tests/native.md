@@ -64,6 +64,15 @@ or external prover/verifier compatibility.
 
 ## Independent references and trust
 
+The [resident installation witnesses](../../crates/zkc-native/src/resident_contract_tests.rs)
+independently specify ordered physical ports, attributes and timing requirements
+for flat BLST/Halo bindings and conversions. Inventory and mutated-report controls
+check both Native advertisement and VM linking. Separate
+[resident destination controls](../../crates/zkc-native/tests/resident_point_adapter.rs)
+exercise arithmetic, refusal precedence, optional scratch and complete publication;
+[STARK configuration controls](protocol/test_stark_configuration_adapters.py)
+compare pair-layout adapters with independently arranged commitment rows.
+
 An independent reference computes expectations from original inputs and the
 selected contract. It must not use the transformation under test as its oracle.
 Two interpreters agreeing on an already wrong exported plan cannot detect the
