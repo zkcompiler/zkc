@@ -507,6 +507,48 @@ construction profile; the driver then also generates its constructed
 participant data, printed bodies and per-Entry glue
 ([construction bridge](../construction/README.md)).
 
+### Constructed pair completeness roots
+
+[`generate_component_roots.py`](generate_component_roots.py) assembles source,
+actual constructed pair, typed input ABI, whole-process views, fixed Subject,
+canonical completeness theorem and claim receipt. Its configuration lives in
+[`roots/sampled.toml`](roots/sampled.toml), separately from the subject manifests.
+The installed Sigma method proves the actual Schnorr and Schnorr AND producers
+with private draws and a shared public challenge. An additional root borrows one
+random service under two aliases before invoking Schnorr AND. A direct theorem
+selection installs the sampled-abort control and its nonzero bound through the
+same Subject, ABI and receipt printers.
+
+With the security dependencies built, run from the repository root:
+
+```sh
+python3 lean/bridges/structured/generate_component_roots.py \
+  --compiler build/compiler/zkc-compile
+```
+
+The driver checks ordinary generated Lean files in an isolated
+`build/lean/component-roots/lib` tree without running a Lake build. `--check`
+requires exact regeneration, `--only NAME` selects roots, and `--phase` selects
+export, assembly, proof or receipt. `--dependency-path PATH` supplies another
+prechecked dependency tree when collaborators use separate output directories;
+serialize writers to a single output tree.
+
+`ZkcTools.StructuredSource.Root` owns common Subject and receipt assembly.
+`Generation.RootCompleteness` owns the common actual-pair theorem shell used by
+both maintained table roots and Sigma roots. Family extensions supply their
+mathematics and proof method; `Generation.UniformRoot` is an optional model
+presentation helper. Root configuration selects sources, nominal model,
+installed method or direct theorem and numeric error expression. It supplies no
+occurrence paths or structural proofs. Every emitted proof and receipt must
+elaborate independently.
+
+These roots use `blsScalarModel`: the source's nominal BLS scalar/group tags are
+retained, while the groups are interpreted as additive modules over the scalar
+field. Completeness concerns the actual ideal pair under the canonical honest
+sampling experiment. It establishes neither native curve realization nor a new
+discrete-log security result. Local draws use installed producer capabilities;
+they are absent from user data inputs and from the public random-oracle cache.
+
 ## Open participants
 
 The open suite compares the original native SSA interpreter with the independently

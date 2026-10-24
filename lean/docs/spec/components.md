@@ -185,7 +185,35 @@ proofs must still validate the candidate. Ambiguous dependencies, unknown
 sources and private tables remain unresolved. This bounded table-family search
 is not a generic invariant-inference procedure.
 
-The maintained root producer is `security/checks/RunComponentRoots.lean`:
+Common root assembly is owned by `ZkcTools.StructuredSource.Root` and
+`ZkcSecurity.Generation.RootCompleteness`. It emits the source-indexed subject,
+actual ABI elimination, pair correspondence obligation and canonical endpoint;
+the installed proof method supplies the mathematical obligations and their
+proofs. `Generation.UniformRoot` is an opt-in presentation for a uniform scalar
+and group interpretation. Mixed-domain clients need their own presentation;
+the common shell does not identify all nominal fields or groups.
+
+The Sigma installation uses generic module algebra and the same constructed
+whole-process views. Its checked readback tactic aligns exact sends, receives,
+public histories and owner-local draws. It derives the relation fact from the
+retained formula and ABI argument selection. Unsupported formulas or process
+shapes leave proof obligations; a protocol name never chooses a proof.
+The randomized Schnorr, shared-challenge Schnorr AND and same-root alias client
+select this installed method through configuration. They require no handwritten
+ABI, subject, pair-equation or receipt wrapper. The mathematical installation,
+its automation, source configuration and tests are still authoring work.
+
+`bridges/structured/generate_component_roots.py` owns export capture and
+orchestration for these clients. `roots/sampled.toml` selects sources, models and
+installed methods. A direct probability proof can use the same subject and
+receipt shell: SampledAbort proves its actual failure probability is exactly
+`1 / cardinality(bls12-381.fr)` and that zero-error completeness is false.
+Its admissible inputs impose no condition on the sampled coin. The driver is
+an untrusted source printer, not a second semantic evaluator or receipt checker.
+Use `--check` with a detached output directory to compare regenerated sources
+and check the emitted proofs.
+
+The maintained table-root producer is `security/checks/RunComponentRoots.lean`:
 from `lean/security`, run `lake env lean --run checks/RunComponentRoots.lean
 <output-directory>` after building the two generation configuration modules.
 Freshness checking compares a detached output directory with the checked files;
@@ -263,8 +291,20 @@ genuine promise gap and a sampled relaxed quadratic fold. The fold's charged
 derivation covers either false input, preserves the private residual and caller
 frame, and composes with a final residual decider. These exercise the generic
 derivation interface; they are not compiled FRI/STARK, commitment, extraction or
-recursion endpoints. The two complete generated roots remain in the same
-Sumcheck family.
+recursion endpoints. The complete generated table roots establish completeness
+and adversarial scalar/charged soundness. The separate randomized Sigma roots
+establish compiled-ideal completeness; these new artifacts have no new
+knowledge-soundness or zero-knowledge certification. Existing maintained
+Sigma security receipts concern their own fixed artifacts and games.
+
+The source-bound polynomial restriction helper uses coefficient storage of
+length four, then two, then one. Its checked source-body equation and caller
+frame proof instantiate the existing Sumcheck representation laws. Closure
+covers arbitrary field challenges and future restrictions, including off-cube
+evaluation. Boolean-cube agreement alone is rejected. This is a real helper and
+caller demonstration, not a second full compiled Sumcheck producer. The matched
+manual/verifier-only/joint-IR author-cost experiment remains separate; no
+measured author-effort reduction follows from these installation examples.
 
 Proof-search failure diagnostics retain failed mathematical premises and kernel
 errors. Lean's tagged elaborator resource errors propagate through ordinary

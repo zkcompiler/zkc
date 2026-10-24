@@ -23,10 +23,12 @@ import Zkc.Construction.DomainExecutionLaws
 import Zkc.Construction.DomainProducer
 import Zkc.Construction.DomainPublicBinding
 import Zkc.Construction.DomainTranscript
+import Zkc.Construction.DomainTransport
 import Zkc.Construction.DomainView
 import Zkc.Construction.DomainViewLaws
 import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
+import Zkc.Construction.PairAcceptance
 import Zkc.Construction.Participant
 import Zkc.Construction.Pattern
 import Zkc.Construction.Projection
@@ -386,6 +388,10 @@ import ZkcExamples.Construction.EmbeddingEqualityBinding
 import ZkcExamples.Construction.EmbeddingEqualityBodies
 import ZkcExamples.Construction.EmbeddingEqualityData
 import ZkcExamples.Construction.EmbeddingEqualityParticipant
+import ZkcExamples.Construction.Generated.SampledAbortPair
+import ZkcExamples.Construction.Generated.SchnorrAndAliasedPair
+import ZkcExamples.Construction.Generated.SchnorrAndRandomizedPair
+import ZkcExamples.Construction.Generated.SchnorrRandomizedPair
 import ZkcExamples.Construction.Generated.SmallSumcheckPair
 import ZkcExamples.Construction.Generated.TwoSumsPair
 import ZkcExamples.Construction.GkrProof
@@ -463,6 +469,14 @@ import ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsData
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+import ZkcExamples.Structured.Generated.Bindings.SampledAbortData
+import ZkcExamples.Structured.Generated.Bindings.SampledAbortInputs
+import ZkcExamples.Structured.Generated.Bindings.SchnorrAndAliasedData
+import ZkcExamples.Structured.Generated.Bindings.SchnorrAndAliasedInputs
+import ZkcExamples.Structured.Generated.Bindings.SchnorrAndRandomizedData
+import ZkcExamples.Structured.Generated.Bindings.SchnorrAndRandomizedInputs
+import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedData
+import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedInputs
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheck
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckCallbacks
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
@@ -472,6 +486,14 @@ import ZkcExamples.Structured.Generated.Bindings.TwoSumsCallbacks
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsData
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsSumcheck
+import ZkcExamples.Structured.Generated.Constructed.SampledAbortProducer
+import ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator
+import ZkcExamples.Structured.Generated.Constructed.SchnorrAndAliasedProducer
+import ZkcExamples.Structured.Generated.Constructed.SchnorrAndAliasedValidator
+import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedProducer
+import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidator
+import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer
+import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
 import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer
 import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
 import ZkcExamples.Structured.Generated.Constructed.TwoSumsProducer
@@ -517,6 +539,10 @@ import ZkcExamples.Structured.OkamotoBodies
 import ZkcExamples.Structured.OkamotoData
 import ZkcExamples.Structured.OkamotoNormalForms
 import ZkcExamples.Structured.OkamotoViews
+import ZkcExamples.Structured.PolynomialRestrictionBinding
+import ZkcExamples.Structured.PolynomialRestrictionBodies
+import ZkcExamples.Structured.PolynomialRestrictionData
+import ZkcExamples.Structured.PolynomialRestrictionMath
 import ZkcExamples.Structured.PrimitiveContracts
 import ZkcExamples.Structured.PrimitiveExpansions
 import ZkcExamples.Structured.PrimitiveHalvesData
@@ -658,7 +684,6 @@ import ZkcTools.StructuredSource.Bindings.Generate
 import ZkcTools.StructuredSource.Bindings.Gkr
 import ZkcTools.StructuredSource.Bindings.Inputs
 import ZkcTools.StructuredSource.Bindings.Ledger
-import ZkcTools.StructuredSource.Bindings.Subject
 import ZkcTools.StructuredSource.Bounds
 import ZkcTools.StructuredSource.Constructed
 import ZkcTools.StructuredSource.Discovery.Address
@@ -673,3 +698,4 @@ import ZkcTools.StructuredSource.NormalForm
 import ZkcTools.StructuredSource.OpenEvaluation
 import ZkcTools.StructuredSource.OpenValues
 import ZkcTools.StructuredSource.Presentation
+import ZkcTools.StructuredSource.Root

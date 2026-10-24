@@ -1,4 +1,5 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
+import ZkcSecurity.Algebra.Polynomial
 import ZkcSecurity.Claims.Admission
 import ZkcSecurity.Claims.Arithmetic
 import ZkcSecurity.Claims.AuthoredPair
@@ -89,6 +90,13 @@ import ZkcSecurity.Examples.EmbeddingEqualityClient
 import ZkcSecurity.Examples.EmbeddingEqualityDomains
 import ZkcSecurity.Examples.EmbeddingEqualitySoundness
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
+import ZkcSecurity.Examples.Generated.Components.SampledAbortABI
+import ZkcSecurity.Examples.Generated.Components.SchnorrAndAliasedABI
+import ZkcSecurity.Examples.Generated.Components.SchnorrAndAliasedCompleteness
+import ZkcSecurity.Examples.Generated.Components.SchnorrAndRandomizedABI
+import ZkcSecurity.Examples.Generated.Components.SchnorrAndRandomizedCompleteness
+import ZkcSecurity.Examples.Generated.Components.SchnorrRandomizedABI
+import ZkcSecurity.Examples.Generated.Components.SchnorrRandomizedCompleteness
 import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 import ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness
 import ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds
@@ -99,6 +107,14 @@ import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
 import ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
 import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
 import ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView
+import ZkcSecurity.Examples.Generated.SampledAbort
+import ZkcSecurity.Examples.Generated.SampledAbortCompletenessClaims
+import ZkcSecurity.Examples.Generated.SchnorrAndAliased
+import ZkcSecurity.Examples.Generated.SchnorrAndAliasedCompletenessClaims
+import ZkcSecurity.Examples.Generated.SchnorrAndRandomized
+import ZkcSecurity.Examples.Generated.SchnorrAndRandomizedCompletenessClaims
+import ZkcSecurity.Examples.Generated.SchnorrRandomized
+import ZkcSecurity.Examples.Generated.SchnorrRandomizedCompletenessClaims
 import ZkcSecurity.Examples.Generated.SmallSumcheck
 import ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims
 import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
@@ -115,6 +131,8 @@ import ZkcSecurity.Examples.NativePrograms.FactorWrongPoint
 import ZkcSecurity.Examples.NativePrograms.FactorWrongResidual
 import ZkcSecurity.Examples.NativePrograms.Sumcheck
 import ZkcSecurity.Examples.NativePrograms.SumcheckVariants
+import ZkcSecurity.Examples.PolynomialRestriction
+import ZkcSecurity.Examples.SampledAbort
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.SchnorrAndSigma
 import ZkcSecurity.Examples.StructuredSchnorr
@@ -147,6 +165,8 @@ import ZkcSecurity.Examples.Subjects.SchnorrAnd.Evidence
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
 import ZkcSecurity.Families.Schnorr
 import ZkcSecurity.Families.SchnorrVariants
+import ZkcSecurity.Families.Sigma.Algebra
+import ZkcSecurity.Families.Sigma.Realization
 import ZkcSecurity.Families.Sumcheck.Committed.Contract
 import ZkcSecurity.Families.Sumcheck.Committed.Security
 import ZkcSecurity.Families.Sumcheck.Common
@@ -203,6 +223,10 @@ import ZkcSecurity.FiatShamir.HonestCompiled
 import ZkcSecurity.FiatShamir.HonestReadback
 import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
 import ZkcSecurity.FiatShamir.HonestReadbackLoops
+import ZkcSecurity.FiatShamir.HonestReadbackTransport
+import ZkcSecurity.FiatShamir.HonestSampledReadback
+import ZkcSecurity.FiatShamir.HonestSampling
+import ZkcSecurity.FiatShamir.HonestSamplingTransport
 import ZkcSecurity.FiatShamir.Interface
 import ZkcSecurity.FiatShamir.Keyed
 import ZkcSecurity.FiatShamir.Laws
@@ -211,10 +235,17 @@ import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Roles
+import ZkcSecurity.FiatShamir.SampledCompiled
+import ZkcSecurity.FiatShamir.SampledReadbackCompleteness
 import ZkcSecurity.FiatShamir.Sampling
+import ZkcSecurity.FiatShamir.SamplingControl
 import ZkcSecurity.FiatShamir.Soundness
+import ZkcSecurity.FiatShamir.TranscriptOracle
 import ZkcSecurity.FiatShamir.Typed
+import ZkcSecurity.Generation.RootCompleteness
 import ZkcSecurity.Generation.RoundDescriptors
+import ZkcSecurity.Generation.SigmaCompleteness.Command
+import ZkcSecurity.Generation.SigmaCompleteness
 import ZkcSecurity.Generation.SubjectABI.Command
 import ZkcSecurity.Generation.SubjectABI
 import ZkcSecurity.Generation.SumcheckCompleteness.Command
@@ -223,6 +254,7 @@ import ZkcSecurity.Generation.SumcheckInputs
 import ZkcSecurity.Generation.SumcheckSoundness.Command
 import ZkcSecurity.Generation.SumcheckSoundness
 import ZkcSecurity.Generation.SumcheckViews
+import ZkcSecurity.Generation.UniformRoot
 import ZkcSecurity.HashChain.Bound
 import ZkcSecurity.HashChain.Bridge
 import ZkcSecurity.HashChain.Bytes
@@ -258,6 +290,8 @@ import ZkcSecurity.Tools.ComponentReadback
 import ZkcSecurity.Tools.ComponentView
 import ZkcSecurity.Tools.InputLaws
 import ZkcSecurity.Tools.PairConstruction
+import ZkcSecurity.Tools.ProcessView
+import ZkcSecurity.Tools.SigmaReadback
 import ZkcSecurity.Tools.SubjectABI
 import ZkcSecurity.Tools.TableCapacity
 import ZkcSecurity.Tools.TargetEvaluation
@@ -329,6 +363,7 @@ import TestsSecurity.HonestClaims
 import TestsSecurity.HonestCompiled
 import TestsSecurity.HonestInput
 import TestsSecurity.HonestOracle
+import TestsSecurity.HonestSampling
 import TestsSecurity.InputFormulaBindings
 import TestsSecurity.InputLaws
 import TestsSecurity.InterfaceAxioms
@@ -341,11 +376,14 @@ import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
 import TestsSecurity.Obligations
 import TestsSecurity.PairConstruction
+import TestsSecurity.ProofSearchDiagnostics
 import TestsSecurity.ProtocolObligations
 import TestsSecurity.ProviderSimulation
 import TestsSecurity.ReferenceDiscovery
 import TestsSecurity.RegisteredExtraction
 import TestsSecurity.RoundDescriptors
+import TestsSecurity.SampledReadback
+import TestsSecurity.SampledRootClaims
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.SourceChargeSites
