@@ -54,21 +54,17 @@ theorem projectionLaws_hold {inputs : List Ty} (input : Values (Component (assig
   fin_cases entry
 
 noncomputable def protocol0Role0Callees : CalleeProcesses (ringModel F G) calleeKeys :=
-  (Fin.cases (fun ctx binders => actualCallees payload calleeKeys ⟨0, by decide +kernel⟩ ctx binders) (Fin.cases (fun ctx binders => actualCallees payload calleeKeys ⟨1, by decide +kernel⟩ ctx binders) (fun entry => entry.elim0)))
+  actualCallees payload calleeKeys
 
 theorem protocol0Role0Callees_hold {inputs : List Ty}
     (input : Values (Component (assignment F G)) inputs) :
-    CalleesHold (payload.plainProtocolTable F G) protocol0Role0Callees input := by
-  apply callees_from_bindings _ (actualCallees payload calleeKeys) _ input (callees_hold input)
-  intro entry ctx binders distinct
-  fin_cases entry
-  · rfl
-  · rfl
+    CalleesHold (payload.plainProtocolTable F G) protocol0Role0Callees input :=
+  callees_hold input
 
-def protocol0Role0Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)]⟩ : Signature)
+def protocol0Role0Signature : Signature := ⟨projectionKeys, false, false, program.payload.definitions.map (·.helper), calleeKeys⟩
 def protocol0Role0Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional .nil))
 
-noncomputable def protocol0Role0Form : (Form [] [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
+noncomputable def protocol0Role0Form : Form protocol0Role0Signature.laws calleeKeys protocol0Role0Pattern.scope [.index] :=
   (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "round" (.ret (.cons (.there .here) .nil)) (.input .here) (.cons (.input (.there .here)) .nil) .nil (.done (.cons (.read .here .here) .nil)))
 
 set_option linter.unusedVariables false in
@@ -127,22 +123,28 @@ theorem protocol0Role0_participant
     program.participant F G 0 input = protocol0Role0View {} input := by
   exact (payload.protocolTable_forgetSites (F := F) (G := G) payload.entry.signature {} 0 input).trans (protocol0Role0_invocation {} (RosterDistinct.root _ _) input)
 
+noncomputable def protocol0Role0BoundCallees : CalleeProcesses (ringModel F G) calleeKeys :=
+  (Function.update (actualCallees payload calleeKeys) ⟨0, by decide +kernel⟩ (fun ctx binders => protocol0Role0View (F := F) (G := G) ctx ((optionalPattern [.index, .index]).environment (ringModel F G) binders)))
+
+theorem protocol0Role0BoundCallees_hold {inputs : List Ty}
+    (input : Values (Component (assignment F G)) inputs) :
+    CalleesHold (payload.plainProtocolTable F G) protocol0Role0BoundCallees input := by
+  apply callees_update _ (actualCallees payload calleeKeys) (actualCallees payload calleeKeys) ⟨0, by decide +kernel⟩ _ input (callees_hold input) (callees_hold input)
+  intro ctx binders distinct
+  exact protocol0Role0_invocation ctx distinct _
+
 noncomputable def protocol0Role1Callees : CalleeProcesses (ringModel F G) calleeKeys :=
-  (Fin.cases (fun ctx binders => actualCallees payload calleeKeys ⟨0, by decide +kernel⟩ ctx binders) (Fin.cases (fun ctx binders => actualCallees payload calleeKeys ⟨1, by decide +kernel⟩ ctx binders) (fun entry => entry.elim0)))
+  actualCallees payload calleeKeys
 
 theorem protocol0Role1Callees_hold {inputs : List Ty}
     (input : Values (Component (assignment F G)) inputs) :
-    CalleesHold (payload.plainProtocolTable F G) protocol0Role1Callees input := by
-  apply callees_from_bindings _ (actualCallees payload calleeKeys) _ input (callees_hold input)
-  intro entry ctx binders distinct
-  fin_cases entry
-  · rfl
-  · rfl
+    CalleesHold (payload.plainProtocolTable F G) protocol0Role1Callees input :=
+  callees_hold input
 
-def protocol0Role1Signature : Signature := (⟨[], false, false, [], [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)]⟩ : Signature)
+def protocol0Role1Signature : Signature := ⟨projectionKeys, false, false, program.payload.definitions.map (·.helper), calleeKeys⟩
 def protocol0Role1Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional .nil))
 
-noncomputable def protocol0Role1Form : (Form [] [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
+noncomputable def protocol0Role1Form : Form protocol0Role1Signature.laws calleeKeys protocol0Role1Pattern.scope [.index] :=
   (.repeat (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) "round" (.ret (.cons (.there .here) .nil)) (.input .here) (.cons (.input (.there .here)) .nil) .nil (.done (.cons (.read .here .here) .nil)))
 
 set_option linter.unusedVariables false in
@@ -200,6 +202,16 @@ theorem protocol0Role1_participant
     (input : Values (Component (assignment F G)) program.payload.entry.inputs) :
     program.participant F G 1 input = protocol0Role1View {} input := by
   exact (payload.protocolTable_forgetSites (F := F) (G := G) payload.entry.signature {} 1 input).trans (protocol0Role1_invocation {} (RosterDistinct.root _ _) input)
+
+noncomputable def protocol0Role1BoundCallees : CalleeProcesses (ringModel F G) calleeKeys :=
+  (Function.update (protocol0Role0BoundCallees) ⟨1, by decide +kernel⟩ (fun ctx binders => protocol0Role1View (F := F) (G := G) ctx ((optionalPattern [.index, .index]).environment (ringModel F G) binders)))
+
+theorem protocol0Role1BoundCallees_hold {inputs : List Ty}
+    (input : Values (Component (assignment F G)) inputs) :
+    CalleesHold (payload.plainProtocolTable F G) protocol0Role1BoundCallees input := by
+  apply callees_update _ (actualCallees payload calleeKeys) (protocol0Role0BoundCallees) ⟨1, by decide +kernel⟩ _ input (callees_hold input) (protocol0Role0BoundCallees_hold input)
+  intro ctx binders distinct
+  exact protocol0Role1_invocation ctx distinct _
 
 end
 end Tests.Generated.StructuredBindingsGeneric

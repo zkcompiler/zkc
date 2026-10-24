@@ -26,7 +26,7 @@ def main() -> None:
     parser.add_argument("--records", type=Path)
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    directory = options.records or Path(tempfile.mkdtemp(prefix="zkc-structured-bindings-"))
+    directory = (options.records or Path(tempfile.mkdtemp(prefix="zkc-structured-bindings-"))).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LEAN_NUM_THREADS": "2"}
     # Poison the legacy Python proof producer in this orchestration process.
@@ -148,8 +148,34 @@ example : GkrRoundsGate.valueDefinition.body.component
                                                   "object file", "failed to synthesize"]), log
         refused.append({"name": name, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
+    # Compile the actual emitter output for dense and sparse selections. The
+    # generated clients check dependent lookup, role remapping and private masks;
+    # the emitter also rejects quadratic catalogue duplication on scaled inputs.
+    dispatch = directory / "dispatch"
+    result = subprocess.run(
+        ["lean", "--run", "checks/RunGenerators.lean", "dispatch-controls", str(dispatch)],
+        cwd=root, env=env, text=True, capture_output=True, timeout=180,
+    )
+    (directory / "dispatch-generate.log").write_text(result.stdout + result.stderr)
+    assert result.returncode == 0, "dispatch generation failed; see dispatch-generate.log"
+    objects = dispatch / "objects"
+    objects.mkdir(parents=True, exist_ok=True)
+    env["LEAN_PATH"] = str(objects.resolve()) + os.pathsep + env.get("LEAN_PATH", "")
+    checked_dispatch = []
+    for name in ("DispatchInputs", "DispatchAll", "DispatchProtocols", "DispatchRoles",
+                 "DispatchSparse", "DispatchRootOnly", "DispatchEmpty"):
+        target = objects / (name + ".olean")
+        target.unlink(missing_ok=True)
+        result = run(dispatch / (name + ".lean"), "-DwarningAsError=true", "-DElab.async=false",
+                     "--root=" + str(dispatch.resolve()), "-o", str(target.resolve()))
+        log = result.stdout + result.stderr
+        (directory / (name + ".log")).write_text(log)
+        assert result.returncode == 0 and "sorryAx" not in log, f"dispatch client failed: {name}"
+        checked_dispatch.append(name)
+        print(f"PASS {name}", flush=True)
     report = {"format": "zkc.structured-binding-controls/0", "legacy_evaluator_step_disabled": True,
               "generated": generated,
+              "dispatch": checked_dispatch,
               "mutations": refused}
     (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(f"PASS {len(generated)} generated views; {len(refused)} stale certificates refused")

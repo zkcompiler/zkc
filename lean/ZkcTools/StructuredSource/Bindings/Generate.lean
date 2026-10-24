@@ -119,38 +119,25 @@ def source (program : Program) (output : Output) : Except String String := do
           "    exact body.trans (congrArg PIR.Process.done (Option.some.inj (selected.symm.trans passed)))\n"
       | _ => pure ()
   text := text ++ "\n"
+  -- Every role in a declaration sees the same earlier selected bindings.
+  -- Publish each new entry once, only for subsequent declarations. This keeps
+  -- unselected dependencies on the checked actual table and avoids cyclic views.
+  let mut available := "actualCallees payload calleeKeys"
+  let mut availableHold := "callees_hold"
+  let mut keyOffset := 0
   for (definition, index) in program.payload.protocols.zipIdx do
+    let current := available
+    let currentHold := availableHold
     for role in List.range definition.roles.length do
       if !output.protocols.isEmpty && !output.protocols.contains index then continue
       if !output.roles.isEmpty && !output.roles.contains role then continue
       let name := roleName index role
       let processes := name ++ "Callees"
-      let mut calleeBodies : List String := []
-      for (prior, priorIndex) in program.payload.protocols.zipIdx do
-        for priorRole in List.range prior.roles.length do
-          if priorIndex < index && (output.protocols.isEmpty || output.protocols.contains priorIndex) &&
-              (output.roles.isEmpty || output.roles.contains priorRole) then
-            calleeBodies := calleeBodies ++ ["fun ctx binders => " ++ roleName priorIndex priorRole ++ "View (F := F) (G := G) ctx (" ++
-              "(optionalPattern " ++ typesText prior.inputs ++ ").environment (ringModel F G) binders)"]
-          else
-            calleeBodies := calleeBodies ++ ["fun ctx binders => actualCallees payload calleeKeys ⟨" ++
-              toString ((keys program).findIdx fun key => key.signature.name == prior.name && key.role == priorRole) ++
-              ", by decide +kernel⟩ ctx binders"]
-      let calleeFunction := calleeBodies.foldr (fun body rest => app "Fin.cases" [paren body, rest])
-        "(fun entry => entry.elim0)"
       text := text ++ "noncomputable def " ++ processes ++ " : CalleeProcesses (ringModel F G) calleeKeys :=\n  " ++
-        calleeFunction ++ "\n\ntheorem " ++ processes ++ "_hold {inputs : List Ty}\n" ++
+        current ++ "\n\ntheorem " ++ processes ++ "_hold {inputs : List Ty}\n" ++
         "    (input : Values (Component (assignment F G)) inputs) :\n" ++
-        "    CalleesHold (payload.plainProtocolTable F G) " ++ processes ++ " input := by\n" ++
-        "  apply callees_from_bindings _ (actualCallees payload calleeKeys) _ input (callees_hold input)\n" ++
-        "  intro entry ctx binders distinct\n  fin_cases entry\n"
-      for (prior, priorIndex) in program.payload.protocols.zipIdx do
-        for priorRole in List.range prior.roles.length do
-          if priorIndex < index && (output.protocols.isEmpty || output.protocols.contains priorIndex) &&
-              (output.roles.isEmpty || output.roles.contains priorRole) then
-            text := text ++ "  · exact " ++ roleName priorIndex priorRole ++ "_invocation ctx distinct _\n"
-          else text := text ++ "  · rfl\n"
-      text := text ++ "\n"
+        "    CalleesHold (payload.plainProtocolTable F G) " ++ processes ++ " input :=\n  " ++
+        currentHold ++ " input\n\n"
       let pattern := optionalPattern definition.inputs
       let signature : Signature := ⟨laws, false, false, program.payload.definitions.map (·.helper), selectedKeys⟩
       let naming : Naming signature.laws signature.callees pattern.scope := {
@@ -162,11 +149,13 @@ def source (program : Program) (output : Output) : Except String String := do
         processes := processes }
       let (_, names, printed) ← (request signature definition.body role definition.roles.length pattern naming).mapError
         (fun refusal => "protocol " ++ toString index ++ " role " ++ toString role ++ ": " ++ refusal)
-      let signature := {signature with names := names}
       let decl : Presentation.Declaration := ⟨name, "(ctx : ProtocolContext)", ["ctx"]⟩
-      text := text ++ "def " ++ name ++ "Signature : Signature := " ++ signatureLiteral signature ++ "\n" ++
+      text := text ++ "def " ++ name ++ "Signature : Signature := ⟨projectionKeys, false, " ++ boolText names ++
+        ", program.payload.definitions.map (·.helper), calleeKeys⟩\n" ++
         "def " ++ name ++ "Pattern : InputPattern " ++ definitionName index ++ ".inputs := " ++ patternText pattern ++ "\n\n" ++
-        declarations (out := definition.outputs) naming .outputs printed decl ++ "\n" ++
+        declarations (out := definition.outputs) naming .outputs printed decl
+          (some ("Form " ++ name ++ "Signature.laws calleeKeys " ++ name ++ "Pattern.scope " ++
+            typesText definition.outputs)) ++ "\n" ++
         "theorem " ++ name ++ "_normalized : normalize " ++ name ++ "Signature " ++ definitionName index ++
         ".body " ++ toString role ++ " " ++ toString definition.roles.length ++ " " ++ name ++
         "Pattern = .ok " ++ name ++ "Form := by\n  kernel_rfl\n\n"
@@ -205,6 +194,21 @@ def source (program : Program) (output : Output) : Except String String := do
           "    program.participant F G " ++ toString role ++ " input = " ++ name ++ "View {} input := by\n" ++
           "  exact (payload.protocolTable_forgetSites (F := F) (G := G) payload.entry.signature {} " ++
           toString role ++ " input).trans (" ++ name ++ "_invocation {} (RosterDistinct.root _ _) input)\n\n"
+      let updated := name ++ "BoundCallees"
+      let entry := "⟨" ++ toString (keyOffset + role) ++ ", by decide +kernel⟩"
+      let replacement := "fun ctx binders => " ++ name ++ "View (F := F) (G := G) ctx " ++
+        "((optionalPattern " ++ typesText definition.inputs ++ ").environment (ringModel F G) binders)"
+      text := text ++ "noncomputable def " ++ updated ++ " : CalleeProcesses (ringModel F G) calleeKeys :=\n  " ++
+        app "Function.update" [paren available, entry, paren replacement] ++ "\n\n" ++
+        "theorem " ++ updated ++ "_hold {inputs : List Ty}\n" ++
+        "    (input : Values (Component (assignment F G)) inputs) :\n" ++
+        "    CalleesHold (payload.plainProtocolTable F G) " ++ updated ++ " input := by\n" ++
+        "  apply callees_update _ (actualCallees payload calleeKeys) " ++ paren available ++
+        " " ++ entry ++ " _ input (callees_hold input) (" ++ availableHold ++ " input)\n" ++
+        "  intro ctx binders distinct\n  exact " ++ name ++ "_invocation ctx distinct _\n\n"
+      available := updated
+      availableHold := updated ++ "_hold"
+    keyOffset := keyOffset + definition.roles.length
   text := text ++ "end\nend " ++ output.moduleName ++ "\n"
   return text
 

@@ -89,6 +89,32 @@ theorem callees_from_bindings {model : DomainModel} {keys : List CalleeKey}
   exact (known entry context binders others pinned distinct).trans
     (bind_congr_left (equations entry context binders distinct) _)
 
+/-- Replace one dependent callee entry using its whole-process equation to a
+checked reference table. Other entries retain their existing proofs, so a
+sequence of selected bindings need not recheck the complete dispatch table. -/
+theorem callees_update {model : DomainModel} {keys : List CalleeKey}
+    (protocols : ProtocolTable model.Value (Interface model))
+    (reference presented : CalleeProcesses model keys) (entry : Fin keys.length)
+    (replacement : (context : ProtocolContext) →
+      Binders model (calleeAt keys entry).pattern.scope →
+      PIR.Process (Interface model)
+        (Values (Component model.Value) (calleeAt keys entry).signature.outputs))
+    {inputs : List Ty} (input : Values (Component model.Value) inputs)
+    (referenceHold : CalleesHold protocols reference input)
+    (presentedHold : CalleesHold protocols presented input)
+    (equation : ∀ context binders,
+      RosterDistinct context (calleeAt keys entry).role (calleeAt keys entry).signature.roles.length →
+      reference entry context binders = replacement context binders) :
+    CalleesHold protocols (Function.update presented entry replacement) input := by
+  intro selected context binders others pinned distinct
+  by_cases same : selected = entry
+  · subst selected
+    rw [Function.update_self]
+    exact (referenceHold entry context binders others pinned distinct).trans
+      (bind_congr_left (equation context binders distinct) _)
+  · rw [Function.update_of_ne same]
+    exact presentedHold selected context binders others pinned distinct
+
 /-- Context substitution cannot make an unrelated, admitted local role visible. -/
 theorem mapped_contains (context : ProtocolContext) (role roster : Nat)
     (distinct : RosterDistinct context role roster) (scope : List Nat)

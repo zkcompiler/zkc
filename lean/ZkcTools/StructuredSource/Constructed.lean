@@ -68,14 +68,16 @@ def action (instruction : Instruction) (bodyName : String) : Except String (Stri
         literal initial, declared, app bodyName arguments],
        app "Correspondence.loop" [literal site, toString maximum, literal yielded,
         toString count, literal initial, declared, app (bodyName ++ "_eq") arguments])
-  | _, _, _ => throw "constructed-view-unsupported-shape"
+  | _, _, _ => throw ("constructed-view-unsupported-shape: operation=" ++
+      literal instruction.operation ++ "; operands=" ++ references ++ "; results=" ++
+      declared ++ "; body-instructions=" ++ toString instruction.body.length)
 
 /-- A block is emitted as named actions and bind composition. Nested loops
 remain named, parameterized blocks, never an unrolled trace. -/
 def block (fuel : Nat) (instructions : List Instruction) (name path : String)
     (inputs : List ValueSort := []) (inputPath : String := "([] : List ValueSort)") :
     Except String String := do
-  let fuel + 1 := fuel | throw "constructed-view-depth"
+  let fuel + 1 := fuel | throw ("constructed-view-depth: path=" ++ path)
   let mut text := ""
   let mut names : List String := []
   let mut sorts := inputs
@@ -92,7 +94,8 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
           ("(" ++ stepPath ++ ").body")
           (sorts ++ .data .index :: instruction.results) bodyInputPath)
     | _ => pure ()
-    let (view, proof) ← action instruction (stepName ++ "Body")
+    let (view, proof) ← (action instruction (stepName ++ "Body")).mapError
+      (fun error => error ++ "; path=" ++ stepPath)
     text := text ++ "def " ++ stepName ++ binders ++ " : View.Block model.toCarriers :=\n  " ++
       view ++ "\n\n" ++
       "theorem " ++ stepName ++ "_eq" ++ binders ++ " :\n" ++

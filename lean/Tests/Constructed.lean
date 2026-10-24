@@ -101,14 +101,18 @@ example : View.participant [.data .boolean] [.data .boolean] [1] View.empty inpu
     .call (.checkpoint input) (fun _ => .halt .refused) := by kernel_rfl
 
 -- Unsupported static shapes cause printing refusal, never evaluator fallback.
-example : (ZkcTools.StructuredSource.Constructed.action
-    ⟨.send "m" "m" "V", [], [], []⟩ "unused") =
-    .error "constructed-view-unsupported-shape" := by decide +kernel
-example : (ZkcTools.StructuredSource.Constructed.action
-    ⟨.unsupported "private-coins", [], [], []⟩ "unused") =
-    .error "constructed-view-unsupported-shape" := by decide +kernel
-example : ZkcTools.StructuredSource.Constructed.block 0 [] "body" "artifact.instructions" =
-    .error "constructed-view-depth" := by decide +kernel
+-- Match the stable code; ConstructedDiagnostics checks the full added context.
+#guard match ZkcTools.StructuredSource.Constructed.action
+    ⟨.send "m" "m" "V", [], [], []⟩ "unused" with
+  | .error reason => reason.startsWith "constructed-view-unsupported-shape:"
+  | .ok _ => false
+#guard match ZkcTools.StructuredSource.Constructed.action
+    ⟨.unsupported "private-coins", [], [], []⟩ "unused" with
+  | .error reason => reason.startsWith "constructed-view-unsupported-shape:"
+  | .ok _ => false
+#guard match ZkcTools.StructuredSource.Constructed.block 0 [] "body" "artifact.instructions" with
+  | .error reason => reason == "constructed-view-depth: path=artifact.instructions"
+  | .ok _ => false
 
 #print axioms ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.participant_eq
 #print axioms ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.participant_eq

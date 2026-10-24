@@ -466,9 +466,12 @@ structure Declaration where
 
 /-- A finite module fragment. The caller puts it in its ordinary imports and
 namespace, with the same open namespaces as this module. No proof is trusted.
-The literal is deliberately independent of all readable helper/name hints. -/
+The literal is deliberately independent of all readable helper/name hints.
+An optional type expression can refer to shared law/callee catalogues; its
+indices must still agree with the literal and all generated kernel equations. -/
 def declarations {Δ : Scope} {out : List Ty} (naming : Naming laws callees Δ) (finish : Finish out)
-    (printed : Rendered) (decl : Declaration := {}) : String :=
+    (printed : Rendered) (decl : Declaration := {})
+    (formTypeExpression : Option String := none) : String :=
   let form := decl.name ++ "Form"
   let process := decl.name ++ "Process"
   let parameters := " ".intercalate ((Δ.zip printed.binders).map fun (slot, name) =>
@@ -481,7 +484,7 @@ def declarations {Δ : Scope} {out : List Ty} (naming : Naming laws callees Δ) 
     | .outputs => ""
     | .presented spec => "\ntheorem " ++ decl.name ++ "_finishes : " ++ form ++ ".finishes " ++
         finishText spec ++ " = true := by\n  decide +kernel\n"
-  "noncomputable def " ++ form ++ " : " ++ formType laws callees Δ out ++ " :=\n  " ++ printed.form ++
+  "noncomputable def " ++ form ++ " : " ++ formTypeExpression.getD (formType laws callees Δ out) ++ " :=\n  " ++ printed.form ++
     "\n\nset_option linter.unusedVariables false in\nnoncomputable def " ++ process ++ " " ++ decl.parameters ++ " " ++ parameters ++ " :\n    " ++
     processType naming finish ++ " :=\n" ++ printed.process ++
     "\n\ntheorem " ++ decl.name ++ "_calls : " ++ form ++ ".CallsMatch := by\n  kernel_rfl\n\n" ++
