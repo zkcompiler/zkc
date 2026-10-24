@@ -57,6 +57,23 @@ parameters; an unknown helper can remain opaque. Exact constructed views
 retain the nominal sorts of every operand/result and the full producer and
 validator instruction sequences.
 
+The nominal source interpreter also supports optional iteration observations.
+`Occurrence.participant` uses the same admitted helper and protocol bodies and
+records each reached repeat site and induction index. Call-site qualification,
+role substitution, masks and callback captures remain those of the original
+interpreter. `Occurrence.participant_erase` proves equality with
+`Program.participantOn` after erasing iteration boundaries, for all inputs and
+provider responses. A stopped callback emits no closing boundary and runs no
+later iteration. Silent instrumentation is definitionally the existing meaning.
+These are source-view laws; construction transport and dynamic transcript-key
+agreement still require their own correspondence proofs.
+
+`DomainInterpretation` and `DomainParticipantInterpretation` provide the
+effect-interpretation laws over the actual nominal domain model and captured
+helper/protocol prefixes. `Domain.Binding` pair transport quantifies the selected
+private-service handler as well as the public oracle. It preserves their actual
+shared post-state, stopped prefixes, proof buffers and returned ABI values.
+
 Generated callee dispatch uses one checked actual-callee table and dependent
 updates for selected views. All roles of a declaration see the completed table
 of earlier declarations; omitted views keep their actual invocation. This

@@ -39,9 +39,10 @@ theorem produce_eq {m : Type → Type} [Monad m] {S : Type}
     (model : Structured.DomainModel) (program : Structured.Program) (context : Context)
     (artifact : Participant) (view : Meaning model.toCarriers)
     (same : ∀ inputs, Domain.participant model program context artifact inputs = view inputs)
-    (inputs : Environment model.toCarriers) (oracle : Oracle m model.toCarriers S) (initial : S) :
-    produce model program context artifact inputs oracle initial =
-      run .producer oracle (view inputs) ⟨inputs, [], initial⟩ := by
+    (inputs : Environment model.toCarriers) (oracle : Oracle m model.toCarriers S) (initial : S)
+    (services : LocalServices m model.toCarriers S := refuseLocal) :
+    produce model program context artifact inputs oracle initial services =
+      run .producer oracle (view inputs) ⟨inputs, [], initial⟩ services := by
   unfold produce
   rw [same]
 
@@ -50,9 +51,10 @@ theorem validate_eq {m : Type → Type} [Monad m] {S : Type}
     (artifact : Participant) (view : Meaning model.toCarriers)
     (same : ∀ inputs, Domain.participant model program context artifact inputs = view inputs)
     (inputs : Environment model.toCarriers) (proof : Proof model.toCarriers)
-    (oracle : Oracle m model.toCarriers S) (initial : S) :
-    validate model program context artifact inputs proof oracle initial =
-      run .validator oracle (view inputs) ⟨inputs, proof, initial⟩ := by
+    (oracle : Oracle m model.toCarriers S) (initial : S)
+    (services : LocalServices m model.toCarriers S := refuseLocal) :
+    validate model program context artifact inputs proof oracle initial services =
+      run .validator oracle (view inputs) ⟨inputs, proof, initial⟩ services := by
   unfold validate
   rw [same]
 
@@ -66,18 +68,18 @@ theorem executePair_eq {m : Type → Type} [Monad m] {S : Type}
     (validatorSame : ∀ inputs,
       Domain.participant model program context validator inputs = validatorView inputs)
     (producerInputs validatorInputs : Environment model.toCarriers)
-    (oracle : Oracle m model.toCarriers S) (initial : S) :
-    executePair model program context producer validator producerInputs validatorInputs oracle initial =
+    (oracle : Oracle m model.toCarriers S) (initial : S)
+    (services : LocalServices m model.toCarriers S := refuseLocal) :
+    executePair model program context producer validator producerInputs validatorInputs oracle initial services =
       (do
-        let produced ← run .producer oracle (producerView producerInputs) ⟨producerInputs, [], initial⟩
+        let produced ← run .producer oracle (producerView producerInputs) ⟨producerInputs, [], initial⟩ services
         match produced.outcome with
         | .stopped _ => pure ⟨produced, none⟩
         | .returned _ =>
             let validated ← run .validator oracle (validatorView validatorInputs)
-              ⟨validatorInputs, produced.state.proof, produced.state.oracle⟩
+              ⟨validatorInputs, produced.state.proof, produced.state.oracle⟩ services
             pure ⟨produced, some validated⟩) := by
-  simp only [executePair, produce_eq model program context producer producerView producerSame,
-    validate_eq model program context validator validatorView validatorSame]
+  simp only [executePair, produce, validate, producerSame, validatorSame]
   kernel_rfl
 
 /-- A helper law must identify its outcome on the EXACT program and signature,

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Semantics.Execution
+public import Zkc.Semantics.Interpretation
 
 @[expose] public section
 
@@ -115,6 +116,24 @@ theorem runM_bind (h : MonadHandler m I S E) (p : Process I A)
     congr 1
     funext a t
     exact ih a t
+
+/-- Executing an operation expansion is the same as composing the handlers.
+The law preserves complete returned executions, including stops, ordered
+observations, and the actual oracle/service post-state in any lawful monad. -/
+theorem runM_interpret {J : Signature} (operations : OperationInterpretation I J)
+    (handler : MonadHandler m J S E) (process : Process I A) (state : S) :
+    (process.interpret operations).runM handler state =
+      process.runM (fun operation current => (operations operation).runM handler current) state := by
+  induction process generalizing state with
+  | done => rfl
+  | halt => rfl
+  | call operation next ih =>
+    simp only [Process.interpret, runM_bind, Process.runM]
+    congr 1
+    funext result
+    congr 1
+    funext reply final
+    exact ih reply final
 
 /-- Interpret hidden residual state by a distribution, preserving every outcome/event. -/
 def Execution.expand (η : S → m T) (r : Execution S E A) : m (Execution T E A) := do
