@@ -76,6 +76,8 @@ def selectionValid {original : Snapshot} (selected : Selection original) : Bool 
   policy.producer != policy.validator &&
   p.symbol == selected.producerSymbol && v.symbol == selected.validatorSymbol &&
   p.symbol != v.symbol &&
+  SourceOccurrences.servicePorts original policy policy.producer == some p.servicePorts &&
+  SourceOccurrences.servicePorts original policy policy.validator == some v.servicePorts &&
   inputContract original == some selected.inputs &&
   original.contracts.any (fun contract => contract.owner == original.entry &&
     contract.clauses.contains selected.target) &&
@@ -154,6 +156,20 @@ theorem admitted_validator_policy {original : Snapshot} {imported : Imported ori
     {selected : Selection original} {actual : Artifacts}
     (admitted : Admitted imported selected actual) :
     selected.artifacts.validator.policy = selected.policy := by
+  have valid := admitted_selection admitted
+  simp only [selectionValid, Bool.and_eq_true, beq_iff_eq] at valid
+  tauto
+
+/-- Admission authenticates both complete interfaces, including unused ports.
+The existing validator rule separately refuses local service operations. -/
+theorem admitted_servicePorts {original : Snapshot} {imported : Imported original}
+    {selected : Selection original} {actual : Artifacts}
+    (admitted : Admitted imported selected actual) :
+    SourceOccurrences.servicePorts original selected.policy selected.policy.producer =
+        some actual.producer.servicePorts ∧
+      SourceOccurrences.servicePorts original selected.policy selected.policy.validator =
+        some actual.validator.servicePorts := by
+  rw [admitted_artifacts admitted]
   have valid := admitted_selection admitted
   simp only [selectionValid, Bool.and_eq_true, beq_iff_eq] at valid
   tauto

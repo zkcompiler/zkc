@@ -681,6 +681,7 @@ theorem checkStep_sound : ∀ (instruction : Instruction) (state successor : Che
         exact receive_sound context challenge handle table state successor site schema peer ty operands
           results body accepted nextIdeal nextSpec agree
       | send site schema peer => simp [checkStep] at accepted
+      | localService port request template coordinates => simp [checkStep] at accepted
       | indicesEmpty =>
         exact indicesEmpty_sound context challenge handle table state successor operands results body
           accepted nextIdeal nextSpec agree

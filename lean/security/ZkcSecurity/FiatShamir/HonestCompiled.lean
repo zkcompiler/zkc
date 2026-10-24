@@ -57,10 +57,10 @@ theorem eval_oracle {carriers : Structured.Carriers} (answers : QueryImpl (Trans
 
 theorem eval_handler {carriers : Structured.Carriers} (answers : QueryImpl (TranscriptOracle.DomainSpec carriers) Id)
     (mode : Domain.Mode) (operation : Domain.Effect carriers) (state : Domain.RuntimeState carriers Unit) :
-    evalWithAnswerFn answers (Domain.handler mode oracle operation state) =
-      Domain.handler mode (tableOracle answers) operation state := by
+    evalWithAnswerFn answers (Domain.handler mode oracle Domain.refuseLocal operation state) =
+      Domain.handler mode (tableOracle answers) Domain.refuseLocal operation state := by
   cases operation with
-  | checkpoint | observe => rfl
+  | checkpoint | observe | localService => rfl
   | send => cases mode <;> rfl
   | receive ty site schema peer =>
       cases mode with
@@ -91,7 +91,7 @@ theorem eval_computation (model : Structured.DomainModel) (program : Structured.
     evalWithAnswerFn answers (computation model program context producer validator producerInputs validatorInputs) =
       Domain.executePair model program context producer validator producerInputs validatorInputs (tableOracle answers) () := by
   have handlerEquality (mode : Domain.Mode) :
-      (fun operation state => evalWithAnswerFn answers (Domain.handler mode oracle operation state)) =
+      (fun operation state => evalWithAnswerFn answers (Domain.handler mode oracle Domain.refuseLocal operation state)) =
         Domain.handler mode (tableOracle answers) :=
     funext fun operation => funext fun state => eval_handler answers mode operation state
   have producerLaw : evalWithAnswerFn answers

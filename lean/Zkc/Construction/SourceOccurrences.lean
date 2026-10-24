@@ -116,23 +116,88 @@ theorem valid_iff (snapshot : Structured.Snapshot) (context : Context) (template
     valid snapshot context template = true ↔ expected snapshot context template = some template.event := by
   simp [valid]
 
+/-- The complete native service interface, including unused capabilities. The
+root is a source input, while the native position counts role-local data and
+services after the selected validator services have been removed. -/
+def servicePorts (snapshot : Structured.Snapshot) (policy : Policy) (owner : String) :
+    Option (List ServicePort) := do
+  let (inputs, interface) ← entryInterface snapshot
+  if policy.entry ≠ snapshot.entry ∨ owner ∉ interface.roles then none else do
+    let roots := ((inputs.zip interface.inputScopes).zipIdx.filter fun ((_, scope), index) =>
+      scope.contains owner && !(owner == policy.validator && policy.services.contains index))
+    let ports ← roots.zipIdx.mapM fun (((ty, scope), root), input) =>
+      match ty with
+      | .service contract =>
+          if scope = [owner] then
+            some (some (⟨"service_" ++ decimal input, owner, root, input, contract⟩ : ServicePort))
+          else none
+      | _ => some none
+    return ports.filterMap id
+
+/-- Resolve a local draw independently of the selected public challenge. The
+same root survives restrictions, application substitution and repeat captures. -/
+def localEvent (snapshot : Structured.Snapshot) (context : Context) (port : ServicePort)
+    (request : Request) (template : Template) : Option (List String) := do
+  if template.entry ≠ context.entry ∨ port.owner ≠ context.role context.producer then none else do
+    let initial ← root snapshot context
+    let frame ← follow snapshot template.steps initial
+    let site ← template.event[2]?
+    let (instruction, arguments) ← frameAt frame site
+    let .instruction (.draw owner field) _ [.field result] [] _ := instruction | none
+    let [some source] := arguments | none
+    let some (.service contract) := frame.definition.inputs[source.localInput]? | none
+    let owner ← frame.roles.lookup owner
+    let some (.service rootContract) := initial.definition.inputs[source.rootInput]? | none
+    let interface ← initial.definition.interface
+    if source.rootInput ≠ port.root ∨ contract ≠ port.contract ∨ rootContract ≠ contract ∨
+        interface.inputScopes[source.rootInput]? ≠ some [owner] ∨ owner ≠ port.owner ∨
+        request ≠ .draw field ∨ result ≠ field ∨ contract ≠ "random." ++ field ++ "/0" then none
+    else some ["query", frame.definition.name, site, "input_" ++ decimal source.localInput,
+      contract, "draw", owner]
+
+def localValid (snapshot : Structured.Snapshot) (context : Context) (port : ServicePort)
+    (request : Request) (template : Template) : Bool :=
+  localEvent snapshot context port request template == some template.event
+
+theorem localValid_iff (snapshot : Structured.Snapshot) (context : Context) (port : ServicePort)
+    (request : Request) (template : Template) :
+    localValid snapshot context port request template = true ↔
+      localEvent snapshot context port request template = some template.event := by
+  simp [localValid]
+
+/-- Native loop sites include the application prefix at the point of the
+repeat, rather than the prefix of a later application inside that repeat. -/
+def repeatSites (template : Template) : List String :=
+  (template.steps.foldl (fun (state : Option String × List String) step =>
+    if step.kind = "apply" then
+      (some (Structured.qualifyProtocolSite state.1 step.site), state.2)
+    else if step.kind = "repeat" then
+      (state.1, state.2 ++ [Structured.qualifyProtocolSite state.1 step.site])
+    else state) (none, [])).2
+
 mutual
 /-- Every transcript operation, including nested loop bodies, must retain its
 actual source event. The construction rule separately checks sequencing and
 dynamic coordinate provenance. -/
-def instruction (snapshot : Structured.Snapshot) (context : Context) : Instruction → Bool
+def instruction (snapshot : Structured.Snapshot) (context : Context) (ports : List ServicePort)
+    (loops : List String) : Instruction → Bool
   | ⟨operation, _, _, body⟩ =>
       (match operation with
        | .observe _ template | .challenge _ _ template => valid snapshot context template
-       | _ => true) && instructions snapshot context body
+       | .localService port request template _ =>
+           ports.contains port && localValid snapshot context port request template &&
+             repeatSites template == loops
+       | _ => true) && instructions snapshot context ports
+         (match operation with | .loop site .. => loops ++ [site] | _ => loops) body
 
-def instructions (snapshot : Structured.Snapshot) (context : Context) : List Instruction → Bool
+def instructions (snapshot : Structured.Snapshot) (context : Context) (ports : List ServicePort)
+    (loops : List String) : List Instruction → Bool
   | [] => true
-  | first :: rest => instruction snapshot context first && instructions snapshot context rest
+  | first :: rest => instruction snapshot context ports loops first && instructions snapshot context ports loops rest
 end
 
 def check (snapshot : Structured.Snapshot) (context : Context) (participant : Participant) : Except String Unit :=
-  if instructions snapshot context participant.instructions then .ok ()
+  if instructions snapshot context participant.servicePorts [] participant.instructions then .ok ()
   else .error "construction-source-occurrence"
 
 end Zkc.Construction.SourceOccurrences

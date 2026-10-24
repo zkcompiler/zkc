@@ -90,6 +90,27 @@ def challenge (context : Context) (suite field : String) (template : Template)
       else .halt .refused
   | _, _ => .halt .refused
 
+/-- A retained owner-local service call preserves actual occurrence coordinates.
+No sample is appended to the public transcript by this action. -/
+def localService (context : Context) (port : ServicePort) (request : Request)
+    (template : Template) (coordinates references : List Nat) (declared : List ValueSort) :
+    Block carriers := fun env =>
+  match request, localCoordinates env coordinates with
+  | ⟨"draw", [], .field field⟩, some path =>
+      if references = [] ∧ declared = [.data (.field field)] ∧
+          port.contract = "random." ++ field ++ "/0" then
+        match localOrigin context port (.draw field) template path with
+        | some origin =>
+            if request : origin.request = some (.draw field) then
+              .call (.localService port origin) fun answer =>
+                let value : carriers.Field field := by
+                  simpa only [Raw, request, Request.draw] using answer
+                append declared env [.data (.field field value)]
+            else .halt .refused
+        | none => .halt .refused
+      else .halt .refused
+  | _, _ => .halt .refused
+
 /-- Nominal arithmetic includes bounded-index failure and refused decoding. -/
 def calculation (model : Structured.DomainModel) (operation : Calculation)
     (references : List Nat) (declared : List ValueSort) : Block model.toCarriers := fun env =>

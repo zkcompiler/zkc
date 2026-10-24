@@ -65,7 +65,7 @@ def export(inputs, instructions, returned):
               "merlin3.bls12-381.fr64be/0", ["9"], [str(index) for index in range(len(inputs) - 1)], [],
               "zkc.framed/0", ""]
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "1" * 64, policy, "_math_1",
-            inputs, ["i1", TRANSCRIPT], instructions, returned]
+            inputs, ["i1", TRANSCRIPT], instructions, returned, []]
 
 
 def check(output, lake):

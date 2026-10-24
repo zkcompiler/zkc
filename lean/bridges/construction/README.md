@@ -88,3 +88,24 @@ sort, refuses the export (the renderer check exercises both, and a nested loop
 capturing its enclosing induction index). Native exporter correctness, this
 rendering, and the meanings of native kernels are tested boundaries, not
 theorems.
+
+The participant reader requires the current ten-field envelope and the
+separate service-port interface, including unused ports. Local queries retain
+a seventh source-annotation field with their canonical origin template and
+enclosing induction references; these references are metadata, not request
+operands. `Operation.localService` is separate from transcript challenges.
+The producer rule supports only owner-local field draws; source admission
+checks their original root, alias map, contract, method, nominal result and
+occurrence. The validator rule remains coin-free.
+
+Run the focused actual-producer and alias/repeat controls with existing builds:
+
+```sh
+python3 lean/checks/check_local_service_admission.py --compiler build/compiler/zkc-compile --output build/experiments/local-service-admission
+```
+
+`--lean-path` selects a private compiled Lean output tree. This command does
+not run a Lake build. It retains fresh Schnorr, borrowed-alias and repeat
+exports, strict-reader refusals and kernel-checked admission controls. It
+establishes admission of those artifacts, not fresh-sampling distribution laws,
+native entropy realization or compiled completeness.

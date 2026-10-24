@@ -225,6 +225,7 @@ def validateDirect : PIR.Process (effects carriers) A → RuntimeState carriers 
           match payload.value ty with
           | none => pure ⟨.stopped .refused, state, []⟩
           | some value => validateDirect (next value) { state with proof := unread }
+  | .call (.localService _ _) _, state => pure ⟨.stopped .refused, state, []⟩
   | .call (.send _ _ _ _) next, state => validateDirect (next ()) state
   | .call (.checkpoint env) next, state =>
       validateDirect (next ()) { state with environment := env }
@@ -255,6 +256,7 @@ theorem validator_eq_direct (process : PIR.Process (effects carriers) A)
               cases hv : payload.value ty <;>
                 simp [run, PIR.Process.runM, handler, hp, hv, PIR.Execution.followM,
                   validateDirect, ← ih]
+      | localService => simp [run, PIR.Process.runM, handler, refuseLocal, PIR.Execution.followM, validateDirect]
       | send => simp [run, PIR.Process.runM, handler, PIR.Execution.followM, validateDirect, ← ih]
       | checkpoint =>
           simp [run, PIR.Process.runM, handler, PIR.Execution.followM, validateDirect, ← ih]
@@ -276,10 +278,10 @@ def prependProof (preceding : Proof carriers) (state : RuntimeState carriers S) 
 
 theorem producer_handler_prefix (preceding : Proof carriers) (operation : Effect carriers)
     (state : RuntimeState carriers S) :
-    handler .producer oracle operation (prependProof preceding state) =
-      (handler .producer oracle operation state >>= fun result =>
+    handler .producer oracle refuseLocal operation (prependProof preceding state) =
+      (handler .producer oracle refuseLocal operation state >>= fun result =>
         pure { result with state := prependProof preceding result.state }) := by
-  cases operation <;> simp [handler, prependProof, List.append_assoc]
+  cases operation <;> simp [handler, refuseLocal, prependProof, List.append_assoc]
   case query history origin =>
     split <;> simp
 
@@ -340,8 +342,8 @@ omit [LawfulMonad m] in
 /-- Producing and validating query the same oracle cell, independent of mode. -/
 theorem query_mode_agreement (history : History carriers) (origin : Origin)
     (state : RuntimeState carriers S) :
-    handler .producer oracle (.query history origin) state =
-      handler .validator oracle (.query history origin) state := rfl
+    handler .producer oracle refuseLocal (.query history origin) state =
+      handler .validator oracle refuseLocal (.query history origin) state := rfl
 
 /-- The constructed pair never replaces producer failure with verifier success. -/
 theorem executePair_failure (model : Structured.DomainModel) (program : Structured.Program)

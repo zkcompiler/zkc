@@ -185,6 +185,42 @@ def policy(value):
             f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
 
 
+def service_port(value):
+    name, owner, root, input_, contract = record(value, 5)
+    for item in (name, owner, contract):
+        text(item, printable_ascii=True)
+    return (f"⟨{text(name)}, {text(owner)}, {decimal(root)}, "
+            f"{decimal(input_)}, {text(contract)}⟩")
+
+
+def local_service(attrs, binding, operands, result_kinds, retained, ports, places, kinds):
+    require(set(attrs) == {"port", "method", "site"} and binding == [], "local service attributes")
+    name, method, site = (string_attribute(attrs, key) for key in ("port", "method", "site"))
+    require(name in ports, "undeclared local service port")
+    port = ports[name]
+    require(method == "draw" and not operands and len(result_kinds) == 1
+            and result_kinds[0][0] == "field", "unsupported local service request")
+    field = result_kinds[0][1]
+    require(port[4] == f"random.{field}/0", "local service nominal domain")
+    encoded, coordinates = record(retained, 2)
+    template = origin(encoded)
+    _, _, steps, _, event = lean_render.template(encoded)
+    require(len(event) == 7 and event[0] == "query" and event[4] == port[4]
+            and event[5] == method and event[6] == port[1], "local service occurrence")
+    prefix = None
+    for kind, _, application in steps:
+        if kind == "apply":
+            prefix = application if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{application}"
+    qualified = event[2] if prefix is None else f"apply_{len(prefix.encode('utf-8'))}_{prefix}_{event[2]}"
+    require(site == qualified, "local service source site")
+    mapped = references(coordinates, places, "local service coordinates")
+    require(all(kinds[index] == ("index", None) for index in mapped), "local service coordinate sort")
+    # Source/path/owner/root association is checked independently in Lean.
+    require(isinstance(site, str) and site, "missing local service site")
+    return (f".localService ({service_port(port)}) (Request.draw {text(field)}) "
+            f"{template} {seq(mapped, nat)}")
+
+
 # Sorts a loop may capture: immutable data, never a transcript.
 CAPTURED = {"boolean", "index", "field", "vector", "group"}
 
@@ -196,14 +232,17 @@ def references(values, places, what):
     return [places[o] for o in values]
 
 
-def block(instructions, kinds, places, indent, depth=0):
+def block(instructions, kinds, places, indent, depth=0, ports=None):
     """Render one block. `kinds` are the sorts of the rendered environment and
     `places` maps every exported reference in scope to its rendered reference.
     Return the rendered instructions, the final kinds and the final map."""
     require(depth <= 64 and isinstance(instructions, list) and len(instructions) <= 4096, "invalid block")
     rendered = []
     for item in instructions:
-        name, attrs, binding, operands, results, regions = record(item, 6)
+        record(item)
+        is_service = bool(item) and item[0] == "protocol.service_query"
+        record(item, 7 if is_service else 6)
+        name, attrs, binding, operands, results, regions = item[:6]
         require(isinstance(name, str) and isinstance(regions, list), "operation name")
         mapped = references(operands, places, "operand")
         result_kinds = [sort(value)[1] for value in results]
@@ -224,7 +263,7 @@ def block(instructions, kinds, places, indent, depth=0):
             require(all(kind[0] in CAPTURED for kind in captured_kinds), "loop capture sort")
             inner, _, inner_places = block(
                 nested, kinds + argument_kinds[:1 + carried],
-                places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", depth + 1)
+                places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", depth + 1, ports)
             yielded = references(yielded, inner_places, "yielded")
             maximum = decimal(attributes_["maximum"][1], 1048577) if attributes_["maximum"][0] == "integer" \
                 else None
@@ -234,7 +273,11 @@ def block(instructions, kinds, places, indent, depth=0):
             rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, {body}⟩")
         else:
             require(regions == [], "unexpected operation region")
-            term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds)
+            if is_service:
+                term = local_service(attributes(attrs), binding, mapped, result_kinds,
+                                     item[6], ports or {}, places, kinds)
+            else:
+                term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds)
             rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, []⟩")
         kinds = kinds + result_kinds
         places = places + list(range(fresh, fresh + len(result_kinds)))
@@ -242,11 +285,23 @@ def block(instructions, kinds, places, indent, depth=0):
 
 
 def render_declaration(data, namespace):
-    version, source, candidate, selected, symbol, inputs, outputs, instructions, returned = record(data, 9)
+    version, source, candidate, selected, symbol, inputs, outputs, instructions, returned, services = record(data, 10)
     require(version == FORMAT, "wrong participant export version")
     lean_render.namespace(namespace)
+    policy_term = policy(selected)
+    require(isinstance(services, list) and len(services) <= 512, "invalid service interface")
+    ports = {}
+    roots, positions = set(), set()
+    for port in services:
+        service_port(port)
+        require(port[0] not in ports and port[2] not in roots and port[3] not in positions,
+                "duplicate service interface")
+        require(port[1] in (selected[2], selected[3]), "service interface owner")
+        ports[port[0]] = port
+        roots.add(port[2])
+        positions.add(port[3])
     kinds = [sort(value)[1] for value in inputs]
-    rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ")
+    rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ", ports=ports)
     returned = references(returned, places, "returned")
     body = ",\n".join(rendered)
     return f'''namespace {namespace}
@@ -255,13 +310,13 @@ open Zkc.Construction
 def participant : Participant where
   source := {text(source)}
   candidate := {text(candidate)}
-  policy := {policy(selected)}
+  policy := {policy_term}
   symbol := {text(symbol)}
   inputs := {seq(inputs, lambda v: sort(v)[0])}
   outputs := {seq(outputs, lambda v: sort(v)[0])}
   instructions := [
 {body}]
-  returned := {seq(returned, nat)}
+  returned := {seq(returned, nat)}{chr(10) + '  servicePorts := ' + seq(services, service_port) if services else ''}
 
 end {namespace}
 '''

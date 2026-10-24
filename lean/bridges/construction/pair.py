@@ -21,7 +21,7 @@ def decode(data, *, expected=None):
     version, producer, validator = lean_render.record(data, 3)
     lean_render.require(version == FORMAT, "wrong pair export version")
     for child in (producer, validator):
-        lean_render.record(child, 9)
+        lean_render.record(child, 10)
         lean_render.require(child[0] == participant.FORMAT, "wrong participant export version")
         for identity in child[1:3]:
             lean_render.require(isinstance(identity, str)

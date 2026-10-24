@@ -200,7 +200,7 @@ theorem Readback.pair_success (model : Structured.DomainModel) (program : Struct
       (Domain.participant model program context validator validatorInputs))
     (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
     Domain.PairExecution.Success position
-      (Domain.executePair model program context producer validator producerInputs validatorInputs
+      (Domain.executePair (m := Id) model program context producer validator producerInputs validatorInputs
         (HonestCompiled.tableOracle answers) ()) := by
   obtain ⟨left, right, leftFinal, rightFinal, leftEvents, rightEvents, proof,
     produced, validated, accepted⟩ := aligned.run answers producerInputs validatorInputs [] []

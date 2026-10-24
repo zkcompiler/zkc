@@ -85,6 +85,14 @@ theorem challenge (suite field : String) (template : Template) (state coordinate
   intro env
   kernel_rfl
 
+theorem localService (port : ServicePort) (request : Request) (template : Template)
+    (coordinates references : List Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.localService port request template coordinates, references, declared, []⟩
+      (View.localService context port request template coordinates references declared) := by
+  intro env
+  kernel_rfl
+
 theorem calculation (operation : Calculation) (references : List Nat) (declared : List ValueSort) :
     Step (model := model) (program := program) (context := context)
       ⟨.calculate operation, references, declared, []⟩

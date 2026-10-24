@@ -50,6 +50,10 @@ def action (instruction : Instruction) (bodyName : String) : Except String (Stri
       let args := [literal suite, literal field, literal template, toString state,
         toString coordinates, declared]
       .ok (app "View.challenge" ("context" :: args), app "Correspondence.challenge" args)
+  | .localService port request template coordinates, _, [] =>
+      let args := [literal port, literal request, literal template, literal coordinates,
+        references, declared]
+      .ok (app "View.localService" ("context" :: args), app "Correspondence.localService" args)
   | .calculate operation, _, [] =>
       let args := [literal operation, references, declared]
       .ok (app "View.calculation" ("model" :: args), app "Correspondence.calculation" args)

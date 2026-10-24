@@ -7,6 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bridges.construction import pair  # noqa: E402
+from bridges.common import lean_render  # noqa: E402
 
 
 def fixture():
@@ -15,7 +16,7 @@ def fixture():
               ["1"], ["0"], [], "zkc.framed/0", ""]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
              ["i1", "!local.capability<\"transcript:suite\">"],
-             ["!local.capability<\"transcript:suite\">"], [], [1]]
+             ["!local.capability<\"transcript:suite\">"], [], [1], []]
     validator = deepcopy(child)
     validator[4] = "validator"
     return [pair.FORMAT, child, validator]
@@ -78,6 +79,35 @@ class PairReader(unittest.TestCase):
                     pair.participant.operation(name, attrs, [], operands, [i] if results == [b] else [b])
         with self.assertRaises(ValueError):
             pair.participant.operation("arith.cmpi", {"predicate": ("integer", "2")}, [], [b, b], [b])
+
+    def test_local_services_are_separate_and_exact(self):
+        data = fixture()
+        data[1][9] = [["service_1", "P", "2", "1", "random.bls12-381.fr/0"]]
+        origin = lean_render.encode_tree([
+            "zkc.native-origin-template/0", "main", [], [],
+            ["query", "main", "nonce", "input_2", "random.bls12-381.fr/0", "draw", "P"]]).hex()
+        data[1][7] = [["protocol.service_query", [["method", ["string", "draw"]],
+                         ["port", ["string", "service_1"]], ["site", ["string", "nonce"]]],
+                        [], [], ['!algebra.field<"bls12-381.fr">'], [], [origin, []]]]
+        rendered = pair.render(data, "Services")
+        self.assertIn("servicePorts :=", rendered)
+        self.assertIn(".localService", rendered)
+        self.assertNotIn(".challenge", rendered)
+        for change in [lambda d: d[1].pop(), lambda d: d[1][7][0].pop(),
+                       lambda d: d[1][7][0][1].append(["extra", ["string", "ignored"]]),
+                       lambda d: d[1][7][0][1][1].__setitem__(1, ["string", "undeclared"]),
+                       lambda d: d[1][7][0][2].append("binding"),
+                       lambda d: d[1][7][0][5].append([]),
+                       lambda d: d[1][7][0][6].append("ignored"),
+                       lambda d: d[1][7][0][6][1].append(0),
+                       lambda d: d[1][9][0].__setitem__(1, "unknown-owner"),
+                       lambda d: d[1][9][0].__setitem__(3, "01"),
+                       lambda d: d[1][9][0].__setitem__(4, "random.other/0")]:
+            with self.subTest(change=change):
+                changed = deepcopy(data)
+                change(changed)
+                with self.assertRaises(ValueError):
+                    pair.decode(changed)
 
 
 if __name__ == "__main__":

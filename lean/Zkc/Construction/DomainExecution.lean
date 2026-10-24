@@ -107,6 +107,7 @@ inductive Effect (carriers : Structured.Carriers) where
   | receive (ty : Structured.Ty) (site schema peer : String)
   | send (site schema peer : String) (payload : Payload carriers)
   | query (history : History carriers) (origin : Origin)
+  | localService (port : ServicePort) (origin : Origin)
   | observe (event : Event carriers)
   | checkpoint (environment : Environment carriers)
 
@@ -116,6 +117,7 @@ abbrev effects (carriers : Structured.Carriers) : PIR.Signature where
     | .receive ty .. => carriers.Value ty
     | .send .. => Unit
     | .query _ origin => Raw (.challenge origin : Event carriers)
+    | .localService _ origin => Raw (.challenge origin : Event carriers)
     | .observe _ => Unit
     | .checkpoint _ => Unit
 
@@ -144,6 +146,25 @@ def queryOrigin (context : Context) (suite field : String) (template : Template)
     | some origin => if origin.request = some (.draw field) then some origin else none
     | none => none
   else none
+
+/-- Local services keep their own root and owner. They are not the replaced
+public challenge service, and their occurrence is not a transcript observation. -/
+def localOrigin (context : Context) (port : ServicePort) (request : Request)
+    (template : Template) (coordinates : List Nat) : Option Origin := do
+  if template.entry ≠ context.entry ∨ template.repeats ≠ coordinates.length ∨
+      !template.steps.all (fun step => step.kind == "apply" || step.kind == "repeat") then none
+  else do
+    let ["query", _, site, _, contract, method, owner] := template.event | none
+    if contract ≠ port.contract ∨ method ≠ request.method ∨ owner ≠ port.owner then none
+    else some (atCoordinates
+      (Origin.query context.entry (template.qualify site) ("input_" ++ decimal port.root)
+        port.contract port.owner request) coordinates)
+
+/-- Coordinates are the actual reached loop indices, not a static call label. -/
+def localCoordinates (env : Environment carriers) (references : List Nat) : Option (List Nat) :=
+  references.mapM fun (index : Nat) => match (env[index]? : Option (Value carriers)) with
+    | some (.data (.index value)) => some value
+    | _ => none
 
 def dataType : Structured.Ty → Bool
   | .service _ => false
@@ -229,6 +250,22 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
                         simpa only [Raw, request, Request.draw] using answer
                       append [.data (.field field value),
                         .transcript suite (history ++ [.challenge origin])]
+                  else .halt .refused
+              | none => .halt .refused
+            else .halt .refused
+        | _, _ => .halt .refused
+    | .localService port request template coordinates, references, [] =>
+        match request, localCoordinates env coordinates with
+        | ⟨"draw", [], .field field⟩, some path =>
+            if references = [] ∧ declared = [.data (.field field)] ∧
+                port.contract = "random." ++ field ++ "/0" then
+              match localOrigin context port (.draw field) template path with
+              | some origin =>
+                  if request : origin.request = some (.draw field) then
+                    .call (.localService port origin) fun answer =>
+                      let value : model.Field field := by
+                        simpa only [Raw, request, Request.draw] using answer
+                      append [.data (.field field value)]
                   else .halt .refused
               | none => .halt .refused
             else .halt .refused

@@ -22,7 +22,8 @@ def instructions(block):
 
 
 for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
-                      ("TwoSums", "examples/projects/sumcheck/composed")]:
+                      ("TwoSums", "examples/projects/sumcheck/composed"),
+                      ("Schnorr", "examples/projects/schnorr")]:
     directory = OUT / name
     directory.mkdir()
     flags = ["--source-format=zkc", "--entry=example::Proof",
@@ -52,10 +53,19 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
         assert producer[3] == policy and producer[4] != validator[4]
         producer_names = [op[0] for op in instructions(producer[7])]
         validator_names = [op[0] for op in instructions(validator[7])]
-        assert producer_names.count("protocol.send") == (2 if name == "SmallSumcheck" else 4)
+        assert producer_names.count("protocol.send") == (4 if name == "TwoSums" else 2)
         assert "protocol.receive" not in producer_names
         assert "protocol.send" not in validator_names
         assert "crypto.exec.indexed_transcript_challenge" in producer_names
+        assert len(producer) == len(validator) == 10
+        assert validator[9] == []
+        if name == "Schnorr":
+            assert producer[9] == [["service_3", policy[2], "3", "3", "random.bls12-381.fr/0"]]
+            query = next(op for op in instructions(producer[7]) if op[0] == "protocol.service_query")
+            assert query[3] == [] and len(query) == 7 and query[6][1] == []
+            assert query[4] == ['!algebra.field<"bls12-381.fr">']
+        else:
+            assert producer[9] == []
         for role, value in [("producer", producer), ("validator", validator), ("pair", pair)]:
             (directory / f"{role}.json").write_text(json.dumps(value) + "\n")
 
@@ -78,5 +88,24 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
                          refuses="native-proof-options")
         for mode in ["protocol-check-proof", "protocol-constructed-pair", "protocol-construct-proof"]:
             commands.run([compiler, mode, *arguments, "--role=producer"], refuses="native-proof-options")
+
+    if name == "Schnorr":
+        service = 'service_ports = [["service_3", "random.bls12-381.fr/0", 3]]'
+        mutations = [
+            ("root input", service, service.replace(', 3]]', ', 2]]')),
+            ("nominal domain", service, service.replace('random.bls12-381.fr/0', 'random.other/0')),
+            ("owner", f'role = "{policy[2]}"', f'role = "{policy[3]}"'),
+            ("source site", 'site = "s0"', 'site = "another-site"'),
+            ("unsupported method", 'method = "draw"', 'method = "index"'),
+        ]
+        for label, before, after in mutations:
+            with case(f"Schnorr: refuse changed local service {label}"):
+                assert before in candidate
+                candidate_path.write_text(candidate.replace(before, after, 1))
+                try:
+                    commands.run([compiler, "protocol-constructed-pair", *arguments],
+                                 refuses="native-proof-candidate")
+                finally:
+                    candidate_path.write_text(candidate)
 
 counted()
