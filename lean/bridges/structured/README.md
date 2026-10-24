@@ -517,7 +517,9 @@ The installed Sigma method proves the actual Schnorr and Schnorr AND producers
 with private draws and a shared public challenge. An additional root borrows one
 random service under two aliases before invoking Schnorr AND. A direct theorem
 selection installs the sampled-abort control and its nonzero bound through the
-same Subject, ABI and receipt printers.
+same Subject, ABI and receipt printers. `SequentialSigma` composes Schnorr and
+Chaum–Pedersen through the same method, drawing its second private nonce after
+the first protocol's challenge and response.
 
 With the security dependencies built, run from the repository root:
 
@@ -542,7 +544,14 @@ strings naming Lean declarations. Every root requires nonempty strings `name`,
 module names to nonempty source paths. Root names must be unique identifiers.
 
 The installed `sigma` method accepts an optional `error_expression`; it generates
-its own proof module and theorem. The `direct` method additionally requires
+its own proof module and theorem. Optional `method_imports` names additional Lean
+modules, and `nonvacuity_law` supplies a term checked as `Nonvacuous subject` for
+the fixed generated subject. Without that term, the method proposes the default
+zero witness and must prove its admission. These hooks install mathematical
+evidence; they cannot replace the subject's relation, retained input clauses or
+input policy. `method_imports` is a list of nonempty strings and
+`nonvacuity_law` is a nonempty string. Both are refused for the `direct` method.
+The `direct` method additionally requires
 `proof_module` and permits `proof_name`, defaulting to
 `<proof_module>.compiled_ideal_complete`. Both methods default an omitted
 `error_expression` to `.natural 0`. These optional values must be nonempty
@@ -552,6 +561,13 @@ generator, invoking native/Lean tools or creating output directories. Validation
 includes unselected roots. A misspelled bound never activates the zero default.
 Run the focused production-entry refusal checks with
 `python3 lean/bridges/structured/component_roots_tests.py`.
+
+The security test scope also runs `security/checks/check_abi_installations.py`.
+It compiles freshly emitted ABIs and completeness proofs for ordered, permuted,
+repeated and heterogeneous selectors, empty public data, and constrained input
+policies. It refuses incorrect selector equations, clause interpretations and
+nonvacuity terms. Fully empty source rows are checked as emitted structural
+declarations; admission of a service-free pair is not added by those controls.
 
 `ZkcTools.StructuredSource.Root` owns common Subject and receipt assembly.
 `Generation.RootCompleteness` owns the common actual-pair theorem shell used by

@@ -263,6 +263,7 @@ import Tests.CommonRegion
 import Tests.Component
 import Tests.Constructed.Generate
 import Tests.Constructed
+import Tests.ConstructedDiagnostics
 import Tests.ConstructionControls
 import Tests.ConstructionPattern
 import Tests.ContractCallDerivation
@@ -321,6 +322,8 @@ import Tests.StructuredApplications
 import Tests.StructuredAssociations
 import Tests.StructuredAvailability
 import Tests.StructuredBindings
+import Tests.StructuredBindingsDispatchData
+import Tests.StructuredBindingsDispatchGenerate
 import Tests.StructuredBindingsGenerator
 import Tests.StructuredBindingsGeneric
 import Tests.StructuredBindingsSources
@@ -392,6 +395,7 @@ import ZkcExamples.Construction.Generated.SampledAbortPair
 import ZkcExamples.Construction.Generated.SchnorrAndAliasedPair
 import ZkcExamples.Construction.Generated.SchnorrAndRandomizedPair
 import ZkcExamples.Construction.Generated.SchnorrRandomizedPair
+import ZkcExamples.Construction.Generated.SequentialSigmaPair
 import ZkcExamples.Construction.Generated.SmallSumcheckPair
 import ZkcExamples.Construction.Generated.TwoSumsPair
 import ZkcExamples.Construction.GkrProof
@@ -477,6 +481,8 @@ import ZkcExamples.Structured.Generated.Bindings.SchnorrAndRandomizedData
 import ZkcExamples.Structured.Generated.Bindings.SchnorrAndRandomizedInputs
 import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedData
 import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedInputs
+import ZkcExamples.Structured.Generated.Bindings.SequentialSigmaData
+import ZkcExamples.Structured.Generated.Bindings.SequentialSigmaInputs
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheck
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckCallbacks
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
@@ -494,6 +500,8 @@ import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedProducer
 import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidator
 import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer
 import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
+import ZkcExamples.Structured.Generated.Constructed.SequentialSigmaProducer
+import ZkcExamples.Structured.Generated.Constructed.SequentialSigmaValidator
 import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer
 import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
 import ZkcExamples.Structured.Generated.Constructed.TwoSumsProducer

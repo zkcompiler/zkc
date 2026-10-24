@@ -184,6 +184,9 @@ def execute(scope, args):
         run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-security",
              "--output", reports / "lean/clients-security"], cwd=ROOT / "lean")
         run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "security"])
+        run(["lake", "env", sys.executable,
+             ROOT / "lean/security/checks/check_abi_installations.py",
+             reports / "lean/abi-installations"], cwd=ROOT / "lean/security")
     elif scope == "lean-integration":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
         run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "arklib"])

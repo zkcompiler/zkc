@@ -3,6 +3,15 @@
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
 
+The [component installation](spec/components.md) also checks a sequential
+Schnorr/Chaum–Pedersen producer with private draws interleaved with public
+challenges, through generated whole-process views and a canonical compiled-ideal
+completeness receipt. Reusable sampled readback composes over actual returned
+values, service state and transcript histories. This adds honest completeness
+coverage, under the installed returning-service model; it adds no knowledge,
+zero-knowledge or native-realization claim. Input-clause interpretations and
+nonvacuity evidence remain checked against the fixed subject.
+
 | Surface | Maintained claim | Explicit boundary |
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |

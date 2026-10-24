@@ -130,6 +130,15 @@ classify dependencies independently of declaration namespaces.
 | Subject evidence/examples | Their upstream libraries and other subjects |
 | Tests/tooling | Any repository layer |
 
+`ZkcSecurity.Realizations` owns reusable laws for concrete source implementations.
+For example, its Sumcheck helper laws accept checked body-membership evidence
+for any admitted program containing the installed library bodies. These are
+source-bound realizations, so the dependency audit assigns them the same
+boundary as subject evidence; general security and family mathematics cannot
+import them. Moving them out of `Examples` introduces no new allowed edge or
+exception. Existing underlying source-library templates remain in `ZkcExamples`
+until their separately planned migration.
+
 Mathlib/Lean foundations are available throughout; VCVio and PolyFun
 belong to generic security, ArkLib to its optional package, Clean to the Clean
 package, and CompPoly is available to the packages that require it. More specific guards preserve generic

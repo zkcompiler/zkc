@@ -31,6 +31,7 @@ flowchart TD
 | `ZkcSecurity.Obligations` | Actual-distribution escape laws and interpretation into the existing reduction engine |
 | `ZkcSecurity.Algebra` | Shared algebraic probability lemmas independent of a protocol family |
 | `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
+| `ZkcSecurity.Realizations` | Checked laws for concrete source implementations, under the subject-level dependency boundary |
 | `ZkcSecurity.Examples` | Exact source-body instances, selected subjects and root proof applications |
 | `ZkcSecurity.Claims` | Request-owned models and canonical meanings, stage links and receipt admission |
 | `ZkcTools`, `ZkcSecurity.Generation` and test generators | Candidate search and ordinary Lean source emission; their output must be checked |
@@ -55,6 +56,22 @@ stopped execution. Mathematical helper summaries are explicit checked
 parameters; an unknown helper can remain opaque. Exact constructed views
 retain the nominal sorts of every operand/result and the full producer and
 validator instruction sequences.
+
+Generated callee dispatch uses one checked actual-callee table and dependent
+updates for selected views. All roles of a declaration see the completed table
+of earlier declarations; omitted views keep their actual invocation. This
+preserves sparse selections, role remapping and private output masks without
+repeating the full dispatch catalogue per role. The printer shares key type
+expressions as well. This removes quadratic full-table source duplication; it
+does not establish a linear elaboration-time bound. Unsupported constructed
+operations retain a stable diagnostic code together with their exact nested
+source path, operation, operands, sorts and body size.
+
+The maintained structured-binding check compiles dense, sparse, root-only and
+empty-selection outputs and tests catalogue growth. The security scope compiles
+fresh ABI installations and rejects incorrect argument orders, conditions and
+nonvacuity evidence. These checks exercise printer output, not just hand-written
+lookalike declarations.
 
 For adversarial verification, `DomainReduction.ReadingTo` proves the endpoint
 execution reading, while `CoherentTo` proves locality at the actual reached
@@ -193,13 +210,30 @@ proofs. `Generation.UniformRoot` is an opt-in presentation for a uniform scalar
 and group interpretation. Mixed-domain clients need their own presentation;
 the common shell does not identify all nominal fields or groups.
 
+The common ABI separates distinct source-coordinate parameters from ordered
+relation-selector payloads. Payload order and repeated selectors are preserved;
+empty public rows use their unique packed value without an empty existential.
+Retained input clauses stay in `honestInput_iff` together with the request-owned
+input policy. An optional clause presentation must prove equivalence to the exact
+retained clauses for every source input. Without it, the generated condition is
+the actual clause conjunction.
+
+Installed Sigma methods may supply a term checked as `Nonvacuous subject` and
+imports for that term. The default still proposes the all-default witness and
+fails if the fixed conditions do not admit it. A missing or incorrect law never
+becomes an assumption or an established claim. In the source-root descriptor,
+`method_imports` and `nonvacuity_law` select this checked installation evidence;
+they do not choose the subject's relation, input conditions, or experiment.
+
 The Sigma installation uses generic module algebra and the same constructed
 whole-process views. Its checked readback tactic aligns exact sends, receives,
 public histories and owner-local draws. It derives the relation fact from the
 retained formula and ABI argument selection. Unsupported formulas or process
 shapes leave proof obligations; a protocol name never chooses a proof.
-The randomized Schnorr, shared-challenge Schnorr AND and same-root alias client
-select this installed method through configuration. They require no handwritten
+The randomized Schnorr, shared-challenge Schnorr AND, same-root alias client
+and sequential Schnorr/Chaum–Pedersen client select this installed method through
+configuration. The sequential client requires a fresh private nonce after the
+first component's public challenge and response. They require no handwritten
 ABI, subject, pair-equation or receipt wrapper. The mathematical installation,
 its automation, source configuration and tests are still authoring work.
 
@@ -212,6 +246,16 @@ Its admissible inputs impose no condition on the sampled coin. The driver is
 an untrusted source printer, not a second semantic evaluator or receipt checker.
 Use `--check` with a detached output directory to compare regenerated sources
 and check the emitted proofs.
+
+Reusable laws for the installed table implementation live in
+`ZkcSecurity.Realizations.Sumcheck`. `DomainHelpers.Bodies` checks exact source
+bodies and dependencies; `ReadbackHelpers` and `ValidatorHelpers` give honest
+and arbitrary-input terminal laws for that implementation. Roots reuse these
+laws by proving body membership, rather than reproving arithmetic or selecting
+helpers by name. The family reduction remains independent of these source
+realizations. Another implementation must provide its own checked realization;
+a different representation does not become correct merely by selecting this
+installation.
 
 The maintained table-root producer is `security/checks/RunComponentRoots.lean`:
 from `lean/security`, run `lake env lean --run checks/RunComponentRoots.lean
@@ -251,10 +295,16 @@ Private inputs remain fixed inputs. For pairs with no installed local service
 ports, `SampledCompiled.computation_no_services` and
 `HonestSampling.run_transcript` preserve the complete old experiment, including
 its failures and final cache. A fixed public answer table leaves private draws
-probabilistic. `SamplingPrefix` and `SampledReadback` prove producer-only sampled
-prefixes followed by exact deterministic readback; each reached local request
-must be authorized and every possible sampled continuation must succeed. This
-is a sufficient proof method, not the definition of completeness. A direct
+probabilistic. `SamplingPrefix` remains a convenience for producer-private
+prefixes. `SampledReadback` also permits authorized private draws between exact
+sends/receives, public queries, observations and checkpoints. Its bind rule
+composes over the actual returned values and their relation; finite repetition
+uses the same rule. Every reached local request must be authorized and every
+typed continuation must succeed. The service-return law applies to supported
+outcomes and retains the actual private post-state. The validator consumes the
+producer's exact proof with any suffix preserved; both participants use the same
+public table, lifted through the existing single outer ROM cache. This remains
+a sufficient proof method, not the definition of completeness. A direct
 kernel proof may establish a nonzero failure bound for a sample-dependent
 abort. Such a failure is not removed by a new honest-input premise.
 
