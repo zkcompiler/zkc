@@ -112,13 +112,13 @@ theorem readback (plan : Plan) (program : Structured.Program)
             leftCaptured.length + 24, leftCaptured.length + 20] = some
           [.data (.vector plan.field (restrictValues raw challenge)), .data (.index (dimension - 1)),
             .data (.index 1), .data (.vector plan.field (point ++ [challenge])),
-            .transcript context.suite (CompiledRound.finalHistory plan.field low high query delivery
+            .transcript context.suite (TableComponent.Execution.finalHistory plan.field low high query delivery
               history (raw.take (raw.length / 2)).sum (raw.drop (raw.length / 2)).sum challenge)] ∧
         Domain.read right [rightCaptured.length + 21, rightCaptured.length + 26, rightCaptured.length + 20] = some
           [.data (.vector plan.field (point ++ [challenge])),
             .data (.field plan.field ((1 - challenge) * (raw.take (raw.length / 2)).sum +
               challenge * (raw.drop (raw.length / 2)).sum)),
-            .transcript context.suite (CompiledRound.finalHistory plan.field low high query delivery
+            .transcript context.suite (TableComponent.Execution.finalHistory plan.field low high query delivery
               history (raw.take (raw.length / 2)).sum (raw.drop (raw.length / 2)).sum challenge)])
       (producerBlock plan program context leftCaptured.length
         (leftCaptured ++ [.data (.index index), .data (.vector plan.field raw), .data (.index dimension),
@@ -186,6 +186,6 @@ theorem readback (plan : Plan) (program : Structured.Program)
         Option.bind, GetElem?.getElem?, List.instGetElem?NatLtLength, List.get?Internal])
   apply Readback.done
   refine ⟨challenge, ?_, ?_⟩ <;>
-    simp [Domain.read, CompiledRound.finalHistory, CompiledRound.receivedHistory, List.append_assoc, challenge]
+    simp [Domain.read, TableComponent.Execution.finalHistory, TableComponent.Execution.receivedHistory, List.append_assoc, challenge]
 
 end ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound

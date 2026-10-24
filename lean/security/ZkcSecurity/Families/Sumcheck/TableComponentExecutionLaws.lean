@@ -1,18 +1,19 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.CompiledValidator
+public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+public import ZkcSecurity.Families.Sumcheck.TableComponentNominalCost
 public import ZkcSecurity.FiatShamir.Budget
 
 @[expose] public section
 
 /-! The installed reference and its existing residual consumer apply to the
-exact nominal compiled loop. The original raw table and all reached histories
+nominal table loop. The original raw table and all reached histories
 survive the connection. No second polynomial reference or reduction engine is
 introduced. -/
 set_option autoImplicit false
 set_option maxHeartbeats 2000000
 set_option linter.unusedSimpArgs false
-namespace ZkcSecurity.Families.Sumcheck.CompiledValidator
+namespace ZkcSecurity.Families.Sumcheck.TableComponent.Execution
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript Zkc.Obligations
 open ZkcSecurity.Obligations ZkcSecurity.FiatShamir
 open TableComponent
@@ -28,7 +29,7 @@ def project {n : Nat} (state : ReferenceState F G n) : State F G :=
 
 def frameUpdate (field : String) : Nominal.FrameUpdate F (Domain.History (uniformCarriers F G)) field :=
   fun sites state message challenge =>
-    CompiledRound.finalHistory field (sites.low state.point.length) (sites.high state.point.length)
+    finalHistory field (sites.low state.point.length) (sites.high state.point.length)
       (sites.query state.point.length) (sites.delivery state.point.length) state.frame message.1 message.2 challenge
 
 noncomputable abbrev component (field : String) :=
@@ -60,7 +61,7 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
         using ih ((component (G := G) field).advance sites state (low, high) challenge)
     · simp [boundary, eq_comm, PIR.Process.bind]
 
-/-- The exact compiled loop inherits the existing reference residual theorem,
+/-- The nominal table loop inherits the existing reference residual theorem,
 including the immutable original table needed by the actual terminal. -/
 noncomputable def run_residual
     [∀ event : Domain.Event (uniformCarriers F G), SampleableType (Domain.Raw event)]
@@ -176,4 +177,4 @@ noncomputable def run_rejecting
     simpa only [List.length_nil, Nat.zero_add, List.length_range] using
       run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
 
-end ZkcSecurity.Families.Sumcheck.CompiledValidator
+end ZkcSecurity.Families.Sumcheck.TableComponent.Execution

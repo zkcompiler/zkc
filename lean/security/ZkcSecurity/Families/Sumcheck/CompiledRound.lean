@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.FiatShamir.DomainViewReading
 public import ZkcSecurity.Families.Sumcheck.TableComponentNominal
+public import ZkcSecurity.Families.Sumcheck.TableComponentHistory
 public import Zkc.Construction.DomainCalculations
 public import Zkc.Construction.DomainViewLaws
 
@@ -17,6 +18,7 @@ set_option maxHeartbeats 4000000
 namespace ZkcSecurity.Families.Sumcheck.CompiledRound
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.FiatShamir.DomainReduction
+open TableComponent.Execution
 
 structure Plan where
   lowSite : String
@@ -77,15 +79,6 @@ def block (plan : Plan) (program : Structured.Program) (context : Context) (fiel
                                             Domain.View.sequence (Domain.View.calculation (ringModel F G) (.fieldMultiply field) [(offset + 16), (offset + 8)] [.data (.field field)]) (
                                               Domain.View.sequence (Domain.View.calculation (ringModel F G) (.fieldAdd field) [(offset + 24), (offset + 25)] [.data (.field field)]) (
                                                 Domain.View.empty)))))))))))))))))))))))
-
-def receivedHistory (field : String) (lowOrigin highOrigin : Origin)
-    (history : Domain.History (carriers (F := F) (G := G))) (low high : F) :=
-  (history ++ [.message lowOrigin (.field field low)]) ++ [.message highOrigin (.field field high)]
-
-def finalHistory (field : String) (lowOrigin highOrigin queryOrigin deliveryOrigin : Origin)
-    (history : Domain.History (carriers (F := F) (G := G))) (low high challenge : F) :=
-  (receivedHistory field lowOrigin highOrigin history low high ++ [.challenge queryOrigin]) ++
-    [.message deliveryOrigin (.field field challenge)]
 
 /-- Every intermediate slot, including the boundary Boolean, is retained. -/
 def output (field suite : String) (captured : Domain.Environment (carriers (F := F) (G := G)))

@@ -5,7 +5,7 @@ public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 public import ZkcSecurity.Examples.Components.SmallSumcheckFormula
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrimeField
-public import ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness
+public import ZkcSecurity.Families.Sumcheck.TableComponentExecutionLaws
 public import ZkcSecurity.Claims.CompiledSoundness
 public meta import ZkcSecurity.Tools.ComponentDerivation
 public meta import ZkcSecurity.Tools.ComponentCost
@@ -53,7 +53,7 @@ noncomputable def rejectedInputs (input0 : List Scalar) (input1 : Scalar) (input
     Zkc.Obligations.Derivation (Nominal.interface (G := Group) field) (boundedEscape (fun _ _ => price))
       (fun _ result => validatorCompiled.acceptance result ≠ some true) initial
       (ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented input0 input1 input2 initial) := by
-  derive_component_rejection [CompiledValidator.run_rejecting field ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds.round0.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (CompiledValidator.frameUpdate (F := Scalar) (G := Group) field)) input0]
+  derive_component_rejection [TableComponent.Execution.run_rejecting field ZkcSecurity.Examples.Generated.Components.SmallSumcheckRounds.round0.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) field)) input0]
     unfolding [ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented]
     finishing (first
       | (exfalso
@@ -69,7 +69,7 @@ theorem inputCosts (input0 : List Scalar) (input1 : Scalar) (input2 : Nat) (init
     Typed.ChargedCostBound (Nominal.interface (G := Group) field) (fun _ _ => price)
       (ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented input0 input1 input2 initial) initial (budget • price) := by
   unfold budget
-  derive_component_cost [CompiledValidator.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]
+  derive_component_cost [TableComponent.Execution.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]
     unfolding [ZkcSecurity.Examples.Generated.Components.SmallSumcheckValidatorView.presented]
 
 def presented (statement : Statement) : Domain.History carriers →

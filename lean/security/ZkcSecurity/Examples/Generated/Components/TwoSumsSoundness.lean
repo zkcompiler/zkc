@@ -5,7 +5,7 @@ public import ZkcSecurity.Examples.Generated.Components.TwoSumsRounds
 public import ZkcSecurity.Examples.Generated.Components.TwoSumsABI
 public import ZkcSecurity.Examples.Components.TwoSumsFormula
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrimeField
-public import ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness
+public import ZkcSecurity.Families.Sumcheck.TableComponentExecutionLaws
 public import ZkcSecurity.Claims.CompiledSoundness
 public meta import ZkcSecurity.Tools.ComponentDerivation
 public meta import ZkcSecurity.Tools.ComponentCost
@@ -53,8 +53,8 @@ noncomputable def rejectedInputs (input0 : List Scalar) (input1 : List Scalar) (
     Zkc.Obligations.Derivation (Nominal.interface (G := Group) field) (boundedEscape (fun _ _ => price))
       (fun _ result => validatorCompiled.acceptance result ≠ some true) initial
       (ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented input0 input1 input2 input3 input4 initial) := by
-  derive_component_rejection [CompiledValidator.run_rejecting field ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round0.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (CompiledValidator.frameUpdate (F := Scalar) (G := Group) field)) input0,
-    CompiledValidator.run_rejecting field ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round1.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (CompiledValidator.frameUpdate (F := Scalar) (G := Group) field)) input1]
+  derive_component_rejection [TableComponent.Execution.run_rejecting field ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round0.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) field)) input0,
+    TableComponent.Execution.run_rejecting field ZkcSecurity.Examples.Generated.Components.TwoSumsRounds.round1.schedule (fun _ _ => price) (TableComponent.PrimeField.conditionalWithFrame blsModulus field (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) field)) input1]
     unfolding [ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented]
     finishing (first
       | (exfalso
@@ -70,7 +70,7 @@ theorem inputCosts (input0 : List Scalar) (input1 : List Scalar) (input2 : Scala
     Typed.ChargedCostBound (Nominal.interface (G := Group) field) (fun _ _ => price)
       (ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented input0 input1 input2 input3 input4 initial) initial (budget • price) := by
   unfold budget
-  derive_component_cost [CompiledValidator.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]
+  derive_component_cost [TableComponent.Execution.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]
     unfolding [ZkcSecurity.Examples.Generated.Components.TwoSumsValidatorView.presented]
 
 def presented (statement : Statement) : Domain.History carriers →

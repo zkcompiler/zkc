@@ -176,7 +176,9 @@ import ZkcSecurity.Families.Sumcheck.CompiledRound
 import ZkcSecurity.Families.Sumcheck.CompiledValidator
 import ZkcSecurity.Families.Sumcheck.CompiledValidatorExecution
 import ZkcSecurity.Families.Sumcheck.CompiledValidatorOrigins
-import ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness
+import ZkcSecurity.Families.Sumcheck.TableComponentHistory
+import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+import ZkcSecurity.Families.Sumcheck.TableComponentExecutionLaws
 import ZkcSecurity.Families.Sumcheck.Completeness
 import ZkcSecurity.Families.Sumcheck.Composition
 import ZkcSecurity.Families.Sumcheck.Cost
@@ -193,7 +195,7 @@ import ZkcSecurity.Families.Sumcheck.TableComponent
 import ZkcSecurity.Families.Sumcheck.TableComponentBinding
 import ZkcSecurity.Families.Sumcheck.TableComponentCompleteness
 import ZkcSecurity.Families.Sumcheck.TableComponentCost
-import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 import ZkcSecurity.Families.Sumcheck.TableComponentFold
 import ZkcSecurity.Families.Sumcheck.TableComponentFrame
 import ZkcSecurity.Families.Sumcheck.TableComponentNominal

@@ -123,7 +123,7 @@ theorem actual_round
     (index : Nat) (point : List F) (claim : F) (history : Domain.History (uniformCarriers F G))
     (Post : Domain.History (uniformCarriers F G) → Domain.Environment (uniformCarriers F G) → Prop)
     (post : ∀ low high challenge, claim = low + high →
-      Post (CompiledRound.finalHistory field (lowOrigin index) (highOrigin index)
+      Post (TableComponent.Execution.finalHistory field (lowOrigin index) (highOrigin index)
         (queryOrigin index) (deliveryOrigin index) history low high challenge)
         (CompiledRound.output field context.suite captured index point claim history
           (lowOrigin index) (highOrigin index) (queryOrigin index) (deliveryOrigin index) low high challenge)) :

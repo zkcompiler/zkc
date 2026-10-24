@@ -54,7 +54,7 @@ def source (input : Input) : Except String String := do
   let subject := output.subjectModule
   let imports := [view, output.roundsModule, output.abiModule, output.mathematicsModule,
     "ZkcSecurity.Families.Sumcheck.TableComponentPrimeField",
-    "ZkcSecurity.Families.Sumcheck.CompiledValidatorSoundness",
+    "ZkcSecurity.Families.Sumcheck.TableComponentExecutionLaws",
     "ZkcSecurity.Claims.CompiledSoundness"]
   let tools := ["ComponentDerivation", "ComponentCost", "TableCapacity", "TargetEvaluation"]
   let mut text := "module\n\n" ++ String.join (imports.map fun name => "public import " ++ name ++ "\n") ++
@@ -89,9 +89,9 @@ def source (input : Input) : Except String String := do
     "      (fun _ result => validatorCompiled.acceptance result ≠ some true) initial\n" ++
     "      (" ++ view ++ ".presented " ++ arguments ++ " initial) := by\n"
   let sampling := "(TableComponent.PrimeField.conditionalWithFrame " ++ output.modulus ++
-    " field (CompiledValidator.frameUpdate (F := Scalar) (G := Group) field))"
+    " field (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) field))"
   let leaves := (tables.zipIdx).map fun (position, index) =>
-    "CompiledValidator.run_rejecting field " ++ output.roundsModule ++ ".round" ++ toString index ++
+    "TableComponent.Execution.run_rejecting field " ++ output.roundsModule ++ ".round" ++ toString index ++
       ".schedule (fun _ _ => price) " ++ sampling ++ " " ++ SubjectABI.inputName position
   text := text ++ "  derive_component_rejection [" ++ ",\n    ".intercalate leaves ++ "]\n" ++
     "    unfolding [" ++ view ++ ".presented]\n" ++
@@ -106,7 +106,7 @@ def source (input : Input) : Except String String := do
     "    Typed.ChargedCostBound (Nominal.interface (G := Group) field) (fun _ _ => price)\n" ++
     "      (" ++ view ++ ".presented " ++ arguments ++ " initial) initial (budget • price) := by\n" ++
     "  unfold budget\n" ++
-    "  derive_component_cost [CompiledValidator.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]\n" ++
+    "  derive_component_cost [TableComponent.Execution.run_cost _ _ (fun _ _ => price) price (fun _ _ => le_rfl)]\n" ++
     "    unfolding [" ++ view ++ ".presented]\n\n" ++
     "def presented (statement : Statement) : Domain.History carriers →\n" ++
     "    PIR.Process (Nominal.signature Scalar field) (Domain.Result carriers) :=\n" ++

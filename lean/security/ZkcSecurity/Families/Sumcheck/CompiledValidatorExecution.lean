@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 public import ZkcSecurity.Families.Sumcheck.CompiledValidator
 public import ZkcSecurity.FiatShamir.DomainComposition
 
@@ -45,7 +45,7 @@ theorem sourceLoop (field : String) (program : Structured.Program) (context : Zk
       (Domain.iterate body captured [offset + 21, offset + 26, offset + 20]
         [.data (.vector field), .data (.field field), .transcript context.suite]
         indices (CompiledValidator.carried field context.suite ⟨point, scalar, history⟩))
-      ((CompiledValidator.run field sites indices ⟨point, scalar, history⟩).bind
+      ((TableComponent.Execution.run field sites indices ⟨point, scalar, history⟩).bind
         (fun final => .done (CompiledValidator.carried field context.suite final))) := by
   rw [body_eq, ← size]
   exact CompiledValidator.loop_bridge connection captured indices ⟨point, scalar, history⟩
@@ -67,7 +67,7 @@ theorem sourceLoopBind {B : Type}
     (history : Domain.History (uniformCarriers F G))
     (Post : Domain.History (uniformCarriers F G) → B → Prop)
     (nextActual : Domain.Environment (uniformCarriers F G) → PIR.Process (Domain.effects (uniformCarriers F G)) B)
-    (nextPresented : CompiledValidator.State F G → PIR.Process (Nominal.signature F field) B)
+    (nextPresented : TableComponent.Execution.State F G → PIR.Process (Nominal.signature F field) B)
     (next : ∀ final, final.point.length = point.length + indices.length →
       FiatShamir.DomainReduction.Bridge (Nominal.interface (G := G) field) Post final.history
         (nextActual (CompiledValidator.carried field context.suite final)) (nextPresented final)) :
@@ -75,10 +75,10 @@ theorem sourceLoopBind {B : Type}
       ((Domain.iterate body captured [offset + 21, offset + 26, offset + 20]
         [.data (.vector field), .data (.field field), .transcript context.suite]
         indices (CompiledValidator.carried field context.suite ⟨point, scalar, history⟩)).bind nextActual)
-      ((CompiledValidator.run field sites indices ⟨point, scalar, history⟩).bind nextPresented) := by
+      ((TableComponent.Execution.run field sites indices ⟨point, scalar, history⟩).bind nextPresented) := by
   apply ZkcSecurity.FiatShamir.DomainReduction.Bridge.bindEncoded
     (CompiledValidator.carried field context.suite) CompiledValidator.decode (fun _ => rfl)
-    CompiledValidator.State.history (fun final => final.point.length = point.length + indices.length)
+    TableComponent.Execution.State.history (fun final => final.point.length = point.length + indices.length)
     ((sourceLoop field program context plan sites connection body offset body_eq captured size indices point scalar history).weaken ?_)
     nextActual nextPresented next
   intro reached output post

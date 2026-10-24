@@ -100,7 +100,7 @@ theorem loop_readback (plan : Plan) (program : Structured.Program)
     (state.entries.drop (state.entries.length / 2)).sum)
   let next : LoopState F G rest.length :=
     { state.advance endpoints challenge with
-      frame := CompiledRound.finalHistory plan.field site.low site.high site.query site.delivery
+      frame := TableComponent.Execution.finalHistory plan.field site.low site.high site.query site.delivery
         state.frame endpoints.1 endpoints.2 challenge }
   have nextEntries : next.entries = restrictValues state.entries challenge := state.advance_entries endpoints challenge
   have nextHonest : next.scalar = next.entries.sum := by

@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Families.Sumcheck.CompiledRound
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrimeField
-public import ZkcSecurity.Families.Sumcheck.TableComponentNominalCost
+public import ZkcSecurity.Families.Sumcheck.TableComponentExecutionLaws
 
 @[expose] public section
 
@@ -17,36 +17,13 @@ set_option maxHeartbeats 2000000
 namespace ZkcSecurity.Families.Sumcheck.CompiledValidator
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript
 open ZkcSecurity.FiatShamir.DomainReduction
-open TableComponent
+open TableComponent Execution
 
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-structure State (F G : Type) where
-  point : List F
-  scalar : F
-  history : Domain.History (uniformCarriers F G)
-
 def carried (field suite : String) (state : State F G) : Domain.Environment (uniformCarriers F G) :=
   [.data (.vector field state.point), .data (.field field state.scalar), .transcript suite state.history]
-
-def advance (field : String) (sites : Nominal.Schedule field) (index : Nat)
-    (state : State F G) (low high challenge : F) : State F G :=
-  ⟨state.point ++ [challenge], (1 - challenge) * low + challenge * high,
-    CompiledRound.finalHistory field (sites.low index) (sites.high index)
-      (sites.query index) (sites.delivery index) state.history low high challenge⟩
-
-noncomputable def run (field : String) (sites : Nominal.Schedule field) :
-    List Nat → State F G → PIR.Process (Nominal.signature F field) (State F G)
-  | [], state => .done state
-  | index :: rest, state =>
-      .call (.receive (sites.low index)) fun low =>
-      .call (.receive (sites.high index)) fun high =>
-      if state.scalar = low + high then
-        .call (.query (sites.query index) (sites.request index)) fun challenge =>
-        .call (.deliver (sites.delivery index) challenge) fun _ =>
-          run field sites rest (advance field sites index state low high challenge)
-      else .halt .reject
 
 /-- A checked connection to the exact source block, independent of its caller's
 raw table, retained captures, scalar, prefix, and every malicious endpoint. -/

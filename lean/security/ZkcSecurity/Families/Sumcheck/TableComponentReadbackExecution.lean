@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 
 @[expose] public section
 

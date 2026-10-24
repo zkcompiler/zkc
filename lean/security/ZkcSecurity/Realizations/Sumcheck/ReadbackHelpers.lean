@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
-public import ZkcSecurity.Families.Sumcheck.TableComponentExecution
+public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 
 @[expose] public section
 
