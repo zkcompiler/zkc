@@ -256,12 +256,13 @@ def test_bn254_catalog_matches_explicit_family_and_provider_inventory(modules):
     assert shapes and all(shape['family'] == 'bn254' for shape in shapes)
     for group, kernel, sizes in [('g1', 'msm', (32, 256)), ('g2', 'msm', (32, 256)),
                                  ('pairing', 'pairing_check', (2, 8)), ('scalar', 'field_mul', (1,)),
-                                 ('scalar', 'vector_mul', (32, 256)), ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
+                                 ('scalar', 'vector_mul', (32, 256, 8192, 32_768)), ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
                                  ('g1', 'scale_each', (1, 32, 1024)), ('g2', 'scale_each', (1, 32, 1024)),
                                  ('g1', 'vector_scale', (1, 32, 1024)), ('g2', 'vector_scale', (1, 32, 1024))]:
         for n in sizes:
             selected = [shape for shape in shapes if (shape['group'], shape['kernel'], shape['elements']) == (group, kernel, n)]
-            assert {s['boundary'] for s in selected} >= {'resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain'}
+            assert {s['boundary'] for s in selected} >= {'resident', 'converted', 'resident_installed_chain', 'wire_resident_chain'}
+            assert ('installed' in {s['boundary'] for s in selected}) == (n <= 8192)
             if kernel in ('scale_each', 'vector_scale'):
                 assert {(s['boundary'], s.get('chain_length', 1)) for s in selected} == {
                     ('resident', 1), ('converted', 1), ('installed', 1), ('resident', 4),
@@ -272,6 +273,23 @@ def test_bn254_catalog_matches_explicit_family_and_provider_inventory(modules):
                 continue
             providers.validate_backend({'kind': 'kernel', 'provider': provider, **shape},
                                        boundary=providers.BOUNDARIES[shape['boundary']], operation='run')
+
+
+@pytest.mark.parametrize('family', ['bls12-381', 'bn254'])
+def test_vector_panel_reaches_parallel_sizes_without_expanding_curve_limits(modules, family):
+    providers, _, io = modules
+    shapes = [shape for _, _, shape in providers.catalog()
+              if shape.get('family', 'bls12-381') == family and shape['kernel'] == 'vector_mul']
+    for n in (8192, 32_768):
+        assert {s['boundary'] for s in shapes if s['elements'] == n} >= {
+            'resident', 'converted', 'resident_installed_chain', 'wire_resident_chain'}
+    assert max(s['elements'] for s in shapes if s['boundary'] == 'installed') == 8192
+    request = dict(kind='kernel', family=family, provider='arkworks', group='scalar',
+                   kernel='vector_mul', boundary='resident', elements=65_536)
+    providers.validate_backend(request)
+    for change in (dict(elements=65_537), dict(group='g1', kernel='msm', elements=8192)):
+        with pytest.raises(io.MeasurementError):
+            providers.validate_backend(request | change)
 
 
 @pytest.mark.parametrize('family,provider', [

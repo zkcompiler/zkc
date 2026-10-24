@@ -712,6 +712,21 @@ operation; MSM chains accumulate repeated MSM outputs with resident curve additi
 pairing chains return every Boolean for checking. No intermediate representation
 conversion is inserted in resident chains.
 
+Scalar-vector multiplication includes 8,192 and 32,768 elements for both curve
+families, covering the shared vector kernel's parallel chunks as well as small
+calls. The direct Arkworks controls use the same typed destination kernel as
+Native; their result checks use scalar loops outside timing. Curve scaling and
+MSM results are checked using element-wise Arkworks multiplication and addition,
+without reusing the measured bulk plan or MSM. These checks share Arkworks scalar
+and group primitives and are not independent curve-coordinate implementations.
+Operands and base-point coefficients use distinct deterministic hash domains,
+so reversing a single-step vector result is observable. Direct point-valued
+controls retain inline points for both providers; observer-only singleton vectors
+are constructed outside timing. Setup constructs foreign input storage only for
+the resident or export controls that consume it. The converted installed panel
+stops at 8,192 vector elements so explicit conversions fit Native's default work
+allowance; direct and resident-chain panels also include 32,768 elements.
+
 Worker diagnostics retain the admitted straight-line program, exact physical
 ports, chain length, arithmetic calls, explicit conversion directions/counts,
 elements and canonical payload bytes (excluding framing), and native wire byte

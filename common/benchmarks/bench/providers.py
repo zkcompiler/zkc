@@ -10,6 +10,9 @@ BOUNDARIES = {'resident': 'resident_kernel_call', 'converted': 'converted_kernel
               'resident_installed_chain': 'resident_installed_chain',
               'wire_resident_chain': 'wire_decode_resident_execute_wire_encode'}
 FAMILIES = {'bls12-381': ('arkworks', 'blst'), 'bn254': ('arkworks', 'halo2curves-axiom')}
+# The largest maintained power-of-two vector whose individual explicit
+# conversions fit Native's default numerical-work allowance.
+CONVERTED_INSTALLED_VECTOR_LIMIT = 8192
 
 
 def validate_backend(backend, boundary=None, operation=None):
@@ -27,7 +30,8 @@ def validate_backend(backend, boundary=None, operation=None):
             and backend['boundary'] in BOUNDARIES, 'invalid kernel control')
     require(boundary is None or boundary == BOUNDARIES[backend['boundary']], 'invalid kernel boundary')
     require(operation in (None, 'run'), 'invalid kernel operation')
-    require(type(backend['elements']) is int and 1 <= backend['elements'] <= 4096, 'invalid kernel length')
+    limit = 65_536 if backend['kernel'] == 'vector_mul' else 4096
+    require(type(backend['elements']) is int and 1 <= backend['elements'] <= limit, 'invalid kernel length')
     require((backend['group'] == 'pairing') == (backend['kernel'] == 'pairing_check')
             and (backend['group'] == 'scalar') == (backend['kernel'] in ('field_mul', 'vector_mul'))
             and (backend['kernel'] not in ('scale', 'field_mul') or backend['elements'] == 1)
@@ -70,11 +74,14 @@ def catalog():
                    ('scale', 'scale_each', 'vector_scale', 'msm'))
         for kernel in kernels:
             sizes = ((1,) if kernel in ('scale', 'field_mul') else
-                     (2, 32) if group == 'pairing' else (1, 32, 1024))
+                     (2, 32) if group == 'pairing' else
+                     (1, 32, 1024, 8192, 32_768) if kernel == 'vector_mul' else (1, 32, 1024))
             boundaries = (('resident', 'converted', 'installed', 'resident_installed_chain', 'wire_resident_chain')
                           if group == 'scalar' else ('resident_installed_chain', 'wire_resident_chain'))
             for n in sizes:
                 for boundary in boundaries:
+                    if boundary == 'installed' and n > CONVERTED_INSTALLED_VECTOR_LIMIT:
+                        continue
                     shape = {'group': group, 'kernel': kernel, 'elements': n, 'boundary': boundary}
                     if boundary in ('resident_installed_chain', 'wire_resident_chain'):
                         shape['chain_length'] = 4
@@ -90,7 +97,7 @@ def catalog():
 
 def _bn254_catalog():
     cases = []
-    for group, kernel, sizes in (('scalar', 'field_mul', (1,)), ('scalar', 'vector_mul', (32, 256)),
+    for group, kernel, sizes in (('scalar', 'field_mul', (1,)), ('scalar', 'vector_mul', (32, 256, 8192, 32_768)),
                                  ('g1', 'scale', (1,)), ('g2', 'scale', (1,)),
                                  ('g1', 'scale_each', (1, 32, 1024)), ('g2', 'scale_each', (1, 32, 1024)),
                                  ('g1', 'vector_scale', (1, 32, 1024)), ('g2', 'vector_scale', (1, 32, 1024)),
@@ -100,6 +107,8 @@ def _bn254_catalog():
             for boundary, length in (('resident', 1), ('converted', 1), ('installed', 1),
                                      ('resident', 4), ('converted', 4),
                                      ('resident_installed_chain', 4), ('wire_resident_chain', 4)):
+                if boundary == 'installed' and n > CONVERTED_INSTALLED_VECTOR_LIMIT:
+                    continue
                 shape = dict(family='bn254', group=group, kernel=kernel, elements=n, boundary=boundary)
                 if length != 1:
                     shape['chain_length'] = length
@@ -132,7 +141,7 @@ def prepare_case(args, output, capture, manifest, case):
     manifest['contracts'][case.identifier] = {
         'family': 'BLS12-381 provider', 'shape': shape, 'threads': args.threads,
         'boundaries': {job.implementation: job.boundary for job in jobs},
-        'input_policy': 'fixed full-width SHA-256-derived scalars; nontrivial generator multiples',
+        'input_policy': 'fixed domain-separated full-width SHA-256-derived nonzero scalars; distinct operand and base domains',
         'comparison': 'same mathematical operation and input values; explicit representation boundary',
         'included': {
             'resident': 'arithmetic chain and result construction; resident provider bulk inputs prepared outside timer',
@@ -156,7 +165,7 @@ def prepare_case(args, output, capture, manifest, case):
     if family == 'bn254':
         contract = manifest['contracts'][case.identifier]
         contract['family'] = 'BN254 provider'
-        contract['input_policy'] = 'fixed domain-separated full-width SHA-256-derived nonzero scalars; nonidentity generator multiples'
+        contract['input_policy'] = 'fixed domain-separated full-width SHA-256-derived nonzero scalars; distinct operand and base domains'
         if shape['boundary'] == 'installed':
             contract['included'] = ('VM local call, Native publication and Runner teardown; halo2curves-axiom explicitly '
                                     'imports Arkworks BN254 inputs, computes and exports output; Runner construction excluded')

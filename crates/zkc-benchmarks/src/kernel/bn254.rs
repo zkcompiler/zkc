@@ -1,5 +1,5 @@
 //! BN254 controls use typed resident buffers, the common timer and installed VM.
-use super::{Boundary, Family, Group, Kernel, Provider, fail, installed};
+use super::{Boundary, CanonicalOutput, Family, Group, Kernel, Provider, fail, installed};
 use crate::{Failure, Operation, Report, Request, Result, measure};
 use ark_ff::PrimeField;
 use serde_json::json;
@@ -8,10 +8,14 @@ use zkc_kernels::{arkworks::bn254 as ark, halo2curves::bn254 as halo};
 use zkc_native::Value;
 
 fn scalars(n: usize) -> Vec<ark::Scalar> {
+    scalars_for(b"scalars", n)
+}
+fn scalars_for(domain: &[u8], n: usize) -> Vec<ark::Scalar> {
     (0..n)
         .map(|i| {
             let mut hash = Sha256::new();
             hash.update(b"zkc.benchmark/bn254/0");
+            hash.update(domain);
             hash.update((i as u64).to_le_bytes());
             let scalar = ark::Scalar::from_le_bytes_mod_order(&hash.finalize());
             // Keep every generated base a nonidentity generator multiple.
@@ -185,20 +189,6 @@ curve!(
     Bn254G2Vector
 );
 
-// Keep point-valued controls inline throughout timing, including converted
-// output and MSM accumulation. Only bulk operations construct point vectors.
-enum CanonicalOutput<G> {
-    Point(G),
-    Points(Vec<G>),
-}
-impl<G> CanonicalOutput<G> {
-    fn into_points(self) -> Vec<G> {
-        match self {
-            Self::Point(point) => vec![point],
-            Self::Points(points) => points,
-        }
-    }
-}
 enum ResidentOutput<G: Curve> {
     Point(G::Point),
     Points(G::Bulk),
@@ -293,12 +283,10 @@ fn curve_run<G: Curve>(
     length: usize,
 ) -> Result<Report> {
     let mut s = scalars(n);
-    let p = G::bases(&s);
+    let p = G::bases(&scalars_for(b"bases", n));
     if op == Kernel::VectorScale {
         s.truncate(1);
     }
-    let fs = import_scalars(&s)?;
-    let fp = G::import(&p)?;
     let conversion = matches!(boundary, Boundary::Import | Boundary::Export);
     let expected = if conversion {
         p.clone()
@@ -333,6 +321,13 @@ fn curve_run<G: Curve>(
         Resident(ResidentOutput<G>),
         Imported(G::Bulk, halo::ScalarVector),
     }
+    let fp = (provider == Provider::Halo2curvesAxiom
+        && matches!(boundary, Boundary::Resident | Boundary::Export))
+    .then(|| G::import(&p))
+    .transpose()?;
+    let fs = (provider == Provider::Halo2curvesAxiom && boundary == Boundary::Resident)
+        .then(|| import_scalars(&s))
+        .transpose()?;
     let samples = measure::measure(
         request.plan,
         || Ok(()),
@@ -341,16 +336,21 @@ fn curve_run<G: Curve>(
                 Output::Canonical(arithmetic_chain(op, &s, &p, length)?)
             } else {
                 match boundary {
-                    Boundary::Resident => {
-                        Output::Resident(resident_chain::<G>(op, &fs, &fp, length)?)
-                    }
+                    Boundary::Resident => Output::Resident(resident_chain::<G>(
+                        op,
+                        fs.as_ref().unwrap(),
+                        fp.as_ref().unwrap(),
+                        length,
+                    )?),
                     Boundary::Converted => {
                         let p = G::import(&p)?;
                         let s = import_scalars(&s)?;
                         Output::Canonical(resident_chain::<G>(op, &s, &p, length)?.export()?)
                     }
                     Boundary::Import => Output::Imported(G::import(&p)?, import_scalars(&s)?),
-                    Boundary::Export => Output::Canonical(CanonicalOutput::Points(G::export(&fp)?)),
+                    Boundary::Export => {
+                        Output::Canonical(CanonicalOutput::Points(G::export(fp.as_ref().unwrap())?))
+                    }
                     _ => unreachable!(),
                 }
             })
@@ -379,7 +379,7 @@ fn scalar_run(
     length: usize,
 ) -> Result<Report> {
     let a = scalars(n);
-    let b: Vec<_> = a.iter().rev().copied().collect();
+    let b = scalars_for(b"factors", n);
     let arithmetic = || {
         let mut out = a.clone();
         for _ in 0..length {
@@ -410,8 +410,9 @@ fn scalar_run(
             length,
         );
     }
-    let fa = import_scalars(&a)?;
-    let fb = import_scalars(&b)?;
+    let inputs = (provider == Provider::Halo2curvesAxiom && boundary == Boundary::Resident)
+        .then(|| Ok::<_, Failure>((import_scalars(&a)?, import_scalars(&b)?)))
+        .transpose()?;
     enum Output {
         Canonical(Vec<ark::Scalar>),
         CanonicalField(ark::Scalar),
@@ -471,7 +472,8 @@ fn scalar_run(
                 let b = import_scalars(&b)?;
                 canonical(resident(&a, &b)?)
             } else {
-                resident(&fa, &fb)
+                let (a, b) = inputs.as_ref().unwrap();
+                resident(a, b)
             }
         },
         |out| {
@@ -506,8 +508,6 @@ fn pairing_run(
     length: usize,
 ) -> Result<Report> {
     let (p, q) = pairing_inputs(n, length > 1);
-    let fp = <ark::G1 as Curve>::import(&p)?;
-    let fq = <ark::G2 as Curve>::import(&q)?;
     let expected = ark::pairing_check(&p, &q).map_err(fail)?;
     if is_installed(boundary) {
         return installed::run(
@@ -525,6 +525,14 @@ fn pairing_run(
             length,
         );
     }
+    let resident = (provider == Provider::Halo2curvesAxiom && boundary == Boundary::Resident)
+        .then(|| {
+            Ok::<_, Failure>((
+                <ark::G1 as Curve>::import(&p)?,
+                <ark::G2 as Curve>::import(&q)?,
+            ))
+        })
+        .transpose()?;
     let samples = measure::measure(
         request.plan,
         || Ok(()),
@@ -540,8 +548,9 @@ fn pairing_run(
                     .map(|_| halo::pairing_check_bulk(&p, &q).map_err(fail))
                     .collect()
             } else {
+                let (fp, fq) = resident.as_ref().unwrap();
                 (0..length)
-                    .map(|_| halo::pairing_check_bulk(&fp, &fq).map_err(fail))
+                    .map(|_| halo::pairing_check_bulk(fp, fq).map_err(fail))
                     .collect()
             }
         },
@@ -583,7 +592,7 @@ pub(super) fn run(
 ) -> Result<Report> {
     if request.operation != Operation::Run
         || !Family::Bn254.supports(provider)
-        || !(1..=4096).contains(&n)
+        || !(1..=kernel.max_elements()).contains(&n)
         || !(1..=32).contains(&length)
         || matches!(kernel, Kernel::Scale | Kernel::FieldMul) && n != 1
         || !matches!(
@@ -636,6 +645,22 @@ mod tests {
         })).unwrap();
         request.cpu = Some(zkc::execution::CpuExecution::serial().unwrap());
         request
+    }
+
+    #[test]
+    fn single_step_fixtures_detect_reversed_outputs() {
+        let s = scalars(4);
+        let factors = scalars_for(b"factors", 4);
+        let product: Vec<_> = s.iter().zip(&factors).map(|(a, b)| *a * b).collect();
+        assert_ne!(product, product.iter().rev().copied().collect::<Vec<_>>());
+        fn group<G: Curve>() {
+            let s = scalars(4);
+            let p = G::bases(&scalars_for(b"bases", 4));
+            let output = expected(Kernel::ScaleEach, &s, &p, 1).unwrap();
+            assert!(output != output.iter().rev().copied().collect::<Vec<_>>());
+        }
+        group::<ark::G1>();
+        group::<ark::G2>();
     }
 
     #[test]

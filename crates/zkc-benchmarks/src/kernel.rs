@@ -96,6 +96,14 @@ pub enum Kernel {
     VectorMul,
 }
 impl Kernel {
+    fn max_elements(self) -> usize {
+        if self == Self::VectorMul {
+            65_536
+        } else {
+            4096
+        }
+    }
+
     fn contract(self) -> &'static str {
         match self {
             Self::Scale => "curve.scale",
@@ -117,6 +125,7 @@ trait Curve: Copy + PartialEq {
     type ForeignBulk;
     const DOMAIN: &'static str;
     fn generator() -> Self;
+    fn identity() -> Self;
     fn scale(self, scalar: ark::Scalar) -> Self;
     fn export(point: Self::Foreign) -> Result<Self>;
     fn foreign_scale(point: Self::Foreign, scalar: blst::Scalar) -> Self::Foreign;
@@ -142,6 +151,9 @@ macro_rules! curve {
             const DOMAIN: &'static str = $domain;
             fn generator() -> Self {
                 Self::generator()
+            }
+            fn identity() -> Self {
+                Self::identity()
             }
             fn scale(self, scalar: ark::Scalar) -> Self {
                 Self::scale(&self, scalar)
@@ -238,15 +250,43 @@ curve!(
 );
 
 fn scalars(n: usize) -> Vec<ark::Scalar> {
+    scalars_for(b"scalars", n)
+}
+fn scalars_for(domain: &[u8], n: usize) -> Vec<ark::Scalar> {
     (0..n)
-        .map(|i| ark::Scalar::from_le_bytes_mod_order(&Sha256::digest((i as u64).to_le_bytes())))
+        .map(|i| {
+            let mut hash = Sha256::new();
+            hash.update(b"zkc.benchmark/bls12-381/0");
+            hash.update(domain);
+            hash.update((i as u64).to_le_bytes());
+            let scalar = ark::Scalar::from_le_bytes_mod_order(&hash.finalize());
+            if scalar == ark::Scalar::from(0) {
+                ark::Scalar::from(1)
+            } else {
+                scalar
+            }
+        })
         .collect()
 }
-fn arithmetic<G: Curve>(op: Kernel, s: &[ark::Scalar], p: &[G]) -> Result<Vec<G>> {
+// Keep point results inline through timing and conversion. Only the untimed
+// observer normalizes them to singleton vectors. Both curve families use this.
+enum CanonicalOutput<G> {
+    Point(G),
+    Points(Vec<G>),
+}
+impl<G> CanonicalOutput<G> {
+    fn into_points(self) -> Vec<G> {
+        match self {
+            Self::Point(point) => vec![point],
+            Self::Points(points) => points,
+        }
+    }
+}
+fn arithmetic<G: Curve>(op: Kernel, s: &[ark::Scalar], p: &[G]) -> Result<CanonicalOutput<G>> {
     match op {
-        Kernel::Msm => Ok(vec![G::msm(s, p)?]),
-        Kernel::Scale => Ok(vec![p[0].scale(s[0])]),
-        _ => G::scale_into(p, s, op == Kernel::VectorScale),
+        Kernel::Msm => Ok(CanonicalOutput::Point(G::msm(s, p)?)),
+        Kernel::Scale => Ok(CanonicalOutput::Point(p[0].scale(s[0]))),
+        _ => G::scale_into(p, s, op == Kernel::VectorScale).map(CanonicalOutput::Points),
     }
 }
 fn arithmetic_chain<G: Curve>(
@@ -254,17 +294,53 @@ fn arithmetic_chain<G: Curve>(
     scalars: &[ark::Scalar],
     points: &[G],
     length: usize,
-) -> Result<Vec<G>> {
+) -> Result<CanonicalOutput<G>> {
     let mut result = arithmetic::<G>(op, scalars, points)?;
     for _ in 1..length {
-        result = if op == Kernel::Msm {
-            vec![result[0].add(G::msm(scalars, points)?)]
-        } else {
-            arithmetic::<G>(op, scalars, &result)?
+        result = match result {
+            CanonicalOutput::Point(previous) if op == Kernel::Msm => {
+                CanonicalOutput::Point(previous.add(G::msm(scalars, points)?))
+            }
+            CanonicalOutput::Point(previous) => CanonicalOutput::Point(previous.scale(scalars[0])),
+            CanonicalOutput::Points(previous) => arithmetic::<G>(op, scalars, &previous)?,
         };
     }
     Ok(result)
 }
+
+// Check bulk scaling and MSM through scalar multiplication and addition rather
+// than reusing the timed plan. Both providers share the scalar arithmetic oracle.
+fn expected_curve<G: Curve>(
+    op: Kernel,
+    scalars: &[ark::Scalar],
+    points: &[G],
+    length: usize,
+) -> Result<Vec<G>> {
+    match op {
+        Kernel::Msm => {
+            let term = points
+                .iter()
+                .zip(scalars)
+                .fold(G::identity(), |sum, (&point, &scalar)| {
+                    sum.add(point.scale(scalar))
+                });
+            Ok(vec![
+                (0..length).fold(G::identity(), |sum, _| sum.add(term)),
+            ])
+        }
+        Kernel::Scale | Kernel::ScaleEach | Kernel::VectorScale => {
+            let mut result = points.to_vec();
+            for _ in 0..length {
+                for (i, point) in result.iter_mut().enumerate() {
+                    *point = point.scale(scalars[if op == Kernel::ScaleEach { i } else { 0 }]);
+                }
+            }
+            Ok(result)
+        }
+        _ => Err("unsupported BLS12-381 curve oracle".into()),
+    }
+}
+
 fn foreign_chain<G: Curve>(
     op: Kernel,
     scalars: &blst::ScalarVector,
@@ -296,15 +372,15 @@ enum ForeignOutput<G: Curve> {
     Points(G::ForeignBulk),
 }
 impl<G: Curve> ForeignOutput<G> {
-    fn export(self) -> Result<Vec<G>> {
+    fn export(self) -> Result<CanonicalOutput<G>> {
         match self {
-            Self::Point(p) => Ok(vec![G::export(p)?]),
-            Self::Points(p) => G::bulk_export(&p),
+            Self::Point(p) => G::export(p).map(CanonicalOutput::Point),
+            Self::Points(p) => G::bulk_export(&p).map(CanonicalOutput::Points),
         }
     }
 }
 enum Output<G: Curve> {
-    Native(Vec<G>),
+    Native(CanonicalOutput<G>),
     Foreign(ForeignOutput<G>, Option<blst::ScalarVector>),
 }
 
@@ -317,17 +393,18 @@ fn curve_run<G: Curve>(
     chain_length: usize,
 ) -> Result<Report> {
     let mut s = scalars(n);
-    let p: Vec<_> = s.iter().rev().map(|&s| G::generator().scale(s)).collect();
+    let p: Vec<_> = scalars_for(b"bases", n)
+        .iter()
+        .map(|&s| G::generator().scale(s))
+        .collect();
     if op == Kernel::VectorScale {
         s.truncate(1);
     }
-    let fp = G::bulk_import(&p)?;
-    let fs = import_scalars(&s)?;
     let conversion = matches!(boundary, Boundary::Import | Boundary::Export);
     let expected = if conversion {
         p.clone()
     } else {
-        arithmetic_chain::<G>(op, &s, &p, chain_length)?
+        expected_curve::<G>(op, &s, &p, chain_length)?
     };
     if matches!(
         boundary,
@@ -355,6 +432,13 @@ fn curve_run<G: Curve>(
             chain_length,
         );
     }
+    let fp = (provider == Provider::Blst
+        && matches!(boundary, Boundary::Resident | Boundary::Export))
+    .then(|| G::bulk_import(&p))
+    .transpose()?;
+    let fs = (provider == Provider::Blst && boundary == Boundary::Resident)
+        .then(|| import_scalars(&s))
+        .transpose()?;
     let samples = measure::measure(
         request.plan,
         || Ok(()),
@@ -363,14 +447,22 @@ fn curve_run<G: Curve>(
                 Output::Native(arithmetic_chain::<G>(op, &s, &p, chain_length)?)
             } else {
                 match boundary {
-                    Boundary::Resident => {
-                        Output::Foreign(foreign_chain::<G>(op, &fs, &fp, chain_length)?, None)
-                    }
+                    Boundary::Resident => Output::Foreign(
+                        foreign_chain::<G>(
+                            op,
+                            fs.as_ref().unwrap(),
+                            fp.as_ref().unwrap(),
+                            chain_length,
+                        )?,
+                        None,
+                    ),
                     Boundary::Import => Output::Foreign(
                         ForeignOutput::Points(G::bulk_import(&p)?),
                         Some(import_scalars(&s)?),
                     ),
-                    Boundary::Export => Output::Native(G::bulk_export(&fp)?),
+                    Boundary::Export => Output::Native(CanonicalOutput::Points(G::bulk_export(
+                        fp.as_ref().unwrap(),
+                    )?)),
                     Boundary::Converted => {
                         let points = G::bulk_import(&p)?;
                         let scalars = import_scalars(&s)?;
@@ -386,15 +478,18 @@ fn curve_run<G: Curve>(
         },
         |out| {
             let out = match out {
-                Output::Native(out) => out,
+                Output::Native(out) => out.into_points(),
                 Output::Foreign(out, scalars) => {
-                    if scalars.as_ref().is_some_and(|scalars| {
-                        scalars.iter().map(|s| s.to_bytes_le()).collect::<Vec<_>>()
-                            != fs.iter().map(|s| s.to_bytes_le()).collect::<Vec<_>>()
-                    }) {
-                        return Err(Failure::IncorrectResult);
+                    if let Some(scalars) = scalars {
+                        let actual = scalars
+                            .iter()
+                            .map(|value| blst::arkworks::export_scalar(value).map_err(fail))
+                            .collect::<Result<Vec<_>>>()?;
+                        if actual != s {
+                            return Err(Failure::IncorrectResult);
+                        }
                     }
-                    out.export()?
+                    out.export()?.into_points()
                 }
             };
             if out == expected {
@@ -432,9 +527,6 @@ fn pairing_run(
             right[i + 1] = right[i];
         }
     }
-    let p = blst::G1Vector::try_from_fn(n, |i| blst::arkworks::import_g1(left[i])).map_err(fail)?;
-    let q =
-        blst::G2Vector::try_from_fn(n, |i| blst::arkworks::import_g2(right[i])).map_err(fail)?;
     let expected = ark::pairing_check(&left, &right).map_err(fail)?;
     if matches!(
         boundary,
@@ -455,6 +547,16 @@ fn pairing_run(
             chain_length,
         );
     }
+    let resident = (provider == Provider::Blst && boundary == Boundary::Resident)
+        .then(|| {
+            Ok::<_, Failure>((
+                blst::G1Vector::try_from_fn(n, |i| blst::arkworks::import_g1(left[i]))
+                    .map_err(fail)?,
+                blst::G2Vector::try_from_fn(n, |i| blst::arkworks::import_g2(right[i]))
+                    .map_err(fail)?,
+            ))
+        })
+        .transpose()?;
     let samples = measure::measure(
         request.plan,
         || Ok(()),
@@ -464,8 +566,9 @@ fn pairing_run(
                     .map(|_| ark::pairing_check(&left, &right).map_err(fail))
                     .collect::<Result<Vec<_>>>()
             } else if boundary == Boundary::Resident {
+                let (p, q) = resident.as_ref().unwrap();
                 (0..chain_length)
-                    .map(|_| blst::pairing_check_bulk(&p, &q).map_err(fail))
+                    .map(|_| blst::pairing_check_bulk(p, q).map_err(fail))
                     .collect()
             } else {
                 let p = blst::G1Vector::try_from_fn(n, |i| blst::arkworks::import_g1(left[i]))
@@ -536,7 +639,7 @@ pub fn run(
 ) -> Result<Report> {
     if !Family::Bls12381.supports(provider)
         || request.operation != Operation::Run
-        || !(1..=4096).contains(&elements)
+        || !(1..=kernel.max_elements()).contains(&elements)
         || matches!(kernel, Kernel::Scale | Kernel::FieldMul) && elements != 1
         || !(1..=32).contains(&chain_length)
         || chain_length != 1
@@ -744,7 +847,7 @@ fn scalar_run(
     chain_length: usize,
 ) -> Result<Report> {
     let left = scalars(n);
-    let right: Vec<_> = left.iter().rev().copied().collect();
+    let right = scalars_for(b"factors", n);
     let mut expected = left.clone();
     for _ in 0..chain_length {
         for (out, factor) in expected.iter_mut().zip(&right) {
@@ -774,8 +877,9 @@ fn scalar_run(
             chain_length,
         );
     }
-    let foreign_left = import_scalars(&left)?;
-    let foreign_right = import_scalars(&right)?;
+    let resident = (provider == Provider::Blst && boundary == Boundary::Resident)
+        .then(|| Ok::<_, Failure>((import_scalars(&left)?, import_scalars(&right)?)))
+        .transpose()?;
     enum ScalarOutput {
         NativeField(ark::Scalar),
         ForeignField(blst::Scalar),
@@ -825,9 +929,12 @@ fn scalar_run(
                     }
                     Ok(ScalarOutput::NativeField(result))
                 } else {
-                    let mut result: Vec<_> = left.iter().zip(&right).map(|(a, b)| *a * b).collect();
+                    let mut result = vec![ark::Scalar::from(0); n];
+                    zkc_kernels::vector::mul(&left, &right, &mut result).map_err(fail)?;
                     for _ in 1..chain_length {
-                        result = result.iter().zip(&right).map(|(a, b)| *a * b).collect();
+                        let mut next = vec![ark::Scalar::from(0); n];
+                        zkc_kernels::vector::mul(&result, &right, &mut next).map_err(fail)?;
+                        result = next;
                     }
                     Ok(ScalarOutput::NativeVector(result))
                 }
@@ -836,7 +943,8 @@ fn scalar_run(
                 let b = import_scalars(&right)?;
                 Ok(ScalarOutput::NativeVector(export(compute(&a, &b)?)?))
             } else {
-                compute(&foreign_left, &foreign_right)
+                let (a, b) = resident.as_ref().unwrap();
+                compute(a, b)
             }
         },
         |out| {
@@ -870,6 +978,38 @@ mod tests {
             .unwrap();
         request.cpu = Some(zkc::execution::CpuExecution::serial().unwrap());
         request
+    }
+
+    #[test]
+    fn single_step_fixtures_detect_reversed_outputs() {
+        let s = scalars(4);
+        let factors = scalars_for(b"factors", 4);
+        let product: Vec<_> = s.iter().zip(&factors).map(|(a, b)| *a * b).collect();
+        assert_ne!(product, product.iter().rev().copied().collect::<Vec<_>>());
+        fn group<G: Curve>() {
+            let s = scalars(4);
+            let p: Vec<_> = scalars_for(b"bases", 4)
+                .iter()
+                .map(|&s| G::generator().scale(s))
+                .collect();
+            let expected = expected_curve(Kernel::ScaleEach, &s, &p, 1).unwrap();
+            assert!(expected != expected.iter().rev().copied().collect::<Vec<_>>());
+            for (op, points) in [
+                (Kernel::Scale, &p[..1]),
+                (Kernel::Msm, &p[..]),
+                (Kernel::ScaleEach, &p[..]),
+                (Kernel::VectorScale, &p[..]),
+            ] {
+                let out = arithmetic_chain(op, &s, points, 3).unwrap();
+                assert_eq!(
+                    matches!(&out, CanonicalOutput::Point(_)),
+                    matches!(op, Kernel::Scale | Kernel::Msm)
+                );
+                assert!(out.into_points() == expected_curve(op, &s, points, 3).unwrap());
+            }
+        }
+        group::<ark::G1>();
+        group::<ark::G2>();
     }
 
     #[test]
@@ -934,6 +1074,10 @@ mod tests {
             (Group::Scalar, Kernel::VectorMul, "scalar", "vector_mul", 2),
             (Group::G1, Kernel::Msm, "g1", "msm", 2),
             (Group::G2, Kernel::Msm, "g2", "msm", 2),
+            (Group::G1, Kernel::ScaleEach, "g1", "scale_each", 33),
+            (Group::G2, Kernel::ScaleEach, "g2", "scale_each", 33),
+            (Group::G1, Kernel::VectorScale, "g1", "vector_scale", 33),
+            (Group::G2, Kernel::VectorScale, "g2", "vector_scale", 33),
             (
                 Group::Pairing,
                 Kernel::PairingCheck,
@@ -959,6 +1103,85 @@ mod tests {
                         } else {
                             "blst "
                         }));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn vector_controls_cross_parallel_grains_at_each_execution_boundary() {
+        let cpu = zkc::execution::CpuExecution::new(4).unwrap();
+        for (family, provider) in [
+            (Family::Bls12381, Provider::Arkworks),
+            (Family::Bls12381, Provider::Blst),
+            (Family::Bn254, Provider::Arkworks),
+            (Family::Bn254, Provider::Halo2curvesAxiom),
+        ] {
+            for (boundary, spelling) in [
+                (Boundary::Resident, "resident"),
+                (Boundary::Converted, "converted"),
+                (Boundary::Installed, "installed"),
+                (Boundary::ResidentInstalledChain, "resident_installed_chain"),
+                (Boundary::WireResidentChain, "wire_resident_chain"),
+            ] {
+                // Cover a nonempty chunk tail and the largest catalog chains.
+                let shapes: &[(usize, usize)] = if boundary == Boundary::Installed {
+                    &[(8193, 1)]
+                } else {
+                    &[(8193, 2), (32_768, 4)]
+                };
+                for &(n, length) in shapes {
+                    let mut request = request("scalar", "vector_mul", spelling, n, length);
+                    request.cpu = Some(cpu.clone());
+                    request.backend = crate::Backend::Kernel {
+                        family,
+                        provider,
+                        group: Group::Scalar,
+                        kernel: Kernel::VectorMul,
+                        boundary,
+                        elements: n,
+                        chain_length: length,
+                    };
+                    let result = cpu.enter(|| {
+                        run_family(
+                            &request,
+                            family,
+                            provider,
+                            Group::Scalar,
+                            Kernel::VectorMul,
+                            boundary,
+                            n,
+                            length,
+                        )
+                    });
+                    assert_eq!(result.unwrap().samples.len(), 2);
+                    if boundary == Boundary::Installed && provider != Provider::Arkworks {
+                        let refused = cpu.enter(|| {
+                            run_family(
+                                &request,
+                                family,
+                                provider,
+                                Group::Scalar,
+                                Kernel::VectorMul,
+                                boundary,
+                                32_768,
+                                1,
+                            )
+                        });
+                        assert!(matches!(refused, Err(Failure::Failed(message))
+                            if message.contains("numerical-work")));
+                    }
+                    for (group, kernel, elements) in [
+                        (Group::Scalar, Kernel::VectorMul, 65_537),
+                        (Group::G1, Kernel::Msm, 4097),
+                    ] {
+                        assert!(
+                            run_family(
+                                &request, family, provider, group, kernel, boundary, elements, 2,
+                            )
+                            .is_err()
+                        );
                     }
                 }
             }
