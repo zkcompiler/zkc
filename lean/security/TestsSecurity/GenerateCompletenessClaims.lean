@@ -1,27 +1,9 @@
-import ZkcTools.StructuredSource.Root
+import ZkcSecurity.Generation.Roots.Stages
 
+/-! Executable driver; production root configuration owns all selections. -/
 namespace TestsSecurity.GenerateCompletenessClaims
 
-/-! Select existing closed subjects and proved endpoint theorems. The printer
-supplies uniform structural/receipt assembly for each descriptor. -/
-open ZkcTools.StructuredSource.Root
-
-def descriptors : List FixedCompletenessOutput :=
-  ["SmallSumcheck", "TwoSums"].map fun name => {
-    moduleName := "ZkcSecurity.Examples.Generated." ++ name ++ "CompletenessClaims"
-    subjectModule := "ZkcSecurity.Examples.Generated." ++ name
-    subjectNamespace := "ZkcSecurity.Examples.Generated." ++ name
-    proofModule := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "Completeness"
-    proofName := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "Completeness.compiled_ideal_complete"
-    capabilitiesExpression := "ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)" }
-
 def main (args : List String) : IO Unit := do
-  let [directory] := args | throw (IO.userError "expected output directory")
-  for descriptor in descriptors do
-    let path := System.FilePath.mk directory /
-      (descriptor.moduleName.replace "." "/" ++ ".lean")
-    IO.FS.createDirAll path.parent.get!
-    IO.FS.writeFile path (fixedCompletenessSource descriptor)
-    IO.println s!"generated {descriptor.moduleName}"
+  ZkcSecurity.Generation.Roots.generateStage "completeness-claims" args
 
 end TestsSecurity.GenerateCompletenessClaims

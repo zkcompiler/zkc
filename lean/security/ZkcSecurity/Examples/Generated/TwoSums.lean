@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
+public import ZkcSecurity.Examples.Generated.Components.TwoSumsSources
 public import ZkcExamples.Construction.Generated.TwoSumsPair
 public import ZkcSecurity.Domains.PrimeField
 public import ZkcSecurity.Tools.PairConstruction
@@ -15,8 +15,8 @@ set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 noncomputable section
 
-abbrev original : Snapshot := ZkcExamples.Structured.Generated.Bindings.TwoSumsData.snapshot
-abbrev imported : Imported original := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported
+abbrev original : Snapshot := ZkcSecurity.Examples.Generated.Components.TwoSumsSources.original
+abbrev imported : Imported original := ZkcSecurity.Examples.Generated.Components.TwoSumsSources.imported
 abbrev artifacts := ZkcExamples.Construction.Generated.TwoSumsPair.artifacts
 
 def selected : Zkc.Construction.AuthoredPair.Selection original :=

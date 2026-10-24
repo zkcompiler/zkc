@@ -1,6 +1,7 @@
 module
 
 public import Lean
+public import Zkc.Source.Structured.Import
 
 @[expose] public section
 
@@ -12,6 +13,84 @@ namespace ZkcTools.StructuredSource.Root
 
 def quoted (value : String) : String := reprStr value
 def paren (value : String) : String := "(" ++ value ++ ")"
+
+/-- A source helper alias carries the exact admitted origin and specialization.
+The ordinal is generated from the checked helper table, never authored. -/
+structure SourceAlias where
+  origin : String
+  arguments : List (String × String)
+  symbol : String
+  index : Nat
+  deriving Repr
+
+/-- Missing, malformed and ambiguous origins are transport failures. This does
+not infer a library realization from the spelling of an origin. -/
+def sourceAliases (snapshot : Zkc.Source.Structured.Snapshot)
+    (helpers : List String) : Except String (List SourceAlias) := do
+  let mut aliases := []
+  for definition in snapshot.definitions do
+    let .function function := definition | continue
+    if function.kind != .local then continue
+    let some (origin, arguments) := function.origin | throw "root-missing-helper-origin"
+    unless definition.headerValid do throw "root-malformed-helper-origin"
+    let [index] := (helpers.zipIdx.filter (fun (name, _) => name == function.name)).map Prod.snd
+      | throw "root-helper-origin-association"
+    if aliases.any (fun alias => alias.origin == origin && alias.arguments == arguments) then
+      throw "root-ambiguous-helper-origin"
+    aliases := aliases ++ [⟨origin, arguments, function.name, index⟩]
+  return aliases
+
+/-- Decode the frontend's explicit UTF-8 label encoding. Unlabelled sites are
+refused, rather than assigned a new request-visible identity. -/
+def sourceLabel (site : String) : Except String String := do
+  let some hex := site.dropPrefix? "label_" | throw "root-unlabelled-charge-site"
+  let chars := hex.toString.toList
+  unless chars.length % 2 == 0 do throw "root-malformed-charge-label"
+  let digits := "0123456789abcdef".toList
+  let values ← chars.mapM fun char => do
+    let some value := digits.idxOf? char | throw "root-malformed-charge-label"
+    pure value
+  let bytes := (List.range (values.length / 2)).map fun index =>
+    UInt8.ofNat (values[2 * index]! * 16 + values[2 * index + 1]!)
+  let some label := String.fromUTF8? (ByteArray.mk bytes.toArray)
+    | throw "root-malformed-charge-label"
+  if label.isEmpty || label.contains '.' then throw "root-malformed-charge-label"
+  return label
+
+/-- Source identity, including specialization, determines the alias name.
+Hex encoding avoids Lean keyword/identifier collisions and never reverses a
+compiled symbol hash. Reordering the helper table only changes its witness. -/
+def sourceAliasName (alias : SourceAlias) : String :=
+  let hex := fun (value : String) => String.join (value.toByteArray.data.toList.map fun byte =>
+    let digits := "0123456789abcdef".toList
+    String.ofList [digits[byte.toNat / 16]!, digits[byte.toNat % 16]!])
+  "source_" ++ hex alias.origin ++ "_args_" ++
+    (if alias.arguments.isEmpty then "none" else "_".intercalate
+      (alias.arguments.map fun (key, value) => hex key ++ "_value_" ++ hex value))
+
+/-- Publish typed aliases and kernel-checked associations with the retained raw
+origin. Alias ordinals and both source/checked positions are generated. -/
+def sourceAliasSource (moduleName sourceModule : String)
+    (snapshot : Zkc.Source.Structured.Snapshot) (helpers : List String) : Except String String := do
+  let aliases ← sourceAliases snapshot helpers
+  let mut text := "module\n\npublic import " ++ sourceModule ++
+    "\n\n@[expose] public section\n\n/-! Generated exact source-origin aliases. -/\n" ++
+    "namespace " ++ moduleName ++ "\nopen Zkc.Source.Structured\n" ++
+    "set_option maxRecDepth 50000\nset_option maxHeartbeats 16000000\nnoncomputable section\n\n" ++
+    "abbrev imported := " ++ sourceModule ++ ".imported\n" ++
+    "abbrev original := " ++ sourceModule ++ ".program.snapshot\n\n"
+  for alias in aliases do
+    let name := sourceAliasName alias
+    let arguments := "[" ++ ", ".intercalate (alias.arguments.map fun (key, value) =>
+      "(" ++ quoted key ++ ", " ++ quoted value ++ ")") ++ "]"
+    text := text ++ "abbrev " ++ name ++ " := imported.program.payload.definitions.get ⟨" ++
+      toString alias.index ++ ", by decide +kernel⟩\n" ++
+      "theorem " ++ name ++ "_symbol : " ++ name ++ ".name = " ++ quoted alias.symbol ++ " := rfl\n" ++
+      "theorem " ++ name ++ "_origin :\n" ++
+      "    ((original.definitions.filterMap (fun | .function function => some function | _ => none)).find? (fun function => function.name == " ++ name ++ ".name)).bind\n" ++
+      "      (fun function => function.origin) = some (" ++ quoted alias.origin ++ ", " ++ arguments ++
+      ") := by decide +kernel\n\n"
+  return text ++ "end\nend " ++ moduleName ++ "\n"
 
 structure FixedSubjectOutput where
   moduleName : String

@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
+public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSources
 public import ZkcExamples.Construction.Generated.SmallSumcheckPair
 public import ZkcSecurity.Domains.PrimeField
 public import ZkcSecurity.Tools.PairConstruction
@@ -15,8 +15,8 @@ set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 noncomputable section
 
-abbrev original : Snapshot := ZkcExamples.Structured.SumcheckSourceData.snapshot
-abbrev imported : Imported original := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported
+abbrev original : Snapshot := ZkcSecurity.Examples.Generated.Components.SmallSumcheckSources.original
+abbrev imported : Imported original := ZkcSecurity.Examples.Generated.Components.SmallSumcheckSources.imported
 abbrev artifacts := ZkcExamples.Construction.Generated.SmallSumcheckPair.artifacts
 
 def selected : Zkc.Construction.AuthoredPair.Selection original :=
