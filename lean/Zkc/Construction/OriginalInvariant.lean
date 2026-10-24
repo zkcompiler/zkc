@@ -18,26 +18,28 @@ private theorem receive_frames (routing : Routing) (state : State carriers)
     PIR.Yields (fun result => result.2.frames = state.frames) (receive routing state ty site sender) := by
   cases mode : routing.mode with
   | producer =>
-      simp only [receive, mode]
+      dsimp only [receive]
+      simp only [mode]
       cases ty <;> try trivial
       dsimp only
       split
       · trivial
       · unfold queryField
         split
-        · simp only [PIR.Process.bind, record, PIR.Yields]
+        · dsimp only [PIR.Process.bind, record, PIR.Yields]
           intros
           trivial
         · trivial
   | validator =>
-      simp only [receive, mode]
+      dsimp only [receive]
+      simp only [mode]
       split
       · trivial
       · intro value
         dsimp only
         split
         · trivial
-        · simp only [record, PIR.Process.bind, PIR.Yields]
+        · dsimp only [record, PIR.Process.bind, PIR.Yields]
           intros
           trivial
 
@@ -47,7 +49,7 @@ private theorem send_frames (routing : Routing) (state : State carriers)
   cases mode : routing.mode <;> simp only [send, mode]
   all_goals
     split
-    · simp only [record, PIR.Yields]
+    · dsimp only [record, PIR.Yields]
       intros
       trivial
     · trivial

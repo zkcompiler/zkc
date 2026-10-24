@@ -26,7 +26,8 @@ private theorem receive_forget (routing : Routing) (state : State carriers) (ty 
       receive routing state ty site sender := by
   cases mode : routing.mode with
   | producer =>
-      simp only [receive, mode]
+      dsimp only [receive]
+      simp only [mode]
       cases ty <;> try rfl
       dsimp only
       split
@@ -34,7 +35,8 @@ private theorem receive_forget (routing : Routing) (state : State carriers) (ty 
       · simp only [PIR.Process.interpret_bind, queryField_forget]
         congr 1
   | validator =>
-      simp only [receive, mode]
+      dsimp only [receive]
+      simp only [mode]
       split
       · rfl
       · simp only [PIR.Process.interpret, forgetCheckpoints, PIR.Process.bind]
