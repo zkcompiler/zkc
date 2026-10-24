@@ -45,8 +45,9 @@ def query : Template :=
 def message : Template :=
   ⟨"main", [], ["message", "main", "m", "m", "P", "V"]⟩
 def constructed (instructions : List Instruction) (returned : List Nat) : Participant :=
-  ⟨snapshot.source, snapshot.source, policy, "fixture", [.transcript "suite"],
-    [.data .boolean, .transcript "suite"], instructions, returned⟩
+  { source := snapshot.source, candidate := snapshot.source, policy, symbol := "fixture",
+    inputs := [.transcript "suite"], outputs := [.data .boolean, .transcript "suite"],
+    instructions, returned }
 
 def queryInstructions : List Instruction :=
   [⟨.indicesEmpty, [], [.indices], []⟩,
