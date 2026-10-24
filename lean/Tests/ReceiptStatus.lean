@@ -5,6 +5,8 @@ This test driver is never used by the production receipt reporter. -/
 set_option autoImplicit false
 open ReceiptAudit
 
+namespace Tests.ReceiptStatus
+
 example : classify ⟨true, .available, []⟩ = .certified := rfl
 example : classify ⟨true, .available, [⟨.kernel, false, "extra premise"⟩]⟩ = .open := rfl
 example : classify ⟨false, .undefined ["registered meaning"], []⟩ = .incomplete := rfl
@@ -34,3 +36,5 @@ def main : IO Unit := do
       | .error error => Lean.Json.mkObj [("error", .str error)]
     output.putStrLn value.compress
     output.flush
+
+end Tests.ReceiptStatus

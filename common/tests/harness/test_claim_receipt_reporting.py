@@ -21,14 +21,14 @@ EXPORTED_STAGE_LINKS = {
 def pure_classifier():
     """Run the actual Lean policy on mock exports, without claiming provenance."""
     root = Path(__file__).resolve().parents[3] / "lean"
-    process = subprocess.Popen(["lake", "env", "lean", "--run", "Tests/ReceiptStatus.lean"], cwd=root,
+    process = subprocess.Popen(["lake", "env", "lean", "--run", "checks/ReceiptStatus.lean"], cwd=root,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     def invoke(payload, _packages):
         process.stdin.write(json.dumps(payload) + "\n")
         process.stdin.flush()
         line = process.stdout.readline()
-        # #print axioms is emitted by the test driver before its JSON loop.
+        # Ignore optional Lean diagnostics before the JSON response.
         while line and not line.startswith("{"):
             line = process.stdout.readline()
         assert line, process.stderr.read()
