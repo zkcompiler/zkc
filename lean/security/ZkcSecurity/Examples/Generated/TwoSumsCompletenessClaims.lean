@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.Generated.TwoSums
-public import ZkcSecurity.Examples.Components.TwoSumsCompleteness
+public import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
 public import ZkcSecurity.Tools.ClaimConstruction
 
 @[expose] public section
@@ -39,7 +39,7 @@ def library : ZkcSecurity.Tools.ClaimConstruction.Library where
   properties := ``properties
   models := ``models
   normalization := [``subject, ``authority, ``properties, ``models, ``capabilities]
-  theoremMethods := [(⟨"fs.honest_completeness", 0⟩, ``ZkcSecurity.Examples.Components.TwoSums.compiled_ideal_complete)]
+  theoremMethods := [(⟨"fs.honest_completeness", 0⟩, ``ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness.compiled_ideal_complete)]
 
 claim_request completeData using library method
   (some (⟨⟨"fs.honest_completeness", 0⟩, []⟩ : Wire.Application))

@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Components.SmallSumcheckCompleteness
-public import ZkcSecurity.Examples.Components.TwoSumsCompleteness
+public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness
+public import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
 
 @[expose] public section
 
@@ -19,10 +19,10 @@ local instance : ∀ event : Domain.Event blsScalarModel.toCarriers,
     SampleableType (Domain.Raw event) := rawSampleable Zkc.Source.Structured.blsModulus
 
 example : CanonicalCompleteness Generated.SmallSumcheck.subject 0 :=
-  Components.SmallSumcheck.compiled_ideal_complete
+  Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete
 
 example : CanonicalCompleteness Generated.TwoSums.subject 0 :=
-  Components.TwoSums.compiled_ideal_complete
+  Generated.Components.TwoSumsCompleteness.compiled_ideal_complete
 
 example (service : Option Nat) :
     Generated.SmallSumcheck.subject.HonestInput
@@ -61,10 +61,10 @@ example (service : Option Nat) :
   rw [Generated.Components.TwoSumsABI.honestInput_iff]
   simp
 
-#print axioms Components.SmallSumcheck.compiled_ideal_complete
-#print axioms Components.TwoSums.compiled_ideal_complete
-#print axioms Components.SmallSumcheck.mathematical_readback
-#print axioms Components.TwoSums.mathematical_readback
+#print axioms Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete
+#print axioms Generated.Components.TwoSumsCompleteness.compiled_ideal_complete
+#print axioms Generated.Components.SmallSumcheckCompleteness.readback
+#print axioms Generated.Components.TwoSumsCompleteness.readback
 
 end
 end TestsSecurity.SumcheckRootCompleteness

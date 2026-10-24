@@ -11,8 +11,8 @@ def descriptors : List FixedCompletenessOutput :=
     moduleName := "ZkcSecurity.Examples.Generated." ++ name ++ "CompletenessClaims"
     subjectModule := "ZkcSecurity.Examples.Generated." ++ name
     subjectNamespace := "ZkcSecurity.Examples.Generated." ++ name
-    proofModule := "ZkcSecurity.Examples.Components." ++ name ++ "Completeness"
-    proofName := "ZkcSecurity.Examples.Components." ++ name ++ ".compiled_ideal_complete"
+    proofModule := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "Completeness"
+    proofName := "ZkcSecurity.Examples.Generated.Components." ++ name ++ "Completeness.compiled_ideal_complete"
     capabilitiesExpression := "ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)" }
 
 def main (args : List String) : IO Unit := do

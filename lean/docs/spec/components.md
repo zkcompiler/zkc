@@ -142,9 +142,28 @@ the helper-realization boundary. The tactic never chooses a protocol by name.
 Both compiled table roots use these shared cost and rejection composers.
 Independent opaque-component controls reject an OR final check when only one
 child is known false, a missing contract and a continuation law restricted to
-the initial history. Source-specific root presentation, binding and subject
-assembly remain authored; these examples do not yet demonstrate zero authored
-structural glue.
+the initial history. Source-driven generation now supplies both full validator presentations and
+their bridges from admitted inputs and every discovered round. The checked
+constructor preserves complete returned data and stopped paths. Fixed security
+subject export assembly remains authored; these examples do not yet demonstrate
+zero authored structural glue.
+
+`compose_component_readback` assembles the honest producer–validator connection
+from installed paired component rules. Each continuation receives the complete
+returned representation and its invariant. A stopped execution, unknown component,
+unproved side premise or false terminal condition cannot establish completion.
+The table adapter uses the same discovered whole-body correspondences as the
+adversarial view, retaining both environments and the shared history.
+
+For the two actual table roots, `Generation.SumcheckCompleteness` derives input
+projection and all occurrence setup from the admitted subject/pair. Configuration
+selects domain carriers, sampling, a relation law and a nonvacuity proof. It does
+not supply captures, source offsets, loop counts or a root-specific proof script.
+`prepare_honest_readback` applies those checked input laws and exposes carrier
+types for arithmetic reasoning; it does not establish relation mathematics.
+The resulting generated theorem directly feeds the canonical completeness
+receipt. Mathematical target equations and security-subject assembly remain
+separately owned and counted as author work.
 
 ## Fixed experiments and receipts
 
