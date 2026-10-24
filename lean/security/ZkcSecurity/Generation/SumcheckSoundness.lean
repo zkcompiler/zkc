@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Generation.SumcheckCompleteness
+public import ZkcSecurity.Generation.UniformRoot
 public import ZkcSecurity.Generation.SumcheckInputs
 
 @[expose] public section
@@ -47,7 +47,7 @@ def source (input : Input) : Except String String := do
     throw "soundness-assembly-validator-interface-mismatch"
   let publicNames := metadata.publicPositions.map SubjectABI.inputName
   let binders := String.join ((publicTypes.zip publicNames).map fun (ty, name) =>
-    " (" ++ name ++ " : " ++ SumcheckCompleteness.carrier ty ++ ")")
+    " (" ++ name ++ " : " ++ UniformRoot.carrier ty ++ ")")
   let arguments := " ".intercalate publicNames
   let budget := toString ((rounds.map (·.validator.maximum)).sum)
   let view := output.validatorViewModule

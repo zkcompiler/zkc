@@ -7,7 +7,7 @@ namespace TestsSecurity.HonestOracle
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
 abbrev Raw (_ : Unit) := Fin 2
-abbrev Spec := Honest.Spec Raw
+abbrev Spec := TranscriptOracle.Spec Raw
 
 def once : OracleComp Spec (Fin 2) := Typed.ask (R := Typed.ByLast Raw) (Raw := Raw) [] ()
 
