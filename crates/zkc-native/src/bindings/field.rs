@@ -34,6 +34,12 @@ fn embed(
     // Installed extensions embed their declared base field.
     use crate::domains::{BINARY64, BINARY64_EXT3, KOALA_BEAR, KOALA_BEAR_EXT4, KOALA_BEAR_EXT8};
     let (base, extension) = match binding.arguments.as_slice() {
+        [name] if name == "baby-bear.ext4-binomial11" => {
+            (crate::domains::BABY_BEAR, crate::domains::BABY_BEAR_EXT4)
+        }
+        [name] if name == "goldilocks.ext2-binomial7" => {
+            (crate::domains::GOLDILOCKS, crate::domains::GOLDILOCKS_EXT2)
+        }
         [name] if name == "koala-bear.ext8-binomial3" => (KOALA_BEAR, KOALA_BEAR_EXT8),
         [name] if name == "koala-bear.ext4-binomial3" => (KOALA_BEAR, KOALA_BEAR_EXT4),
         [name] if name == "gf2-64.pentanomial-4-3-1.ext3-trinomial1" => (BINARY64, BINARY64_EXT3),

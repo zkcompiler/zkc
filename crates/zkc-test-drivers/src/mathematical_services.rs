@@ -40,7 +40,7 @@ fn load(
     inputs: Vec<Value>,
 ) -> Result<Runner<NativeBackend>, RuntimeError> {
     let native = backend(role, session);
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -262,7 +262,7 @@ fn main() {
     let deferred = read("services_deferred");
     let single = read("service_single");
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&WithoutServices(backend("Alice", "unsupported")))?;
                 Ok(program)
@@ -328,7 +328,7 @@ fn main() {
         }
         let encoded = serde_json::to_vec(&artifact).unwrap();
         assert!(
-            zkc_runtime::vm::Program::decode(&encoded)
+            zkc_runtime::vm::Program::decode(&encoded, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&backend("Alice", "malformed"))?;
                     Ok(program)
@@ -344,12 +344,15 @@ fn main() {
         serde_json::json!(["query", "hidden", "service_0", "draw", [], ["out"]]),
     );
     assert!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad_local).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend("Alice", "bad_local"))?;
-                Ok(program)
-            })
-            .is_err()
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&bad_local).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&backend("Alice", "bad_local"))?;
+            Ok(program)
+        })
+        .is_err()
     );
 
     // Same generated program, two different host alias relations.
@@ -628,7 +631,7 @@ fn main() {
 
     // A data-entry refusal releases a tentatively acquired service lease.
     let native = backend("Alice", "authorized_session");
-    let admitted = zkc_runtime::vm::Program::decode(&single)
+    let admitted = zkc_runtime::vm::Program::decode(&single, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -673,7 +676,7 @@ fn main() {
         panic!("rng")
     };
     let before = native.observe(token).unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&artifact)
+    let admitted = zkc_runtime::vm::Program::decode(&artifact, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -719,7 +722,7 @@ fn main() {
 
     // Capacity refusal happens at the query cut, before the consume.
     let native = backend("Alice", "capacity");
-    let admitted = zkc_runtime::vm::Program::decode(&single)
+    let admitted = zkc_runtime::vm::Program::decode(&single, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -747,7 +750,7 @@ fn main() {
     assert!(matches!(limited.poll(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
     observe(&registry, &root, 2, 2, false, false);
     let native = backend("Alice", "changing_signature");
-    let admitted = zkc_runtime::vm::Program::decode(&single)
+    let admitted = zkc_runtime::vm::Program::decode(&single, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -781,7 +784,7 @@ fn main() {
         let registry = ServiceRegistry::new(Policy::default());
         let root = tape(&registry, "Alice", 2, &[5, 11]);
         let native = backend("Alice", "bad_reply");
-        let admitted = zkc_runtime::vm::Program::decode(&single)
+        let admitted = zkc_runtime::vm::Program::decode(&single, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)

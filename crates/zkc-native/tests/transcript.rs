@@ -150,12 +150,15 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
         // Generated names have no authority over the source challenge attrs.
         j[2][0][1] = json!("generated_helper");
         j[3][0][6][0][2] = json!("generated_helper");
-        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&j).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let runner = Runner::new(&admitted, "main", role, session, backend, vec![tok, f(7)])
             .unwrap_or_else(|e| panic!("{}", e.error));
         let (out, backend) = finish(runner);
@@ -272,7 +275,8 @@ fn nested() -> Vec<u8> {
         "indices.append",
         "indices.append",
         [],
-        "native/indices.append"
+        "native/indices.append",
+        []
     ]));
     j[2][0][4][0][5] = json!(["empty_coordinates"]);
     j[2][0][4].as_array_mut().unwrap().insert(
@@ -357,7 +361,7 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
             .issue_transcript_for(Identity::Merlin3Fr64Be, wrong, 3, &root())
             .unwrap();
         let old = tok.clone();
-        let a = zkc_runtime::vm::Program::decode(&bytes)
+        let a = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -385,7 +389,7 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
         &["transcript", "transcript"],
         &["a", "b"],
     );
-    let a = zkc_runtime::vm::Program::decode(&bytes)
+    let a = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&issuer)?;
             Ok(program)
@@ -416,25 +420,31 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
     j[2][0][4][2] = challenge("t", "c", "t2");
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&j).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
     j[2][0][4][1][3] = json!(["Source"]);
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&j).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Attributes
     );
     assert!(logical::decode_tree(&root()).is_ok()); // syntactic fixture, NOT source correspondence
@@ -676,6 +686,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
                 value.physical_type().logical().spelling(),
             ],
             implementation: "arkworks/transcript.native.indexed.observe.data".into(),
+            physical_arguments: vec![],
         };
         assert!(binding.signature().is_err());
     }
@@ -780,12 +791,15 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         }
         program[3][0][3] = json!(role);
         program[4][0][2][0][0] = json!(role);
-        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&program).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let runner = Runner::new(
             &admitted,
             "main",

@@ -1,10 +1,9 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
 pub(crate) use super::field::Coefficient;
-use super::field::{Family, with_field};
+use super::field::{Family, StructuredFamily, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
-use std::sync::Arc;
 use zkc_kernels::{
     polynomial::{boundary, evaluate},
     vector::Plan,
@@ -14,10 +13,10 @@ use zkc_runtime::vm::{Identity, Invocation, Value as _};
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
 /// remains delegated to the selected field library.
-fn invert_nonzero<S: Coefficient>(
+fn invert_nonzero<'a, S: Coefficient>(
     values: &[S],
-    allocate: impl FnOnce() -> Result<Vec<S>>,
-) -> Result<Vec<S>> {
+    allocate: impl FnOnce() -> Result<crate::numerical::Destination<'a, Vec<S>>>,
+) -> Result<crate::numerical::Destination<'a, Vec<S>>> {
     let operation = zkc_kernels::vector::Inversion::new(values).map_err(crate::field_error)?;
     let mut out = allocate()?;
     out.resize(values.len(), S::zero());
@@ -51,6 +50,7 @@ fn find_last<S: Coefficient>(
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
     zkc_kernels::allocation::reserve(n).map_err(|_| exhausted("allocation"))
 }
+
 pub(crate) fn equal_len(a: usize, b: usize) -> Result<()> {
     if a != b {
         Err(refused("length-mismatch"))
@@ -64,6 +64,14 @@ pub(crate) fn split_len(n: usize) -> Result<usize> {
     } else {
         Ok(n / 2)
     }
+}
+/// Both ordinary and fixed vectors use the provider's checked reduction path.
+/// Callers validate operands and output allowance before numerical admission.
+pub(crate) fn dot<S: Family>(a: &[S], b: &[S], call: &crate::numerical::Call) -> Result<Value> {
+    equal_len(a.len(), b.len())?;
+    call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
+    call.scalar(512)?
+        .finish(|| Ok(S::field_value(S::dot(a, b)?)))
 }
 pub(crate) fn natural(attrs: &[String], i: usize) -> Result<usize> {
     attrs
@@ -92,7 +100,7 @@ pub(crate) fn apply(
             xs: &[B],
             p: &Policy,
             i: &Invocation<'_>,
-            value: fn(Arc<[E]>) -> Value,
+            value: fn(crate::Buffer<E>) -> Value,
         ) -> Result<Vec<Value>> {
             let width = std::mem::size_of::<E>();
             p.vector_width(xs.len(), width)?;
@@ -104,6 +112,17 @@ pub(crate) fn apply(
         return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearVector(xs)]) => {
                 embed::<KoalaBear, KoalaBearExt8>(xs, p, i, Value::KoalaBearExt8Vector)
+            }
+            (Some(Identity::BabyBearExt4), [Value::BabyBearVector(xs)]) => {
+                embed::<crate::BabyBear, crate::BabyBearExt4>(xs, p, i, Value::BabyBearExt4Vector)
+            }
+            (Some(Identity::GoldilocksExt2), [Value::GoldilocksVector(xs)]) => {
+                embed::<crate::Goldilocks, crate::GoldilocksExt2>(
+                    xs,
+                    p,
+                    i,
+                    Value::GoldilocksExt2Vector,
+                )
             }
             (Some(Identity::KoalaBearExt4), [Value::KoalaBearVector(xs)]) => {
                 embed::<KoalaBear, KoalaBearExt4>(xs, p, i, Value::KoalaBearExt4Vector)
@@ -120,6 +139,12 @@ pub(crate) fn apply(
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
             }
+            (Some(Identity::BabyBearExt4), [Value::BabyBearField(x)]) => {
+                Ok(vec![Value::BabyBearExt4Field((*x).into())])
+            }
+            (Some(Identity::GoldilocksExt2), [Value::GoldilocksField(x)]) => {
+                Ok(vec![Value::GoldilocksExt2Field((*x).into())])
+            }
             (Some(Identity::KoalaBearExt4), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt4Field((*x).into())])
             }
@@ -130,39 +155,10 @@ pub(crate) fn apply(
         };
     }
     with_field!(field.ok_or_else(|| refused("kernel-operands"))?, |S| {
-        dense::<S>(name, args, i, p)
+        structured::<S>(name, args, i, p)
     })
 }
-fn dense<S: Family>(
-    name: &str,
-    args: &[Value],
-    i: &Invocation<'_>,
-    p: &Policy,
-) -> Result<Vec<Value>> {
-    let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
-    let f = |j| S::field(arg(j)?);
-    let v = |j| S::vector(arg(j)?);
-    let index = |j| match arg(j)? {
-        Value::Index(n) => usize::try_from(*n).map_err(|_| refused("index-bounds")),
-        _ => Err(refused("kernel-operands")),
-    };
-    let scalar = |s| Ok(vec![S::field_value(s)]);
-    let boolean = |b| Ok(vec![Value::Bool(b)]);
-    let width = std::mem::size_of::<S>();
-    let allocation = |n| {
-        p.vector_width(n, width)?;
-        p.output(size(n, width)?, i.max_output_bytes)?;
-        reserve::<S>(n)
-    };
-    let call = crate::numerical::Call::new(p, i.max_output_bytes);
-    let destination = |n, initial, per_element| {
-        // Preserve element/output preflights before numerical work and storage.
-        p.vector_width(n, width)?;
-        let bytes = size(n, width)?;
-        p.output(bytes, i.max_output_bytes)?;
-        call.work_items(n, per_element, 1)?;
-        call.output(n, initial, bytes)
-    };
+fn preflight_scalar_output(i: &Invocation<'_>, p: &Policy) -> Result<()> {
     // Scalar results (including Boolean checks) reserve before arithmetic.
     if i.binding.signature().outputs.iter().all(|t| {
         matches!(
@@ -172,16 +168,36 @@ fn dense<S: Family>(
     }) {
         p.output(512, i.max_output_bytes)?;
     }
+    Ok(())
+}
+
+/// Structured payloads are available only through their dedicated adapter.
+/// Other operations use the same scalar/vector family as resident providers.
+fn structured<S: StructuredFamily>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    if !name.starts_with("poly.") && !name.starts_with("matrix.") {
+        return dense::<S>(name, args, i, p);
+    }
+    let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
+    let f = |j| S::field(arg(j)?);
+    let v = |j| S::vector(arg(j)?);
+    let index = |j| match arg(j)? {
+        Value::Index(n) => usize::try_from(*n).map_err(|_| refused("index-bounds")),
+        _ => Err(refused("kernel-operands")),
+    };
+    let scalar = |s| Ok(vec![S::field_value(s)]);
+    let boolean = |b| Ok(vec![Value::Bool(b)]);
+    let allocation = |n| {
+        p.vector_width(n, std::mem::size_of::<S>())?;
+        p.output(size(n, std::mem::size_of::<S>())?, i.max_output_bytes)?;
+        reserve::<S>(n)
+    };
+    preflight_scalar_output(i, p)?;
     match name {
-        "field.constant" => {
-            super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p)
-        }
-        "field.add" => scalar(f(0)? + f(1)?),
-        "field.sub" => scalar(f(0)? - f(1)?),
-        "field.mul" => scalar(f(0)? * f(1)?),
-        "field.neg" => scalar(-f(0)?),
-        "field.inverse" => scalar(f(0)?.inverse().ok_or_else(|| refused("zero-inverse"))?),
-        "field.equal" => boolean(f(0)? == f(1)?),
         "poly.univariate_evaluate" => scalar(evaluate(S::polynomial(arg(0)?)?, f(1)?)),
         "poly.univariate_boundary" => scalar(boundary(S::polynomial(arg(0)?)?)),
         "poly.boundary" => scalar(boundary(S::round(arg(0)?)?)),
@@ -194,26 +210,23 @@ fn dense<S: Family>(
             let n = a.iter().rposition(|s| *s != S::zero()).map_or(0, |i| i + 1);
             let mut out = allocation(n)?;
             out.extend_from_slice(&a[..n]);
-            Ok(vec![S::polynomial_value(out.into())])
+            Ok(vec![S::polynomial_value(out.into())?])
         }
         "poly.coefficients" => {
             let a = S::polynomial(arg(0)?)?;
             let mut out = allocation(a.len())?;
             out.extend_from_slice(a);
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![S::vector_value(out)])
         }
         "matrix.mul_vector" | "matrix.transpose_mul_vector" => {
             let m = S::matrix(arg(0)?)?;
-            Ok(vec![S::vector_value(
-                crate::matrix::mul(
-                    m,
-                    v(1)?,
-                    name == "matrix.transpose_mul_vector",
-                    p,
-                    i.max_output_bytes,
-                )?
-                .into(),
-            )])
+            Ok(vec![S::vector_value(crate::matrix::mul(
+                m,
+                v(1)?,
+                name == "matrix.transpose_mul_vector",
+                p,
+                i.max_output_bytes,
+            )?)])
         }
         "matrix.bilinear" => scalar(crate::matrix::bilinear(S::matrix(arg(0)?)?, v(1)?, v(2)?)?),
         "matrix.row_dot" => scalar(crate::matrix::row_dot(
@@ -252,81 +265,12 @@ fn dense<S: Family>(
             S::matrix(arg(0)?)?,
             i.attributes,
         )?),
-        "vector.constant" => {
-            let mut out = allocation(i.attributes.len())?;
-            for literal in i.attributes {
-                out.push(S::decimal(literal)?);
-            }
-            Ok(vec![S::vector_value(out.into())])
-        }
-        "vector.scatter_sum" => {
-            let a = v(0)?;
-            let n = natural(i.attributes, 0)?;
-            equal_len(a.len(), i.attributes.len() - 1)?;
-            // Check all indices before allocating the zero-filled output. A late
-            // bad index must not be masked by an output-allocation failure.
-            for j in 1..i.attributes.len() {
-                if natural(i.attributes, j)? >= n {
-                    return Err(refused("vector-index"));
-                }
-            }
-            let mut out = allocation(n)?;
-            out.resize(n, S::zero());
-            for (j, value) in a.iter().enumerate() {
-                let index = natural(i.attributes, j + 1)?;
-                out[index] = out[index] + *value;
-            }
-            Ok(vec![S::vector_value(out.into())])
-        }
-        "vector.empty" => {
-            p.output(size(0, width)?, i.max_output_bytes)?;
-            Ok(vec![S::vector_value(Arc::from([]))])
-        }
-        "vector.sum" | "vector.product" => {
-            let a = v(0)?;
-            // One load and one accumulator operation per element, plus setup.
-            call.work_items(a.len(), 2, 1)?;
-            let result = call.scalar(512)?;
-            Ok(vec![result.finish(|| {
-                let value = if name == "vector.sum" {
-                    a.iter().fold(S::zero(), |sum, x| sum + *x)
-                } else {
-                    a.iter().fold(S::one(), |product, x| product * *x)
-                };
-                Ok(S::field_value(value))
-            })?])
-        }
-        "vector.dot" => {
-            let (a, b) = (v(0)?, v(1)?);
-            equal_len(a.len(), b.len())?;
-            // Two loads, multiply/add, and any provider accumulator-lane reduction.
-            call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
-            let result = call.scalar(512)?;
-            Ok(vec![result.finish(|| Ok(S::field_value(S::dot(a, b)?)))?])
-        }
-        "field.from_index" => {
-            let Value::Index(mut n) = *arg(0)? else {
-                return Err(refused("kernel-operands"));
-            };
-            let (mut sum, mut bit) = (S::zero(), S::one());
-            while n != 0 {
-                if n & 1 == 1 {
-                    sum = sum + bit;
-                }
-                n >>= 1;
-                bit = bit + bit;
-            }
-            scalar(sum)
-        }
-        "vector.length" => Ok(vec![Value::Index(
-            u64::try_from(v(0)?.len()).map_err(|_| exhausted("size-overflow"))?,
-        )]),
         "poly.divide_opening" => {
             let cs = S::polynomial(arg(0)?)?;
             let (point, value) = (f(1)?, f(2)?);
             if cs.is_empty() {
                 return if value == S::zero() {
-                    Ok(vec![S::polynomial_value(Arc::from([]))])
+                    Ok(vec![S::polynomial_value(crate::Buffer::default())?])
                 } else {
                     Err(refused("polynomial-opening-value"))
                 };
@@ -344,10 +288,157 @@ fn dense<S: Family>(
             while out.last().is_some_and(|x| *x == S::zero()) {
                 out.pop();
             }
-            Ok(vec![S::polynomial_value(out.into())])
+            Ok(vec![S::polynomial_value(out.into())?])
         }
         "poly.coefficient_count" => Ok(vec![Value::Index(
             u64::try_from(S::polynomial(arg(0)?)?.len()).map_err(|_| exhausted("size-overflow"))?,
+        )]),
+        _ => Err(refused("kernel-operands")),
+    }
+}
+
+pub(super) fn dense<S: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    if name.starts_with("field.") {
+        scalar::<S>(name, args, i, p)
+    } else {
+        vector::<S>(name, args, i, p)
+    }
+}
+
+// Scalar arithmetic has no bulk destination, workspace or reservation state.
+#[inline]
+pub(crate) fn scalar<S: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    let field = |j| S::field(args.get(j).ok_or_else(|| refused("kernel-operands"))?);
+    preflight_scalar_output(i, p)?;
+    let value = match name {
+        "field.constant" => {
+            return super::field::publish_literal(&super::field::literal::<S>(i.attributes)?, i, p);
+        }
+        "field.add" => S::field_value(field(0)? + field(1)?),
+        "field.sub" => S::field_value(field(0)? - field(1)?),
+        "field.mul" => S::field_value(field(0)? * field(1)?),
+        "field.neg" => S::field_value(-field(0)?),
+        "field.inverse" => {
+            S::field_value(field(0)?.inverse().ok_or_else(|| refused("zero-inverse"))?)
+        }
+        "field.from_index" => {
+            let Value::Index(mut n) = *args.first().ok_or_else(|| refused("kernel-operands"))?
+            else {
+                return Err(refused("kernel-operands"));
+            };
+            let (mut sum, mut bit) = (S::zero(), S::one());
+            while n != 0 {
+                if n & 1 == 1 {
+                    sum = sum + bit;
+                }
+                n >>= 1;
+                bit = bit + bit;
+            }
+            S::field_value(sum)
+        }
+        "field.equal" => Value::Bool(field(0)? == field(1)?),
+        _ => return Err(refused("kernel-operands")),
+    };
+    Ok(vec![value])
+}
+
+fn vector<S: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
+    let f = |j| S::field(arg(j)?);
+    let v = |j| S::vector(arg(j)?);
+    let index = |j| match arg(j)? {
+        Value::Index(n) => usize::try_from(*n).map_err(|_| refused("index-bounds")),
+        _ => Err(refused("kernel-operands")),
+    };
+    let scalar = |s| Ok(vec![S::field_value(s)]);
+    let boolean = |b| Ok(vec![Value::Bool(b)]);
+    let width = std::mem::size_of::<S>();
+    let call = crate::numerical::Call::new(p, i.max_output_bytes);
+    let output = |n, initial, bytes| {
+        if S::RESIDENT_STORAGE {
+            call.output_owned(n, initial, bytes)
+        } else {
+            call.output(n, initial, bytes)
+        }
+    };
+    let allocation = |n| {
+        p.vector_width(n, width)?;
+        let bytes = size(n, width)?;
+        p.output(bytes, i.max_output_bytes)?;
+        call.destination(S::RESIDENT_STORAGE, bytes, || reserve::<S>(n))
+    };
+    let destination = |n, initial, per_element| {
+        // Preserve element/output preflights before numerical work and storage.
+        p.vector_width(n, width)?;
+        let bytes = size(n, width)?;
+        p.output(bytes, i.max_output_bytes)?;
+        call.work_items(n, per_element, 1)?;
+        output(n, initial, bytes)
+    };
+    preflight_scalar_output(i, p)?;
+    match name {
+        "vector.constant" => Ok(vec![super::literal::vector::<S>(
+            i.attributes,
+            p,
+            i.max_output_bytes,
+        )?]),
+        "vector.scatter_sum" => {
+            let a = v(0)?;
+            let n = natural(i.attributes, 0)?;
+            equal_len(a.len(), i.attributes.len() - 1)?;
+            // Check all indices before allocating the zero-filled output. A late
+            // bad index must not be masked by an output-allocation failure.
+            for j in 1..i.attributes.len() {
+                if natural(i.attributes, j)? >= n {
+                    return Err(refused("vector-index"));
+                }
+            }
+            let mut out = allocation(n)?;
+            out.resize(n, S::zero());
+            for (j, value) in a.iter().enumerate() {
+                let index = natural(i.attributes, j + 1)?;
+                out[index] = out[index] + *value;
+            }
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
+        }
+        "vector.empty" => Ok(vec![
+            allocation(0)?.finish(|values| Ok(S::vector_value(values)))?,
+        ]),
+        "vector.sum" | "vector.product" => {
+            let a = v(0)?;
+            // One load and one accumulator operation per element, plus setup.
+            call.work_items(a.len(), 2, 1)?;
+            let result = call.scalar(512)?;
+            Ok(vec![result.finish(|| {
+                let value = if name == "vector.sum" {
+                    a.iter().fold(S::zero(), |sum, x| sum + *x)
+                } else {
+                    a.iter().fold(S::one(), |product, x| product * *x)
+                };
+                Ok(S::field_value(value))
+            })?])
+        }
+        "vector.dot" => {
+            let (a, b) = (v(0)?, v(1)?);
+            Ok(vec![dot(a, b, &call)?])
+        }
+        "vector.length" => Ok(vec![Value::Index(
+            u64::try_from(v(0)?.len()).map_err(|_| exhausted("size-overflow"))?,
         )]),
         "vector.get" => scalar(
             *v(0)?
@@ -364,7 +455,7 @@ fn dense<S: Family>(
             let slice = a.get(start..end).ok_or_else(|| refused("vector-slice"))?;
             let mut out = allocation(length)?;
             out.extend_from_slice(slice);
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.transpose" => {
             let input = v(0)?;
@@ -386,7 +477,7 @@ fn dense<S: Family>(
                     }
                 }
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.rotate" => {
             let a = v(0)?;
@@ -397,7 +488,7 @@ fn dense<S: Family>(
             let mut out = allocation(a.len())?;
             out.extend_from_slice(&a[k..]);
             out.extend_from_slice(&a[..k]);
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.bit_reverse" | "vector.bit_reverse_rows" => {
             let a = v(0)?;
@@ -419,7 +510,7 @@ fn dense<S: Family>(
                     .ok_or_else(|| refused("vector-bit-reversal"))?;
                 out.extend_from_slice(&a[source * width..(source + 1) * width]);
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.interleave" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -433,13 +524,13 @@ fn dense<S: Family>(
                 out.push(*x);
                 out.push(*y);
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.prefix_product" | "vector.prefix_sum" | "vector.inverse" => {
             let a = v(0)?;
             if name == "vector.inverse" {
                 let out = invert_nonzero(a, || allocation(a.len()))?;
-                return Ok(vec![S::vector_value(out.into())]);
+                return Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?]);
             }
             let mut out = allocation(a.len())?;
             let mut acc = if name == "vector.prefix_product" {
@@ -454,7 +545,7 @@ fn dense<S: Family>(
                 };
                 out.push(acc);
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.fill" | "vector.geometric" | "vector.splat" | "vector.powers" => {
             // Attribute-sized forms historically read the length before the scalar.
@@ -479,9 +570,7 @@ fn dense<S: Family>(
                     power = power * x;
                 }
             }
-            Ok(vec![
-                out.finish(|values| Ok(S::vector_value(values.into())))?,
-            ])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.at" => scalar(
             *v(0)?
@@ -502,19 +591,18 @@ fn dense<S: Family>(
                 i.max_output_bytes,
             )?;
             p.vector_width(half, width)?;
-            let call = crate::numerical::Call::new(p, i.max_output_bytes);
             call.work(
                 (a.len() as u64)
                     .checked_mul(2)
                     .ok_or_else(|| exhausted("numerical-work"))?,
             )?;
-            let mut left = call.output(half, S::zero(), bytes)?;
-            let mut right = call.output(half, S::zero(), bytes)?;
+            let mut left = output(half, S::zero(), bytes)?;
+            let mut right = output(half, S::zero(), bytes)?;
             left.as_mut_slice().copy_from_slice(&a[..half]);
             right.as_mut_slice().copy_from_slice(&a[half..]);
             Ok(vec![
-                left.finish(|values| Ok(S::vector_value(values.into())))?,
-                right.finish(|values| Ok(S::vector_value(values.into())))?,
+                left.finish(|values| Ok(S::vector_value(values)))?,
+                right.finish(|values| Ok(S::vector_value(values)))?,
             ])
         }
         "vector.scale" => {
@@ -525,9 +613,7 @@ fn dense<S: Family>(
             let plan = Plan::select(a.len()).map_err(crate::field_error)?;
             plan.scale(a, x, out.as_mut_slice())
                 .map_err(crate::field_error)?;
-            Ok(vec![
-                out.finish(|values| Ok(S::vector_value(values.into())))?,
-            ])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.append" => {
             let a = v(0)?;
@@ -539,7 +625,7 @@ fn dense<S: Family>(
             let mut out = allocation(n)?;
             out.extend_from_slice(a);
             out.push(x);
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.gather" => {
             let a = v(0)?;
@@ -553,7 +639,7 @@ fn dense<S: Family>(
             for j in 0..i.attributes.len() {
                 out.push(a[natural(i.attributes, j)?]);
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.add" | "vector.sub" | "vector.mul" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -571,9 +657,7 @@ fn dense<S: Family>(
                 plan.sub(a, b, out.as_mut_slice())
                     .map_err(crate::field_error)?;
             }
-            Ok(vec![
-                out.finish(|values| Ok(S::vector_value(values.into())))?,
-            ])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.concat" | "vector.kronecker" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -597,7 +681,7 @@ fn dense<S: Family>(
                     }
                 }
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.matvec" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -625,13 +709,12 @@ fn dense<S: Family>(
             p.vector_width(outer, width)?;
             let bytes = size(outer, width)?;
             p.output(bytes, i.max_output_bytes)?;
-            let call = crate::numerical::Call::new(p, i.max_output_bytes);
             let work = (a.len() as u64)
                 .checked_mul(2)
                 .and_then(|n| n.checked_add(outer as u64))
                 .ok_or_else(|| exhausted("numerical-work"))?;
             call.work(work)?;
-            let mut out = call.output(outer, S::zero(), bytes)?;
+            let mut out = output(outer, S::zero(), bytes)?;
             for (j, destination) in out.as_mut_slice().iter_mut().enumerate() {
                 let mut sum = S::zero();
                 if transpose == 0 {
@@ -651,9 +734,7 @@ fn dense<S: Family>(
                 }
                 *destination = sum;
             }
-            Ok(vec![
-                out.finish(|values| Ok(S::vector_value(values.into())))?,
-            ])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         _ => Err(refused("kernel-operands")),
     }
@@ -687,6 +768,33 @@ impl Value {
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bls12381G2Vector(v.into()))
+    }
+    pub fn baby_bear_vector(values: &[crate::BabyBear], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::BabyBear>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::BabyBearVector(copied.into()))
+    }
+    pub fn baby_bear_ext4_vector(values: &[crate::BabyBearExt4], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::BabyBearExt4>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::BabyBearExt4Vector(copied.into()))
+    }
+    pub fn goldilocks_vector(values: &[crate::Goldilocks], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::Goldilocks>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::GoldilocksVector(copied.into()))
+    }
+    pub fn goldilocks_ext2_vector(
+        values: &[crate::GoldilocksExt2],
+        policy: &Policy,
+    ) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<crate::GoldilocksExt2>())?;
+        let mut copied = reserve(values.len())?;
+        copied.extend_from_slice(values);
+        Ok(Self::GoldilocksExt2Vector(copied.into()))
     }
     pub fn koala_bear_ext8_vector(values: &[KoalaBearExt8], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt8>())?;
@@ -1355,9 +1463,18 @@ mod batch_inversion_tests {
     fn check_values<S: Coefficient>(mut element: impl FnMut(usize) -> S) {
         for n in [0, 1, 2, 17, 257] {
             let values: Vec<_> = (0..n).map(&mut element).collect();
-            let output = invert_nonzero(&values, || Ok(Vec::with_capacity(n))).unwrap();
+            let call = crate::numerical::Call::new(&Policy::default(), usize::MAX);
+            let output = invert_nonzero(&values, || {
+                call.destination(false, 0, || Ok(Vec::with_capacity(n)))
+            })
+            .unwrap();
             assert_eq!(output.len(), n);
-            assert!(values.iter().zip(&output).all(|(x, y)| *x * *y == S::one()));
+            assert!(
+                values
+                    .iter()
+                    .zip(output.iter())
+                    .all(|(x, y)| *x * *y == S::one())
+            );
             for index in [0, n / 2, n.saturating_sub(1)] {
                 if n == 0 {
                     continue;

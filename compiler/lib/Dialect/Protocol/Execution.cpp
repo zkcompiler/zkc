@@ -682,8 +682,8 @@ public:
 
     for (auto &op : root->getRegion(0).front()) {
       if (isa<zkc::local::OperationBindingOp>(op)) {
-        if (!attributes(
-                &op, {"sym_name", "contract", "arguments", "implementation"}))
+        if (!attributes(&op, {"sym_name", "contract", "arguments",
+                              "implementation", "physical_arguments"}))
           return error(problem);
         auto binding = readBinding(&op);
         if (!binding)
@@ -770,8 +770,8 @@ public:
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
       if (isa<zkc::local::OperationBindingOp>(op)) {
-        if (!attributes(
-                &op, {"sym_name", "contract", "arguments", "implementation"}))
+        if (!attributes(&op, {"sym_name", "contract", "arguments",
+                              "implementation", "physical_arguments"}))
           return error("binding-attribute");
         auto binding = readBinding(&op);
         if (!binding)

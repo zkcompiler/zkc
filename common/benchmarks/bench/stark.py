@@ -1,4 +1,5 @@
 """STARK dimensions: trace shape, evaluation size and polynomial degree are distinct."""
+from dataclasses import dataclass
 from functools import partial
 import importlib.util
 
@@ -6,10 +7,49 @@ from . import algebra as a
 from .programs import Program
 
 
-def mutate_claim(proof, tag=b'ZKCV\x00\x1b', minimum=42):
+@dataclass(frozen=True)
+class LibraryProfile:
+    configuration: str
+    modulus: int
+    extension: str
+    degree: int
+    challenge_configuration: str
+    transcript: str
+    poseidon_width: int
+    shift: int
+    vector_tag: int
+    coordinate_bytes: int
+
+
+# Exact authored configurations, selected before compilation and measurement.
+# KoalaBear's quartic FRI retains the original octic transcript draws.
+LIBRARY_PROFILES = {
+    'koala-bear': LibraryProfile(
+        'koala_bear_quartic', a.P, 'koala-bear.ext4-binomial3', 4, 'koala_bear_octic',
+        'merlin3.koala-bear.ext8-binomial3.rejection31le/0', 16, 3, 22, 4),
+    'baby-bear': LibraryProfile(
+        'baby_bear_quartic', 2013265921, 'baby-bear.ext4-binomial11', 4, 'baby_bear_quartic',
+        'merlin3.baby-bear.ext4-binomial11.rejection31le/0', 16, 31, 94, 4),
+    'goldilocks': LibraryProfile(
+        'goldilocks_quadratic', 18446744069414584321, 'goldilocks.ext2-binomial7', 2, 'goldilocks_quadratic',
+        'merlin3.goldilocks.ext2-binomial7.rejection64le/0', 8, 7, 100, 8),
+}
+
+
+def library_profile(shape):
+    field = shape.get('field', 'koala-bear')
+    if field not in LIBRARY_PROFILES:
+        raise ValueError('unsupported STARK field family')
+    profile = LIBRARY_PROFILES[field]
+    if shape.get('profile', profile.configuration) != profile.configuration:
+        raise ValueError('STARK field and configuration must match')
+    return field, profile
+
+
+def mutate_claim(proof, tag=b'ZKCV\x00\x1b', minimum=42, *, modulus=a.P, coordinate_bytes=4):
     """Alter a canonical extension-field claim while preserving the invocation
-    and framing: an Ext8 vector by default, or another vector tag and minimum
-    frame size.
+    and framing: a KoalaBear Ext8 vector by default, or another explicit vector
+    tag, minimum frame size, prime characteristic and coordinate byte width.
 
     Uses docs/spec/formats/proof.md and messages.md, as do the maintained STARK
     conformance controls. Provers reject invalid traces before producing proofs.
@@ -24,9 +64,9 @@ def mutate_claim(proof, tag=b'ZKCV\x00\x1b', minimum=42):
             raise ValueError('truncated proof frame')
         payload = proof[start:end]
         if payload[:6] == tag and size >= minimum:
-            coordinate = int.from_bytes(payload[10:14], 'little')
-            changed = ((coordinate+1) % a.P).to_bytes(4, 'little')
-            return proof[:start+10] + changed + proof[start+14:]
+            coordinate = int.from_bytes(payload[10:10+coordinate_bytes], 'little')
+            changed = ((coordinate+1) % modulus).to_bytes(coordinate_bytes, 'little')
+            return proof[:start+10] + changed + proof[start+10+coordinate_bytes:]
         offset = end
     raise ValueError('missing extension claim')
 
@@ -64,6 +104,8 @@ def recurrence(root, shape):
     columns read their cyclic neighbors in the same row; updates are simultaneous.
     """
     height, width = shape['height'], shape['width']
+    field, profile = library_profile(shape)
+    modulus = profile.modulus
     coupled = shape.get('constraint') == 'coupled'
     degree = shape.get('constraint_degree', 2)
     if coupled and (width < 2 or degree not in (2, 3)):
@@ -74,14 +116,14 @@ def recurrence(root, shape):
     arena = arena_module.Arena()
     outputs, assertions = [], []
     for col in range(width):
-        current = arena.input('koala-bear', ['read', 0, '0', col])
-        following = arena.input('koala-bear', ['read', 0, '1', col])
-        initial = arena.input('koala-bear', ['public', col])
-        final = arena.input('koala-bear', ['public', width+col])
+        current = arena.input(field, ['read', 0, '0', col])
+        following = arena.input(field, ['read', 0, '1', col])
+        initial = arena.input(field, ['public', col])
+        final = arena.input(field, ['public', width+col])
         first_boundary, last_boundary = current-initial, current-final
         if coupled:
-            neighbor = arena.input('koala-bear', ['read', 0, '0', (col+1) % width])
-            previous = arena.input('koala-bear', ['read', 0, '0', (col-1) % width])
+            neighbor = arena.input(field, ['read', 0, '0', (col+1) % width])
+            previous = arena.input(field, ['read', 0, '0', (col-1) % width])
             product = current*neighbor
             if degree == 3:
                 product = current*product
@@ -93,19 +135,19 @@ def recurrence(root, shape):
             assertions.append([len(outputs), selector])
             outputs.append(value)
     ring, bindings = arena.finish(outputs)
-    bundle = ['zkc.relation-bundle/0', [[f'public-{i}', 'koala-bear'] for i in range(2*width)], [],
-              [['trace', 'required', ['fixed', height], 'cyclic', [['trace', 'witness', 'koala-bear', width]],
+    bundle = ['zkc.relation-bundle/0', [[f'public-{i}', field] for i in range(2*width)], [],
+              [['trace', 'required', ['fixed', height], 'cyclic', [['trace', 'witness', field, width]],
                 ring, bindings, assertions, []]]]
-    initial = [x[0] for x in a.dense(width, seed=101+shape.get('statement', 0))]
+    initial = [x[0] for x in a.dense(width, seed=101+shape.get('statement', 0), modulus=modulus)]
     current, trace = initial, []
     for _ in range(height):
         trace.extend(current)
         final = current
         if coupled:
-            current = [(pow(x, degree-1, a.P)*current[(i+1) % width]+current[(i-1) % width]+i+1) % a.P
+            current = [(pow(x, degree-1, modulus)*current[(i+1) % width]+current[(i-1) % width]+i+1) % modulus
                        for i, x in enumerate(current)]
         else:
-            current = [(x*x+i+1) % a.P for i, x in enumerate(current)]
+            current = [(x*x+i+1) % modulus for i, x in enumerate(current)]
     return bundle, initial, final, trace
 
 
@@ -115,6 +157,8 @@ def trace_oracle(shape):
 
 
 def air(root, shape):
+    if shape.get('field', 'koala-bear') != 'koala-bear':
+        raise ValueError('octic AIR control requires KoalaBear')
     height, size = shape['height'], shape['evaluation_size']
     bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final)), 'shift': '3',
@@ -144,14 +188,15 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
 
 
 def library(root, shape):
-    """The same AIR through the parameterized library at its KoalaBear quartic
-    Poseidon2 configuration, with the final polynomial a constant."""
+    """The same AIR through an explicit library configuration and transcript,
+    with the final polynomial a constant. KoalaBear remains the default."""
+    _, profile = library_profile(shape)
     height, size = shape['height'], shape['evaluation_size']
     bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final))}
     source = '''module example;
-use stark::configurations::koala_bear_octic::{Base,Extension};
-use stark::configurations::koala_bear_quartic::{Poseidon2};
+use stark::configurations::CHALLENGE_MODULE::{Base,Extension};
+use stark::configurations::CONFIGURATION_MODULE::{Poseidon2};
 use stark::single_table::{Statement,TableArgument};
 use zkc::vector::{Vector}; use zkc::vector as v;
 domain Trace=bundle(asset trace);
@@ -164,12 +209,15 @@ protocol Air roles(P,V)(trace:Vector<Base>@P,public_data:Vector<Base>@(P,V),coin
  return accepted;
 }
 proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
- construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0",coins);}
-'''.replace('ROUNDS', str(height.bit_length()-1)).replace('BLOWUP', str((size//height).bit_length()-1)).replace('QUERIES', str(shape['queries']))
-    changed = public | {'public_data': [str((initial[0]+1) % a.P), *public['public_data'][1:]]}
+ construction fiat_shamir("TRANSCRIPT_SUITE",coins);}
+'''.replace('CHALLENGE_MODULE', profile.challenge_configuration).replace('CONFIGURATION_MODULE', profile.configuration).replace('TRANSCRIPT_SUITE', profile.transcript).replace('ROUNDS', str(height.bit_length()-1)).replace('BLOWUP', str((size//height).bit_length()-1)).replace('QUERIES', str(shape['queries']))
+    changed = public | {'public_data': [str((initial[0]+1) % profile.modulus), *public['public_data'][1:]]}
     witness = {'trace': list(map(str, trace))}
+    configurations = dict.fromkeys((profile.challenge_configuration, profile.configuration))
+    dependencies = ('arguments.stark.single_table', *(f'arguments.stark.configurations.{name}' for name in configurations))
     return Program(source, [{'public': public, 'witness': witness}],
-                   mutate_proof=partial(mutate_claim, tag=b'ZKCV\x00\x16', minimum=26),
-                   entry='example::Proof', dependencies=('arguments.stark.single_table', 'arguments.stark.configurations.koala_bear_octic',
-                                                        'arguments.stark.configurations.koala_bear_quartic'), assets={'trace': bundle}, proof=True,
+                   mutate_proof=partial(mutate_claim, tag=b'ZKCV\x00'+bytes([profile.vector_tag]),
+                                        minimum=10+profile.degree*profile.coordinate_bytes,
+                                        modulus=profile.modulus, coordinate_bytes=profile.coordinate_bytes),
+                   entry='example::Proof', dependencies=dependencies, assets={'trace': bundle}, proof=True,
                    changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))

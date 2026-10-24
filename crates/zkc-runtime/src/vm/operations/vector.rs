@@ -354,21 +354,24 @@ use super::super::Representation;
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/vector.from_table",
         contract: "vector.from_table",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/vector.to_table",
         contract: "vector.to_table",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-diagonal/vector.mul",
         contract: "vector.mul",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Diagonal {
             output: true,
             port: 0,
@@ -376,9 +379,10 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-diagonal/vector.dot",
         contract: "vector.dot",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Diagonal {
             output: false,
             port: 1,
@@ -386,9 +390,10 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-pairwise/vector.dot",
         contract: "vector.dot",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Default,
     },
 ];

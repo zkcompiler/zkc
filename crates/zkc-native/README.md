@@ -6,6 +6,18 @@ owns program admission and execution; this crate owns concrete values, installed
 backend capacity checks. [zkc-kernels](../zkc-kernels/README.md) owns typed
 arithmetic, transforms, commitments and curve primitives without VM authority.
 
+## Dense values
+
+Flat numerical vectors, coefficient polynomials and points use `Buffer<T>`, an
+immutable shared owner of an initialized `Vec<T>` allocation.
+Construct with `values.into()`; read through slices and clone to share storage.
+Publication adopts the vector without copying its elements. Resource accounting
+includes its complete capacity, including spare slots. Use exact-sized storage
+when supplying inputs under tight retained-byte limits. Provider-resident values
+keep their typed provider owners. Encoded byte strings, authentication paths and
+digests retain exact-length shared slices, matching their wire admission bounds.
+The VM depends on none of these representations.
+
 ## Host transport integration
 
 `NativeBackend` implements `zkc-runtime::host::wire::{WireBackend, ProofBackend}`
@@ -29,7 +41,7 @@ authorized. There is no implicit receive-site setup selector.
 
 `resource.rs` owns fresh affine RNG, nonce and transcript capabilities, their
 bounded counters, domain separation, generations and retirement. Local frames
-receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the four registered random
+receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the six registered random
 sampling service contracts to Host-owned providers. It does not install arbitrary
 request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
@@ -47,7 +59,9 @@ do not authorize a root or replace live lease, generation and owner checks.
 The Arkworks, Dalek and Plonky3 providers retain their nominal field, vector,
 polynomial, round, sparse matrix, group and pairing kernels where installed.
 This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight and
-degree-four extensions, and the binary fields GF(2^64) and GF(2^192). Multilinear KZG, row-oracle operations, external Monero/OpenVM
+degree-four extensions, BabyBear and its quartic `X^4 - 11` extension,
+Goldilocks and its quadratic `X^2 - 7` extension, and the binary fields
+GF(2^64) and GF(2^192). Multilinear KZG, row-oracle operations, external Monero/OpenVM
 primitives, sequences, variants, field arrays, fixed vectors and resource units
 retain their own type and capacity checks. Domain installation does not imply
 that every domain has every group, transcript or PCS operation.
@@ -55,26 +69,77 @@ that every domain has every group, transcript or PCS operation.
 `operations::poseidon2` installs the batched width-16 KoalaBear Poseidon2
 permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
 external-work permutation per state before computing. `zkc-kernels::plonky3::words` owns the
-canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
+canonical four/eight-byte residue coordinates and explicitly supported
+31-bit Montgomery words. `fields` registers typed value adaptation, codecs and
+dispatch once per residue field; `operations::plonky3` shares coset algorithms,
+base-field DFT caches and resource admission across all registered fields.
+Extension shifts retain every coordinate; the subgroup root always comes from
+the prime base. Decimal constants embed into the base coordinate and preserve
+full u64 Goldilocks values in scalar, packed, polynomial and relation paths.
 Bit reversal of vectors and table rows is a positional kernel of every field
 family. `merkle` installs row commitments backed by `zkc-kernels::plonky3::merkle`: an `Instance` names a
 leaf hash, compression, element type and canonical digest encoding over a
 Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
-Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
-flattened to base coordinates, add pruned multi-openings; `merkle_differential`
+Poseidon2 instances use width 16 for KoalaBear and BabyBear and width 8 for
+Goldilocks. Their quartic or quadratic extension rows flatten to base
+coordinates. They support pruned multi-openings; `merkle_differential`
 compares roots, rows and pruned proofs with Plonky3's `MerkleTreeMmcs` and
 `ExtensionMmcs` and with a reference model that makes each permutation call
 explicit. The `poseidon2_permutation` test compares the permutation with the
 upstream known answer, p3-poseidon2's generic round functions and an integer
 implementation.
 
+`native_contracts()` contributes resident `blst/fr`, `blst/g1` and `blst/g2`
+scalar and bulk storage to the neutral VM. Canonical layouts remain Arkworks.
+The compiler's [Target preferences](../../docs/compiler/representation.md#resident-providers)
+select resident BLS12-381 G2 scaling and pairing checks automatically, with
+checked conversions at canonical boundaries. Native executes those exact
+bindings; provider selection adds no runtime optimizer.
+Selected values stay in their provider representation across adjacent calls,
+control flow and supported containers. Explicit flat conversion calls delimit
+provider boundaries; there is no implicit container conversion.
+
+Complete sequence and variant types retain every physical child, including
+inactive alternatives. Resident field arrays and fixed vectors retain typed
+scalar backing with exact extents. Sequence and dense operation families receive
+one checked complete container parameter, without enumerating every length or
+schema. Codec permission combines the installed frame owner with every child
+permission; fixed vectors remain local-only. Immutable preparation eligibility
+is checked separately from wire support.
+
+Scalar/vector arithmetic uses a small provider family. Installation selects typed
+scalar handlers from the backend's own port metadata. Scalar calls do not
+construct bulk destinations or workspace; both paths retain their output checks.
+Intrinsic value classification borrows installed metadata and compares exact
+physical layouts, including catalog identity. Structured polynomial and matrix
+operations extend the family only where supported; resident scalars do not
+implement placeholder structured operations. Group algebra is separate from
+Native value projection, policy and error translation. Resident MSM borrows the
+typed provider buffers directly.
+
+BN254 also has an explicit `halo2curves-axiom/resident/` operation menu for
+field/vector arithmetic, G1/G2 algebra, MSM and `pairing.check`. Its six flat
+ports use `halo2curves-axiom/bn254.fr`, `halo2curves-axiom/bn254.g1` and
+`halo2curves-axiom/bn254.g2`; canonical ports and existing automatic preferences
+remain unchanged. Expected Contracts and actual handlers enumerate the allowed
+operations independently. Selected codecs use the existing BN254 mathematical
+bytes (tags 40/41, 46/47 and 48/49), including readable JSON. Explicit conversions
+own provider crossings; sharing a field identity does not grant an operation.
+There are no Halo GT, PCS, FFT, matrix, field-array or fixed-vector bindings.
+MSM requires variable-time permission for both operands. Pairing preparation is
+invocation-local, with kernel work and workspace admission. Provider-private
+infallible allocations remain outside recoverable allocation failure handling.
+
 `backend/registry.rs` assembles exact implementation ownership. Duplicate owners
 and alternatives of alternatives refuse. Alternative implementations inherit the
 installed family resolver and must match their primary domain. Constant-time
 Ristretto MSM, diagonal contractions, table layouts and the independently
-implemented pairwise dot product remain selectable. No variable-time MSM
-public-operand authority is installed. Kernel-specific timing properties do not
-establish a timing guarantee for the entire runtime.
+implemented pairwise dot product remain selectable. Resident BLS12-381 MSM declares variable-time input positions independently
+of the trusted admission catalog. It requires an explicit compatible execution
+policy or an exact scoped timing grant; a role or provider name grants neither.
+Computation checkpoints retain the immutable catalog/authorization-view identity;
+changes to policy or exact grants require normal execution rather than replay.
+Kernel timing premises do not establish a whole-runtime timing guarantee.
 
 Each contract row lists its actual default implementation names. Custom families
 list exact implementation/contract pairs. The inventory contains no inferred
@@ -98,7 +163,7 @@ instance owns its preparation, including when instances share an admitted progra
 Private initialized destinations and scratch share checked memory and work
 limits. Exact field adapters and table storage owners supply interpretation;
 the scope grants no resource authority or mutation of published inputs.
-Dense matvec/split, BLS table fold, KoalaBear opening quotient and coefficient
+Dense matvec/split, BLS table fold, registered residue opening quotient and coefficient
 batch coset evaluation exercise this path. `poly.coset_evaluate_batch` builds
 one column-major result from coefficient blocks, with provider-owned transform
 workspace; it has its own authored work/storage contract as specified in the
@@ -113,7 +178,7 @@ and scalar tails. Chunking changes neither the Kernel/VM contract nor the
 minimum managed-memory allowance. CPU-specific packing follows build target
 features; portable builds remain supported.
 
-`curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
+Arkworks `curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
 results for BLS12-381 and BN254 G1/G2 while retaining affine-base `mul_bigint`.
 Native admits the kernel's workspace bound from public length and the numerical
 scratch allowance. The typed kernel plan prepares bounded scratch and freezes
@@ -122,6 +187,8 @@ Insufficient scratch or failed scratch preparation selects direct scaling.
 Existing output preflight and charges remain in place, with no added numerical
 work charge. Dalek multiplication paths and their timing properties are unchanged;
 Arkworks remains variable-time.
+Resident BLST and Halo scaling use their provider-owned bulk kernels, as described
+in the [numerical contract](../../docs/spec/runtime/numerical.md#implemented-consumers).
 
 Sparse matrices remain immutable canonical COO. Forward and bilinear kernels
 contract occupied rows; transpose scatters entries in stored order without a
@@ -170,14 +237,29 @@ Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data`,
-`transcript.native.indexed.challenge` and, for the octic Merlin and hash-chain
+`transcript.native.indexed.challenge` and, for installed residue Merlin and octic hash-chain
 suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
-supported cross-domain data. Merlin and Spongefish suites own their exact
+supported cross-domain data. The observation binding accepts either no physical
+arguments (default payload storage) or one complete selected payload type,
+including all inactive child layouts. Expected Contracts and independently
+authored installed metadata require the same logical schema and positive Native
+codec support. Observation uses the existing canonical message encoder before
+consuming the transcript; selected storage changes neither framing nor custody.
+Merlin and Spongefish suites own their exact
 framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
 are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
 [their source pins and construction details](../zkc-kernels/src/interop/README.md).
+
+Explicit extension RNG and transcript installations include
+`random.baby-bear.ext4-binomial11/0`, `random.goldilocks.ext2-binomial7/0`,
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`. Rejection sampling checks
+ascending canonical base coordinates without reduction, with at most sixteen
+64-byte blocks. Only the new Merlin suites append their exact suite name under
+`b"suite"` before the existing root binding. Existing suite framing is unchanged.
+Hash and commitment constructions require their own explicit installation.
 
 ## Validation
 

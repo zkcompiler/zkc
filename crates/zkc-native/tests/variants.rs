@@ -37,30 +37,40 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
     json!([
         "zkc.program/0",
         [
-            ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
+            [
+                "add",
+                "field.add",
+                ["bls12-381.fr"],
+                "arkworks/field.add",
+                []
+            ],
             [
                 "draw",
                 "random.draw",
                 ["bls12-381.fr"],
-                "arkworks/random.draw"
+                "arkworks/random.draw",
+                []
             ],
             [
                 "make",
                 "resource_unit.create",
                 ["Slot.A"],
-                "logical/resource_unit.create"
+                "logical/resource_unit.create",
+                []
             ],
             [
                 "pass",
                 "resource_unit.pass",
                 ["Slot.A"],
-                "logical/resource_unit.pass"
+                "logical/resource_unit.pass",
+                []
             ],
             [
                 "consume",
                 "resource_unit.consume",
                 ["Slot.A"],
-                "logical/resource_unit.consume"
+                "logical/resource_unit.consume",
+                []
             ]
         ],
         [["function", "Local", ports, results, body, ["Local", []]]],
@@ -219,10 +229,7 @@ fn malformed_descriptors_fail_closed() {
     let error = PhysicalType::parse(&format!("{valid}@host.resource/0")).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
-        (
-            ErrorCode::Representation,
-            "representation does not implement logical type"
-        )
+        (ErrorCode::Representation, "aggregate-storage-children")
     );
 }
 
@@ -280,10 +287,29 @@ fn native_active_payload_has_unequal_layouts_and_exact_wire_codec() {
         ]),
     );
     let d = descriptor(&ty);
-    let empty = Value::pack_variant(d.clone(), 2, vec![]).unwrap();
-    let scalar = Value::pack_variant(d.clone(), 0, vec![f(9)]).unwrap();
+    let empty = Value::pack_variant(
+        zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+            d.clone(),
+        ))
+        .unwrap(),
+        2,
+        vec![],
+    )
+    .unwrap();
+    let scalar = Value::pack_variant(
+        zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+            d.clone(),
+        ))
+        .unwrap(),
+        0,
+        vec![f(9)],
+    )
+    .unwrap();
     let wide = Value::pack_variant(
-        d.clone(),
+        zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+            d.clone(),
+        ))
+        .unwrap(),
         1,
         vec![
             Value::Bool(true),
@@ -311,17 +337,33 @@ fn native_active_payload_has_unequal_layouts_and_exact_wire_codec() {
         );
     }
     assert_eq!(
-        Value::pack_variant(d.clone(), 3, vec![]).unwrap_err().code,
+        Value::pack_variant(
+            PhysicalType::default_for(LogicalType::variant(d.clone())).unwrap(),
+            3,
+            vec![]
+        )
+        .unwrap_err()
+        .code,
         "refused:variant-alternative"
     );
     assert_eq!(
-        Value::pack_variant(d.clone(), 0, vec![]).unwrap_err().code,
+        Value::pack_variant(
+            PhysicalType::default_for(LogicalType::variant(d.clone())).unwrap(),
+            0,
+            vec![]
+        )
+        .unwrap_err()
+        .code,
         "refused:variant-payload"
     );
     assert_eq!(
-        Value::pack_variant(d, 0, vec![Value::Bool(false)])
-            .unwrap_err()
-            .code,
+        Value::pack_variant(
+            PhysicalType::default_for(LogicalType::variant(d)).unwrap(),
+            0,
+            vec![Value::Bool(false)]
+        )
+        .unwrap_err()
+        .code,
         "refused:variant-payload"
     );
     assert_eq!(
@@ -566,12 +608,13 @@ fn resource_unit_in_active_payload_survives_join_and_is_consumed_once() {
         .as_array_mut()
         .unwrap()
         .insert(4, json!(["op", "again", "consume", [], ["next"], []]));
-    let error = zkc_runtime::vm::Program::decode(&bytes(&duplicate))
-        .and_then(|program| {
-            program.check_installation(&ark_backend(None))?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error =
+        zkc_runtime::vm::Program::decode(&bytes(&duplicate), zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
+            .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -604,7 +647,7 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
         ]),
     );
     let backend = ark_backend(None);
-    zkc_runtime::vm::Program::decode(&bytes(&base))
+    zkc_runtime::vm::Program::decode(&bytes(&base), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -632,7 +675,7 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
                     json!([["send", "leak", "tag", "V", "p"], ["yield", ["p"]]])
             }
         }
-        let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+        let error = zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -658,7 +701,7 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     }
     let mut entry = base.clone();
     entry[3][0][4][0][1] = json!(ty);
-    let error = zkc_runtime::vm::Program::decode(&bytes(&entry))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&entry), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -679,7 +722,7 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     send[3][0][5] = json!([]);
     // An immutable sum of native public data is a valid native message.
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes(&send))
+        zkc_runtime::vm::Program::decode(&bytes(&send), zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -713,12 +756,13 @@ fn inactive_resource_arm_still_controls_copy_and_drop() {
         json!([]),
         json!([make, match_v("first"), match_v("second"), ["return", []]]),
     );
-    let error = zkc_runtime::vm::Program::decode(&bytes(&duplicate))
-        .and_then(|program| {
-            program.check_installation(&ark_backend(None))?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error =
+        zkc_runtime::vm::Program::decode(&bytes(&duplicate), zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
+            .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -731,7 +775,7 @@ fn inactive_resource_arm_still_controls_copy_and_drop() {
         json!([]),
         json!([make, ["release", ["v"]], ["return", []]]),
     );
-    let error = zkc_runtime::vm::Program::decode(&bytes(&drop))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&drop), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -935,7 +979,7 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     capture[2][0][4][1][5] = json!([]);
     capture[2][0][4][1][6] = json!(["v"]);
     capture[2][0][4][1][8] = json!([]);
-    let error = zkc_runtime::vm::Program::decode(&bytes(&capture))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&capture), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -961,7 +1005,7 @@ fn wrong_nominal_same_layout_refuses() {
     // Retain the variant only as a local intermediate, with matching call
     // arity. The participant must not expose a variant at its output boundary.
     j[3][0][6][0][4] = json!(["discarded"]);
-    zkc_runtime::vm::Program::decode(&bytes(&j))
+    zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -969,7 +1013,7 @@ fn wrong_nominal_same_layout_refuses() {
         .unwrap();
 
     j[2][0][3] = json!([b]);
-    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -998,14 +1042,14 @@ fn duplicate_affine_captures_refuse() {
             ["return", []]
         ]),
     );
-    zkc_runtime::vm::Program::decode(&bytes(&j))
+    zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
         })
         .unwrap();
     j[2][0][4][1][3] = json!(["r", "r"]);
-    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -1062,17 +1106,18 @@ fn private_match_cannot_schedule_transcript_challenges() {
         "challenge",
         "transcript.native.indexed.challenge",
         ["merlin3.bls12-381.fr64be/0"],
-        "arkworks/transcript.native.indexed.challenge"
+        "arkworks/transcript.native.indexed.challenge",
+        []
     ]));
     let mut outside_match = j.clone();
     outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", []]]);
-    zkc_runtime::vm::Program::decode(&bytes(&outside_match))
+    zkc_runtime::vm::Program::decode(&bytes(&outside_match), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
         })
         .unwrap();
-    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)

@@ -457,6 +457,44 @@ int main() {
       application(*candidate, mul.binding.application.implementation);
     });
 
+  for (StringRef domain : {"bls12-381.g1", "bls12-381.g2"})
+    cases.run(
+        "resident provider retains fixed exact-port binding for " + domain,
+        [&] {
+          auto source = std::string(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+!G = !algebra.group<"bls12-381.g1">
+!GS = !algebra.group_vector<"bls12-381.g1">
+)mlir") + mathematicalFixture(R"mlir(
+kernel.module @difference {
+ func.func @evaluate(%a:!F,%b:!F)->!F {
+   %r = algebra.field_subtract %a,%b : (!F,!F)->!F
+   func.return %r : !F
+ }
+}
+"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
+"local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+)mlir",
+                              "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
+                              "!V,!GS,!F,!F", "!G", R"mlir(
+%difference = kernel.call @difference::@evaluate(%a,%b) {site="difference",policy=[false,false,false]} : (!F,!F)->!F
+%out = "algebra.exec.group_msm"(%s,%p) {binding=@msm,parameters=[],site="msm"} : (!V,!GS)->!G
+%scaled = "algebra.exec.group_scale"(%out,%difference) {binding=@scale,parameters=[],site="scaled"} : (!G,!F)->!G
+local.return %scaled : !G
+)mlir",
+                              4);
+          auto module =
+              executable(replaceText(source, "bls12-381.g1", domain), context);
+          auto checked = checkedPlan(*module);
+          const auto &choice = bindingFor(checked.choices(), "curve.msm");
+          require(choice.fixed && choice.binding.application.implementation ==
+                                      "blst/resident/curve.msm",
+                  "physical planning replaced an explicit foreign provider");
+          auto candidate = materializedCopy(*module, checked);
+          application(*candidate, "blst/resident/curve.msm");
+        });
+
   cases.run(
       "fixed native operation survives planning beside Kernel arithmetic", [&] {
         auto module = executable(pinnedSource(), context);

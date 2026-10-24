@@ -204,7 +204,8 @@ public:
           builder.setInsertionPointToStart(&root.getBody().front());
           local::OperationBindingOp::create(
               builder, map.getLoc(), name, contract,
-              arguments(root.getContext(), contract, field.getDomain()), "");
+              arguments(root.getContext(), contract, field.getDomain()), "",
+              mlir::ArrayAttr{});
         }
         std::string site = protocol::attr(sum, "site").str();
         if (guard) {

@@ -271,6 +271,19 @@ reduced wide-byte sample is not an exactly uniform field draw. A nonzero
 challenge policy requires an explicit reject/retry rule; zero is not silently
 resampled.
 
+The additional Merlin suites
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0` use Merlin 3 with domain
+`zkc.artifact/0`. Initialization appends `suite` with the complete suite identity
+before `binding` with the canonical invocation root. Existing suite bytes are
+unchanged. Message and request labels follow the ordinary managed construction.
+Each field draw requests 64-byte `challenge` blocks and fills the ascending
+extension coordinates using the bounded rejection decoder in
+[native services](../runtime/services.md#uniformindex-realization).
+The suites also provide the existing power-of-two `UniformIndex` transition.
+These are zkc byte constructions; selecting the same field as another system
+does not imply transcript or proof-format compatibility.
+
 For iterated construction, dynamic coordinates are explicit semantic inputs to
 the observation/challenge operation. Optimization preserves those inputs;
 a future transformation that peels a loop must substitute the induction value

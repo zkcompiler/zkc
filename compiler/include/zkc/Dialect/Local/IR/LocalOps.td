@@ -82,7 +82,8 @@ def LocalConditionOp
 
 def OperationBindingOp : Op<LocalDialect, "binding", [Symbol]> {
   let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
-    ArrayAttr:$arguments, StrAttr:$implementation);
+    ArrayAttr:$arguments, StrAttr:$implementation,
+    OptionalAttr<ArrayAttr>:$physical_arguments);
   let hasVerifier = 1;
 }
 

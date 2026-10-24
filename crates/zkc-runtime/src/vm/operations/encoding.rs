@@ -156,23 +156,20 @@ fn select(
     }
     let primary = support::primary(binding)?;
     // Four-byte coordinate words cover KoalaBear and its installed extensions.
-    let koala_bear = matches!(
-        primary,
-        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
-    );
+    let residue = primary.is_plonky3_residue();
     // Binary fields have little-endian bit patterns; Montgomery residues are
     // defined only for prime fields and their extensions.
     let binary = primary.bit_pattern_width().is_some();
     let allowed = match binding.contract.as_str() {
         "encoding.field_le" | "encoding.fields_le" | "encoding.field_from_le" => {
-            primary == Identity::Ristretto255Scalar || koala_bear || binary
+            primary == Identity::Ristretto255Scalar || residue || binary
         }
         "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
-        "encoding.fields_from_le" => koala_bear || binary,
+        "encoding.fields_from_le" => residue || binary,
         "encoding.field_montgomery_le"
         | "encoding.field_from_montgomery_le"
         | "encoding.fields_montgomery_le"
-        | "encoding.fields_from_montgomery_le" => koala_bear,
+        | "encoding.fields_from_montgomery_le" => primary.has_montgomery_words(),
         "encoding.group_decode_cofactor" | "encoding.cryptonote_map" => {
             primary == Identity::Edwards25519Prime
         }

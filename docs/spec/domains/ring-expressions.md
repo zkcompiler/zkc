@@ -144,7 +144,7 @@ surrounding-context mismatches refuse as `asset-sharing-kind`,
 ## Native bulk substitution
 
 Four ordered algebra kernels use one SHA-256 asset parameter and the installed
-`plonky3` provider over KoalaBear or its degree-eight binomial extension. The
+`plonky3` provider over the [registered residue fields](values.md#registered-residue-fields). The
 parameter is exactly 64 lowercase hexadecimal digits. It is part of the program;
 the Host separately admits the referenced arena into an immutable registry.
 No proof message installs or changes an evaluator.
@@ -180,17 +180,16 @@ on formal ring expressions. For `ring.affine_sum`, the polynomial is exactly
 `sum_i P(low_i + (high_i - low_i) X)`, componentwise over ordered outputs.
 It reuses one coefficient scratch allocation across all rows.
 
-KoalaBear inputs and constants can be interpreted in an installed KoalaBear
-extension (Ext8 or Ext4) or its polynomials. In that interpretation, an input
-originally declared over KoalaBear may hold an extension value after polynomial
-substitution. An explicit embedding from KoalaBear into that extension becomes
-the compatible map into the selected algebra. The converse interpretation, an
-extension in KoalaBear, refuses, as does one extension in the other. Arbitrary field identities and
-uninstalled embeddings refuse even if their characteristics agree. The bulk
-`ring.*` kernels substitute integer residue coordinates, so they are installed
-for KoalaBear carriers only; arenas over other fields, including the
-[binary fields](values.md#binary-fields), still form and serve other
-consumers such as pointwise maps.
+For each registered residue field, inputs and constants can be interpreted in
+that same carrier or its polynomials. A declared prime base can also lift into
+its registered extension: a base-field input may then hold a full extension
+value after substitution, and an explicit base embedding becomes the compatible
+map into the selected algebra. An extension does not lift into its base or into
+a different extension. Cross-family and uninstalled embeddings refuse even
+when characteristics or byte widths agree. The bulk `ring.*` kernels use this
+closed residue family. Arenas over other fields, including the
+[binary fields](values.md#binary-fields), still form and serve other consumers
+such as pointwise maps.
 
 The row provider gathers SIMD lanes from the same row-major assignments as the
 scalar reference and preserves output order. Both charge the same logical work:

@@ -11,6 +11,7 @@ use super::{
 };
 use crate::{
     cli::Arguments,
+    execution::CpuExecution,
     files::{Outputs, digest, hex, read_regular as read},
     run::HostLimits,
 };
@@ -20,14 +21,14 @@ use sha2::{Digest, Sha256};
 use target::Target;
 type Result<T> = std::result::Result<T, String>;
 
-pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
+pub(crate) fn run(command: &str, args: &Arguments<'_>, cpu: Option<&CpuExecution>) -> Json {
     let format = match command {
         "inspect" => "zkc.entry-inspection/0",
         "init" | "new" | "prepare" => "zkc.project-init/0",
         _ => "zkc.entry-result/0",
     };
     let mut report = json!({"format":format,"status":"refused","phase":"arguments"});
-    if let Err(code) = execute(command, args, &mut report) {
+    if let Err(code) = execute(command, args, cpu, &mut report) {
         report["code"] = json!(output_error(code));
     }
     report
@@ -51,7 +52,12 @@ fn measured<T>(
     }
     result
 }
-fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
+fn execute(
+    command: &str,
+    args: &Arguments<'_>,
+    cpu: Option<&CpuExecution>,
+    report: &mut Json,
+) -> Result<()> {
     if matches!(command, "init" | "new") {
         return initialize::project(command, args, report);
     }
@@ -104,6 +110,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         return Ok(());
     }
     let operation = operation.expect("execution command");
+    let cpu = cpu.expect("execution command CPU context");
     let view = crate::project::CheckedInterface::read(&package)?;
     report["entry"] = json!(view.entry());
     report["phase"] = json!("invocation");
@@ -115,15 +122,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         invocation::Invocation::resolve(&view, layout.as_ref(), args, operation, checking, report)?;
     let mut destinations = invocation.destinations(&target, args)?;
     if operation == Operation::Run {
-        return function::execute(
-            package,
-            &view,
-            args,
-            invocation,
-            destinations,
-            checking,
-            report,
-        );
+        return function::execute(package, &view, args, invocation, destinations, cpu, report);
     }
     let mut options = Options::parse(args)?;
     report["setups"] = json!(
@@ -138,7 +137,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     let mut documents = files::Documents::new(options.proof.capacity)?;
     {
         let host = measured(args, report, "admission", |_| {
-            ProofEntry::admit(package, options.proof, options.setups.clone())
+            ProofEntry::admit_with_cpu(package, options.proof, options.setups.clone(), cpu.clone())
         })?;
         if invocation.results.is_some() {
             host.check_result_encoding(if operation == Operation::Prove {

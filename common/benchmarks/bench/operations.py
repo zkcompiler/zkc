@@ -11,6 +11,25 @@ def literal(shape, *, root):
     trips, form = shape['trips'], shape['form']
     if trips < 0 or form not in ('constant', 'operand'):
         raise ValueError('invalid literal control')
+    if 'elements' in shape:
+        n = shape['elements']
+        if n < 1 or f.degree != 1 or f.binary:
+            raise ValueError('vector literal controls require a nonempty prime-field vector')
+        values = f.dense(n, 482)
+        attributes = ','.join(f'"{f.encode(value)}"' for value in values)
+        expression = f'kernel<F>("vector.constant"; {attributes})' if form == 'constant' else 'value'
+        expected = [f.encode(f.mul(value, (trips % f.modulus,))) for value in values]
+        program = local(shape['field'], 'value:Vector<F>, trips:index, expected:Vector<F>',
+                        f'''let mut total=v::fill<F>(0,v::length(value));
+                          for i in 0..trips {{ total=v::add(total,{expression}); }}
+                          return v::equal(total,expected);''',
+                        {'value': list(map(f.encode, values)), 'trips': str(trips),
+                         'expected': expected}, root=root)
+        program.oracle = ('Independent prime-field repeated vector addition; every output checked; '
+                          'identical decoded inputs across forms. Repeated-reach interpretation requires '
+                          'vector.constant inside the exported loop and reached-site counts; compiler '
+                          'invariant hoisting would invalidate it. SDK/run includes checking and Host costs')
+        return program
     value = f.dense(1, 481)[0]
     # Decimal literals in prime extensions denote a base-field embedding.
     if not f.binary:
@@ -146,6 +165,73 @@ def coset_batch(shape):
     program.source = program.source.replace('fn compute(', 'use zkc::coset as coset;\nfn compute(')
     program.dependencies = ('core.collections', 'core.polynomial')
     program.oracle = 'Independent integer radix-two evaluation of dense coefficients; every output and extension coordinate checked; no native roundtrip oracle'
+    return program
+
+
+def _bn254_coset(coefficients, shift, size):
+    """Independent integer radix-two evaluation in natural coset order."""
+    modulus = a.BN254
+    values = [0] * size
+    bits = size.bit_length() - 1
+    power = 1
+    for i, coefficient in enumerate(coefficients):
+        index = int(f'{i:0{bits}b}'[::-1], 2) if bits else 0
+        values[index] = coefficient * power % modulus
+        power = power * shift % modulus
+    width = 2
+    while width <= size:
+        root = pow(5, (modulus - 1) // width, modulus)
+        for start in range(0, size, width):
+            twiddle = 1
+            for j in range(width // 2):
+                left = values[start + j]
+                right = values[start + j + width // 2] * twiddle % modulus
+                values[start + j] = (left + right) % modulus
+                values[start + j + width // 2] = (left - right) % modulus
+                twiddle = twiddle * root % modulus
+        width *= 2
+    return values
+
+
+def coefficient_batch(shape):
+    """BN254 coefficient prefixes versus explicit padded per-column FFTs."""
+    height, width, size = shape['height'], shape['width'], shape['evaluation_size']
+    form, shift = shape['form'], shape['shift']
+    if (type(height) is not int or type(width) is not int or type(size) is not int
+            or height < 1 or width < 1 or height > size
+            or size & (size - 1) or size > 1 << 28
+            or type(shift) is not int or not 0 < shift < a.BN254
+            or form not in ('batch', 'padded-columns')):
+        raise ValueError('invalid BN254 coefficient batch control')
+    columns = [[x[0] for x in a.dense(height, seed=351 + column, modulus=a.BN254)]
+               for column in range(width)]
+    expected = [value for column in columns for value in _bn254_coset(column, shift, size)]
+    if form == 'batch':
+        body = 'let out=coset::evaluate_batch(xs,width,height,shift,size);'
+    else:
+        # from_coefficients trims trailing zeros, so ordinary polynomial
+        # evaluation would erase this control's explicit full-length padding.
+        # Width-one evaluate_batch preserves the supplied coefficient extent.
+        body = '''let padding=v::fill<F>(0,size-height);
+          let mut out=v::empty<F>();
+          for column in 0..width {
+            let prefix=v::slice(xs,column*height,height);
+            let padded=v::concat(prefix,padding);
+            let values=coset::evaluate_batch(padded,1,size,shift,size);
+            out=v::concat(out,values);
+          }'''
+    program = local('bn254.fr', 'xs:Vector<F>, width:index, height:index, shift:F, size:index, expected:Vector<F>',
+                    body + 'return v::equal(out,expected);',
+                    {'xs': [str(value) for column in columns for value in column],
+                     'width': str(width), 'height': str(height), 'shift': str(shift),
+                     'size': str(size), 'expected': list(map(str, expected))})
+    program.source = program.source.replace('fn compute(', 'use zkc::coset as coset;\nfn compute(')
+    program.dependencies = ('core.collections', 'core.polynomial')
+    program.oracle = ('Independent modular Python radix-two evaluation of BN254 coefficient blocks; '
+                      'every output checked in column-major order. Same input polynomial and output '
+                      'across batch and explicitly padded width-one FFT controls; source padding, '
+                      'slices, concatenation, equality and Host costs remain inside SDK/run. '
+                      'Default capacities; no native roundtrip or kernel-only timing')
     return program
 
 

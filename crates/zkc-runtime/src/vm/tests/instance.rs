@@ -4,12 +4,15 @@ use crate::vm::instance::Instance;
 use std::{cell::RefCell, rc::Rc};
 
 fn program() -> Program {
-    Program::decode(&bytes(&one(
-        json!([add_fn()]),
-        json!([]),
-        json!([]),
-        json!([["return", []]]),
-    )))
+    Program::decode(
+        &bytes(&one(
+            json!([add_fn()]),
+            json!([]),
+            json!([]),
+            json!([["return", []]]),
+        )),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
     .unwrap()
 }
 
@@ -337,12 +340,15 @@ fn backend_recovery_cancels_views_without_interpreter_cleanup() {
 
 #[test]
 fn refused_entry_returns_custody_and_preserves_charged_input_bytes() {
-    let program = Program::decode(&bytes(&one(
-        json!([]),
-        json!([["value", "field"]]),
-        json!([]),
-        json!([["return", []]]),
-    )))
+    let program = Program::decode(
+        &bytes(&one(
+            json!([]),
+            json!([["value", "field"]]),
+            json!([]),
+            json!([["return", []]]),
+        )),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
     .unwrap();
     let mut backend = Mock::new();
     backend.fail_enter = Some(FrameKind::Entry);
@@ -362,12 +368,15 @@ fn refused_entry_returns_custody_and_preserves_charged_input_bytes() {
 
 #[test]
 fn vm_loading_owns_input_refusals_without_an_evaluator() {
-    let program = Program::decode(&bytes(&one(
-        json!([]),
-        json!([["value", "field"]]),
-        json!([]),
-        json!([["return", []]]),
-    )))
+    let program = Program::decode(
+        &bytes(&one(
+            json!([]),
+            json!([["value", "field"]]),
+            json!([]),
+            json!([["return", []]]),
+        )),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
     .unwrap();
     for (inputs, budget, expected) in [
         (vec![], ValueBudget::default(), RuntimeError::Inputs),
@@ -434,7 +443,11 @@ fn service_queries_cannot_supply_authority_absent_from_the_active_frame() {
     use crate::vm::retention::Retention;
     let mut source = one(json!([]), json!([]), json!([]), json!([["return", []]]));
     source[3][0][7] = json!([["coins", "random.bls12-381.fr/0", "0"]]);
-    let program = Program::decode(&bytes(&source)).unwrap();
+    let program = Program::decode(
+        &bytes(&source),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     let mut instance = instance(&program, Mock::new());
     let frame = root(&mut instance);
     instance.enter_frame(&frame, &[]).unwrap();

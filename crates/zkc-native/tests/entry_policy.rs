@@ -6,7 +6,7 @@ use common::*;
 fn heterogeneous_tables_follow_explicit_entry_shapes() {
     let bytes = program(&[("small", "table"), ("large", "table")], vec![], &[], &[]);
     let backend = ark_backend(None);
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)

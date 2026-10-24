@@ -82,6 +82,7 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
             contract: "poly.even_odd_fold".into(),
             arguments: vec![domain.field.name().into()],
             implementation: format!("{}/poly.even_odd_fold", domain.provider),
+            physical_arguments: vec![],
         };
         assert_eq!(
             b.signature().is_ok(),
@@ -91,6 +92,10 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
                     | Identity::KoalaBear
                     | Identity::KoalaBearExt8
                     | Identity::KoalaBearExt4
+                    | Identity::BabyBear
+                    | Identity::BabyBearExt4
+                    | Identity::Goldilocks
+                    | Identity::GoldilocksExt2
             )
         );
         assert_eq!(
@@ -117,6 +122,7 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
             contract: "poly.even_odd_fold".into(),
             arguments: vec![field.name().into()],
             implementation: "plonky3/poly.even_odd_fold".into(),
+            physical_arguments: vec![],
         };
         assert!(binary.signature().is_err());
         assert!(backend.binding_signature(&binary).is_none());
@@ -125,6 +131,7 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
         contract: "poly.even_odd_fold".into(),
         arguments: vec!["uninstalled.binary".into()],
         implementation: "plonky3/poly.even_odd_fold".into(),
+        physical_arguments: vec![],
     };
     assert!(unsupported.signature().is_err());
     assert!(backend.binding_signature(&unsupported).is_none());

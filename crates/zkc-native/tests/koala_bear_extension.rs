@@ -16,6 +16,7 @@ fn binding(name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![EXT.into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn scalar(a: [u32; 8]) -> KoalaBearExt8 {
@@ -461,7 +462,7 @@ fn resource_limits_and_hostile_operands_fail_closed() {
         &["out".into()],
     );
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend(Policy::default()))?;
                 Ok(program)
@@ -477,7 +478,7 @@ fn resource_limits_and_hostile_operands_fail_closed() {
             &["out".into()],
         );
         assert!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&backend(Policy::default()))?;
                     Ok(program)

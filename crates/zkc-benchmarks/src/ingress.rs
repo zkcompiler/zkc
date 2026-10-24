@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use zkc::{
     entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
-    execution::{Capacity, InputValue, PreparedData},
+    execution::{Capacity, CpuExecution, InputValue, PreparedData},
 };
 use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
@@ -43,8 +43,16 @@ impl Owner {
         interface: &Interface,
         ingress: Ingress,
         capacity: Capacity,
+        cpu: &CpuExecution,
     ) -> Result<Self> {
-        Self::with_types(values, group, Types::Native(interface), ingress, capacity)
+        Self::with_types(
+            values,
+            group,
+            Types::Native(interface),
+            ingress,
+            capacity,
+            cpu,
+        )
     }
 
     pub fn function(
@@ -53,8 +61,16 @@ impl Owner {
         interface: &FunctionInterface,
         ingress: Ingress,
         capacity: Capacity,
+        cpu: &CpuExecution,
     ) -> Result<Self> {
-        Self::with_types(values, group, Types::Function(interface), ingress, capacity)
+        Self::with_types(
+            values,
+            group,
+            Types::Function(interface),
+            ingress,
+            capacity,
+            cpu,
+        )
     }
 
     fn with_types(
@@ -63,13 +79,20 @@ impl Owner {
         interface: Types<'_>,
         ingress: Ingress,
         capacity: Capacity,
+        cpu: &CpuExecution,
     ) -> Result<Self> {
         if ingress == Ingress::Json {
             return Err("benchmark-ingress: JSON has no preowned inputs".into());
         }
         let description = group.describe();
         let ports = array(&description, "ports")?;
-        let mut retained_payload_bytes = 0;
+        let mut conversion = Conversion {
+            interface,
+            ingress,
+            capacity,
+            cpu,
+            retained_payload_bytes: 0,
+        };
         let values = values
             .into_iter()
             .map(|(name, value)| {
@@ -81,21 +104,14 @@ impl Owner {
                 let value = if !port["initializer"].is_null() {
                     value
                 } else {
-                    convert(
-                        value,
-                        &port["schema"],
-                        interface,
-                        ingress,
-                        capacity,
-                        &mut retained_payload_bytes,
-                    )?
+                    conversion.convert(value, &port["schema"])?
                 };
                 Ok((name, value))
             })
             .collect::<Result<_>>()?;
         Ok(Self {
             values,
-            retained_payload_bytes,
+            retained_payload_bytes: conversion.retained_payload_bytes,
         })
     }
 
@@ -118,129 +134,111 @@ fn field<'a>(fields: &'a [Json], name: &str) -> Result<&'a Json> {
         .map(|f| &f["schema"])
         .ok_or_else(|| format!("benchmark-ingress: missing admitted field {name}").into())
 }
-fn convert(
-    value: Value,
-    schema: &Json,
-    interface: Types<'_>,
+struct Conversion<'a> {
+    interface: Types<'a>,
     ingress: Ingress,
     capacity: Capacity,
-    retained: &mut usize,
-) -> Result<Value> {
-    let converted = match value {
-        Value::Leaf(InputValue::Wire(bytes)) => {
-            let types = array(schema, "native_types")?;
-            if types.len() != 1 {
-                return Err("benchmark-ingress: leaf requires one admitted physical type".into());
+    cpu: &'a CpuExecution,
+    retained_payload_bytes: usize,
+}
+impl Conversion<'_> {
+    fn convert(&mut self, value: Value, schema: &Json) -> Result<Value> {
+        let value = match value {
+            Value::Leaf(InputValue::WireFile { file, sha256 }) => Value::Leaf(InputValue::Wire(
+                file.read_verified(&sha256, self.capacity.wire_bytes)?
+                    .into(),
+            )),
+            other => other,
+        };
+        let converted = match value {
+            Value::Leaf(InputValue::Wire(bytes)) => {
+                let types = array(schema, "native_types")?;
+                if types.len() != 1 {
+                    return Err(
+                        "benchmark-ingress: leaf requires one admitted physical type".into(),
+                    );
+                }
+                let logical = types[0]
+                    .as_str()
+                    .and_then(|s| self.interface.logical_type(s))
+                    .ok_or("benchmark-ingress: unknown admitted leaf type")?;
+                // Identical to the public named Decoder's physical codec selection.
+                let ty = PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
+                let (value, bytes_retained) =
+                    convert_wire(bytes, ty, self.ingress, self.capacity, self.cpu)?;
+                self.retained_payload_bytes = self
+                    .retained_payload_bytes
+                    .checked_add(bytes_retained)
+                    .ok_or("benchmark-ingress: retained payload overflow")?;
+                Value::Leaf(value)
             }
-            let logical = types[0]
-                .as_str()
-                .and_then(|s| interface.logical_type(s))
-                .ok_or("benchmark-ingress: unknown admitted leaf type")?;
-            // Identical to the public named Decoder's physical codec selection.
-            let ty = PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
-            let (value, bytes_retained) = convert_wire(bytes, ty, ingress, capacity)?;
-            *retained = retained
-                .checked_add(bytes_retained)
-                .ok_or("benchmark-ingress: retained payload overflow")?;
-            Value::Leaf(value)
-        }
-        Value::Unit => Value::Unit,
-        Value::Tuple(values) | Value::Array(values) => {
-            let fields = array(schema, "fields")?;
-            if fields.len() != values.len() {
-                return Err("benchmark-ingress: product shape mismatch".into());
+            Value::Unit => Value::Unit,
+            Value::Tuple(values) | Value::Array(values) => {
+                let fields = array(schema, "fields")?;
+                if fields.len() != values.len() {
+                    return Err("benchmark-ingress: product shape mismatch".into());
+                }
+                let values = values
+                    .into_iter()
+                    .zip(fields)
+                    .map(|(v, f)| self.convert(v, &f["schema"]))
+                    .collect::<Result<_>>()?;
+                match schema["kind"].as_str() {
+                    Some("tuple") => Value::Tuple(values),
+                    Some("array") => Value::Array(values),
+                    _ => return Err("benchmark-ingress: unsupported product schema".into()),
+                }
             }
-            let values = values
-                .into_iter()
-                .zip(fields)
-                .map(|(v, f)| convert(v, &f["schema"], interface, ingress, capacity, retained))
-                .collect::<Result<_>>()?;
-            match schema["kind"].as_str() {
-                Some("tuple") => Value::Tuple(values),
-                Some("array") => Value::Array(values),
-                _ => return Err("benchmark-ingress: unsupported product schema".into()),
+            Value::Record(values) => {
+                Value::Record(self.convert_fields(values, array(schema, "fields")?)?)
             }
-        }
-        Value::Record(values) => Value::Record(convert_fields(
-            values,
-            array(schema, "fields")?,
-            interface,
-            ingress,
-            capacity,
-            retained,
-        )?),
-        Value::Variant {
-            alternative,
-            fields,
-        } => {
-            let arm = array(schema, "cases")?
-                .iter()
-                .find(|a| a["name"] == alternative)
-                .ok_or("benchmark-ingress: unsupported variant alternative")?;
             Value::Variant {
                 alternative,
-                fields: convert_fields(
-                    fields,
-                    array(arm, "fields")?,
-                    interface,
-                    ingress,
-                    capacity,
-                    retained,
-                )?,
+                fields,
+            } => {
+                let arm = array(schema, "cases")?
+                    .iter()
+                    .find(|a| a["name"] == alternative)
+                    .ok_or("benchmark-ingress: unsupported variant alternative")?;
+                Value::Variant {
+                    alternative,
+                    fields: self.convert_fields(fields, array(arm, "fields")?)?,
+                }
             }
-        }
-        Value::Associated(value) => {
-            let fields = array(schema, "fields")?;
-            if fields.len() != 1 {
-                return Err("benchmark-ingress: unsupported associated schema".into());
+            Value::Associated(value) => {
+                let fields = array(schema, "fields")?;
+                if fields.len() != 1 {
+                    return Err("benchmark-ingress: unsupported associated schema".into());
+                }
+                Value::Associated(Box::new(self.convert(*value, &fields[0]["schema"])?))
             }
-            Value::Associated(Box::new(convert(
-                *value,
-                &fields[0]["schema"],
-                interface,
-                ingress,
-                capacity,
-                retained,
-            )?))
-        }
-        Value::Leaf(
-            value @ (InputValue::Resource { .. }
-            | InputValue::VerifierKey
-            | InputValue::ProverKey(_)
-            | InputValue::ProverKeyFile { .. }
-            | InputValue::ProverKeyInput { .. }),
-        ) => Value::Leaf(value),
-        Value::Leaf(_) => return Err("benchmark-ingress: unsupported non-Wire data leaf".into()),
-    };
-    Ok(converted)
-}
-fn convert_fields(
-    values: NamedValues,
-    fields: &[Json],
-    interface: Types<'_>,
-    ingress: Ingress,
-    capacity: Capacity,
-    retained: &mut usize,
-) -> Result<NamedValues> {
-    if values.len() != fields.len() {
-        return Err("benchmark-ingress: record shape mismatch".into());
+            Value::Leaf(
+                value @ (InputValue::Resource { .. }
+                | InputValue::VerifierKey
+                | InputValue::ProverKey(_)
+                | InputValue::ProverKeyFile { .. }
+                | InputValue::ProverKeyInput { .. }),
+            ) => Value::Leaf(value),
+            Value::Leaf(_) => {
+                return Err("benchmark-ingress: unsupported non-Wire data leaf".into());
+            }
+        };
+        Ok(converted)
     }
-    values
-        .into_iter()
-        .map(|(name, value)| {
-            let value = convert(
-                value,
-                field(fields, &name)?,
-                interface,
-                ingress,
-                capacity,
-                retained,
-            )?;
-            Ok((name, value))
-        })
-        .collect()
+    fn convert_fields(&mut self, values: NamedValues, fields: &[Json]) -> Result<NamedValues> {
+        if values.len() != fields.len() {
+            return Err("benchmark-ingress: record shape mismatch".into());
+        }
+        values
+            .into_iter()
+            .map(|(name, value)| {
+                let value = self.convert(value, field(fields, &name)?)?;
+                Ok((name, value))
+            })
+            .collect()
+    }
 }
-fn codec(capacity: Capacity) -> Result<NativeBackend> {
+fn codec(capacity: Capacity, cpu: &CpuExecution) -> Result<NativeBackend> {
     capacity.validate()?;
     let policy = Policy {
         max_table_elements: capacity.elements,
@@ -249,10 +247,11 @@ fn codec(capacity: Capacity) -> Result<NativeBackend> {
         max_value_bytes: capacity.value_bytes,
         ..Policy::default()
     };
-    NativeBackend::new(
+    NativeBackend::new_with_cpu(
         policy,
         EntryPolicy::new(Domain::new("benchmark", "ingress", "data", None), None),
         SetupRegistry::new(Vec::new(), &policy).map_err(|e| e.to_string())?,
+        cpu.clone(),
     )
     .map_err(|e| e.to_string().into())
 }
@@ -261,6 +260,7 @@ fn convert_wire(
     ty: PhysicalType,
     ingress: Ingress,
     capacity: Capacity,
+    cpu: &CpuExecution,
 ) -> Result<(InputValue, usize)> {
     if ingress == Ingress::Wire {
         let retained = bytes.len();
@@ -275,9 +275,11 @@ fn convert_wire(
                 .into(),
         );
     }
-    match ingress {
+    // Enter on the caller: codec validation may install parallel numerical
+    // leaves, while conversion, retention and accounting keep caller custody.
+    cpu.enter(|| match ingress {
         Ingress::Native => {
-            let backend = codec(capacity)?;
+            let backend = codec(capacity, cpu)?;
             let value = backend
                 .decode_native_value(&ty, bytes.as_slice())
                 .map_err(|e| format!("benchmark-ingress: native decode: {e}"))?;
@@ -292,14 +294,18 @@ fn convert_wire(
         }
         Ingress::Prepared => {
             // Move the Decoder allocation when unique; no retained Wire duplicate.
-            let data =
-                PreparedData::from_wire(ty, std::sync::Arc::unwrap_or_clone(bytes), capacity)
-                    .map_err(|e| format!("benchmark-ingress: prepared decode: {e}"))?;
+            let data = PreparedData::from_wire_with_cpu(
+                ty,
+                std::sync::Arc::unwrap_or_clone(bytes),
+                capacity,
+                cpu.clone(),
+            )
+            .map_err(|e| format!("benchmark-ingress: prepared decode: {e}"))?;
             let retained = data.retained_bytes();
             Ok((data.into(), retained))
         }
         _ => Err("benchmark-ingress: unsupported conversion policy".into()),
-    }
+    })
 }
 fn share_fields(values: &NamedValues) -> Result<NamedValues> {
     values
@@ -345,8 +351,8 @@ fn share_leaf(value: &InputValue) -> Result<InputValue> {
             file: file.clone(),
             fingerprint: *fingerprint,
         },
-        // File-backed ordinary data and physical variants are not produced by
-        // this worker's bounded, resolver-free named Decoder.
+        // Ordinary files were materialized before ownership. Physical variants
+        // are represented by their admitted source Value shape.
         _ => return Err("benchmark-ingress: unsupported input constructor".into()),
     })
 }
@@ -394,6 +400,25 @@ mod tests {
                 "inputs":[{"name":"statement","index":0,"native":(0..count).collect::<Vec<_>>(),
                     "roles":["P"],"type":statement["type"],"schema":statement}],
                 "outputs":[],"services":[],"clauses":[]}],"relations":[],"job":{"kind":"run"}})
+    }
+
+    fn proof_document(statement: Json) -> Json {
+        let count = statement["leaves"].as_array().unwrap().len();
+        let mut doc = document(statement.clone());
+        let protocol = &mut doc["protocols"][0];
+        protocol["roles"] = json!(["P", "V"]);
+        protocol["inputs"][0]["roles"] = json!(["P", "V"]);
+        protocol["inputs"].as_array_mut().unwrap().push(json!({
+            "name":"witness","index":1,"native":(count..2*count).collect::<Vec<_>>(),
+            "roles":["P"],"type":statement["type"],"schema":statement
+        }));
+        protocol["outputs"] = json!([{"name":"accepted","index":0,"native":[0],
+            "roles":["V"],"type":"bool","schema":schema("boolean", "bool", json!(["bool"]))}]);
+        doc["job"] = json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
+            "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
+            "completion":null,"target":null,
+            "construction":{"kind":"authored","format":"zkc.framed/0"}});
+        doc
     }
 
     fn package(document: &Json, artifact: &str) -> Package {
@@ -451,14 +476,14 @@ mod tests {
         choice
     }
 
-    fn assert_boolean(value: &Value, expected: bool, ingress: Ingress) {
-        let expected = wire(&zkc_native::Value::Bool(expected));
+    fn assert_boolean(value: &Value, expected: bool, ingress: Ingress, cpu: &CpuExecution) {
+        let expected = wire(&zkc_native::Value::Bool(expected), cpu);
         match (ingress, value) {
             (Ingress::Wire, Value::Leaf(InputValue::Wire(bytes))) => {
                 assert_eq!(bytes.as_slice(), expected.as_slice())
             }
             (Ingress::Native, Value::Leaf(InputValue::Native(value))) => {
-                assert_eq!(wire(value).as_slice(), expected.as_slice())
+                assert_eq!(wire(value, cpu).as_slice(), expected.as_slice())
             }
             (Ingress::Prepared, Value::Leaf(InputValue::Prepared(data))) => {
                 assert_eq!(data.canonical_bytes(), expected.as_slice())
@@ -467,55 +492,78 @@ mod tests {
         }
     }
 
-    fn wire(value: &zkc_native::Value) -> Arc<Vec<u8>> {
-        codec(Capacity::default())
-            .unwrap()
-            .encode_native_value(value)
-            .unwrap()
-            .into()
+    fn wire(value: &zkc_native::Value, cpu: &CpuExecution) -> Arc<Vec<u8>> {
+        cpu.enter(|| {
+            codec(Capacity::default(), cpu)
+                .unwrap()
+                .encode_native_value(value)
+                .unwrap()
+        })
+        .into()
+    }
+
+    #[test]
+    fn repeated_codecs_execute_on_the_supplied_worker() {
+        let cpu = CpuExecution::new(1).unwrap();
+        let caller = std::thread::current().id();
+        let worker = cpu.execute(|| std::thread::current().id());
+        assert_ne!(worker, caller);
+        for _ in 0..4 {
+            let backend = codec(Capacity::default(), &cpu).unwrap();
+            assert_eq!(
+                backend.cpu().execute(|| std::thread::current().id()),
+                worker
+            );
+            assert_eq!(std::thread::current().id(), caller);
+        }
     }
 
     #[test]
     fn native_and_prepared_use_the_same_canonical_statement() {
+        let cpu = CpuExecution::new(2).unwrap();
         let value = zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 17].into());
-        let bytes = wire(&value);
-        let backend = codec(Capacity::default()).unwrap();
+        let bytes = wire(&value, &cpu);
+        let backend = codec(Capacity::default(), &cpu).unwrap();
         for ingress in [Ingress::Wire, Ingress::Native, Ingress::Prepared] {
-            let (input, retained) = convert_wire(
-                bytes.clone(),
-                value.physical_type(),
-                ingress,
-                Capacity::default(),
-            )
-            .unwrap();
-            let shared = share_leaf(&input).unwrap();
-            match (&input, shared) {
-                (InputValue::Wire(a), InputValue::Wire(b)) => {
-                    assert!(Arc::ptr_eq(a, &b));
-                    assert_eq!(retained, bytes.len());
+            for _ in 0..3 {
+                let (input, retained) = convert_wire(
+                    bytes.clone(),
+                    value.physical_type(),
+                    ingress,
+                    Capacity::default(),
+                    &cpu,
+                )
+                .unwrap();
+                let shared = share_leaf(&input).unwrap();
+                match (&input, shared) {
+                    (InputValue::Wire(a), InputValue::Wire(b)) => {
+                        assert!(Arc::ptr_eq(a, &b));
+                        assert_eq!(retained, bytes.len());
+                    }
+                    (InputValue::Native(a), InputValue::Native(b)) => {
+                        assert_eq!(backend.encode_native_value(&b).unwrap(), *bytes);
+                        let (zkc_native::Value::Vector(a), zkc_native::Value::Vector(b)) =
+                            (a.as_ref(), b.as_ref())
+                        else {
+                            panic!("vector owners")
+                        };
+                        assert_eq!(a.as_ptr(), b.as_ptr());
+                        assert_eq!(retained, value.retained_bytes());
+                    }
+                    (InputValue::Prepared(a), InputValue::Prepared(b)) => {
+                        assert_eq!(a.canonical_bytes(), bytes.as_slice());
+                        assert_eq!(a.canonical_bytes().as_ptr(), b.canonical_bytes().as_ptr());
+                        assert_eq!(retained, a.retained_bytes());
+                    }
+                    _ => panic!("ingress changed the representation"),
                 }
-                (InputValue::Native(a), InputValue::Native(b)) => {
-                    assert_eq!(backend.encode_native_value(&b).unwrap(), *bytes);
-                    let (zkc_native::Value::Vector(a), zkc_native::Value::Vector(b)) =
-                        (a.as_ref(), b.as_ref())
-                    else {
-                        panic!("vector owners")
-                    };
-                    assert_eq!(a.as_ptr(), b.as_ptr());
-                    assert_eq!(retained, value.retained_bytes());
-                }
-                (InputValue::Prepared(a), InputValue::Prepared(b)) => {
-                    assert_eq!(a.canonical_bytes(), bytes.as_slice());
-                    assert_eq!(a.canonical_bytes().as_ptr(), b.canonical_bytes().as_ptr());
-                    assert_eq!(retained, a.retained_bytes());
-                }
-                _ => panic!("ingress changed the representation"),
             }
         }
     }
 
     #[test]
-    fn changing_statement_selection_keeps_distinct_nested_owners() {
+    fn changing_run_and_proof_inputs_keep_distinct_nested_owners() {
+        let cpu = CpuExecution::new(2).unwrap();
         let boolean = schema("boolean", "bool", json!(["bool"]));
         let pair = product(
             "tuple",
@@ -541,63 +589,97 @@ mod tests {
                 ("choice", choice_schema()),
             ],
         );
-        let interface = read_interface(&document(nested));
-        let groups = interface.input_groups();
-        let group = &groups[0];
-        for ingress in [Ingress::Wire, Ingress::Native, Ingress::Prepared] {
-            let owners: Vec<_> = [false, true]
-                .into_iter()
-                .map(|flag| {
-                    let input = json!({"statement":{"empty":null,"pair":[flag,[!flag,flag]],
+        for doc in [document(nested.clone()), proof_document(nested)] {
+            let interface = read_interface(&doc);
+            let groups = interface.input_groups();
+            if doc["job"]["kind"] == "proof" {
+                assert_eq!(
+                    groups.iter().map(|g| g.name()).collect::<Vec<_>>(),
+                    ["public", "witness"]
+                );
+            }
+            for ingress in [Ingress::Wire, Ingress::Native, Ingress::Prepared] {
+                // Keep public and witness owners alive together, as the proof worker does.
+                let owners: Vec<Vec<_>> = groups
+                    .iter()
+                    .map(|group| {
+                        let name = if group.name() == "witness" {
+                            "witness"
+                        } else {
+                            "statement"
+                        };
+                        [false, true]
+                            .into_iter()
+                            .map(|flag| {
+                                // Public and witness data differ, so an owner mixup is visible.
+                                let flag = flag ^ (group.name() == "witness");
+                                let input = json!({name:{"empty":null,"pair":[flag,[!flag,flag]],
                         "choice":{"case":if flag {"Flag"} else {"Empty"},
                             "fields":if flag {json!({"0":flag})} else {json!({})}}}});
-                    Owner::new(
-                        decode(group, &input),
-                        group,
-                        &interface,
-                        ingress,
-                        Capacity::default(),
-                    )
-                    .unwrap()
-                })
-                .collect();
-            assert!(owners[0].retained_payload_bytes > 0);
-            assert!(owners[1].retained_payload_bytes > owners[0].retained_payload_bytes);
-            for index in [0, 1, 0, 1] {
-                let request = owners[index].share().unwrap();
-                let Value::Record(record) = &request["statement"] else {
-                    panic!("record")
-                };
-                assert!(matches!(record["empty"], Value::Unit));
-                let Value::Tuple(pair) = &record["pair"] else {
-                    panic!("tuple")
-                };
-                assert_boolean(&pair[0], index == 1, ingress);
-                let Value::Array(array) = &pair[1] else {
-                    panic!("array")
-                };
-                assert_boolean(&array[0], index == 0, ingress);
-                assert_boolean(&array[1], index == 1, ingress);
-                let Value::Variant {
-                    alternative,
-                    fields,
-                } = &record["choice"]
-                else {
-                    panic!("variant")
-                };
-                if index == 0 {
-                    assert_eq!(alternative, "Empty");
-                    assert!(fields.is_empty());
-                } else {
-                    assert_eq!(alternative, "Flag");
-                    assert_boolean(&fields["0"], true, ingress);
-                };
+                                Owner::new(
+                                    decode(group, &input),
+                                    group,
+                                    &interface,
+                                    ingress,
+                                    Capacity::default(),
+                                    &cpu,
+                                )
+                                .unwrap()
+                            })
+                            .collect()
+                    })
+                    .collect();
+                for (group, owners) in groups.iter().zip(&owners) {
+                    let name = if group.name() == "witness" {
+                        "witness"
+                    } else {
+                        "statement"
+                    };
+                    assert!(owners[0].retained_payload_bytes > 0);
+                    let empty_index = usize::from(group.name() == "witness");
+                    assert!(
+                        owners[1 - empty_index].retained_payload_bytes
+                            > owners[empty_index].retained_payload_bytes
+                    );
+                    for index in [0, 1, 0, 1] {
+                        let request = owners[index].share().unwrap();
+                        let flag = (index == 1) ^ (group.name() == "witness");
+                        let Value::Record(record) = &request[name] else {
+                            panic!("record")
+                        };
+                        assert!(matches!(record["empty"], Value::Unit));
+                        let Value::Tuple(pair) = &record["pair"] else {
+                            panic!("tuple")
+                        };
+                        assert_boolean(&pair[0], flag, ingress, &cpu);
+                        let Value::Array(array) = &pair[1] else {
+                            panic!("array")
+                        };
+                        assert_boolean(&array[0], !flag, ingress, &cpu);
+                        assert_boolean(&array[1], flag, ingress, &cpu);
+                        let Value::Variant {
+                            alternative,
+                            fields,
+                        } = &record["choice"]
+                        else {
+                            panic!("variant")
+                        };
+                        if flag {
+                            assert_eq!(alternative, "Flag");
+                            assert_boolean(&fields["0"], true, ingress, &cpu);
+                        } else {
+                            assert_eq!(alternative, "Empty");
+                            assert!(fields.is_empty());
+                        }
+                    }
+                }
             }
         }
     }
 
     #[test]
     fn associated_ownership_does_not_grant_decoder_constructor_permission() {
+        let cpu = CpuExecution::new(2).unwrap();
         let boolean = schema("boolean", "bool", json!(["bool"]));
         let plain = read_interface(&document(boolean.clone()));
         let mut associated = product(
@@ -620,18 +702,26 @@ mod tests {
             let mut values = decode(&plain.input_groups()[0], &json!({"statement":true}));
             let value = values.remove("statement").unwrap();
             values.insert("statement".into(), Value::Associated(Box::new(value)));
-            let owner =
-                Owner::new(values, group, &associated, ingress, Capacity::default()).unwrap();
+            let owner = Owner::new(
+                values,
+                group,
+                &associated,
+                ingress,
+                Capacity::default(),
+                &cpu,
+            )
+            .unwrap();
             let request = owner.share().unwrap();
             let Value::Associated(value) = &request["statement"] else {
                 panic!("associated")
             };
-            assert_boolean(value, true, ingress);
+            assert_boolean(value, true, ingress, &cpu);
         }
     }
 
     #[test]
     fn decoder_key_initializers_remain_descriptors_without_data_conversion() {
+        let cpu = CpuExecution::new(2).unwrap();
         use zkc::{entry::inputs::Resolver, execution::InputFile};
         struct KeyFile;
         impl Resolver for KeyFile {
@@ -661,8 +751,15 @@ mod tests {
                 .unwrap()
                 .decode(group, &input, Some(&mut KeyFile))
                 .unwrap();
-            let owner =
-                Owner::new(values, group, &interface, ingress, Capacity::default()).unwrap();
+            let owner = Owner::new(
+                values,
+                group,
+                &interface,
+                ingress,
+                Capacity::default(),
+                &cpu,
+            )
+            .unwrap();
             assert_eq!(owner.retained_payload_bytes, 0);
             for _ in 0..2 {
                 let request = owner.share().unwrap();
@@ -676,6 +773,7 @@ mod tests {
 
     #[test]
     fn schema_directed_owners_refuse_unsupported_types_and_leaf_capacity() {
+        let cpu = CpuExecution::new(2).unwrap();
         let interface = read_interface(&document(schema("boolean", "bool", json!(["bool"]))));
         let groups = interface.input_groups();
         let group = &groups[0];
@@ -686,24 +784,41 @@ mod tests {
                 group,
                 &interface,
                 Ingress::Json,
-                Capacity::default()
+                Capacity::default(),
+                &cpu,
             )
             .is_err()
         );
         for ingress in [Ingress::Native, Ingress::Prepared] {
             let capacity = Capacity {
-                wire_bytes: wire(&zkc_native::Value::Bool(true)).len() - 1,
+                wire_bytes: wire(&zkc_native::Value::Bool(true), &cpu).len() - 1,
                 ..Capacity::default()
             };
             assert!(
-                Owner::new(decode(group, &input), group, &interface, ingress, capacity).is_err()
+                Owner::new(
+                    decode(group, &input),
+                    group,
+                    &interface,
+                    ingress,
+                    capacity,
+                    &cpu
+                )
+                .is_err()
             );
             let capacity = Capacity {
                 value_bytes: 0,
                 ..Capacity::default()
             };
             assert!(
-                Owner::new(decode(group, &input), group, &interface, ingress, capacity).is_err()
+                Owner::new(
+                    decode(group, &input),
+                    group,
+                    &interface,
+                    ingress,
+                    capacity,
+                    &cpu
+                )
+                .is_err()
             );
         }
         for leaf in [
@@ -731,9 +846,16 @@ mod tests {
                     Value::Leaf(InputValue::Wire(Vec::new().into())),
                 )]
                 .into();
-                let error = Owner::new(values, group, &interface, ingress, Capacity::default())
-                    .err()
-                    .unwrap();
+                let error = Owner::new(
+                    values,
+                    group,
+                    &interface,
+                    ingress,
+                    Capacity::default(),
+                    &cpu,
+                )
+                .err()
+                .unwrap();
                 assert!(
                     matches!(error, crate::Failure::Failed(message) if message ==
                     "benchmark-ingress: unsupported data conversion (private or setup-dependent type)")
@@ -782,6 +904,7 @@ mod tests {
     fn entry_preflight_checks_aggregate_loading_for_every_representation() {
         use zkc::entry::{EntryPhase, RoleInputs, RunEntry, RunRequest, SetupAuthority};
         use zkc::run::HostLimits;
+        let cpu = CpuExecution::new(2).unwrap();
         let boolean = schema("boolean", "bool", json!(["bool"]));
         for pair in [false, true] {
             let statement = if pair {
@@ -801,12 +924,14 @@ mod tests {
                     let value = zkc_native::Value::Bool(true);
                     // One Prepared owner retains both native and wire data;
                     // that fits while two independently loaded values do not.
-                    limits.capacity.values.live_bytes = value.retained_bytes() + wire(&value).len();
+                    limits.capacity.values.live_bytes =
+                        value.retained_bytes() + wire(&value, &cpu).len();
                 }
-                let entry = RunEntry::admit(
+                let entry = RunEntry::admit_with_cpu(
                     package(&doc, &run_artifact(&doc)),
                     limits,
                     SetupAuthority::default(),
+                    cpu.clone(),
                 )
                 .unwrap();
                 let groups = entry.interface().input_groups();
@@ -818,6 +943,7 @@ mod tests {
                         entry.interface(),
                         ingress,
                         limits.capacity,
+                        entry.cpu(),
                     )
                     .unwrap();
                     // Each leaf was admitted for ownership; Entry must still
@@ -850,20 +976,28 @@ mod tests {
 
     #[test]
     fn conversion_refuses_invalid_wire_and_current_capacity() {
+        let cpu = CpuExecution::new(2).unwrap();
         let value = zkc_native::Value::Bool(true);
         let ty = value.physical_type();
-        let bytes = wire(&value);
+        let bytes = wire(&value, &cpu);
         for ingress in [Ingress::Native, Ingress::Prepared] {
             assert!(
-                convert_wire(vec![0].into(), ty.clone(), ingress, Capacity::default()).is_err()
+                convert_wire(
+                    vec![0].into(),
+                    ty.clone(),
+                    ingress,
+                    Capacity::default(),
+                    &cpu
+                )
+                .is_err()
             );
             let capacity = Capacity {
                 wire_bytes: bytes.len() - 1,
                 ..Capacity::default()
             };
-            assert!(convert_wire(bytes.clone(), ty.clone(), ingress, capacity).is_err());
+            assert!(convert_wire(bytes.clone(), ty.clone(), ingress, capacity, &cpu).is_err());
         }
-        assert!(convert_wire(bytes, ty, Ingress::Json, Capacity::default()).is_err());
+        assert!(convert_wire(bytes, ty, Ingress::Json, Capacity::default(), &cpu).is_err());
         let private =
             zkc_native::Value::point(vec![zkc_native::Scalar::from(7); 4], &Policy::default())
                 .unwrap();
@@ -873,6 +1007,7 @@ mod tests {
                 private.physical_type(),
                 ingress,
                 Capacity::default(),
+                &cpu,
             )
             .unwrap_err();
             assert!(

@@ -18,8 +18,11 @@ struct AppliedTypeRepresentation {
   llvm::ArrayRef<TypeArgumentPattern> arguments;
   llvm::StringRef representation;
   bool isDefault;
+  /// Exact physical type of the single dense child, including its layout.
+  llvm::StringRef childType;
 };
-/// Validate closed patterns and reject overlapping defaults or named matches.
+/// Validate closed patterns and exact child types against the logical schemas,
+/// and reject overlapping defaults or named matches.
 /// This does not assign implementations or provider ownership to an ABI.
 llvm::Error validateAppliedTypeRepresentations(
     llvm::ArrayRef<AppliedTypeRepresentation> representations);

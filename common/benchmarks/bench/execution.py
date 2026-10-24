@@ -101,7 +101,7 @@ def prepare_case(args, output, capture, manifest, case):
     boundary = 'admitted_entry_call' if program.proof else 'admitted_function_call'
     base = {'package': str(package), 'sha256': digest(package), 'ingress': args.ingress}
     if not program.proof:
-        backend = base | {'kind': 'run', 'arguments': files[0]['arguments'], 'accept_role': 'P'}
+        backend = base | {'kind': 'run', 'arguments': files[0]['arguments'], 'check': {'kind': 'acceptance', 'role': 'P'}}
         job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary, execution_counts=args.execution_counts)
         execute_job(job, directory/'control', CONTROL, args.timeout)
         # The generator supplies a typed incorrect expectation for its own domain.

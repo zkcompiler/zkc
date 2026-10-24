@@ -12,6 +12,7 @@ pub(super) struct OptionSpec {
 enum ValueFormat {
     Text,
     Unsigned,
+    UnsignedRange(u64, u64),
     Hex(Option<usize>),
 }
 impl OptionSpec {
@@ -24,6 +25,10 @@ impl OptionSpec {
     }
     pub const fn unsigned(mut self) -> Self {
         self.value = ValueFormat::Unsigned;
+        self
+    }
+    pub const fn unsigned_range(mut self, minimum: u64, maximum: u64) -> Self {
+        self.value = ValueFormat::UnsignedRange(minimum, maximum);
         self
     }
     pub const fn hex(mut self, bytes: Option<usize>) -> Self {
@@ -139,6 +144,13 @@ impl Command {
                         !value.is_empty()
                             && value.bytes().all(|b| b.is_ascii_digit())
                             && value.parse::<u64>().is_ok()
+                    }
+                    ValueFormat::UnsignedRange(minimum, maximum) => {
+                        !value.is_empty()
+                            && value.bytes().all(|b| b.is_ascii_digit())
+                            && value
+                                .parse::<u64>()
+                                .is_ok_and(|count| (minimum..=maximum).contains(&count))
                     }
                     ValueFormat::Hex(bytes) => {
                         value.len() % 2 == 0

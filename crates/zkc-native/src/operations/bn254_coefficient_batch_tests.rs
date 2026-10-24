@@ -25,7 +25,20 @@ fn vector(value: &Value) -> &[F] {
 fn coefficient_batches_match_pinned_fft_and_scalar_horner() {
     let policy = Policy::default();
     for columns in [1, 3, 16] {
-        for (height, size) in [(0, 1), (0, 8), (1, 1), (1, 8), (3, 8), (8, 8), (5, 2)] {
+        for (height, size) in [
+            (0, 1),
+            (0, 8),
+            (1, 1),
+            (1, 8),
+            (3, 8),
+            (8, 8),
+            (5, 2),
+            (15, 64),
+            (16, 64),
+            (17, 64),
+            (64, 64),
+            (67, 64),
+        ] {
             let domain = domain(size, F::from(7), &policy).unwrap();
             let mut coefficients = Vec::new();
             let mut expected = Vec::new();
@@ -44,7 +57,10 @@ fn coefficient_batches_match_pinned_fft_and_scalar_horner() {
                     .map(|x| block.iter().rev().fold(F::zero(), |value, c| value * x + c))
                     .collect();
                 // Pinned ark-poly 0.6.0 provider control, using a separate Vec.
+                // Pad this control to exercise the ordinary FFT even when the
+                // checked batch is eligible for the degree-aware path.
                 let mut scalar_fft: Vec<_> = block.iter().take(size).copied().collect();
+                scalar_fft.resize(size, F::zero());
                 domain.fft_in_place(&mut scalar_fft);
                 assert_eq!(scalar_fft, horner);
                 expected.extend(horner);
@@ -72,21 +88,151 @@ fn coefficient_batches_match_pinned_fft_and_scalar_horner() {
 #[test]
 fn coefficient_batch_allocation_failures_publish_nothing_and_preserve_inputs() {
     let policy = Policy::default();
-    let values: Vec<_> = (1u64..=9).map(F::from).collect();
-    let arguments = args(values.clone(), 3, 3, 8);
-    let aliases = [arguments[0].clone(), arguments[0].clone()];
-    // First the private destination, then the reusable FFT scratch vector.
-    for successful in [0, 1] {
-        let failure = zkc_kernels::allocation::failure::after(successful);
-        assert_eq!(
-            run(&arguments, &policy, usize::MAX).unwrap_err().code,
-            "exhausted:allocation"
-        );
-        drop(failure);
-        for alias in &aliases {
-            assert_eq!(vector(alias), values);
+    for height in [0, 1, 15, 16, 17, 64] {
+        let values: Vec<_> = (1..=3 * height).map(F::from).collect();
+        let arguments = args(values.clone(), 3, height, 64);
+        let aliases = [arguments[0].clone(), arguments[0].clone()];
+        let expected = run(&arguments, &policy, usize::MAX).unwrap();
+        // First the private destination, then the reusable FFT scratch vector.
+        // Even an empty prefix retains both admitted reservations.
+        for successful in [0, 1] {
+            let failure = zkc_kernels::allocation::failure::after(successful);
+            assert_eq!(
+                run(&arguments, &policy, usize::MAX).unwrap_err().code,
+                "exhausted:allocation"
+            );
+            drop(failure);
+            for alias in &aliases {
+                assert_eq!(vector(alias), values);
+            }
+            let recovered = run(&arguments, &policy, usize::MAX).unwrap();
+            assert_eq!(vector(&recovered[0]), vector(&expected[0]));
         }
-        assert!(run(&arguments, &policy, usize::MAX).is_ok());
+    }
+}
+
+#[test]
+fn coefficient_batch_prefixes_keep_worst_case_resource_boundaries() {
+    let columns = 3;
+    let size = 64;
+    let element_bytes = std::mem::size_of::<F>();
+    let output_len = columns * size;
+    let retained = 256 + output_len * element_bytes;
+    let managed = 256 + (2 * output_len + size) * element_bytes;
+    for height in [0, 1, 15, 16, 17, 64, 67] {
+        let values: Vec<_> = (0..columns)
+            .flat_map(|column| {
+                (0..height).map(move |row| {
+                    if row >= size {
+                        F::zero()
+                    } else {
+                        F::from((column * height + row + 1) as u64)
+                    }
+                })
+            })
+            .collect();
+        let arguments = args(values.clone(), columns as u64, height as u64, size as u64);
+        let alias = arguments[0].clone();
+        // The contract charges the full transform, independent of the upstream
+        // algorithm selected from the checked coefficient prefix.
+        let work = (16 * output_len * 6
+            + (columns * height + output_len) * 24
+            + (columns + 1) * 4096) as u64;
+        let exact = Policy {
+            max_numerical_work: work,
+            max_numerical_bytes: managed,
+            ..Policy::default()
+        };
+        assert!(run(&arguments, &exact, retained).is_ok());
+        for (policy, available, expected) in [
+            (
+                Policy {
+                    max_numerical_work: work - 1,
+                    max_numerical_bytes: 0,
+                    ..exact
+                },
+                retained,
+                "exhausted:numerical-work",
+            ),
+            (
+                Policy {
+                    max_numerical_bytes: managed - 1,
+                    ..exact
+                },
+                retained,
+                "exhausted:numerical-bytes",
+            ),
+            (
+                Policy {
+                    max_numerical_work: 0,
+                    max_numerical_bytes: 0,
+                    ..exact
+                },
+                retained - 1,
+                "exhausted:output-bytes",
+            ),
+        ] {
+            let failure = zkc_kernels::allocation::failure::after(0);
+            assert_eq!(
+                run(&arguments, &policy, available).unwrap_err().code,
+                expected,
+                "height={height}"
+            );
+            drop(failure);
+            assert_eq!(vector(&alias), values);
+        }
+    }
+}
+
+#[test]
+fn coefficient_batch_discarded_tails_keep_validation_order() {
+    let policy = Policy::default();
+    for column in 0..3 {
+        for row in [64, 66] {
+            let mut values = vec![F::zero(); 3 * 67];
+            values[column * 67 + row] = F::one();
+            let arguments = args(values.clone(), 3, 67, 64);
+            let aliases = [arguments[0].clone(), arguments[0].clone()];
+            for (policy, available, expected) in [
+                (
+                    Policy {
+                        max_table_elements: 63,
+                        ..policy
+                    },
+                    0,
+                    "refused:coset-element-limit",
+                ),
+                (
+                    Policy {
+                        max_table_elements: 200,
+                        ..policy
+                    },
+                    0,
+                    "exhausted:element-limit",
+                ),
+                (policy, 0, "exhausted:output-bytes"),
+                (
+                    Policy {
+                        max_numerical_work: 0,
+                        max_numerical_bytes: 0,
+                        ..policy
+                    },
+                    usize::MAX,
+                    "refused:coset-coefficient-count",
+                ),
+            ] {
+                let failure = zkc_kernels::allocation::failure::after(0);
+                assert_eq!(
+                    run(&arguments, &policy, available).unwrap_err().code,
+                    expected,
+                    "column={column}, row={row}"
+                );
+                drop(failure);
+                for alias in &aliases {
+                    assert_eq!(vector(alias), values);
+                }
+            }
+        }
     }
 }
 

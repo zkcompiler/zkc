@@ -195,7 +195,15 @@ mod tests {
                 })
                 .collect();
             let parts = Value::Sequence(
-                crate::Sequence::new(ty.clone(), parts, &Policy::default()).unwrap(),
+                crate::Sequence::new(
+                    zkc_runtime::vm::PhysicalType::default_for(
+                        zkc_runtime::vm::LogicalType::sequence(ty.clone()).unwrap(),
+                    )
+                    .unwrap(),
+                    parts,
+                    &Policy::default(),
+                )
+                .unwrap(),
             );
             let out = run("bytes.join", std::slice::from_ref(&parts)).unwrap();
             assert!(matches!(&out[0], Value::Bytes(v) if v.as_ref() == expected));
@@ -218,8 +226,15 @@ mod tests {
             );
         }
         let parts = Value::Sequence(
-            crate::Sequence::new(ty, vec![bytes(&[1, 2]), bytes(&[3, 4])], &Policy::default())
+            crate::Sequence::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(ty).unwrap(),
+                )
                 .unwrap(),
+                vec![bytes(&[1, 2]), bytes(&[3, 4])],
+                &Policy::default(),
+            )
+            .unwrap(),
         );
         let policy = Policy {
             max_wire_bytes: 3,
@@ -245,7 +260,11 @@ mod tests {
         );
         let wrong = Value::Sequence(
             crate::Sequence::new(
-                LogicalType::parse("index").unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("index").unwrap())
+                        .unwrap(),
+                )
+                .unwrap(),
                 vec![],
                 &Policy::default(),
             )

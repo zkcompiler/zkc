@@ -1,6 +1,6 @@
 //! Immutable exact implementation ownership, independent of runtime admission.
 //! A selected entry carries its signature resolver, security premise and handler.
-use super::NativeBackend;
+use super::{NativeBackend, dispatch::Dispatch};
 use crate::{Result, Value, refused};
 use std::{collections::BTreeMap, sync::OnceLock};
 use zkc_runtime::vm::{BoundSignature, Identity, Invocation, OperationBinding};
@@ -14,25 +14,44 @@ enum Signature {
     Custom(fn(&OperationBinding) -> Option<BoundSignature>),
 }
 pub(crate) type Handler = fn(&mut NativeBackend, &Invocation<'_>, &[Value]) -> Result<Vec<Value>>;
+pub(crate) fn blst(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::blst::apply(&i.binding.declaration().contract, i, args, &b.core.policy)
+}
 pub(super) type PreparedHandler =
     fn(&mut NativeBackend, &Invocation<'_>, &[Value], &super::NativeCall) -> Result<Vec<Value>>;
 #[derive(Clone, Copy)]
 pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
-    pub(super) handler: Handler,
+    pub(super) handler: Dispatch,
     pub(super) prepared_handler: Option<PreparedHandler>,
     pub(super) deterministic: bool,
+    pub(super) requirements: zkc_runtime::vm::ImplementationRequirements,
 }
 impl Implementation {
     pub(super) fn signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
         if binding.contract != self.contract {
             return None;
         }
+        if !binding.physical_arguments.is_empty()
+            && !binding.contract.starts_with("sequence.")
+            && !binding.contract.starts_with("field_array.")
+            && !binding.contract.starts_with("fixed_vector.")
+            && binding.contract != "representation.convert"
+            && binding.contract != "transcript.native.indexed.observe.data"
+        {
+            return None;
+        }
         match self.signature {
             Signature::Shaped(row, policy) => {
-                if let crate::bindings::Selection::Alternative { primary, .. } = policy
-                    && binding.arguments.first().map(String::as_str) != Some(primary.name())
+                if let crate::bindings::Selection::Alternative { domains, .. } = policy
+                    && !domains.iter().any(|domain| {
+                        binding.arguments.first().map(String::as_str) == Some(domain.name())
+                    })
                 {
                     return None;
                 }
@@ -71,9 +90,10 @@ impl Registry {
                 Implementation {
                     contract,
                     signature,
-                    handler,
+                    handler: Dispatch::Direct(handler),
                     prepared_handler: None,
                     deterministic,
+                    requirements: Default::default(),
                 },
             )?;
         }
@@ -116,7 +136,7 @@ impl Registry {
     fn install_shaped(
         &mut self,
         contracts: &'static [crate::bindings::Contract],
-        handler: Handler,
+        handler: Dispatch,
         deterministic: bool,
     ) -> Result<()> {
         for row in contracts {
@@ -129,6 +149,7 @@ impl Registry {
                         handler,
                         prepared_handler: None,
                         deterministic,
+                        requirements: Default::default(),
                     },
                 )?;
             }
@@ -140,14 +161,14 @@ impl Registry {
         rows: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
-        self.install_shaped(rows, handler, false)
+        self.install_shaped(rows, Dispatch::Direct(handler), false)
     }
     fn pure_shaped(
         &mut self,
         rows: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
-        self.install_shaped(rows, handler, true)
+        self.install_shaped(rows, Dispatch::Direct(handler), true)
     }
     fn alternative(&mut self, row: &Alternative) -> Result<()> {
         let mut entry = self
@@ -162,12 +183,12 @@ impl Registry {
         entry.signature = Signature::Shaped(
             shape,
             crate::bindings::Selection::Alternative {
-                primary: row.primary,
+                domains: row.domains,
                 ports: row.ports,
             },
         );
         if let Some(handler) = row.handler {
-            entry.handler = handler;
+            entry.handler = Dispatch::Direct(handler);
             entry.prepared_handler = None;
         }
         entry.deterministic &= row.deterministic;
@@ -187,8 +208,8 @@ impl Registry {
 pub(crate) struct Alternative {
     pub(crate) identity: &'static str,
     pub(crate) original: &'static str,
-    /// Exact first domain argument: field, group, scheme or transcript suite.
-    pub(crate) primary: Identity,
+    /// Admitted first domain arguments: fields, groups, schemes or transcript suites.
+    pub(crate) domains: &'static [Identity],
     pub(crate) ports: crate::bindings::PortTransform,
     /// Omit for a layout-only alternative to retain the original algorithm.
     pub(crate) handler: Option<Handler>,
@@ -218,17 +239,22 @@ pub(super) fn installed() -> Result<&'static Registry> {
             )?;
             r.pure_shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(super::execute::PCS_CONTRACTS, basic)?;
-            r.pure_shaped(crate::operations::arithmetic::CONTRACTS, arithmetic)?;
+            r.install_shaped(
+                crate::operations::arithmetic::CONTRACTS,
+                Dispatch::Resolve(super::dispatch::arithmetic),
+                true,
+            )?;
             // Reuse the owning contract row, including all installed providers.
-            let constants = crate::operations::arithmetic::CONTRACTS
+            for constants in crate::operations::arithmetic::CONTRACTS
                 .iter()
-                .find(|row| row.name == "field.constant")
-                .expect("field constant contract");
-            for implementation in constants.implementations {
-                r.entries
-                    .get_mut(*implementation)
-                    .expect("installed field constant")
-                    .prepared_handler = Some(prepared_field_constant);
+                .filter(|row| matches!(row.name, "field.constant" | "vector.constant"))
+            {
+                for implementation in constants.implementations {
+                    r.entries
+                        .get_mut(*implementation)
+                        .expect("installed literal constant")
+                        .prepared_handler = Some(prepared_literal);
+                }
             }
             r.prepared_family(
                 crate::numerical::expression::IMPLEMENTATIONS,
@@ -292,6 +318,16 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 field_array,
             )?;
             r.pure_family(
+                crate::field_array::RESIDENT_IMPLEMENTATIONS,
+                Signature::Custom(crate::field_array::signature),
+                field_array,
+            )?;
+            r.pure_family(
+                crate::fixed_vector::RESIDENT_IMPLEMENTATIONS,
+                Signature::Custom(crate::fixed_vector::signature),
+                fixed_vector,
+            )?;
+            r.pure_family(
                 crate::sequence::IMPLEMENTATIONS,
                 Signature::Custom(crate::sequence::signature),
                 sequence,
@@ -317,6 +353,93 @@ pub(super) fn installed() -> Result<&'static Registry> {
             )?;
             r.pure_shaped(crate::operations::arithmetic::EMBEDDINGS, arithmetic)?;
             r.pure_shaped(crate::operations::curve::PAIRINGS, curve)?;
+            // Resident installation derives actual ports from native-owned shapes.
+            for row in crate::operations::arithmetic::CONTRACTS
+                .iter()
+                .chain(crate::operations::curve::CONTRACTS)
+                .chain(crate::operations::curve::PAIRINGS)
+            {
+                let domain = if row.name.starts_with("curve.") {
+                    "bls12-381.g1"
+                } else {
+                    "bls12-381.fr"
+                };
+                let binding = OperationBinding {
+                    contract: row.name.into(),
+                    implementation: format!("blst/resident/{}", row.name),
+                    arguments: vec![domain.into()],
+                    physical_arguments: vec![],
+                };
+                if crate::operations::blst::signature(&binding).is_some() {
+                    r.insert(
+                        binding.implementation.clone(),
+                        Implementation {
+                            contract: row.name,
+                            signature: Signature::Custom(crate::operations::blst::signature),
+                            handler: Dispatch::Resolve(super::dispatch::resident),
+                            prepared_handler: if matches!(
+                                row.name,
+                                "field.constant" | "vector.constant"
+                            ) {
+                                Some(prepared_literal)
+                            } else {
+                                None
+                            },
+                            deterministic: true,
+                            // Actual handler premises are authored here, independently
+                            // of expected Contracts contribution metadata.
+                            requirements: zkc_runtime::vm::ImplementationRequirements {
+                                timing: if row.name == "curve.msm" {
+                                    zkc_runtime::vm::TimingRequirement::VariableTime
+                                } else {
+                                    zkc_runtime::vm::TimingRequirement::Unspecified
+                                },
+                                timing_operands: if row.name == "curve.msm" {
+                                    &[0, 1]
+                                } else {
+                                    &[]
+                                },
+                            },
+                        },
+                    )?;
+                }
+            }
+            for &contract in crate::operations::halo2curves::CONTRACTS {
+                r.insert(
+                    format!("halo2curves-axiom/resident/{contract}"),
+                    Implementation {
+                        contract,
+                        signature: Signature::Custom(crate::operations::halo2curves::signature),
+                        handler: Dispatch::Resolve(super::dispatch::halo2curves),
+                        prepared_handler: if matches!(
+                            contract,
+                            "field.constant" | "vector.constant"
+                        ) {
+                            Some(prepared_literal)
+                        } else {
+                            None
+                        },
+                        deterministic: true,
+                        requirements: zkc_runtime::vm::ImplementationRequirements {
+                            timing: if contract == "curve.msm" {
+                                zkc_runtime::vm::TimingRequirement::VariableTime
+                            } else {
+                                zkc_runtime::vm::TimingRequirement::Unspecified
+                            },
+                            timing_operands: if contract == "curve.msm" {
+                                &[0, 1]
+                            } else {
+                                &[]
+                            },
+                        },
+                    },
+                )?;
+            }
+            r.pure_family(
+                &[("native/representation.convert", "representation.convert")],
+                Signature::Custom(crate::operations::resident::conversion_signature),
+                resident_conversion,
+            )?;
             for row in alternatives() {
                 r.alternative(row)?;
             }
@@ -358,7 +481,11 @@ fn fixed_vector(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Re
 fn sequence(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::sequence::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
-fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+pub(super) fn arithmetic(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
     crate::operations::arithmetic::apply(
         &i.binding.declaration().contract,
         field(i),
@@ -367,13 +494,13 @@ fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resu
         &b.core.policy,
     )
 }
-fn prepared_field_constant(
+fn prepared_literal(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     _args: &[Value],
     call: &super::NativeCall,
 ) -> Result<Vec<Value>> {
-    crate::operations::field::publish_literal(call.literal()?, i, &b.core.policy)
+    crate::operations::literal::publish(call.literal()?, i, &b.core.policy)
 }
 fn expression(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::numerical::expression::prepare(
@@ -423,7 +550,7 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
     if field(i) == Some(Identity::Bn254Fr) {
         crate::operations::bn254::apply(name, field(i), args, i, &b.core.policy)
     } else {
-        crate::operations::koala_bear::apply(
+        crate::operations::plonky3::apply(
             name,
             field(i),
             args,
@@ -537,4 +664,25 @@ mod tests;
 
 fn field_array(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::field_array::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}
+
+fn resident_conversion(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::resident::convert(i, args, &b.core.policy)
+}
+
+pub(super) fn halo2curves(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+) -> Result<Vec<Value>> {
+    crate::operations::halo2curves::apply(
+        &i.binding.declaration().contract,
+        i,
+        args,
+        &b.core.policy,
+    )
 }

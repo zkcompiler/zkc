@@ -120,11 +120,14 @@ Executable values incur the charges below. Bounded unpack scratch is additional
 to installed metadata; concurrent
 loads and allocator overhead are not a process memory guarantee.
 
-The physical spelling appends `@logical.variant/0`; those 18 suffix bytes are
-additional to the logical bound. Payloads still use logical types, whose admitted
-default representations determine their physical values. This profile supplies
-no arbitrary alternative representation. Unknown descriptor tags and malformed
-records refuse.
+The default physical spelling appends `@logical.variant/0`. A nondefault layout
+also appends the ordered physical child layouts in brackets, flattening payload
+positions over every alternative in declaration order. Logical payload schemas
+remain unchanged. Complete child layouts, including inactive alternatives,
+participate in physical identity, formation and metadata charging. Only canonical
+default children omit the brackets; explicit default brackets refuse. The complete
+physical spelling is bounded to 1 MiB in addition to the logical descriptor's
+independent bounds. Unknown layouts, descriptor tags and malformed records refuse.
 
 The portable instructions are:
 
@@ -135,6 +138,8 @@ The portable instructions are:
 ```
 
 Construction checks the exact chosen alternative's payload types and arity.
+Its selected complete physical type determines those payload types. Packing and
+matching retain that complete type; neither infers it from an active payload.
 Matching lists every alternative exactly once, in descriptor order. There is no
 default arm, guard or hidden fallback. Each arm sees its active payload names
 followed by the named captures; other enclosing bindings are unavailable.
@@ -153,7 +158,9 @@ sharing does not justify undercharging the storage bound.
 
 The executable physical reference charges each variant descriptor by
 `512 + 4 * logicalSpellingBytes + 256 * alternativeCount + 256 * payloadEntryCount`,
-plus the same recursive charge for nested descriptors. An active variant value
+plus the same recursive charge for nested logical descriptors. Its complete
+physical descriptor additionally charges each stored child slot and its recursive
+descriptor, including inactive alternatives. An active variant value
 adds `256 + 512 * activePayloadCount` and each active value's retained-byte charge.
 These are conservative profile charges, not allocator measurements. The native
 representation retains canonical nominal bytes, not an additional expanded

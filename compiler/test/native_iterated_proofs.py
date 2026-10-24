@@ -99,10 +99,25 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
          [[expanded(call,site) for site in ('draw','challenge')] for call in ('quadratic','cubic')], "zkc.framed/0", ""]
     pol = OUT / 'mixed_shapes.policy'; pol.write_text(json.dumps(p))
     result = json.loads(commands.run([compiler,'protocol-proof',src,pol]))
-    bindings = json.loads(result[4])[1]
-    arrays = [b for b in bindings if 'transcript.native.indexed.observe.data' in b and b[2][-1].startswith('field_array<')]
-    assert len(arrays) == 2, arrays
+    program = json.loads(result[4])
+    bindings = program[1]
+
+    def referenced_bindings(value):
+        if not isinstance(value, list):
+            return set()
+        if value and value[0] == 'op':
+            return {value[2]}
+        return {name for child in value for name in referenced_bindings(child)}
+
+    referenced = referenced_bindings(program[2:4])
+    arrays = [b for b in bindings if b[0] in referenced and 'transcript.native.indexed.observe.data' in b and b[2][-1].startswith('field_array<')]
+    # Checked specialization retains both the original and executable rows.
+    # Shape identity and exact complete parameters, not declaration count,
+    # distinguish the two transcript bindings referenced by executable bodies.
+    assert all(len(b) == 5 for b in bindings), bindings
     assert {b[2][-1] for b in arrays} == {'field_array<bls12-381.fr,3>', 'field_array<bls12-381.fr,4>'}, arrays
+    assert all(b[4] == [b[2][-1] + '@arkworks.field-array/0'] for b in arrays), arrays
+    assert len({(tuple(b[2]), b[3], tuple(b[4])) for b in arrays}) == 2, arrays
 
 with case('iterated source correspondence checks real control operands'):
     src, pol = OUT / 'sumcheck_0.mlir', OUT / 'sumcheck_0.policy'

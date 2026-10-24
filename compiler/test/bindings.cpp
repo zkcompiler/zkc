@@ -83,7 +83,8 @@ int main() {
     auto loc = outer->getLoc();
     auto declare = [&] {
       local::OperationBindingOp::create(builder, loc, "combine", "bool.and",
-                                        builder.getArrayAttr({}), "");
+                                        builder.getArrayAttr({}), "",
+                                        mlir::ArrayAttr{});
     };
     declare();
     auto inner = mlir::ModuleOp::create(loc, "schedule");
@@ -144,6 +145,40 @@ int main() {
   refuse(resolveBinding(fold.application, true), "binding-implementation");
   fold.application.implementation.clear();
   refuse(resolveBinding(fold.application, true), "binding-stage");
+  // Alternative providers retain exact physical ports, and never broaden their
+  // mathematical domains or replace the installed default preference.
+  for (StringRef contract :
+       {"curve.scale", "curve.scale_each", "curve.vector_scale", "curve.msm",
+        "pairing.check"}) {
+    for (StringRef domain : {"bls12-381.g1", "bls12-381.g2", "bls12-381.fr"}) {
+      BindingApplication alternative{
+          contract.str(), {domain.str()}, ("blst/resident/" + contract).str()};
+      bool eligible =
+          (contract == "pairing.check") == (domain == "bls12-381.fr");
+      auto signature = resolveBinding(alternative, true);
+      if (!eligible) {
+        refuse(std::move(signature), "binding-static-identity");
+        continue;
+      }
+      auto original = alternative;
+      original.implementation = ("arkworks/" + contract).str();
+      auto expected = accept(resolveBinding(original, true));
+      auto actual = accept(std::move(signature));
+      for (auto *ports : {&actual.inputs, &actual.outputs})
+        for (auto &port : *ports) {
+          if (port.kind == "bool")
+            continue;
+          require(StringRef(port.representation).starts_with("blst/"),
+                  "resident provider lost exact resident ports");
+          port.representation = accept(defaultRepresentation(BoundType{
+                                           port.kind, port.identity, ""}))
+                                    .representation;
+        }
+      require(actual.inputs == expected.inputs &&
+                  actual.outputs == expected.outputs,
+              "resident provider changed logical ports");
+    }
+  }
   protocol::OperationBinding opening{
       "open", {"pcs.open", {"multilinear.kzg.bls12-381/0"}, ""}};
   protocol::OperationBinding challenge{"draw",

@@ -581,7 +581,7 @@ class Admission {
             consumeError(type.takeError());
             return fail("entry.signature", "invalid numerical physical type");
           }
-          type->representation.clear();
+          *type = protocol::erasePhysicalType(*type);
           if (type->spelling() != leaf.getAsString())
             return fail("entry.signature",
                         "numerical native signature differs");

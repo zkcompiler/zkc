@@ -129,6 +129,32 @@ impl Call {
         })
     }
 
+    /// Reserve a result whose final constructor adopts the same Vec allocation.
+    /// Both output and memory charges are `max(retained_bytes, payload_bytes::<T>(len))`.
+    /// The caller bounds total final managed payload, including any additional
+    /// retained storage, through `retained_bytes`.
+    ///
+    /// The caller promises that `Output::finish` consumes this Vec without growth,
+    /// reallocation, or a second element buffer, including on error or unwind.
+    /// Use `output` when staging and final element storage can overlap. This is
+    /// an explicit trusted-constructor contract, never inferred from a type or
+    /// provider. Allocator overhead and hidden provider storage remain excluded.
+    pub fn output_owned<T: Clone>(
+        &self,
+        len: usize,
+        initial: T,
+        retained_bytes: usize,
+    ) -> Result<Output<'_, T>> {
+        let retained_bytes = retained_bytes.max(payload_bytes::<T>(len)?);
+        let result = self.scalar(retained_bytes)?;
+        // The retained reservation already covers the buffer being adopted.
+        let staging = self.reserve_memory(0)?;
+        Ok(Output {
+            buffer: Buffer::new(len, initial, staging)?,
+            result,
+        })
+    }
+
     /// Reserve and initialize private scratch, releasing its charge on drop.
     pub fn scratch<T: Clone>(&self, len: usize, initial: T) -> Result<Scratch<'_, T>> {
         let reservation = self.reserve_memory(payload_bytes::<T>(len)?)?;
@@ -140,12 +166,24 @@ impl Call {
     /// Reserve adapter-owned typed workspace without allocating a second buffer.
     /// Keep the guard alive through the corresponding vectors' destruction.
     /// Provider caches, allocator overhead and hidden scratch are outside this scope.
-    pub fn reserve_workspace<T>(&self, elements: usize) -> Result<impl Drop + '_> {
+    pub fn reserve_workspace<T>(&self, elements: usize) -> Result<StorageReservation<'_>> {
         self.reserve_memory(payload_bytes::<T>(elements)?)
+            .map(StorageReservation)
     }
 
     fn reserve_memory(&self, bytes: usize) -> Result<Reservation<'_>> {
         Reservation::new(&self.memory, bytes, self.limits.memory, Error::Memory)
+    }
+}
+
+/// A managed storage charge without an aggregate-result allowance. The adapter
+/// owns the corresponding storage and must destroy it before dropping this guard.
+pub struct StorageReservation<'a>(Reservation<'a>);
+impl StorageReservation<'_> {
+    /// Retain a successfully published destination's charge until call end.
+    /// Only use after its trusted constructor has adopted the reserved storage.
+    pub fn retain(self) {
+        self.0.keep();
     }
 }
 
@@ -180,14 +218,17 @@ impl<T> Output<'_, T> {
     }
 
     /// The trusted adapter consumes the Vec without growth, within its final bound.
-    /// Extra allocations inside freeze are outside this managed-storage facade.
+    /// An `output_owned` constructor must adopt the same allocation without a
+    /// second element buffer or reallocation, including on error or unwind.
+    /// Hidden allocations inside freeze are not tracked automatically.
     pub fn finish<V, E>(
         self,
         freeze: impl FnOnce(Vec<T>) -> std::result::Result<V, E>,
     ) -> std::result::Result<V, E> {
         let Self { buffer, result } = self;
         let Buffer { data, reservation } = buffer;
-        // Both reservations remain live while Vec and final storage can overlap.
+        // Keep all charges live through construction. For output_owned, the
+        // retained charge covers this Vec and the staging charge is zero.
         let value = result.finish(|| freeze(data))?;
         drop(reservation);
         Ok(value)
@@ -238,5 +279,76 @@ mod tests {
         ));
         assert_eq!(call.usage().memory, 0);
         call.scratch(4, 0u64).unwrap();
+    }
+
+    #[test]
+    fn output_allocation_failure_rolls_back_both_construction_modes() {
+        for owned in [false, true] {
+            let call = Call::new(Limits {
+                work: 7,
+                memory: 64,
+                outputs: 32,
+            });
+            call.work(7).unwrap();
+            let baseline = call.usage();
+            let _failure = crate::allocation::failure::after(0);
+            let output = if owned {
+                call.output_owned(4, 0u64, 32)
+            } else {
+                call.output(4, 0u64, 32)
+            };
+            assert!(matches!(output, Err(Error::Allocation)));
+            assert_eq!(call.usage(), baseline);
+            // The injected failure fires once; the full allowance is reusable.
+            let output = if owned {
+                call.output_owned(4, 0u64, 32)
+            } else {
+                call.output(4, 0u64, 32)
+            }
+            .unwrap();
+            assert_eq!(call.usage().memory, if owned { 32 } else { 64 });
+            assert_eq!(call.usage().outputs, 32);
+            drop(output);
+            assert_eq!(call.usage(), baseline);
+        }
+    }
+
+    #[test]
+    fn output_resource_refusals_precede_allocation_in_both_modes() {
+        for owned in [false, true] {
+            let required_memory = if owned { 32 } else { 64 };
+            for (memory, outputs, expected) in [
+                (required_memory, 31, Error::OutputBytes),
+                (required_memory - 1, 32, Error::Memory),
+            ] {
+                let call = Call::new(Limits {
+                    work: 0,
+                    memory,
+                    outputs,
+                });
+                let baseline = call.usage();
+                let _failure = crate::allocation::failure::after(0);
+                let output = if owned {
+                    call.output_owned(4, 0u64, 32)
+                } else {
+                    call.output(4, 0u64, 32)
+                };
+                assert!(matches!(output, Err(error) if error == expected));
+                assert_eq!(call.usage(), baseline);
+                // Admission did not consume the injected allocation failure.
+                let admitted = Call::new(Limits {
+                    work: 0,
+                    memory: required_memory,
+                    outputs: 32,
+                });
+                let output = if owned {
+                    admitted.output_owned(4, 0u64, 32)
+                } else {
+                    admitted.output(4, 0u64, 32)
+                };
+                assert!(matches!(output, Err(Error::Allocation)));
+                assert_eq!(admitted.usage(), baseline);
+            }
+        }
     }
 }

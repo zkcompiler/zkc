@@ -28,13 +28,15 @@ class Case:
             return stark.library(root, shape)
         if self.name == 'expression':
             return expressions.expression(shape, root=root)
+        if self.name == 'vector_literal':
+            return operations.literal(shape, root=root)
         if self.name in ('field_vector', 'literal'):
             return getattr(operations, self.name)(shape, root=root)
         if self.name == 'host_vector':
             return operations.host_vector(shape)
         if self.name in ('hash_bytes', 'poseidon', 'merkle'):
             return getattr(commitments, self.name)(shape)
-        if self.name in ('transform', 'coset', 'coset_batch', 'coset_point', 'curve_operation'):
+        if self.name in ('transform', 'coset', 'coset_batch', 'coefficient_batch', 'coset_point', 'curve_operation'):
             return getattr(operations, self.name)(shape)
         return getattr(programs, self.name)(shape)
 
@@ -135,6 +137,10 @@ def cases():
     vector_panel += [('kb', 'sum', 0), ('kb', 'product', 0), ('fr', 'dot', 1024),
                      ('ext4', 'hadamard', 129), ('ext8', 'sum', 1024),
                      ('binary64', 'product', 33), ('binary-ext3', 'dot', 33)]
+    # Full vector results cross the small-vector boundary without multiplying
+    # every operation by every installed field and size.
+    vector_panel += [(short, operation, n) for short in ('kb', 'fr')
+                     for operation, n in (('add', 1024), ('hadamard', 8192))]
     for short, operation, n in vector_panel:
         add(f'field-vector-{short}-{operation}-{n}', 'field_vector',
             {'field': fields[short], 'elements': n, 'operation': operation}, 'operation', (operation,),
@@ -161,6 +167,20 @@ def cases():
                     {'extension_degree': degree, 'elements': n, 'operation': operation},
                     'operation', ('coset shift', operation, 'vector equality'),
                     'Independent integer field oracle; dense extension coordinates and arbitrary fold inputs. Includes equality and Host costs, not a low-degree test.')
+    # Arkworks' degree-aware FFT threshold is output_size / 4. Preserve its
+    # immediate neighbors, plus matched short/dense inputs on larger domains.
+    coefficient_panel = [(height, 1, 64) for height in (15, 16, 17, 64)]
+    coefficient_panel += [(height, width, 4096) for height in (17, 4096) for width in (1, 3)]
+    coefficient_panel += [(1024, 1, 32768), (32768, 1, 32768)]
+    for height, width, size in coefficient_panel:
+        for form in ('batch', 'padded-columns'):
+            add(f'coefficient-batch-bn254-h{height}-w{width}-n{size}-{form}', 'coefficient_batch',
+                {'field': 'bn254.fr', 'height': height, 'width': width,
+                 'evaluation_size': size, 'shift': 7, 'form': form},
+                'operation', ('coefficient coset evaluation', form, 'column-major vector equality'),
+                'Independent full-output modular Python oracle. Identical coefficients and outputs across forms; '
+                'padded-columns uses full-height width-one batch calls to retain zero padding. '
+                'SDK/run includes source construction, validation, equality and Host costs; default capacities.')
     # Fixed point-evaluation panel: vary width and height separately, then
     # compare repeated interpolation with coefficient reuse for many points.
     # Keep small controls even when interpolation is the faster strategy.
@@ -195,6 +215,30 @@ def cases():
                  'queries': 8, 'constraint': 'coupled', 'constraint_degree': degree},
                 'protocol', ('coupled columns', f'degree-{degree} AIR', 'quotients', 'FRI', 'Merkle', 'transcript'),
                 'Matched one-table AIR across both profiles; independent Python trace. Default capacities; not a production or multi-table scaling study.')
+    # The same recurrence families at fixed, bounded library configurations.
+    # Field/hash/transcript choices are authored shapes, never timed dispatch.
+    field_panel = [(h, w, 2, b, False) for h, w, b in
+                   ((8, 1, 4), (32, 1, 4), (128, 1, 4), (32, 4, 4), (32, 16, 4), (32, 4, 8))]
+    field_panel += [(8, 2, 2, 4, True), (32, 4, 2, 4, True), (128, 4, 2, 4, True),
+                    (32, 8, 2, 4, True), (32, 4, 3, 8, True)]
+    for field in ('baby-bear', 'goldilocks'):
+        profile = stark.LIBRARY_PROFILES[field]
+        label = profile.configuration.replace('_', '-')+f'-poseidon2-{profile.poseidon_width}'
+        for height, width, degree, blowup, coupled in field_panel:
+            shape = {'field': field, 'profile': profile.configuration, 'extension_field': profile.extension,
+                     'characteristic': profile.modulus, 'transcript': profile.transcript,
+                     'poseidon_width': profile.poseidon_width, 'coset_shift': profile.shift,
+                     'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8}
+            constraint = 'quadratic'
+            if coupled:
+                shape |= {'constraint': 'coupled', 'constraint_degree': degree}
+                constraint = f'coupled-d{degree}'
+            suffix = f'coupled-d{degree}-' if coupled else ''
+            add(f'stark-{label}-{suffix}h{height}-w{width}-b{blowup}', 'stark', shape,
+                'protocol', ('trace extension', constraint+' AIR', 'quotients', 'FRI', 'Poseidon2 multi-opening', 'transcript'),
+                'Same recurrence families as the KoalaBear controls, with an explicit field/hash/transcript profile. '
+                'Independent modular Python trace; same-stack proof verification. Default capacities; '
+                'not external proof compatibility, a field-only speed comparison or a production security profile.')
     for size in (0, 64, 8192):
         add(f'hash-sha256-{size}', 'hash_bytes', {'algorithm': 'sha256', 'payload_bytes': size},
             'operation', ('SHA-256', 'digest equality'),
@@ -300,6 +344,17 @@ def cases():
                     ('ordered Local loop', form, 'field addition'),
                     'Independent repeated-addition oracle. Confirm exported reached literal counts; '
                     'zero trips, first reach and repeated reach are separate cases; SDK/run includes checking and Host.')
+    # Keep first and repeated reach distinct. Inspect the exported candidate:
+    # vector.constant must remain inside the loop for repeated-site evidence.
+    for short, field in (('kb', 'koala-bear'), ('fr', 'bls12-381.fr')):
+        for n, trips in ((1024, 17), (8192, 1)):
+            for form in ('constant', 'operand'):
+                add(f'vector-literal-{short}-n{n}-{trips}-{form}', 'vector_literal',
+                    {'field': field, 'elements': n, 'trips': trips, 'form': form}, 'operation',
+                    ('typed vector literal', form, 'vector addition', 'vector equality'),
+                    'Repeated reach requires vector.constant inside the exported loop and reached-site counts. '
+                    'Independent full-vector oracle; identical decoded inputs across forms. '
+                    'SDK/run includes arithmetic, publication, equality and Host costs; no parse-only timing claim.')
     opening_panel = [(8, 1, 1, 'repeated'), (32, 4, 4, 'repeated'), (32, 4, 4, 'distinct'),
                      (128, 4, 4, 'distinct'), (32, 8, 6, 'distinct'), (8, 4, 0, 'repeated'),
                      (1024, 4, 8, 'distinct'), (4096, 1, 8, 'distinct'),

@@ -38,7 +38,7 @@ fn runner(bytes: &[u8], group: bool, allowed: bool, short_right: bool) -> Runner
         Default::default(),
     )
     .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)

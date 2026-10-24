@@ -6,17 +6,67 @@ use crate::{
     measure::measure,
     observation::{Call, InputSetup, Lifecycle},
 };
-use std::{collections::BTreeMap, path::Path, time::Instant};
+use serde::Deserialize;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 use zkc::{
     entry::{
         FunctionEntry, FunctionInterface, FunctionOptions, FunctionRequest, InvocationBinding,
-        InvocationContext, NamedValues, RunContext, Value, inputs::Decoder,
+        InvocationContext, NamedValues, RunContext, Value, files::Documents,
     },
     execution::InputValue,
 };
 
 fn accepted(value: Option<&Value>) -> bool {
     matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_native::Value::Bool(true)))
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Check {
+    Acceptance { role: String },
+    Output { expected: PathBuf },
+}
+
+fn check_output(
+    value: &Value,
+    check: &Check,
+    expected: Option<&serde_json::Value>,
+    options: FunctionOptions,
+    cpu: &zkc::execution::CpuExecution,
+) -> Result<()> {
+    let correct = match check {
+        Check::Acceptance { role } => {
+            let output = match value {
+                Value::Record(roles) => roles.get(role),
+                _ => None,
+            };
+            let acceptance = match output {
+                Some(Value::Record(outputs)) => outputs.get("accepted"),
+                _ => None,
+            };
+            accepted(acceptance)
+        }
+        Check::Output { .. } => {
+            let bytes = zkc::entry::files::function_output_with_cpu(
+                value,
+                options.limits.capacity,
+                Default::default(),
+                cpu.clone(),
+            )?;
+            let actual: serde_json::Value =
+                serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            Some(&actual) == expected
+        }
+    };
+    if correct {
+        Ok(())
+    } else {
+        Err(Failure::IncorrectResult)
+    }
 }
 
 fn context(entry: &FunctionEntry) -> InvocationContext {
@@ -48,7 +98,7 @@ pub fn run(
     path: &Path,
     sha256: &str,
     arguments: &Path,
-    accept_role: &str,
+    check: &Check,
 ) -> Result<Report> {
     let ingress = job.ingress()?;
     if job.operation != Operation::Run {
@@ -67,13 +117,22 @@ pub fn run(
         authority.insert(child.id().into(), Default::default());
     }
     let options = FunctionOptions::default();
-    let entry = FunctionEntry::admit(package, options, authority).map_err(|e| e.to_string())?;
+    let entry = FunctionEntry::admit_with_cpu(package, options, authority, job.cpu()?.clone())
+        .map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
-    let data = std::fs::read(arguments).map_err(|e| e.to_string())?;
+    let expected = match check {
+        Check::Output { expected } => Some(
+            serde_json::from_slice::<serde_json::Value>(
+                &std::fs::read(expected).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?,
+        ),
+        _ => None,
+    };
     let group = entry.interface().input_group();
     let decode = || -> Result<NamedValues> {
-        Decoder::new(options.limits.capacity)?
-            .decode(&group, &data, None)
+        Documents::new(options.limits.capacity)?
+            .load(&group, Some(arguments))
             .map_err(|e| e.to_string().into())
     };
     let mut input_setup = Vec::new();
@@ -87,6 +146,7 @@ pub fn run(
             entry.interface(),
             ingress,
             options.limits.capacity,
+            entry.cpu(),
         )?;
         entry
             .check_inputs(make_request(&entry, owner.share()?))
@@ -138,17 +198,7 @@ pub fn run(
                 return Err(format!("function failed: {}", report.diagnostics()).into());
             }
             let value = report.value.as_ref().unwrap().clone().into_value();
-            let value = match &value {
-                Value::Record(roles) => roles.get(accept_role),
-                _ => None,
-            };
-            let acceptance = match value {
-                Some(Value::Record(outputs)) => outputs.get("accepted"),
-                _ => None,
-            };
-            if !accepted(acceptance) {
-                return Err(Failure::IncorrectResult);
-            }
+            check_output(&value, check, expected.as_ref(), options, entry.cpu())?;
             observed += 1;
             if observed == total {
                 last = Some(report);
@@ -180,6 +230,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zkc_runtime::vm::Value as _;
     #[test]
     fn acceptance_is_a_typed_boolean() {
         assert!(accepted(Some(&Value::from(zkc_native::Value::Bool(true)))));
@@ -188,6 +239,52 @@ mod tests {
         )))));
         assert!(!accepted(Some(&Value::Unit)));
         assert!(!accepted(None));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires strace and ptrace permission; run this focused gate explicitly"]
+    fn output_checks_create_no_additional_workers() {
+        let evidence = zkc_test_support::evidence("benchmark-output-threads");
+        for workers in [1, 4] {
+            let directory = evidence.nested(&format!("workers-{workers}"));
+            let tasks = zkc_test_support::task_trace::test(
+                directory.path(),
+                "run_entry::tests::output_check_workload_child",
+                &[
+                    ("ZKC_BENCHMARK_OUTPUT_WORKERS", workers.to_string()),
+                    ("RAYON_NUM_THREADS", "7".into()),
+                ],
+            );
+            // libtest adds one runner. Repeated encodings must use the owner
+            // supplied by the admitted entry, without transient serial pools.
+            assert_eq!(tasks, 1 + workers);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "child entry point for the output-check CPU ownership gate"]
+    fn output_check_workload_child() {
+        let Ok(workers) = std::env::var("ZKC_BENCHMARK_OUTPUT_WORKERS") else {
+            return;
+        };
+        let cpu = zkc::execution::CpuExecution::new(workers.parse().unwrap()).unwrap();
+        let value = Value::from(zkc_native::Value::Bool(true));
+        let expected = serde_json::json!({"format":"zkc.entry-outputs/0", "value":true});
+        let check = Check::Output {
+            expected: PathBuf::new(),
+        };
+        for _ in 0..3 {
+            check_output(
+                &value,
+                &check,
+                Some(&expected),
+                FunctionOptions::default(),
+                &cpu,
+            )
+            .unwrap();
+        }
     }
 
     // Independently authored Function carrier: acceptance is ordinary source
@@ -248,47 +345,125 @@ mod tests {
         let path = directory.join("function.zkpkg");
         std::fs::write(&path, &package).unwrap();
         let arguments = directory.join("arguments.json");
+        let payload = zkc_native::readable_wire(
+            &zkc_native::Value::Bool(true).physical_type(),
+            &json!(true),
+            128,
+        )
+        .unwrap();
+        std::fs::write(directory.join("input.zkcv"), &payload).unwrap();
         for ingress in ["json", "wire", "native", "prepared"] {
-            let job: Request = serde_json::from_value(json!({"format":"zkc.benchmark-job/0",
+            for file_backed in [false, true] {
+                let mut job: Request = serde_json::from_value(json!({"format":"zkc.benchmark-job/0",
                 "backend":{"kind":"run","ingress":ingress,"package":path,"sha256":hash(package.as_bytes()),
-                    "arguments":arguments,"accept_role":"P"},"operation":"run",
+                    "arguments":arguments,"check":{"kind":"acceptance","role":"P"}},"operation":"run",
                 "plan":{"warmups":1,"samples":2,"iterations":2},"proof":directory.join("unused")})).unwrap();
-            std::fs::write(&arguments, r#"{"accepted":true}"#).unwrap();
-            let report = run(&job, &path, &hash(package.as_bytes()), &arguments, "P");
-            let report = report.unwrap();
-            assert_eq!(report.boundary, "admitted_function_call");
-            assert_eq!(report.diagnostics["completed"], true);
-            assert!(
-                report.diagnostics["usage"]["instructions"]
-                    .as_u64()
-                    .unwrap()
-                    > 0
-            );
-            let life = report.lifecycle.unwrap();
-            assert_eq!(life.calls.len(), 6);
-            assert!(
-                life.calls
-                    .iter()
-                    .all(|c| c.execution_counts.is_some()
+                job.cpu = Some(zkc::execution::CpuExecution::new(1).unwrap());
+                let input = if file_backed {
+                    json!({"accepted":{"file":"input.zkcv","sha256":hash(&payload)}}).to_string()
+                } else {
+                    json!({"accepted":true}).to_string()
+                };
+                std::fs::write(&arguments, input).unwrap();
+                let report = run(
+                    &job,
+                    &path,
+                    &hash(package.as_bytes()),
+                    &arguments,
+                    &Check::Acceptance { role: "P".into() },
+                );
+                let report = report.unwrap();
+                assert_eq!(report.boundary, "admitted_function_call");
+                assert_eq!(report.diagnostics["completed"], true);
+                assert!(
+                    report.diagnostics["usage"]["instructions"]
+                        .as_u64()
+                        .unwrap()
+                        > 0
+                );
+                let life = report.lifecycle.unwrap();
+                assert_eq!(life.calls.len(), 6);
+                assert!(
+                    life.calls.iter().all(|c| c.execution_counts.is_some()
                         == zkc_runtime::vm::ExecutionCounts::ENABLED)
-            );
-            assert_eq!(life.input_setup.len(), usize::from(ingress != "json"));
-            assert!(
-                life.calls
-                    .iter()
-                    .all(|c| c.decode_ns.is_some() == (ingress == "json"))
-            );
-            assert!(matches!(
-                run(&job, &path, &hash(package.as_bytes()), &arguments, "absent"),
-                Err(Failure::IncorrectResult)
-            ));
-            std::fs::write(&arguments, r#"{"accepted":false}"#).unwrap();
-            assert!(matches!(
-                run(&job, &path, &hash(package.as_bytes()), &arguments, "P"),
-                Err(Failure::IncorrectResult)
-            ));
-            std::fs::write(&arguments, r#"{"accepted":true,"extra":false}"#).unwrap();
-            assert!(run(&job, &path, &hash(package.as_bytes()), &arguments, "P").is_err());
+                );
+                assert_eq!(life.input_setup.len(), usize::from(ingress != "json"));
+                assert!(
+                    life.calls
+                        .iter()
+                        .all(|c| c.decode_ns.is_some() == (ingress == "json"))
+                );
+                let expected = directory.join("expected.json");
+                let output_check = Check::Output {
+                    expected: expected.clone(),
+                };
+                std::fs::write(
+                    &expected,
+                    json!({"format":"zkc.entry-outputs/0", "value":{"P":{"accepted":true}}})
+                        .to_string(),
+                )
+                .unwrap();
+                assert!(
+                    run(
+                        &job,
+                        &path,
+                        &hash(package.as_bytes()),
+                        &arguments,
+                        &output_check
+                    )
+                    .is_ok()
+                );
+                std::fs::write(
+                    &expected,
+                    json!({"format":"zkc.entry-outputs/0", "value":{"P":{"accepted":false}}})
+                        .to_string(),
+                )
+                .unwrap();
+                assert!(matches!(
+                    run(
+                        &job,
+                        &path,
+                        &hash(package.as_bytes()),
+                        &arguments,
+                        &output_check
+                    ),
+                    Err(Failure::IncorrectResult)
+                ));
+                assert!(matches!(
+                    run(
+                        &job,
+                        &path,
+                        &hash(package.as_bytes()),
+                        &arguments,
+                        &Check::Acceptance {
+                            role: "absent".into()
+                        }
+                    ),
+                    Err(Failure::IncorrectResult)
+                ));
+                std::fs::write(&arguments, r#"{"accepted":false}"#).unwrap();
+                assert!(matches!(
+                    run(
+                        &job,
+                        &path,
+                        &hash(package.as_bytes()),
+                        &arguments,
+                        &Check::Acceptance { role: "P".into() }
+                    ),
+                    Err(Failure::IncorrectResult)
+                ));
+                std::fs::write(&arguments, r#"{"accepted":true,"extra":false}"#).unwrap();
+                assert!(
+                    run(
+                        &job,
+                        &path,
+                        &hash(package.as_bytes()),
+                        &arguments,
+                        &Check::Acceptance { role: "P".into() }
+                    )
+                    .is_err()
+                );
+            }
         }
     }
 }

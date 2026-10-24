@@ -40,6 +40,23 @@ impl InputFile {
             .map_err(super::io::ReadError::Io)?;
         super::io::read_from(&mut *file, limit)
     }
+    /// Materialize an explicitly pinned payload under the caller's byte ceiling.
+    /// This reads the retained descriptor; it does not reopen a pathname.
+    pub fn read_verified(&self, sha256: &[u8; 32], limit: usize) -> Result<Vec<u8>, String> {
+        let bytes = self.read(limit).map_err(|error| match error {
+            super::io::ReadError::Limit => "entry-input-reference-byte-limit",
+            _ => "entry-input-reference",
+        })?;
+        Self::verify(&bytes, sha256)?;
+        Ok(bytes)
+    }
+    pub(crate) fn verify(bytes: &[u8], sha256: &[u8; 32]) -> Result<(), String> {
+        use sha2::{Digest, Sha256};
+        if <[u8; 32]>::from(Sha256::digest(bytes)) != *sha256 {
+            return Err("entry-input-reference-digest".into());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -59,5 +76,16 @@ mod tests {
         std::fs::write(&path, b"replacement").unwrap();
         assert_eq!(input.read(8).unwrap(), b"original");
         assert_eq!(input.clone().read(8).unwrap(), b"original");
+        use sha2::{Digest, Sha256};
+        let pin = Sha256::digest(b"original").into();
+        assert_eq!(input.read_verified(&pin, 8).unwrap(), b"original");
+        assert_eq!(
+            input.read_verified(&pin, 7).unwrap_err(),
+            "entry-input-reference-byte-limit"
+        );
+        assert_eq!(
+            input.read_verified(&[0; 32], 8).unwrap_err(),
+            "entry-input-reference-digest"
+        );
     }
 }

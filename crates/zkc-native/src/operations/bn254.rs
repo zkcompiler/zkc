@@ -8,10 +8,9 @@ use crate::{
     value::size,
 };
 use ark_ff::{FftField, Field, One, Zero};
-use ark_poly::EvaluationDomain;
 use zkc_kernels::arkworks::bn254::polynomial::{
-    BatchError, CoefficientBatch, Domain, coset_evaluate_at_into, coset_extend_into,
-    serial_batch_inverse_into,
+    BatchError, CoefficientBatch, Domain, batch_inverse_in_place, coset_evaluate_at_into,
+    coset_extend_into, serial_batch_inverse_into,
 };
 use zkc_runtime::vm::{Identity, Invocation};
 
@@ -96,7 +95,7 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
     let result = match name {
         "poly.domain_root" => {
             p.output(512, available)?;
-            Value::Bn254Field(domain(ix(0)?, F::one(), p)?.group_gen)
+            Value::Bn254Field(domain(ix(0)?, F::one(), p)?.generator())
         }
         "poly.domain_point" => {
             p.output(512, available)?;
@@ -244,8 +243,8 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             let mut out = alloc(half)?;
             let inv2 = F::from(2).inverse().unwrap();
             let c = f(2)?;
-            let mut invx = d.offset_inv;
-            let invg = d.group_gen_inv;
+            let mut invx = d.shift_inverse();
+            let invg = d.generator_inverse();
             for (a, b) in values[..half].iter().zip(&values[half..]) {
                 out.push((*a + *b) * inv2 + c * (*a - *b) * inv2 * invx);
                 invx *= invg;
@@ -262,7 +261,7 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
             }
             let mut out = alloc(d.size())?;
             out.extend(d.elements().map(|x| x - point));
-            ark_ff::batch_inversion(&mut out);
+            batch_inverse_in_place(&mut out);
             for (x, y) in out.iter_mut().zip(values) {
                 *x *= *y - value;
             }

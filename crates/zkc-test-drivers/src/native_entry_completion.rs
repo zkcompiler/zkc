@@ -27,7 +27,13 @@ fn main() {
         let name = case["name"].as_str().unwrap();
         let depth = case["depth"].as_u64().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.bundle"))).unwrap();
-        let bundle = Bundle::admit(&bytes, &backend("P"), BundleLimits::default()).unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend("P"),
+            zkc_native::native_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
         if depth == 0 && name == "completion_0" {
             let inputs = ["P", "V"]
                 .into_iter()
@@ -107,7 +113,13 @@ fn main() {
         }
     }
     let bytes = std::fs::read(directory.join("independent_counts.bundle")).unwrap();
-    let bundle = Bundle::admit(&bytes, &backend("P"), BundleLimits::default()).unwrap();
+    let bundle = Bundle::admit(
+        &bytes,
+        &backend("P"),
+        zkc_native::native_contracts(),
+        BundleLimits::default(),
+    )
+    .unwrap();
     for last_count in [2, 3] {
         let inputs = [("P", 99), ("Q", 2), ("V", last_count)]
             .into_iter()

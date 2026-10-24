@@ -95,7 +95,8 @@ fn check(
         "b",
         binding.contract,
         binding.arguments,
-        binding.implementation
+        binding.implementation,
+        binding.physical_arguments
     ]);
     let body = json!([["op", "output", "b", [], names, results], ["return", []]]);
     let function = json!(["function", "f", ports, [], body, ["f", []]]);
@@ -114,7 +115,8 @@ fn check(
             "dot",
             "vector.dot",
             ["bls12-381.fr"],
-            "arkworks-diagonal/vector.dot"
+            "arkworks-diagonal/vector.dot",
+            []
         ]));
         carrier[2][0][4].as_array_mut().unwrap().insert(
             1,
@@ -135,7 +137,7 @@ fn check(
         full,
         checked: false,
     };
-    let program = Program::decode(&bytes).unwrap();
+    let program = Program::decode(&bytes, crate::native_contracts()).unwrap();
     program.check_installation(&backend).unwrap();
     let mut runner = Runner::new(&program, "main", "P", "session", backend, args)
         .unwrap_or_else(|e| panic!("{}", e.error));
@@ -153,6 +155,7 @@ fn binding(contract: &str, arguments: &[&str], provider: &str) -> OperationBindi
         contract: contract.into(),
         arguments: arguments.iter().map(|s| (*s).into()).collect(),
         implementation: format!("{provider}/{contract}"),
+        physical_arguments: vec![],
     }
 }
 fn vector() -> Value {
@@ -161,7 +164,11 @@ fn vector() -> Value {
 fn sequence(value: Value) -> Value {
     Value::Sequence(
         Sequence::new(
-            value.physical_type().logical(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical().clone())
+                    .unwrap(),
+            )
+            .unwrap(),
             vec![value],
             &Policy::default(),
         )
@@ -196,12 +203,16 @@ fn new_array_and_view_charge_only_their_own_storage() {
     };
     let array = Value::FieldArray(
         crate::FieldArray::new(
-            LogicalType::field_array(zkc_runtime::vm::Identity::Bls12381Fr, 2).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(zkc_runtime::vm::Identity::Bls12381Fr, 2).unwrap(),
+            )
+            .unwrap(),
             elements.clone(),
         )
         .unwrap(),
     );
-    // 1,024 owned descriptor bytes, plus a shared 256 + 2*32 backing.
+    // The complete selected descriptor is owned; the scalar backing is shared.
+    let owned = 1024 + array.physical_type().descriptor_bytes();
     check(
         binding(
             "field_array.from_vector",
@@ -210,8 +221,8 @@ fn new_array_and_view_charge_only_their_own_storage() {
         ),
         vec![Value::Vector(elements.clone())],
         vec![array],
-        1024,
-        1344,
+        owned,
+        owned + 320,
     );
     let view = Value::FrDiagonal(Arc::new(
         crate::diagonal::Diagonal::new(elements.clone(), elements.clone()).unwrap(),
@@ -275,3 +286,6 @@ fn inline_result_before_fresh_backing_keeps_its_owned_charge() {
         832,
     );
 }
+
+#[path = "validation_inventory_tests.rs"]
+mod inventory;

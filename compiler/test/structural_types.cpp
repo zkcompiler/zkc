@@ -40,27 +40,41 @@ void representationPatterns() {
             "unexpected representation refusal");
   };
   validate(appliedTypeRepresentations());
+  StringRef blsChild = "field:bls12-381.fr@arkworks.fr/0";
   const TypeArgumentPattern positive[] = {{Kind::Domain, "bls12-381.fr"},
                                           {Kind::Nat, {}, 4, 1}};
   const TypeArgumentPattern emptyRange[] = {{Kind::Domain, "bls12-381.fr"},
                                             {Kind::Nat, {}, 0, 1}};
-  validate({{"field_array", positive, "test.array/0", true}});
-  validate({{"field_array", emptyRange, "test.array/0", true}},
+  validate({{"field_array", positive, "test.array/0", true, blsChild}});
+  validate({{"field_array", emptyRange, "test.array/0", true, blsChild}},
            "representation-pattern");
   const TypeArgumentPattern later[] = {{Kind::Domain, "bls12-381.fr"},
                                        {Kind::Nat, {}, 8, 5}};
   const TypeArgumentPattern overlap[] = {{Kind::Domain, "bls12-381.fr"},
                                          {Kind::Nat, {}, 8, 4}};
-  validate({{"field_array", positive, "test.array/0", true},
-            {"field_array", later, "test.array/0", true}});
-  validate({{"field_array", positive, "test.array/0", true},
-            {"field_array", overlap, "test.alternative-array/0", true}},
-           "representation-default");
+  validate({{"field_array", positive, "test.array/0", true, blsChild},
+            {"field_array", later, "test.array/0", true, blsChild}});
+  validate(
+      {{"field_array", positive, "test.array/0", true, blsChild},
+       {"field_array", overlap, "test.alternative-array/0", true, blsChild}},
+      "representation-default");
   const TypeArgumentPattern arguments[] = {{Kind::Type, "field:koala-bear"},
                                            {Kind::Nat, {}, 1048576}};
   AppliedTypeRepresentation row{"fixed_vector", arguments, "test.vector/0",
-                                true};
+                                true, "field:koala-bear@plonky3.koala-bear/0"};
   validate({row});
+  for (StringRef child :
+       {"", "field:koala-bear", "bool@arkworks.bool/0",
+        "field:koala-bear@blst/fr", "field:bls12-381.fr@blst/fr",
+        "field:koala-bear@plonky3.koala-bear/0[]"}) {
+    auto bad = row;
+    bad.childType = child;
+    validate({bad}, "representation-pattern");
+  }
+  // Descriptor identities are opaque. An admitted child is an exact layout
+  // fact, independent of the name chosen for its parent representation.
+  validate({{"field_array", positive, "unrelated.array/0", false,
+             "field:bls12-381.fr@blst/fr"}});
   for (StringRef constructor : {"missing", "resource_unit", "bool"}) {
     auto bad = row;
     bad.constructor = constructor;
@@ -104,7 +118,7 @@ void representationPatterns() {
   // not shadow that separate key space, even with a valid Domain identity.
   for (StringRef domain : {"koala-bear", "bls12-381.g1", "missing", ""}) {
     TypeArgumentPattern pattern{Kind::Domain, domain};
-    validate({{"field", {pattern}, "test.field/0", true}},
+    validate({{"field", {pattern}, "test.field/0", true, blsChild}},
              "representation-constructor");
   }
   validate({row, row}, "representation-duplicate");
@@ -126,9 +140,39 @@ void representationPatterns() {
   TypeArgumentPattern distinct[] = {{Kind::Type, "field:bls12-381.fr"},
                                     arguments[1]};
   alternative.arguments = distinct;
+  alternative.childType = blsChild;
   validate({row, alternative});
   distinct[0].exact = "fixed_vector<field:koala-bear,4>";
+  alternative.childType =
+      "fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/0";
   validate({row, alternative});
+  // Every selected descriptor requires its own exact physical child, even
+  // when a different provider admits the same logical scalar type.
+  for (const auto &entry : appliedTypeRepresentations()) {
+    std::vector<std::string> args;
+    for (const auto &pattern : entry.arguments)
+      args.push_back(pattern.kind == Kind::Nat ? "4" : pattern.exact.str());
+    auto logical = applyBoundType(entry.constructor, args);
+    check(bool(logical), "installed dense logical type refused");
+    auto child = parseBoundType(entry.childType, true);
+    check(bool(child), "descriptor child refused");
+    auto physical = physicalType(*logical, entry.representation, {*child});
+    check(bool(physical) && physical->physicalChildren &&
+              physical->physicalChildren->front() == *child,
+          "exact descriptor child not preserved");
+    for (StringRef wrong :
+         {"field:bls12-381.fr@arkworks.fr/0", "field:bls12-381.fr@blst/fr",
+          "field:koala-bear@plonky3.koala-bear/0"}) {
+      if (wrong == entry.childType)
+        continue;
+      auto other = parseBoundType(wrong, true);
+      check(bool(other), "wrong-child fixture is not independently admitted");
+      auto refused = physicalType(*logical, entry.representation, {*other});
+      check(!refused &&
+                toString(refused.takeError()) == "binding-representation",
+            "dense representation accepted another child's layout");
+    }
+  }
 }
 } // namespace
 int main() {

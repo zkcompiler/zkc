@@ -136,6 +136,9 @@ fn arithmetic<S: Coefficient>(element: impl Fn(usize) -> S) {
 #[test]
 fn all_installed_families_support_checked_typed_arithmetic() {
     arithmetic::<Scalar>(|i| Scalar::from((i * 13 + 3) as u64));
+    arithmetic::<zkc_kernels::blst::bls12_381::Scalar>(|i| {
+        zkc_kernels::blst::bls12_381::Scalar::from((i * 13 + 3) as u64)
+    });
     arithmetic::<Bn254Scalar>(|i| Bn254Scalar::from((i * 17 + 5) as u64));
     arithmetic::<RistrettoScalar>(|i| RistrettoScalar::from((i * 19 + 7) as u64));
     arithmetic::<KoalaBear>(|i| KoalaBear::new((i * 23 + 11) as u32));

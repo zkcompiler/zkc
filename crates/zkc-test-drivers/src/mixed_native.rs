@@ -48,7 +48,7 @@ fn main() {
                 .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
                 .unwrap();
             let before = native.observe(token(&rng)).unwrap();
-            let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&native)?;
                     Ok(program)
@@ -113,7 +113,7 @@ fn main() {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)
@@ -145,7 +145,7 @@ fn main() {
         let wrong = native
             .issue_rng_for(Identity::Bls12381Fr, domain("V"), 7)
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)
@@ -231,7 +231,7 @@ fn custody_boundaries(directory: &str) {
                 }
                 _ => vec![field(9), Value::Bool(go)],
             };
-            let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&native)?;
                     Ok(program)
@@ -363,7 +363,7 @@ fn mixed_service(directory: &str) {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)

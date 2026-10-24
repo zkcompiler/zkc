@@ -141,7 +141,7 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
         .unwrap(),
     )
     .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&prover)?;
             Ok(program)

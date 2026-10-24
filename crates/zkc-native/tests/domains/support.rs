@@ -87,6 +87,7 @@ pub fn binding(d: bool, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: if common { vec![] } else { vec![nominal.into()] },
         implementation: format!("{}/{name}", if d && !common { "dalek" } else { "arkworks" }),
+        physical_arguments: vec![],
     }
 }
 pub fn native_origin(kind: &str, site: &str, template: bool) -> Vec<u8> {
@@ -140,7 +141,15 @@ pub fn program(
     let mut rows = bindings
         .iter()
         .enumerate()
-        .map(|(j, b)| json!([format!("b{j}"), b.contract, b.arguments, b.implementation]))
+        .map(|(j, b)| {
+            json!([
+                format!("b{j}"),
+                b.contract,
+                b.arguments,
+                b.implementation,
+                b.physical_arguments
+            ])
+        })
         .collect::<Vec<_>>();
     let mut body = operations;
     let mut coordinates = false;
@@ -168,7 +177,8 @@ pub fn program(
             "indices",
             "indices.empty",
             [],
-            "native/indices.empty"
+            "native/indices.empty",
+            []
         ]));
         body.insert(
             0,
@@ -209,7 +219,16 @@ pub fn run_program<B: Backend<Value = Value>>(
     bytes: &[u8],
     args: Vec<Value>,
 ) -> (Result<Vec<Value>, String>, B) {
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    run_program_with_contracts(b, bytes, args, zkc_native::native_contracts())
+}
+
+pub fn run_program_with_contracts<B: Backend<Value = Value>>(
+    b: B,
+    bytes: &[u8],
+    args: Vec<Value>,
+    contracts: &zkc_runtime::vm::Contracts,
+) -> (Result<Vec<Value>, String>, B) {
+    let admitted = zkc_runtime::vm::Program::decode(bytes, contracts)
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -232,7 +251,10 @@ pub fn one<B: Backend<Value = Value>>(
     attrs: &[&str],
     args: Vec<Value>,
 ) -> (Result<Vec<Value>, String>, B) {
-    let sig = binding.signature().unwrap();
+    let resolved = zkc_native::native_contracts()
+        .resolve(binding.clone())
+        .unwrap();
+    let sig = resolved.signature();
     let outputs = (0..sig.outputs.len())
         .map(|j| format!("o{j}"))
         .collect::<Vec<_>>();

@@ -3,6 +3,7 @@
 
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -44,6 +45,7 @@ inline bool programPort(const BoundType &type) {
 }
 // Native arrays have a frame determined by their complete type. This
 // profile fact does not install a codec in older artifact formats.
+inline bool nativeMessageData(const BoundType &type);
 inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
   return type.kind == "field_array" && type.identity.empty() &&
          type.arguments.size() == 2 &&
@@ -51,21 +53,48 @@ inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
          type.arguments[0].domain == "bls12-381.fr" &&
          type.arguments[1].kind == TypeArgument::Kind::Nat &&
          type.arguments[1].natural <= 1048576 &&
-         (physical ? type.representation == "arkworks.field-array/0"
-                   : type.representation.empty());
+         (physical
+              ? ((type.representation == "arkworks.field-array/0" ||
+                  type.representation == "blst/field-array") &&
+                 type.physicalChildren && type.physicalChildren->size() == 1 &&
+                 nativeMessageData(type.physicalChildren->front()))
+              : type.representation.empty());
 }
 // Complete closed native message grammar. Local copy permission alone is
 // insufficient: keys, setup handles and unsupported leaves stay local.
 inline bool nativeMessageData(const BoundType &type) {
   if (!type.representation.empty()) {
-    auto logical = type;
-    logical.representation.clear();
+    // The closed installation grants sequence/variant frame families and
+    // the two field-array owners. Every complete child needs its own frame;
+    // local Copy and an active tag never grant an inactive child a codec.
+    auto formed = parseBoundType(type.spelling(), true);
+    if (!formed) {
+      llvm::consumeError(formed.takeError());
+      return false;
+    }
+    if (!(*formed == type))
+      return false;
+    auto logical = erasePhysicalType(type);
+    if (!nativeMessageData(logical))
+      return false;
+    if (type.kind == "sequence" || type.kind == "variant")
+      return type.physicalChildren &&
+             llvm::all_of(*type.physicalChildren, nativeMessageData);
+    if (type.kind == "field_array")
+      return nativeFieldArrayWire(type, true);
     auto selected = defaultRepresentation(logical);
     if (!selected) {
       llvm::consumeError(selected.takeError());
       return false;
     }
-    return *selected == type && nativeMessageData(logical);
+    // These exact installed resident owners positively supply the existing
+    // canonical field/group frames. Other nondefault layouts remain local.
+    return *selected == type || type.representation == "blst/fr" ||
+           type.representation == "blst/g1" ||
+           type.representation == "blst/g2" ||
+           type.representation == "halo2curves-axiom/bn254.fr" ||
+           type.representation == "halo2curves-axiom/bn254.g1" ||
+           type.representation == "halo2curves-axiom/bn254.g2";
   }
   if (type.kind == "sequence")
     return type.arguments.size() == 1 &&
@@ -96,9 +125,7 @@ inline bool nativeMessageData(const BoundType &type) {
            type.kind == "matrix") &&
           (type.identity == "bn254.fr" ||
            type.identity == "ristretto255.scalar" ||
-           type.identity == "koala-bear" ||
-           type.identity == "koala-bear.ext8-binomial3" ||
-           type.identity == "koala-bear.ext4-binomial3" ||
+           plonky3Field(type.identity) ||
            type.identity == "gf2-64.pentanomial-4-3-1" ||
            type.identity == "gf2-64.pentanomial-4-3-1.ext3-trinomial1")) ||
          ((type.kind == "group" || type.kind == "groups") &&
@@ -116,6 +143,12 @@ inline bool nativeMessageData(const BoundType &type) {
            type.identity == "rows.merkle-keccak256.koala-bear/0" ||
            type.identity ==
                "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
+           type.identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
+           type.identity == "rows.merkle-poseidon2-8.goldilocks/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0" ||
            type.identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
            type.identity ==
                "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
@@ -134,9 +167,7 @@ inline bool nativeSetupType(const BoundType &type) {
       type.identity == "multilinear.kzg.bls12-381/0")
     return true;
   if (type.kind == "variant") {
-    auto logical = type;
-    logical.representation.clear();
-    auto descriptor = decodeVariant(logical.spelling());
+    auto descriptor = decodeVariant(erasePhysicalType(type).spelling());
     if (!descriptor)
       return true;
     for (const auto &arm : descriptor->alternatives)
@@ -170,10 +201,12 @@ inline bool applicationPermission(llvm::StringRef type, bool copy) {
   return true;
 }
 inline bool variantPermission(llvm::StringRef type, bool copy) {
-  auto [logical, rep] = type.split('@');
-  if (type.contains('@') && rep != "logical.variant/0")
+  auto formed = parseBoundType(type, type.contains('@'));
+  if (!formed) {
+    llvm::consumeError(formed.takeError());
     return false;
-  auto descriptor = decodeVariant(logical.str());
+  }
+  auto descriptor = decodeVariant(erasePhysicalType(*formed).spelling());
   if (!descriptor)
     return false;
   for (const auto &arm : descriptor->alternatives)
@@ -186,7 +219,7 @@ inline bool variantPermission(llvm::StringRef type, bool copy) {
 // parsing it for each permission multiplies work at every sequence level.
 inline bool boundPermission(const BoundType &type, bool copy) {
   if (type.kind == "variant")
-    return variantPermission(type.spelling(), copy);
+    return variantPermission(erasePhysicalType(type).spelling(), copy);
   const auto *permissions = typePermissions(type.kind);
   return permissions && (copy ? permissions->copy : permissions->drop) &&
          llvm::all_of(type.arguments, [&](const TypeArgument &argument) {
@@ -203,12 +236,13 @@ inline bool discardable(const BoundType &type) {
 inline Custody custody(llvm::StringRef type) {
   auto kind = typeKind(type);
   if (kind == "variant") {
-    auto logical = type.split('@').first;
-    if (!decodeVariant(logical.str()) ||
-        (type.contains('@') && type.split('@').second != "logical.variant/0"))
+    auto formed = parseBoundType(type, type.contains('@'));
+    if (!formed) {
+      llvm::consumeError(formed.takeError());
       return Custody::Unknown;
-    return variantPermission(type, true) ? Custody::PrivateImmutable
-                                         : Custody::Affine;
+    }
+    return boundPermission(*formed, true) ? Custody::PrivateImmutable
+                                          : Custody::Affine;
   }
   const auto *permissions = typePermissions(kind);
   if (type.contains('<')) {

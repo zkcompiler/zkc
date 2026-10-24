@@ -39,6 +39,10 @@ production correctness theorem.
 only the compiler and default-feature CLI. `just build-test-drivers` separately
 builds integration drivers with test providers; `just test-integration` builds both. No default build, test or installation invokes a Lean checker. `just test-sanitize` selects the compiler sanitizer profile.
 
+The Rust scope checks the all-features workspace, then the benchmark worker's
+normal build and the runtime's disabled execution collector. Provider timing
+controls reject instrumented builds; both configurations need their own checks.
+
 The driver uses existing project tools. Cargo tests and SDK checks compile their own test targets and consumers:
 
 ```sh
@@ -57,6 +61,24 @@ uv run --no-sync --locked pytest common/tests --collect-only
 The `harness`, `sdk` and `integration` selections are disjoint. `checks.project` in Nix invokes `integration` against packaged tools; separate derivations own the harness, SDK discovery, compiler, Rust, installed consumer and style checks. The integration suite executes the [published walkthrough](../../docs/getting-started.md) directly.
 
 `python3 common/tests/run.py style` checks source formatting and syntax without project builds. `lint` adds C++ formatting and Clippy. Install checks live in `check_sdk.py` and `check_domain.py`; `check_install.py` exercises the packaged application outside the checkout. Domain checks prepare isolated base/domain builds or validate explicitly selected existing builds with `--skip-build`.
+
+### CPU worker confinement
+
+Portable Cargo checks cover numerical agreement under different worker counts.
+The explicit Linux gates also require `strace` and ptrace permission:
+
+```sh
+cargo test --locked -p zkc-kernels --test cpu_thread_creation provider_workloads_create_only_owned_workers -- --ignored
+cargo test --locked -p zkc-native --test cpu_thread_creation installed_polynomial_operations_create_only_owned_workers -- --ignored
+cargo test --locked -p zkc-native --test cpu_thread_creation installed_resident_scaling_creates_only_owned_workers -- --ignored
+cargo test --locked -p zkc-benchmarks output_checks_create_no_additional_workers -- --ignored
+```
+
+They count successful task creation over each child process's full lifetime,
+including workers that exit before the numerical call returns. Known caller and
+test threads are included separately from the owner budget. These gates check
+the selected installed/provider workloads; the owner does not limit foreign code
+or total process CPU use.
 
 ## Coverage and ownership
 

@@ -64,6 +64,62 @@ fn host(raw: &[u8], limits: HostLimits) -> RunHost {
     )
     .unwrap()
 }
+
+#[test]
+fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
+    let (raw, request) = fixture("bool");
+    let original = host(&raw, HostLimits::default());
+    let worker = |cpu: &CpuExecution| cpu.execute(|| std::thread::current().id());
+    let original_worker = worker(original.cpu());
+    assert_eq!(worker(original.clone().cpu()), original_worker);
+    let independent = host(&raw, HostLimits::default());
+    assert_ne!(worker(independent.cpu()), original_worker);
+    let cpu = CpuExecution::serial().unwrap();
+    let id = worker(&cpu);
+    assert_ne!(id, original_worker);
+    let admission = RunHost::admission_backend(HostLimits::default(), cpu.clone()).unwrap();
+    assert_eq!(worker(admission.cpu()), id);
+    let configured = RunHost::admit_with_cpu(
+        &raw,
+        &Sha256::digest(&raw).into(),
+        HostLimits::default(),
+        SetupAuthority::default(),
+        cpu.clone(),
+    )
+    .unwrap();
+    assert_eq!(worker(configured.clone().cpu()), id);
+    assert_eq!(worker(original.clone().with_cpu(cpu.clone()).cpu()), id);
+    drop(cpu);
+    let ledger = zkc_runtime::vm::ExecutionLedger::new(
+        configured.limits.capacity.values,
+        configured.limits.capacity.work,
+    );
+    let mut child_limits = configured.limits();
+    child_limits.capacity.values.live_bytes /= 4;
+    let configured = configured
+        .clone()
+        .with_invocation_limits(
+            child_limits,
+            zkc_native::ring::DEFAULT_WORK_LIMIT,
+            16_777_216,
+        )
+        .with_shared_ledger(ledger);
+    let prepared = configured
+        .prepare(&serde_json::to_vec(&request).unwrap())
+        .unwrap();
+    assert_eq!(prepared.roles.len(), 2);
+    for role in &prepared.roles {
+        assert_eq!(worker(role.backend.cpu()), id);
+    }
+    let report = prepared.execute();
+    assert!(report.failure.is_none(), "{:?}", report.failure);
+    let execution = report.execution.unwrap();
+    assert_eq!(execution.outcome, Outcome::Completed);
+    for (_, backend) in &execution.backends {
+        assert_eq!(worker(backend.cpu()), id);
+    }
+    assert_eq!(worker(original.cpu()), original_worker);
+}
 #[test]
 fn false_output_and_bounded_work_keep_complete_reports() {
     let (raw, input) = fixture("bool");
@@ -327,7 +383,8 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
             "create",
             "resource_unit.create",
             ["Slot.A"],
-            "logical/resource_unit.create"
+            "logical/resource_unit.create",
+            []
         ]],
         [[
             "function",
@@ -475,13 +532,15 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
                 "init",
                 "external.openvm.init",
                 [],
-                "native/external.openvm.init"
+                "native/external.openvm.init",
+                []
             ],
             [
                 "sample",
                 "external.openvm.sample",
                 [],
-                "native/external.openvm.sample"
+                "native/external.openvm.sample",
+                []
             ]
         ],
         [[

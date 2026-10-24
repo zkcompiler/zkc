@@ -8,6 +8,7 @@ use zkc_test_support::variants::logical as variant;
 
 fn binding(contract: &str, arguments: &[&str], implementation: &str) -> OperationBinding {
     OperationBinding {
+        physical_arguments: vec![],
         contract: contract.into(),
         arguments: arguments.iter().map(|s| (*s).into()).collect(),
         implementation: implementation.into(),
@@ -295,12 +296,17 @@ fn unknown_transcript_contracts_are_not_logical_or_physical_bindings() {
         assert!(b.logical_signature().is_err(), "{contract}");
         assert!(b.signature().is_err(), "{contract}");
         assert!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&NoBackend)?;
-                    Ok(program)
-                })
-                .is_err()
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&carrier(&b)).unwrap(),
+                &zkc_runtime::vm::Contracts::standard(
+                    zkc_runtime::vm::ExecutionPolicy::general_purpose()
+                )
+            )
+            .and_then(|program| {
+                program.check_installation(&NoBackend)?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
 }
@@ -366,7 +372,7 @@ fn selected_observations_keep_the_installed_suite_policy() {
         b.implementation = format!("{provider}/{contract}");
         assert_eq!(b.logical_signature().unwrap(), logical);
         let selected = b.signature().unwrap();
-        assert_eq!(selected.inputs[1].logical(), ty);
+        assert_eq!(selected.inputs[1].logical(), &ty);
         assert_eq!(
             selected.inputs[0].logical().spelling(),
             format!("transcript:{suite}")
@@ -468,6 +474,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
                 .inputs
                 .iter()
                 .map(PhysicalType::logical)
+                .cloned()
                 .collect::<Vec<_>>(),
             logical.inputs
         );
@@ -476,6 +483,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
                 .outputs
                 .iter()
                 .map(PhysicalType::logical)
+                .cloned()
                 .collect::<Vec<_>>(),
             logical.outputs
         );
@@ -583,14 +591,18 @@ fn representation_refusals_are_distinct_from_formation_and_binding_errors() {
     ] {
         b.arguments[1] = length.into();
         b.implementation = implementation.into();
-        let production_error =
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&NoBackend)?;
-                    Ok(program)
-                })
-                .err()
-                .unwrap();
+        let production_error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&carrier(&b)).unwrap(),
+            &zkc_runtime::vm::Contracts::standard(
+                zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+            ),
+        )
+        .and_then(|program| {
+            program.check_installation(&NoBackend)?;
+            Ok(program)
+        })
+        .err()
+        .unwrap();
         for error in [
             b.logical_signature().unwrap_err(),
             b.signature().unwrap_err(),
@@ -734,7 +746,13 @@ impl Backend for NoBackend {
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
         "zkc.program/0",
-        [["op", b.contract, b.arguments, b.implementation]],
+        [[
+            "op",
+            b.contract,
+            b.arguments,
+            b.implementation,
+            b.physical_arguments
+        ]],
         [],
         [[
             "participant",
@@ -767,24 +785,33 @@ fn production_decoder_requires_a_real_physical_selection() {
     ] {
         let mut b = binding(contract, &args, implementation);
         assert!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&NoBackend)?;
-                    Ok(program)
-                })
-                .is_ok(),
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&carrier(&b)).unwrap(),
+                &zkc_runtime::vm::Contracts::standard(
+                    zkc_runtime::vm::ExecutionPolicy::general_purpose()
+                )
+            )
+            .and_then(|program| {
+                program.check_installation(&NoBackend)?;
+                Ok(program)
+            })
+            .is_ok(),
             "{b:?}"
         );
         for implementation in ["", "unknown/provider"] {
             b.implementation = implementation.into();
-            let error =
-                zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
-                    .and_then(|program| {
-                        program.check_installation(&NoBackend)?;
-                        Ok(program)
-                    })
-                    .err()
-                    .unwrap();
+            let error = zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&carrier(&b)).unwrap(),
+                &zkc_runtime::vm::Contracts::standard(
+                    zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+                ),
+            )
+            .and_then(|program| {
+                program.check_installation(&NoBackend)?;
+                Ok(program)
+            })
+            .err()
+            .unwrap();
             assert_eq!(error.code, ErrorCode::Signature);
         }
     }
@@ -793,13 +820,16 @@ fn production_decoder_requires_a_real_physical_selection() {
         &["bls12-381.fr", "4"],
         "plonky3/fixed_vector.dot",
     );
-    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
-        .and_then(|program| {
-            program.check_installation(&NoBackend)?;
-            Ok(program)
-        })
-        .err()
-        .unwrap();
+    let error = zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&carrier(&b)).unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&NoBackend)?;
+        Ok(program)
+    })
+    .err()
+    .unwrap();
     assert_eq!(error.code, ErrorCode::Representation);
     assert_eq!(error.detail, "unrepresented logical type");
 }
@@ -816,13 +846,16 @@ fn production_admission_still_requires_backend_advertisement() {
         [["op", "site", "op", ["0"], [], ["x"]], ["return", ["x"]]],
         ["Constant", []]
     ]]);
-    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
-        .and_then(|program| {
-            program.check_installation(&NoBackend)?;
-            Ok(program)
-        })
-        .err()
-        .unwrap();
+    let error = zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&value).unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&NoBackend)?;
+        Ok(program)
+    })
+    .err()
+    .unwrap();
     assert_eq!(error.code, ErrorCode::Backend);
     assert_eq!(
         error.detail,
@@ -872,13 +905,18 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
             [["return", ["x"]]],
             ["Identity", []]
         ]]);
-        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
-            .and_then(|program| {
-                program.check_installation(&NoBackend)?;
-                Ok(program)
-            })
-            .err()
-            .unwrap();
+        let error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&value).unwrap(),
+            &zkc_runtime::vm::Contracts::standard(
+                zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+            ),
+        )
+        .and_then(|program| {
+            program.check_installation(&NoBackend)?;
+            Ok(program)
+        })
+        .err()
+        .unwrap();
         assert_eq!(error.code, ErrorCode::Representation);
         assert_eq!(error.detail, "unrepresented logical type");
     }
@@ -933,6 +971,6 @@ fn variant_spelling_keeps_its_existing_larger_limit() {
         PhysicalType::parse(&format!("{spelling}@logical.variant/0"))
             .unwrap_err()
             .detail,
-        "physical type spelling limit"
+        "variant:limit"
     );
 }

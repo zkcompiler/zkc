@@ -32,7 +32,11 @@ fn backend(keys: &Keys) -> NativeBackend {
 fn seq(element: &str, values: Vec<Value>) -> Value {
     Value::Sequence(
         Sequence::new(
-            LogicalType::parse(element).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(LogicalType::parse(element).unwrap())
+                    .unwrap(),
+            )
+            .unwrap(),
             values,
             &Policy::default(),
         )
@@ -424,7 +428,13 @@ fn checked_indexing(directory: &Path, keys: &Keys) {
     use zkc_runtime::host::joint::*;
     for suffix in ["", "_plain", "_release"] {
         let bytes = std::fs::read(directory.join(format!("checked{suffix}.bundle"))).unwrap();
-        let bundle = Bundle::admit(&bytes, &backend(keys), BundleLimits::default()).unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend(keys),
+            zkc_native::native_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
         for index in [0, 1, u64::MAX] {
             let report = run(
                 &bundle,

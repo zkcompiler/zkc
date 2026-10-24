@@ -11,6 +11,7 @@ fn selected_matrix_contractions_preserve_field_and_explicit_provider() {
             ("koala-bear.ext8-binomial3", "plonky3"),
         ] {
             let binding = OperationBinding {
+                physical_arguments: vec![],
                 contract: name.into(),
                 arguments: vec![field.into()],
                 implementation: format!("{provider}/{name}"),
@@ -49,12 +50,14 @@ fn selected_matrix_contractions_preserve_field_and_explicit_provider() {
             }
             for other in ["arkworks", "dalek", "plonky3", "missing"] {
                 let selected = OperationBinding {
+                    physical_arguments: vec![],
                     implementation: format!("{other}/{name}"),
                     ..binding.clone()
                 };
                 assert_eq!(selected.signature().is_ok(), other == provider);
             }
             let wrong_operation = OperationBinding {
+                physical_arguments: vec![],
                 implementation: format!("{provider}/matrix.bilinear"),
                 ..binding
             };
@@ -76,6 +79,7 @@ fn vector_product_has_one_vector_and_same_field_scalar_result() {
         ("koala-bear.ext8-binomial3", "plonky3"),
     ] {
         let binding = OperationBinding {
+            physical_arguments: vec![],
             contract: "vector.product".into(),
             arguments: vec![field.into()],
             implementation: format!("{provider}/vector.product"),
@@ -111,6 +115,7 @@ fn vector_product_has_one_vector_and_same_field_scalar_result() {
         for implementation in ["missing/vector.product", "arkworks/vector.sum"] {
             assert_eq!(
                 OperationBinding {
+                    physical_arguments: vec![],
                     implementation: implementation.into(),
                     ..binding.clone()
                 }
@@ -129,9 +134,10 @@ fn with_alternative(
     primary: Identity,
 ) -> Result<Registry> {
     let alternatives = Box::leak(Box::new([Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "independent/test",
         contract: name,
-        primary,
+        domains: Box::leak(Box::new([primary])),
         ports: super::super::domain_bindings::PortTransform::Default,
     }]));
     let aliases = Box::leak(Box::new(Contribution {
@@ -150,7 +156,7 @@ fn fixed_owners_refuse_alternative_installation() {
             &super::super::fixed_vector::CONTRIBUTION,
             "fixed_vector.dot",
         ),
-        (&curve::CONTRIBUTION, "pairing.check"),
+        (&curve::CONTRIBUTION, "pairing.apply"),
         (&field::CONTRIBUTION, "field.embed"),
         (&vector::CONTRIBUTION, "vector.embed"),
         (&control::CONTRIBUTION, "bool.and"),
@@ -195,6 +201,7 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
         ),
     ] {
         let binding = OperationBinding {
+            physical_arguments: vec![],
             contract: "transcript.native.indexed.observe.data".into(),
             implementation: "independent/test".into(),
             arguments: vec![suite.into(), payload.into()],
@@ -204,6 +211,7 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
         assert_eq!(result.is_ok(), accepted, "{binding:?}");
     }
     let mut binding = OperationBinding {
+        physical_arguments: vec![],
         contract: "transcript.native.indexed.observe.data".into(),
         implementation: "independent/test".into(),
         arguments: vec![
@@ -224,6 +232,7 @@ fn transcript_data_refuses_local_table_layouts() {
         "point:bls12-381.fr",
     ] {
         let binding = OperationBinding {
+            physical_arguments: vec![],
             contract: "transcript.native.indexed.observe.data".into(),
             implementation: "arkworks/transcript.native.indexed.observe.data".into(),
             arguments: vec!["merlin3.bls12-381.fr64be/0".into(), payload.into()],
@@ -235,9 +244,10 @@ fn transcript_data_refuses_local_table_layouts() {
 #[test]
 fn registry_dispatch_enforces_fixed_contracts() {
     static ROW: Alternative = Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "independent/embedding",
         contract: "field.embed",
-        primary: Identity::KoalaBearExt8,
+        domains: &[Identity::KoalaBearExt8],
         ports: super::super::domain_bindings::PortTransform::Default,
     };
     // Deliberately bypass completed assembly to test the dispatch guard itself.
@@ -250,9 +260,10 @@ fn registry_dispatch_enforces_fixed_contracts() {
         )
         .unwrap();
     let binding = OperationBinding {
+        physical_arguments: vec![],
         contract: ROW.contract.into(),
         implementation: ROW.implementation.into(),
-        arguments: vec![ROW.primary.name().into()],
+        arguments: vec![ROW.domains[0].name().into()],
     };
     assert_eq!(
         registry
@@ -284,6 +295,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
         curve.split curve.generator curve.identity curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
+        pairing.check
         pcs.commit pcs.open pcs.check pcs.equal
         transcript.native.indexed.observe.data
     ".split_whitespace().collect::<BTreeSet<_>>();
@@ -323,9 +335,10 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
         physical_only: false,
         physical_error: "binding-implementation",
         alternatives: &[Alternative {
+            timing: TimingRequirement::Unspecified,
             implementation: "separate/field.mul",
             contract: "field.mul",
-            primary: Identity::Bls12381Fr,
+            domains: &[Identity::Bls12381Fr],
             ports: super::super::domain_bindings::PortTransform::Default,
         }],
     };
@@ -340,9 +353,10 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
 #[test]
 fn exact_same_port_provider_does_not_depend_on_default_provider() {
     static ROW: Alternative = Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "independent/field.mul",
         contract: "field.mul",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: super::super::domain_bindings::PortTransform::Default,
     };
     let mut registry = Registry::assemble(&[&field::CONTRIBUTION]).unwrap();
@@ -354,6 +368,7 @@ fn exact_same_port_provider_does_not_depend_on_default_provider() {
         )
         .unwrap();
     let mut binding = OperationBinding {
+        physical_arguments: vec![],
         contract: "field.mul".into(),
         arguments: vec!["bls12-381.fr".into()],
         implementation: ROW.implementation.into(),
@@ -401,6 +416,7 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         ),
     ] {
         let binding = OperationBinding {
+            physical_arguments: vec![],
             contract: contract.into(),
             arguments: args.into_iter().map(str::to_owned).collect(),
             implementation: "missing/owner".into(),
@@ -415,6 +431,7 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         ),
     ] {
         let binding = OperationBinding {
+            physical_arguments: vec![],
             contract: contract.into(),
             arguments: vec![],
             implementation: String::new(),
@@ -434,7 +451,8 @@ fn independent_history_classification_matches_installed_inventory() {
     let mut seen = std::collections::BTreeSet::new();
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
-    let native = "numerical.map 0
+    let native = "representation.convert 0
+numerical.map 0
 numerical.sum 0
 numerical.product 0
 vector.find_last 0

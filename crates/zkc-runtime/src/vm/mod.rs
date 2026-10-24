@@ -5,8 +5,17 @@
 //! capability issuance and state, shape admission, and mathematical operations.
 
 mod admit;
+mod aggregate_bindings;
+pub use aggregate_bindings::AggregateImplementationFamily;
 pub(crate) mod backend;
 mod bindings;
+mod contracts;
+mod physical;
+pub use contracts::{
+    AggregateChildRule, AuthorizationId, Contracts, ContractsBuilder, ExecutionPolicy,
+    ExtensionRepresentation, ImplementationId, ImplementationRequirements, TimingRequirement,
+    WireCodec,
+};
 pub(crate) mod execution_ledger;
 mod field_array;
 mod fixed_vector;

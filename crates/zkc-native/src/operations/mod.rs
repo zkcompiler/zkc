@@ -6,11 +6,15 @@ pub(crate) mod conversions;
 pub(crate) mod curve;
 pub(crate) mod field;
 pub(crate) mod indices;
+pub(crate) mod literal;
 pub(crate) mod pairwise;
 pub(crate) mod resources;
 
 pub(crate) mod encoding;
 
+pub(crate) mod blst;
 pub(crate) mod external;
-pub(crate) mod koala_bear;
+pub(crate) mod halo2curves;
+pub(crate) mod plonky3;
 pub(crate) mod poseidon2;
+pub(crate) mod resident;

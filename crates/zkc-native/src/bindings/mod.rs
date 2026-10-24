@@ -46,7 +46,7 @@ impl Contract {
         self.implementations = implementations;
         self
     }
-    const fn selectable(self) -> Self {
+    pub(crate) const fn selectable(self) -> Self {
         Self {
             alternatives: true,
             ..self
@@ -66,7 +66,7 @@ impl Contract {
 pub(crate) enum Selection {
     Default,
     Alternative {
-        primary: Identity,
+        domains: &'static [Identity],
         ports: PortTransform,
     },
 }

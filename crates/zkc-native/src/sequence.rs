@@ -264,23 +264,23 @@ impl<'a> Iterator for Iter<'a> {
 }
 impl ExactSizeIterator for Iter<'_> {}
 impl Sequence {
-    pub fn new(element: LogicalType, values: Vec<Value>, policy: &Policy) -> Result<Self> {
+    pub fn new(physical_type: PhysicalType, values: Vec<Value>, policy: &Policy) -> Result<Self> {
         policy.vector_width(add(values.len(), 1)?, VALUE_SLOT)?;
-        let physical_type = PhysicalType::default_for(
-            LogicalType::sequence(element.clone()).map_err(|_| refused("sequence-type"))?,
-        )
-        .map_err(|_| refused("sequence-representation"))?;
-        let element_type =
-            PhysicalType::default_for(element).map_err(|_| refused("sequence-element"))?;
+        if physical_type.representation() != zkc_runtime::vm::Representation::Sequence {
+            return Err(refused("sequence-representation"));
+        }
+        let element_type = physical_type
+            .sequence_element()
+            .ok_or_else(|| refused("sequence-type"))?;
         let len = values.len();
         let mut count = 1;
         let mut bytes = add(
-            add(NODE_HEADER, physical_type.logical().descriptor_bytes())?,
+            add(NODE_HEADER, physical_type.descriptor_bytes())?,
             add(tree_overhead(len)?, mul(len, VALUE_SLOT)?)?,
         )?;
         let mut resource_free = true;
         for value in &values {
-            if value.physical_type() != element_type {
+            if value.physical_type() != *element_type {
                 return Err(refused("sequence-element"));
             }
             count = add(count, nodes(value)?)?;
@@ -323,7 +323,7 @@ impl Sequence {
         0
     }
     fn root_bytes(&self) -> usize {
-        NODE_HEADER + self.root.physical_type.logical().descriptor_bytes()
+        NODE_HEADER + self.root.physical_type.descriptor_bytes()
     }
     fn backing(&self) -> Backing {
         Backing::of(&self.root, self.root_bytes())
@@ -415,15 +415,11 @@ impl Sequence {
         (2 * VALUE_SLOT + self.root.height * CHILD_SLOT) as u64
     }
     fn appended(&self, value: &Value, policy: &Policy, allowance: usize) -> Result<Self> {
-        let expected = PhysicalType::default_for(
-            self.physical_type()
-                .logical()
-                .sequence_element()
-                .ok_or_else(|| refused("sequence-type"))?
-                .clone(),
-        )
-        .map_err(|_| refused("sequence-element"))?;
-        if value.physical_type() != expected {
+        let expected = self
+            .physical_type()
+            .sequence_element()
+            .ok_or_else(|| refused("sequence-type"))?;
+        if value.physical_type() != *expected {
             return Err(refused("sequence-element"));
         }
         let count = add(self.root.nodes, nodes(value)?)?;
@@ -476,8 +472,18 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     }
     let element = LogicalType::parse(spelling).ok()?;
-    let sequence = PhysicalType::default_for(LogicalType::sequence(element.clone()).ok()?).ok()?;
-    let element = PhysicalType::default_for(element).ok()?;
+    let logical = LogicalType::sequence(element.clone()).ok()?;
+    let sequence = match binding.physical_arguments.as_slice() {
+        [] => PhysicalType::default_for(logical).ok()?,
+        [selected] => crate::native_contracts().physical_type(selected).ok()?,
+        _ => return None,
+    };
+    if sequence.representation() != zkc_runtime::vm::Representation::Sequence
+        || *sequence.logical() != LogicalType::sequence(element).ok()?
+    {
+        return None;
+    }
+    let element = sequence.sequence_element()?.clone();
     let index = PhysicalType::default_for(LogicalType::parse("index").ok()?).ok()?;
     let (inputs, outputs) = match binding.contract.as_str() {
         "sequence.empty" => (vec![], vec![sequence]),
@@ -502,11 +508,7 @@ pub(crate) fn apply(
     let (result, allocated) = match (name, args) {
         ("sequence.empty", []) => {
             let empty = Value::Sequence(Sequence::new(
-                invocation.binding.signature().outputs[0]
-                    .logical()
-                    .sequence_element()
-                    .ok_or_else(|| refused("sequence-type"))?
-                    .clone(),
+                invocation.binding.signature().outputs[0].clone(),
                 vec![],
                 policy,
             )?);
@@ -566,14 +568,25 @@ mod tests {
     fn canonical_tree_preserves_order_shape_charges_and_prefixes() {
         let policy = Policy::default();
         let ty = LogicalType::parse("index").unwrap();
-        let mut appended = Sequence::new(ty.clone(), vec![], &policy).unwrap();
+        let mut appended = Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(ty.clone()).unwrap(),
+            )
+            .unwrap(),
+            vec![],
+            &policy,
+        )
+        .unwrap();
         let boundaries = [
             0, 1, 3, 4, 5, 63, 64, 65, 1023, 1024, 1025, 16383, 16384, 16385,
         ];
         for n in 0..=16385 {
             if boundaries.contains(&n) {
                 let direct = Sequence::new(
-                    ty.clone(),
+                    zkc_runtime::vm::PhysicalType::default_for(
+                        zkc_runtime::vm::LogicalType::sequence(ty.clone()).unwrap(),
+                    )
+                    .unwrap(),
                     (0..n).map(|i| Value::Index(i as u64)).collect(),
                     &policy,
                 )
@@ -626,14 +639,26 @@ mod tests {
     fn shared_nested_payloads_are_counted_once_by_retention_not_by_value_size() {
         let policy = Policy::default();
         let nested = Sequence::new(
-            LogicalType::parse("index").unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("index").unwrap())
+                    .unwrap(),
+            )
+            .unwrap(),
             vec![Value::Index(7); 65],
             &policy,
         )
         .unwrap();
         let inner = Value::Sequence(nested.clone());
-        let mut outer =
-            Sequence::new(inner.physical_type().logical().clone(), vec![], &policy).unwrap();
+        let mut outer = Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(inner.physical_type().logical().clone())
+                    .unwrap(),
+            )
+            .unwrap(),
+            vec![],
+            &policy,
+        )
+        .unwrap();
         for _ in 0..65 {
             outer = outer.appended(&inner, &policy, usize::MAX).unwrap();
         }

@@ -17,19 +17,22 @@ fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> J
                 "make",
                 "resource_unit.create",
                 ["Slot.A"],
-                "logical/resource_unit.create"
+                "logical/resource_unit.create",
+                []
             ],
             [
                 "pass",
                 "resource_unit.pass",
                 ["Slot.A"],
-                "logical/resource_unit.pass"
+                "logical/resource_unit.pass",
+                []
             ],
             [
                 "consume",
                 "resource_unit.consume",
                 ["Slot.A"],
-                "logical/resource_unit.consume"
+                "logical/resource_unit.consume",
+                []
             ]
         ],
         [["function", "Local", ports, results, body, ["Local", []]]],
@@ -136,7 +139,7 @@ fn create_pass_consume_and_host_alias_refusal() {
         json!(["a", "b"]),
         json!([]),
     );
-    let admitted = zkc_runtime::vm::Program::decode(&bytes(&dup))
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&dup), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -188,7 +191,7 @@ fn create_pass_consume_and_host_alias_refusal() {
         ["return", []]
     ]);
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes(&dup))
+        zkc_runtime::vm::Program::decode(&bytes(&dup), zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -206,7 +209,7 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     bad[2][0][3] = json!([ty("Slot.A"), ty("Slot.A")]);
     bad[2][0][4][1] = json!(["return", ["x", "x"]]);
     assert!(
-        zkc_runtime::vm::Program::decode(&bytes(&bad))
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -218,10 +221,12 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     let mut bad = make();
     bad[2][0][3] = json!([ty("Slot.B")]);
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            },
+        ),
         ErrorCode::Signature,
         "function-return-types: operand type x",
     );
@@ -230,30 +235,36 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     let mut bad = make();
     bad[1][0][2] = json!(["0invalid"]);
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            },
+        ),
         ErrorCode::Type,
         "binding-resource-unit-domain",
     );
     let mut bad = make();
     bad[1][0][3] = json!("arkworks/resource_unit.create");
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            },
+        ),
         ErrorCode::Signature,
         "binding-implementation",
     );
     let mut bad = make();
     bad[2][0][4][0][3] = json!(["bytes"]);
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            },
+        ),
         ErrorCode::Attributes,
         "interactive-kernel-parameters: exact kernel attributes required",
     );
@@ -264,10 +275,12 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
         ["return", ["x"]]
     ]);
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&bad), zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            },
+        ),
         ErrorCode::Type,
         "nonserializable message type",
     );
@@ -324,7 +337,7 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
     );
     other[3][0][3] = json!("V");
     other[4][0][2][0][0] = json!("V");
-    let admitted = zkc_runtime::vm::Program::decode(&bytes(&other))
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&other), zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -387,10 +400,11 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
         .unwrap()
         .insert(1, json!(["op", "reuse", "consume", [], ["a"], []]));
     refused_as(
-        zkc_runtime::vm::Program::decode(&bytes(&program)).and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        }),
+        zkc_runtime::vm::Program::decode(&bytes(&program), zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            }),
         ErrorCode::Ssa,
         "interactive-resource-reuse: consumed operand a",
     );

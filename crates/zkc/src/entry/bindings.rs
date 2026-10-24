@@ -404,6 +404,7 @@ pub fn rust(package: &Package) -> Result<String> {
             "__zkc_decode",
             "PACKAGE_SHA256",
             "admit",
+            "admit_with_cpu",
             "setups",
             "services",
             "PROVER",
@@ -424,6 +425,7 @@ pub fn rust(package: &Package) -> Result<String> {
         ("::zkc::entry::RunEntry", "::zkc::run::HostLimits")
     };
     generator.add(format!("/// Authenticate this exact package and admit its interface, program and application limits.\n/// Artifact bytes stay immutable; no caller verification flag or CLI transport is involved.\npub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc::entry::SetupAuthority)->::core::result::Result<{host},::zkc::entry::EntryError>{{let package=::zkc::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc::entry::Package::MAX_BYTES)?;{host}::admit(package,options,setups)}}\n"))?;
+    generator.add(format!("/// Admit with an application-owned shared numerical context.\npub fn admit_with_cpu(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc::entry::SetupAuthority,cpu: ::zkc::execution::CpuExecution)->::core::result::Result<{host},::zkc::entry::EntryError>{{let package=::zkc::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc::entry::Package::MAX_BYTES)?;{host}::admit_with_cpu(package,options,setups,cpu)}}\n"))?;
     let public_name = interface
         .is_proof()
         .then(|| generator.names.ty("PublicInputs"))
@@ -549,10 +551,16 @@ fn function(package: &Package) -> Result<String> {
     };
     generator.names.used.insert(
         0,
-        ["__zkc_decode", "PACKAGE_SHA256", "admit", "call"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
+        [
+            "__zkc_decode",
+            "PACKAGE_SHA256",
+            "admit",
+            "admit_with_cpu",
+            "call",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
     );
     generator.add("// Generated from an authenticated zkc Entry function package.\n// Mathematical leaves retain native Value ingress; all execution uses FunctionEntry.\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc::entry::Value>>(value: ::zkc::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
     generator.add(format!(
@@ -570,6 +578,7 @@ fn function(package: &Package) -> Result<String> {
     )?;
     let result = generator.schema(&signature.result, "Result")?;
     generator.add("pub fn admit(bytes: &[::core::primitive::u8], options: ::zkc::entry::FunctionOptions, authority: ::std::collections::BTreeMap<::std::string::String, ::zkc::entry::SetupAuthority>) -> ::core::result::Result<::zkc::entry::FunctionEntry, ::zkc::entry::EntryError> { let package = ::zkc::entry::Package::capture(bytes, &PACKAGE_SHA256, ::zkc::entry::Package::MAX_BYTES)?; ::zkc::entry::FunctionEntry::admit(package, options, authority) }\n")?;
+    generator.add("pub fn admit_with_cpu(bytes: &[::core::primitive::u8], options: ::zkc::entry::FunctionOptions, authority: ::std::collections::BTreeMap<::std::string::String, ::zkc::entry::SetupAuthority>, cpu: ::zkc::execution::CpuExecution) -> ::core::result::Result<::zkc::entry::FunctionEntry, ::zkc::entry::EntryError> { let package = ::zkc::entry::Package::capture(bytes, &PACKAGE_SHA256, ::zkc::entry::Package::MAX_BYTES)?; ::zkc::entry::FunctionEntry::admit_with_cpu(package, options, authority, cpu) }\n")?;
     generator.add(format!("/// Execute the selected source function using its admitted common Host.\npub fn call(host: &::zkc::entry::FunctionEntry, arguments: {arguments}, context: ::zkc::entry::InvocationContext) -> ::core::result::Result<::zkc::entry::bindings::CallResult<{result}>, ::zkc::entry::EntryError> {{ ::zkc::entry::bindings::CallResult::execute(host, &PACKAGE_SHA256, ::zkc::entry::FunctionRequest {{ arguments: arguments.into(), context }}) }}\n"))?;
     Ok(generator.code)
 }

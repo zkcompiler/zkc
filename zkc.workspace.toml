@@ -3,6 +3,8 @@ format = "zkc.workspace/0"
 [packages]
 "arguments.bulletproofs.weighted_inner_product" = "libraries/arguments/bulletproofs/weighted_inner_product"
 "arguments.stark.configurations.contract" = "libraries/arguments/stark/configurations/contract"
+"arguments.stark.configurations.baby_bear_quartic" = "libraries/arguments/stark/configurations/baby_bear_quartic"
+"arguments.stark.configurations.goldilocks_quadratic" = "libraries/arguments/stark/configurations/goldilocks_quadratic"
 "arguments.stark.configurations.koala_bear_octic" = "libraries/arguments/stark/configurations/koala_bear_octic"
 "arguments.stark.configurations.koala_bear_quartic" = "libraries/arguments/stark/configurations/koala_bear_quartic"
 "arguments.stark.sampling" = "libraries/arguments/stark/sampling"

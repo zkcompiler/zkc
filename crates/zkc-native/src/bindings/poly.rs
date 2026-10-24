@@ -29,7 +29,14 @@ fn resolve(
             | "poly.opening_quotient_sum"
     ) && !matches!(
         domain.field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        Identity::Bn254Fr
+            | Identity::KoalaBear
+            | Identity::KoalaBearExt8
+            | Identity::KoalaBearExt4
+            | Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2
     ) {
         return None;
     }

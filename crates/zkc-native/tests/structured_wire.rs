@@ -8,7 +8,14 @@ use zkc_runtime::vm::{DecodeReason, LogicalType, Value as RuntimeValue};
 use zkc_test_support::variants::logical;
 fn variant(ty: &str, tag: usize, values: Vec<Value>) -> Value {
     let ty = LogicalType::parse(ty).unwrap();
-    Value::Variant(Variant::new(ty.variant_descriptor().unwrap().clone(), tag, values).unwrap())
+    Value::Variant(
+        Variant::new(
+            zkc_runtime::vm::PhysicalType::default_for(ty.clone()).unwrap(),
+            tag,
+            values,
+        )
+        .unwrap(),
+    )
 }
 fn bounded(policy: Policy) -> NativeBackend {
     NativeBackend::new(policy, common::entry(None), Default::default()).unwrap()
@@ -387,11 +394,11 @@ fn immutable_variant_bounds_count_shared_payload_occurrences() {
         json!([["pair", [ty.clone(), ty]]]),
     ))
     .unwrap();
-    let descriptor = pair_type.variant_descriptor().unwrap().clone();
+    let physical_type = zkc_runtime::vm::PhysicalType::default_for(pair_type).unwrap();
     // Expanded charges count both occurrences, even though cloned immutable
     // variants share their backing. Decoding retains that same profile.
-    let expected = descriptor.retained_bytes() + 256 + 2 * 512 + 2 * value.retained_bytes();
-    let pair = Value::Variant(Variant::new(descriptor, 0, vec![value.clone(), value]).unwrap());
+    let expected = physical_type.descriptor_bytes() + 256 + 2 * 512 + 2 * value.retained_bytes();
+    let pair = Value::Variant(Variant::new(physical_type, 0, vec![value.clone(), value]).unwrap());
     assert_eq!(pair.retained_bytes(), expected);
     let backend = common::ark_backend(None);
     let bytes = backend.encode_native_value(&pair).unwrap();
@@ -445,7 +452,8 @@ fn nested_fixed_arrays_keep_empty_shape_and_full_retained_charge() {
         let ty = logical("Arrays", json!([["record", [leaf, leaf]]]));
         let array = Value::FieldArray(
             zkc_native::FieldArray::new(
-                LogicalType::parse(&leaf).unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(LogicalType::parse(&leaf).unwrap())
+                    .unwrap(),
                 vec![Scalar::from(3); n].into(),
             )
             .unwrap(),
@@ -574,7 +582,8 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
                 "observe",
                 "transcript.native.indexed.observe.data",
                 ["merlin3.bls12-381.fr64be/0", ty],
-                "arkworks/transcript.native.indexed.observe.data"
+                "arkworks/transcript.native.indexed.observe.data",
+                []
             ]],
             [[
                 "function",
@@ -609,12 +618,15 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             ]],
             [["entry", "main", [["P", "participant"]]]]
         ]);
-        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&program).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let runner = Runner::new(
             &admitted,
             "main",
@@ -681,7 +693,13 @@ fn native_and_wire_collection_admission_agree_across_nested_shapes() {
     fn sequence(values: Vec<Value>) -> Value {
         Value::Sequence(
             zkc_native::Sequence::new(
-                values[0].physical_type().logical(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(
+                        values[0].physical_type().logical().clone(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
                 values,
                 &Policy::default(),
             )
@@ -736,7 +754,12 @@ fn host_assembly_measures_complete_type_counts_and_construction_peak() {
         .measure_native_variant(&physical, 0, &sizes)
         .unwrap();
     let value = Value::Variant(
-        Variant::new(ty.variant_descriptor().unwrap().clone(), 0, vec![a, b]).unwrap(),
+        Variant::new(
+            zkc_runtime::vm::PhysicalType::default_for(ty.clone()).unwrap(),
+            0,
+            vec![a, b],
+        )
+        .unwrap(),
     );
     assert_eq!(measured.retained_bytes(), value.retained_bytes());
     let limited = bounded(Policy {
@@ -821,7 +844,13 @@ fn runtime_owned_measurements_preserve_nonwire_data_and_complete_counts() {
     let polynomial = Value::Polynomial(vec![Scalar::from(7); 3].into());
     let sequence = Value::Sequence(
         zkc_native::Sequence::new(
-            polynomial.physical_type().logical(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(
+                    polynomial.physical_type().logical().clone(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             vec![polynomial.clone(), polynomial.clone()],
             &Policy::default(),
         )
@@ -846,14 +875,7 @@ fn runtime_owned_measurements_preserve_nonwire_data_and_complete_counts() {
     assert!(backend.measure_native_input(&sequence).is_err());
     let sizes = [backend.measure_native_value(&sequence).unwrap()];
     let measured = backend.measure_native_variant(&ty, 1, &sizes).unwrap();
-    let value = Value::Variant(
-        Variant::new(
-            ty.logical().variant_descriptor().unwrap().clone(),
-            1,
-            vec![sequence],
-        )
-        .unwrap(),
-    );
+    let value = Value::Variant(Variant::new(ty.clone(), 1, vec![sequence]).unwrap());
     assert_eq!(measured.retained_bytes(), value.retained_bytes());
     assert_eq!(
         backend
@@ -972,12 +994,7 @@ fn runtime_owned_handle_collections_count_handles_and_keep_backing_limits() {
                 backend.measure_native_value(value).unwrap(),
             ];
             let pair = Value::Variant(
-                Variant::new(
-                    ty.logical().variant_descriptor().unwrap().clone(),
-                    0,
-                    vec![value.clone(), value.clone()],
-                )
-                .unwrap(),
+                Variant::new(ty.clone(), 0, vec![value.clone(), value.clone()]).unwrap(),
             );
             assert_eq!(
                 backend.measure_native_variant(&ty, 0, &sizes).is_ok(),
@@ -1044,14 +1061,7 @@ fn singular_pcs_handles_do_not_invent_backing_element_collection_counts() {
             backend.measure_native_value(&value).unwrap(),
         ];
         assert!(backend.measure_native_variant(&ty, 0, &sizes).is_ok());
-        let pair = Value::Variant(
-            Variant::new(
-                ty.logical().variant_descriptor().unwrap().clone(),
-                0,
-                vec![value.clone(), value],
-            )
-            .unwrap(),
-        );
+        let pair = Value::Variant(Variant::new(ty.clone(), 0, vec![value.clone(), value]).unwrap());
         assert!(backend.measure_native_value(&pair).is_ok());
         assert!(backend.measure_native_input(&pair).is_err());
         assert!(backend.encode_native_value(&pair).is_err());

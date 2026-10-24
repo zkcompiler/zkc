@@ -6,7 +6,9 @@ use zkc_native::{
     Bn254G1, Bn254G2, Bn254Gt, Bn254Scalar as F, NativeBackend, NativeWireError as Error, Policy,
     RistrettoScalar, Value,
 };
-use zkc_runtime::vm::{DecodeReason, LogicalType, OperationBinding, Value as RuntimeValue};
+use zkc_runtime::vm::{
+    DecodeReason, LogicalType, OperationBinding, PhysicalType, Value as RuntimeValue,
+};
 
 fn backend(policy: Policy) -> NativeBackend {
     support::backend(policy)
@@ -46,8 +48,15 @@ fn roundtrip(v: Value) {
         Error::Invalid(DecodeReason::Length)
     );
     // Every leaf also passes through expected-type recursive framing.
-    let seq = zkc_native::Sequence::new(v.physical_type().logical(), vec![v], &Policy::default())
-        .unwrap();
+    let seq = zkc_native::Sequence::new(
+        PhysicalType::default_for(
+            LogicalType::sequence(v.physical_type().logical().clone()).unwrap(),
+        )
+        .unwrap(),
+        vec![v],
+        &Policy::default(),
+    )
+    .unwrap();
     let value = Value::Sequence(seq);
     b.validate_native_input(&value).unwrap();
     let bytes = b.encode_native_value(&value).unwrap();
@@ -141,8 +150,13 @@ fn typed_errors_and_aggregate_limits_precede_bulk_allocation() {
         ..Policy::default()
     };
     let nested = Value::Sequence(
-        zkc_native::Sequence::new(ty.logical(), vec![value.clone(), value], &Policy::default())
-            .unwrap(),
+        zkc_native::Sequence::new(
+            PhysicalType::default_for(LogicalType::sequence(ty.logical().clone()).unwrap())
+                .unwrap(),
+            vec![value.clone(), value],
+            &Policy::default(),
+        )
+        .unwrap(),
     );
     let bytes = b.encode_native_value(&nested).unwrap();
     assert_eq!(
@@ -204,6 +218,7 @@ fn pairing_result_uses_ordinary_group_contracts() {
                 contract: name.into(),
                 arguments: vec![domain.into()],
                 implementation: format!("arkworks/{name}"),
+                physical_arguments: vec![],
             },
             &[],
             args,
@@ -262,6 +277,7 @@ fn pairing_preparation_obeys_value_capacity() {
                     contract: contract.into(),
                     arguments: vec![domain.into()],
                     implementation: format!("arkworks/{contract}"),
+                    physical_arguments: vec![],
                 },
                 &[],
                 args.clone(),
@@ -283,7 +299,10 @@ fn nested_target_budget_precedes_subgroup_validation() {
     let point = Value::Bn254Gt(Bn254Gt::generator());
     let nested = Value::Sequence(
         zkc_native::Sequence::new(
-            point.physical_type().logical(),
+            PhysicalType::default_for(
+                LogicalType::sequence(point.physical_type().logical().clone()).unwrap(),
+            )
+            .unwrap(),
             vec![point.clone(), point],
             &p,
         )
@@ -365,6 +384,7 @@ fn equality_compares_every_element_and_length() {
                             "arkworks"
                         }
                     ),
+                    physical_arguments: vec![],
                 },
                 &[],
                 vec![vector(a), vector(b)],

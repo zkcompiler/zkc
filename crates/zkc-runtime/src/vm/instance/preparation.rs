@@ -137,7 +137,7 @@ impl<B: Backend> Instance<B> {
         } = recording;
         if values
             .iter()
-            .any(|v| !v.preparation_output() || v.validate_serializable().is_err())
+            .any(|v| !v.preparation_output() || self.validate_backend(v).is_err())
         {
             return None;
         }

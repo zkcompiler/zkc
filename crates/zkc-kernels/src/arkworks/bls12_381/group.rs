@@ -38,7 +38,7 @@ impl G1 {
         let mut bases = crate::arkworks::allocation::vector(points.len())?;
         bases.extend(points.iter().map(|p| p.0));
         Ok(Self(
-            ark_bls12_381::G1Projective::msm(&bases, scalars)
+            crate::cpu::install(|| ark_bls12_381::G1Projective::msm(&bases, scalars))
                 .map_err(|_| Error::InvalidEncoding)?
                 .into_affine(),
         ))

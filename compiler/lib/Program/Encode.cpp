@@ -119,7 +119,8 @@ class Encoder {
   }
   V binding(const protocol::OperationBinding &b) {
     return A{b.name, b.application.contract, names(b.application.arguments),
-             b.application.implementation};
+             b.application.implementation,
+             names(b.application.physicalArguments)};
   }
   template <typename T> V environment(const T &m) {
     return list(m.bindings, [&](const auto &b) { return binding(b); });

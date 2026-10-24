@@ -180,6 +180,10 @@ impl<B: Backend> Runner<B> {
             early_return: None,
         })
     }
+    /// Immutable admission permissions retained by this execution.
+    pub fn contracts(&self) -> &crate::vm::Contracts {
+        self.instance.admitted().contracts()
+    }
     pub fn role(&self) -> &str {
         self.instance.role()
     }
@@ -1121,7 +1125,9 @@ impl<B: Backend> Runner<B> {
         let ty = request.ty.clone();
         if let Ok(value) = &decoded
             && (!value.has_type(&ty)
-                || !ty.is_message_type()
+                || !self
+                    .contracts()
+                    .permits_wire(&ty, crate::vm::WireCodec::Native)
                 || (ty.is_serializable() && value.validate_serializable().is_err()))
         {
             return Err(RuntimeError::Payload);

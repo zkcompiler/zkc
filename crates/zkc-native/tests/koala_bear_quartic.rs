@@ -15,6 +15,7 @@ fn binding(name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![EXT.into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn scalar(a: [u32; 4]) -> KoalaBearExt4 {

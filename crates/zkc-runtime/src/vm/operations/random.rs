@@ -41,7 +41,12 @@ fn resolve(
     let primary = support::primary(binding)?;
     let field = primary.scalar_field().ok_or_else(support::failure)?;
     support::require_primary(binding, field)?;
-    if binding.contract == "random.index" && primary != Identity::KoalaBearExt8 {
+    if binding.contract == "random.index"
+        && !matches!(
+            primary,
+            Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2
+        )
+    {
         return Err(support::failure());
     }
     support::instantiate(shape, field, |kind| support::field_type(kind, field))

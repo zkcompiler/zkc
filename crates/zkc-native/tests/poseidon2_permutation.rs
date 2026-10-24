@@ -27,6 +27,7 @@ fn binding() -> OperationBinding {
         contract: "hash.poseidon2_16".into(),
         arguments: vec!["koala-bear".into()],
         implementation: "plonky3/hash.poseidon2_16".into(),
+        physical_arguments: vec![],
     }
 }
 

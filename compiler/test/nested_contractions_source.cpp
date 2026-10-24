@@ -169,7 +169,8 @@ void pinCallbackResult(ModuleOp module) {
   OpBuilder builder(helper);
   auto binding = local::OperationBindingOp::create(
       builder, helper.getLoc(), "pinned_sum", "field.add",
-      builder.getArrayAttr({builder.getStringAttr(domain)}), *implementation);
+      builder.getArrayAttr({builder.getStringAttr(domain)}), *implementation,
+      mlir::ArrayAttr{});
   builder.setInsertionPoint(&end);
   // Pin an exact existing scalar operation without introducing raw math into
   // Local.

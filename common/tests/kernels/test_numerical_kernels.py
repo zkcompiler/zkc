@@ -8,7 +8,7 @@ import random
 
 import pytest
 
-from binomial_reference import FIELDS, OCTIC, P
+from binomial_reference import PLONKY3_FIELDS as FIELDS, P
 from entry import Entry
 
 
@@ -27,12 +27,14 @@ def direct(ext, coefficients, point):
 
 
 @pytest.mark.parametrize('field', ['koala-bear', 'koala-bear.ext8-binomial3',
-                                   'koala-bear.ext4-binomial3'])
+                                   'koala-bear.ext4-binomial3', 'baby-bear',
+                                   'baby-bear.ext4-binomial11', 'goldilocks',
+                                   'goldilocks.ext2-binomial7'])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_coset_evaluation_interpolation_fold_and_refusals(toolchain, journal, directory, field, flags):
-    extension = field != 'koala-bear'
-    # Base-field values are embedded coordinate lists; any extension computes them.
-    ext = FIELDS[field] if extension else OCTIC
+    ext = FIELDS[field]
+    extension = ext.degree > 1
+    p = ext.modulus
     d, ZERO, ONE, add, mul = ext.degree, ext.ZERO, ext.ONE, ext.add, ext.mul
     source = f'''module sample;
 domain F=field("{field}");
@@ -59,16 +61,19 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     rng = random.Random(619 + d)
 
     def scalar():
-        return [rng.randrange(P) for _ in range(d)] if extension else ext.embed(rng.randrange(P))
+        return [rng.randrange(p) for _ in range(d)] if extension else ext.embed(rng.randrange(p))
 
     for n in (2, 4, 8, 16, 32, 64):
         cs = [scalar() for _ in range(n // 2)]
         shift, beta = scalar(), scalar()
-        # The public KoalaBear coset convention fixes this primitive 2^24 root.
-        # Verify its order locally before using it; no backend data is queried.
-        root = pow(1791270792, (1 << 24) // n, P)
-        assert pow(root, n, P) == 1 and pow(root, n // 2, P) == P - 1
-        points = [mul(shift, ext.embed(pow(root, i, P))) for i in range(n)]
+        # Independent Plonky3 0.8.0 base-root facts; extensions deliberately
+        # use the base subgroup even when every shift coordinate is nonzero.
+        maximal_root, log = {'koala-bear': (1791270792, 24),
+                             'baby-bear': (440564289, 27),
+                             'goldilocks': (1753635133440165772, 32)}[field.split('.')[0]]
+        root = pow(maximal_root, (1 << log) // n, p)
+        assert pow(root, n, p) == 1 and pow(root, n // 2, p) == p - 1
+        points = [mul(shift, ext.embed(pow(root, i, p))) for i in range(n)]
         values = [direct(ext, cs, point) for point in points]
         folded_cs = [add(cs[i], mul(beta, cs[i + 1] if i + 1 < len(cs) else ZERO))
                      for i in range(0, len(cs), 2)]

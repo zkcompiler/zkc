@@ -92,11 +92,11 @@ class Package:
 
     @classmethod
     def source(cls, toolchain, journal, directory, source, assets, *, overrides=None,
-               flags=(), name='variant'):
+               flags=(), name='variant', modules=()):
         path = directory / f'{name}.zkc'
         path.write_text(source)
         return cls(toolchain, journal, directory,
-                   [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides=overrides),
+                   [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
                     *[f'--asset={k}=relation-bundle-json={v}' for k, v in assets.items()],
                     'example::Proof', *flags], name)
 
@@ -105,16 +105,16 @@ class Package:
         return input_files(self.journal, f'{self.name}-{self.runs}.json', public=public,
                            witness=witness or {})
 
-    def prove(self, public, witness, *, refuses=None, capacity=None):
+    def prove(self, public, witness, *, refuses=None, capacity=None, threads=1):
         proof = self.directory / f'{self.name}-{self.runs + 1}.proof'
-        extra = [f'--capacity={capacity}'] if capacity else []
+        extra = [f'--threads={threads}', *([f'--capacity={capacity}'] if capacity else [])]
         report = self.journal.json([self.tools.runtime, '--json', 'prove', f'--package={self.path}',
                                     f'--sha256={self.pin}', *self.request(public, witness),
                                     f'--output={proof}', *extra], refuses=refuses)
         return report, proof
 
-    def verify(self, public, proof, *, refuses=None, capacity=None):
-        extra = [f'--capacity={capacity}'] if capacity else []
+    def verify(self, public, proof, *, refuses=None, capacity=None, threads=1):
+        extra = [f'--threads={threads}', *([f'--capacity={capacity}'] if capacity else [])]
         return self.journal.json([self.tools.runtime, '--json', 'verify', f'--package={self.path}',
                                   f'--sha256={self.pin}', *self.request(public),
                                   f'--proof={proof}', *extra], refuses=refuses)
@@ -165,7 +165,7 @@ def test_example_entries_prove_and_verify(toolchain, journal, directory, entry, 
     assert int.from_bytes(messages[8][6:10], 'little') == 8 * 2
 
 
-def quadratic_air(height, width):
+def quadratic_air(height, width, *, field='koala-bear', modulus=P):
     """The benchmark recurrence x' = x^2 + c + 1 per column, with first and
     last rows bound to public values, as a one-table Bundle."""
     import importlib.util
@@ -175,24 +175,24 @@ def quadratic_air(height, width):
     arena = module.Arena()
     outputs, assertions = [], []
     for col in range(width):
-        current = arena.input('koala-bear', ['read', 0, '0', col])
-        following = arena.input('koala-bear', ['read', 0, '1', col])
-        initial = arena.input('koala-bear', ['public', col])
-        final = arena.input('koala-bear', ['public', width + col])
+        current = arena.input(field, ['read', 0, '0', col])
+        following = arena.input(field, ['read', 0, '1', col])
+        initial = arena.input(field, ['public', col])
+        final = arena.input(field, ['public', width + col])
         for value, selector in ((current - initial, ['first']), (current - final, ['last']),
                                 (following - current * current - (col + 1), ['interior', 0, 1])):
             assertions.append([len(outputs), selector])
             outputs.append(value)
     ring, bindings = arena.finish(outputs)
-    bundle = ['zkc.relation-bundle/0', [[f'public-{i}', 'koala-bear'] for i in range(2 * width)], [],
+    bundle = ['zkc.relation-bundle/0', [[f'public-{i}', field] for i in range(2 * width)], [],
               [['trace', 'required', ['fixed', height], 'cyclic',
-                [['trace', 'witness', 'koala-bear', width]], ring, bindings, assertions, []]]]
-    current = [(7919 * (c + 3)) % P for c in range(width)]
+                [['trace', 'witness', field, width]], ring, bindings, assertions, []]]]
+    current = [(7919 * (c + 3)) % modulus for c in range(width)]
     initial, trace = current, []
     for _ in range(height):
         trace.extend(current)
         final = current
-        current = [(x * x + i + 1) % P for i, x in enumerate(current)]
+        current = [(x * x + i + 1) % modulus for i, x in enumerate(current)]
     return bundle, [str(v) for v in initial + final], [str(v) for v in trace]
 
 

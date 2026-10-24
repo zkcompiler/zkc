@@ -4,8 +4,8 @@ use crate::field::{Error, Result};
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 
-/// A checked exact radix-two coset. The upstream domain has public fields;
-/// this wrapper admits construction and exposes only immutable provider access.
+/// A checked exact radix-two coset. Numerical methods use the supplied CPU
+/// context; upstream scheduling and mutable domain fields stay private.
 #[derive(Clone, Copy, Debug)]
 pub struct Domain(Radix2EvaluationDomain<F>);
 impl Domain {
@@ -18,12 +18,48 @@ impl Domain {
             .get_coset(shift)
             .map(Self)
     }
-}
-impl std::ops::Deref for Domain {
-    type Target = Radix2EvaluationDomain<F>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+
+    pub fn size(&self) -> usize {
+        self.0.size()
     }
+
+    pub fn generator(&self) -> F {
+        self.0.group_gen
+    }
+
+    pub fn generator_inverse(&self) -> F {
+        self.0.group_gen_inv
+    }
+
+    pub fn shift_inverse(&self) -> F {
+        self.0.offset_inv
+    }
+
+    pub fn element(&self, index: usize) -> F {
+        self.0.element(index)
+    }
+
+    pub fn elements(&self) -> impl Iterator<Item = F> {
+        self.0.elements()
+    }
+
+    pub fn evaluate_vanishing_polynomial(&self, point: F) -> F {
+        self.0.evaluate_vanishing_polynomial(point)
+    }
+
+    pub fn fft_in_place(&self, values: &mut Vec<F>) {
+        crate::cpu::install(|| self.0.fft_in_place(values));
+    }
+
+    pub fn ifft_in_place(&self, values: &mut Vec<F>) {
+        crate::cpu::install(|| self.0.ifft_in_place(values));
+    }
+}
+
+/// Invert nonzero elements using the supplied CPU context. Zero entries retain
+/// Arkworks' zero-preserving semantics; provider scratch remains provider-owned.
+pub fn batch_inverse_in_place(values: &mut [F]) {
+    crate::cpu::install(|| ark_ff::batch_inversion(values));
 }
 
 /// Invalid batch or workspace extents, or nonzero discarded coefficients.
@@ -112,16 +148,19 @@ impl<'a> CoefficientBatch<'a> {
         if domain.size() != self.output_size || scratch.capacity() < self.output_size {
             return Err(BatchError::BatchShape);
         }
-        scratch.resize(self.output_size, F::zero());
         let count = self.height.min(self.output_size);
-        for (column, result) in destination.chunks_exact_mut(self.output_size).enumerate() {
-            scratch.fill(F::zero());
-            let begin = column * self.height;
-            scratch[..count].copy_from_slice(&self.coefficients[begin..begin + count]);
-            domain.fft_in_place(scratch);
-            result.copy_from_slice(scratch);
-        }
-        Ok(())
+        crate::cpu::install(|| {
+            for (column, result) in destination.chunks_exact_mut(self.output_size).enumerate() {
+                let begin = column * self.height;
+                // Preserve the checked prefix length for Arkworks' degree-aware
+                // FFT. It supplies zero padding within the admitted capacity.
+                scratch.clear();
+                scratch.extend_from_slice(&self.coefficients[begin..begin + count]);
+                domain.0.fft_in_place(scratch);
+                result.copy_from_slice(scratch);
+            }
+            Ok(())
+        })
     }
 }
 
@@ -156,24 +195,30 @@ pub fn coset_extend_into(
     if scratch.capacity() < input.size().max(output.size()) {
         return Err(BatchError::BatchShape);
     }
-    for (column, result) in values
-        .chunks_exact(input.size())
-        .zip(destination.chunks_exact_mut(output.size()))
-    {
-        scratch.clear();
-        scratch.extend_from_slice(column);
-        input.ifft_in_place(scratch);
-        if scratch
-            .get(output.size()..)
-            .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
+    crate::cpu::install(|| {
+        for (column, result) in values
+            .chunks_exact(input.size())
+            .zip(destination.chunks_exact_mut(output.size()))
         {
-            return Err(BatchError::CoefficientCount);
+            scratch.clear();
+            scratch.extend_from_slice(column);
+            input.0.ifft_in_place(scratch);
+            if scratch
+                .get(output.size()..)
+                .is_some_and(|tail| tail.iter().any(|c| !c.is_zero()))
+            {
+                return Err(BatchError::CoefficientCount);
+            }
+            // Retain the interpolated coefficient prefix when growing. The
+            // provider selects its degree-aware FFT and supplies zero padding
+            // within the already admitted reusable capacity. Shrinkage still
+            // discards only the zero tail checked above.
+            scratch.truncate(output.size());
+            output.0.fft_in_place(scratch);
+            result.copy_from_slice(scratch);
         }
-        scratch.resize(output.size(), F::zero());
-        output.fft_in_place(scratch);
-        result.copy_from_slice(scratch);
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Serial Montgomery inversion with explicitly supplied prefix storage. Unlike
@@ -226,8 +271,8 @@ pub fn coset_evaluate_at_into(
     }
     ark_ff::serial_batch_inversion_and_mul(weights, &F::one());
     let scale = domain.evaluate_vanishing_polynomial(point)
-        * domain.size_inv
-        * domain.offset_inv.pow([domain.size() as u64]);
+        * domain.0.size_inv
+        * domain.0.offset_inv.pow([domain.size() as u64]);
     for (inverse, x) in weights.iter_mut().zip(domain.elements()) {
         *inverse *= scale * x;
     }
@@ -244,6 +289,43 @@ pub fn coset_evaluate_at_into(
 mod tests {
     use super::*;
 
+    #[test]
+    fn single_transforms_and_zero_preserving_inversion_share_the_supplied_owner() {
+        for workers in [1, 4] {
+            let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
+            cpu.enter(|| {
+                for size in [1, 2, 32, 1024] {
+                    let domain = Domain::new(size, F::from(7)).unwrap();
+                    let coefficients = vec![F::from(3); size.min(2)];
+                    let expected = evaluations(&coefficients, domain);
+                    let mut values = coefficients.clone();
+                    domain.fft_in_place(&mut values);
+                    assert_eq!(values, expected);
+                    domain.ifft_in_place(&mut values);
+                    assert_eq!(&values[..coefficients.len()], coefficients);
+                    assert!(values[coefficients.len()..].iter().all(Zero::is_zero));
+                }
+                for original in [
+                    vec![],
+                    vec![F::zero()],
+                    vec![F::from(3), F::zero(), F::from(5)],
+                ] {
+                    let mut inverses = original.clone();
+                    batch_inverse_in_place(&mut inverses);
+                    for (value, inverse) in original.iter().zip(inverses) {
+                        assert_eq!(
+                            *value * inverse,
+                            if value.is_zero() { F::zero() } else { F::one() }
+                        );
+                        if value.is_zero() {
+                            assert!(inverse.is_zero());
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     fn horner(coefficients: &[F], point: F) -> F {
         coefficients
             .iter()
@@ -258,7 +340,20 @@ mod tests {
     #[test]
     fn coefficient_batches_match_horner_without_reallocating_scratch() {
         for width in [1, 3, 16] {
-            for (height, size) in [(0, 1), (0, 8), (1, 1), (1, 8), (3, 8), (8, 8), (5, 2)] {
+            for (height, size) in [
+                (0, 1),
+                (0, 8),
+                (1, 1),
+                (1, 8),
+                (3, 8),
+                (8, 8),
+                (5, 2),
+                (15, 64),
+                (16, 64),
+                (17, 64),
+                (64, 64),
+                (67, 64),
+            ] {
                 let domain = Domain::new(size, F::from(7)).unwrap();
                 let mut coefficients = Vec::new();
                 let mut expected = Vec::new();
@@ -278,7 +373,13 @@ mod tests {
                 let original = coefficients.clone();
                 let batch =
                     CoefficientBatch::new(&coefficients, width, height, domain.size()).unwrap();
-                for (capacity, initial_len) in [(size, 0), (size, size), (size + 3, size + 3)] {
+                for (capacity, initial_len) in [
+                    (size, 0),
+                    (size, 1),
+                    (size, size - 1),
+                    (size, size),
+                    (size + 3, size + 3),
+                ] {
                     let mut scratch = Vec::with_capacity(capacity);
                     scratch.resize(initial_len, F::from(97));
                     let pointer = scratch.as_ptr();
@@ -301,65 +402,120 @@ mod tests {
     }
 
     #[test]
-    fn extension_interpolates_horner_values_without_reallocating_scratch() {
-        for width in [1, 3, 16] {
-            for (height, size) in [
-                (1, 1),
-                (1, 8),
-                (4, 1),
-                (4, 2),
-                (4, 8),
-                (8, 4),
-                (8, 8),
-                (8, 16),
-            ] {
-                let input = Domain::new(height, F::from(7)).unwrap();
-                let output = Domain::new(size, F::from(11)).unwrap();
-                let mut values = Vec::new();
-                let mut expected = Vec::new();
-                for column in 0..width {
-                    let count = if column == 0 && width > 1 {
-                        0
-                    } else {
-                        (column + height.min(size)) % (height.min(size) + 1)
-                    };
-                    let coefficients: Vec<_> = (0..count)
-                        .map(|row| F::from((17 * column + 5 * row + 1) as u64))
-                        .collect();
-                    values.extend(evaluations(&coefficients, input));
-                    expected.extend(evaluations(&coefficients, output));
-                }
-                let original = values.clone();
-                let workspace = height.max(size);
-                for (capacity, initial_len) in [
-                    (workspace, 0),
-                    (workspace, workspace),
-                    (workspace + 3, workspace + 3),
-                ] {
-                    let mut scratch = Vec::with_capacity(capacity);
-                    scratch.resize(initial_len, F::from(97));
+    fn coefficient_batches_reuse_dirty_scratch_across_prefix_lengths_and_cpu_owners() {
+        for workers in [1, 4] {
+            let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
+            cpu.enter(|| {
+                for shift in [F::one(), F::from(7)] {
+                    let domain = Domain::new(64, shift).unwrap();
+                    let mut scratch = vec![F::from(97); 67];
                     let pointer = scratch.as_ptr();
                     let capacity = scratch.capacity();
-                    let mut destination = vec![F::from(101); width * size];
-                    for _ in 0..2 {
-                        coset_extend_into(
-                            &values,
-                            width,
-                            input,
-                            output,
-                            &mut scratch,
-                            &mut destination,
-                        )
-                        .unwrap();
-                        assert_eq!(destination, expected);
-                        assert_eq!(scratch.len(), size);
+                    // Alternate dense, short, empty and shrinking inputs using
+                    // the same scratch allocation and previous FFT contents.
+                    for height in [64, 16, 0, 17, 1, 15, 67] {
+                        let coefficients: Vec<_> = (0..3)
+                            .flat_map(|column| {
+                                (0..height).map(move |row| {
+                                    if row >= domain.size() || column == 1 {
+                                        F::zero()
+                                    } else {
+                                        F::from((column * height + row + 1) as u64)
+                                    }
+                                })
+                            })
+                            .collect();
+                        let expected: Vec<_> = (0..3)
+                            .flat_map(|column| {
+                                evaluations(
+                                    &coefficients[column * height..(column + 1) * height],
+                                    domain,
+                                )
+                            })
+                            .collect();
+                        let batch = CoefficientBatch::new(&coefficients, 3, height, 64).unwrap();
+                        let mut destination = vec![F::from(101); 3 * 64];
+                        batch
+                            .write_into(domain, &mut scratch, &mut destination)
+                            .unwrap();
+                        assert_eq!(destination, expected, "workers={workers}, height={height}");
+                        assert_eq!(scratch, expected[2 * 64..]);
+                        assert_eq!(scratch.len(), 64);
                         assert_eq!(scratch.capacity(), capacity);
                         assert_eq!(scratch.as_ptr(), pointer);
-                        assert_eq!(values, original);
-                        destination.fill(F::from(101));
                     }
                 }
-            }
+            });
+        }
+    }
+
+    #[test]
+    fn extension_interpolates_horner_values_without_reallocating_scratch() {
+        for workers in [1, 4] {
+            let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
+            cpu.enter(|| {
+                for width in [1, 3, 16] {
+                    for (height, size) in [
+                        (1, 1),
+                        (1, 8),
+                        (4, 1),
+                        (4, 2),
+                        (4, 8),
+                        (4, 16),
+                        (4, 32),
+                        (8, 4),
+                        (8, 8),
+                        (8, 16),
+                    ] {
+                        let input = Domain::new(height, F::from(7)).unwrap();
+                        let output = Domain::new(size, F::from(11)).unwrap();
+                        let mut values = Vec::new();
+                        let mut expected = Vec::new();
+                        for column in 0..width {
+                            let count = if column == 0 && width > 1 {
+                                0
+                            } else {
+                                (column + height.min(size)) % (height.min(size) + 1)
+                            };
+                            let coefficients: Vec<_> = (0..count)
+                                .map(|row| F::from((17 * column + 5 * row + 1) as u64))
+                                .collect();
+                            values.extend(evaluations(&coefficients, input));
+                            expected.extend(evaluations(&coefficients, output));
+                        }
+                        let original = values.clone();
+                        let workspace = height.max(size);
+                        for (capacity, initial_len) in [
+                            (workspace, 0),
+                            (workspace, workspace),
+                            (workspace + 3, workspace + 3),
+                        ] {
+                            let mut scratch = Vec::with_capacity(capacity);
+                            scratch.resize(initial_len, F::from(97));
+                            let pointer = scratch.as_ptr();
+                            let capacity = scratch.capacity();
+                            let mut destination = vec![F::from(101); width * size];
+                            for _ in 0..2 {
+                                coset_extend_into(
+                                    &values,
+                                    width,
+                                    input,
+                                    output,
+                                    &mut scratch,
+                                    &mut destination,
+                                )
+                                .unwrap();
+                                assert_eq!(destination, expected);
+                                assert_eq!(scratch.len(), size);
+                                assert_eq!(scratch.capacity(), capacity);
+                                assert_eq!(scratch.as_ptr(), pointer);
+                                assert_eq!(values, original);
+                                destination.fill(F::from(101));
+                            }
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -409,22 +565,24 @@ mod tests {
                 Some(BatchError::BatchShape)
             );
         }
-        let coefficients = [F::one(); 6];
-        let batch = CoefficientBatch::new(&coefficients, 2, 3, domain.size()).unwrap();
-        for (capacity, output_len) in [(8, 0), (8, 15), (8, 17), (0, 16), (7, 16)] {
-            let mut scratch = vec![F::from(97); capacity];
-            let original = scratch.clone();
-            let pointer = scratch.as_ptr();
-            let capacity = scratch.capacity();
-            let mut destination = vec![F::from(101); output_len];
-            assert_eq!(
-                batch.write_into(domain, &mut scratch, &mut destination),
-                Err(BatchError::BatchShape)
-            );
-            assert_eq!(destination, vec![F::from(101); output_len]);
-            assert_eq!(scratch, original);
-            assert_eq!(scratch.capacity(), capacity);
-            assert_eq!(scratch.as_ptr(), pointer);
+        for height in [0, 3] {
+            let coefficients = vec![F::one(); 2 * height];
+            let batch = CoefficientBatch::new(&coefficients, 2, height, domain.size()).unwrap();
+            for (capacity, output_len) in [(8, 0), (8, 15), (8, 17), (0, 16), (7, 16)] {
+                let mut scratch = vec![F::from(97); capacity];
+                let original = scratch.clone();
+                let pointer = scratch.as_ptr();
+                let capacity = scratch.capacity();
+                let mut destination = vec![F::from(101); output_len];
+                assert_eq!(
+                    batch.write_into(domain, &mut scratch, &mut destination),
+                    Err(BatchError::BatchShape)
+                );
+                assert_eq!(destination, vec![F::from(101); output_len]);
+                assert_eq!(scratch, original);
+                assert_eq!(scratch.capacity(), capacity);
+                assert_eq!(scratch.as_ptr(), pointer);
+            }
         }
     }
 

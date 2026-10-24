@@ -135,6 +135,7 @@ fn binding(scheme: &str, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![scheme.into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn kernel_in(scheme: &str, name: &str, args: Vec<Value>) -> Result<Vec<Value>, String> {

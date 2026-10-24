@@ -32,7 +32,8 @@ and preflights every reachable reference, including untaken branches.
 All public slots and the selected table's groups and assertion results must
 have field `F`. Needed arena nodes may also use its base field through explicit
 embedding. This view does not promote base-field trace columns to extension
-values. The native provider supports KoalaBear, Ext4 and Ext8; the relation
+values. The native provider supports the
+[registered residue fields](values.md#registered-residue-fields); the relation
 carrier itself remains independent of that provider.
 
 Each vector concatenates groups of its authority in declaration order, with
@@ -119,7 +120,8 @@ which is then interpreted in the extension (`relation-table-index`,
 `relation-table-carrier`). An extension field is never narrowed, and outputs
 used only by interactions are not visited. The analysis admits any presented
 field; unlike the actual-row view of `relation.table_rows`, which keeps exact
-declared fields, it lets a KoalaBear table be analyzed in Ext8. A view records
+declared fields, it lets a registered prime-base table be analyzed in its
+registered extension. A view records
 the carrier and its base coordinates; each group keeps its declared field.
 
 Checks run in this order: the carrier admission, the parameter law, the
@@ -170,7 +172,8 @@ Like `relation.table_policy`, this metadata operation applies the whole-table
 carrier rule (`admitBundleTableCarrier`): the table index must exist, and all
 Bundle public slots, selected table groups and assertion/interaction output
 sub-DAGs must lift into `F` (`relation-table-index`, `relation-table-carrier`).
-The installed binding is `plonky3/relation.table_widths`, for KoalaBear or Ext8.
+The installed binding is `plonky3/relation.table_widths`, for registered residue
+carriers and their declared base lifts.
 The compiler and Host check the same reference rule independently. The C++ SDK
 exposes `bundleTableWidths`; the Rust SDK exposes `Bundle::table_widths`.
 
@@ -190,7 +193,7 @@ Five kernels expose a table's assertion arena and, at an actual present-table
 height, its polynomial profile to a source library that constructs its own
 polynomial protocol. Each has roots `<F, Table>` like
 `relation.table_rows`, the same Bundle asset parameter, and the installed
-KoalaBear or Ext8 provider. They derive facts from the admitted Bundle and
+registered residue-field provider. They derive facts from the admitted Bundle and
 substitute its existing arena. They select no domain shift, challenge,
 quotient combination, commitment or proof, and they check no interaction.
 
@@ -263,11 +266,11 @@ interior scope is `(0, 0)`; an empty interval keeps its start
 (`relation-table-point-shape`). It substitutes them through the shared ring
 substitution and returns the assertion outputs in assertion order, repeating
 an output that two assertions share. It applies no row mask, selector,
-vanishing polynomial or division, and it claims no satisfaction. Under an
-Ext8 carrier a KoalaBear table is interpreted in Ext8: inputs, constants and
-operations lift to the extension, substitution points may be any extension
-values and results keep every coordinate. An Ext8 table admits only its Ext8
-carrier; nothing is narrowed or coerced from another field.
+vanishing polynomial or division, and it claims no satisfaction. Under a
+registered extension carrier, its prime-base table is interpreted in that
+extension: inputs, constants and operations lift, substitution points may be
+any extension values and results keep every coordinate. An extension table
+admits only its exact extension carrier; no other family or extension coerces.
 
 `relation.table_points` applies the same substitution to `rows` assignments
 at once. Its first operand is row-major with one column per arena input; its
@@ -292,8 +295,8 @@ interaction records over the same arena inputs.
 When a body closes, the compiler checks the static table index and carrier
 admission, without selecting an execution height or requiring that one exists.
 Table failures report `source.asset-table`; carrier failures report
-`source.asset-carrier`. Only the installed KoalaBear and Ext8 providers
-implement these kernels. The Host independently checks the same premises once
+`source.asset-carrier`. The installed residue-field provider implements these
+kernels for each registered carrier and its declared base lifts. The Host independently checks the same premises once
 per referenced asset, table and carrier before execution, without allocating,
 including references in untaken branches. Height-taking kernels check the
 actual two-adic height, policy, windows and limits when reached. A fixed-height
@@ -325,7 +328,7 @@ evaluation domain may need several calls.
 
 Four kernels expose one table's declared height policy and its interaction
 records to a source library that builds its own reduction. They have the same
-roots `<F, Table>`, Bundle asset parameter and installed KoalaBear or Ext8
+roots `<F, Table>`, Bundle asset parameter and installed residue-field
 provider as the polynomial view. They report the Bundle's declarations and
 substitute its existing arena. They apply no scope, multiplicity range,
 balance, locality, challenge or reduction, and they decide neither presence
@@ -386,9 +389,9 @@ row holds, for each interaction in declaration order, its tuple outputs in
 tuple order and then its count or multiplicity output. An output used by
 several records, or twice in one tuple, is repeated. Rows, inputs and
 interactions may each be zero; a length other than `rows * inputs` is
-`relation-table-point-shape`. Under an Ext8 carrier, KoalaBear inputs,
-constants and operations lift exactly as for the point substitutions, and the
-results keep every coordinate.
+`relation-table-point-shape`. Under a registered extension carrier, its declared
+base inputs, constants and operations lift exactly as for the point substitutions,
+and the results keep every coordinate.
 
 A record value is only a substituted output. At a point outside the table's
 rows a multiplicity has no natural interpretation, and on a row it is still a
@@ -481,9 +484,10 @@ refused. The structural identity is SHA-256 of the canonical compact encoding.
 
 Fields must be installed. Public slots and groups additionally need an element
 encoding: a prime field element is one canonical decimal residue; an element of
-`koala-bear.ext8-binomial3` or `koala-bear.ext4-binomial3` is eight or four base
-residues in the ascending basis of its
-[presentation](values.md#nominal-field-extensions). An installed field without
+a registered degree-`d` binomial extension is exactly `d` base residues in the
+ascending basis of its [presentation](values.md#registered-residue-fields).
+Each coordinate is below its prime characteristic, including Goldilocks values
+above `2^63`; malformed decimal spellings and wrong coordinate counts refuse. An installed field without
 a residue presentation, such as a [binary field](values.md#binary-fields),
 refuses with `bundle-field-presentation`.
 

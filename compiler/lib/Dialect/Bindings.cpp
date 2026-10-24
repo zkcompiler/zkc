@@ -83,8 +83,16 @@ Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
     return {};
   if (t.representation.empty())
     return result;
-  return type_adapters::loadedType<zkc::plan::DataType>(ctx, result,
-                                                        t.representation);
+  SmallVector<Type> children;
+  if (t.physicalChildren)
+    for (const auto &child : *t.physicalChildren) {
+      auto decoded = decodeBoundType(ctx, child);
+      if (!decoded)
+        return {};
+      children.push_back(decoded);
+    }
+  return type_adapters::loadedType<zkc::plan::DataType>(
+      ctx, result, t.representation, children);
 }
 
 Expected<BoundType> encodeBoundType(Type type, bool physical) {
@@ -102,7 +110,18 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
   auto result = type_adapters::encodeLogicalType(type);
   if (!result)
     return result.takeError();
-  result->representation = std::move(rep);
+  if (physical) {
+    std::vector<BoundType> children;
+    for (auto child : cast<zkc::plan::DataType>(original).getChildren()) {
+      auto encoded = encodeBoundType(child, true);
+      if (!encoded)
+        return encoded.takeError();
+      children.push_back(std::move(*encoded));
+    }
+    result = physicalType(*result, rep, std::move(children));
+    if (!result)
+      return result.takeError();
+  }
   auto checked = parseBoundType(result->spelling(), physical);
   if (!checked)
     return checked.takeError();
@@ -138,6 +157,14 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
                                      {contract.getValue().str(),
                                       std::move(values),
                                       implementation.getValue().str()}};
+  if (auto parameters = declaration.getPhysicalArgumentsAttr()) {
+    for (auto parameter : parameters) {
+      auto value = dyn_cast<StringAttr>(parameter);
+      if (!value)
+        return error("binding-representation");
+      binding.application.physicalArguments.push_back(value.getValue().str());
+    }
+  }
   if (auto e =
           checkBindingDeclaration(binding.name, binding.application, physical))
     return e;

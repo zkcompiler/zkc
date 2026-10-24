@@ -250,7 +250,7 @@ impl<'a> MessageLayout<'a> {
                     |((site, schema, ty), (expected, logical))| {
                         site.as_str() != *expected
                             || schema.as_str() != *expected
-                            || ty.logical() != **logical
+                            || ty.logical() != *logical
                     },
                 )
             {

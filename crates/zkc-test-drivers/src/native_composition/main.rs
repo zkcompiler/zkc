@@ -127,7 +127,10 @@ fn qap(n: usize, change: &str) -> Vec<Value> {
     vec![
         Value::Sequence(
             Sequence::new(
-                LogicalType::parse("matrix:bn254.fr").unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    LogicalType::sequence(LogicalType::parse("matrix:bn254.fr").unwrap()).unwrap(),
+                )
+                .unwrap(),
                 matrices,
                 &Policy::default(),
             )

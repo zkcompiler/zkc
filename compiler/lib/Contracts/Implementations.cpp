@@ -2,7 +2,10 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Numerical.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/ResourceUnit.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -13,6 +16,29 @@ using namespace llvm;
 namespace zkc::protocol {
 namespace {
 using Compatibility = ImplementationDescriptor::Compatibility;
+using Family = ImplementationDescriptor::Family;
+
+// Closed dense family support. These exact tuples supply descriptor facts and
+// validate provider/layout agreement; implementation identities stay opaque.
+struct DenseLayoutRow {
+  Family family;
+  StringRef provider, domain, container, vector;
+};
+const DenseLayoutRow denseLayouts[] = {
+    {Family::FieldArray, "arkworks", "bls12-381.fr", "arkworks.field-array/0",
+     "arkworks.fr-vector/0"},
+    {Family::FieldArray, "blst", "bls12-381.fr", "blst/field-array", "blst/fr"},
+    {Family::FixedVector, "blst", "bls12-381.fr", "blst/fixed-vector",
+     "blst/fr"},
+    {Family::FixedVector, "plonky3", "koala-bear", "plonky3.fixed-vector/0",
+     "plonky3.koala-bear-vector/0"}};
+
+const DenseLayoutRow *denseLayoutRow(const ImplementationDescriptor &entry) {
+  auto row = find_if(denseLayouts, [&](const auto &row) {
+    return row.family == entry.family && row.provider == entry.provider;
+  });
+  return row == std::end(denseLayouts) ? nullptr : row;
+}
 
 // Applicability is deliberately independent of DefaultProvider in Domains.
 // Changing a preference cannot grant a backend a new nominal domain.
@@ -24,6 +50,12 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bls12-381.g1"},
     {"arkworks", "bls12-381.g2"},
     {"arkworks", "bls12-381.gt"},
+    {"halo2curves-axiom", "bn254.fr"},
+    {"halo2curves-axiom", "bn254.g1"},
+    {"halo2curves-axiom", "bn254.g2"},
+    {"blst", "bls12-381.fr"},
+    {"blst", "bls12-381.g1"},
+    {"blst", "bls12-381.g2"},
     {"arkworks", "bn254.fr"},
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
@@ -35,29 +67,28 @@ constexpr ProviderDomain providerDomains[] = {
     {"dalek", "ristretto255.group"},
     {"dalek", "edwards25519.prime"},
     {"dalek", "merlin3.ristretto255.scalar64le/0"},
-    {"plonky3", "koala-bear"},
-    {"plonky3", "koala-bear.ext8-binomial3"},
-    {"plonky3", "koala-bear.ext4-binomial3"},
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
+    {"plonky3", "merlin3.baby-bear.ext4-binomial11.rejection31le/0"},
+    {"plonky3", "merlin3.goldilocks.ext2-binomial7.rejection64le/0"},
     {"plonky3",
      "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.baby-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0"},
+    {"plonky3", "rows.merkle-poseidon2-8.goldilocks/0"},
+    {"plonky3", "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0"},
+
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
     {"plonky3", "gf2-64.pentanomial-4-3-1"},
     {"plonky3", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"},
     {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
 
-// One provider can serve fields with different presentations. Rows whose
-// kernels read integer residue coordinates name the KoalaBear family, so the
-// binary fields under the same provider do not inherit them
-// (docs/spec/realization/external-constructions.md).
-constexpr StringRef koalaFamily[] = {"koala-bear", "koala-bear.ext8-binomial3",
-                                     "koala-bear.ext4-binomial3"};
-constexpr StringRef littleEndianFields[] = {
-    "koala-bear", "koala-bear.ext8-binomial3", "koala-bear.ext4-binomial3",
-    "gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"};
+// Residue arithmetic, canonical bytes and Montgomery words have distinct
+// applicability. Binary fields share canonical little-endian byte operations
+// but cannot inherit residue arithmetic; Goldilocks has no Montgomery32 form.
+enum class FieldSet { None, Residue, LittleEndian, Montgomery32 };
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -75,26 +106,25 @@ struct ContractRow {
   unsigned providers;
   Compatibility compatibility = Compatibility::Nominal;
   StringRef domain = {};
-  // Several domain restrictions of one row, as if listed one per row.
-  ArrayRef<StringRef> domains = {};
+  FieldSet fields = FieldSet::None;
 };
 constexpr auto Nominal = Compatibility::Nominal;
 constexpr ContractRow contractRows[] = {
-    {"ring.point", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.rows", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.coefficients", Plonky3, Nominal, {}, koalaFamily},
-    {"ring.affine_sum", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_rows", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_shape", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_input", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_scope", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_point", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_points", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_widths", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_policy", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_interactions", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_interaction", Plonky3, Nominal, {}, koalaFamily},
-    {"relation.table_record_points", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.point", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.rows", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.coefficients", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"ring.affine_sum", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_rows", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_shape", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_input", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_scope", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_point", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_points", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_widths", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_policy", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_interactions", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_interaction", Plonky3, Nominal, {}, FieldSet::Residue},
+    {"relation.table_record_points", Plonky3, Nominal, {}, FieldSet::Residue},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},
@@ -147,16 +177,32 @@ constexpr ContractRow contractRows[] = {
      "edwards25519.prime"},
     {"encoding.cryptonote_map", Dalek, Compatibility::Nominal,
      "edwards25519.prime"},
-    // KoalaBear and its installed extensions: four-byte words per coordinate.
+    // Registered residue fields: four- or eight-byte words per coordinate.
     // Binary fields: little-endian bit patterns, with no Montgomery form.
-    {"encoding.field_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.field_from_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.fields_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.fields_from_le", Plonky3, Nominal, {}, littleEndianFields},
-    {"encoding.field_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.field_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.fields_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
-    {"encoding.fields_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.field_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.field_from_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.fields_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.fields_from_le", Plonky3, Nominal, {}, FieldSet::LittleEndian},
+    {"encoding.field_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.field_from_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.fields_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
+    {"encoding.fields_from_montgomery_le",
+     Plonky3,
+     Nominal,
+     {},
+     FieldSet::Montgomery32},
     {"hash.keccak256", Native, Compatibility::Independent},
     {"hash.sha256", Native, Compatibility::Independent},
     {"hash.poseidon2_16", Plonky3, Compatibility::Nominal, "koala-bear"},
@@ -325,7 +371,7 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
-    // Only the octic suites grant IndexTranscript.
+    // Only explicitly installed sampling suites grant IndexTranscript.
     {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
@@ -350,6 +396,8 @@ bool knownProvider(StringRef provider) {
 } // namespace
 
 bool implementationProviderSupports(StringRef provider, StringRef domain) {
+  if (provider == "plonky3" && plonky3Field(domain))
+    return true;
   return any_of(providerDomains, [&](const auto &row) {
     return row.provider == provider && row.domain == domain;
   });
@@ -375,13 +423,58 @@ Expected<ImplementationCatalog> ImplementationCatalog::create(
       return error("implementation-catalog-entry");
     if (auto e = checkImplementationScope(entry, logical->signature.scope))
       return e;
-    std::set<std::tuple<std::string, std::optional<unsigned>, bool>> overrides;
+    if (entry.family == Family::FieldArray ||
+        entry.family == Family::FixedVector) {
+      const auto *row = denseLayoutRow(entry);
+      if (!row || !entry.denseLayout ||
+          entry.denseLayout->container != row->container ||
+          entry.denseLayout->vector != row->vector ||
+          entry.domains != std::vector<std::string>{row->domain.str()})
+        return error("implementation-catalog-representation");
+      auto vector = installedDomains().representation(
+          "vector", row->domain, entry.denseLayout->vector);
+      if (!vector)
+        return error("implementation-catalog-representation");
+      StringRef kind =
+          entry.family == Family::FieldArray ? "field_array" : "fixed_vector";
+      std::string argument = entry.family == Family::FieldArray
+                                 ? row->domain.str()
+                                 : ("field:" + row->domain).str();
+      for (StringRef size : {"0", "1048576"}) {
+        auto type = applyBoundType(kind, {argument, size.str()});
+        if (!type)
+          return type.takeError();
+        const auto *representation =
+            appliedTypeRepresentation(*type, entry.denseLayout->container);
+        if (!representation)
+          return error("implementation-catalog-representation");
+      }
+    } else if (entry.denseLayout) {
+      return error("implementation-catalog-representation");
+    }
+    if (entry.family != ImplementationDescriptor::Family::Exact) {
+      StringRef prefix =
+          entry.family == ImplementationDescriptor::Family::Sequence
+              ? "sequence."
+          : entry.family == ImplementationDescriptor::Family::FieldArray
+              ? "field_array."
+              : "fixed_vector.";
+      bool applicable =
+          entry.family == ImplementationDescriptor::Family::Observation
+              ? entry.contract == "transcript.native.indexed.observe.data"
+              : StringRef(entry.contract).starts_with(prefix);
+      if (!applicable || !entry.representations.empty())
+        return error("implementation-catalog-entry");
+    }
+    std::set<
+        std::tuple<std::string, std::string, std::optional<unsigned>, bool>>
+        overrides;
     for (const auto &rep : entry.representations) {
       if (!installedDomains().representation(rep.kind, rep.domain,
                                              rep.identity))
         return error("implementation-catalog-representation");
       if (!implementationProviderSupports(entry.provider, rep.domain) ||
-          !overrides.emplace(rep.kind, rep.port, rep.output).second)
+          !overrides.emplace(rep.kind, rep.domain, rep.port, rep.output).second)
         return error("implementation-catalog-representation");
       if (rep.port) {
         const auto &ports =
@@ -571,11 +664,192 @@ Error applyImplementationRepresentations(const ImplementationDescriptor &entry,
     } else {
       for (auto *ports : {&operation.inputs, &operation.outputs})
         for (auto &port : *ports)
-          if (port.kind == rep.kind)
+          if (port.kind == rep.kind && port.identity == rep.domain)
             if (auto e = replace(port))
               return e;
     }
   }
+  return Error::success();
+}
+
+Expected<std::vector<std::string>>
+defaultPhysicalArguments(const BindingApplication &binding) {
+  auto descriptor =
+      installedImplementations().find(binding.contract, binding.implementation);
+  if (!descriptor ||
+      descriptor->family == ImplementationDescriptor::Family::Exact)
+    return std::vector<std::string>{};
+  auto logical = resolveLogicalBinding(binding);
+  if (!logical)
+    return logical.takeError();
+  if (descriptor->family == ImplementationDescriptor::Family::Observation) {
+    auto payload =
+        operationContracts(binding.contract)->observation->payloadInput;
+    auto selected = defaultRepresentation(logical->inputs[payload]);
+    if (!selected)
+      return selected.takeError();
+    return std::vector<std::string>{selected->spelling()};
+  }
+  StringRef kind =
+      descriptor->family == ImplementationDescriptor::Family::Sequence
+          ? "sequence"
+      : descriptor->family == ImplementationDescriptor::Family::FieldArray
+          ? "field_array"
+          : "fixed_vector";
+  const BoundType *container = nullptr;
+  for (const auto *ports : {&logical->inputs, &logical->outputs})
+    for (const auto &port : *ports)
+      if (!container && port.kind == kind)
+        container = &port;
+  if (!container)
+    return error("binding-representation");
+  auto physical = [&]() -> Expected<BoundType> {
+    if (!descriptor->denseLayout)
+      return defaultRepresentation(*container);
+    // Select this implementation's layout explicitly. Admission of omitted
+    // physical arguments below still requests the independent logical default.
+    const auto *representation = appliedTypeRepresentation(
+        *container, descriptor->denseLayout->container);
+    if (!representation)
+      return error("binding-representation");
+    auto child = parseBoundType(representation->childType, true);
+    if (!child)
+      return child.takeError();
+    return physicalType(*container, representation->representation, {*child});
+  }();
+  if (!physical)
+    return physical.takeError();
+  return std::vector<std::string>{physical->spelling()};
+}
+
+Error applyImplementationFamily(const ImplementationDescriptor &entry,
+                                const BindingApplication &binding,
+                                BoundOperation &operation) {
+  using Family = ImplementationDescriptor::Family;
+  if (entry.family == Family::Observation) {
+    if (binding.physicalArguments.size() > 1)
+      return error("binding-representation");
+    auto payload =
+        operationContracts(binding.contract)->observation->payloadInput;
+    auto selected =
+        binding.physicalArguments.empty()
+            ? defaultRepresentation(operation.inputs[payload])
+            : parseBoundType(binding.physicalArguments.front(), true);
+    if (!selected)
+      return selected.takeError();
+    if (!(erasePhysicalType(*selected) == operation.inputs[payload]))
+      return error("binding-representation");
+    if (!nativeMessageData(*selected))
+      return error("native-proof-wire-type");
+    for (auto *ports : {&operation.inputs, &operation.outputs})
+      for (auto [index, port] : enumerate(*ports)) {
+        if (ports == &operation.inputs && index == payload) {
+          port = *selected;
+          continue;
+        }
+        auto physical = defaultRepresentation(port);
+        if (!physical)
+          return physical.takeError();
+        port = std::move(*physical);
+      }
+    return Error::success();
+  }
+  if (entry.family == Family::Exact) {
+    if (!binding.physicalArguments.empty())
+      return error("binding-representation");
+    for (auto *ports : {&operation.inputs, &operation.outputs})
+      for (auto &port : *ports) {
+        auto physical = defaultRepresentation(port);
+        if (!physical)
+          return physical.takeError();
+        port = std::move(*physical);
+      }
+    return applyImplementationRepresentations(entry, operation);
+  }
+  Expected<std::vector<std::string>> parameters = binding.physicalArguments;
+  if (binding.physicalArguments.empty()) {
+    // Empty parameters mean the one installed default layout, independently
+    // of the selected implementation's storage. No provider fallback.
+    StringRef kind = entry.family == Family::Sequence     ? "sequence"
+                     : entry.family == Family::FieldArray ? "field_array"
+                                                          : "fixed_vector";
+    const BoundType *container = nullptr;
+    for (const auto *ports : {&operation.inputs, &operation.outputs})
+      for (const auto &port : *ports)
+        if (!container && port.kind == kind)
+          container = &port;
+    if (!container)
+      return error("binding-representation");
+    auto selected = defaultRepresentation(*container);
+    if (!selected)
+      return selected.takeError();
+    parameters = std::vector<std::string>{selected->spelling()};
+  }
+  if (!parameters)
+    return parameters.takeError();
+  if (parameters->size() != 1)
+    return error("binding-representation");
+  auto selected = parseBoundType(parameters->front(), true);
+  if (!selected)
+    return selected.takeError();
+  StringRef kind = entry.family == Family::Sequence     ? "sequence"
+                   : entry.family == Family::FieldArray ? "field_array"
+                                                        : "fixed_vector";
+  if (selected->kind != kind || !selected->physicalChildren ||
+      selected->physicalChildren->size() != 1)
+    return error("binding-representation");
+  auto logical = erasePhysicalType(*selected);
+  // The first container port is the family's schema. A sequence element may
+  // itself be a sequence, with a different logical schema and child layout.
+  const BoundType *container = nullptr;
+  for (const auto *ports : {&operation.inputs, &operation.outputs})
+    for (const auto &port : *ports)
+      if (!container && port.kind == kind)
+        container = &port;
+  if (!container || !(*container == logical))
+    return error("binding-representation");
+  const auto &element = selected->physicalChildren->front();
+  if (entry.family != Family::Sequence) {
+    if (!entry.denseLayout ||
+        selected->representation != entry.denseLayout->container)
+      return error("binding-representation");
+  }
+  auto select = [&](BoundType &port, bool output, unsigned index) -> Error {
+    if (port == logical) {
+      port = *selected;
+      return Error::success();
+    }
+    bool elementPort =
+        entry.family == Family::Sequence
+            ? ((binding.contract == "sequence.append" && !output &&
+                index == 1) ||
+               (binding.contract == "sequence.at" && output && index == 0))
+            : port.kind == "field";
+    if (elementPort) {
+      if (!(port == erasePhysicalType(element)))
+        return error("binding-representation");
+      port = element;
+      return Error::success();
+    }
+    if (entry.family != Family::Sequence && port.kind == "vector") {
+      auto physical = physicalType(port, entry.denseLayout->vector, {});
+      if (!physical)
+        return physical.takeError();
+      port = std::move(*physical);
+      return Error::success();
+    }
+    auto physical = defaultRepresentation(port);
+    if (!physical)
+      return physical.takeError();
+    port = std::move(*physical);
+    return Error::success();
+  };
+  for (auto [i, port] : enumerate(operation.inputs))
+    if (auto e = select(port, false, i))
+      return e;
+  for (auto [i, port] : enumerate(operation.outputs))
+    if (auto e = select(port, true, i))
+      return e;
   return Error::success();
 }
 
@@ -620,14 +894,137 @@ const ImplementationCatalog &installedImplementations() {
         }
     };
     for (const auto &row : contractRows) {
-      if (!row.domain.empty() && !row.domains.empty())
-        report_fatal_error("ambiguous installed implementation row", false);
-      if (row.domains.empty())
+      if (row.fields == FieldSet::None) {
         install(row, row.domain);
-      for (StringRef domain : row.domains)
-        install(row, domain);
+        continue;
+      }
+      if (!row.domain.empty() || row.providers != Plonky3)
+        report_fatal_error("ambiguous installed implementation row", false);
+      for (const auto &field : plonky3Fields())
+        if (row.fields != FieldSet::Montgomery32 || field.montgomery32)
+          install(row, field.identity);
+      if (row.fields == FieldSet::LittleEndian)
+        for (StringRef field : {"gf2-64.pentanomial-4-3-1",
+                                "gf2-64.pentanomial-4-3-1.ext3-trinomial1"})
+          install(row, field);
+    }
+    // Explicit BN254 provider menu. These positive operation and physical-port
+    // inventories do not add a canonical default or a protocol-specific route.
+    for (StringRef contract : {"field.constant",    "field.from_index",
+                               "field.add",         "field.sub",
+                               "field.neg",         "field.mul",
+                               "field.inverse",     "field.equal",
+                               "vector.empty",      "vector.constant",
+                               "vector.splat",      "vector.append",
+                               "vector.at",         "vector.get",
+                               "vector.length",     "vector.length_check",
+                               "vector.add",        "vector.sub",
+                               "vector.mul",        "vector.dot",
+                               "vector.scale",      "vector.sum",
+                               "vector.product",    "vector.split",
+                               "vector.concat",     "vector.slice",
+                               "vector.equal",      "curve.generator",
+                               "curve.identity",    "curve.add",
+                               "curve.neg",         "curve.equal",
+                               "curve.nonidentity", "curve.scale",
+                               "curve.empty",       "curve.append",
+                               "curve.at",          "curve.get",
+                               "curve.length",      "curve.vector_add",
+                               "curve.scale_each",  "curve.vector_scale",
+                               "curve.split",       "curve.concat",
+                               "curve.msm",         "pairing.check"}) {
+      std::string implementation =
+          ("halo2curves-axiom/resident/" + contract).str();
+      entries.push_back(
+          {contract.str(),
+           implementation,
+           "halo2curves-axiom",
+           Compatibility::Nominal,
+           contract.starts_with("curve.")
+               ? std::vector<std::string>{"bn254.g1", "bn254.g2"}
+               : std::vector<std::string>{"bn254.fr"},
+           {{"field", "bn254.fr", "halo2curves-axiom/bn254.fr"},
+            {"vector", "bn254.fr", "halo2curves-axiom/bn254.fr"},
+            {"group", "bn254.g1", "halo2curves-axiom/bn254.g1"},
+            {"groups", "bn254.g1", "halo2curves-axiom/bn254.g1"},
+            {"group", "bn254.g2", "halo2curves-axiom/bn254.g2"},
+            {"groups", "bn254.g2", "halo2curves-axiom/bn254.g2"}}});
+      entries.back().requiresExplicitSelection = true;
+      preferences.push_back(
+          {contract.str(), "halo2curves-axiom", implementation});
     }
     // Algorithm and layout alternatives do not add a default preference.
+    // Resident alternatives have exact ports and deliberately no preference.
+    for (StringRef contract : {"field.constant",
+                               "field.from_index",
+                               "field.add",
+                               "field.sub",
+                               "field.neg",
+                               "field.mul",
+                               "field.inverse",
+                               "field.equal",
+                               "vector.empty",
+                               "vector.append",
+                               "vector.at",
+                               "vector.get",
+                               "vector.length",
+                               "vector.length_check",
+                               "vector.add",
+                               "vector.sub",
+                               "vector.mul",
+                               "vector.dot",
+                               "vector.scale",
+                               "vector.sum",
+                               "vector.product",
+                               "vector.split",
+                               "vector.concat",
+                               "vector.slice",
+                               "vector.equal",
+                               "vector.splat",
+                               "vector.powers",
+                               "vector.bit_reverse",
+                               "vector.bit_reverse_rows",
+                               "vector.constant",
+                               "vector.fill",
+                               "vector.find_last",
+                               "vector.gather",
+                               "vector.geometric",
+                               "vector.interleave",
+                               "vector.inverse",
+                               "vector.kronecker",
+                               "vector.matvec",
+                               "vector.prefix_product",
+                               "vector.prefix_sum",
+                               "vector.rotate",
+                               "vector.scatter_sum",
+                               "vector.transpose"})
+      entries.push_back({contract.str(),
+                         ("blst/resident/" + contract).str(),
+                         "blst",
+                         Compatibility::Nominal,
+                         {"bls12-381.fr"},
+                         {{"field", "bls12-381.fr", "blst/fr"},
+                          {"vector", "bls12-381.fr", "blst/fr"}}});
+    for (StringRef contract :
+         {"curve.generator", "curve.identity", "curve.add", "curve.neg",
+          "curve.equal", "curve.nonidentity", "curve.scale", "curve.empty",
+          "curve.append", "curve.at", "curve.get", "curve.length",
+          "curve.vector_add", "curve.scale_each", "curve.vector_scale",
+          "curve.split", "curve.concat", "curve.msm", "pairing.check"})
+      entries.push_back(
+          {contract.str(),
+           ("blst/resident/" + contract).str(),
+           "blst",
+           Compatibility::Nominal,
+           contract == "pairing.check"
+               ? std::vector<std::string>{"bls12-381.fr"}
+               : std::vector<std::string>{"bls12-381.g1", "bls12-381.g2"},
+           {{"field", "bls12-381.fr", "blst/fr"},
+            {"vector", "bls12-381.fr", "blst/fr"},
+            {"group", "bls12-381.g1", "blst/g1"},
+            {"groups", "bls12-381.g1", "blst/g1"},
+            {"group", "bls12-381.g2", "blst/g2"},
+            {"groups", "bls12-381.g2", "blst/g2"}}});
     entries.push_back({"vector.dot",
                        "arkworks-pairwise/vector.dot",
                        "arkworks",
@@ -672,6 +1069,29 @@ const ImplementationCatalog &installedImplementations() {
          Compatibility::Nominal,
          {"ristretto255.group"},
          {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/0", 1}}});
+    for (StringRef contract : {"field_array.from_vector", "field_array.at",
+                               "field_array.get", "fixed_vector.from_vector",
+                               "fixed_vector.to_vector", "fixed_vector.dot"})
+      entries.push_back({contract.str(),
+                         ("blst/resident/" + contract).str(),
+                         "blst",
+                         Compatibility::Nominal,
+                         {"bls12-381.fr"}});
+    for (auto &entry : entries) {
+      if (entry.contract == "curve.msm" && entry.provider == "blst")
+        entry.requiresExplicitSelection = true;
+      if (entry.contract == "transcript.native.indexed.observe.data")
+        entry.family = ImplementationDescriptor::Family::Observation;
+      if (StringRef(entry.contract).starts_with("sequence."))
+        entry.family = ImplementationDescriptor::Family::Sequence;
+      if (StringRef(entry.contract).starts_with("field_array."))
+        entry.family = ImplementationDescriptor::Family::FieldArray;
+      if (StringRef(entry.contract).starts_with("fixed_vector."))
+        entry.family = ImplementationDescriptor::Family::FixedVector;
+      if (const auto *row = denseLayoutRow(entry))
+        entry.denseLayout = ImplementationDescriptor::DenseLayout{
+            row->container.str(), row->vector.str()};
+    }
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));
     if (!result)

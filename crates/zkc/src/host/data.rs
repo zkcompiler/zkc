@@ -28,28 +28,58 @@ impl PreparedData {
     /// Decode once under an explicit capacity. This API does not import or
     /// authorize setup material; setup-dependent values require the setup owner.
     pub fn from_wire(ty: PhysicalType, wire: Vec<u8>, capacity: Capacity) -> Result<Self> {
-        let backend = codec(capacity)?;
+        Self::from_wire_with_cpu(
+            ty,
+            wire,
+            capacity,
+            crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
+        )
+    }
+    /// Decode using an application-owned context, retaining caller ordering.
+    pub fn from_wire_with_cpu(
+        ty: PhysicalType,
+        wire: Vec<u8>,
+        capacity: Capacity,
+        cpu: crate::execution::CpuExecution,
+    ) -> Result<Self> {
+        let backend = codec(capacity, cpu.clone())?;
         capacity.check_wire(wire.len())?;
         let mut admission = super::admission::Admission::new(capacity.loading())?;
         let id = admission.native_wire(&backend, ty.clone(), wire.as_slice(), None)?;
         admission.data(id, ty.kind())?;
-        let value = admission.load(&backend, &capacity.backend())?.remove(0);
+        let value = cpu
+            .enter(|| admission.load(&backend, &capacity.backend()))?
+            .remove(0);
         Self::retain(value, wire, capacity)
     }
     /// Freeze a native value and its canonical encoding. Use Native inputs
     /// directly when a private value should remain unencoded.
     /// Elements must satisfy their upstream library invariants, as for Native.
     pub fn from_value(value: Value, capacity: Capacity) -> Result<Self> {
-        let backend = codec(capacity)?;
+        Self::from_value_with_cpu(
+            value,
+            capacity,
+            crate::execution::CpuExecution::serial().map_err(|e| e.to_string())?,
+        )
+    }
+    /// Freeze a native value using an application-owned CPU context.
+    pub fn from_value_with_cpu(
+        value: Value,
+        capacity: Capacity,
+        cpu: crate::execution::CpuExecution,
+    ) -> Result<Self> {
+        let backend = codec(capacity, cpu.clone())?;
         let mut admission = super::admission::Admission::new(capacity.loading())?;
         let ty = value.physical_type();
         let input = super::request::InputValue::from(value);
         let id = admission.native_data(&backend, ty.clone(), &input, None)?;
         admission.data(id, ty.kind())?;
         admission.charge_encoding(id)?;
-        let value = admission.load(&backend, &capacity.backend())?.remove(0);
-        let wire = backend
-            .encode_native_value(&value)
+        let value = cpu
+            .enter(|| admission.load(&backend, &capacity.backend()))?
+            .remove(0);
+        let wire = cpu
+            .enter(|| backend.encode_native_value(&value))
             .map_err(|e| e.to_string())?;
         // The canonical pair must also fit the wire planner's estimate. This
         // checks the reuse invariant once at construction, before publication.
@@ -91,13 +121,14 @@ impl PreparedData {
         &self.0.value
     }
 }
-fn codec(capacity: Capacity) -> Result<NativeBackend> {
+fn codec(capacity: Capacity, cpu: crate::execution::CpuExecution) -> Result<NativeBackend> {
     capacity.validate()?;
     let policy = capacity.backend();
-    NativeBackend::new(
+    NativeBackend::new_with_cpu(
         policy,
         EntryPolicy::new(Domain::new("input", "preparation", "data", None), None),
         SetupRegistry::new(Vec::new(), &policy).map_err(|e| e.to_string())?,
+        cpu,
     )
     .map_err(|e| e.to_string())
 }
@@ -139,7 +170,8 @@ mod tests {
                 "native-capacity-wire"
             );
         }
-        let mut backend = codec(capacity).unwrap();
+        let mut backend =
+            codec(capacity, crate::execution::CpuExecution::serial().unwrap()).unwrap();
         let value = Value::Bool(true);
         let ty = value.physical_type();
         let wire = backend.encode_native_value(&value).unwrap();

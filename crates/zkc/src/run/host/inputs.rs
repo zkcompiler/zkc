@@ -69,7 +69,7 @@ impl SetupAuthority {
     }
 }
 fn needs_key(ty: &PhysicalType) -> bool {
-    ty.kind() == Type::VerifierKey || needs_input_setup(&ty.logical())
+    ty.kind() == Type::VerifierKey || needs_input_setup(ty.logical())
 }
 pub(super) fn kind(ty: &PhysicalType) -> &'static str {
     match ty.kind() {
@@ -343,7 +343,7 @@ pub(super) fn prepare<'a>(
     // The authorized registry retains even receive-only keys, independently
     // of whether an entry operand uses them. Charge that material once.
     for key in keys.values() {
-        admission.add(Input::Ready(Value::VerifierKey(key.clone())))?;
+        admission.add(Input::ready(Value::VerifierKey(key.clone())))?;
     }
     for (row, role) in request.roles.iter().zip(host.bundle.roles()) {
         let mut ports = BTreeMap::new();
@@ -362,7 +362,7 @@ pub(super) fn prepare<'a>(
                 );
             }
         }
-        let backend = NativeBackend::new(
+        let backend = NativeBackend::new_with_cpu(
             policy,
             EntryPolicy::new(
                 Domain::new(
@@ -375,6 +375,7 @@ pub(super) fn prepare<'a>(
             )
             .with_ports(ports),
             setups.clone(),
+            host.cpu.clone(),
         )
         .map_err(|e| e.to_string())?
         .with_ring_assets(host.ring_assets.clone())
@@ -412,9 +413,9 @@ pub(super) fn prepare<'a>(
                     if value.physical_type() != *ty {
                         return Err("bundle-input-type".into());
                     }
-                    admission.add(Input::Ready(value))?
+                    admission.add(Input::ready(value))?
                 }
-                InputValue::ProverKey(material) => admission.add(Input::Ready(
+                InputValue::ProverKey(material) => admission.add(Input::ready(
                     material.operand(ty, selected.ok_or("bundle-setup-input")?, &backend)?,
                 ))?,
                 InputValue::ProverKeyInput { file, fingerprint } => admission.add(Input::Key {

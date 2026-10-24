@@ -124,6 +124,42 @@ replace setup authority or child policies. `RunContext` defaults to a fresh
 OS-random session per reached call; explicit session freshness belongs to the
 application.
 
+## CPU execution
+
+Create `zkc::execution::CpuExecution::new(workers)?` with `1..=256` workers and
+pass it as the last argument to `admit_with_cpu` on `RunHost`,
+`NativeDeployment`, `RunEntry`, `ProofEntry` or `FunctionEntry`. For example:
+
+```rust,ignore
+let cpu = zkc::execution::CpuExecution::new(4)?;
+let host = zkc::entry::RunEntry::admit_with_cpu(package, limits, setups, cpu.clone())?;
+```
+
+Admission backends, input imports, numerical calculations, child deployments,
+participants, proof roles and retries share clones of that owner from
+construction onward. `ProofEntry::admit_operation_with_cpu` admits a selected
+proof operation. All five Hosts expose `cpu()` and `with_cpu` for rebinding an
+idle admitted Host; use `admit_with_cpu` when the context is known at construction
+to avoid creating an unused default pool. CPU ownership stays outside the
+copyable limit and option structs.
+
+Each default `admit` creates one fresh, explicitly owned one-worker pool before
+admission. Each independent `CpuExecution::serial()?` also creates a fresh pool;
+there is no process-global singleton. Clone a context to share one worker
+ceiling between independently admitted Hosts. `PreparedData` constructors and
+Entry result encoders also offer variants ending in `_with_cpu`;
+`FunctionResultEncoder::encode_with_cpu` and proof file results preserve sharing
+through serialization.
+
+`cpu.enter` supplies the context lexically while validation, imports, partial
+effects and VM control remain ordered on the calling thread. Kernel numerical
+phases select work for its pool. The worker count bounds only that context's
+numerical workers; caller threads, other contexts and foreign threads are
+outside the ceiling. Dropping the last clone requests Rayon worker shutdown;
+drop does not guarantee that worker threads have joined. CPU policy is separate
+from capacity, authority, invocation data and artifact identity. The SDK does
+not read Rayon environment variables to select its worker count.
+
 ## Proof authority and outcomes
 
 The verifier selects its trusted package, acceptance port, public inputs, context
@@ -131,6 +167,14 @@ and setup authority independently of candidate proof bytes and producer witness.
 `SetupAuthority::default()` authorizes no setup slots; setup-bearing deployments
 require independently pinned registry/key material. Generated types describe
 data shape and do not grant authority.
+
+Public data uses the complete physical types selected by the admitted Program,
+including inactive variant children. Producer and validator occurrences of a
+shared public source port must select the same physical type. Named and
+positional calls decode wire data into that selection and require Native and
+Prepared values to match it exactly; source constructor and custody checks still
+apply. Public binding uses the canonical native bytes for the logical value.
+This admission requires an installed native wire codec for the complete type.
 
 The default `BindingPolicy::TranscriptRequired` requires compiler-derived
 transcript binding. The example's `AllowAuthored` opts into the protocol author's
@@ -153,6 +197,19 @@ Changing the independent statement refuses with `proof-header`; it cannot be
 used to reinterpret a candidate. A source `Core::verify` call instead returns its
 source `Accepted` or `Rejected` variant when verification completes, so a
 `Rejected` value can be the successful result of the outer function.
+
+## Independently installed backends
+
+`entry::BackendRun` binds an authenticated run package to an explicit immutable
+`zkc_runtime::vm::Contracts` context and an independently installed
+`WireBackend`. It checks the source interface and logical participant ABI, then
+reuses the Runtime joint Host. Calls supply typed backend values in that ABI's
+order. Each executing backend is linked independently before frame entry.
+
+This small adapter supports data-only run packages. Setup assets, services and
+proof packages require their owning adapters and refuse here. Typed values do
+not bypass source constructor or custody restrictions. Native applications keep
+the named, schema-driven `RunEntry` and `FunctionEntry` APIs described above.
 
 ## Files and optional compiler service
 
@@ -201,7 +258,7 @@ of their returned package uses the same admission APIs as precompiled inputs.
 |---|---|
 | `project` | Source maps, manifests, compiler service and preparation plans |
 | `entry` | Package pins, named values, bindings and function/proof Hosts |
-| `execution` | Capacity, immutable prepared data and authenticated prover material |
+| `execution` | CPU contexts, capacity, immutable prepared data and authenticated prover material |
 | `run`, `proof` | Native deployments, setup/public authority and typed execution reports |
 
 The CLI owns argument grammar and command reports. Portable scheduling and

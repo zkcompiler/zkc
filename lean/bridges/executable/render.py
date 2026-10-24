@@ -196,10 +196,11 @@ def render(deployment, namespace):
     require(isinstance(body, list), "participant body")
     declared = {}
     for binding in bindings:
-        name, contract, arguments, implementation = record(binding, 4)
+        name, contract, arguments, implementation, physical_arguments = record(binding, 5)
         require(isinstance(name, str) and name not in declared, "duplicate binding")
         require(isinstance(contract, str) and isinstance(implementation, str)
                 and isinstance(arguments, list) and all(isinstance(a, str) for a in arguments), "binding shape")
+        require(physical_arguments == [], "physical binding specialization is outside the executable bridge")
         declared[name] = (name, contract, arguments, implementation)
     reached = called(body)
     selected_functions, used = [], set()

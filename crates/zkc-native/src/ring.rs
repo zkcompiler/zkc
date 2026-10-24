@@ -1,5 +1,4 @@
-//! Bulk substitution of admitted ring expressions over KoalaBear and its
-//! installed extensions.
+//! Bulk substitution of admitted ring expressions over registered residue fields.
 //! Assets are immutable Host configuration; a proof message cannot install one.
 use crate::{Policy, Result, Value, exhausted, refused};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing};
@@ -14,23 +13,11 @@ pub const DEFAULT_WORK_LIMIT: u64 = 1 << 28;
 pub const COEFFICIENT_DEGREE_LIMIT: u32 = 64;
 /// Canonical bytes plus decoded metadata admitted into one registry.
 pub const REGISTRY_BYTE_LIMIT: usize = 32 * 1024 * 1024;
-mod sealed {
+pub(crate) mod sealed {
     pub trait Sealed {}
-    impl Sealed for crate::KoalaBear {}
-    impl Sealed for crate::KoalaBearExt8 {}
-    impl Sealed for crate::KoalaBearExt4 {}
 }
-pub trait Carrier: Field + sealed::Sealed {
+pub trait Carrier: Field + zkc_kernels::plonky3::residue::Residue + sealed::Sealed {
     const IDENTITY: Identity;
-}
-impl Carrier for crate::KoalaBear {
-    const IDENTITY: Identity = Identity::KoalaBear;
-}
-impl Carrier for crate::KoalaBearExt8 {
-    const IDENTITY: Identity = Identity::KoalaBearExt8;
-}
-impl Carrier for crate::KoalaBearExt4 {
-    const IDENTITY: Identity = Identity::KoalaBearExt4;
 }
 
 /// The expected digest must come from the authorized program's closed reference.
@@ -137,7 +124,13 @@ fn checked_product(a: usize, b: usize) -> Result<usize> {
 fn field_compatible(expression: &Expression, carrier: Identity) -> Result<()> {
     if !matches!(
         carrier,
-        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        Identity::KoalaBear
+            | Identity::KoalaBearExt8
+            | Identity::KoalaBearExt4
+            | Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2
     ) {
         return Err(refused("ring-carrier"));
     }
@@ -163,7 +156,7 @@ fn scalar<S: PrimeCharacteristicRing>(
     values.clear();
     for node in expression.nodes() {
         let value = match node {
-            Node::Constant(_, n) => S::from_u32(n.parse().expect("admitted KoalaBear literal")),
+            Node::Constant(_, n) => S::from_u64(n.parse().expect("admitted residue literal")),
             Node::Input(i) => input(*i),
             Node::Add(a, b) => values[*a].clone() + values[*b].clone(),
             Node::Mul(a, b) => values[*a].clone() * values[*b].clone(),
@@ -358,7 +351,7 @@ impl CoefficientPlan {
             let dst = self.offsets[i];
             match node {
                 Node::Constant(_, n) => {
-                    values[dst] = S::from_u32(n.parse().expect("admitted KoalaBear literal"))
+                    values[dst] = S::from_u64(n.parse().expect("admitted residue literal"))
                 }
                 Node::Input(slot) => {
                     for d in 0..self.widths[i] {
@@ -554,6 +547,12 @@ pub(crate) fn apply(
         Some(Value::KoalaBearVector(_)) => dispatch!(KoalaBearVector, Identity::KoalaBear),
         Some(Value::KoalaBearExt8Vector(_)) => {
             dispatch!(KoalaBearExt8Vector, Identity::KoalaBearExt8)
+        }
+        Some(Value::BabyBearVector(_)) => dispatch!(BabyBearVector, Identity::BabyBear),
+        Some(Value::BabyBearExt4Vector(_)) => dispatch!(BabyBearExt4Vector, Identity::BabyBearExt4),
+        Some(Value::GoldilocksVector(_)) => dispatch!(GoldilocksVector, Identity::Goldilocks),
+        Some(Value::GoldilocksExt2Vector(_)) => {
+            dispatch!(GoldilocksExt2Vector, Identity::GoldilocksExt2)
         }
         Some(Value::KoalaBearExt4Vector(_)) => {
             dispatch!(KoalaBearExt4Vector, Identity::KoalaBearExt4)

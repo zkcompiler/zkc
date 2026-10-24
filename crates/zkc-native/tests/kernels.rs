@@ -240,7 +240,7 @@ fn opening_refuses_table_and_folded_scratch_at_admission() {
             &["y", "proof"],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&ark_backend(Some(2)))?;
                     Ok(program)
@@ -413,7 +413,7 @@ fn entry_shape_setup_and_public_correspondence_policy() {
             .arity(2)
             .verifier(keys.verifier_key().clone())
             .build();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&b)?;
                 Ok(program)
@@ -561,7 +561,7 @@ fn keys_must_match_entry_arity_and_opening_must_match_point() {
             .arity(2)
             .verifier(keys.verifier_key().clone())
             .build();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&b)?;
                 Ok(program)

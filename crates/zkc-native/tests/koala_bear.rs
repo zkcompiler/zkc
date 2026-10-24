@@ -16,6 +16,7 @@ fn binding(name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec!["koala-bear".into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn field(n: u32) -> Value {
@@ -78,8 +79,8 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
             ty.logical().codec().unwrap(),
             format!("zkcv.{}.koala-bear/0", kind.name())
         );
-        assert!(PhysicalType::new(ty.logical(), Representation::Fr).is_err());
-        assert!(PhysicalType::new(ty.logical(), Representation::DalekScalar).is_err());
+        assert!(PhysicalType::new(ty.logical().clone(), Representation::Fr).is_err());
+        assert!(PhysicalType::new(ty.logical().clone(), Representation::DalekScalar).is_err());
     }
     for kind in [
         Type::Rng,
@@ -255,7 +256,7 @@ fn scalar_arithmetic_matches_integer_modular_reference_and_zero_inverse_refuses(
             &["x".into()],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&backend(Policy::default()))?;
                     Ok(program)

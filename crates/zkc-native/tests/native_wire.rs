@@ -26,7 +26,15 @@ fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
     // A root leaf is allowed, but its count must survive when it becomes a
     // child of a complete nested message.
     let sequence = Value::Sequence(
-        zkc_native::Sequence::new(ty.logical(), vec![point], &Policy::default()).unwrap(),
+        zkc_native::Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(ty.logical().clone()).unwrap(),
+            )
+            .unwrap(),
+            vec![point],
+            &Policy::default(),
+        )
+        .unwrap(),
     );
     let nested = ordinary.encode_native_value(&sequence).unwrap();
     assert_eq!(
@@ -657,8 +665,15 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
             })
         );
         let sequence = Value::Sequence(
-            zkc_native::Sequence::new(ty.logical(), vec![value.clone(); 3], &Policy::default())
+            zkc_native::Sequence::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(ty.logical().clone()).unwrap(),
+                )
                 .unwrap(),
+                vec![value.clone(); 3],
+                &Policy::default(),
+            )
+            .unwrap(),
         );
         let nested = backend.encode_native_value(&sequence).unwrap();
         assert_eq!(

@@ -198,7 +198,7 @@ fn capacities_and_unpassed_resources_fail_closed_in_both_domains() {
             &sig.outputs,
             &["x".into(), "t".into()],
         );
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&b)?;
                 Ok(program)

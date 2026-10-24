@@ -27,14 +27,13 @@ pub(crate) fn install<B: Backend>(program: &Program, backend: &B) -> Result<Vec<
             }
         }
     }
-    use super::InstalledOperation;
     executable
         .bindings
         .iter()
         .map(|binding| {
             let actual = backend
                 .prepare_binding(binding.declaration())
-                .filter(|operation| operation.signature() == binding.signature());
+                .filter(|operation| compatible(program, binding, operation));
             actual.ok_or_else(|| {
                 err(
                     ErrorCode::Backend,
@@ -141,7 +140,7 @@ fn install_selected<'a, B: Backend>(
             }
             backend
                 .prepare_binding(binding.declaration())
-                .filter(|operation| operation.signature() == binding.signature())
+                .filter(|operation| compatible(program, binding, operation))
                 .map(Some)
                 .ok_or_else(|| {
                     err(
@@ -151,4 +150,20 @@ fn install_selected<'a, B: Backend>(
                 })
         })
         .collect()
+}
+
+fn compatible<O: InstalledOperation>(
+    program: &Program,
+    expected: &ResolvedBinding,
+    actual: &O,
+) -> bool {
+    // Never obtain the expected ports or premises from the backend advertisement.
+    actual.signature() == expected.signature()
+        && actual.implementation_id() == expected.implementation_id()
+        && actual.requirements() == expected.requirements()
+        && program.contracts().permits_implementation(
+            expected.declaration(),
+            actual.implementation_id(),
+            actual.requirements(),
+        )
 }

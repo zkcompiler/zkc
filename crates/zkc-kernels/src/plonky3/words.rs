@@ -1,12 +1,14 @@
-//! Four-byte little-endian words of KoalaBear coordinates.
+//! Canonical little-endian words of registered residue coordinates.
 //!
-//! A word is either the canonical residue `x` or the Montgomery residue
+//! Words use the registered base field's four- or eight-byte width. A word is
+//! either the canonical residue `x` or, for Montgomery32 bases, the residue
 //! `x * 2^32 mod p` that Plonky3's binary serializers write. Extension elements
 //! are their ascending power-basis coordinates, one word each. Decoding accepts
 //! only words below the modulus; it never reduces. See
 //! docs/spec/domains/values.md for the exchanged encodings.
+use super::residue::{PrimeWord, Residue};
 use super::{KoalaBear, MODULUS};
-use p3_field::{BasedVectorSpace, PrimeField32};
+use p3_field::{PrimeCharacteristicRing, PrimeField32};
 
 /// The residue that a word carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,48 +44,42 @@ pub fn decode_word(bytes: [u8; 4], form: Form) -> Option<KoalaBear> {
     })
 }
 
-/// Bytes of one element: four per coordinate.
-pub fn width<E: BasedVectorSpace<KoalaBear>>() -> usize {
-    4 * E::DIMENSION
+/// Bytes of one element, using its exact base-coordinate word width.
+pub fn width<E: Residue>() -> usize {
+    super::residue::width::<E>()
 }
 
-pub fn encode_into<E: BasedVectorSpace<KoalaBear>>(value: &E, form: Form, out: &mut Vec<u8>) {
-    for coordinate in value.as_basis_coefficients_slice() {
-        out.extend_from_slice(&encode_word(*coordinate, form));
+pub fn encode_into<E: Residue>(value: &E, form: Form, out: &mut Vec<u8>) {
+    let factor = match form {
+        Form::Canonical => E::Base::ONE,
+        Form::Montgomery => {
+            assert!(E::Base::MONTGOMERY_INVERSE.is_some());
+            E::Base::from_u64(1 << 32)
+        }
+    };
+    for c in value.as_basis_coefficients_slice() {
+        out.extend_from_slice(
+            &p3_field::PrimeField64::as_canonical_u64(&(*c * factor)).to_le_bytes()
+                [..E::Base::WORD_BYTES],
+        );
     }
 }
-
-/// Decode exactly one element; `None` for any other width or a word at or
-/// above the modulus.
-pub fn decode<E: BasedVectorSpace<KoalaBear>>(bytes: &[u8], form: Form) -> Option<E> {
-    if bytes.len() != width::<E>() {
-        return None;
-    }
-    let (words, _) = bytes.as_chunks::<4>();
-    let mut coordinates = [KoalaBear::new(0); 8];
-    let coordinates = coordinates.get_mut(..E::DIMENSION)?;
-    for (coordinate, word) in coordinates.iter_mut().zip(words) {
-        *coordinate = decode_word(*word, form)?;
-    }
-    E::from_basis_coefficients_slice(coordinates)
+pub fn decode<E: Residue>(bytes: &[u8], form: Form) -> Option<E> {
+    let value = super::residue::decode::<E>(bytes).ok()?;
+    Some(match form {
+        Form::Canonical => value,
+        Form::Montgomery => value * E::Base::MONTGOMERY_INVERSE?,
+    })
 }
-
-/// Whether every word of a whole number of elements is below the modulus.
-/// Validation precedes any allocation of decoded elements.
-pub fn valid_elements<E: BasedVectorSpace<KoalaBear>>(bytes: &[u8]) -> bool {
-    bytes.len().is_multiple_of(width::<E>())
-        && bytes
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|word| u32::from_le_bytes(*word) < MODULUS)
+pub fn valid_elements<E: Residue>(bytes: &[u8]) -> bool {
+    super::residue::valid_elements::<E>(bytes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::plonky3::KoalaBearExt8;
-    use p3_field::{Field, PrimeCharacteristicRing};
+    use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
 
     #[test]
     fn montgomery_constants_match_the_upstream_representation() {

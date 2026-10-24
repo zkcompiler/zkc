@@ -22,7 +22,7 @@ pub(super) fn ports(
         Selection::Default => (binding.implementation
             == format!("{provider}/{}", binding.contract))
         .then_some(PortTransform::Default),
-        // Exact primary identity is checked by registry dispatch before the
+        // Exact domain applicability is checked by registry dispatch before the
         // family resolver; the owner still validates domain applicability.
         Selection::Alternative { ports, .. } => Some(ports),
     }
@@ -31,6 +31,20 @@ pub(super) fn ports(
 // Independently authored here: do not import the runtime's literal refinement.
 fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
     match (field, rule) {
+        (
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+            AttributeRule::FieldDecimal,
+        ) => AttributeRule::ResidueLiteral(field),
+        (
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+            AttributeRule::FieldDecimals,
+        ) => AttributeRule::ResidueLiterals(field),
         (Identity::Ristretto255Scalar, AttributeRule::FieldDecimal) => {
             AttributeRule::RistrettoDecimal
         }
@@ -66,7 +80,7 @@ pub(super) fn materialize(
     let make = |kind| {
         let ty = make(kind)?;
         if matches!(ports, PortTransform::Msb) && kind == Type::Table {
-            PhysicalType::new(ty.logical(), Representation::TableMsb).ok()
+            PhysicalType::new(ty.logical().clone(), Representation::TableMsb).ok()
         } else {
             Some(ty)
         }
@@ -94,7 +108,7 @@ pub(super) fn materialize(
         } else {
             inputs.get_mut(port)?
         };
-        *port = PhysicalType::new(port.logical(), representation).ok()?;
+        *port = PhysicalType::new(port.logical().clone(), representation).ok()?;
     }
     Some(OperationSignature {
         inputs,

@@ -292,7 +292,14 @@ fn resolve(
             | "poly.opening_quotient_sum"
     ) && !matches!(
         field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        Identity::Bn254Fr
+            | Identity::KoalaBear
+            | Identity::KoalaBearExt8
+            | Identity::KoalaBearExt4
+            | Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2
     ) {
         return Err(support::failure());
     }
@@ -303,51 +310,59 @@ fn resolve(
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.product_sum",
         contract: "poly.product_sum",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.product_round",
         contract: "poly.product_round",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.boundary",
         contract: "poly.boundary",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.round_evaluate",
         contract: "poly.round_evaluate",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.fold",
         contract: "poly.fold",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.evaluate",
         contract: "poly.evaluate",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.empty_point",
         contract: "poly.empty_point",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "arkworks-msb/poly.append_point",
         contract: "poly.append_point",
-        primary: Identity::Bls12381Fr,
+        domains: &[Identity::Bls12381Fr],
         ports: PortTransform::Msb,
     },
 ];

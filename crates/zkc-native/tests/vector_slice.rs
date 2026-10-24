@@ -38,6 +38,7 @@ fn slice_checks_dynamic_bounds_and_preserves_every_installed_scalar_carrier() {
             contract: "vector.slice".into(),
             arguments: vec![nominal.into()],
             implementation: format!("{provider}/vector.slice"),
+            physical_arguments: vec![],
         };
         for (start, length) in [(0, 4), (1, 2), (4, 0), (0, 0)] {
             let out = one(

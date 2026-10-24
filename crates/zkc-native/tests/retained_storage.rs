@@ -43,7 +43,8 @@ fn row(name: &str, contract: &str, identity: Identity, provider: &str) -> Json {
         name,
         contract,
         [identity.name()],
-        format!("{provider}/{contract}")
+        format!("{provider}/{contract}"),
+        []
     ])
 }
 fn program(rows: Vec<Json>, functions: Vec<Json>, inputs: Json, body: Json) -> Vec<u8> {
@@ -81,7 +82,7 @@ fn run(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (Result<(), String>, Usage) {
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -149,7 +150,8 @@ fn alias_conversions(n: usize, unwrap: bool) -> Vec<u8> {
             name,
             contract,
             ["koala-bear", n.to_string()],
-            format!("plonky3/{contract}")
+            format!("plonky3/{contract}"),
+            []
         ])
     };
     program(
@@ -173,7 +175,11 @@ fn alias_conversions(n: usize, unwrap: bool) -> Vec<u8> {
 fn alias_kernels_accept_the_exact_live_and_fresh_boundary() {
     const N: usize = 1 << 16;
     // Two entry scalars, their local arguments, the vector and its descriptor.
-    let edge = 4 * INLINE + size(N, 4) + 1024;
+    let fixed_type = PhysicalType::default_for(
+        LogicalType::parse(&format!("fixed_vector<field:koala-bear,{N}>")).unwrap(),
+    )
+    .unwrap();
+    let edge = 4 * INLINE + size(N, 4) + 1024 + fixed_type.descriptor_bytes();
     for unwrap in [false, true] {
         let attempt = |values| {
             run(
@@ -216,7 +222,15 @@ fn nested_aliases_need_no_fresh_allowance_but_new_vectors_do() {
     let vector = Value::KoalaBearVector(vec![KoalaBear::new(7); n].into());
     let element = LogicalType::new(Type::Vector, Identity::KoalaBear).unwrap();
     let sequence = Value::Sequence(
-        zkc_native::Sequence::new(element.clone(), vec![vector], &Policy::default()).unwrap(),
+        zkc_native::Sequence::new(
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(element.clone()).unwrap(),
+            )
+            .unwrap(),
+            vec![vector],
+            &Policy::default(),
+        )
+        .unwrap(),
     );
     let mut controlled = support::Controlled::new(backend(n));
     controlled.output_limit = Some(0);
@@ -224,6 +238,7 @@ fn nested_aliases_need_no_fresh_allowance_but_new_vectors_do() {
         contract: "sequence.at".into(),
         arguments: vec![element.spelling()],
         implementation: "native/sequence.at".into(),
+        physical_arguments: vec![],
     };
     one(controlled, binding, &[], vec![sequence, Value::Index(0)])
         .0
@@ -232,6 +247,7 @@ fn nested_aliases_need_no_fresh_allowance_but_new_vectors_do() {
         contract: "vector.fill".into(),
         arguments: vec!["koala-bear".into()],
         implementation: "plonky3/vector.fill".into(),
+        physical_arguments: vec![],
     };
     for allowance in [size(n, 4) - 1, size(n, 4)] {
         let mut controlled = support::Controlled::new(backend(n));
@@ -712,6 +728,7 @@ fn row_check_preflights_claimed_height_times_width_without_allocation() {
                 contract: "oracle.commit".into(),
                 arguments: vec![domain.identity().name().into()],
                 implementation: "plonky3/oracle.commit".into(),
+                physical_arguments: vec![],
             },
             &[],
             vec![
@@ -732,6 +749,7 @@ fn row_check_preflights_claimed_height_times_width_without_allocation() {
                 contract: "oracle.open".into(),
                 arguments: vec![domain.identity().name().into()],
                 implementation: "plonky3/oracle.open".into(),
+                physical_arguments: vec![],
             },
             &[],
             vec![committed[1].clone(), Value::Index(0)],
@@ -745,6 +763,7 @@ fn row_check_preflights_claimed_height_times_width_without_allocation() {
                     contract: "oracle.check".into(),
                     arguments: vec![domain.identity().name().into()],
                     implementation: "plonky3/oracle.check".into(),
+                    physical_arguments: vec![],
                 },
                 &[],
                 vec![

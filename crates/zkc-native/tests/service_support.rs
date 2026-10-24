@@ -140,7 +140,7 @@ fn independently_authored_shapes_and_bounded_support_are_required_at_installatio
         assert_eq!(support.max_retained_bytes, 512);
         assert!(native.service_support(contract, "reset").is_none());
         let bytes = program(name, output);
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)
@@ -153,7 +153,7 @@ fn independently_authored_shapes_and_bounded_support_are_required_at_installatio
                 invalid_reply: false,
                 calls: 0,
             };
-            let error = zkc_runtime::vm::Program::decode(&bytes)
+            let error = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&adapter)?;
                     Ok(program)
@@ -186,7 +186,7 @@ fn service_capacity_precedes_consumption_and_invalid_reply_poisons_live_root() {
             calls: 0,
         };
         let bytes = program(SERVICES[0].1, SERVICES[0].2);
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&adapter)?;
                 Ok(program)
@@ -251,12 +251,15 @@ fn excessive_work_budget_refuses_before_leasing_and_retains_backend_custody() {
         let backend = native()
             .with_services(registry.clone(), [("rng".into(), root.clone())].into())
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&program(SERVICES[0].1, SERVICES[0].2))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(
+            &program(SERVICES[0].1, SERVICES[0].2),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let failure = match Runner::new_with_budgets(
             &admitted,
             "main",
@@ -335,23 +338,29 @@ fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
         .unwrap();
     assert_eq!(support.signature.inputs, std::slice::from_ref(&index));
     assert_eq!(support.signature.outputs, [index]);
-    zkc_runtime::vm::Program::decode(&index_program(octic, json!(["n"])))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    zkc_runtime::vm::Program::decode(
+        &index_program(octic, json!(["n"])),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     for (contract, inputs, code) in [
         (SERVICES[0].1, json!(["n"]), ErrorCode::Type),
         (octic, json!([]), ErrorCode::Signature),
         (octic, json!(["n", "n"]), ErrorCode::Signature),
     ] {
-        let error = zkc_runtime::vm::Program::decode(&index_program(contract, inputs))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(
+            &index_program(contract, inputs),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(error.code, code, "{contract}: {}", error.detail);
     }
     for (bound, accepted) in [(8u64, true), (1, true), (6, false), (0, false)] {
@@ -362,12 +371,15 @@ fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
         let backend = native()
             .with_services(registry.clone(), [("rng".into(), root.clone())].into())
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&index_program(octic, json!(["n"])))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(
+            &index_program(octic, json!(["n"])),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let mut runner = Runner::new(
             &admitted,
             "main",

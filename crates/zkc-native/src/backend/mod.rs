@@ -1,5 +1,6 @@
 //! Native backend composition and explicit host-issued capabilities.
 mod call;
+mod dispatch;
 mod preparation;
 pub use preparation::ComputationCheckpoint;
 mod execute;
@@ -35,20 +36,29 @@ pub struct NativeOperation {
     read_extent: work::ReadExtent,
     sequence: bool,
     deterministic: bool,
+    implementation_id: Option<zkc_runtime::vm::ImplementationId>,
+    requirements: zkc_runtime::vm::ImplementationRequirements,
 }
 impl zkc_runtime::vm::InstalledOperation for NativeOperation {
     fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         &self.binding.signature
+    }
+    fn implementation_id(&self) -> Option<zkc_runtime::vm::ImplementationId> {
+        self.implementation_id
+    }
+    fn requirements(&self) -> zkc_runtime::vm::ImplementationRequirements {
+        self.requirements
     }
     fn deterministic(&self) -> bool {
         self.deterministic
     }
 }
 
-/// Production Arkworks/Dalek field, group, PCS and challenge adapter. Private committed originals are
+/// Installed mathematical operations and challenge adapter. Private committed originals are
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
+    cpu: crate::CpuExecution,
     ring_assets: crate::ring::Registry,
     relation_assets: crate::relation::Registry,
     ring_work: crate::ring::Budget,
@@ -57,6 +67,7 @@ pub struct NativeBackend {
     core: Core,
     services: Option<crate::services::ServiceBindings>,
     implementations: &'static registry::Registry,
+    contracts: zkc_runtime::vm::Contracts,
 }
 impl NativeBackend {
     fn invoke(
@@ -70,6 +81,15 @@ impl NativeBackend {
         if operation.binding.declaration != *i.binding.declaration() {
             return Err(crate::refused("kernel-binding"));
         }
+        // Handles can survive an idle backend's policy change. Recheck exact
+        // authorization at use before charging work or reaching the handler.
+        if !self.contracts.permits_implementation(
+            &operation.binding.declaration,
+            operation.implementation_id,
+            operation.requirements,
+        ) {
+            return Err(crate::refused("implementation-permission"));
+        }
         if operation.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }
@@ -82,8 +102,9 @@ impl NativeBackend {
         }
         self.core
             .invoke(i, args, &operation.binding, call.as_deref_mut())?;
-        let outputs = match operation.prepared_handler {
-            None => (operation.handler)(self, i, args)?,
+        let cpu = self.cpu.clone();
+        let outputs = cpu.enter(|| match operation.prepared_handler {
+            None => (operation.handler)(self, i, args),
             Some(handler) => handler(
                 self,
                 i,
@@ -91,8 +112,8 @@ impl NativeBackend {
                 call.as_deref()
                     .and_then(Option::as_ref)
                     .ok_or_else(|| crate::refused("kernel-preparation"))?,
-            )?,
-        };
+            ),
+        })?;
         self.core.outputs(i, args, outputs)
     }
 
@@ -102,6 +123,20 @@ impl NativeBackend {
         }
         self.relation_assets = assets;
         Ok(self)
+    }
+
+    /// Share an application-owned numerical pool. Caller validation, accounting
+    /// and ordered effects stay outside worker tasks.
+    pub fn with_cpu(mut self, cpu: crate::CpuExecution) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("cpu-active-backend"));
+        }
+        self.cpu = cpu;
+        Ok(self)
+    }
+
+    pub fn cpu(&self) -> &crate::CpuExecution {
+        &self.cpu
     }
     pub fn with_ring_assets(mut self, assets: crate::ring::Registry) -> Result<Self> {
         if self.active_frames() != 0 {
@@ -201,16 +236,55 @@ impl NativeBackend {
     /// An empty registry is valid for computations that use no setup.
     pub fn new(policy: Policy, entry: EntryPolicy, setups: crate::SetupRegistry) -> Result<Self> {
         setups.validate(&policy)?;
+        Self::from_validated(
+            policy,
+            entry,
+            setups,
+            crate::CpuExecution::serial().map_err(|_| crate::exhausted("cpu-pool-creation"))?,
+        )
+    }
+
+    /// Construct with the Host's shared numerical worker owner. Supplying the
+    /// context before admission avoids creating a pool for each participant.
+    pub fn new_with_cpu(
+        policy: Policy,
+        entry: EntryPolicy,
+        setups: crate::SetupRegistry,
+        cpu: crate::CpuExecution,
+    ) -> Result<Self> {
+        setups.validate(&policy)?;
+        Self::from_validated(policy, entry, setups, cpu)
+    }
+    fn from_validated(
+        policy: Policy,
+        entry: EntryPolicy,
+        setups: crate::SetupRegistry,
+        cpu: crate::CpuExecution,
+    ) -> Result<Self> {
         Ok(Self {
+            cpu,
             ring_assets: crate::ring::Registry::default(),
             relation_assets: crate::relation::Registry::default(),
             ring_work: crate::ring::Budget::default(),
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::operations::external::Budget::default(),
             implementations: registry::installed()?,
+            contracts: crate::native_contracts().clone(),
             core: Core::new(policy, entry, setups),
             services: None,
         })
+    }
+    /// Attach the exact trusted admission catalog used for this deployment.
+    /// Native resident IDs must come from native_contracts or its policy view.
+    pub fn with_contracts(mut self, contracts: zkc_runtime::vm::Contracts) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("contracts-active-backend"));
+        }
+        self.contracts = contracts;
+        Ok(self)
+    }
+    pub fn contracts(&self) -> &zkc_runtime::vm::Contracts {
+        &self.contracts
     }
     #[cfg(feature = "test-utils")]
     pub fn issue_test_nonce(
@@ -396,6 +470,15 @@ impl Backend for NativeBackend {
     ) -> Option<NativeOperation> {
         let implementation = self.implementations.get(&binding.implementation)?;
         let signature = implementation.signature(binding)?;
+        let handler = implementation.handler.resolve(binding, &signature)?;
+        let actual = crate::contracts::actual_identity(binding);
+        let requirements = implementation.requirements;
+        if !self
+            .contracts
+            .permits_implementation(binding, actual, requirements)
+        {
+            return None;
+        }
         // Traversal charging belongs to the operation contract. Observing a
         // sequence through a transcript retains that operation's own budget.
         let sequence = binding.contract == "bytes.join"
@@ -407,11 +490,13 @@ impl Backend for NativeBackend {
                 declaration: binding.clone(),
                 signature,
             }),
-            handler: implementation.handler,
+            handler,
             prepared_handler: implementation.prepared_handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),
             sequence,
             deterministic: implementation.deterministic,
+            implementation_id: actual,
+            requirements,
         })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {

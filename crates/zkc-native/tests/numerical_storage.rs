@@ -6,7 +6,6 @@ use p3_field::BasedVectorSpace;
 use std::{
     mem::size_of,
     ops::{Add, Mul, Neg, Sub},
-    sync::Arc,
 };
 use support::{Controlled, assert_value, backend, one};
 use zkc_native::{
@@ -20,6 +19,7 @@ fn binding(domain: domains::NativeDomain, operation: &str) -> OperationBinding {
         contract: operation.into(),
         arguments: vec![domain.field.name().into()],
         implementation: format!("{}/{operation}", domain.provider),
+        physical_arguments: vec![],
     }
 }
 
@@ -414,7 +414,10 @@ fn construction_keeps_element_ceilings_before_output_work_and_memory() {
                     &signature.outputs,
                     &["out".into()],
                 );
-                let error = zkc_runtime::vm::Program::decode(&bytes).err().unwrap();
+                let error =
+                    zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+                        .err()
+                        .unwrap();
                 assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Attributes);
                 assert_eq!(error.detail, "interactive-kernel-parameters");
                 continue;
@@ -466,8 +469,8 @@ fn aliased_inputs_and_unique_last_uses_never_become_result_destinations() {
     else {
         panic!("expected BLS vectors");
     };
-    assert!(Arc::ptr_eq(input, other));
-    assert!(!Arc::ptr_eq(input, output));
+    assert!(zkc_native::Buffer::ptr_eq(input, other));
+    assert!(!zkc_native::Buffer::ptr_eq(input, output));
     assert_value(&original, &bls(&[2, 5, 11]));
     assert_value(&result[0], &bls(&[4, 10, 22]));
 
@@ -475,8 +478,7 @@ fn aliased_inputs_and_unique_last_uses_never_become_result_destinations() {
     let Value::Vector(input) = &unique else {
         unreachable!()
     };
-    assert_eq!(Arc::strong_count(input), 1);
-    let backing = Arc::as_ptr(input);
+    let backing = input.as_ptr();
     let result = one(
         backend(Policy::default()),
         binding(domains::BLS, "vector.scale"),
@@ -488,7 +490,7 @@ fn aliased_inputs_and_unique_last_uses_never_become_result_destinations() {
     let Value::Vector(output) = &result[0] else {
         unreachable!()
     };
-    assert!(!std::ptr::eq(backing, Arc::as_ptr(output)));
+    assert!(!std::ptr::eq(backing, output.as_ptr()));
     assert_value(
         &result[0],
         &Value::Vector([3u64, 7, 13].map(|n| -Scalar::from(n)).into()),

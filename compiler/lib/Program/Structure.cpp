@@ -188,7 +188,8 @@ class Structure {
     return list(m.bindings, [&](const protocol::OperationBinding &b) {
       return fields({text(b.name), text(b.application.contract),
                      names(b.application.arguments),
-                     text(b.application.implementation)});
+                     text(b.application.implementation),
+                     names(b.application.physicalArguments)});
     });
   }
   size_t measure(const LocalDefinitions &m) {

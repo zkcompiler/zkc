@@ -175,7 +175,7 @@ Value emitBound(ModuleOp module, OpBuilder &builder, StringRef contract,
     builder.setInsertionPointToStart(&unit.getRegion(0).front());
     local::OperationBindingOp::create(builder, module.getLoc(), name, contract,
                                       builder.getStrArrayAttr({"bls12-381.fr"}),
-                                      "");
+                                      "", mlir::ArrayAttr{});
   }
   OperationState state(module.getLoc(), protocol::boundOperationName(contract));
   state.addOperands(inputs);

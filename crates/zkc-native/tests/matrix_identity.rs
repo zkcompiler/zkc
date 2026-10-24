@@ -40,6 +40,7 @@ fn binding(d: usize) -> OperationBinding {
         contract: "matrix.identity_check".into(),
         arguments: vec![FIELDS[d].0.into()],
         implementation: format!("{}/matrix.identity_check", FIELDS[d].1),
+        physical_arguments: vec![],
     }
 }
 fn matrix(d: usize, rows: usize, columns: usize, entries: &[(u32, u32, u64)]) -> Value {
@@ -236,10 +237,11 @@ fn malformed_digest_refused_by_admission_and_backend() {
                 &["ok".into()],
             );
             let b = backend(Policy::default());
-            let err = match zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
-                program.check_installation(&b)?;
-                Ok(program)
-            }) {
+            let err = match zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                }) {
                 Ok(_) => panic!("admitted bad digest"),
                 Err(e) => e,
             };

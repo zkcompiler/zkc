@@ -15,6 +15,7 @@ fn binding(operation: &str, n: u64) -> OperationBinding {
         contract: format!("fixed_vector.{operation}"),
         arguments: vec!["koala-bear".into(), n.to_string()],
         implementation: format!("plonky3/fixed_vector.{operation}"),
+        physical_arguments: vec![],
     }
 }
 fn vector(values: &[u32]) -> Value {
@@ -25,7 +26,7 @@ fn fixed(values: &[u32]) -> Value {
         LogicalType::parse(&format!("fixed_vector<field:koala-bear,{}>", values.len())).unwrap();
     Value::FixedVector(
         FixedVector::new(
-            logical,
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
             values.iter().copied().map(KoalaBear::new).collect(),
         )
         .unwrap(),
@@ -112,7 +113,8 @@ fn conversions_retain_length_identity_and_never_expose_a_codec() {
     };
     assert_eq!(
         storage
-            .elements()
+            .koala_bear_elements()
+            .unwrap()
             .iter()
             .map(PrimeField32::as_canonical_u32)
             .collect::<Vec<_>>(),
@@ -157,18 +159,16 @@ fn exact_length_is_checked_at_construction_and_conversion() {
     }
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,4>").unwrap();
     assert_eq!(
-        FixedVector::new(logical, vec![KoalaBear::new(1); 3].into())
-            .unwrap_err()
-            .code,
+        FixedVector::new(
+            PhysicalType::default_for(logical).unwrap(),
+            vec![KoalaBear::new(1); 3].into()
+        )
+        .unwrap_err()
+        .code,
         "refused:fixed-vector-length"
     );
     let unsupported = LogicalType::parse("fixed_vector<field:bls12-381.fr,1>").unwrap();
-    assert_eq!(
-        FixedVector::new(unsupported, vec![KoalaBear::new(1)].into())
-            .unwrap_err()
-            .code,
-        "refused:fixed-vector-representation"
-    );
+    assert!(PhysicalType::default_for(unsupported).is_err());
 }
 
 #[test]
@@ -271,7 +271,7 @@ fn native_invocation_refuses_wrong_types_attributes_and_handles() {
         &["x".into()],
     );
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend(Policy::default()))?;
                 Ok(program)
@@ -297,6 +297,145 @@ fn fixed_vector_output_storage_is_bounded_before_construction() {
         .unwrap_err(),
         "exhausted:output-bytes"
     );
+}
+
+#[test]
+fn ordinary_and_fixed_dot_share_exact_numerical_limits() {
+    use std::sync::Arc;
+    use zkc_kernels::{blst::bls12_381 as blst, field::Coefficient};
+    for n in [0, 3] {
+        let resident =
+            Arc::new(blst::ScalarVector::try_from_fn(n, |_| Ok(blst::Scalar::from(2))).unwrap());
+        let ty = zkc_native::native_contracts()
+            .physical_type(&format!(
+                "fixed_vector<field:bls12-381.fr,{n}>@blst/fixed-vector[blst/fr]"
+            ))
+            .unwrap();
+        let resident_fixed =
+            Value::FixedVector(FixedVector::from_resident(ty.clone(), resident.clone()).unwrap());
+        for (binding, value, work) in [
+            (
+                binding("dot", n as u64),
+                fixed(&vec![2; n]),
+                4 * n as u64 + KoalaBear::DOT_SETUP_WORK,
+            ),
+            (
+                OperationBinding {
+                    contract: "vector.dot".into(),
+                    arguments: vec!["koala-bear".into()],
+                    implementation: "plonky3/vector.dot".into(),
+                    physical_arguments: vec![],
+                },
+                vector(&vec![2; n]),
+                4 * n as u64 + KoalaBear::DOT_SETUP_WORK,
+            ),
+            (
+                OperationBinding {
+                    contract: "fixed_vector.dot".into(),
+                    arguments: vec!["bls12-381.fr".into(), n.to_string()],
+                    implementation: "blst/resident/fixed_vector.dot".into(),
+                    physical_arguments: vec![ty.spelling()],
+                },
+                resident_fixed,
+                4 * n as u64 + 1,
+            ),
+            (
+                OperationBinding {
+                    contract: "vector.dot".into(),
+                    arguments: vec!["bls12-381.fr".into()],
+                    implementation: "blst/resident/vector.dot".into(),
+                    physical_arguments: vec![],
+                },
+                Value::BlstVector(resident),
+                4 * n as u64 + 1,
+            ),
+        ] {
+            for (memory, allowed_work, output, error) in [
+                (512, work, 512, None),
+                (511, work, 512, Some("exhausted:numerical-bytes")),
+                (512, work - 1, 512, Some("exhausted:numerical-work")),
+                (0, 0, 511, Some("exhausted:output-bytes")),
+            ] {
+                let mut controlled = Controlled::new(backend(Policy {
+                    max_numerical_bytes: memory,
+                    max_numerical_work: allowed_work,
+                    ..Policy::default()
+                }));
+                controlled.output_limit = Some(output);
+                let (result, observed) = one(
+                    controlled,
+                    binding.clone(),
+                    &[],
+                    vec![value.clone(), value.clone()],
+                );
+                if let Some(error) = error {
+                    assert_eq!(result.unwrap_err(), error);
+                    assert!(observed.outputs.is_empty());
+                } else {
+                    let output = result.unwrap().remove(0);
+                    match output {
+                        Value::KoalaBearField(result) => {
+                            assert_eq!(result.as_canonical_u32(), 4 * n as u32)
+                        }
+                        Value::BlstField(result) => {
+                            assert_eq!(result, blst::Scalar::from(4 * n as u64))
+                        }
+                        _ => panic!("field output"),
+                    }
+                }
+                assert_eq!(observed.inner.active_frames(), 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn resident_dense_results_adopt_one_buffer_at_exact_memory_boundary() {
+    use zkc_kernels::blst::bls12_381 as blst;
+    for n in [0, 3, 257] {
+        let retained = 256 + n * 32;
+        let work = 2 * n as u64 + 1;
+        for (memory, output, error) in [
+            (retained, retained, None),
+            (retained - 1, retained, Some("exhausted:numerical-bytes")),
+            (0, retained - 1, Some("exhausted:output-bytes")),
+        ] {
+            let mut controlled = Controlled::new(backend(Policy {
+                max_numerical_bytes: memory,
+                max_numerical_work: work,
+                ..Policy::default()
+            }));
+            controlled.output_limit = Some(output);
+            let binding = OperationBinding {
+                contract: "vector.fill".into(),
+                arguments: vec!["bls12-381.fr".into()],
+                implementation: "blst/resident/vector.fill".into(),
+                physical_arguments: vec![],
+            };
+            let (result, observed) = one(
+                controlled,
+                binding,
+                &[],
+                vec![
+                    Value::BlstField(blst::Scalar::from(7)),
+                    Value::Index(n as u64),
+                ],
+            );
+            if let Some(error) = error {
+                assert_eq!(result.unwrap_err(), error);
+                assert!(observed.outputs.is_empty());
+            } else {
+                let result = result.unwrap();
+                let Value::BlstVector(values) = &result[0] else {
+                    panic!("resident vector")
+                };
+                assert_eq!(values.len(), n);
+                assert_eq!(values.storage_bytes(), n * 32);
+                assert!((0..n).all(|i| values.get(i) == Some(blst::Scalar::from(7))));
+            }
+            assert_eq!(observed.inner.active_frames(), 0);
+        }
+    }
 }
 
 #[test]
@@ -336,12 +475,15 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "zkcv.fixed_vector.koala-bear/0",
     ] {
         carrier[2][0][5][1][1][1] = json!(bad);
-        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend(Policy::default()))?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&carrier).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend(Policy::default()))?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::Type);
         assert_eq!(error.detail, "logical origin static identity");
     }
@@ -370,9 +512,17 @@ fn variants_contain_real_fixed_vectors_and_refuse_unrepresented_payloads() {
     );
     let logical = LogicalType::parse(&spelling).unwrap();
     let descriptor = logical.variant_descriptor().unwrap().clone();
-    let value = Value::pack_variant(descriptor, 0, vec![fixed(&[1, 2])]).unwrap();
+    let value = Value::pack_variant(
+        zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+            descriptor,
+        ))
+        .unwrap(),
+        0,
+        vec![fixed(&[1, 2])],
+    )
+    .unwrap();
     backend(Policy::default()).validate_value(&value).unwrap();
-    assert_eq!(value.physical_type().logical(), logical);
+    assert_eq!(value.physical_type().logical(), &logical);
     assert!(matches!(
         value.unpack_variant().unwrap().2[0],
         Value::FixedVector(_)
@@ -385,9 +535,5 @@ fn variants_contain_real_fixed_vectors_and_refuse_unrepresented_payloads() {
         ]),
     );
     let logical = LogicalType::parse(&unsupported).unwrap();
-    let descriptor = logical.variant_descriptor().unwrap().clone();
-    assert_eq!(
-        Value::pack_variant(descriptor, 1, vec![]).unwrap_err().code,
-        "refused:variant-payload-representation"
-    );
+    assert!(PhysicalType::default_for(logical).is_err());
 }

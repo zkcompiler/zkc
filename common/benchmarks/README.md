@@ -45,7 +45,7 @@ Selection options intersect:
 - `--preset smoke`: a fixed, small list covering the major execution paths.
 - `--preset stark`: AIR (both single-table profiles), FRI, polynomial, extension, transcript and machine cases.
 - `--preset execution`: all source controls and library workloads, without an external reference build.
-- `--preset all` (default): everything, including the optional Monero comparison.
+- `--preset all` (default): everything, including the optional Monero and c-kzg comparisons.
 
 The default is four **sequential** fresh processes per implementation/operation,
 two warmup samples and five measured samples per process, one call per sample.
@@ -60,9 +60,21 @@ records the choices and captures the resulting packages. Compare separate runs
 with identical sources, inputs and worker settings. A smaller intermediate or
 instruction count does not by itself establish a timing improvement.
 
-`--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
-`--cpu` pins the suite and children to one allowed CPU. Workers check the requested
-environment and affinity. The harness records governor/turbo/SMT settings but does
+`--threads` selects the shared Native CPU context (default one). The development
+worker transports this request through `RAYON_NUM_THREADS`; SDK and CLI execution
+receive an explicit context. Worker reports separate pool initialization from
+admission and timed calls. Native workers must report their actual owned worker
+count; live and saved-result validation require it to match the request.
+Separate CLI proof observations pass `--threads`
+explicitly, check the CLI's reported worker count and retain it beside their
+process wall times. Foreign reference providers retain their own policy;
+this is not a universal process thread limit.
+`--cpus 2,4-7` pins the suite and children to a set within the current affinity;
+`--cpus 2` selects one CPU. Workers check the requested environment, main-thread
+affinity and every surviving thread's CPU set. This is an exit-time observation,
+not scheduler tracing or proof that a terminated thread never escaped.
+The harness records CPU topology, common runtime ISA features across the selected
+CPUs and governor/turbo/SMT settings but does
 not change them. `--seed` shuffles case/operation blocks; paired implementations
 run consecutively with their order reversed on alternate process repetitions.
 Child processes receive a recorded, allowlisted environment: tool paths, temporary
@@ -70,6 +82,61 @@ paths, allocator/thread settings and explicit locale controls. Ambient feature
 switches, Python injection paths and unrelated credentials are not inherited.
 The schedule seed does not seed production prover randomness. Input generators use fixed,
 recorded algorithms and seeds, with full generated inputs retained.
+
+Rust workers embed their compiler, profile, target features, Rust flags and
+crate features. `--cargo-manifest Cargo.toml` additionally captures an offline,
+locked source dependency-feature resolution; repeat for standalone reference
+workspaces. Source graphs and lockfiles do not attest which features a prebuilt
+binary linked. Compiled Rust target features also do not describe the ISA of
+separately compiled C/assembly dependencies.
+
+### EIP-4844 comparison
+
+Build the [pinned standalone reference](../tests/reference/c-kzg/README.md):
+
+```sh
+cargo build --release --locked --manifest-path common/tests/reference/c-kzg/Cargo.toml \
+  --bin zkc-c-kzg-benchmarks --target-dir build/experiments/c-kzg-reference
+python3 common/benchmarks/run.py run --suite eip4844 \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks \
+  --c-kzg build/experiments/c-kzg-reference/release/zkc-c-kzg-benchmarks \
+  --cargo-manifest Cargo.toml --cargo-manifest common/tests/reference/c-kzg/Cargo.toml \
+  --threads 1 --cpus 0 --output build/experiments/eip4844
+```
+
+Use an allowed CPU. Compare multicore conditions in a separate run, for example
+`--threads 4 --cpus 0-3`. c-kzg's EIP-4844 APIs are single-threaded; its setup
+`precompute` setting stays zero because it targets EIP-7594 operations.
+Neither affinity nor the Rayon environment creates a shared provider budget.
+The reference uses its pinned `std` and `portable` features; Native keeps its
+normal build policy. Captured feature graphs expose that distinction, which
+also prevents interpreting the API ratio as a matched ISA comparison.
+
+The panel measures the ordinary authored EIP-4844 library: commitments, point
+openings and verification, single blob proofs, and batches of 1/4/16 blobs.
+Blobs contain distinct deterministic full-width scalars. Every function output
+is compared with the reference outside the execution timer; every produced blob
+proof is byte-checked and cross-verified. Changed statements and truncated and
+trailing proofs are negative controls. The panel stays within normal Host
+capacities. A 64-blob concatenated statement exceeds the current logical tree
+limit, so it is outside the maintained timing panel. A refused case remains
+failed evidence and is never silently resized.
+
+The source timer includes SDK input adaptation, source-level statement/setup
+validation, provider conversions, execution, publication and teardown. The
+reference timer covers the upstream call and returned bytes. Both exclude
+result checks and proof-file writes. Source JSON decoding parses input documents
+and resolves deferred file references; the timed SDK call reads those payloads,
+checks pins and imports values. Preowned ingress materializes payloads during
+its one-time input construction. Reference input decoding and setup loading are
+outside its timer. Lifecycle records separate source capture/admission,
+document parsing/reference resolution, ownership, requests and diagnostics. Reference setup/decode
+times are diagnostics. Conversion diagnostics are counts, not isolated timings.
+Thus this is a practical API comparison, not a matched kernel-only speedup.
+The current compiler's mixed-provider policy is used normally. An all-Arkworks
+KZG baseline needs an explicit captured pre-preference compiler; the harness
+does not rewrite executable artifacts to change providers.
 
 ### External Monero comparison
 
@@ -89,16 +156,19 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `numerical` | Two columns and a scalar capture; map, collect and vector operations; vector, sum and product results; KoalaBear, BLS Fr and dense degree-eight extension; 0–8,192 elements | Matched arithmetic and inputs across forms; includes equality and Host costs, with independent Python expectations |
 | `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
-| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
+| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; larger KoalaBear/BLS Fr vector results at 1,024 (add) and 8,192 (Hadamard) | Independent scalar expectations and complete vector equality; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
 | `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
 | `coset_batch` | Matched per-column and library extension; KB/Ext4/Ext8, widths 1/4/16/64, separate height and row-layout controls | Independent integer transforms; every coordinate checked; row-layout cases include both transposes and SDK/run includes Host and equality costs |
+| `coefficient_batch` | BN254 coefficient prefixes versus explicitly padded per-column FFTs; threshold neighbors at 64 outputs, short/dense pairs at 4,096 and 32,768 outputs, widths 1/3 | Independent modular Python transform and complete column-major output equality; identical coefficients across forms; default Host capacities and source construction costs |
 | `coset_point` | Direct opening claims, repeated native interpolation/evaluation, and coefficient reuse for multiple points | Full point-major output check; on/off-domain controls; SDK timing includes setup, validation and output construction |
 | `quotient_split` | Matched library batch and explicit per-block coefficient evaluation; base, quartic and octic KoalaBear; varying input height, block width and count | Independent coefficient/block-evaluation oracle; includes interpolation, padding, output checks and Host costs; no divisibility proof |
 | `literal` | Constants versus operand captures in ordered Local loops across all installed fields; zero, first and repeated reach | Independent repeated-addition oracle; inspect exported reached literal counts; SDK/run includes Host and checking |
+| `vector_literal` | Typed `vector.constant` versus decoded vector operands; KoalaBear/BLS Fr, 1,024 elements with 17 reaches and 8,192 elements with one reach | Independent complete-output repeated-addition oracle; repeated reach requires the literal inside the exported loop; includes vector arithmetic, equality and Host costs |
 | `relation_rows` | Actual table residuals for quadratic and coupled constraints; varying height/width, valid and perturbed traces | Independent complete residual oracle, including inactive slots; Bundle admission, result checks and Host costs included |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `kzg` | Generic KZG evaluation/quotient on checked roots-of-unity evaluations; on/off-domain, BLS Fr sizes 1/8/64/256/1,024, a bit-reversed control and KoalaBear size 32 | Independent coefficients, Horner and synthetic division; every quotient entry checked, including the derivative at an on-domain point; no pairing or commitment |
+| `eip4844` | Actual 4,096-scalar blob commitments, openings, point/single/blob-batch verification; 1/4/16 blobs | Authored library against c-kzg 2.1.8; exact bytes and independent cross-verification; different SDK/API validation boundaries and normal resource limits |
 | `curve_family` | BLS12-381 and BN254 G1/G2, Ristretto and prime Edwards; fixed-base source multiplication, shared-scalar/per-point scaling and MSM; 257-point scaling controls cross the Arkworks chunk boundary | Python scalar expectations plus shared-provider group-law self-consistency; includes point construction and checks, without an independent curve-coordinate oracle |
 | `sparse_matrix` | Controlled dimensions/nnz and uniform, clustered or empty-row distributions; forward, transpose and bilinear contractions; prime, extension and binary fields | Independent complete-output Python contractions with dense extension coordinates; bilinear includes singleton/long-row controls; no full R1CS proof or enlarged capacities |
 | `opening_quotient` | Current `deep_columns` versus explicit per-opening quotient/accumulate; KB/Ext4/Ext8, selected columns, repeated/distinct off-domain points | Identical inputs; independent coefficient/Horner/quotient expectations, all accumulated coordinates and final weight checked; checked setup and output construction inside SDK/run |
@@ -116,7 +186,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
 | `air` | Trace height, width and evaluation blowup vary separately, including original independent recurrences and new coupled quadratic/cubic columns | First/last/transition constraints; one table; default execution capacities |
-| `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
+| `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument), retaining KoalaBear quartic FRI and octic Merlin draws; additional bounded BabyBear quartic and Goldilocks quadratic configurations | Independent integer recurrence and same-stack proof verification; exact field/hash/transcript profiles, constant final polynomial; no external proof compatibility or field-only performance attribution |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
 | `machine` | LogUp/grand-product, optional memory absent/present; bounded CPU/program and memory heights | Existing `ThreeTableArgument` and external accumulator interpreter; same-stack proof checks, not production zkVM scale |
 
@@ -130,6 +200,27 @@ Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.
 
+The additional `stark-baby-bear-quartic-poseidon2-16-*` and
+`stark-goldilocks-quadratic-poseidon2-8-*` cases use the existing
+`baby_bear_quartic::Poseidon2` and `goldilocks_quadratic::Poseidon2` library
+configurations. Their exact extension fields are `baby-bear.ext4-binomial11`
+and `goldilocks.ext2-binomial7`; their Merlin suites are
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` and
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`. Poseidon2 widths are 16
+and 8, and coset shifts are 31 and 7, respectively. Shape metadata retains
+these selections and each characteristic before compilation. Each field has
+11 fixed cases: independent quadratic columns and coupled quadratic/cubic
+columns, heights 8/32/128, widths 1/2/4/8/16, blowups 4/8 and eight queries.
+The largest trace has 512 base elements and the largest evaluation domain has
+512 rows. Each shape matches an existing KoalaBear recurrence control, with
+all arithmetic reduced modulo its selected characteristic. The existing KoalaBear
+cases and smoke list stay fixed. Changed statements and canonical claim mutations
+use the selected modulus and coordinate width. These are composed SDK/Host proof
+workloads under normal capacities; field, hash and transcript all change between
+profiles, so a ratio cannot isolate arithmetic throughput. They provide no external
+STARK byte compatibility or independent security result. BLS provider, Monero and
+EIP-4844 comparisons keep their separate contracts.
+
 ### Fixed numerical panel
 
 The numerical panels vary expression shape, field operations, transforms, cosets,
@@ -140,6 +231,61 @@ forms. It separates batch width, transform height and layout conversion. The
 per-column form retains explicit interpolation/evaluation and concatenation;
 the library form follows the current column-extension implementation. These are
 source-to-execution comparisons, not isolated provider transform timings.
+
+The separate `coefficient_batch` family starts from BN254 coefficients, without
+interpolating evaluation words. Its fixed panel pairs `batch` with
+`padded-columns` on exactly the same input polynomial, shift 7 and complete
+output. At output size 64, coefficient heights 15/16/17 straddle the pinned
+Arkworks 0.6.0 degree-aware FFT condition `4 * coefficient_count <= output_size`;
+height 64 supplies a dense control. At output size 4,096, heights 17 and 4,096
+each use widths one and three. At output size 32,768, heights 1,024 and 32,768
+use width one. This keeps the flattened expected output within the ordinary
+Host's 32,768-element logical array limit. Larger multicolumn domains require
+separate input design; the harness does not raise capacities or silently resize.
+
+The padded control slices each coefficient column, appends explicit zeros to
+the output height and calls public `coset::evaluate_batch` with width one and
+that full coefficient height. This reaches the ordinary full-length FFT while
+retaining the same polynomial and evaluation order. Going through
+`polynomial::from_coefficients` would trim the zero tail and erase the control.
+The source loop, padding, slices and concatenation are part of its cost.
+The Python oracle independently evaluates all output points with modular
+radix-two arithmetic; focused tests cross-check it against Horner at every point.
+Both source forms check full vector length and equality before returning their
+boolean acceptance result. These are SDK/Host measurements with output
+construction and checking, not isolated FFT or publication timings.
+
+Select a matched pair, using already-built tools and a new output directory:
+
+```sh
+python3 common/benchmarks/run.py run \
+  --case coefficient-batch-bn254-h17-w3-n4096-batch \
+  --case coefficient-batch-bn254-h17-w3-n4096-padded-columns \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks \
+  --output build/experiments/coefficient-batch
+```
+
+The larger `field-vector-{kb,fr}-add-1024` and
+`field-vector-{kb,fr}-hadamard-8192` cases retain dense, distinct inputs and
+check every output element through `vector::equal`. They expose larger native
+result construction within the existing SDK/run boundary. Equality and Host
+costs remain included; returning a boolean does not replace the full vector
+check with a reduction or checksum.
+
+The `vector_literal` family extends the `literal` generator with typed vector
+values. `vector-literal-{kb,fr}-n1024-17-{constant,operand}` pairs 17 executions
+of one literal site with captured operands; `vector-literal-{kb,fr}-n8192-1-{constant,operand}`
+pairs first reach at a larger vector size. Each form receives identical decoded
+inputs and independently computed expectations for every result element.
+Inspect the exported `zkc.program/0` before interpreting repeated preparation:
+the `vector.constant` operation must remain inside the `for` body. Invariant
+hoisting would invalidate that interpretation even if the source contains a
+literal in the loop. Observe reached-site counts separately with an instrumented
+worker and `--execution-counts`; count runs do not supply timing comparisons.
+If a compiler moves the literal, keep repeated preparation in a Native probe.
+SDK calls reset invocation-local preparation, and the source cases include
+vector addition and equality, so neither form measures parsing alone.
 
 [`expressions.py`](bench/expressions.py) defines short/deep Horner, independent
 branches, shared intermediates, capture-heavy and input-heavy Math bodies with
@@ -428,10 +574,10 @@ floor is recorded and never subtracted.
 ## Execution counts
 
 For runtime attribution, build a separate worker with execution observations.
-Function jobs require aggregate native execution observations from the shared
-Host; while that API is unavailable, the worker refuses these jobs explicitly.
-It does not publish zero counters or time an unwrapped native child. Native proof
-jobs retain their existing observation support.
+Function jobs report native execution counts merged across reached numerical
+calculations and child runs/proofs. Host control and non-native work are outside
+those counts. Native proof jobs report their native invocation counts. These
+instrumented builds are separate from release timing runs.
 
 Build the observation worker with:
 
@@ -548,10 +694,7 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 
 ```sh
 cargo test --locked -p zkc-benchmarks
-uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
-  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
-  common/tests/harness/test_benchmark_library_algebra.py \
-  common/tests/harness/test_benchmark_execution.py \
+uv run --no-sync --locked pytest common/tests/harness/test_benchmark*.py \
   common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py
 uv run --no-sync --locked ruff check common/benchmarks
@@ -589,3 +732,74 @@ package policy. Compilation is outside runtime samples; its observation-enabled
 wall time is labelled and must not be compared with uninstrumented compilation
 as if the measurement boundaries were equal. Runtime counts remain a separate
 observation mode, with the existing restrictions on timing comparisons.
+
+## Provider and conversion controls
+
+The `bls_provider` suite compares Arkworks and blst G1/G2 scaling, MSM and
+pairing-product checks on deterministic full-width inputs. Use `list` to choose
+cases or select `--suite=bls_provider`. The existing process scheduler alternates
+providers and retains every request and result.
+
+`resident_kernel_call` starts with each provider's resident values.
+`converted_kernel_call` directly times import, arithmetic and export from the
+shared Arkworks representation. `installed_operation_call` executes the selected
+binding through the VM and Native, including resource admission and output
+publication; program admission and Runner construction occur before the timer.
+For blst, this boundary has Arkworks entry and output ports and explicit
+`native/representation.convert` calls around `blst/resident` arithmetic.
+`provider_import` measures point and scalar import, while `provider_export`
+measures point export. These conversion-only cases contain no arithmetic. Never
+add their isolated medians to estimate a complete call; measure that boundary
+directly. Every result is compared with Arkworks outside the timer, including
+warmups; input generation, JSON I/O, checking and returned-result destruction are
+excluded. blst's worker pool is disabled, and MSM is variable-time. These are
+operation controls, not protocol throughput or security measurements.
+
+Cases with `resident-chain` and `converted-chain` measure the same four-operation
+computation at the direct kernel boundary (conversion once around the chain in
+the latter). `resident_installed_chain` repeats the selected operation four times on Native
+resident values. `wire_decode_resident_execute_wire_encode` additionally times
+selected wire decoding, Runner construction, output encoding and Runner teardown.
+Both include Runner teardown; both admit programs and generate/check mathematical
+oracle values outside timing. Backend construction is excluded from the wire boundary.
+These are selected entry codec controls; no protocol message transport, transcript
+or whole-protocol execution is measured.
+Select these cases with names containing `resident-installed-chain` or
+`wire-resident-chain`. Scalar field/vector, G1/G2 and pairing cases cover small
+and large inputs. Scaling and scalar products feed each result into the next
+operation; MSM chains accumulate repeated MSM outputs with resident curve addition;
+pairing chains return every Boolean for checking. No intermediate representation
+conversion is inserted in resident chains.
+
+Scalar-vector multiplication includes 8,192 and 32,768 elements for both curve
+families, covering the shared vector kernel's parallel chunks as well as small
+calls. The direct Arkworks controls use the same typed destination kernel as
+Native; their result checks use scalar loops outside timing. Curve scaling and
+MSM results are checked using element-wise Arkworks multiplication and addition,
+without reusing the measured bulk plan or MSM. These checks share Arkworks scalar
+and group primitives and are not independent curve-coordinate implementations.
+Operands and base-point coefficients use distinct deterministic hash domains,
+so reversing a single-step vector result is observable. Direct point-valued
+controls retain inline points for both providers; observer-only singleton vectors
+are constructed outside timing. Setup constructs foreign input storage only for
+the resident or export controls that consume it. The converted installed panel
+stops at 8,192 vector elements so explicit conversions fit Native's default work
+allowance; direct and resident-chain panels also include 32,768 elements.
+
+Worker diagnostics retain the admitted straight-line program, exact physical
+ports, chain length, arithmetic calls, explicit conversion directions/counts,
+elements and canonical payload bytes (excluding framing), and native wire byte
+counts. Conversion counts describe reached program occurrences, not allocator
+instrumentation. Native selected codecs construct resident values through
+`decode_native_value`; direct wire paths need no Arkworks value construction
+inside timing. MSM requires explicit trusted variable-time authorization.
+Provider workspace admission bounds (where available) are declared limits rather
+than observed allocation peaks. Managed input retained-payload charges and terminal Runner usage are reported
+separately from process lifetime peak RSS. Public APIs currently expose no
+retained/scratch high-water counters, so those fields are null; cumulative fresh
+payload is not a peak, and provider-hidden allocation is not allocator-traced.
+
+For exploratory resident measurements use `--processes=3`, bounded build workers
+(`cargo build --release --locked --jobs=2 -p zkc-benchmarks`) and the existing
+scheduler without `--exclusive`. Preserve each process's samples and variability;
+these operation/control measurements do not establish protocol throughput.

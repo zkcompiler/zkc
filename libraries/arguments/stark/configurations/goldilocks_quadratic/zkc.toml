@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::configurations::goldilocks_quadratic" = "lib.zkc"
+
+["dependencies"]
+"stark-contract" = "../contract"
+"collections" = "../../../../core/collections"
+"primitive-cryptography" = "../../../../core/primitives/cryptography"

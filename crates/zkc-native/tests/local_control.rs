@@ -46,7 +46,7 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
                     };
                     bindings.insert(
                         name.into(),
-                        json!([name, name, args, format!("arkworks/{name}")]),
+                        json!([name, name, args, format!("arkworks/{name}"), []]),
                     );
                 }
                 "if" => {
@@ -479,12 +479,15 @@ fn malformed_dead_regions_and_affine_copy_are_rejected() {
     cases.push(v);
     for (i, v) in cases.iter().enumerate() {
         assert!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(v).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&backend)?;
-                    Ok(program)
-                })
-                .is_err(),
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(v).unwrap(),
+                zkc_native::native_contracts()
+            )
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .is_err(),
             "mutation {i}"
         );
     }
@@ -492,12 +495,15 @@ fn malformed_dead_regions_and_affine_copy_are_rejected() {
     let mut v = good;
     v[1][0][3] = json!("missing/random.draw");
     assert!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&v).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .is_err()
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&v).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .is_err()
     );
 }
 #[test]
@@ -551,7 +557,7 @@ fn dynamic_bound_and_iteration_exhaustion_are_finite() {
 fn finite_value_budget_refuses_region_entry_without_open_frame_leak() {
     let bytes = choose();
     let b = Traced::new(ark_backend(None));
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -580,13 +586,16 @@ fn local_control_is_not_admitted_in_protocol_body() {
     let mut value: Json = serde_json::from_slice(&choose()).unwrap();
     value[3][0][6][0] = value[2][0][4][0].clone();
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
-            .and_then(|program| {
-                program.check_installation(&ark_backend(None))?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&value).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Record
     );
 }
@@ -634,7 +643,7 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
         .insert(2, json!(["op", "not2", "bool.not", [], ["b"], ["m"]]));
     let bytes = serde_json::to_vec(&value).unwrap();
     let b = Traced::new(ark_backend(None));
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -681,7 +690,7 @@ fn local_region_depth_counts_every_active_native_frame() {
         body.as_array_mut().unwrap().last_mut().unwrap()[0] = json!("return");
         let bytes = candidate(json!([["ok", "bool"]]), json!(["bool"]), body);
         if !succeeds {
-            let error = zkc_runtime::vm::Program::decode(&bytes)
+            let error = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&ark_backend(None))?;
                     Ok(program)
@@ -749,7 +758,7 @@ fn instruction_exhaustion_does_not_execute_suffix_or_next_iteration() {
 #[test]
 fn recursive_installation_inventory_and_reinstallation_cover_nested_operations() {
     let bytes = random_loop();
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -758,7 +767,7 @@ fn recursive_installation_inventory_and_reinstallation_cover_nested_operations()
     let mut backend = Traced::new(ark_backend(None));
     backend.blocked = Some("random.draw".into());
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&bytes)
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -809,7 +818,7 @@ fn nested_cleanup_failure_is_recorded_without_hiding_consumed_rng_exhaustion() {
 fn bindings_are_prepared_once_per_owned_backend_not_per_iteration() {
     let bytes = sum_loop();
     let admitting = Traced::new(ark_backend(None));
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&admitting)?;
             Ok(program)
@@ -863,15 +872,23 @@ fn preparation_identity_includes_static_arguments_and_coalesces_declaration_alia
                 "first",
                 "sequence.empty",
                 ["index"],
-                "native/sequence.empty"
+                "native/sequence.empty",
+                []
             ],
             [
                 "alias",
                 "sequence.empty",
                 ["index"],
-                "native/sequence.empty"
+                "native/sequence.empty",
+                []
             ],
-            ["other", "sequence.empty", ["bool"], "native/sequence.empty"]
+            [
+                "other",
+                "sequence.empty",
+                ["bool"],
+                "native/sequence.empty",
+                []
+            ]
         ],
         [[
             "function",
@@ -903,7 +920,7 @@ fn preparation_identity_includes_static_arguments_and_coalesces_declaration_alia
     ]))
     .unwrap();
     let admitting = Traced::new(ark_backend(None));
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&admitting)?;
             Ok(program)
@@ -938,6 +955,7 @@ fn native_direct_call_refuses_a_handle_for_a_different_binding() {
         contract: "bool.not".into(),
         arguments: vec![],
         implementation: "arkworks/bool.not".into(),
+        physical_arguments: vec![],
     });
     let (out, _, backend) = execute(load(
         &choose(),
@@ -978,13 +996,16 @@ fn preparation_handles_terminal_branches_and_rejects_fabricated_results() {
     let mut bad: Json = serde_json::from_slice(&bytes).unwrap();
     bad[2][0][4][0][6] = json!(["fabricated"]);
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
-            .and_then(|program| {
-                program.check_installation(&ark_backend(None))?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&bad).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Signature
     );
     let mut duplicate: Json = serde_json::from_slice(&bytes).unwrap();
@@ -993,13 +1014,16 @@ fn preparation_handles_terminal_branches_and_rejects_fabricated_results() {
         .unwrap()
         .push(json!(["c", "bool@native.bool/0"]));
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&duplicate).unwrap())
-            .and_then(|program| {
-                program.check_installation(&ark_backend(None))?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&duplicate).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
 }
@@ -1016,7 +1040,7 @@ fn prepared_code_keeps_attributes_at_each_call_site() {
         ]),
     );
     let backend = Traced::new(ark_backend(None));
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -1094,7 +1118,7 @@ fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
             ["return", []]
         ]),
     );
-    let admitted = zkc_runtime::vm::Program::decode(&program)
+    let admitted = zkc_runtime::vm::Program::decode(&program, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&ark_backend(None))?;
             Ok(program)
@@ -1160,6 +1184,7 @@ fn native_direct_call_refuses_a_different_handle_with_identical_ports() {
         contract: "vector.dot".into(),
         arguments: vec!["bls12-381.fr".into()],
         implementation: "arkworks/vector.dot".into(),
+        physical_arguments: vec![],
     };
     let substitute = OperationBinding {
         implementation: "arkworks-pairwise/vector.dot".into(),

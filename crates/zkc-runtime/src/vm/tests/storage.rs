@@ -41,12 +41,15 @@ fn owned_return_transfer_keeps_backing_alive_and_releases_a_refused_condition() 
         32,
         true,
     );
-    let program = Program::decode(&bytes(&one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([["return", []]]),
-    )))
+    let program = Program::decode(
+        &bytes(&one(
+            json!([]),
+            json!([]),
+            json!([]),
+            json!([["return", []]]),
+        )),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
     .unwrap();
     let mut instance = Instance::new(
         &program,
@@ -405,12 +408,15 @@ fn run_budgeted(
 ) -> (String, Usage, StorageBackend) {
     let mut backend = StorageBackend::new(charge, failure);
     backend.later_charge = later_charge;
-    let admitted = crate::vm::Program::decode(&bytes(&program(release, repeat)))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = crate::vm::Program::decode(
+        &bytes(&program(release, repeat)),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     let mut runner = Runner::new_with_value_budget(
         &admitted,
         "main",
@@ -501,12 +507,15 @@ fn host_value_budget_checks_entry_and_keeps_individual_value_limit() {
             json!([]),
             json!([["return", []]]),
         );
-        let admitted = crate::vm::Program::decode(&bytes(&program))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = crate::vm::Program::decode(
+            &bytes(&program),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
         let result = Runner::new_with_value_budget(
             &admitted,
             "main",
@@ -622,13 +631,16 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
             .unwrap()
             .insert(position, json!(["release", names]));
         assert_eq!(
-            crate::vm::Program::decode(&bytes(&candidate))
-                .and_then(|program| {
-                    program.check_installation(&backend)?;
-                    Ok(program)
-                })
-                .unwrap_err()
-                .code,
+            crate::vm::Program::decode(
+                &bytes(&candidate),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
             code
         );
     }
@@ -638,13 +650,16 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .unwrap()
         .insert(3, json!(["release", ["a"]]));
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&duplicate))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&duplicate),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
     let mut returned = program(true, None);
@@ -655,25 +670,31 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .last_mut()
         .unwrap()[1] = json!(["c"]);
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&returned))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&returned),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
     let mut rebound = program(true, None);
     rebound[2][0][4][3][5] = json!(["a"]);
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&rebound))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&rebound),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
     for ty in [
@@ -695,7 +716,11 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
             json!([]),
             json!([["return", []]]),
         );
-        let admitted = crate::vm::Program::decode(&bytes(&candidate)).and_then(|program| {
+        let admitted = crate::vm::Program::decode(
+            &bytes(&candidate),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
         });
@@ -713,25 +738,31 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .unwrap()
         .insert(0, json!(["release", ["a"]]));
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&control))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&control),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Record
     );
     let mut logical = program(true, None);
     logical.as_array_mut().unwrap().insert(2, json!("logical"));
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&logical))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&logical),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Record
     );
 }
@@ -798,22 +829,28 @@ fn storage_release_after_affine_consumption_is_rejected() {
         json!([["return", []]]),
     );
     let backend = StorageBackend::new(1, None);
-    crate::vm::Program::decode(&bytes(&candidate))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    crate::vm::Program::decode(
+        &bytes(&candidate),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     candidate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["release", ["r"]]));
-    let error = crate::vm::Program::decode(&bytes(&candidate))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = crate::vm::Program::decode(
+        &bytes(&candidate),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(error.code, ErrorCode::Ssa);
 }
 
@@ -824,12 +861,15 @@ fn drive(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (String, Usage, StorageBackend) {
-    let admitted = crate::vm::Program::decode(&bytes(program))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = crate::vm::Program::decode(
+        &bytes(program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted,
         "main",
@@ -1356,12 +1396,15 @@ fn participant_handoff_references_are_released_on_every_failure() {
 #[test]
 fn logical_work_budget_has_a_hard_ceiling() {
     let backend = StorageBackend::new(1, None);
-    let admitted = crate::vm::Program::decode(&bytes(&program(false, None)))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = crate::vm::Program::decode(
+        &bytes(&program(false, None)),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     for (budget, accepted) in [
         (Limits::LOGICAL_BYTES, true),
         (Limits::LOGICAL_BYTES + 1, false),

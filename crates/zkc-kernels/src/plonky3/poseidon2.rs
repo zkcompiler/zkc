@@ -6,6 +6,7 @@
 //! docs/spec/domains/permutations.md.
 use super::KoalaBear;
 use crate::interop::Work;
+use p3_field::{Field, PackedValue};
 use p3_koala_bear::{Poseidon2KoalaBear, default_koalabear_poseidon2_16};
 use p3_symmetric::Permutation;
 use std::sync::OnceLock;
@@ -43,11 +44,33 @@ pub fn permute_states(states: &[KoalaBear], out: &mut Vec<KoalaBear>) -> Result<
     if !states.len().is_multiple_of(WIDTH) {
         return Err(Error::Width);
     }
-    for state in states.as_chunks::<WIDTH>().0 {
-        let mut state = *state;
-        permutation().permute_mut(&mut state);
-        out.extend_from_slice(&state);
-    }
+    let start = out.len();
+    out.extend_from_slice(states);
+    crate::cpu::chunks_mut(&mut out[start..], 128 * WIDTH, |_, states| {
+        type Packed = <KoalaBear as Field>::Packing;
+        let packed_elements = WIDTH * Packed::WIDTH;
+        let end = if Packed::WIDTH > 1 {
+            states.len() / packed_elements * packed_elements
+        } else {
+            0
+        };
+        let (packed, tail) = states.split_at_mut(end);
+        for block in packed.chunks_exact_mut(packed_elements) {
+            // Transpose independent row-major states into SIMD lanes. The
+            // caller's final row layout and every scalar tail stay unchanged.
+            let mut lanes: [Packed; WIDTH] =
+                std::array::from_fn(|column| Packed::from_fn(|lane| block[lane * WIDTH + column]));
+            permutation().permute_mut(&mut lanes);
+            for (column, lane) in lanes.iter().enumerate() {
+                for (row, value) in lane.as_slice().iter().enumerate() {
+                    block[row * WIDTH + column] = *value;
+                }
+            }
+        }
+        for state in tail.as_chunks_mut::<WIDTH>().0 {
+            permutation().permute_mut(state);
+        }
+    });
     Ok(())
 }
 
@@ -89,6 +112,22 @@ mod tests {
                 Err(Error::Width)
             );
             assert_eq!(out, [KoalaBear::new(99)]);
+        }
+    }
+
+    #[test]
+    fn packed_blocks_and_scalar_tails_preserve_every_state() {
+        for count in [1, 15, 16, 17, 127, 128, 129, 257] {
+            let states: Vec<_> = (0..count * WIDTH)
+                .map(|i| KoalaBear::new((i * 17 + i / WIDTH) as u32))
+                .collect();
+            let mut expected = states.clone();
+            for state in expected.as_chunks_mut::<WIDTH>().0 {
+                default_koalabear_poseidon2_16().permute_mut(state);
+            }
+            let mut actual = Vec::new();
+            permute_states(&states, &mut actual).unwrap();
+            assert_eq!(actual, expected, "state count {count}");
         }
     }
 }

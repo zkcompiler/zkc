@@ -3,6 +3,7 @@
 
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Binding.h"
+#include "zkc/Target/Selection.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/ADT/StringRef.h"
 #include <memory>
@@ -43,7 +44,8 @@ std::unique_ptr<mlir::Pass> createExpandAlgorithmsPass();
 /// Selections have already been checked against the caller's retained source.
 std::unique_ptr<mlir::Pass> createSelectPhysicalPass(
     protocol::Assignments selections = {}, bool linearContractions = false,
-    bool releaseStorage = false, LinearContractionStats *statistics = nullptr);
+    bool releaseStorage = false, LinearContractionStats *statistics = nullptr,
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
 } // namespace protocol
 namespace kernel {
 /// Realize logical numerical units into existing Local execution before

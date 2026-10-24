@@ -344,9 +344,9 @@ int main() {
   mutation("untracked binding declaration", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
     OpBuilder builder(function);
-    local::OperationBindingOp::create(builder, function.getLoc(),
-                                      "unused_binding", "bool.and",
-                                      builder.getArrayAttr({}), "");
+    local::OperationBindingOp::create(
+        builder, function.getLoc(), "unused_binding", "bool.and",
+        builder.getArrayAttr({}), "", mlir::ArrayAttr{});
   });
   mutation("generated logical origin", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
@@ -414,7 +414,8 @@ int main() {
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(&unit.getBody().front());
     local::OperationBindingOp::create(builder, unit.getLoc(), "authored_and",
-                                      "bool.and", builder.getArrayAttr({}), "");
+                                      "bool.and", builder.getArrayAttr({}), "",
+                                      mlir::ArrayAttr{});
     require(succeeded(verify(*original)), "authored binding lost formation");
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());

@@ -10,10 +10,12 @@ from .runner import CONTROL, Job, execute_job, refuse
 from .projects import freeze_project
 from .workloads import Protocol, catalog as protocol_catalog
 from .coverage import catalog as execution_catalog, SMOKE
+from .providers import Case as ProviderCase, catalog as provider_catalog
+from .eip4844 import Case as Eip4844Case, catalog as eip4844_catalog
 
 
 def catalog():
-    return protocol_catalog() + execution_catalog()
+    return protocol_catalog() + execution_catalog() + provider_catalog() + eip4844_catalog()
 
 
 class ProofChecks:
@@ -37,12 +39,12 @@ def prepare(args, output, capture, manifest):
     if args.preset == 'smoke':
         selected = [c for c in selected if c[0] in SMOKE]
     elif args.preset == 'execution':
-        selected = [c for c in selected if not isinstance(c[1], Protocol)]
+        selected = [c for c in selected if not isinstance(c[1], (Protocol, ProviderCase, Eip4844Case))]
     elif args.preset == 'stark':
         selected = [c for c in selected if c[1].name in ('air', 'stark', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
     if args.execution_counts:
-        require(all(not isinstance(c[1], Protocol) for c in selected), 'execution counts require source workloads')
+        require(all(not isinstance(c[1], (Protocol, ProviderCase, Eip4844Case)) for c in selected), 'execution counts require source workloads')
     controls = [c for c in selected if not isinstance(c[1], Protocol)]
     selected = [c for c in selected if isinstance(c[1], Protocol)]
     suites = {c[1].name: c[1] for c in selected}
@@ -56,8 +58,12 @@ def prepare(args, output, capture, manifest):
 
     execution_checks = {}
     from .execution import prepare_case as prepare_execution
+    from .providers import prepare_case as prepare_provider
+    from .eip4844 import prepare_case as prepare_eip4844
     for name, case, _ in controls:
-        jobs, gate = prepare_execution(args, output, capture, manifest, case)
+        prepare_control = (prepare_provider if isinstance(case, ProviderCase) else
+                           prepare_eip4844 if isinstance(case, Eip4844Case) else prepare_execution)
+        jobs, gate = prepare_control(args, output, capture, manifest, case)
         all_jobs.extend(jobs)
         execution_checks[name] = gate
 
@@ -79,7 +85,7 @@ def capture_sources(args, output, capture, manifest, suites):
         capture.add(getattr(args, name))
     # The executing harness and worker sources are evidence, not proof of a binary build.
     for path in sorted((ROOT / 'common/benchmarks').rglob('*')):
-        if path.is_file() and path.suffix in ('.py', '.cpp'):
+        if path.is_file() and path.suffix in ('.py', '.cpp', '.rs'):
             capture.add(path, Path('measurement') / path.relative_to(ROOT))
     for path in sorted((root / 'crates/zkc-benchmarks').rglob('*')):
         if path.is_file() and path.suffix in ('.rs', '.toml'):
@@ -93,6 +99,29 @@ def capture_sources(args, output, capture, manifest, suites):
         return Path(record['stdout']).read_text().strip()
     for name, tree in (('source', root), ('harness', ROOT)):
         manifest[name] = {'revision': git(tree, 'rev-parse', 'HEAD'), 'status': git(tree, 'status', '--short')}
+        # Record the actual dirty source, including newly added provider files.
+        # A base revision and status listing cannot reconstruct those contents.
+        changes = git(tree, 'diff', 'HEAD', '--name-only', '--diff-filter=ACMRT', '-z')
+        untracked = git(tree, 'ls-files', '--others', '--exclude-standard', '-z')
+        for relative in sorted(set((changes + '\0' + untracked).split('\0')) - {''}):
+            path = tree / relative
+            if path.is_file():
+                capture.add(path, Path(name) / relative)
+    for index, path in enumerate(getattr(args, 'cargo_manifest', [])):
+        path = path.resolve()
+        metadata = output/'preparation'/f'cargo-metadata-{index}.json'
+        journal.command(['cargo', 'metadata', '--offline', '--locked', '--format-version=1',
+                         '--manifest-path', path], cwd=path.parent, stdout=metadata)
+        graph = json.loads(metadata.read_text())
+        packages = {p['id']: p for p in graph['packages']}
+        manifest.setdefault('references', {}).setdefault('rust_features', []).append({
+            'manifest': str(path), 'metadata': capture.add(metadata),
+            'scope': 'resolved source graph; not an attestation of a prebuilt binary or target-specific compilation',
+            'packages': [{'name': packages[n['id']]['name'], 'version': packages[n['id']]['version'],
+                          'features': sorted(n['features'])} for n in graph['resolve']['nodes']],
+        })
+        capture.add(path)
+        capture.add(Path(graph['workspace_root'])/'Cargo.lock')
     for protocol in suites.values():
         tool = getattr(args, protocol.reference_tool)
         require(tool is not None, f'{protocol.name} requires --{protocol.reference_tool}')
@@ -129,6 +158,26 @@ def compile_projects(args, output, capture, manifest, suites, journal):
         packages[suite] = package
         manifest['compilation'][suite] = records
     return packages
+
+
+def observe_cli(args, directory, package, public, witness):
+    """Observe complete proof processes under the requested worker policy."""
+    cli = Journal(directory / 'cli', args.timeout)
+    proof = directory / 'cli.proof'
+    flags = [f'--package={package}', f'--sha256={digest(package)}',
+             f'--public={public}', '--allow-authored', f'--threads={args.threads}']
+    times = {}
+    for operation, status, extra in (
+        ('prove', 'produced', [f'--witness={witness}', f'--output={proof}']),
+        ('verify', 'accepted', [f'--proof={proof}']),
+    ):
+        report, record = cli.report([args.runtime, '--json', operation, *flags, *extra],
+                                    cwd=args.source.resolve(), status=status)
+        cpu = report.get('cpu')
+        require(isinstance(cpu, dict) and type(cpu.get('workers')) is int
+                and cpu['workers'] == args.threads, 'CLI worker count differs from request')
+        times[f'{operation}_wall_seconds'] = record['wall_seconds']
+    return proof, times | {'workers': args.threads}
 
 
 def prepare_case(args, output, capture, manifest, name, protocol, size, package):
@@ -187,12 +236,8 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
         refuse(replace(job, backend=changed_backend),
                directory / f'{job.implementation}-changed', args.timeout)
     # CLI execution is retained as a different, separately named boundary.
-    cli = Journal(directory / 'cli', args.timeout)
-    flags = [f'--package={package}', f'--sha256={digest(package)}', f'--public={public_path}', '--allow-authored']
-    cli_proof = directory / 'cli.proof'
-    produced = cli.command([args.runtime, '--json', 'prove', *flags, f'--witness={witness_path}', f'--output={cli_proof}'], cwd=root)
-    verified = cli.report([args.runtime, '--json', 'verify', *flags, f'--proof={cli_proof}'], cwd=root, status='accepted')[1]
-    manifest.setdefault('cli', {})[name] = {'prove_wall_seconds': produced['wall_seconds'], 'verify_wall_seconds': verified['wall_seconds']}
+    cli_proof, observations = observe_cli(args, directory, package, public_path, witness_path)
+    manifest.setdefault('cli', {})[name] = observations
     capture.add(cli_proof)
     gate = ProofChecks(protocol.randomized)
     controls = [j.proof for j in jobs if j.operation == 'prove'] + [cli_proof]

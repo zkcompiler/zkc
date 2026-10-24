@@ -69,7 +69,7 @@ impl Arenas {
     }
 }
 fn binding(name: &str, field: &str) -> Json {
-    json!([name, "ring.point", [field], "plonky3/ring.point"])
+    json!([name, "ring.point", [field], "plonky3/ring.point", []])
 }
 /// `evaluate` substitutes the executed arena after a branch that is never
 /// taken; `inner` runs only inside the participant's loop.

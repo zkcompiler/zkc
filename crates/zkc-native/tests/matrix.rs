@@ -17,6 +17,7 @@ fn binding(d: usize, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![field.into()],
         implementation: format!("{provider}/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn vector(d: usize, xs: &[u64]) -> Value {
@@ -346,7 +347,7 @@ fn nominal_signatures_shapes_attributes_and_resource_failures_are_closed() {
                 &["out".into()],
             );
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&plan)
+                zkc_runtime::vm::Program::decode(&plan, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend(Policy::default()))?;
                         Ok(program)
@@ -622,6 +623,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                     "{}/transcript.native.indexed.observe.data",
                     if d == 0 { "arkworks" } else { "dalek" }
                 ),
+                physical_arguments: vec![],
             };
             assert_eq!(
                 b.binding_signature(&observe),

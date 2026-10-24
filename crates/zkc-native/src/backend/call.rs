@@ -4,7 +4,7 @@ use crate::{Result, ark, refused};
 use std::sync::Arc;
 use zkc_runtime::vm::AttributeRule;
 
-/// Backend-owned static call facts, including immutable decoded scalar literals.
+/// Backend-owned static call facts, including immutable decoded typed literals.
 /// Typed payloads require equal declarations, signatures and attributes. Actual
 /// operands, policy, domain, setup, custody and budgets remain invocation facts.
 pub struct NativeCall {
@@ -33,6 +33,8 @@ impl NativeCall {
         slot: &mut Option<Self>,
         binding: &Arc<CallBinding>,
         attributes: &[String],
+        policy: &crate::Policy,
+        available: usize,
     ) -> Result<()> {
         let rule = binding.signature.attributes;
         // The linked signature already fixes attribute interpretation. Keep
@@ -40,8 +42,11 @@ impl NativeCall {
         if rule == AttributeRule::None {
             return Self::prepare(slot, rule, attributes);
         }
-        if binding.declaration.contract == "field.constant" {
-            return Self::prepare_literal(slot, binding, attributes);
+        if matches!(
+            binding.declaration.contract.as_str(),
+            "field.constant" | "vector.constant"
+        ) {
+            return Self::prepare_literal(slot, binding, attributes, policy, available);
         }
         if rule != AttributeRule::NumericalExpression {
             return Self::prepare(slot, rule, attributes);
@@ -53,6 +58,8 @@ impl NativeCall {
         slot: &mut Option<Self>,
         binding: &Arc<CallBinding>,
         attributes: &[String],
+        policy: &crate::Policy,
+        available: usize,
     ) -> Result<()> {
         let signature = &binding.signature;
         if slot.as_ref().is_some_and(|call| {
@@ -63,15 +70,13 @@ impl NativeCall {
         }) {
             return Ok(());
         }
-        let field = signature
+        let output = signature
             .outputs
             .first()
-            .ok_or_else(|| refused("kernel-operands"))?
-            .logical()
-            .identity();
-        let value = crate::operations::field::decode_literal(field, attributes)?;
+            .ok_or_else(|| refused("kernel-operands"))?;
+        let value = crate::operations::literal::prepare(output, attributes, policy, available)?;
         // Failed decoding must neither publish a partial replacement nor use
-        // the previous successful scalar for this invocation.
+        // the previous successful literal for this invocation.
         *slot = Some(Self {
             rule: signature.attributes,
             attributes: attributes.into(),
@@ -168,6 +173,7 @@ impl NativeCall {
     pub(super) fn check(rule: AttributeRule, attributes: &[String]) -> Result<()> {
         use zkc_runtime::vm::Identity;
         let field = match rule {
+            AttributeRule::ResidueLiteral(field) => Some(field),
             AttributeRule::FieldDecimal => Some(Identity::Bls12381Fr),
             AttributeRule::Bn254Decimal => Some(Identity::Bn254Fr),
             AttributeRule::RistrettoDecimal => Some(Identity::Ristretto255Scalar),
@@ -198,6 +204,11 @@ impl NativeCall {
                     && attributes
                         .iter()
                         .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
+            AttributeRule::ResidueLiterals(field) => {
+                for literal in attributes {
+                    crate::operations::field::decode_literal(field, std::slice::from_ref(literal))?;
+                }
+            }
             AttributeRule::Bn254Decimals => {
                 for literal in attributes {
                     zkc_kernels::arkworks::bn254::parse_decimal(literal).map_err(ark)?;
@@ -327,6 +338,7 @@ mod tests {
 
     fn expression_binding(field: &str, provider: &str) -> Arc<CallBinding> {
         let declaration = zkc_runtime::vm::OperationBinding {
+            physical_arguments: vec![],
             contract: "numerical.map".into(),
             arguments: vec![field.into(), "1".into()],
             implementation: format!("{provider}/numerical.map"),
@@ -371,7 +383,8 @@ mod tests {
                 &mut signature.outputs[0]
             };
             let original = port.clone();
-            *port = PhysicalType::new(original.logical(), Representation::FrDiagonal).unwrap();
+            *port =
+                PhysicalType::new(original.logical().clone(), Representation::FrDiagonal).unwrap();
             assert_eq!(port.logical(), original.logical());
             assert_ne!(*port, original);
             assert_eq!(

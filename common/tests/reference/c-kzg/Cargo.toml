@@ -7,10 +7,19 @@ version = "0.0.0"
 edition = "2024"
 license = "Apache-2.0"
 publish = false
+default-run = "zkc-c-kzg-reference"
 
 [dependencies]
 # c-kzg-4844 v2.1.8, whose C sources equal the tagged revision
 # e125905e5e01186e6ccb7a0ced4845bf7eddbcfe.
 c-kzg = { version = "=2.1.8", default-features = false, features = ["std", "portable"] }
+rustix = { version = "=1.1.5", features = ["time"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.152", features = ["arbitrary_precision", "unbounded_depth"] }
+sha2 = "=0.11.0"
+
+[[bin]]
+name = "zkc-c-kzg-benchmarks"
+path = "../../../benchmarks/c_kzg.rs"
 
 [workspace]

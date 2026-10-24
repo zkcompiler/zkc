@@ -110,10 +110,12 @@ impl Transport {
 fn write_message<B: ProofBackend>(
     writer: &mut ProofWriter,
     backend: &B,
+    contracts: &crate::vm::Contracts,
     value: &B::Value,
     format: ProofFormat,
     ledger: Option<&crate::vm::ExecutionLedger>,
 ) -> Result<(), ArtifactFailure> {
+    check_native_wire(backend, contracts, &value.physical_type(), format)?;
     let bound = if format == ProofFormat::RawBytes {
         value.retained_bytes()
     } else {
@@ -129,6 +131,22 @@ fn write_message<B: ProofBackend>(
         .encode(backend, value)
         .map_err(ArtifactFailure::Wire)?;
     writer.message(&bytes)?;
+    Ok(())
+}
+
+fn check_native_wire<B: ProofBackend>(
+    backend: &B,
+    contracts: &crate::vm::Contracts,
+    ty: &crate::vm::PhysicalType,
+    format: ProofFormat,
+) -> Result<(), ArtifactFailure> {
+    if format == ProofFormat::Native
+        && (!contracts.permits_wire(ty, crate::vm::WireCodec::Native) || !backend.supports_wire(ty))
+    {
+        return Err(ArtifactFailure::Wire(WireError::Backend(
+            BackendError::new("proof-wire-type"),
+        )));
+    }
     Ok(())
 }
 
@@ -174,6 +192,7 @@ pub fn produce<B: ProofBackend>(
                 write_message(
                     &mut writer,
                     runner.backend(),
+                    runner.contracts(),
                     &packet.payload,
                     transport.format(),
                     ledger.as_ref(),
@@ -191,6 +210,7 @@ pub fn produce<B: ProofBackend>(
                     write_message(
                         &mut writer,
                         runner.backend(),
+                        runner.contracts(),
                         proof,
                         transport.format(),
                         ledger.as_ref(),
@@ -237,6 +257,12 @@ pub fn validate<B: ProofBackend>(
         acceptance,
         |backend, value| backend.acceptance(value),
         |runner, request, bytes| {
+            check_native_wire(
+                runner.backend(),
+                runner.contracts(),
+                &request.ty,
+                transport.format(),
+            )?;
             let cut = Action::<B::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;

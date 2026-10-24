@@ -47,7 +47,7 @@ fn fresh_with_policy(role: &str, policy: Policy) -> Runner<NativeBackend> {
         Default::default(),
     )
     .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -254,7 +254,7 @@ fn record_publication_is_exact_bounded_and_requires_return() {
             Default::default(),
         )
         .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&program)
+        let admitted = zkc_runtime::vm::Program::decode(&program, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -266,7 +266,7 @@ fn record_publication_is_exact_bounded_and_requires_return() {
             "P",
             "session",
             backend,
-            vec![Value::Bytes(std::sync::Arc::from([1, 2, 3]))],
+            vec![Value::Bytes([1, 2, 3].into())],
         )
         .unwrap_or_else(|_| panic!("record entry"))
     }

@@ -1,4 +1,5 @@
 #include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
@@ -65,11 +66,24 @@ const CosetConvention *cosetConvention(llvm::StringRef field) {
   static const CosetConvention koala{"koala-bear.two-adic.1791270792/0",
                                      "koala-bear", "1791270792",
                                      "shift * root(size)^i; i = 0..size-1", 24};
-  // Installed KoalaBear extensions evaluate on the base field's subgroups.
-  return field == "koala-bear" || field == "koala-bear.ext8-binomial3" ||
-                 field == "koala-bear.ext4-binomial3"
-             ? &koala
-             : nullptr;
+  // Plonky3 0.8.0 baby-bear/src/baby_bear.rs: TwoAdicData's entry 27
+  // is 0x1a427a41; test_baby_bear_two_adicity_generators checks every root
+  // against its successive squares. Goldilocks goldilocks/src/goldilocks.rs
+  // TWO_ADIC_GENERATORS[32] is 0x185629dcda58878c; TwoAdicField indexes it.
+  static const CosetConvention baby{"baby-bear.two-adic.440564289/0",
+                                    "baby-bear", "440564289",
+                                    "shift * root(size)^i; i = 0..size-1", 27};
+  static const CosetConvention goldilocks{
+      "goldilocks.two-adic.1753635133440165772/0", "goldilocks",
+      "1753635133440165772", "shift * root(size)^i; i = 0..size-1", 32};
+  const auto *registered = plonky3Field(field);
+  if (!registered)
+    return nullptr;
+  // Even a nonbase extension shift uses the BASE root and two-adicity.
+  for (const auto *convention : {&koala, &baby, &goldilocks})
+    if (registered->base == convention->rootField)
+      return convention;
+  return nullptr;
 }
 const OperationContracts *operationContracts(llvm::StringRef key) {
   const auto *application = findOperationShape(key);

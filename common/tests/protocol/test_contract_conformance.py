@@ -93,9 +93,23 @@ def finish(directory, failures):
     assert not failures, f"{len(failures)} disagreements; {directory / 'disagreements.json'}; {failures[:3]}"
 
 
-def binding(contract, arguments=(), implementation="", physical=False):
-    return {"contract": contract, "arguments": list(arguments),
-            "implementation": implementation, "physical": physical}
+def binding(contract, arguments=(), implementation="", physical=False, physical_arguments=None):
+    arguments = list(arguments)
+    parameters = [] if physical_arguments is None else list(physical_arguments)
+    # Independent fixture construction: the exchanged request always has the
+    # current logical arguments plus a separate physical parameter vector.
+    if physical and physical_arguments is None:
+        if contract.startswith("sequence.") and len(arguments) == 1:
+            parameters = [f"sequence<{arguments[0]}>@logical.sequence/0"]
+        elif contract.startswith("field_array.") and len(arguments) == 2:
+            representation = "blst/field-array[blst/fr]" if implementation.startswith("blst/") else "arkworks.field-array/0"
+            parameters = [f"field_array<{arguments[0]},{arguments[1]}>@{representation}"]
+        elif contract.startswith("fixed_vector.") and len(arguments) == 2:
+            representation = "blst/fixed-vector[blst/fr]" if implementation.startswith("blst/") else "plonky3.fixed-vector/0"
+            parameters = [f"fixed_vector<field:{arguments[0]},{arguments[1]}>@{representation}"]
+    return {"contract": contract, "arguments": arguments,
+            "implementation": implementation, "physical": physical,
+            "physical_arguments": parameters}
 
 
 def required_atomic_types():
@@ -188,7 +202,9 @@ def test_atomic_representations(inventory, drivers, directory):
         requests.append({"physical_type": spelling})
         expected.append({"accepted": True, "canonical": spelling}
                         if (kind, domain, representation) in keys else {"accepted": False})
-    assert len(requests) <= 1024, "review atomic representation probe growth"
+    # BabyBear/Goldilocks and the resident BN254 ports bring this bounded
+    # cross-product to 1,223 probes; retain a ceiling for future catalog growth.
+    assert len(requests) <= 1536, "review atomic representation probe growth"
     replies = query(drivers, requests, directory)
     failures = agreements(replies, requests)
     for consumer, actual in replies.items():
@@ -300,7 +316,9 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    assert len(rows) < 1700, "review enumeration growth; avoid combinatorial testing"
+    # Field, oracle and transcript additions produce 2,320 closed candidates.
+    # Enumerate each operation's domain sort rather than all parameter products.
+    assert len(rows) < 2560, "review enumeration growth; avoid combinatorial testing"
     return rows
 
 
@@ -357,7 +375,30 @@ def implementation_arguments(inventory):
     fields = {row["identity"] for row in inventory[1]["domains"] if row["sort"] == "Field"}
     arguments["table.relayout"] = {(field, source, target)
                                    for field in fields for source in tables for target in tables}
+    # Direct resident adapters have no logical declaration. Probe both admitted
+    # directions and identity/wrong-target refusals for every flat logical port.
+    conversions = set()
+    for row in inventory[1]["atomic_representations"]:
+        if (row["default"] or row["layout"] or
+                row["kind"] not in {"field", "vector", "group", "groups"}):
+            continue
+        logical = f"{row['kind']}:{row['domain']}"
+        ordinary = next(r["representation"] for r in inventory[1]["atomic_representations"]
+                        if r["kind"] == row["kind"] and r["domain"] == row["domain"] and r["default"])
+        resident = row["representation"]
+        conversions.update((logical, source, target)
+                           for source in (ordinary, resident)
+                           for target in (ordinary, resident, "unknown.representation/0"))
+    arguments["representation.convert"] = conversions
     return arguments
+
+
+def implementation_request(contract, arguments, implementation, physical):
+    if contract == "representation.convert":
+        logical, source, target = arguments
+        return binding(contract, [logical], implementation, physical,
+                       [logical + "@" + source, logical + "@" + target] if physical else [])
+    return binding(contract, arguments, implementation, physical)
 
 
 def implementation_requests(inventory, installed_identities):
@@ -365,7 +406,7 @@ def implementation_requests(inventory, installed_identities):
     pairs = set.union(*installed_identities.values())
     assert {contract for contract, _ in pairs} == arguments.keys(), (
         "new owner requires closed-argument coverage", {c for c, _ in pairs} ^ arguments.keys())
-    requests = [binding(contract, args, implementation, physical)
+    requests = [implementation_request(contract, args, implementation, physical)
                 for contract, implementation in sorted(pairs)
                 for args in sorted(arguments[contract]) for physical in (False, True)]
     assert len(requests) < 100000, "review implementation probe growth"
@@ -381,7 +422,7 @@ def installed_failures(replies, requests, installed_identities):
             # exact identities are still discovered by the other owners
             # and their full signatures are compared in the same probe union.
             bypass = consumer == "cpp" and (pair[0].startswith("resource_unit.") or
-                                             pair[0] == "table.relayout")
+                                             pair[0] in {"table.relayout", "representation.convert"})
             if response["accepted"] and pair not in installed_identities[consumer] and not bypass:
                 failures.append({"consumer": consumer, "accepted_but_not_discovered": request})
     return failures
@@ -442,7 +483,8 @@ def test_alternative_eligibility_boundaries(inventory, drivers, physical_drivers
     defaults = {(op["name"], implementation) for op, _, implementation in candidates(inventory)}
     # This subtraction classifies already independently discovered and resolved
     # names. It does not supply any alternative identity to a reader.
-    alternatives = accepted - defaults - {("table.relayout", "arkworks/table.relayout")}
+    alternatives = accepted - defaults - {("table.relayout", "arkworks/table.relayout"),
+                                          ("representation.convert", "native/representation.convert")}
     assert alternatives, "the alternative implementation path must be exercised"
     arguments = implementation_arguments(inventory)
     requests, coverage = [], []
@@ -459,15 +501,16 @@ def test_alternative_eligibility_boundaries(inventory, drivers, physical_drivers
         for other, choices in sorted(arguments.items()):
             if (other, implementation) in accepted:
                 continue
-            requests.extend(binding(other, args, implementation, physical)
-                            for args in sorted(choices) for physical in (False, True))
+            requests.extend(implementation_request(other, args, implementation, physical)
+                            for args in sorted(choices)[:1] for physical in (False, True))
         for request in good:
             requests.append({**request, "implementation": implementation + "/unknown"})
             requests.append({**request, "contract": contract + ".unknown"})
             requests.append({**request, "arguments": ["unknown.domain", *request["arguments"][1:]]})
-    # The reviewed coefficient-batch and ordered-search contracts expand the
-    # closed-domain cross product to 50,130 probes; retain an explicit bound.
-    assert len(requests) < 60000, "review alternative negative probe growth"
+    # The discovery probes cover complete closed-domain eligibility. A single
+    # argument witness per other contract covers exact owner-name refusal here,
+    # keeping the larger resident inventory's negative cross product bounded.
+    assert len(requests) < 75000, "review alternative negative probe growth"
     actual = query(drivers, requests, directory)
     failures = [{"consumer": consumer, "request": request, "unexpected_acceptance": response}
                 for consumer, rows in actual.items() for request, response in zip(requests, rows)
@@ -751,7 +794,7 @@ def test_bounded_json_lines_protocol(physical_drivers, directory):
                {"facets": "field.add", "arguments": ["koala-bear"], "publicReplay": True},
                {"facets": "field.add", "arguments": ["koala-bear"] * 17},
                b'{"type":"bool"} garbage', b'{"type":"\xff"}', b'[' * 32 + b']' * 32,
-               b" " * 16385, binding("field.add", ["koala-bear"] * 17),
+               b" " * (4 * 1024 * 1024 + 1), binding("field.add", ["koala-bear"] * 17),
                {**binding("field.add", ["koala-bear"]), "physical": 0},
                {**binding("field.add", ["koala-bear"]), "arguments": [1]},
                {**binding("field.add", ["koala-bear"]), "implementation": None},
@@ -948,6 +991,12 @@ def test_generated_applied_representations(inventory, drivers, directory):
         representations.add("unknown.representation/0")
         for representation in sorted(representations):
             physical = logical + "@" + representation
+            if representation in ("blst/field-array", "blst/fixed-vector"):
+                # These owners require resident children; omitting the child
+                # selects the independent canonical default and must refuse.
+                requests.append({"physical_type": physical})
+                wanted.append({"kind": "physical", "response": {"accepted": False}})
+                physical += "[blst/fr]"
             requests.append({"physical_type": physical})
             accepted = len([p for p in matches if p["representation"] == representation]) == 1
             wanted.append({"kind": "physical", "response": {"accepted": True, "canonical": physical}
@@ -1117,7 +1166,9 @@ def test_matrix_contraction_admits_only_dynamic_operands_without_attributes(driv
 
 def attribute_request(case):
     return {**binding(case["contract"], case["arguments"], case["implementation"], True),
-            "attributes": case["attributes"]}
+            "attributes": case["attributes"],
+            "physical_arguments": case.get("physical_arguments", binding(
+                case["contract"], case["arguments"], case["implementation"], True)["physical_arguments"])}
 
 
 def admission_failures(cases, replies):
@@ -1454,3 +1505,139 @@ def test_table_widths_independent_signatures(physical_drivers, directory):
             assert row['accepted'] and row['physical'], (consumer, row)
             assert row['inputs'] == []
             assert [value.split('@')[0] for value in row['outputs']] == ['index'] * 3
+
+
+def test_complete_aggregate_layout_contracts(physical_drivers, directory):
+    field = "field:bls12-381.fr"
+    selected = field + "@blst/fr"
+    sequence = f"sequence<{field}>@logical.sequence/0[blst/fr]"
+    nested = f"sequence<sequence<{field}>>@logical.sequence/0[logical.sequence/0[blst/fr]]"
+    array = "field_array<bls12-381.fr,4>@blst/field-array[blst/fr]"
+    fixed = f"fixed_vector<{field},4>@blst/fixed-vector[blst/fr]"
+    # Independent canonical postorder graph: none | value(Fr) | unused(G2).
+    nodes = ["AggregateChoice", "none", [], ["1", "2"], "value", field,
+             ["5"], ["4", "6"], "unused", "group:bls12-381.g2", ["9"],
+             ["8", "10"], ["3", "7", "11"], ["0", "12"]]
+    variant = "variant:" + json.dumps(["zkc.variant/0", nodes], separators=(",", ":")).encode().hex()
+    chosen_variant = variant + "@logical.variant/0[blst/fr,blst/g2]"
+    changed_inactive = variant + "@logical.variant/0[blst/fr,arkworks.bls12-381-g2/0]"
+    valid = [selected, sequence, nested, array, fixed, chosen_variant, changed_inactive,
+             "field_array<bls12-381.fr,0>@blst/field-array[blst/fr]",
+             f"fixed_vector<{field},0>@blst/fixed-vector[blst/fr]"]
+    invalid = [sequence + " ", sequence.replace("[blst/fr]", "[]"),
+               sequence.replace("[blst/fr]", "[blst/fr,blst/fr]"),
+               sequence.replace("[blst/fr]", "[arkworks.fr/0]"),
+               array.replace("blst/field-array", "arkworks.field-array/0"),
+               fixed.replace("[blst/fr]", "[arkworks.fr/0]"),
+               selected + "[]", nested.replace("blst/fr", "foreign/fr"),
+               chosen_variant.replace("blst/g2", "foreign/g2"),
+               chosen_variant.replace(",blst/g2", ""),
+               chosen_variant.replace("blst/g2", "blst/fr")]
+    requests = [{"physical_type": value} for value in valid + invalid]
+    # Formation is owned by the compiler and Runtime readers. The executing
+    # backend advertises its complete types through binding signatures below.
+    type_drivers = {name: driver for name, driver in physical_drivers.items() if name != "backend"}
+    replies = query(type_drivers, requests, directory / "types")
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for text, row in zip(valid, rows):
+            assert row == {"accepted": True, "canonical": text}, (consumer, text, row)
+        assert all(row == {"accepted": False} for row in rows[len(valid):]), consumer
+    no_default_element = f"fixed_vector<{field},2>"
+    no_default_sequence = f"sequence<{no_default_element}>@logical.sequence/0[blst/fixed-vector[blst/fr]]"
+    logical_requests = [binding("sequence.empty", [no_default_element], "native/sequence.empty")]
+    replies = query(type_drivers, logical_requests, directory / "logical-without-physical-default")
+    finish(directory, agreements(replies, logical_requests))
+    for consumer, rows in replies.items():
+        assert rows == [{"accepted": True, "physical": False, "inputs": [],
+                         "outputs": [f"sequence<{no_default_element}>"]}], (consumer, rows)
+    requests = [
+        binding("sequence.append", [field], "native/sequence.append", True, [sequence]),
+        binding("sequence.at", [f"sequence<{field}>"], "native/sequence.at", True, [nested]),
+        binding("field_array.from_vector", ["bls12-381.fr", "4"], "blst/resident/field_array.from_vector", True, [array]),
+        binding("fixed_vector.dot", ["bls12-381.fr", "4"], "blst/resident/fixed_vector.dot", True, [fixed]),
+        binding("representation.convert", [field], "native/representation.convert", True,
+                [field + "@arkworks.fr/0", selected]),
+        binding("sequence.empty", [no_default_element], "native/sequence.empty", True, [no_default_sequence]),
+    ]
+    expected = [([sequence, selected], [sequence]), ([nested, "index@native.index/0"], [sequence]),
+                (["vector:bls12-381.fr@blst/fr"], [array]), ([fixed, fixed], [selected]),
+                ([field + "@arkworks.fr/0"], [selected]), ([], [no_default_sequence])]
+    replies = query(physical_drivers, requests, directory / "signatures")
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for request, (inputs, outputs), row in zip(requests, expected, rows):
+            assert row == {"accepted": True, "physical": True, "inputs": inputs, "outputs": outputs}, (consumer, request, row)
+    bad = [
+        binding("sequence.append", [field], "native/sequence.append", True, [nested]),
+        binding("field.add", ["bls12-381.fr"], "arkworks/field.add", True, [selected]),
+        binding("sequence.append", [field], "native/sequence.append", False, [sequence]),
+        binding("representation.convert", [f"sequence<{field}>"], "native/representation.convert", True,
+                [f"sequence<{field}>@logical.sequence/0", sequence]),
+        binding("representation.convert", [field], "native/representation.convert", True, [selected, selected]),
+        binding("representation.convert", [field], "native/representation.convert", True, [selected]),
+    ]
+    # Neither an artifact-provided signature nor the former request envelope
+    # grants admission to a specialization or conversion law.
+    old = dict(requests[0])
+    old.pop("physical_arguments")
+    bad.append(old)
+    replies = query(physical_drivers, bad, directory / "refusals")
+    for consumer, rows in replies.items():
+        assert all(row == {"accepted": False} for row in rows), (consumer, rows)
+
+
+def test_complete_aggregate_properties(drivers, directory):
+    field = "field:bls12-381.fr"
+    sequence = f"sequence<{field}>@logical.sequence/0[blst/fr]"
+    # Independently encoded nominal alternatives: no value or one payload.
+    def variant(payload, suffix):
+        nodes = ["PropertyChoice", "none", [], ["1", "2"], "some", payload,
+                 ["5"], ["4", "6"], ["3", "7"], ["0", "8"]]
+        return "variant:" + json.dumps(["zkc.variant/0", nodes], separators=(",", ":")).encode().hex() + suffix
+
+    probes = [
+        ("sequence<bool>@logical.sequence/0", True, True, True),
+        (sequence, True, True, True),
+        (f"sequence<sequence<{field}>>@logical.sequence/0[logical.sequence/0[blst/fr]]", True, True, True),
+        (variant(field, "@logical.variant/0"), True, True, True),
+        (variant(field, "@logical.variant/0[blst/fr]"), True, True, True),
+        ("field_array<bls12-381.fr,0>@blst/field-array[blst/fr]", True, True, True),
+        (f"fixed_vector<{field},0>@blst/fixed-vector[blst/fr]", True, True, False),
+        (variant(f"fixed_vector<{field},2>", "@logical.variant/0[blst/fixed-vector[blst/fr]]"), True, True, False),
+        (variant("rng:bls12-381.fr", "@logical.variant/0"), False, False, False),
+    ]
+    requests = [{"physical_properties": text} for text, *_ in probes]
+    requests.append({"physical_properties": sequence.replace("blst/fr", "foreign/fr")})
+    replies = query(drivers, requests, directory)
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for (text, copy, drop, wire), row in zip(probes, rows):
+            assert row == {"accepted": True, "copy": copy, "drop": drop,
+                           "native_message": wire}, (consumer, text, row)
+        assert rows[-1] == {"accepted": False}, consumer
+
+
+def test_selected_indexed_transcript_payload(physical_drivers, directory):
+    suite = "merlin3.bls12-381.fr64be/0"
+    transcript = f"transcript:{suite}@host.resource/0"
+    sequence = "sequence<field:bls12-381.fr>@logical.sequence/0[blst/fr]"
+    array = "field_array<bls12-381.fr,4>@blst/field-array[blst/fr]"
+    contract = "transcript.native.indexed.observe.data"
+    implementation = "arkworks/" + contract
+    requests = [binding(contract, [suite, text.split("@")[0]], implementation, True, [text])
+                for text in (sequence, array)]
+    replies = query(physical_drivers, requests, directory / "selected")
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for text, row in zip((sequence, array), rows):
+            assert row == {"accepted": True, "physical": True,
+                           "inputs": [transcript, text, "indices@native.indices/0"],
+                           "outputs": [transcript]}, (consumer, text, row)
+    bad = [binding(contract, [suite, sequence.split("@")[0]], implementation, True,
+                   ["field:bls12-381.fr@blst/fr"]),
+           binding(contract, [suite, sequence.split("@")[0]], implementation, True, [sequence, sequence]),
+           binding(contract, [suite, sequence.split("@")[0]], implementation, False, [sequence])]
+    replies = query(physical_drivers, bad, directory / "refusals")
+    for consumer, rows in replies.items():
+        assert rows == [{"accepted": False}] * len(bad), (consumer, rows)

@@ -2,6 +2,7 @@
 //! and an independent integer model of `koala-bear.ext8-binomial3`.
 use super::*;
 use crate::{KoalaBearExt4, KoalaBearExt8, ring::Budget};
+use p3_field::PrimeField32;
 use zkc_runtime::relation::{
     Assertion, Authority, Channel, ChannelKind, Columns, Group, Height, HeightAuthority, Input,
     Interaction, Locality, PolynomialInput, PolynomialShape, ReadModel, Scope, Slot, Table,
@@ -959,6 +960,7 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
                 contract: contract.into(),
                 arguments: vec![field.into(), table.into()],
                 implementation: format!("plonky3/{contract}"),
+                physical_arguments: vec![],
             };
             let got = signature(&binding);
             assert_eq!(got.is_some(), accepted);
@@ -981,6 +983,7 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
                 contract: contract.into(),
                 arguments: vec![field.into(), "0".into()],
                 implementation: format!("plonky3/{contract}"),
+                physical_arguments: vec![],
             };
             let got = signature(&binding).unwrap();
             assert_eq!((got.inputs.len(), got.outputs.len()), (inputs, 1));
