@@ -500,7 +500,13 @@ impl Core {
             return Err(refused("kernel-operands"));
         }
         if let Some(call) = call {
-            super::NativeCall::prepare_invocation(call, binding, i.attributes)?;
+            super::NativeCall::prepare_invocation(
+                call,
+                binding,
+                i.attributes,
+                &self.policy,
+                i.max_output_bytes,
+            )?;
         } else {
             super::NativeCall::check(signature.attributes, i.attributes)?;
         }

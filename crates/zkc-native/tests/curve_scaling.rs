@@ -20,7 +20,6 @@ macro_rules! ark_scaling_tests {
         $points:ident, $scalars:ident, $field:ident, $width:expr) => {
         mod $module {
             use super::*;
-            use std::sync::Arc;
             type Point = $point;
             type Scalar = $scalar;
             fn repeated_add(point: Point, scalar: usize) -> Point {
@@ -106,7 +105,7 @@ macro_rules! ark_scaling_tests {
                                 panic!("wrong representation")
                             };
                             if len != 0 {
-                                assert!(!Arc::ptr_eq(original, result));
+                                assert!(!zkc_native::Buffer::ptr_eq(original, result));
                             }
                             assert_value(&input, &alias);
                             assert_value(&input, &saved);

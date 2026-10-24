@@ -1,4 +1,6 @@
-//! Scalar counterparts of the index_preparation Runner and boundary probes.
+//! Typed literal preparation through real Runner frames and boundary probes.
+#[path = "vector_literal_tests.rs"]
+mod vectors;
 use super::{CallBinding, CallPayload, NativeCall};
 use crate::operations::field::LITERAL_DECODES;
 use crate::{Domain, EntryPolicy, NativeBackend, NativeOperation, Policy, Result, Value};
@@ -105,6 +107,7 @@ struct Caller {
     attempts: usize,
     leaves: Vec<(FrameKind, FrameExit)>,
     cleanup_error: bool,
+    revoke: bool,
 }
 impl Caller {
     fn new(prepared: bool) -> Self {
@@ -120,6 +123,7 @@ impl Caller {
             attempts: 0,
             leaves: vec![],
             cleanup_error: false,
+            revoke: false,
         }
     }
 }
@@ -151,7 +155,10 @@ impl Backend for Caller {
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        if i.binding.declaration().contract != "field.constant" {
+        if !matches!(
+            i.binding.declaration().contract.as_str(),
+            "field.constant" | "vector.constant"
+        ) {
             return self.inner.apply(operation, i, args);
         }
         self.attempts += 1;
@@ -166,6 +173,12 @@ impl Backend for Caller {
             replacement
         });
         let operation = replacement.as_ref().unwrap_or(operation);
+        if self.revoke {
+            self.inner.contracts = self
+                .inner
+                .contracts
+                .with_policy(zkc_runtime::vm::ExecutionPolicy::operand_independent());
+        }
         let i = Invocation {
             context: CallContext {
                 attributes: self.attributes.as_deref().unwrap_or(i.attributes),
@@ -471,9 +484,23 @@ fn separately_installed_equal_literal_metadata_reuses_the_retained_value() {
     let mut slot = None;
     let attributes = ["1".into()];
     LITERAL_DECODES.set(0);
-    NativeCall::prepare_literal(&mut slot, &first.binding, &attributes).unwrap();
+    NativeCall::prepare_literal(
+        &mut slot,
+        &first.binding,
+        &attributes,
+        &Policy::default(),
+        usize::MAX,
+    )
+    .unwrap();
     let value = std::ptr::from_ref(slot.as_ref().unwrap().literal().unwrap());
-    NativeCall::prepare_literal(&mut slot, &second.binding, &attributes).unwrap();
+    NativeCall::prepare_literal(
+        &mut slot,
+        &second.binding,
+        &attributes,
+        &Policy::default(),
+        usize::MAX,
+    )
+    .unwrap();
     assert_eq!(LITERAL_DECODES.get(), 1);
     assert_eq!(
         value,

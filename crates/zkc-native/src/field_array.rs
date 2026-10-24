@@ -13,11 +13,11 @@ pub struct FieldArray {
 }
 #[derive(Clone, Debug)]
 enum Storage {
-    Ark(Arc<[Scalar]>),
+    Ark(crate::Buffer<Scalar>),
     Blst(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
 }
 impl FieldArray {
-    pub fn new(physical_type: PhysicalType, elements: Arc<[Scalar]>) -> Result<Self> {
+    pub fn new(physical_type: PhysicalType, elements: crate::Buffer<Scalar>) -> Result<Self> {
         let value = Self {
             physical_type,
             storage: Storage::Ark(elements),
@@ -108,7 +108,7 @@ impl FieldArray {
     /// The identity and charge match the dynamic vector's shared carrier.
     pub(crate) fn backing(&self) -> Result<Backing> {
         Ok(match &self.storage {
-            Storage::Ark(v) => Backing::of(v, crate::value::size(v.len(), 32)?),
+            Storage::Ark(v) => v.backing(crate::value::size(v.storage_capacity(), 32)?),
             Storage::Blst(v) => Backing::of(
                 v,
                 v.storage_bytes()

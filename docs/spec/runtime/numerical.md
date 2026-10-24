@@ -67,7 +67,12 @@ trusted constructor adopts the supplied Vec without growth, reallocation or
 a second element buffer, including on error and unwind. Its output and memory
 charge is the maximum of the typed payload and the caller's complete retained
 bound. This contract is audited at each adapter; it is not inferred from an
-arbitrary Rust type. Conversion to `Arc<[T]>` retains ordinary overlap accounting.
+arbitrary Rust type. Native flat dense values use immutable `Buffer<T>` owners
+that adopt initialized vectors without moving their elements. Their retained
+charge includes spare capacity; clones and mathematical views retain the same
+complete owner. Ordinary output paths keep their conservative staging-plus-final
+reservation even when publication adopts the vector. Explicit `output_owned`
+paths retain their single-buffer contract.
 Finished results remain charged until the scope ends. Scratch and abandoned
 destinations release their reservations when dropped. Scratch exposes only
 borrowed slices and cannot be frozen through the result API. Accepted work

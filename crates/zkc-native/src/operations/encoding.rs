@@ -4,7 +4,6 @@ use crate::{Binary64, Binary64Ext3, G1, Policy, Result, Scalar, Value, ark, refu
 use crate::{KoalaBear, KoalaBearExt8};
 #[cfg(test)]
 use p3_field::BasedVectorSpace;
-use std::sync::Arc;
 use zkc_kernels::plonky3::words::{self, Form};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
@@ -230,7 +229,7 @@ trait BitPattern: Copy + Default {
     fn field(value: &Value) -> Option<Self>;
     fn vector(value: &Value) -> Option<&[Self]>;
     fn field_value(self) -> Value;
-    fn vector_value(values: Arc<[Self]>) -> Value;
+    fn vector_value(values: crate::Buffer<Self>) -> Value;
 }
 impl BitPattern for Binary64 {
     const WIDTH: usize = zkc_kernels::plonky3::binary::WIDTH;
@@ -255,7 +254,7 @@ impl BitPattern for Binary64 {
     fn field_value(self) -> Value {
         Value::Binary64Field(self)
     }
-    fn vector_value(values: Arc<[Self]>) -> Value {
+    fn vector_value(values: crate::Buffer<Self>) -> Value {
         Value::Binary64Vector(values)
     }
 }
@@ -282,7 +281,7 @@ impl BitPattern for Binary64Ext3 {
     fn field_value(self) -> Value {
         Value::Binary64Ext3Field(self)
     }
-    fn vector_value(values: Arc<[Self]>) -> Value {
+    fn vector_value(values: crate::Buffer<Self>) -> Value {
         Value::Binary64Ext3Vector(values)
     }
 }

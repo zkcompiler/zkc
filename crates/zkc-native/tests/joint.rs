@@ -626,7 +626,7 @@ fn native_measurement_preserves_malformed_receive_outcomes_with_shared_capacity(
                 RoleInput {
                     role: "Alice".into(),
                     backend: backend("Alice"),
-                    values: vec![Value::Bytes(std::sync::Arc::from(&b"payload"[..]))],
+                    values: vec![Value::Bytes((&b"payload"[..]).into())],
                 },
                 RoleInput {
                     role: "Bob".into(),

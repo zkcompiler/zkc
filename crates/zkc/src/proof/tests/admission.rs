@@ -144,11 +144,7 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     value[8].as_array_mut().unwrap().truncate(1);
     seal(&mut value);
     let host = admit(&value).unwrap();
-    let input = || {
-        InputValue::Native(Box::new(Value::Bytes(std::sync::Arc::from(
-            &b"raw payload"[..],
-        ))))
-    };
+    let input = || InputValue::Native(Box::new(Value::Bytes((&b"raw payload"[..]).into())));
     let mut producer = request(true, true, true);
     producer.inputs[0] = input();
     producer.inputs[1] = input();
@@ -176,7 +172,7 @@ fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     assert!(other.outcome.is_ok());
     assert_ne!(other.binding, verified.binding);
 
-    producer.inputs[0] = InputValue::Native(Box::new(Value::Bytes(std::sync::Arc::from([]))));
+    producer.inputs[0] = InputValue::Native(Box::new(Value::Bytes(Default::default())));
     let empty = host.execute(&producer, Invocation::Prove).unwrap();
     assert!(empty.outcome.unwrap().is_empty());
     let empty = host

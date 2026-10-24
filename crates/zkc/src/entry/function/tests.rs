@@ -1227,10 +1227,11 @@ fn native_output_retention_does_not_require_public_input_codec() {
     );
     let entry = admit(&d).unwrap();
     let schema = &entry.signature().result;
-    let backing = std::sync::Arc::from([
+    let backing = [
         zkc_native::Scalar::from(2u64),
         zkc_native::Scalar::from(3u64),
-    ]);
+    ]
+    .into();
     let native = zkc_native::Value::Polynomial(backing);
     assert!(!zkc_native::has_native_wire(&native.physical_type()));
     let ledger = ExecutionLedger::new(Default::default(), Default::default());
@@ -1314,10 +1315,11 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
         BTreeMap::from([("joint".into(), SetupAuthority::default())]),
     )
     .unwrap();
-    let coefficients: std::sync::Arc<[_]> = std::sync::Arc::from([
+    let coefficients: zkc_native::Buffer<_> = [
         zkc_native::Scalar::from(2u64),
         zkc_native::Scalar::from(3u64),
-    ]);
+    ]
+    .into();
     let mut request = request(vec![(
         "coefficients",
         zkc_native::Value::Vector(coefficients.clone()).into(),
@@ -1448,10 +1450,11 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
         BTreeMap::from([("proof".into(), SetupAuthority::default())]),
     )
     .unwrap();
-    let coefficients: std::sync::Arc<[_]> = std::sync::Arc::from([
+    let coefficients: zkc_native::Buffer<_> = [
         zkc_native::Scalar::from(2u64),
         zkc_native::Scalar::from(3u64),
-    ]);
+    ]
+    .into();
     let mut request = request(vec![
         ("public", row(vec![("公開", true.into())])),
         (

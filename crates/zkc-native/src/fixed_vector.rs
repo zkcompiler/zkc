@@ -13,12 +13,12 @@ pub struct FixedVector {
 }
 #[derive(Clone, Debug)]
 enum Storage {
-    KoalaBear(Arc<[KoalaBear]>),
+    KoalaBear(crate::Buffer<KoalaBear>),
     Blst(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
 }
 impl FixedVector {
     /// Admission and exact length precede construction. There is no wire codec.
-    pub fn new(physical_type: PhysicalType, elements: Arc<[KoalaBear]>) -> Result<Self> {
+    pub fn new(physical_type: PhysicalType, elements: crate::Buffer<KoalaBear>) -> Result<Self> {
         let value = Self {
             physical_type,
             storage: Storage::KoalaBear(elements),
@@ -106,7 +106,7 @@ impl FixedVector {
     }
     pub(crate) fn backing(&self) -> Result<Backing> {
         Ok(match &self.storage {
-            Storage::KoalaBear(v) => Backing::of(v, crate::value::size(v.len(), 4)?),
+            Storage::KoalaBear(v) => v.backing(crate::value::size(v.storage_capacity(), 4)?),
             Storage::Blst(v) => Backing::of(
                 v,
                 v.storage_bytes()

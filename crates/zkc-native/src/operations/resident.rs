@@ -46,12 +46,25 @@ macro_rules! group_family {
             fn push(output: &mut Self, point: $kernel::$group) {
                 output.push(point);
             }
+            fn add_many(
+                left: &Self,
+                right: &Self,
+                output: &mut Self,
+            ) -> std::result::Result<(), $kernel::Error> {
+                if left.len() != right.len() || !output.is_empty() {
+                    return Err($kernel::Error::LengthMismatch);
+                }
+                for _ in 0..left.len() {
+                    output.push($kernel::$group::identity());
+                }
+                left.add_into(right, output)
+            }
             $scaling!($kernel, $group);
         }
         impl $crate::operations::curve::Family<$kernel::$bulk> for $kernel::$group {
             const RESIDENT_STORAGE: bool = true;
             // MSM has a separate handler borrowing complete bulk carriers.
-            fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+            fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
                 failure(error)
             }
             fn point(value: &$crate::Value) -> $crate::Result<Self> {
@@ -199,7 +212,7 @@ pub(crate) fn convert(
 pub(crate) fn collect_iter<T, U>(
     values: impl ExactSizeIterator<Item = T>,
     convert: impl Fn(T) -> crate::Result<U>,
-) -> crate::Result<std::sync::Arc<[U]>> {
+) -> crate::Result<crate::Buffer<U>> {
     let mut converted = arithmetic::reserve(values.len())?;
     for value in values {
         converted.push(convert(value)?);
@@ -246,8 +259,8 @@ pub(crate) fn convert_value(
     let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
     call.work_items(len.max(1), 4096, 1)?;
     let output = call.scalar(retained)?;
-    // Exporting provider bulk storage to Arc<[T]> overlaps the temporary Vec
-    // and final allocation. Imports adopt the private destination Vec directly.
+    // Preserve the existing conservative export staging reservation even though
+    // immutable dense publication now adopts the Vec. Imports also adopt it.
     let staging = if width != 0 && is_resident(&signature.inputs[0]) {
         retained
     } else {

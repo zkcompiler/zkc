@@ -645,7 +645,7 @@ mod tests {
                 check_state(scheme, root, 2, 8, at, &opened[0], proof, &policy),
                 Ok(true)
             );
-            let wrong = Value::KoalaBearVector(Arc::from([]));
+            let wrong = Value::KoalaBearVector(crate::Buffer::default());
             assert_eq!(
                 check_state(scheme, root, 2, 8, at, &wrong, proof, &policy)
                     .unwrap_err()
@@ -656,7 +656,7 @@ mod tests {
         assert_eq!(
             commit_state(
                 scheme,
-                &Value::KoalaBearVector(Arc::from([])),
+                &Value::KoalaBearVector(crate::Buffer::default()),
                 &Value::Index(2),
                 &policy,
                 required

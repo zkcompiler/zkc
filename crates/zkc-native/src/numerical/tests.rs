@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Value, refused};
-use std::{panic::AssertUnwindSafe, sync::Arc};
+use std::panic::AssertUnwindSafe;
 use zkc_kernels::matrix::RowMajor;
 
 fn policy(memory: usize) -> Policy {
@@ -410,8 +410,8 @@ fn empty_storage_still_reserves_positive_final_representation_bytes() {
 
 #[test]
 fn repeated_immutable_input_aliases_remain_unchanged() {
-    let input: Arc<[u64]> = vec![1, 2, 3, 4].into();
-    let alias = Arc::clone(&input);
+    let input: crate::Buffer<u64> = vec![1, 2, 3, 4].into();
+    let alias = input.clone();
     let left = RowMajor::new(&input, 2, 2).unwrap();
     let right = RowMajor::new(&alias, 2, 2).unwrap();
     let call = Call::new(&policy(320), 288);
@@ -431,8 +431,28 @@ fn repeated_immutable_input_aliases_remain_unchanged() {
     assert_eq!(&*input, &[1, 2, 3, 4]);
     assert_eq!(&*alias, &[1, 2, 3, 4]);
     assert_eq!(&*result, &[2, 4, 6, 8]);
-    assert!(Arc::ptr_eq(&input, &alias));
-    assert!(!Arc::ptr_eq(&input, &result));
+    assert!(crate::Buffer::ptr_eq(&input, &alias));
+    assert!(!crate::Buffer::ptr_eq(&input, &result));
+}
+
+#[test]
+fn dense_publication_adopts_the_initialized_numerical_destination() {
+    let p = policy(4096);
+    let call = Call::new(&p, 4096);
+    let mut output = call.output(17, 0u64, 512).unwrap();
+    let pointer = output.as_mut_slice().as_ptr();
+    output.as_mut_slice()[16] = 9;
+    let memory = call.memory_bytes();
+    let Value::Indices(value) = output.finish(|v| Ok(Value::Indices(v.into()))).unwrap() else {
+        panic!("indices");
+    };
+    assert_eq!(value.as_ptr(), pointer);
+    assert_eq!(value.len(), 17);
+    assert_eq!(value[16], 9);
+    // The old staging-plus-final ceiling remains a conservative admission floor;
+    // completing publication releases the staging reservation as before.
+    assert_eq!(memory, 512 + 17 * size_of::<u64>());
+    assert_eq!(call.memory_bytes(), 512);
 }
 
 #[test]

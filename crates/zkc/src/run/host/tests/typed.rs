@@ -58,7 +58,7 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     );
     let (raw, _) = fixture(&logical);
     let host = host(&raw, HostLimits::default());
-    let source: Arc<[zkc_native::Scalar]> = [0u64, 1, 7, 19]
+    let source: zkc_native::Buffer<zkc_native::Scalar> = [0u64, 1, 7, 19]
         .into_iter()
         .map(zkc_native::Scalar::from)
         .collect::<Vec<_>>()
@@ -121,12 +121,15 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
             };
             assert_eq!(a.as_ref(), source.as_ref());
             assert_eq!(b.as_ref(), source.as_ref());
-            assert_eq!(Arc::ptr_eq(a, b), constructor != "wire");
-            assert_eq!(Arc::ptr_eq(a, &source), constructor != "wire");
+            assert_eq!(zkc_native::Buffer::ptr_eq(a, b), constructor != "wire");
+            assert_eq!(
+                zkc_native::Buffer::ptr_eq(a, &source),
+                constructor != "wire"
+            );
             role_backings.push(a.clone());
         }
         assert_eq!(
-            Arc::ptr_eq(&role_backings[0], &role_backings[1]),
+            zkc_native::Buffer::ptr_eq(&role_backings[0], &role_backings[1]),
             constructor != "wire"
         );
     }

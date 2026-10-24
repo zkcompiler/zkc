@@ -155,29 +155,31 @@ impl<C: CurveAffine<ScalarExt = ScalarElement>> Plan<C> {
                 affines,
             } => {
                 let chunk_len = projectives.len();
-                for (chunk_index, (inputs, outputs)) in points
-                    .chunks(chunk_len)
-                    .zip(destination.chunks_mut(chunk_len))
-                    .enumerate()
-                {
-                    let len = inputs.len();
-                    // Workers write disjoint slices of the same admitted
-                    // buffer. There is no hidden per-worker heap scratch.
-                    crate::cpu::chunks_mut(&mut projectives[..len], 32, |offset, chunk| {
-                        for (index, out) in chunk.iter_mut().enumerate() {
-                            let index = offset + index;
-                            *out =
-                                affine(inputs[index]) * scalar_at(chunk_index * chunk_len + index);
+                crate::cpu::phase(chunk_len.min(self.len), 32, || {
+                    for (chunk_index, (inputs, outputs)) in points
+                        .chunks(chunk_len)
+                        .zip(destination.chunks_mut(chunk_len))
+                        .enumerate()
+                    {
+                        let len = inputs.len();
+                        // Workers write disjoint slices of the same admitted
+                        // buffer. There is no hidden per-worker heap scratch.
+                        crate::cpu::chunks_mut(&mut projectives[..len], 32, |offset, chunk| {
+                            for (index, out) in chunk.iter_mut().enumerate() {
+                                let index = offset + index;
+                                *out = affine(inputs[index])
+                                    * scalar_at(chunk_index * chunk_len + index);
+                            }
+                        });
+                        // This pinned upstream leaf is serial and allocates no
+                        // scratch. Its temporary invalid affine prefixes remain
+                        // private until normalization has completed.
+                        C::CurveExt::batch_normalize(&projectives[..len], &mut affines[..len]);
+                        for (out, point) in outputs.iter_mut().zip(&affines[..len]) {
+                            *out = wrap(*point);
                         }
-                    });
-                    // This pinned upstream leaf is serial and allocates no
-                    // scratch. Its temporary invalid affine prefixes remain
-                    // private until normalization has completed.
-                    C::CurveExt::batch_normalize(&projectives[..len], &mut affines[..len]);
-                    for (out, point) in outputs.iter_mut().zip(&affines[..len]) {
-                        *out = wrap(*point);
                     }
-                }
+                });
             }
         }
         Ok(())

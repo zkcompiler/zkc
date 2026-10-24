@@ -67,6 +67,59 @@ macro_rules! adapter_tests {
             }
 
             #[test]
+            fn addition_uses_one_reserved_provider_buffer_and_preserves_inputs() {
+                let expected = samples();
+                let left = Bulk::from_slice(&expected).unwrap();
+                let right = Bulk::from_slice(&expected.map(|point| point.neg())).unwrap();
+                let _guard = failure::after(1);
+                let mut output = <Bulk as PointStorage<Point>>::reserve(left.len()).unwrap();
+                let address = output.as_elements().as_ptr();
+                let bytes = output.storage_bytes();
+                <Bulk as PointStorage<Point>>::add_many(&left, &right, &mut output).unwrap();
+                assert_eq!(output.len(), expected.len());
+                assert!(output.iter().all(|point| point == Point::identity()));
+                let value = <Point as Family<Bulk>>::values(output);
+                let view = <Point as Family<Bulk>>::points(&value).unwrap();
+                assert_eq!(view.as_elements().as_ptr(), address);
+                assert_eq!(view.storage_bytes(), bytes);
+                assert_eq!(left.iter().collect::<Vec<_>>(), expected);
+                assert_eq!(
+                    right.iter().collect::<Vec<_>>(),
+                    expected.map(|point| point.neg())
+                );
+                assert!(allocation::reserve::<u8>(1).is_err());
+            }
+
+            #[test]
+            fn addition_shape_refusal_preserves_the_private_destination() {
+                let left = Bulk::from_slice(&samples()).unwrap();
+                let right = Bulk::from_slice(&samples()[..3]).unwrap();
+                for (left, right) in [(&left, &right), (&right, &left)] {
+                    let mut output = <Bulk as PointStorage<Point>>::reserve(left.len()).unwrap();
+                    let address = output.as_elements().as_ptr();
+                    let _guard = failure::after(0);
+                    assert_eq!(
+                        <Bulk as PointStorage<Point>>::add_many(left, right, &mut output),
+                        Err(kernel::Error::LengthMismatch)
+                    );
+                    assert!(output.is_empty());
+                    assert_eq!(output.as_elements().as_ptr(), address);
+                    assert!(allocation::reserve::<u8>(1).is_err());
+                }
+                let expected = samples();
+                let mut output = Bulk::from_slice(&expected).unwrap();
+                let address = output.as_elements().as_ptr();
+                let _guard = failure::after(0);
+                assert_eq!(
+                    <Bulk as PointStorage<Point>>::add_many(&left, &left, &mut output),
+                    Err(kernel::Error::LengthMismatch)
+                );
+                assert_eq!(output.iter().collect::<Vec<_>>(), expected);
+                assert_eq!(output.as_elements().as_ptr(), address);
+                assert!(allocation::reserve::<u8>(1).is_err());
+            }
+
+            #[test]
             fn scaling_writes_directly_into_one_reserved_provider_buffer() {
                 let expected = samples();
                 let input = Bulk::from_slice(&expected).unwrap();

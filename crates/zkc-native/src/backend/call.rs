@@ -4,7 +4,7 @@ use crate::{Result, ark, refused};
 use std::sync::Arc;
 use zkc_runtime::vm::AttributeRule;
 
-/// Backend-owned static call facts, including immutable decoded scalar literals.
+/// Backend-owned static call facts, including immutable decoded typed literals.
 /// Typed payloads require equal declarations, signatures and attributes. Actual
 /// operands, policy, domain, setup, custody and budgets remain invocation facts.
 pub struct NativeCall {
@@ -33,6 +33,8 @@ impl NativeCall {
         slot: &mut Option<Self>,
         binding: &Arc<CallBinding>,
         attributes: &[String],
+        policy: &crate::Policy,
+        available: usize,
     ) -> Result<()> {
         let rule = binding.signature.attributes;
         // The linked signature already fixes attribute interpretation. Keep
@@ -40,8 +42,11 @@ impl NativeCall {
         if rule == AttributeRule::None {
             return Self::prepare(slot, rule, attributes);
         }
-        if binding.declaration.contract == "field.constant" {
-            return Self::prepare_literal(slot, binding, attributes);
+        if matches!(
+            binding.declaration.contract.as_str(),
+            "field.constant" | "vector.constant"
+        ) {
+            return Self::prepare_literal(slot, binding, attributes, policy, available);
         }
         if rule != AttributeRule::NumericalExpression {
             return Self::prepare(slot, rule, attributes);
@@ -53,6 +58,8 @@ impl NativeCall {
         slot: &mut Option<Self>,
         binding: &Arc<CallBinding>,
         attributes: &[String],
+        policy: &crate::Policy,
+        available: usize,
     ) -> Result<()> {
         let signature = &binding.signature;
         if slot.as_ref().is_some_and(|call| {
@@ -63,33 +70,14 @@ impl NativeCall {
         }) {
             return Ok(());
         }
-        let field = signature
+        let output = signature
             .outputs
             .first()
-            .ok_or_else(|| refused("kernel-operands"))?
-            .logical()
-            .identity();
-        let value = if signature
-            .outputs
-            .first()
-            .is_some_and(crate::operations::blst::is_resident)
-        {
-            crate::operations::field::literal::<zkc_kernels::blst::bls12_381::ScalarElement>(
-                attributes,
-            )?
-        } else if signature
-            .outputs
-            .first()
-            .is_some_and(crate::operations::halo2curves::is_resident)
-        {
-            crate::operations::field::literal::<zkc_kernels::halo2curves::bn254::ScalarElement>(
-                attributes,
-            )?
-        } else {
-            crate::operations::field::decode_literal(field, attributes)?
-        };
+            .ok_or_else(|| refused("kernel-operands"))?;
+        let value =
+            crate::operations::arithmetic::prepare_literal(output, attributes, policy, available)?;
         // Failed decoding must neither publish a partial replacement nor use
-        // the previous successful scalar for this invocation.
+        // the previous successful literal for this invocation.
         *slot = Some(Self {
             rule: signature.attributes,
             attributes: attributes.into(),

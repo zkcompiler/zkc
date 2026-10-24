@@ -102,7 +102,7 @@ fn reusable_outputs_preserve_aliases_and_every_usage_counter() {
         let [Value::Vector(a), Value::Vector(b)] = warm.as_slice() else {
             panic!("two vectors")
         };
-        assert!(std::sync::Arc::ptr_eq(a, b));
+        assert!(zkc_native::Buffer::ptr_eq(a, b));
         assert_eq!(cold_usage, warm_usage);
         assert_eq!(cache.stats().hits, hits + 1);
         assert_eq!(cold_backend.active_frames(), 0);
@@ -729,7 +729,7 @@ fn repeated_calls_do_not_alias_distinct_live_allocations() {
             panic!("vectors")
         };
         assert_eq!(first, second);
-        assert!(!std::sync::Arc::ptr_eq(first, second));
+        assert!(!zkc_native::Buffer::ptr_eq(first, second));
         assert_eq!(usage, expected_usage);
         assert_eq!(backend.active_frames(), 0);
     }

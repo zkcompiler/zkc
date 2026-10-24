@@ -1,15 +1,15 @@
 //! Depth-one physical views. Private fields prevent malformed lengths or nested
-//! views; factors and values retain their complete immutable Arc slices.
+//! views; factors and values retain their complete immutable buffers.
 use crate::{Result, exhausted, refused, value::size};
 use std::sync::Arc;
 use zkc_runtime::vm::Backing;
 #[derive(Clone, Debug)]
 pub struct Diagonal<S, B> {
-    factors: Arc<[S]>,
-    backing: Arc<[B]>,
+    factors: crate::Buffer<S>,
+    backing: crate::Buffer<B>,
 }
 impl<S, B> Diagonal<S, B> {
-    pub(crate) fn new(factors: Arc<[S]>, backing: Arc<[B]>) -> Result<Self> {
+    pub(crate) fn new(factors: crate::Buffer<S>, backing: crate::Buffer<B>) -> Result<Self> {
         if factors.len() != backing.len() {
             return Err(refused("length-mismatch"));
         }
@@ -22,8 +22,11 @@ impl<S, B> Diagonal<S, B> {
         &self.backing
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
-        size(self.factors.len(), std::mem::size_of::<S>())?
-            .checked_add(size(self.backing.len(), std::mem::size_of::<B>())?)
+        size(self.factors.storage_capacity(), std::mem::size_of::<S>())?
+            .checked_add(size(
+                self.backing.storage_capacity(),
+                std::mem::size_of::<B>(),
+            )?)
             .and_then(|n| n.checked_add(VIEW_BYTES))
             .ok_or_else(|| exhausted("size-overflow"))
     }
@@ -36,11 +39,11 @@ impl<S, B> Diagonal<S, B> {
         view: &Arc<Self>,
         shared: &mut dyn FnMut(Backing) -> bool,
     ) -> Result<usize> {
-        let factors = size(view.factors.len(), std::mem::size_of::<S>())?;
-        let backing = size(view.backing.len(), std::mem::size_of::<B>())?;
+        let factors = size(view.factors.storage_capacity(), std::mem::size_of::<S>())?;
+        let backing = size(view.backing.storage_capacity(), std::mem::size_of::<B>())?;
         if shared(Self::view(view)) {
-            shared(Backing::of(&view.factors, factors));
-            shared(Backing::of(&view.backing, backing));
+            shared(view.factors.backing(factors));
+            shared(view.backing.backing(backing));
         }
         Ok(0)
     }

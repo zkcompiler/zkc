@@ -84,6 +84,16 @@ pub(super) trait PointStorage<G: Group> {
             Self::push(output, point);
         }
     }
+    /// The dispatcher admits equal input lengths and reserves the complete
+    /// private destination before invoking this storage-specific arithmetic.
+    fn add_many(
+        left: Self::View<'_>,
+        right: Self::View<'_>,
+        output: &mut Self::Output,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(output, left.iter().zip(right.iter()).map(|(a, b)| a.add(b)));
+        Ok(())
+    }
     fn scale_many(
         points: Self::View<'_>,
         scalar: G::Scalar,
@@ -144,6 +154,38 @@ impl<G: Group> PointStorage<G> for SliceStorage {
     }
 }
 
+#[cfg(test)]
+mod point_addition_tests {
+    use super::*;
+
+    fn check_slice_fallback<G: Group>() {
+        let g = G::generator();
+        let left = [G::identity(), g, g.neg()];
+        let right = [g, g.neg(), g];
+        let mut output = <SliceStorage as PointStorage<G>>::reserve(left.len()).unwrap();
+        let address = output.as_ptr();
+        let guard = zkc_kernels::allocation::failure::after(0);
+        assert!(<SliceStorage as PointStorage<G>>::add_many(&left, &right, &mut output).is_ok());
+        assert!(output.as_slice() == [g, G::identity(), G::identity()]);
+        assert_eq!(output.as_ptr(), address);
+        assert!(zkc_kernels::allocation::reserve::<u8>(1).is_err());
+        drop(guard);
+        let mut empty = <SliceStorage as PointStorage<G>>::reserve(0).unwrap();
+        assert!(<SliceStorage as PointStorage<G>>::add_many(&[], &[], &mut empty).is_ok());
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn serial_slice_addition_preserves_all_group_families() {
+        check_slice_fallback::<G1>();
+        check_slice_fallback::<crate::Bls12381G2>();
+        check_slice_fallback::<crate::Bn254G1>();
+        check_slice_fallback::<crate::Bn254G2>();
+        check_slice_fallback::<RistrettoPoint>();
+        check_slice_fallback::<crate::EdwardsPrime>();
+    }
+}
+
 type SliceMsm<G, S = SliceStorage> =
     fn(&[<G as Group>::Scalar], <S as PointStorage<G>>::View<'_>) -> Result<G>;
 
@@ -153,7 +195,7 @@ pub(super) trait Family<S: PointStorage<Self> = SliceStorage>: Group {
     /// None means this adapter requires a distinct bulk MSM handler. It does
     /// not imply that the provider lacks MSM on its own retained bulk carriers.
     const SLICE_MSM: Option<SliceMsm<Self, S>> = None;
-    fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError;
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError;
     fn point(v: &Value) -> Result<Self>;
     fn points(v: &Value) -> Result<S::View<'_>>;
     fn scalar(v: &Value) -> Result<Self::Scalar>;
@@ -311,7 +353,7 @@ impl Group for G1 {
 }
 impl Family for G1 {
     const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| Self::msm(s, p).map_err(crate::ark));
-    fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
         crate::ark(error)
     }
     fn point(v: &Value) -> Result<Self> {
@@ -379,7 +421,7 @@ impl Family for RistrettoPoint {
         equal_len(s.len(), p.len())?;
         Ok(Self::multiscalar_mul(s, p))
     });
-    fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
         match error {}
     }
     fn point(v: &Value) -> Result<Self> {
@@ -447,7 +489,7 @@ impl Family for crate::EdwardsPrime {
         equal_len(s.len(), p.len())?;
         Self::msm(s, p).ok_or_else(|| refused("length-mismatch"))
     });
-    fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
         match error {}
     }
     fn point(v: &Value) -> Result<Self> {
@@ -516,7 +558,7 @@ macro_rules! bn_group {
         impl Family for $t {
             const SLICE_MSM: Option<SliceMsm<Self>> =
                 Some(|s, p| Self::msm(s, p).map_err(crate::ark));
-            fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+            fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
                 crate::ark(error)
             }
             fn point(v: &Value) -> Result<Self> {
@@ -586,7 +628,7 @@ impl Group for crate::Bls12381G2 {
 }
 impl Family for crate::Bls12381G2 {
     const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| Self::msm(s, p).map_err(crate::ark));
-    fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
         crate::ark(error)
     }
     fn point(v: &Value) -> Result<Self> {
@@ -796,7 +838,7 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
             with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
-                S::scale_each(s, b, &mut out, workspace_bytes).map_err(G::scaling_failure)
+                S::scale_each(s, b, &mut out, workspace_bytes).map_err(G::bulk_failure)
             })?;
             out.finish(|values| Ok(G::values(values)))?
         }
@@ -817,7 +859,7 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
             with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
-                S::scale_many(b, x, &mut out, workspace_bytes).map_err(G::scaling_failure)
+                S::scale_many(b, x, &mut out, workspace_bytes).map_err(G::bulk_failure)
             })?;
             out.finish(|values| Ok(G::values(values)))?
         }
@@ -836,7 +878,7 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
                 S::extend(&mut out, a.iter());
                 S::extend(&mut out, b.iter());
             } else {
-                S::extend(&mut out, a.iter().zip(b.iter()).map(|(a, b)| a.add(b)));
+                S::add_many(a, b, &mut out).map_err(G::bulk_failure)?;
             }
             out.finish(|values| Ok(G::values(values)))?
         }

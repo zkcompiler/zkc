@@ -154,13 +154,15 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `numerical` | Two columns and a scalar capture; map, collect and vector operations; vector, sum and product results; KoalaBear, BLS Fr and dense degree-eight extension; 0–8,192 elements | Matched arithmetic and inputs across forms; includes equality and Host costs, with independent Python expectations |
 | `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
-| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
+| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; larger KoalaBear/BLS Fr vector results at 1,024 (add) and 8,192 (Hadamard) | Independent scalar expectations and complete vector equality; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
 | `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
 | `coset_batch` | Matched per-column and library extension; KB/Ext4/Ext8, widths 1/4/16/64, separate height and row-layout controls | Independent integer transforms; every coordinate checked; row-layout cases include both transposes and SDK/run includes Host and equality costs |
+| `coefficient_batch` | BN254 coefficient prefixes versus explicitly padded per-column FFTs; threshold neighbors at 64 outputs, short/dense pairs at 4,096 and 32,768 outputs, widths 1/3 | Independent modular Python transform and complete column-major output equality; identical coefficients across forms; default Host capacities and source construction costs |
 | `coset_point` | Direct opening claims, repeated native interpolation/evaluation, and coefficient reuse for multiple points | Full point-major output check; on/off-domain controls; SDK timing includes setup, validation and output construction |
 | `quotient_split` | Matched library batch and explicit per-block coefficient evaluation; base, quartic and octic KoalaBear; varying input height, block width and count | Independent coefficient/block-evaluation oracle; includes interpolation, padding, output checks and Host costs; no divisibility proof |
 | `literal` | Constants versus operand captures in ordered Local loops across all installed fields; zero, first and repeated reach | Independent repeated-addition oracle; inspect exported reached literal counts; SDK/run includes Host and checking |
+| `vector_literal` | Typed `vector.constant` versus decoded vector operands; KoalaBear/BLS Fr, 1,024 elements with 17 reaches and 8,192 elements with one reach | Independent complete-output repeated-addition oracle; repeated reach requires the literal inside the exported loop; includes vector arithmetic, equality and Host costs |
 | `relation_rows` | Actual table residuals for quadratic and coupled constraints; varying height/width, valid and perturbed traces | Independent complete residual oracle, including inactive slots; Bundle admission, result checks and Host costs included |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `kzg` | Generic KZG evaluation/quotient on checked roots-of-unity evaluations; on/off-domain, BLS Fr sizes 1/8/64/256/1,024, a bit-reversed control and KoalaBear size 32 | Independent coefficients, Horner and synthetic division; every quotient entry checked, including the derivative at an on-domain point; no pairing or commitment |
@@ -227,6 +229,61 @@ forms. It separates batch width, transform height and layout conversion. The
 per-column form retains explicit interpolation/evaluation and concatenation;
 the library form follows the current column-extension implementation. These are
 source-to-execution comparisons, not isolated provider transform timings.
+
+The separate `coefficient_batch` family starts from BN254 coefficients, without
+interpolating evaluation words. Its fixed panel pairs `batch` with
+`padded-columns` on exactly the same input polynomial, shift 7 and complete
+output. At output size 64, coefficient heights 15/16/17 straddle the pinned
+Arkworks 0.6.0 degree-aware FFT condition `4 * coefficient_count <= output_size`;
+height 64 supplies a dense control. At output size 4,096, heights 17 and 4,096
+each use widths one and three. At output size 32,768, heights 1,024 and 32,768
+use width one. This keeps the flattened expected output within the ordinary
+Host's 32,768-element logical array limit. Larger multicolumn domains require
+separate input design; the harness does not raise capacities or silently resize.
+
+The padded control slices each coefficient column, appends explicit zeros to
+the output height and calls public `coset::evaluate_batch` with width one and
+that full coefficient height. This reaches the ordinary full-length FFT while
+retaining the same polynomial and evaluation order. Going through
+`polynomial::from_coefficients` would trim the zero tail and erase the control.
+The source loop, padding, slices and concatenation are part of its cost.
+The Python oracle independently evaluates all output points with modular
+radix-two arithmetic; focused tests cross-check it against Horner at every point.
+Both source forms check full vector length and equality before returning their
+boolean acceptance result. These are SDK/Host measurements with output
+construction and checking, not isolated FFT or publication timings.
+
+Select a matched pair, using already-built tools and a new output directory:
+
+```sh
+python3 common/benchmarks/run.py run \
+  --case coefficient-batch-bn254-h17-w3-n4096-batch \
+  --case coefficient-batch-bn254-h17-w3-n4096-padded-columns \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks \
+  --output build/experiments/coefficient-batch
+```
+
+The larger `field-vector-{kb,fr}-add-1024` and
+`field-vector-{kb,fr}-hadamard-8192` cases retain dense, distinct inputs and
+check every output element through `vector::equal`. They expose larger native
+result construction within the existing SDK/run boundary. Equality and Host
+costs remain included; returning a boolean does not replace the full vector
+check with a reduction or checksum.
+
+The `vector_literal` family extends the `literal` generator with typed vector
+values. `vector-literal-{kb,fr}-n1024-17-{constant,operand}` pairs 17 executions
+of one literal site with captured operands; `vector-literal-{kb,fr}-n8192-1-{constant,operand}`
+pairs first reach at a larger vector size. Each form receives identical decoded
+inputs and independently computed expectations for every result element.
+Inspect the exported `zkc.program/0` before interpreting repeated preparation:
+the `vector.constant` operation must remain inside the `for` body. Invariant
+hoisting would invalidate that interpretation even if the source contains a
+literal in the loop. Observe reached-site counts separately with an instrumented
+worker and `--execution-counts`; count runs do not supply timing comparisons.
+If a compiler moves the literal, keep repeated preparation in a Native probe.
+SDK calls reset invocation-local preparation, and the source cases include
+vector addition and equality, so neither form measures parsing alone.
 
 [`expressions.py`](bench/expressions.py) defines short/deep Horner, independent
 branches, shared intermediates, capture-heavy and input-heavy Math bodies with

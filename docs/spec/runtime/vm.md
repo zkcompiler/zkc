@@ -127,13 +127,22 @@ validation point. Unexecuted branches cannot acquire invocation failures through
 preparation. Scratch arguments are cleared on success and failure; only empty
 buffer capacity survives between calls.
 
-The native backend prepares typed `field.constant` values at that reached
-attribute checkpoint. Reuse requires the exact operation binding, bound physical
-signature, attribute rule and complete attribute strings. A failed decode
-publishes no replacement and refuses the current call. Each use checks 512
-output bytes against current limits and retains a fresh inline scalar charge;
-normal result validation and instruction accounting still apply. These static
-facts confer no policy, setup or resource authority.
+The native backend prepares typed `field.constant` and `vector.constant` values
+at that reached attribute checkpoint. Reuse requires the exact operation binding,
+bound physical signature, attribute rule and complete attribute strings. A failed decode
+publishes no replacement and refuses the current call. Each scalar use checks
+512 output bytes against current limits and retains a fresh inline scalar charge.
+Vector preparation checks current element, retained-byte and applicable numerical
+storage limits before allocating typed storage. Attribute errors retain their
+original precedence over capacity errors. Each vector use repeats current limits
+and allocates a fresh result from the decoded coefficients: preparation shares
+neither result identity nor result charges across reached invocations. Normal
+result validation, allocation failures and instruction accounting still apply.
+Decoded vectors live in the instance's reached-call slots, separately from VM
+result retention. Their storage is bounded by admitted call/attribute limits and
+current per-value limits at preparation; it is not an allocator/RSS budget or a
+charge against the live result ledger. These static facts confer no policy,
+setup or resource authority.
 
 The instance checks output arity, complete physical types, backend validity and
 capacity before retaining results. Shared validation evidence applies only to

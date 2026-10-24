@@ -6,6 +6,18 @@ owns program admission and execution; this crate owns concrete values, installed
 backend capacity checks. [zkc-kernels](../zkc-kernels/README.md) owns typed
 arithmetic, transforms, commitments and curve primitives without VM authority.
 
+## Dense values
+
+Flat numerical vectors, coefficient polynomials and points use `Buffer<T>`, an
+immutable shared owner of an initialized `Vec<T>` allocation.
+Construct with `values.into()`; read through slices and clone to share storage.
+Publication adopts the vector without copying its elements. Resource accounting
+includes its complete capacity, including spare slots. Use exact-sized storage
+when supplying inputs under tight retained-byte limits. Provider-resident values
+keep their typed provider owners. Encoded byte strings, authentication paths and
+digests retain exact-length shared slices, matching their wire admission bounds.
+The VM depends on none of these representations.
+
 ## Host transport integration
 
 `NativeBackend` implements `zkc-runtime::host::wire::{WireBackend, ProofBackend}`

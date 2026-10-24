@@ -2,6 +2,8 @@
 //! Ark PCS is nonhiding; setup honesty and protocol soundness remain premises.
 mod backend;
 mod bindings;
+mod buffer;
+pub use buffer::Buffer;
 mod codec;
 mod contracts;
 #[cfg(test)]

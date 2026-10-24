@@ -1662,7 +1662,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         let normalize = |v: Value| match v {
             Value::TableMsb(t) => Value::Table(Arc::new(t.to_lsb(&policy.ark_bounds()).unwrap())),
             Value::Point(v) | Value::Polynomial(v) => Value::Vector(v),
-            Value::Round(v) => Value::Vector(Arc::from(v)),
+            Value::Round(v) => Value::Vector(v.into()),
             other => other,
         };
         let encode = |v: Value| native().encode_native_value(&normalize(v)).unwrap();
@@ -1677,17 +1677,16 @@ fn every_alternative_executes_and_preserves_the_original_result() {
 
 #[test]
 fn collection_limits_follow_payload_storage() {
-    use std::sync::Arc;
     use zkc_runtime::vm::{Backend, Identity, LogicalType, Type, Value as _};
     let mut native = backend();
     native.core.policy.max_table_elements = 2;
-    let roots = Value::OracleRoots(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 3]));
+    let roots = Value::OracleRoots(crate::oracle::Domain::Base, [[0u8; 32]; 3].into());
     assert_eq!(
         native.validate_value(&roots).unwrap_err().code,
         "exhausted:element-limit"
     );
     native.core.policy.max_table_elements = 64;
-    let path = Value::OraclePath(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 25]));
+    let path = Value::OraclePath(crate::oracle::Domain::Base, [[0u8; 32]; 25].into());
     assert_eq!(
         native.validate_value(&path).unwrap_err().code,
         "refused:oracle-path-length"

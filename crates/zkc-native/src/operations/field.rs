@@ -3,7 +3,6 @@
 //! Arithmetic and canonical literals remain delegated to the existing providers.
 use crate::{Binary64, Binary64Ext3};
 use crate::{Result, RistrettoScalar, Scalar, Value, refused};
-use std::sync::Arc;
 pub(crate) use zkc_kernels::field::Coefficient;
 
 /// Scalar/vector adaptation requires only the provider's coefficient algebra.
@@ -26,7 +25,7 @@ pub(crate) trait StructuredFamily: Family + crate::matrix::IdentityCoefficient {
     fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;
     fn polynomial(v: &Value) -> Result<&[Self]>;
     fn round(v: &Value) -> Result<&[Self]>;
-    fn polynomial_value(v: Arc<[Self]>) -> Result<Value>;
+    fn polynomial_value(v: crate::Buffer<Self>) -> Result<Value>;
 }
 macro_rules! family {
     ($s:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
@@ -76,7 +75,7 @@ macro_rules! family {
                     Err(refused("kernel-operands"))
                 }
             }
-            fn polynomial_value(v: Arc<[Self]>) -> Result<Value> {
+            fn polynomial_value(v: crate::Buffer<Self>) -> Result<Value> {
                 Ok(Value::$poly(v))
             }
         }

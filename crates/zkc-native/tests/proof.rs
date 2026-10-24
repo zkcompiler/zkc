@@ -266,7 +266,7 @@ fn record_publication_is_exact_bounded_and_requires_return() {
             "P",
             "session",
             backend,
-            vec![Value::Bytes(std::sync::Arc::from([1, 2, 3]))],
+            vec![Value::Bytes([1, 2, 3].into())],
         )
         .unwrap_or_else(|_| panic!("record entry"))
     }

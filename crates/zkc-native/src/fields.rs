@@ -1,7 +1,6 @@
 //! One native typed registration for every Plonky3 residue field.
 use crate::{Result, Value, refused};
 use p3_field::{BasedVectorSpace, PrimeField64};
-use std::sync::Arc;
 use zkc_kernels::plonky3::residue::{PrimeWord, Residue};
 use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Representation, Type};
 
@@ -41,7 +40,7 @@ macro_rules! register {
             fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> { if let Value::$m(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
             fn polynomial(v: &Value) -> Result<&[Self]> { if let Value::$p(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
             fn round(v: &Value) -> Result<&[Self]> { if let Value::$r(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
-            fn polynomial_value(v: Arc<[Self]>) -> Result<Value> { Ok(Value::$p(v)) }
+            fn polynomial_value(v: crate::Buffer<Self>) -> Result<Value> { Ok(Value::$p(v)) }
         }
         impl crate::matrix::Wire for $s {
             const WIDTH: usize = <$s as Residue>::Base::WORD_BYTES * <$s as BasedVectorSpace<crate::$base>>::DIMENSION;

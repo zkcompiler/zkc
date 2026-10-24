@@ -99,7 +99,7 @@ impl NativeBackend {
             ("poly.evaluate", [Table(t), Point(point)]) => {
                 vec![Field(t.evaluate(point).map_err(ark)?)]
             }
-            ("poly.empty_point", []) => vec![Point(Arc::from([]))],
+            ("poly.empty_point", []) => vec![Point(crate::Buffer::default())],
             ("poly.append_point", [Point(point), Field(r)]) => {
                 let n = point
                     .len()

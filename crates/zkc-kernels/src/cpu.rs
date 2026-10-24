@@ -97,6 +97,27 @@ pub(crate) fn install<R: Send>(action: impl FnOnce() -> R + Send) -> R {
     }
 }
 
+/// Keep a bounded sequence of numerical chunks in the owned pool. The shape
+/// describes the largest parallel chunk, not the aggregate input: serial-only
+/// work stays on the caller. Validation, admission and scratch allocation must
+/// precede this phase; its closure carries only typed numerical data.
+pub(crate) fn phase<R: Send>(
+    elements: usize,
+    grain: usize,
+    action: impl FnOnce() -> R + Send,
+) -> R {
+    match parallel_context(elements, grain) {
+        Some(context) => context.execute(action),
+        None => action(),
+    }
+}
+
+fn parallel_context(elements: usize, grain: usize) -> Option<CpuExecution> {
+    CURRENT
+        .with(|slot| slot.borrow().clone())
+        .filter(|cpu| cpu.workers() > 1 && elements / grain >= 2)
+}
+
 /// Split a total element-wise phase using only its public shape. Small work
 /// stays on the caller and does not pay a pool hop. No fallible task race occurs.
 pub(crate) fn chunks_mut<T: Send>(
@@ -104,8 +125,7 @@ pub(crate) fn chunks_mut<T: Send>(
     grain: usize,
     action: impl Fn(usize, &mut [T]) + Send + Sync,
 ) {
-    let context = CURRENT.with(|slot| slot.borrow().clone());
-    if let Some(context) = context.filter(|cpu| cpu.workers() > 1 && values.len() / grain >= 2) {
+    if let Some(context) = parallel_context(values.len(), grain) {
         context.execute(|| {
             use rayon::prelude::*;
             values
@@ -185,5 +205,37 @@ mod tests {
             assert_eq!(inner.execute(rayon::current_num_threads), 1);
             assert_eq!(install(rayon::current_num_threads), 4);
         });
+    }
+
+    #[test]
+    fn bounded_phases_keep_small_work_local_and_restore_the_owner() {
+        let caller = std::thread::current().id();
+        phase(128, 32, || assert_eq!(std::thread::current().id(), caller));
+        let cpu = CpuExecution::new(4).unwrap();
+        let serial = CpuExecution::serial().unwrap();
+        cpu.enter(|| {
+            phase(63, 32, || assert_eq!(std::thread::current().id(), caller));
+            phase(64, 32, || {
+                assert!(cpu.0.current_thread_index().is_some());
+                for _ in 0..8 {
+                    let mut values = [0; 64];
+                    chunks_mut(&mut values, 32, |_, chunk| {
+                        assert!(cpu.0.current_thread_index().is_some());
+                        assert_eq!(install(rayon::current_num_threads), 4);
+                        chunk.fill(7);
+                    });
+                    assert_eq!(values, [7; 64]);
+                }
+            });
+            serial.enter(|| phase(64, 32, || assert_eq!(std::thread::current().id(), caller)));
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    phase(64, 32, || panic!("phase unwind"))
+                }))
+                .is_err()
+            );
+            assert_eq!(install(rayon::current_num_threads), 4);
+        });
+        assert!(CURRENT.with(|slot| slot.borrow().is_none()));
     }
 }

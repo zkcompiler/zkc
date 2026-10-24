@@ -245,15 +245,16 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 true,
             )?;
             // Reuse the owning contract row, including all installed providers.
-            let constants = crate::operations::arithmetic::CONTRACTS
+            for constants in crate::operations::arithmetic::CONTRACTS
                 .iter()
-                .find(|row| row.name == "field.constant")
-                .expect("field constant contract");
-            for implementation in constants.implementations {
-                r.entries
-                    .get_mut(*implementation)
-                    .expect("installed field constant")
-                    .prepared_handler = Some(prepared_field_constant);
+                .filter(|row| matches!(row.name, "field.constant" | "vector.constant"))
+            {
+                for implementation in constants.implementations {
+                    r.entries
+                        .get_mut(*implementation)
+                        .expect("installed literal constant")
+                        .prepared_handler = Some(prepared_literal);
+                }
             }
             r.prepared_family(
                 crate::numerical::expression::IMPLEMENTATIONS,
@@ -376,8 +377,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                             contract: row.name,
                             signature: Signature::Custom(crate::operations::blst::signature),
                             handler: Dispatch::Resolve(super::dispatch::resident),
-                            prepared_handler: if row.name == "field.constant" {
-                                Some(prepared_field_constant)
+                            prepared_handler: if matches!(
+                                row.name,
+                                "field.constant" | "vector.constant"
+                            ) {
+                                Some(prepared_literal)
                             } else {
                                 None
                             },
@@ -407,8 +411,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                         contract,
                         signature: Signature::Custom(crate::operations::halo2curves::signature),
                         handler: Dispatch::Resolve(super::dispatch::halo2curves),
-                        prepared_handler: if contract == "field.constant" {
-                            Some(prepared_field_constant)
+                        prepared_handler: if matches!(
+                            contract,
+                            "field.constant" | "vector.constant"
+                        ) {
+                            Some(prepared_literal)
                         } else {
                             None
                         },
@@ -487,13 +494,13 @@ pub(super) fn arithmetic(
         &b.core.policy,
     )
 }
-fn prepared_field_constant(
+fn prepared_literal(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     _args: &[Value],
     call: &super::NativeCall,
 ) -> Result<Vec<Value>> {
-    crate::operations::field::publish_literal(call.literal()?, i, &b.core.policy)
+    crate::operations::arithmetic::publish_literal(call.literal()?, i, &b.core.policy)
 }
 fn expression(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::numerical::expression::prepare(

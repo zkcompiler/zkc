@@ -197,23 +197,25 @@ impl<P: SWCurveConfig> Plan<P> {
         }
         match &mut self.execution {
             Execution::Batched { chunk_len, scratch } => {
-                for (chunk_index, (inputs, outputs)) in points
-                    .chunks(*chunk_len)
-                    .zip(destination.chunks_mut(*chunk_len))
-                    .enumerate()
-                {
-                    scratch.projectives.resize(inputs.len(), Projective::zero());
-                    // Reuse the already admitted aggregate scratch. Workers own
-                    // disjoint projectives; normalization retains one prefix buffer.
-                    crate::cpu::chunks_mut(&mut scratch.projectives, 32, |offset, chunk| {
-                        for (index, output) in chunk.iter_mut().enumerate() {
-                            let index = offset + index;
-                            *output = affine(inputs[index])
-                                .mul_bigint(scalar_at(chunk_index * *chunk_len + index));
-                        }
-                    });
-                    scratch.normalize(outputs, &wrap);
-                }
+                crate::cpu::phase((*chunk_len).min(self.len), 32, || {
+                    for (chunk_index, (inputs, outputs)) in points
+                        .chunks(*chunk_len)
+                        .zip(destination.chunks_mut(*chunk_len))
+                        .enumerate()
+                    {
+                        scratch.projectives.resize(inputs.len(), Projective::zero());
+                        // Reuse the already admitted aggregate scratch. Workers own
+                        // disjoint projectives; normalization retains one prefix buffer.
+                        crate::cpu::chunks_mut(&mut scratch.projectives, 32, |offset, chunk| {
+                            for (index, output) in chunk.iter_mut().enumerate() {
+                                let index = offset + index;
+                                *output = affine(inputs[index])
+                                    .mul_bigint(scalar_at(chunk_index * *chunk_len + index));
+                            }
+                        });
+                        scratch.normalize(outputs, &wrap);
+                    }
+                });
             }
             Execution::Direct => {
                 crate::cpu::chunks_mut(destination, 32, |offset, chunk| {
