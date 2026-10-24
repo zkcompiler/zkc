@@ -163,3 +163,8 @@ def participant (inputs outputs : List ValueSort) (returned : List Nat) (body : 
     else .halt .refused
 
 end Zkc.Construction.Domain.View
+
+-- Own the service-view equations and their private proof helpers here.
+-- Downstream readbacks must not store different providers for these equations.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Domain.View.localService
