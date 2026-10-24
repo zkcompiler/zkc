@@ -14,10 +14,10 @@ use zkc_runtime::vm::{Identity, Invocation, Value as _};
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
 /// remains delegated to the selected field library.
-fn invert_nonzero<S: Coefficient>(
+fn invert_nonzero<'a, S: Coefficient>(
     values: &[S],
-    allocate: impl FnOnce() -> Result<Vec<S>>,
-) -> Result<Vec<S>> {
+    allocate: impl FnOnce() -> Result<crate::numerical::Destination<'a, Vec<S>>>,
+) -> Result<crate::numerical::Destination<'a, Vec<S>>> {
     let operation = zkc_kernels::vector::Inversion::new(values).map_err(crate::field_error)?;
     let mut out = allocate()?;
     out.resize(values.len(), S::zero());
@@ -376,23 +376,11 @@ fn vector<S: Family>(
             call.output(n, initial, bytes)
         }
     };
-    // At most two outputs occur in this family. Plain resident construction
-    // retains its reservation until publication; dense destinations below use
-    // their existing Output reservations instead.
-    let reservations = std::cell::RefCell::new([None, None]);
     let allocation = |n| {
         p.vector_width(n, width)?;
         let bytes = size(n, width)?;
         p.output(bytes, i.max_output_bytes)?;
-        if S::RESIDENT_STORAGE {
-            let reservation = call.reserve_workspace::<u8>(bytes)?;
-            *reservations
-                .borrow_mut()
-                .iter_mut()
-                .find(|slot| slot.is_none())
-                .ok_or_else(|| refused("kernel-output-count"))? = Some(reservation);
-        }
-        reserve::<S>(n)
+        call.destination(S::RESIDENT_STORAGE, bytes, || reserve::<S>(n))
     };
     let destination = |n, initial, per_element| {
         // Preserve element/output preflights before numerical work and storage.
@@ -409,7 +397,7 @@ fn vector<S: Family>(
             for literal in i.attributes {
                 out.push(S::decimal(literal)?);
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.scatter_sum" => {
             let a = v(0)?;
@@ -428,9 +416,11 @@ fn vector<S: Family>(
                 let index = natural(i.attributes, j + 1)?;
                 out[index] = out[index] + *value;
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
-        "vector.empty" => Ok(vec![S::vector_value(allocation(0)?)]),
+        "vector.empty" => Ok(vec![
+            allocation(0)?.finish(|values| Ok(S::vector_value(values)))?,
+        ]),
         "vector.sum" | "vector.product" => {
             let a = v(0)?;
             // One load and one accumulator operation per element, plus setup.
@@ -467,7 +457,7 @@ fn vector<S: Family>(
             let slice = a.get(start..end).ok_or_else(|| refused("vector-slice"))?;
             let mut out = allocation(length)?;
             out.extend_from_slice(slice);
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.transpose" => {
             let input = v(0)?;
@@ -489,7 +479,7 @@ fn vector<S: Family>(
                     }
                 }
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.rotate" => {
             let a = v(0)?;
@@ -500,7 +490,7 @@ fn vector<S: Family>(
             let mut out = allocation(a.len())?;
             out.extend_from_slice(&a[k..]);
             out.extend_from_slice(&a[..k]);
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.bit_reverse" | "vector.bit_reverse_rows" => {
             let a = v(0)?;
@@ -522,7 +512,7 @@ fn vector<S: Family>(
                     .ok_or_else(|| refused("vector-bit-reversal"))?;
                 out.extend_from_slice(&a[source * width..(source + 1) * width]);
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.interleave" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -536,13 +526,13 @@ fn vector<S: Family>(
                 out.push(*x);
                 out.push(*y);
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.prefix_product" | "vector.prefix_sum" | "vector.inverse" => {
             let a = v(0)?;
             if name == "vector.inverse" {
                 let out = invert_nonzero(a, || allocation(a.len()))?;
-                return Ok(vec![S::vector_value(out)]);
+                return Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?]);
             }
             let mut out = allocation(a.len())?;
             let mut acc = if name == "vector.prefix_product" {
@@ -557,7 +547,7 @@ fn vector<S: Family>(
                 };
                 out.push(acc);
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.fill" | "vector.geometric" | "vector.splat" | "vector.powers" => {
             // Attribute-sized forms historically read the length before the scalar.
@@ -638,7 +628,7 @@ fn vector<S: Family>(
             let mut out = allocation(n)?;
             out.extend_from_slice(a);
             out.push(x);
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.gather" => {
             let a = v(0)?;
@@ -652,7 +642,7 @@ fn vector<S: Family>(
             for j in 0..i.attributes.len() {
                 out.push(a[natural(i.attributes, j)?]);
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.add" | "vector.sub" | "vector.mul" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -694,7 +684,7 @@ fn vector<S: Family>(
                     }
                 }
             }
-            Ok(vec![S::vector_value(out)])
+            Ok(vec![out.finish(|values| Ok(S::vector_value(values)))?])
         }
         "vector.matvec" => {
             let (a, b) = (v(0)?, v(1)?);
@@ -1477,9 +1467,18 @@ mod batch_inversion_tests {
     fn check_values<S: Coefficient>(mut element: impl FnMut(usize) -> S) {
         for n in [0, 1, 2, 17, 257] {
             let values: Vec<_> = (0..n).map(&mut element).collect();
-            let output = invert_nonzero(&values, || Ok(Vec::with_capacity(n))).unwrap();
+            let call = crate::numerical::Call::new(&Policy::default(), usize::MAX);
+            let output = invert_nonzero(&values, || {
+                call.destination(false, 0, || Ok(Vec::with_capacity(n)))
+            })
+            .unwrap();
             assert_eq!(output.len(), n);
-            assert!(values.iter().zip(&output).all(|(x, y)| *x * *y == S::one()));
+            assert!(
+                values
+                    .iter()
+                    .zip(output.iter())
+                    .all(|(x, y)| *x * *y == S::one())
+            );
             for index in [0, n / 2, n.saturating_sub(1)] {
                 if n == 0 {
                     continue;

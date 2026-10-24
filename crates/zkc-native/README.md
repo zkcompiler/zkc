@@ -166,7 +166,7 @@ and scalar tails. Chunking changes neither the Kernel/VM contract nor the
 minimum managed-memory allowance. CPU-specific packing follows build target
 features; portable builds remain supported.
 
-`curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
+Arkworks `curve.vector_scale` and `curve.scale_each` optionally batch-normalize projective
 results for BLS12-381 and BN254 G1/G2 while retaining affine-base `mul_bigint`.
 Native admits the kernel's workspace bound from public length and the numerical
 scratch allowance. The typed kernel plan prepares bounded scratch and freezes
@@ -175,6 +175,8 @@ Insufficient scratch or failed scratch preparation selects direct scaling.
 Existing output preflight and charges remain in place, with no added numerical
 work charge. Dalek multiplication paths and their timing properties are unchanged;
 Arkworks remains variable-time.
+Resident BLST and Halo scaling use their provider-owned bulk kernels, as described
+in the [numerical contract](../../docs/spec/runtime/numerical.md#implemented-consumers).
 
 Sparse matrices remain immutable canonical COO. Forward and bilinear kernels
 contract occupied rows; transpose scatters entries in stored order without a

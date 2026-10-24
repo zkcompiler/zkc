@@ -434,3 +434,93 @@ fn repeated_immutable_input_aliases_remain_unchanged() {
     assert!(Arc::ptr_eq(&input, &alias));
     assert!(!Arc::ptr_eq(&input, &result));
 }
+
+#[test]
+fn provider_destinations_keep_storage_charges_through_publication() {
+    let call = Call::new(&policy(8), 0);
+    let mut destination = call.destination(true, 8, || Ok(vec![1u8; 8])).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    assert_eq!(call.scope.usage().outputs, 0); // Preserve this family's existing output checks.
+    destination[0] = 9;
+    let value = destination
+        .finish(|values| {
+            assert_eq!(call.memory_bytes(), 8);
+            assert_eq!(
+                code(call.reserve_workspace::<u8>(1)),
+                "exhausted:numerical-bytes"
+            );
+            bytes(values)
+        })
+        .unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    assert_eq!(call.scope.usage().outputs, 0);
+    drop(value);
+    assert_eq!(call.memory_bytes(), 8);
+}
+
+#[test]
+fn provider_destination_abandonment_failure_and_unwind_release_after_storage() {
+    let call = Call::new(&policy(8), 0);
+    struct Storage<'a>(&'a Call);
+    impl Drop for Storage<'_> {
+        fn drop(&mut self) {
+            assert_eq!(self.0.memory_bytes(), 8);
+        }
+    }
+    for kind in 0..3 {
+        let destination = call.destination(true, 8, || Ok(Storage(&call))).unwrap();
+        match kind {
+            0 => drop(destination),
+            1 => assert_eq!(
+                code(destination.finish(|_storage| Err(refused("freeze")))),
+                "refused:freeze"
+            ),
+            _ => assert!(
+                std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    let _ = destination.finish(|_storage| panic!("freeze"));
+                }))
+                .is_err()
+            ),
+        }
+        assert_eq!(call.memory_bytes(), 0);
+    }
+    assert_eq!(
+        code(call.destination::<()>(true, 9, || panic!("admission precedes allocation"))),
+        "exhausted:numerical-bytes"
+    );
+    assert_eq!(
+        code(call.destination::<()>(true, 8, || Err(exhausted("allocation")))),
+        "exhausted:allocation"
+    );
+    assert_eq!(call.memory_bytes(), 0);
+    assert!(
+        std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _ = call.destination::<()>(true, 8, || {
+                assert_eq!(call.memory_bytes(), 8);
+                panic!("construct");
+            });
+        }))
+        .is_err()
+    );
+    assert_eq!(call.memory_bytes(), 0);
+    let destination = call.destination(false, 8, || Ok(vec![0u8; 8])).unwrap();
+    assert_eq!(call.memory_bytes(), 0);
+    destination.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 0);
+}
+
+#[test]
+fn two_provider_destinations_share_the_live_limit_before_either_is_published() {
+    let call = Call::new(&policy(8), 0);
+    let left = call.destination(true, 4, || Ok(vec![1u8; 4])).unwrap();
+    assert_eq!(
+        code(call.destination::<()>(true, 5, || panic!("live limit"))),
+        "exhausted:numerical-bytes"
+    );
+    let right = call.destination(true, 4, || Ok(vec![2u8; 4])).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    left.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    right.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+}

@@ -66,6 +66,7 @@ The explicit Linux gates also require `strace` and ptrace permission:
 ```sh
 cargo test --locked -p zkc-kernels --test cpu_thread_creation provider_workloads_create_only_owned_workers -- --ignored
 cargo test --locked -p zkc-native --test cpu_thread_creation installed_polynomial_operations_create_only_owned_workers -- --ignored
+cargo test --locked -p zkc-native --test cpu_thread_creation installed_resident_scaling_creates_only_owned_workers -- --ignored
 cargo test --locked -p zkc-benchmarks output_checks_create_no_additional_workers -- --ignored
 ```
 

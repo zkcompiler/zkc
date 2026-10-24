@@ -9,10 +9,10 @@ use zkc_runtime::vm::{
 // provider-owned accessors, preserving validation without raw reconstruction.
 macro_rules! group_family {
     ($kernel:ident, $group:ident, $bulk:ident, $point:ident, $points:ident,
-     $wrap:expr, $read:expr) => {
+     $wrap:expr, $read:expr, $scaling:ident) => {
         impl $crate::operations::curve::Group for $kernel::$group {
             type Scalar = $kernel::ScalarElement;
-            type Error = std::convert::Infallible;
+            type Error = $kernel::Error;
             fn generator() -> Self {
                 Self::generator()
             }
@@ -46,12 +46,13 @@ macro_rules! group_family {
             fn push(output: &mut Self, point: $kernel::$group) {
                 output.push(point);
             }
+            $scaling!($kernel, $group);
         }
         impl $crate::operations::curve::Family<$kernel::$bulk> for $kernel::$group {
             const RESIDENT_STORAGE: bool = true;
             // MSM has a separate handler borrowing complete bulk carriers.
             fn scaling_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
-                match error {}
+                failure(error)
             }
             fn point(value: &$crate::Value) -> $crate::Result<Self> {
                 if let $crate::Value::$point(value) = value {

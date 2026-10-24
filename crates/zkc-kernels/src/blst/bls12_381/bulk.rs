@@ -224,10 +224,19 @@ macro_rules! group_vector {
                 scalars: &ScalarVector,
                 out: &mut Self,
             ) -> Result<(), Error> {
+                self.scale_each_elements_into(scalars.as_elements(), out)
+            }
+            /// Borrow trusted scalar elements without constructing another vector.
+            /// All input and output lengths are checked before any writes.
+            pub fn scale_each_elements_into(
+                &self,
+                scalars: &[super::ScalarElement],
+                out: &mut Self,
+            ) -> Result<(), Error> {
                 if self.len() != scalars.len() {
                     return Err(Error::LengthMismatch);
                 }
-                self.map_into(out, |i, point| point.scale(Scalar(scalars.0[i])))
+                self.map_into(out, |i, point| point.scale(Scalar(scalars[i])))
             }
             pub fn sum(&self) -> $point {
                 self.iter().fold($point::identity(), |a, b| a.add(&b))

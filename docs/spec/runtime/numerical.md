@@ -40,7 +40,8 @@ allowance, without resource stores, randomness, transcript state or interpreter
 environments. It does not create an additional frame or instruction charge.
 
 Results are built in initialized private destinations. The adapter fixes their
-lengths before allocation and exposes only mutable slices. Freezing consumes
+extents before allocation. Scoped typed buffers expose mutable slices; provider
+builders initialize their reserved final storage without growing it. Freezing consumes
 the destination through its owning representation constructor. Native output
 validation and the VM still check the complete returned tuple and its retention.
 Results become observable only after successful completion; a failed operation
@@ -72,6 +73,13 @@ destinations release their reservations when dropped. Scratch exposes only
 borrowed slices and cannot be frozen through the result API. Accepted work
 charges are not refunded.
 
+Provider builders couple their storage and memory-only reservation in one
+destination owner. Abandonment destroys storage before releasing its charge;
+freezing retains the charge through the trusted constructor and, on success,
+until call end. Their existing shape, output and complete-tuple checks remain
+with Native. Optional scaling scratch shares the destination's live memory
+allowance; it cannot independently consume a second call allowance.
+
 The defaults are 256 MiB of managed memory and 2^26 numerical work units per
 call. These native policy fields are included in preparation compatibility;
 reusing a cached computation cannot bypass a changed policy. They are distinct
@@ -99,21 +107,29 @@ The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
-Arkworks curve vector scaling uses a scoped reservation only for optional
-projective, Z-coordinate and inversion-prefix scratch, in chunks of at most
-256 points. The existing output checks and allocation precede this scope.
+Arkworks curve vector scaling reserves optional projective, Z-coordinate and
+inversion-prefix scratch, in chunks of at most 256 points. The existing output
+checks and allocation precede scratch admission.
 Insufficient scratch allowance or a failed optional allocation selects the
 existing per-point path before writing results; these calls acquire no new
 numerical work or mandatory memory floor. Both paths retain affine-base scalar
 multiplication and private complete-output publication. Dalek scaling keeps its
 existing constant-time provider calls and does not use this scratch.
 
-`blst/resident/*` alternatives operate on selected BLS12-381 scalar,
-G1 and G2 storage. Canonical bridges and subgroup checks occur in reached
+`blst/resident/*` and `halo2curves-axiom/resident/*` alternatives operate on
+selected BLS12-381 and BN254 scalar, G1 and G2 storage, respectively.
+Canonical bridges and subgroup checks occur in reached
 `representation.convert` calls. Linking checks the conversion endpoints;
 arithmetic reuses those admitted signatures without parsing them again.
 Imports adopt their provider buffers; bulk exports to Arkworks keep staging
 and final storage reserved together. There are no implicit operand imports.
+
+Resident shared-scalar and elementwise vector scaling call the typed bulk
+kernels, borrowing the original scalar storage and filling one reserved point
+buffer. BLST splits independent multiplications; Halo additionally uses optional
+bounded projective/affine scratch for batch normalization. Insufficient scratch
+or a failed optional allocation selects Direct before numerical writes. Both
+paths keep the existing work charges and mandatory destination bounds.
 
 Resident field/vector arithmetic uses the shared dense adapter. Resident curve
 arithmetic uses the shared curve adapter; it does not inherit the admission

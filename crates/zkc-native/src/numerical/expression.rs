@@ -125,7 +125,7 @@ pub(crate) enum Prepared {
 }
 
 macro_rules! residue_plans {
-    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
+    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
         pub(crate) enum ResiduePlan { $($id(Plan<$s>),)* }
         impl ResiduePlan {
             fn new(field: Identity, expression: Expression, mask: &[u8], mode: Mode, bytes: usize, binding: &OperationBinding) -> Result<Self> {

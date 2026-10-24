@@ -74,6 +74,9 @@ pub(super) trait PointStorage<G: Group> {
     where
         G: 'a;
     type Output;
+    fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
+        G::scaling_workspace_bound(len, max_workspace)
+    }
     fn reserve(len: usize) -> Result<Self::Output>;
     fn push(output: &mut Self::Output, point: G);
     fn extend(output: &mut Self::Output, points: impl IntoIterator<Item = G>) {
@@ -161,7 +164,7 @@ pub(super) trait Family<S: PointStorage<Self> = SliceStorage>: Group {
     fn width() -> usize;
 }
 // The destination has already passed the historical group/output preflights
-// and exact reservation. Only arkworks needs an initialized affine destination.
+// and exact reservation. The slice adapter initializes its affine destination.
 macro_rules! ark_scaling {
     () => {
         fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
@@ -200,17 +203,21 @@ macro_rules! ark_scaling {
     };
 }
 
-fn with_scaling_workspace<G: Group>(
+fn with_scaling_workspace<G: Group, S: PointStorage<G>>(
     len: usize,
     policy: &Policy,
-    available: usize,
+    call: &crate::numerical::Call,
     scale: impl FnOnce(usize) -> Result<()>,
 ) -> Result<()> {
-    // Existing output storage retains its historical owner and admission order.
-    // Call accounts only for optional, scoped projective/Z/prefix payload. These
+    // Output storage retains its historical admission order. Optional scoped
+    // projective/Z/prefix payload shares the destination's live call allowance. These
     // operations historically have no numerical work charge; do not add one.
-    let call = crate::numerical::Call::new(policy, available);
-    let bytes = G::scaling_workspace_bound(len, policy.max_numerical_bytes);
+    let bytes = S::scaling_workspace_bound(
+        len,
+        policy
+            .max_numerical_bytes
+            .saturating_sub(call.memory_bytes()),
+    );
     let workspace = if bytes > 0 {
         call.reserve_workspace::<u8>(bytes).ok()
     } else {
@@ -242,7 +249,8 @@ mod scaling_workspace_tests {
                 ..Policy::default()
             };
             // No output or work floor is attached to this optional scope.
-            with_scaling_workspace::<G>(len, &policy, 0, |workspace_bytes| {
+            let call = crate::numerical::Call::new(&policy, 0);
+            with_scaling_workspace::<G, SliceStorage>(len, &policy, &call, |workspace_bytes| {
                 assert_eq!(workspace_bytes, expected);
                 Ok(())
             })
@@ -260,16 +268,23 @@ mod scaling_workspace_tests {
 
     #[test]
     fn dalek_never_requests_arkworks_workspace() {
+        let policy = Policy::default();
+        let call = crate::numerical::Call::new(&policy, 0);
         for len in [0, 1, 257] {
-            with_scaling_workspace::<RistrettoPoint>(len, &Policy::default(), 0, |chunk| {
+            with_scaling_workspace::<RistrettoPoint, SliceStorage>(len, &policy, &call, |chunk| {
                 assert_eq!(chunk, 0);
                 Ok(())
             })
             .unwrap();
-            with_scaling_workspace::<crate::EdwardsPrime>(len, &Policy::default(), 0, |chunk| {
-                assert_eq!(chunk, 0);
-                Ok(())
-            })
+            with_scaling_workspace::<crate::EdwardsPrime, SliceStorage>(
+                len,
+                &policy,
+                &call,
+                |chunk| {
+                    assert_eq!(chunk, 0);
+                    Ok(())
+                },
+            )
             .unwrap();
         }
     }
@@ -702,20 +717,11 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
     let point = |j| G::point(arg(j)?);
     let points = |j| G::points(arg(j)?);
     let call = crate::numerical::Call::new(p, i.max_output_bytes);
-    let reservations = std::cell::RefCell::new([None, None]);
     let alloc = |n| {
         G::limit(p, n)?;
         let bytes = size(n, G::width())?;
         p.output(bytes, i.max_output_bytes)?;
-        if G::RESIDENT_STORAGE {
-            let reservation = call.reserve_workspace::<u8>(bytes)?;
-            *reservations
-                .borrow_mut()
-                .iter_mut()
-                .find(|slot| slot.is_none())
-                .ok_or_else(|| refused("kernel-output-count"))? = Some(reservation);
-        }
-        S::reserve(n)
+        call.destination(G::RESIDENT_STORAGE, bytes, || S::reserve(n))
     };
     let scalar_output = i
         .binding
@@ -739,7 +745,7 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
         "curve.scale" => G::value(point(0)?.scale(G::scalar(arg(1)?)?)),
         "curve.equal" => Value::Bool(point(0)? == point(1)?),
         "curve.nonidentity" => Value::Bool(point(0)? != G::identity()),
-        "curve.empty" => G::values(alloc(0)?),
+        "curve.empty" => alloc(0)?.finish(|values| Ok(G::values(values)))?,
         "curve.at" => G::value(
             points(0)?
                 .get(natural(i.attributes, 0)?)
@@ -789,10 +795,10 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
+            with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
                 S::scale_each(s, b, &mut out, workspace_bytes).map_err(G::scaling_failure)
             })?;
-            G::values(out)
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.append" => {
             let b = points(0)?;
@@ -804,16 +810,16 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             )?;
             S::extend(&mut out, b.iter());
             S::push(&mut out, x);
-            G::values(out)
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.vector_scale" => {
             let b = points(0)?;
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
+            with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
                 S::scale_many(b, x, &mut out, workspace_bytes).map_err(G::scaling_failure)
             })?;
-            G::values(out)
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.vector_add" | "curve.concat" => {
             let (a, b) = (points(0)?, points(1)?);
@@ -832,7 +838,7 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             } else {
                 S::extend(&mut out, a.iter().zip(b.iter()).map(|(a, b)| a.add(b)));
             }
-            G::values(out)
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.split" => {
             let a = points(0)?;
@@ -847,7 +853,10 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
             let mut right = alloc(half)?;
             S::extend(&mut left, a.iter().take(half));
             S::extend(&mut right, a.iter().skip(half));
-            return Ok(vec![G::values(left), G::values(right)]);
+            return Ok(vec![
+                left.finish(|values| Ok(G::values(values)))?,
+                right.finish(|values| Ok(G::values(values)))?,
+            ]);
         }
         _ => return Err(refused("kernel-operands")),
     };

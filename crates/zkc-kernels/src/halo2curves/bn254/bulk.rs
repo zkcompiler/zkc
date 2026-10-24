@@ -236,10 +236,20 @@ macro_rules! group_vector {
                 out: &mut Self,
                 plan: &mut scaling::Plan<$affine>,
             ) -> Result<(), Error> {
+                self.scale_each_elements_with_plan_into(scalars.as_elements(), out, plan)
+            }
+            /// Borrow trusted field elements directly; no scalar-vector copy.
+            /// Complete shape checks precede all writes and plan execution.
+            pub fn scale_each_elements_with_plan_into(
+                &self,
+                scalars: &[ScalarElement],
+                out: &mut Self,
+                plan: &mut scaling::Plan<$affine>,
+            ) -> Result<(), Error> {
                 if self.len() != scalars.len() {
                     return Err(Error::LengthMismatch);
                 }
-                plan.scale_into(&self.0, &mut out.0, |i| scalars.0[i], |p| p, |p| p)
+                plan.scale_into(&self.0, &mut out.0, |i| scalars[i], |p| p, |p| p)
             }
             pub fn sum(&self) -> $point {
                 // One final normalization, not one inversion per addition.

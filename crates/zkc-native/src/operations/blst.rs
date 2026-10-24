@@ -79,6 +79,40 @@ impl field::Family for kernel::ScalarElement {
     }
 }
 
+// The resident destination is initialized in its already reserved final buffer.
+// Typed bulk kernels borrow the original scalar slice and own numerical splitting.
+macro_rules! scaling {
+    ($kernel:ident, $group:ident) => {
+        fn scale_many(
+            points: &Self,
+            scalar: $kernel::ScalarElement,
+            output: &mut Self,
+            _workspace_bytes: usize,
+        ) -> std::result::Result<(), $kernel::Error> {
+            Self::extend(
+                output,
+                std::iter::repeat_n($kernel::$group::identity(), points.len()),
+            );
+            points.scale_into($kernel::Scalar::from_element(scalar), output)
+        }
+        fn scale_each(
+            scalars: &[$kernel::ScalarElement],
+            points: &Self,
+            output: &mut Self,
+            _workspace_bytes: usize,
+        ) -> std::result::Result<(), $kernel::Error> {
+            if scalars.len() != points.len() {
+                return Err($kernel::Error::LengthMismatch);
+            }
+            Self::extend(
+                output,
+                std::iter::repeat_n($kernel::$group::identity(), points.len()),
+            );
+            points.scale_each_elements_into(scalars, output)
+        }
+    };
+}
+
 super::resident::group_family!(
     kernel,
     G1,
@@ -86,7 +120,8 @@ super::resident::group_family!(
     BlstG1,
     BlstG1Vector,
     |v| v,
-    |v: &kernel::G1| *v
+    |v: &kernel::G1| *v,
+    scaling
 );
 
 super::resident::group_family!(
@@ -96,7 +131,8 @@ super::resident::group_family!(
     BlstG2,
     BlstG2Vector,
     Arc::new,
-    |v: &Arc<kernel::G2>| **v
+    |v: &Arc<kernel::G2>| **v,
+    scaling
 );
 
 pub(crate) fn apply(

@@ -166,12 +166,24 @@ impl Call {
     /// Reserve adapter-owned typed workspace without allocating a second buffer.
     /// Keep the guard alive through the corresponding vectors' destruction.
     /// Provider caches, allocator overhead and hidden scratch are outside this scope.
-    pub fn reserve_workspace<T>(&self, elements: usize) -> Result<impl Drop + '_> {
+    pub fn reserve_workspace<T>(&self, elements: usize) -> Result<StorageReservation<'_>> {
         self.reserve_memory(payload_bytes::<T>(elements)?)
+            .map(StorageReservation)
     }
 
     fn reserve_memory(&self, bytes: usize) -> Result<Reservation<'_>> {
         Reservation::new(&self.memory, bytes, self.limits.memory, Error::Memory)
+    }
+}
+
+/// A managed storage charge without an aggregate-result allowance. The adapter
+/// owns the corresponding storage and must destroy it before dropping this guard.
+pub struct StorageReservation<'a>(Reservation<'a>);
+impl StorageReservation<'_> {
+    /// Retain a successfully published destination's charge until call end.
+    /// Only use after its trusted constructor has adopted the reserved storage.
+    pub fn retain(self) {
+        self.0.keep();
     }
 }
 

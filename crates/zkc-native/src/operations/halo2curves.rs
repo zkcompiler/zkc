@@ -135,6 +135,55 @@ impl field::Family for kernel::ScalarElement {
     }
 }
 
+// Optional batch normalization uses bounded provider scratch; unavailable
+// scratch selects the existing direct plan before any numerical writes.
+macro_rules! scaling {
+    ($kernel:ident, $group:ident) => {
+        fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
+            $kernel::$group::scaling_workspace_bound(len, max_workspace)
+        }
+        fn scale_many(
+            points: &Self,
+            scalar: $kernel::ScalarElement,
+            output: &mut Self,
+            workspace_bytes: usize,
+        ) -> std::result::Result<(), $kernel::Error> {
+            let mut plan = $kernel::$group::scaling_plan(
+                points.len(),
+                $kernel::scaling::Selection::Automatic {
+                    max_workspace: workspace_bytes,
+                },
+            )?;
+            Self::extend(
+                output,
+                std::iter::repeat_n($kernel::$group::identity(), points.len()),
+            );
+            points.scale_with_plan_into($kernel::Scalar::from_element(scalar), output, &mut plan)
+        }
+        fn scale_each(
+            scalars: &[$kernel::ScalarElement],
+            points: &Self,
+            output: &mut Self,
+            workspace_bytes: usize,
+        ) -> std::result::Result<(), $kernel::Error> {
+            if scalars.len() != points.len() {
+                return Err($kernel::Error::LengthMismatch);
+            }
+            let mut plan = $kernel::$group::scaling_plan(
+                points.len(),
+                $kernel::scaling::Selection::Automatic {
+                    max_workspace: workspace_bytes,
+                },
+            )?;
+            Self::extend(
+                output,
+                std::iter::repeat_n($kernel::$group::identity(), points.len()),
+            );
+            points.scale_each_elements_with_plan_into(scalars, output, &mut plan)
+        }
+    };
+}
+
 super::resident::group_family!(
     kernel,
     G1,
@@ -142,7 +191,8 @@ super::resident::group_family!(
     HaloG1,
     HaloG1Vector,
     |v| v,
-    |v: &kernel::G1| *v
+    |v: &kernel::G1| *v,
+    scaling
 );
 
 super::resident::group_family!(
@@ -152,7 +202,8 @@ super::resident::group_family!(
     HaloG2,
     HaloG2Vector,
     Arc::new,
-    |v: &Arc<kernel::G2>| **v
+    |v: &Arc<kernel::G2>| **v,
+    scaling
 );
 
 pub(crate) fn apply(
