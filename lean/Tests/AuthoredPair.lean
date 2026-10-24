@@ -30,11 +30,13 @@ private def program : Program := imported.program
 private def policy : Policy :=
   ⟨"main", "P", "V", 0, "suite", [1], [0], [], "zkc.framed/0", ""⟩
 private def producer : Participant :=
-  ⟨digest, digest, policy, "producer", [.data .boolean, .transcript "suite"],
-    [.transcript "suite"], [], [1]⟩
+  { source := digest, candidate := digest, policy, symbol := "producer",
+    inputs := [.data .boolean, .transcript "suite"],
+    outputs := [.transcript "suite"], instructions := [], returned := [1] }
 private def validator : Participant :=
-  ⟨digest, digest, policy, "validator", [.data .boolean, .transcript "suite"],
-    [.data .boolean, .transcript "suite"], [], [0, 1]⟩
+  { source := digest, candidate := digest, policy, symbol := "validator",
+    inputs := [.data .boolean, .transcript "suite"],
+    outputs := [.data .boolean, .transcript "suite"], instructions := [], returned := [0, 1] }
 private def artifacts : Artifacts := ⟨producer, validator⟩
 private def context : Context :=
   ⟨"main", ["P", "V"], 0, 1, 1, scalarServiceContract, none, "suite", []⟩

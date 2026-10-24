@@ -97,7 +97,7 @@ example : HonestPair.resolveModel ⟨[HonestPair.modelEntry, HonestPair.modelEnt
 
 example : HonestPair.resolveModel ⟨[HonestPair.modelEntry]⟩
     ⟨HonestPair.honestModelIdentifier, [(some "queries", .natural 1)]⟩ =
-      .error (.schema "honest typed-history model accepts no arguments") := rfl
+      .error (.schema "honest private-uniform model accepts no arguments") := rfl
 
 def undefinedModel : Export HonestPair.ModelExport := { HonestPair.modelEntry with definition := none }
 

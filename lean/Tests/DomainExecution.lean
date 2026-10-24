@@ -84,7 +84,8 @@ private def state (env : Environment model.toCarriers := [])
 private def policy : Policy := ⟨"main", "P", "V", 0, "suite", [], [], [], "test", "test"⟩
 private def constructed (instructions : List Instruction) (inputs outputs : List ValueSort)
     (returned : List Nat) : Participant :=
-  ⟨"fixture", "fixture", policy, "fixture", inputs, outputs, instructions, returned⟩
+  { source := "fixture", candidate := "fixture", policy, symbol := "fixture",
+    inputs, outputs, instructions, returned }
 
 private def message : Template :=
   ⟨"main", [], ["message", "main", "m", "m", "P", "V"]⟩
