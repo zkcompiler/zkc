@@ -74,6 +74,43 @@ helper/protocol prefixes. `Domain.Binding` pair transport quantifies the selecte
 private-service handler as well as the public oracle. It preserves their actual
 shared post-state, stopped prefixes, proof buffers and returned ABI values.
 
+The original-component route separates three checked equations:
+
+1. `Occurrence.participant_erase` recovers the admitted original participant.
+2. `Original.fold` constructs that participant's public transcript and private
+   service effects. `OccurrenceResolution` checks the exact source path and
+   reached iteration stack. Producer challenge delivery additionally requires
+   `SourceDelivery.checked`, which follows the original draw's unchanged SSA
+   result to its first exchange; equality of field values is insufficient. The
+   synchronous construction permits only visibility restrictions in that
+   window and requires the unique draw/delivery pair in the fixed policy.
+   Repeated delivery and intervening messages refuse. Supporting those schedules
+   would require preserving draw-time history and reusing the sampled value;
+   re-querying at each receive is not equivalent. Sharing one delivered value
+   among local component consumers does not require repeated delivery.
+3. An `Original.Simulation` connects the constructed original to the selected
+   artifact through return, stop, effect, checkpoint, sequence and repeat rules.
+   Validator and producer certificates are separate. The fixed consumer supplies
+   their complete return relation and live-frame obligations before proof search.
+
+The simulation produces a paired view retaining both original and artifact
+returns. Its target projection equals the actual artifact process, including
+every physical checkpoint. Its source projection erases those checkpoints and
+equals the original construction. `Original.Simulation.source_run_interaction` lifts that
+source projection through the same runtime handler, preserving outcome, unread
+proof, oracle and local-service post-state, and ordered events. It names the
+frame abstraction explicitly: raw original frames and compiled SSA frames are
+not asserted equal. `Original.executePair_eq` transports the independent role
+certificates through the existing pair experiment and its shared post-state.
+
+These rules quantify over arbitrary replies and stopped prefixes. A syntactically
+admitted producer with an added false guard need not have a correspondence
+certificate. A certificate with an arbitrary weak return relation also does not
+supply a fixed claim's stronger ABI obligation. The source equation, artifact
+equation and mathematical family contract must all meet at the same consumer.
+An installed source body's realization belongs with implementation bindings;
+the abstract mathematical family must not import the selected example roots.
+
 Generated callee dispatch uses one checked actual-callee table and dependent
 updates for selected views. All roles of a declaration see the completed table
 of earlier declarations; omitted views keep their actual invocation. This
@@ -351,10 +388,12 @@ subject shape. Receipt status depends on exact meaning, authorized telescope,
 standard axioms and proved request-side links. Proof method or evidence
 attribution never selects the meaning and may be `unattributed`. An author
 extension is reported separately from a canonical security property.
-The final per-claim status is currently assembled by the Python report audit;
-Lean supplies the checked receipt indices and audit records. Moving that whole
-decision into Lean, while preserving the artifact, premise and link checks,
-remains open.
+Lean's `Claims.ReceiptAudit` computes the final status from the complete finite
+audit envelope. The export rechecks actual declaration types, telescopes, axioms
+and required links in each provider's own import environment. Python checks the
+transport identity and joins and renders these decisions; missing or malformed
+exports do not select a weaker audit. Attribution remains best effort and does
+not affect establishment.
 
 Authored-pair selection currently has a typed Lean request API. Its source
 language declaration surface remains a coordinated language decision; the
