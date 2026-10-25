@@ -16,6 +16,15 @@ it does not call the continuation. Cleanup follows the runtime's existing
 primary-cause and diagnostic ordering. A returned `false` and a terminal stop
 are distinct outcomes.
 
+An adapter to another execution model supplies an interpretation of native
+causes into the selected logical stop type and an explicit observation law,
+as defined by the [representation contract](../realization/representations.md).
+Logical stop equality does not require equality of diagnostic prose. A coarser
+observer may omit additional cleanup diagnostics only under that law; it must
+retain the primary logical failure, ordered interaction prefix and related
+actual post-state, including cleanup's custody effects. The native runtime's
+own diagnostic and cleanup contract remains unchanged.
+
 The state and observation journal remain owned by the runtime. An SSA outcome
 is interpreted in that actual state; it does not encode a fresh state or turn
 live handles into context-free values. Additional resource refusals belong to

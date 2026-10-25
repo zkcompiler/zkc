@@ -36,6 +36,10 @@ A checked rule from a source stage to a target stage has five parts.
 Rules compose along a shared meaning when their relations compose: from
 `R₁ ⟦a⟧ ⟦b⟧` and `R₂ ⟦b⟧ ⟦c⟧` a composition law yields `R₃ ⟦a⟧ ⟦c⟧`. The
 composed check is the conjunction of the checks on the artifacts involved.
+Both premises must use the same admitted intermediate subject and compatible
+environments and observations. For execution relations this includes the actual
+intermediate state and returned value; a matching stage name is insufficient.
+Different interpretations need an explicit bridge before composition.
 
 ## Relations by property
 
@@ -45,11 +49,15 @@ from it.
 
 | Relation | Form | Preserves | Composition |
 |---|---|---|---|
-| Exact process equality | `⟦t⟧ = T ⟦s⟧` for a fixed semantic transformer `T` (identity, output selection, the Fiat–Shamir transform) | Every property of the process: outcome distributions in every environment, hence completeness, soundness and any view-based property | Rewriting; transformers compose as functions |
+| Exact process equality | `⟦t⟧ = T ⟦s⟧` for a fixed semantic transformer `T` (identity, output selection, the Fiat–Shamir transform) | Properties of `T ⟦s⟧` under the selected meaning and observations; transfer of properties of `⟦s⟧` additionally needs the law for `T` | Rewriting; transformers compose as functions, with their property-specific laws |
 | Representation refinement | A simulation between `⟦t⟧` and `⟦s⟧` up to a representation relation on values, actions and stops (limbs for field elements, bytes for typed messages, memory for environments); the target may also stop for resource or codec reasons | Acceptance reflection: when the target accepts, the source accepts on related values, which suffices for soundness. Completeness also needs the converse, which holds only under resource and progress assumptions: sufficient bounds, codecs that accept honest encodings, loops that finish within budget | Representation relations compose; the stop conditions of both stages accumulate |
 | Probabilistic reduction with loss | A bound relating experiments: the target's advantage or extraction probability against the source's, with an explicit loss in the query count and field size | Only the stated security property, with its loss | Losses add or compose; adversary classes and query bounds must match |
 
 Transcript construction and participant projection use exact equality.
+Equality to the transformed source does not establish that an arbitrary
+transformer preserves source security, completeness or privacy. A projection
+uses its selected observation; Fiat–Shamir uses its registered theorem and
+hypotheses.
 Probabilistic loss enters only in the security consumers applied to the
 transform of the original verifier: VCVio's Fiat–Shamir theorem for Sigma
 protocols and the multi-round theorems over round-by-round certificates. Lower
