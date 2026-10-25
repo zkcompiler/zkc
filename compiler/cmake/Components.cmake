@@ -178,6 +178,7 @@ add_zkc_component(IR
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
+  lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
@@ -195,7 +196,6 @@ add_zkc_component(IR
   lib/Dialect/Polynomial/IR/Types.cpp
   lib/Dialect/Polynomial/IR/Mathematical.cpp
   lib/Dialect/Polynomial/IR/Recipes.cpp
-  lib/Dialect/Commitment/IR/CommitmentDialect.cpp
   lib/Dialect/Commitment/IR/CommitmentDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp

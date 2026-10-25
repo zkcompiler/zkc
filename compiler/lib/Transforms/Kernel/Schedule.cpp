@@ -615,15 +615,15 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
   }
   return success(valid);
 }
-LogicalResult verifyEntrySchedule(ModuleOp source, mlir::ModuleOp schedule,
-                                  StringRef callSite,
+LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
+                                  mlir::ModuleOp schedule, StringRef callSite,
                                   MathematicalSelectionPolicy policy,
                                   finite::VerificationLimits limits,
                                   finite::VerificationResult *reported) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                      "numerical schedule differs"};
   auto function = scheduledFunction(schedule);
-  auto entry = getEntry(source);
+  auto entry = mathematical::getComputationEntry(source);
   auto finish = [&](bool valid) {
     if (valid)
       outcome = {finite::VerificationStatus::Verified, {}};

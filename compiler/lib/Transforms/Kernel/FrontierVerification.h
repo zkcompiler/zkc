@@ -34,7 +34,7 @@ verifyKernelFrontier(mlir::ModuleOp normalizedBefore,
 struct KernelNormalizationRewrite {
   CallOp sourceCall;
   CallOp normalizedCall;
-  ModuleOp normalizedUnit;
+  mlir::ModuleOp normalizedUnit;
 };
 mlir::LogicalResult verifyKernelNormalizationContext(
     mlir::ModuleOp source, mlir::ModuleOp normalized,

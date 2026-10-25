@@ -677,10 +677,11 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
     finite::VerificationLimits limits, finite::VerificationResult &outcome,
     NumericalSelection *selection) {
   outcome = {finite::VerificationStatus::Mismatch, "numerical recipes differ"};
-  auto unit =
-      source ? dyn_cast_or_null<ModuleOp>(source->getParentOp()) : ModuleOp();
-  if (!unit || source != getEntry(unit) || !source.getBody().hasOneBlock() ||
-      source.front().empty() || callSite.empty())
+  auto unit = source ? dyn_cast_or_null<mlir::ModuleOp>(source->getParentOp())
+                     : mlir::ModuleOp();
+  if (!unit || source != mathematical::getComputationEntry(unit) ||
+      !source.getBody().hasOneBlock() || source.front().empty() ||
+      callSite.empty())
     return failure();
   CheckedHelperNormalizations helpers(unit);
   if (failed(helpers.readback(&remaining)))
@@ -706,8 +707,8 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
   return verifyLocalFragment(owner);
 }
 
-LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
-                                 StringRef callSite,
+LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
+                                 mlir::ModuleOp candidate, StringRef callSite,
                                  MathematicalSelectionPolicy policy,
                                  finite::VerificationLimits limits,
                                  finite::VerificationResult *reported,
@@ -735,7 +736,7 @@ LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
   };
   if (failed(verifyRecipeOutput(candidate)))
     return finish(false);
-  auto entry = getEntry(source);
+  auto entry = mathematical::getComputationEntry(source);
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
   if (!entry || !candidate->getAttrs().empty() || !owner ||

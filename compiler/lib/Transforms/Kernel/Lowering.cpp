@@ -9,6 +9,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
@@ -41,7 +42,7 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     auto policy = effectiveSelectionPolicy(call, fallback);
     if (!entry || failed(policy))
       return refuse(call, "invalid numerical closure or policy");
-    auto unit = cast<ModuleOp>(entry->getParentOp());
+    auto unit = cast<mlir::ModuleOp>(entry->getParentOp());
     auto scratch = realizeEntry(unit, call.getSite(), *policy, work, remaining,
                                 remainingBytes, {}, trace, &selection, outcome,
                                 optionalConstruction);
@@ -150,7 +151,7 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
   // work but still cannot remain in physical input, even when there are no
   // calls.
   for (auto unit :
-       make_early_inc_range(owner.getBody().front().getOps<ModuleOp>()))
+       make_early_inc_range(owner.getBody().front().getOps<mlir::ModuleOp>()))
     unit.erase();
   return success();
 }
@@ -280,8 +281,8 @@ struct LowerKernelsPass
         fallbackPolicy(other.fallbackPolicy) {}
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect,
-                    kernel::KernelDialect, func::FuncDialect, scf::SCFDialect,
-                    arith::ArithDialect>();
+                    kernel::KernelDialect, exec::ExecDialect, func::FuncDialect,
+                    scf::SCFDialect, arith::ArithDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-kernels"; }
   StringRef getDescription() const final {

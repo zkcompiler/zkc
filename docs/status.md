@@ -49,12 +49,14 @@ the closed wire profile. Application identity, setup, public inputs and prepared
 computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
-Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
-ordered Local invocations. Preparation and participant demand lowering form
+Logical [numerical units](spec/ir/kernel.md) use named `builtin.module` with
+`exec.computation` and standard functions. Stage admission checks every retained
+definition; the marker alone is not admission evidence. `kernel.call` retains
+ordered Local invocation. Preparation and participant demand lowering form
 units; the physical plan retains those units alongside the selected Local
 candidate until independent numerical and physical checks permit publication.
 Export receives the resulting physical program without Kernel operations.
-Normalization and numerical recipe checking consume Kernel-owned standard
+Normalization and numerical recipe checking consume these standard
 functions directly, with separate structural facts and call-specific selection
 restrictions.
 Existing installed backends execute the resulting operations. The checked physical

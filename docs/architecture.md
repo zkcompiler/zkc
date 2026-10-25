@@ -45,7 +45,7 @@ relation declarations, library-level multi-table bundles and external adapters.
 | Entry control | Static application calls, ordinary data and ordered Host invocations; numerical islands remain separate |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
-| `exec` | Demand-driven Kernel units and ordered Local calls; checked numerical realization |
+| `exec` | Demand-driven standard computation units and ordered Local calls; checked numerical realization |
 | `physical` | Admitted representations, installed operations, conversions and storage handling |
 | `zkc.program/0` | Closed participant or numerical function description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
@@ -130,8 +130,9 @@ also retain setup authority and the selected proof operation. Execution uses
 these bindings without reinterpreting the serialized carrier. Its shared ledger
 accounts for cumulative work and simultaneous parent/child value storage.
 
-[Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
-mathematical operations and standard functions. Ordered Local calls invoke them;
+[Numerical units](spec/ir/kernel.md) use standard `builtin.module` and
+`func.func` with the explicitly checked `exec.computation` profile and existing
+mathematical operations. Ordered Local calls invoke them;
 physical planning retains their source and selected Local realization together.
 Independent numerical and physical readers check the result before publication.
 This boundary keeps the complete numerical body available independently of

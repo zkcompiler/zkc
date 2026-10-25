@@ -41,7 +41,7 @@ Operation *packetStart(scf::ForOp scheduled) {
   }
   return at;
 }
-void scheduleAccepts(kernel::ModuleOp source, mlir::ModuleOp schedule,
+void scheduleAccepts(mlir::ModuleOp source, mlir::ModuleOp schedule,
                      MathematicalSelectionPolicy policy = fused,
                      finite::VerificationLimits limits = {}) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
@@ -50,7 +50,7 @@ void scheduleAccepts(kernel::ModuleOp source, mlir::ModuleOp schedule,
               outcome.status == finite::VerificationStatus::Verified,
           "original source did not match actual scheduled instructions");
 }
-void scheduleMismatch(kernel::ModuleOp source, mlir::ModuleOp schedule,
+void scheduleMismatch(mlir::ModuleOp source, mlir::ModuleOp schedule,
                       MathematicalSelectionPolicy policy = fused) {
   finite::VerificationResult outcome{finite::VerificationStatus::Verified, {}};
   require(failed(kernel::verifyEntrySchedule(source, schedule, "collect_fold",
@@ -71,7 +71,7 @@ OwningOpRef<mlir::ModuleOp> controls(MLIRContext &context) {
   auto result = parseSourceString<mlir::ModuleOp>(R"mlir(
 !tag = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
 module {
- kernel.module @numerical {
+ module @numerical attributes {exec.computation} {
    func.func @evaluate(%condition:i1,%fallback:!tag)->(i1,!tag,i1) {
      %yes = arith.constant true
      %choice = "data.make"() {alternative="left"} : ()->!tag
@@ -104,7 +104,7 @@ int main() {
   Cases cases;
   cases.run("Boolean and variant schedules verify as ordinary MLIR", [&] {
     auto original = controls(context);
-    auto unit = cast<kernel::ModuleOp>(original->getBody()->front());
+    auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
     auto local = realize(unit);
     auto scheduled = schedule(*local);
     require(operations(*scheduled, "local.variant_inject").size() == 1 &&
@@ -125,7 +125,7 @@ int main() {
         "match label type"})
     cases.run("ordinary verifier rejects schedule shape: " + mutation, [&] {
       auto original = controls(context);
-      auto unit = cast<kernel::ModuleOp>(original->getBody()->front());
+      auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
       auto local = realize(unit);
       auto scheduled = schedule(*local);
       auto changed = clone(*scheduled);
@@ -197,8 +197,8 @@ int main() {
     comparison.addTypes(builder.getI1Type());
     auto condition = builder.create(comparison)->getResult(0);
     auto controlSource = controls(context);
-    auto prototype = kernel::getEntry(
-        cast<kernel::ModuleOp>(controlSource->getBody()->front()));
+    auto prototype = mathematical::getComputationEntry(
+        cast<mlir::ModuleOp>(controlSource->getBody()->front()));
     IRMapping values;
     values.map(prototype.getArgument(0), condition);
     for (auto &op : prototype.front().without_terminator())
@@ -232,7 +232,7 @@ int main() {
         "missing function type", "nonfunction type property"})
     cases.run("schedule checks builtin shape before access: " + mutation, [&] {
       auto original = controls(context);
-      auto unit = cast<kernel::ModuleOp>(original->getBody()->front());
+      auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
       auto local = realize(unit);
       auto scheduled = schedule(*local);
       auto changed = clone(*scheduled);
@@ -516,8 +516,8 @@ module { "protocol.module"() ({
   for (StringRef name : {"elements", "indices"}) {
     cases.run(name + " original source to actual SCF to actual Local", [&] {
       auto unit = source(context, name);
-      OwningOpRef<kernel::ModuleOp> sourceBefore(
-          cast<kernel::ModuleOp>((*unit)->clone()));
+      OwningOpRef<mlir::ModuleOp> sourceBefore(
+          cast<mlir::ModuleOp>((*unit)->clone()));
       auto local = realize(*unit);
       auto localBefore = clone(*local);
       auto scheduled = schedule(*local);

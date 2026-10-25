@@ -244,7 +244,7 @@ int main() {
     SymbolTableCollection symbols;
     auto entry = kernel::resolve(call, symbols);
     require(bool(entry), "wrapper lost its numerical entry");
-    auto closure = cast<kernel::ModuleOp>(entry->getParentOp());
+    auto closure = cast<mlir::ModuleOp>(entry->getParentOp());
     auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("nested");
     require(
         succeeded(kernel::verifyKernelClosure(unit(*source), helper, closure)),
@@ -396,7 +396,7 @@ int main() {
         unsigned rawPolynomialOperations = 0;
         candidate->walk([&](Operation *operation) {
           rawPolynomialOperations +=
-              bool(operation->getParentOfType<kernel::ModuleOp>()) &&
+              bool(operation->getParentOfType<mlir::ModuleOp>()) &&
               operation->getName().getStringRef().starts_with("poly.");
         });
         require(rawPolynomialOperations,

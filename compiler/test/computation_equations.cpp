@@ -37,7 +37,7 @@ std::string numericalAdditionFixture(StringRef name, StringRef output,
   auto helper = text.find(" local.func private @step");
   require(helper != std::string::npos, "missing Local step");
   text.insert(helper, R"mlir(
- kernel.module @numbers {
+ module @numbers attributes {exec.computation} {
    func.func @entry(%a:!F,%b:!F) -> !F {
      %sum = algebra.field_add %a,%b : (!F,!F)->!F
      func.return %sum : !F

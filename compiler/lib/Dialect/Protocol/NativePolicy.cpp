@@ -59,7 +59,7 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
         (void)refuse(op, "physical profile requires expanded local requests");
         return WalkResult::interrupt();
       }
-      if (isa<kernel::ModuleOp, kernel::CallOp>(op)) {
+      if (isa<mlir::ModuleOp, kernel::CallOp>(op)) {
         (void)diagnostics::emit(
             op->emitOpError(), "kernel-profile",
             "physical profile requires realized Kernel units and calls");

@@ -2,6 +2,7 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
@@ -110,9 +111,10 @@ LogicalResult formCalculation(local::FuncOp wrapper, Operation *sourceOwner,
   SymbolTable outer(wrapper->getParentOp()), sourceSymbols(sourceOwner);
   OpBuilder builder(wrapper);
   auto name = fresh(outer, (wrapper.getSymName() + "_kernel").str());
-  auto unit = ModuleOp::create(builder, wrapper.getLoc(), name);
-  unit.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&unit.getBody().front());
+  builder.getContext()->getOrLoadDialect<exec::ExecDialect>();
+  auto unit = mlir::ModuleOp::create(builder, wrapper.getLoc(), name);
+  unit->setAttr("exec.computation", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(unit.getBody());
   SmallVector<Value> outputs(returned.getInputs());
   unsigned condition = outputs.size();
   if (guard) {
@@ -152,7 +154,7 @@ LogicalResult formCalculation(local::FuncOp wrapper, Operation *sourceOwner,
     if (failed(dependencies(source, sourceSymbols, pending, remaining)))
       return refuse(wrapper,
                     "dependency inspection limit or unresolved symbol");
-    builder.setInsertionPointToEnd(&unit.getBody().front());
+    builder.setInsertionPointToEnd(unit.getBody());
     builder.clone(*source);
   }
 

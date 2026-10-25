@@ -42,8 +42,7 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   require(bool(source) && succeeded(verify(*source)), "sum source refused");
   auto numerical = kernelRecipeSource(unit(*source), "sum", "calculation");
   auto original = copy(*source);
-  OwningOpRef<kernel::ModuleOp> before(
-      cast<kernel::ModuleOp>(numerical->clone()));
+  OwningOpRef<mlir::ModuleOp> before(cast<mlir::ModuleOp>(numerical->clone()));
   constexpr uint64_t copyLimit = 1000000;
   // The two top-level operations each have a 19-byte generated site at "x".
   constexpr uint64_t siteCost = 38;
@@ -184,8 +183,8 @@ int main() {
     require(bool(source), "sum source refused");
     auto numerical = kernelRecipeSource(unit(*source), "sum", "calculation");
     auto original = copy(*source);
-    OwningOpRef<kernel::ModuleOp> before(
-        cast<kernel::ModuleOp>(numerical->clone()));
+    OwningOpRef<mlir::ModuleOp> before(
+        cast<mlir::ModuleOp>(numerical->clone()));
     mathematical::RealizationWork work;
     uint64_t remaining = 1000000, remainingBytes = 76;
     work.discardedRecipeSiteBytes = remainingBytes;
@@ -229,8 +228,8 @@ int main() {
           auto numerical =
               kernelRecipeSource(unit(*source), "total", "calculation");
           auto original = copy(*source);
-          OwningOpRef<kernel::ModuleOp> before(
-              cast<kernel::ModuleOp>(numerical->clone()));
+          OwningOpRef<mlir::ModuleOp> before(
+              cast<mlir::ModuleOp>(numerical->clone()));
           mathematical::RealizationWork work, orderedWork, bulkWork;
           const auto initialWork = work;
           auto bulk =
@@ -281,8 +280,8 @@ int main() {
     require(bool(source), "total source refused");
     auto numerical = kernelRecipeSource(unit(*source), "total", "calculation");
     auto original = copy(*source);
-    OwningOpRef<kernel::ModuleOp> before(
-        cast<kernel::ModuleOp>(numerical->clone()));
+    OwningOpRef<mlir::ModuleOp> before(
+        cast<mlir::ModuleOp>(numerical->clone()));
     std::string diagnostics;
     ScopedDiagnosticHandler record(&context, [&](Diagnostic &diagnostic) {
       diagnostics += diagnostic.str();

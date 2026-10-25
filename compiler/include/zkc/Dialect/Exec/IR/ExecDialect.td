@@ -5,5 +5,6 @@ def ExecDialect : ZKCDialect {
   let name = "exec";
   let cppNamespace = "::zkc::exec";
   let useDefaultTypePrinterParser = 1;
+  let hasOperationAttrVerify = 1;
 }
 #endif

@@ -59,16 +59,16 @@ class ExecutionModelReader {
   }
 
   // Internal validation signatures, never executable bodies or published
-  // symbols. The Kernel region verifier has admitted every retained closure.
+  // symbols. The enclosing stage has admitted every retained computation
+  // closure.
   bool collectKernels() {
     unsigned index = 0;
-    for (auto unit :
-         root->getRegion(0).front().getOps<zkc::kernel::ModuleOp>()) {
+    for (auto unit : root->getRegion(0).front().getOps<mlir::ModuleOp>()) {
       if (physical) {
         fail("kernel-profile");
         return false;
       }
-      auto entry = zkc::kernel::getEntry(unit);
+      auto entry = zkc::mathematical::getComputationEntry(unit);
       auto type = signature(entry);
       if (!type)
         return false;
@@ -760,9 +760,10 @@ public:
       }
       if (mapHelpers.contains(&op))
         continue;
-      if (isa<zkc::kernel::ModuleOp>(op)) {
-        // MLIR already checked the owned numerical closure. Only internal
-        // logical admission may retain it; publication must realize it first.
+      if (isa<mlir::ModuleOp>(op)) {
+        // Stage admission already checked the computation closure. Only
+        // internal logical admission may retain it; publication must realize it
+        // first.
         if (!allowLogicalKernels || physical)
           return error("kernel-profile");
         continue;

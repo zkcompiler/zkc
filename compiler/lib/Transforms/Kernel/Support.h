@@ -10,7 +10,7 @@ bool chargeCopy(mlir::Operation *, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity = nullptr);
 // Independent exact comparison of original dependency bodies and domains.
 mlir::LogicalResult verifyDependencies(mlir::Operation *sourceOwner,
-                                       ModuleOp candidate);
+                                       mlir::ModuleOp candidate);
 // Independent exact standard-function substitution, including dead work and
 // every actual argument/result coordinate. No mathematical optimization.
 mlir::OwningOpRef<mlir::func::FuncOp> exactReadback(mlir::func::FuncOp source,
@@ -49,8 +49,8 @@ proposeKernelLowering(mlir::ModuleOp source,
                       mlir::ModuleOp prepared = {});
 // Checked Kernel-to-Kernel normalization; generated-operation identities refer
 // to the returned owned unit and remain valid when that unit is adopted.
-mlir::OwningOpRef<ModuleOp>
-normalizeUnit(ModuleOp unit, uint64_t &remaining,
+mlir::OwningOpRef<mlir::ModuleOp>
+normalizeUnit(mlir::ModuleOp unit, uint64_t &remaining,
               llvm::DenseSet<mlir::Operation *> &polynomialGenerated,
               std::optional<CapacityCause> *capacity = nullptr);
 mlir::FailureOr<MathematicalSelectionPolicy>
@@ -76,7 +76,7 @@ effectiveSelectionPolicy(CallOp call, MathematicalSelectionPolicy fallback) {
 // occurrence, preserving ordered construction quotas and all other choices.
 // Required work and malformed/correspondence failures remain terminal.
 mlir::OwningOpRef<mlir::ModuleOp>
-realizeEntry(ModuleOp source, llvm::StringRef callSite,
+realizeEntry(mlir::ModuleOp source, llvm::StringRef callSite,
              MathematicalSelectionPolicy policy,
              mathematical::RealizationWork &work, uint64_t &remaining,
              uint64_t &remainingBytes, finite::VerificationLimits limits = {},
@@ -94,7 +94,7 @@ mlir::LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate);
 // output interface, binding use and occurrence roots. The typed result allows
 // a producer to retry optional comparison exhaustion without diagnosing it.
 mlir::LogicalResult
-verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
+verifyEntryRecipes(mlir::ModuleOp source, mlir::ModuleOp candidate,
                    llvm::StringRef callSite,
                    MathematicalSelectionPolicy policy = {},
                    finite::VerificationLimits limits = {},

@@ -57,7 +57,7 @@ OwningOpRef<ModuleOp> kernelReductions(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-module { kernel.module @reductions {
+module { module @reductions attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -86,7 +86,7 @@ OwningOpRef<ModuleOp> nestedKernelReductions(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-module { kernel.module @reductions {
+module { module @reductions attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -179,7 +179,7 @@ int main() {
         [&] {
           auto source = nestedKernelReductions(context);
           auto original = clone(*source);
-          auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+          auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
           mathematical::RealizationWork work;
           work.requiredFiniteChecking = 1000;
           work.optionalFiniteChecking = 0;
@@ -266,7 +266,7 @@ int main() {
   cases.run("nested construction exact and one-short checks are atomic", [&] {
     auto source = nestedKernelReductions(context);
     auto original = clone(*source);
-    auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+    auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
     mathematical::RealizationWork work;
     work.requiredFiniteChecking = 1000;
     work.optionalFiniteChecking = 0;
@@ -308,7 +308,7 @@ int main() {
   cases.run("Kernel optional retries debit both occurrences cumulatively", [&] {
     auto source = kernelReductions(context);
     auto before = clone(*source);
-    auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+    auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
     mathematical::NumericalSelection session;
     auto initial = session.work;
     auto candidate = kernel::realizeEntry(
@@ -335,7 +335,7 @@ int main() {
       "Kernel ordered copy exact and one-short boundaries are atomic", [&] {
         auto source = kernelReductions(context);
         auto before = clone(*source);
-        auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+        auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
         mathematical::RealizationWork work;
         uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
         auto measured = kernel::realizeEntry(unit, "boundary", {false, false},

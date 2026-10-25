@@ -566,7 +566,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
                    op)) {
       // The descriptor and finite closure were checked before any liveness.
     } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
-                   local::OperationBindingOp, kernel::ModuleOp, poly::RecipeOp,
+                   local::OperationBindingOp, mlir::ModuleOp, poly::RecipeOp,
                    poly::RealizeOp>(op)) {
       // Kernel already checked its owned closure; whole Local admission below
       // checks even unused executable definitions.

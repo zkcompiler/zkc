@@ -703,17 +703,18 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
 // retain the mathematical input until recipes have replaced it; only then is
 // the entry converted to the existing executable Local function vocabulary.
 OwningOpRef<mlir::ModuleOp>
-recipeCandidate(ModuleOp source, StringRef callSite, func::FuncOp &function,
-                uint64_t &remaining, uint64_t &remainingBytes,
+recipeCandidate(mlir::ModuleOp source, StringRef callSite,
+                func::FuncOp &function, uint64_t &remaining,
+                uint64_t &remainingBytes,
                 std::optional<CapacityCause> &capacity) {
-  auto entry = getEntry(source);
+  auto entry = mathematical::getComputationEntry(source);
   if (!entry || !entry.getBody().hasOneBlock() || callSite.empty() ||
       !chargeCopy(source, remaining, &capacity))
     return {};
   OwningOpRef<mlir::ModuleOp> candidate(
       mlir::ModuleOp::create(source.getLoc()));
   OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
-  for (auto &definition : source.getBody().front())
+  for (auto &definition : *source.getBody())
     builder.clone(definition);
   // Keep source declarations intact, including dormant references to the
   // public entry. Only this separately named working copy is converted.
@@ -770,7 +771,7 @@ void executableCandidate(mlir::ModuleOp candidate, func::FuncOp working,
 }
 } // namespace
 OwningOpRef<mlir::ModuleOp>
-realizeEntry(ModuleOp source, StringRef callSite,
+realizeEntry(mlir::ModuleOp source, StringRef callSite,
              MathematicalSelectionPolicy policy, RealizationWork &available,
              uint64_t &remaining, uint64_t &remainingBytes,
              finite::VerificationLimits limits, RealizationTrace *trace,
@@ -779,7 +780,7 @@ realizeEntry(ModuleOp source, StringRef callSite,
   if (reported)
     *reported = {VerificationObservation::Mismatch,
                  "Kernel construction differs"};
-  auto entry = getEntry(source);
+  auto entry = mathematical::getComputationEntry(source);
   if (!entry)
     return {};
   if (!limits.sharedReader)

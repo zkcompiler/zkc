@@ -173,10 +173,10 @@ class LoweringVerifier {
           auto kernelCall = dyn_cast<kernel::CallOp>(instruction);
           auto entry = kernelCall ? kernel::resolve(kernelCall, kernelSymbols)
                                   : func::FuncOp();
-          auto unit = entry ? dyn_cast<kernel::ModuleOp>(entry->getParentOp())
-                            : kernel::ModuleOp();
+          auto unit = entry ? dyn_cast<mlir::ModuleOp>(entry->getParentOp())
+                            : mlir::ModuleOp();
           if (!unit || !generatedKernels.insert(unit).second ||
-              sourceSymbols.lookup(unit.getSymName()) ||
+              sourceSymbols.lookup(SymbolTable::getSymbolName(unit)) ||
               kernelCall.getInputs() != function.getArguments() ||
               failed(kernel::verifyDependencies(before, unit)))
             return refuse(call, "missing or changed actual numerical closure");

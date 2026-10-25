@@ -45,13 +45,17 @@ int main() {
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
     auto invalid = parseSourceString<ModuleOp>(R"mlir(
-      module { kernel.module @bad {
+      module { module @bad attributes {exec.computation} {
         func.func @entry(%x:!poly.quotient<17,4>)->!poly.quotient<17,4> {
           return %x : !poly.quotient<17,4>
         }
       } })mlir",
                                                &context);
-    require(!invalid, "formal quotient escaped through numerical entry ports");
+    require(bool(invalid),
+            "standard computation module is structurally malformed");
+    auto unit = cast<ModuleOp>(invalid->getBody()->front());
+    require(failed(mathematical::verifyComputationUnit(unit)),
+            "formal quotient escaped through numerical entry ports");
   });
   for (StringRef wrong : {"!poly.quotient<19,4>", "!poly.quotient<17,8>"})
     cases.run("quotient binary requires exact modulus and degree", [&] {
@@ -85,7 +89,7 @@ int main() {
   require(bool(source), "quotient source admission failed");
   auto unit = zkc::test::kernelRecipeSource(*source, "calculate", "entry");
   auto snapshot =
-      OwningOpRef<kernel::ModuleOp>(cast<kernel::ModuleOp>(unit->clone()));
+      OwningOpRef<mlir::ModuleOp>(cast<mlir::ModuleOp>(unit->clone()));
   mathematical::RealizationWork work;
   auto candidate = zkc::test::realizeKernelEntry(*unit, "quotient", {}, work);
   cases.run("managed coefficient realization and immutable source", [&] {
@@ -159,7 +163,8 @@ int main() {
         ScopedDiagnosticHandler quiet(&context,
                                       [](Diagnostic &) { return success(); });
         require(
-            failed(verify(*selected)),
+            succeeded(verify(*selected)) &&
+                failed(mathematical::verifyComputationUnit(*selected)),
             "upstream structural legality widened the scalar select profile");
       });
   cases.run("source identity binds quotient operations", [&] {

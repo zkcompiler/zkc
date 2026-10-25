@@ -8,6 +8,7 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -353,8 +354,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<local::LocalDialect, algebra::AlgebraDialect,
-                    kernel::KernelDialect, func::FuncDialect>();
+    registry
+        .insert<local::LocalDialect, algebra::AlgebraDialect,
+                kernel::KernelDialect, exec::ExecDialect, func::FuncDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-math"; }
   StringRef getDescription() const final {

@@ -1,14 +1,16 @@
 # Numerical units and schedules
 
-The `kernel` dialect owns closed numerical computations between mathematical
-SSA and executable Local operations. It reuses standard `func.func` and the
-existing mathematical dialects. It introduces no runtime instruction, frame,
-artifact format or alternative evaluator.
+Closed numerical computations use named `builtin.module` owners, standard
+`func.func` entries and the existing mathematical dialects. The
+`exec.computation` unit attribute requests zkc's closed-computation profile.
+The `kernel` dialect retains only the ordered invocation from Local control.
+This boundary introduces no runtime instruction, frame, artifact format or
+alternative evaluator.
 
 ## Unit and call
 
 ```mlir
-kernel.module @square {
+module @square attributes {exec.computation} {
   func.func @evaluate(%x: !algebra.field<"bls12-381.fr">)
       -> !algebra.field<"bls12-381.fr"> {
     %r = "algebra.field_multiply"(%x, %x)
@@ -19,11 +21,21 @@ kernel.module @square {
 }
 ```
 
-A unit is an isolated symbol table with exactly one public, defined standard
+The standard module provides an isolated symbol table. An admitted computation
+unit has exactly one public, defined standard
 function. Private standard functions and `data.domain` declarations supply its
 dependencies. References resolve within that owner; implicit captures, external
 functions, recursive closures and arbitrary operations are refused. Admission
 checks every retained definition, including unused ones.
+
+Ordinary MLIR verification checks the module, functions, symbol uses and marker
+placement; the marker must be a unit attribute on a named module. It does not
+establish closed-computation admission. The enclosing Protocol stage calls
+`verifyComputationUnit` after nested MLIR invariants have passed, for every
+nested module, including unreferenced modules and modules missing the marker.
+Standalone clients must perform both checks. Only the symbol name and profile
+marker are admitted module attributes. Entry lookup and profile classification
+are inspection helpers, not admission evidence.
 
 The entry has total, non-affine native data ports and must discharge its own
 mathematical premises. Formal polynomials and quotient elements may occur internally but cannot cross
@@ -87,7 +99,7 @@ second mathematical semantics. An optional call `policy` records the selected
 `[finiteBulk, vectorReductionFusion, collectFoldFusion]` compile-time choices.
 Omitted policy uses the lowering request's defaults.
 
-Normalization produces another Kernel unit and retains checked polynomial
+Normalization produces another profiled standard module and retains checked polynomial
 origins in that owned subject. Recipe conversion consumes its standard entry
 and uses a private builtin module for ordinary MLIR conversion. The completed
 Local function and bindings use the existing executable Protocol owner for
