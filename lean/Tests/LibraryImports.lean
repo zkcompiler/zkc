@@ -371,6 +371,7 @@ import Tests.StructuredBodyBindings
 import Tests.StructuredBounds
 import Tests.StructuredCatalogue
 import Tests.StructuredComponents
+import Tests.StructuredComputations
 import Tests.StructuredContractAuthority
 import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
@@ -734,6 +735,15 @@ import ZkcExamples.Structured.SumcheckVerifierLaws
 import ZkcExamples.Structured.SumcheckVerifierPrelude
 import ZkcExamples.Structured.SumcheckVerifierProcess
 import ZkcExamples.Structured.SumcheckVerifierTerminal
+import ZkcExamples.Structured.TableContractBindings
+import ZkcExamples.Structured.TableIndexedReadBodies
+import ZkcExamples.Structured.TableIndexedReadData
+import ZkcExamples.Structured.TableIndexedReadLaws
+import ZkcExamples.Structured.TableIndexedReadViews
+import ZkcExamples.Structured.TableMembershipBodies
+import ZkcExamples.Structured.TableMembershipData
+import ZkcExamples.Structured.TableMembershipLaws
+import ZkcExamples.Structured.TableMembershipViews
 import ZkcExamples.Structured.TotalState
 import ZkcExamples.Structured.TotalStateData
 import ZkcExamples.Structured.UnitState

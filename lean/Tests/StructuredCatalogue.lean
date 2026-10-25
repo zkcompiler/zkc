@@ -77,11 +77,11 @@ field rows, and an octic random service offers `index` because that field has
 private def transcriptRows : Catalogue where
   nominals := blsCatalogue.nominals ++ [
     { identity := "koala-bear", sort := .field, members := [],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "PrimeField", "CharacteristicNotTwo"],
+      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"],
       modulus := some 2130706433 },
     { identity := "koala-bear.ext8-binomial3", sort := .field, members := [("BaseField", "koala-bear")],
-      capabilities := ["IndexRandomness", "ExtensionField", "TwoAdicField", "Field", "CommRing",
-        "CharacteristicNotTwo"],
+      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
+        "ExtensionField", "IndexRandomness"],
       modulus := some 2130706433 },
     { identity := "hash-chain.keccak256.bls12-381.fr64be/0", sort := .transcript,
       members := [("ChallengeField", blsScalar)], capabilities := ["FieldTranscript", "Transcript"],

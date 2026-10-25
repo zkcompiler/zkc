@@ -31,7 +31,9 @@ These functions introduce no lookup VM instruction or proof system.
 The [example](../../../examples/projects/table/README.md) exercises current
 native execution and contrasts exact membership with the existing AIR
 reciprocal equation. The [formal model](../../../lean/Zkc/Semantics/TableRelation.lean)
-proves exact finite evaluator laws. It supplies neither native execution
+proves exact finite evaluator laws. The [retained-source laws](../../../lean/docs/spec/table-relations.md)
+connect the complete original formulas to those predicates, with explicit
+length bounds and exhausted outcomes. These laws supply neither native execution
 correspondence nor a cryptographic lookup reduction. The
 [shared relation contract](../../../docs/spec/relations.md) states the separate
 encoding and proof obligations.

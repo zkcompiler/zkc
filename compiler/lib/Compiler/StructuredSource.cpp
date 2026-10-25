@@ -958,13 +958,14 @@ class Exporter {
   // cycle/depth checks. These two memoized profiles additionally constrain
   // every transitive instruction, including unused calls and discarded results.
   Error preparationProfiles() {
-    llvm::DenseSet<Operation *> totalChecked;
+    llvm::DenseSet<Operation *> computationChecked;
     llvm::DenseMap<Operation *, Type> ringChecked;
     // A ring closure is checked against the one field its map lifts.
     std::function<Error(Operation *, Type)> check = [&](Operation *op,
                                                         Type field) -> Error {
       bool ring = static_cast<bool>(field);
-      if (ring ? ringChecked.lookup(op) == field : totalChecked.contains(op))
+      if (ring ? ringChecked.lookup(op) == field
+               : computationChecked.contains(op))
         return Error::success();
       StringRef code =
           ring ? "structured-source-map" : "structured-source-realization";
@@ -972,11 +973,11 @@ class Exporter {
       if (!helper || helper.isExternal() || !helper.isPrivate() ||
           helper->getParentOp() != unit.getOperation())
         return error(code, "private Math closure required");
-      if (auto premises =
-              helper->getAttrOfType<ArrayAttr>("data.preconditions");
-          premises && !premises.empty())
-        return error(code, "helper preconditions");
       if (ring) {
+        if (auto premises =
+                helper->getAttrOfType<ArrayAttr>("data.preconditions");
+            premises && !premises.empty())
+          return error(code, "helper preconditions");
         if (ringChecked.contains(op))
           return error(code, "scalar closure ABI");
         auto type = helper.getFunctionType();
@@ -991,6 +992,18 @@ class Exporter {
             return e;
           continue;
         }
+        if (!ring && isa<algebra::FiniteFoldOp>(instruction)) {
+          // Ordinary formation discharges callback bounds at each call edge.
+          // Both callbacks belong to admission even for an empty domain.
+          for (StringRef attribute : {"step", "predicate"}) {
+            auto reference =
+                instruction.getAttrOfType<FlatSymbolRefAttr>(attribute);
+            if (reference)
+              if (auto e = check(symbols.lookup(reference.getValue()), field))
+                return e;
+          }
+          continue;
+        }
         bool allowed = isa<algebra::ConstantFieldOp, algebra::FieldAddOp,
                            algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
                            func::ReturnOp>(instruction);
@@ -999,7 +1012,8 @@ class Exporter {
               isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
                   algebra::GroupAddOp, algebra::GroupScaleOp,
                   algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
-                  data::MakeOp, data::GetOp, arith::ConstantOp, arith::AndIOp,
+                  data::MakeOp, data::GetOp, data::BoundedAtOp,
+                  arith::ConstantOp, arith::AndIOp,
                   arith::OrIOp, arith::XOrIOp, arith::CmpIOp, arith::SelectOp>(
                   instruction);
         if (!allowed || instruction.getNumRegions())
@@ -1008,7 +1022,7 @@ class Exporter {
       if (ring)
         ringChecked[op] = field;
       else
-        totalChecked.insert(op);
+        computationChecked.insert(op);
       return Error::success();
     };
     for (Operation &op : unit.getBody().front()) {
@@ -1025,10 +1039,17 @@ class Exporter {
           return error("structured-source-map", "scalar closure ABI");
         field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
       }
-      if (auto e = check(
-              symbols.lookup(
-                  op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue()),
-              field))
+      Operation *root = symbols.lookup(
+          op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue());
+      // A preparation has no caller-supplied premise. Internal helper premises
+      // remain lawful when discharged by ordinary calls or finite binders.
+      if (root)
+        if (auto premises = root->getAttrOfType<ArrayAttr>("data.preconditions");
+            premises && !premises.empty())
+          return error(field ? "structured-source-map"
+                             : "structured-source-realization",
+                       "root preconditions");
+      if (auto e = check(root, field))
         return e;
     }
     return Error::success();

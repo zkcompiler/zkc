@@ -202,14 +202,14 @@ theorem projection_admitted_returns (args : Values (assignment F G) tableTypes) 
     Returns (invoke (program.payload.meanings F G) projectionHelper args) :=
   Evaluation.admitted_realization_helper_returns SiteObservations.closed
     program.subject.payload projectionHelper
-    (subjectImported.realizationRootSelected realization_retained) args
+    (by decide +kernel) args
 
-/-- Imported retained-root evidence proves actual realization invocation total. -/
+/-- The retained root's explicit immediate-fragment evidence proves return. -/
 theorem realization_admitted_returns (args : Values (assignment F G) tableTypes) :
     Returns (invoke (program.payload.meanings F G) realizationHelper args) :=
-  Evaluation.imported_realization_returns SiteObservations.closed subjectImported
+  Evaluation.imported_immediate_realization_returns SiteObservations.closed subjectImported
     realizationDeclaration realization_retained realizationDefinition
-    realization_member realization_derived args
+    realization_member realization_derived (by decide +kernel) args
 
 set_option backward.isDefEq.respectTransparency false in
 /-- The complete owning protocol fails before table validation when any input is absent. -/

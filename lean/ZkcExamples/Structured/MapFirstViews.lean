@@ -57,7 +57,7 @@ theorem widthRealization_derived : widthRealizationDefinition.raw = widthRealiza
 
 theorem widthRealization_root_selected : widthRealizationDeclaration.helperSpec ∈
     preparationHelpers .realization program.payload.definitions :=
-  subjectImported.realizationRootSelected widthRealization_retained
+  by decide +kernel
 
 def variablesRealizationDeclaration : RealizationDeclaration :=
   ⟨variablesRealizationHelper.name, variablesRealizationHelper.inputs, variablesRealizationHelper.outputs, variablesHelper.name⟩
@@ -70,7 +70,7 @@ theorem variablesRealization_derived : variablesRealizationDefinition.raw = vari
 
 theorem variablesRealization_root_selected : variablesRealizationDeclaration.helperSpec ∈
     preparationHelpers .realization program.payload.definitions :=
-  subjectImported.realizationRootSelected variablesRealization_retained
+  by decide +kernel
 
 def valuesRealizationDeclaration : RealizationDeclaration :=
   ⟨valuesRealizationHelper.name, valuesRealizationHelper.inputs, valuesRealizationHelper.outputs, valuesHelper.name⟩
@@ -83,6 +83,6 @@ theorem valuesRealization_derived : valuesRealizationDefinition.raw = valuesReal
 
 theorem valuesRealization_root_selected : valuesRealizationDeclaration.helperSpec ∈
     preparationHelpers .realization program.payload.definitions :=
-  subjectImported.realizationRootSelected valuesRealization_retained
+  by decide +kernel
 
 end ZkcExamples.Structured.MapFirstViews

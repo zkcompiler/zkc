@@ -453,27 +453,33 @@ protocol functions.
 
 Realization requires the declaration's complete input and output ABIs to match
 those of its helper, including vector projections and zero or multiple results.
-Its transitive Math fragment is
-region-free: admitted Fr arithmetic/equality, G1 operations/equality, pure index
-constant/equality, Boolean operations, supported selection, nominal product
-construction/projection, Math calls and positional returns. No finite operation, bounded read, exec, Local control or
-helper precondition is admitted in that closure. Totality is a separate semantic
-theorem about the actual checked closure; neither this operation list nor a
-native effect annotation proves it.
+Its general Math computation fragment admits field/group operations, pure
+index and Boolean operations, selection, product construction/projection,
+Math calls, finite folds, checked reads and positional returns. Local control,
+exec and services remain excluded. The root has no external premise; ordinary
+formation discharges bounds on internal calls and finite callbacks. Both the
+step and predicate remain in the selected closure, even when never reached.
 
-Formation validates the shared typed operations. The checked raw preparation
-profile and selected helper closure are the single operation/type authority;
-ordinary declaration ordering and protocol availability enforce cycles and depth.
-Declaration ordering precedes preparation-profile selection, so an ordering-depth
-failure takes precedence when a unit also has a preparation-profile violation.
-A separate traversal of retained Math declarations checks only that the entire
-closure has no preconditions, since those original premises are not stored in
-`CheckedDefinition`. It supplies no competing operation profile or depth rule.
-Successful whole-unit admission entails `PreparationRootsSelected`; the
-`Imported` inversion lemmas recover the exact selected root signature of every
-retained realization/map. Totality consumers can use that evidence together
-with actual checked-definition membership and its exact raw derivation, without
-supplying a semantic callee-totality assumption or recomputing root membership.
+Formation validates the shared typed operations. One `selectMathHelpers`
+procedure selects closures using explicit type/body predicates over the actual
+checked dependency table. `computationHelpers` is the general realization
+admission set. `preparationHelpers` retains the narrower region-free fragment
+used by immediate-return proofs and the scalar-map fragment. `mapHelpers`
+additionally binds every selected helper port and intermediate result to the
+declaration's exact field, including discarded values and dead calls; its
+subset theorem supplies the generic immediate-return certificate. Finite folds and
+checked reads are excluded from immediate-return evidence.
+
+Ordinary declaration ordering and protocol availability enforce cycles and
+depth before profile selection. A separate retained-declaration traversal checks
+empty preconditions throughout scalar-map closures; realization checks only its
+root's premises. `PreparationRootsSelected` and its `Imported` inversion lemmas
+identify the exact admitted Math roots. General realization admission cannot
+supply an unconditional return law: reached finite domains can exhaust.
+`imported_immediate_realization_returns` instead requires explicit membership
+of the exact root in the narrower checked closure, alongside retained declaration,
+checked-body membership and raw derivation. It does not assume semantic callee
+totality. Finite formula laws use their own explicit input-domain premises.
 
 Map's root helper has only Fr scalar inputs and exactly one Fr scalar output.
 An input becomes an Fr vector exactly when its mask entry is true, and the map

@@ -34,9 +34,9 @@ def PreparationRootsSelected (retained : List Definition)
     (definitions : List CheckedDefinition) : Prop :=
   ∀ definition ∈ retained, match definition with
     | .realization declaration =>
-      declaration.helperSpec ∈ preparationHelpers .realization definitions
+      declaration.helperSpec ∈ computationHelpers definitions
     | .map declaration =>
-      declaration.spec.helper ∈ preparationHelpers .map definitions
+      declaration.spec.helper ∈ mapHelpers declaration.field definitions
     | _ => True
 
 instance preparationRootsSelectedDecidable (retained : List Definition)
@@ -49,7 +49,7 @@ instance preparationRootsSelectedDecidable (retained : List Definition)
 /-- Check all retained declarations, including unused roots, in source order.
 Keep profile diagnostics at this sole selected-operation/type admission boundary. -/
 def checkPreparationRoots (retained : List Definition)
-    (realizationHelpers mapHelpers : List Helper) : Except String Unit := do
+    (realizationHelpers : List Helper) (selectedMaps : String → List Helper) : Except String Unit := do
   match retained with
   | [] => pure ()
   | definition :: rest =>
@@ -58,15 +58,15 @@ def checkPreparationRoots (retained : List Definition)
       if declaration.helperSpec ∉ realizationHelpers then
         throw PreparationProfile.realization.error
     | .map declaration =>
-      if declaration.spec.helper ∉ mapHelpers then
+      if declaration.spec.helper ∉ selectedMaps declaration.field then
         throw PreparationProfile.map.error
     | _ => pure ()
-    checkPreparationRoots rest realizationHelpers mapHelpers
+    checkPreparationRoots rest realizationHelpers selectedMaps
 
 theorem checkPreparationRoots_ok {retained : List Definition}
     {definitions : List CheckedDefinition}
-    (accepted : checkPreparationRoots retained (preparationHelpers .realization definitions)
-      (preparationHelpers .map definitions) = .ok ()) :
+    (accepted : checkPreparationRoots retained (computationHelpers definitions)
+      (fun field => mapHelpers field definitions) = .ok ()) :
     PreparationRootsSelected retained definitions := by
   induction retained with
   | nil => simp [PreparationRootsSelected]
@@ -111,7 +111,7 @@ def checkUnitHelpers (snapshot : Snapshot) (domains : List DomainSpec)
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
   checkPreparationRoots snapshot.definitions
-    (preparationHelpers .realization definitions) (preparationHelpers .map definitions)
+    (computationHelpers definitions) (fun field => mapHelpers field definitions)
   return ordered
 
 def checkUnitProtocols (snapshot : Snapshot) (domains : List DomainSpec)
@@ -352,12 +352,18 @@ theorem Imported.preparationRoots {snapshot : Snapshot} (imported : Imported sna
 theorem Imported.realizationRootSelected {snapshot : Snapshot} (imported : Imported snapshot)
     {declaration : RealizationDeclaration}
     (declared : .realization declaration ∈ snapshot.definitions) :
-    declaration.helperSpec ∈ preparationHelpers .realization imported.program.payload.definitions :=
+    declaration.helperSpec ∈ computationHelpers imported.program.payload.definitions :=
   imported.preparationRoots (.realization declaration) declared
 
 theorem Imported.mapRootSelected {snapshot : Snapshot} (imported : Imported snapshot)
     {declaration : MapDeclaration} (declared : .map declaration ∈ snapshot.definitions) :
     declaration.spec.helper ∈ preparationHelpers .map imported.program.payload.definitions :=
+  mapHelpers_subset declaration.field imported.program.payload.definitions
+    (imported.preparationRoots (.map declaration) declared)
+
+theorem Imported.mapFieldRootSelected {snapshot : Snapshot} (imported : Imported snapshot)
+    {declaration : MapDeclaration} (declared : .map declaration ∈ snapshot.definitions) :
+    declaration.spec.helper ∈ mapHelpers declaration.field imported.program.payload.definitions :=
   imported.preparationRoots (.map declaration) declared
 
 /-- Every checked protocol is the exact lowering of an original protocol,

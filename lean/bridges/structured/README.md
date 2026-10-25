@@ -15,6 +15,14 @@ empty and duplicate inputs, component order, nominal identity and dormant
 invalid types. It does not use the scalar-only C++ reference or claim native
 execution correspondence. Run it with `--report PATH`, like the suites below.
 
+`tables.py` retains the complete `CheckMembership` and `CheckRead` library
+subjects, including their original realizations and formula contracts. It
+checks the current native catalogue rows, finite computation admission,
+selection masks, duplicate rows/queries, coordinates and callback read bounds.
+Its participant replay uses the existing scalar test model only for equality
+of canonical KoalaBear values; installed execution is checked separately by
+`common/tests/protocol/test_table_relations.py`.
+
 ## Reproduce
 
 From the repository root in the pinned development environment:

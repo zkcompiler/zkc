@@ -5,9 +5,9 @@ public import ZkcSecurity.Claims.DomainModel
 
 @[expose] public section
 
-/-! Capabilities of the actual exported catalogue. Its field rows are ordered
-differently from the installed model catalogue; lookup equality transports
-the existing laws without replacing the snapshot or its interpretation. -/
+/-! Capabilities of the actual exported catalogue. The regenerated field rows agree
+with the installed model catalogue. Lookup equality transports the existing
+laws without replacing the snapshot or its interpretation. -/
 set_option autoImplicit false
 noncomputable section
 namespace ZkcSecurity.Examples.EmbeddingEqualityCapabilities
@@ -15,19 +15,8 @@ open Zkc.Source.Structured
 open ZkcSecurity.Domains.KoalaBearModel
 open ZkcExamples.Construction.EmbeddingEqualityData
 
-theorem find_source (identity : String) : snapshot.catalogue.find identity = catalogue.find identity := by
-  rw [find_eq]
-  by_cases base : identity = baseIdentity
-  · subst identity; rfl
-  · by_cases extension : identity = octicIdentity
-    · subst identity; rfl
-    · have base' : (baseIdentity == identity) = false := beq_eq_false_iff_ne.mpr (Ne.symm base)
-      have extension' : (octicIdentity == identity) = false := beq_eq_false_iff_ne.mpr (Ne.symm extension)
-      change (match [octicNominal, baseNominal].find? (fun row => row.identity == identity) with
-        | some row => Except.ok row
-        | none => Except.error "structured-domain-unknown") = _
-      simp only [List.find?_cons, octicNominal, baseNominal, base', extension',
-        ↓reduceIte, List.find?_nil, base, extension]
+theorem find_source (identity : String) :
+    snapshot.catalogue.find identity = catalogue.find identity := rfl
 
 theorem expect_source (identity : String) (sort : DomainSort) :
     snapshot.catalogue.expect identity sort = catalogue.expect identity sort := by

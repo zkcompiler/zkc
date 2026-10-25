@@ -117,6 +117,25 @@ def show(item):
     return item
 
 
+def prefix_sequence_types(items):
+    """Restore the type constructor's argument context before shortening names.
+
+    Lean may print ``(Ty.product ...).sequence``. Shortening its receiver to
+    ``.product`` loses the expected type needed by dotted constructor syntax.
+    Prefix application gives that type back, including for nested sequences.
+    """
+    result = []
+    for item in items:
+        if isinstance(item, tuple):
+            opening, inner = item
+            item = (opening, prefix_sequence_types(inner))
+        if item == ".sequence" and result and isinstance(result[-1], tuple):
+            result[-1] = ("(", ["Ty.sequence", result[-1]])
+        else:
+            result.append(item)
+    return result
+
+
 def flat(items):
     text = ""
     for item in items:
@@ -164,7 +183,7 @@ def printed(output, name):
     text = output[body:end if end != -1 else len(output)]
     text = text.replace("Zkc.Source.Structured.", "").replace("Zkc.Source.", "")
     items, _ = parse(tokens(text))
-    return chain(items)
+    return chain(prefix_sequence_types(items))
 
 
 def elaborate(runner, path, lake="lake"):

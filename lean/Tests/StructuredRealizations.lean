@@ -56,26 +56,26 @@ example (args : Values (assignment F G) ports) :
   Evaluation.admitted_realization_returns observations program [] summaries emptyDeclaration emptyChecked
     rfl (by decide +kernel) args
 
--- Imported admission derives root selection; the actual retained body is invoked.
+-- The retained body is invoked under explicit immediate-fragment evidence.
 example (args : Values (assignment F G) ports) :
     Returns (invoke
       (program.payload.definitions.foldl (Evaluation.extendMeanings observations) [])
       checked.helper args) :=
-  Evaluation.imported_realization_returns observations imported declaration
+  Evaluation.imported_immediate_realization_returns observations imported declaration
     (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
       (List.mem_cons_of_mem _ List.mem_cons_self)))) checked
     (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
-      (List.mem_cons_of_mem _ List.mem_cons_self))) rfl args
+      (List.mem_cons_of_mem _ List.mem_cons_self))) rfl (by decide +kernel) args
 
 example (args : Values (assignment F G) ports) :
     Returns (invoke
       (program.payload.definitions.foldl (Evaluation.extendMeanings observations) [])
       emptyChecked.helper args) :=
-  Evaluation.imported_realization_returns observations imported emptyDeclaration
+  Evaluation.imported_immediate_realization_returns observations imported emptyDeclaration
     (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
       (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))) emptyChecked
     (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
-      (List.mem_cons_of_mem _ List.mem_cons_self)))) rfl args
+      (List.mem_cons_of_mem _ List.mem_cons_self)))) rfl (by decide +kernel) args
 
 example : (Op.boundedAt scalarDomain).preparationAllowed .realization = false := rfl
 example : (Op.exec (.indexConstant 0)).preparationAllowed .realization = false := rfl
