@@ -82,13 +82,14 @@ inductive Kernel where
   | numerical (reduction : Numerical.Reduction) (domain : String) (characteristic : Nat)
   deriving DecidableEq, Repr
 
-/-- One installed operation: a binding's contract, static arguments and
-implementation, and the meaning assumed for it. -/
+/-- One installed operation: a binding's contract, logical arguments,
+implementation, exact physical specialization and the meaning assumed for it. -/
 structure Installed where
   contract : String
   arguments : List String
   implementation : String
   kernel : Kernel
+  physicalArguments : List PhysicalType
   deriving DecidableEq, Repr
 
 /-- Installed operations and the representations admitted for value sorts. -/
@@ -126,7 +127,8 @@ def Installed.takes (row : Installed) (arguments : List String) : Bool :=
 def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option Installed :=
   vocabulary.operations.find? fun row =>
     row.contract == binding.contract && row.takes binding.arguments &&
-      row.implementation == binding.implementation
+      row.implementation == binding.implementation &&
+      row.physicalArguments == binding.physicalArguments
 
 /-- Resolve a binding and its parameters: transcript operations carry exactly
 one occurrence, constants exactly one canonical decimal below `2 ^ 64`, a

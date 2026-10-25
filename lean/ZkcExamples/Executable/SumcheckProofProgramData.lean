@@ -13,7 +13,7 @@ namespace ZkcExamples.Executable.SumcheckProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:9c11f210ff0771b8a692e9b1af11dd52bf4d8932928058a0339475c8b57039c0"
+def program : String := "sha256:16a63417a62f65de160d326542dd881df74e2b805ec73dee945f0e95dc0640d0"
 
 /-- The local function `zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f`. -/
 def function0 : Function :=
@@ -103,34 +103,34 @@ def validator : Validator where
     .ret ["v421", "v420"]]
   functions := [function0, function1, function2, function3, function4, function5, function6, function7, function8]
   bindings := [
-    ⟨"_map_binding_3", "numerical.map", ["bls12-381.fr", "110"], "arkworks/numerical.map"⟩,
-    ⟨"_map_binding_2", "control.require", [], "arkworks/control.require"⟩,
-    ⟨"_map_binding_1", "index.equal", [], "native/index.equal"⟩,
-    ⟨"_map_binding_0", "vector.length", ["bls12-381.fr"], "arkworks/vector.length"⟩,
-    ⟨"_kernel_binding_7", "field.mul", ["bls12-381.fr"], "arkworks/field.mul"⟩,
-    ⟨"_kernel_binding_8", "field.sub", ["bls12-381.fr"], "arkworks/field.sub"⟩,
-    ⟨"_kernel_binding_9", "field.constant", ["bls12-381.fr"], "arkworks/field.constant"⟩,
-    ⟨"_kernel_binding_5", "field.equal", ["bls12-381.fr"], "arkworks/field.equal"⟩,
-    ⟨"_kernel_binding_6", "field.add", ["bls12-381.fr"], "arkworks/field.add"⟩,
-    ⟨"_transcript_5", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge"⟩,
-    ⟨"_transcript_3", "indices.append", [], "native/indices.append"⟩,
-    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty"⟩,
-    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data"⟩,
-    ⟨"_finite_binding_2", "vector.get", ["bls12-381.fr"], "arkworks/vector.get"⟩,
-    ⟨"_finite_binding_1", "index.constant", [], "native/index.constant"⟩,
-    ⟨"_finite_binding_0", "vector.length", ["bls12-381.fr"], "arkworks/vector.length"⟩,
-    ⟨"zkl_binding_12", "field.equal", ["bls12-381.fr"], "arkworks/field.equal"⟩,
-    ⟨"zkl_binding_11", "vector.append", ["bls12-381.fr"], "arkworks/vector.append"⟩,
-    ⟨"zkl_binding_10", "index.sub", [], "native/index.sub"⟩,
-    ⟨"zkl_binding_9", "vector.split", ["bls12-381.fr"], "arkworks/vector.split"⟩,
-    ⟨"zkl_binding_8", "vector.sum", ["bls12-381.fr"], "arkworks/vector.sum"⟩,
-    ⟨"zkl_binding_7", "vector.empty", ["bls12-381.fr"], "arkworks/vector.empty"⟩,
-    ⟨"zkl_binding_6", "index.mul", [], "native/index.mul"⟩,
-    ⟨"zkl_binding_5", "index.less", [], "native/index.less"⟩,
-    ⟨"zkl_binding_4", "index.div", [], "native/index.div"⟩,
-    ⟨"zkl_binding_3", "index.equal", [], "native/index.equal"⟩,
-    ⟨"zkl_binding_2", "index.mod", [], "native/index.mod"⟩,
-    ⟨"zkl_binding_1", "vector.length", ["bls12-381.fr"], "arkworks/vector.length"⟩,
-    ⟨"zkl_binding_0", "index.constant", [], "native/index.constant"⟩]
+    ⟨"_map_binding_3", "numerical.map", ["bls12-381.fr", "110"], "arkworks/numerical.map", []⟩,
+    ⟨"_map_binding_2", "control.require", [], "arkworks/control.require", []⟩,
+    ⟨"_map_binding_1", "index.equal", [], "native/index.equal", []⟩,
+    ⟨"_map_binding_0", "vector.length", ["bls12-381.fr"], "arkworks/vector.length", []⟩,
+    ⟨"_kernel_binding_7", "field.mul", ["bls12-381.fr"], "arkworks/field.mul", []⟩,
+    ⟨"_kernel_binding_8", "field.sub", ["bls12-381.fr"], "arkworks/field.sub", []⟩,
+    ⟨"_kernel_binding_9", "field.constant", ["bls12-381.fr"], "arkworks/field.constant", []⟩,
+    ⟨"_kernel_binding_5", "field.equal", ["bls12-381.fr"], "arkworks/field.equal", []⟩,
+    ⟨"_kernel_binding_6", "field.add", ["bls12-381.fr"], "arkworks/field.add", []⟩,
+    ⟨"_transcript_5", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge", []⟩,
+    ⟨"_transcript_3", "indices.append", [], "native/indices.append", []⟩,
+    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty", []⟩,
+    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data", [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]⟩,
+    ⟨"_finite_binding_2", "vector.get", ["bls12-381.fr"], "arkworks/vector.get", []⟩,
+    ⟨"_finite_binding_1", "index.constant", [], "native/index.constant", []⟩,
+    ⟨"_finite_binding_0", "vector.length", ["bls12-381.fr"], "arkworks/vector.length", []⟩,
+    ⟨"zkl_binding_12", "field.equal", ["bls12-381.fr"], "arkworks/field.equal", []⟩,
+    ⟨"zkl_binding_11", "vector.append", ["bls12-381.fr"], "arkworks/vector.append", []⟩,
+    ⟨"zkl_binding_10", "index.sub", [], "native/index.sub", []⟩,
+    ⟨"zkl_binding_9", "vector.split", ["bls12-381.fr"], "arkworks/vector.split", []⟩,
+    ⟨"zkl_binding_8", "vector.sum", ["bls12-381.fr"], "arkworks/vector.sum", []⟩,
+    ⟨"zkl_binding_7", "vector.empty", ["bls12-381.fr"], "arkworks/vector.empty", []⟩,
+    ⟨"zkl_binding_6", "index.mul", [], "native/index.mul", []⟩,
+    ⟨"zkl_binding_5", "index.less", [], "native/index.less", []⟩,
+    ⟨"zkl_binding_4", "index.div", [], "native/index.div", []⟩,
+    ⟨"zkl_binding_3", "index.equal", [], "native/index.equal", []⟩,
+    ⟨"zkl_binding_2", "index.mod", [], "native/index.mod", []⟩,
+    ⟨"zkl_binding_1", "vector.length", ["bls12-381.fr"], "arkworks/vector.length", []⟩,
+    ⟨"zkl_binding_0", "index.constant", [], "native/index.constant", []⟩]
 
 end ZkcExamples.Executable.SumcheckProofProgramData

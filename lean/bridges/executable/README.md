@@ -10,10 +10,12 @@ driver on every manifest with the executable profile (or the named
 `--subject`s). `render.py` renders the validator of a native deployment as Lean
 data. The driver is part of `python3 common/tests/run.py lean-native`.
 
-The renderer reads the five-field executable binding row, including its physical
-arguments. Its independent Lean carrier currently covers flat layouts with empty
-physical arguments. Selected aggregate layouts and physical specializations are
-refused at this boundary and require a separate formal extension.
+The renderer retains the five-field executable binding row, including its exact
+physical type arguments. The independent installed vocabulary compares those
+arguments as well as the contract, logical arguments and implementation. It
+admits the default flat layouts and explicitly installed BLS12-381 transcript
+payload layouts. Other specializations require their own installed row;
+aggregate physical types remain outside this bridge's type profile.
 
 ## Reproduce
 

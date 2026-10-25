@@ -19,6 +19,8 @@ every operation binding those functions use. Names, sites, schemas and physical
 types are kept as the artifact spells them; a physical type is a value sort with
 a representation, such as G1 at `arkworks.g1/0`. An occurrence template carried
 by a transcript operation is decoded; other parameters stay text.
+Bindings retain all five native fields, including the ordered physical type
+arguments. An explicit specialization is distinct from an empty argument list.
 
 Participant instructions are typed receives, local calls, counted loops, the
 yield that ends a loop body and the final return. A loop names its count, which
@@ -48,7 +50,7 @@ instruction budget.
   the receive's physical type stops it after charging the receive. A decoded
   value of another sort is a contract failure.
 - Operations. A binding resolves through a `Vocabulary`: each row assigns a
-  meaning to an exact contract, static arguments and installed implementation,
+  meaning to an exact contract, logical and physical arguments and installed implementation,
   and each representation row admits a sort at a representation. Meanings are
   those of `Zkc.Construction`: structured calculations
   (`Zkc.Construction.calculate`), the structured index and vector primitives
@@ -56,7 +58,9 @@ instruction budget.
   requirement that a Boolean is true, numerical expression calls, occurrence
   coordinates, and observation and challenge on the ideal transcript model. A
   constant takes its value from the operation's single canonical decimal
-  parameter.
+  parameter. The current native vocabulary separately installs the default and
+  explicit BLS12-381 scalar/G1 transcript payload layouts. A different layout,
+  crossed payload sort or additional physical argument does not resolve.
 - Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
   binding names its field and an operand mask, and its operation carries one
   `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a
