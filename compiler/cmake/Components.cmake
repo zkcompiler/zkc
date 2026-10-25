@@ -167,12 +167,13 @@ add_zkc_component(IR
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
   lib/Dialect/Local/IR/LocalDialect.cpp
-  lib/Dialect/Entry/IR/EntryDialect.cpp
+  lib/Dialect/Exec/IR/ExecDialect.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Kernel/IR/KernelDialect.cpp
   lib/Dialect/Kernel/IR/Kernel.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
+  lib/Dialect/Data/IR/Logical.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
@@ -359,7 +360,7 @@ target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
-  MLIRFuncDialect MLIRArithDialect MLIRSCFDialect)
+  MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)

@@ -1,8 +1,14 @@
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/IRMapping.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Host.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Program/Admission.h"
@@ -72,11 +78,13 @@ int main() {
     require(admitted.identity() == entry.original().identity(),
             "canonical re-admission changed identity");
   });
-  cases.run("Host control uses actual func/scf and typed captures", [] {
+  cases.run("Host control exposes outcomes with standard control flow", [] {
     auto entry = take(compileEntry(original(R"(module sample;
       entry fn Identity(x:bool)->bool{return x;}
       entry fn Demo(x:bool)->bool{return if x {Identity(x)} else {false};})")));
-    require(entry.original().bytes().contains("scf.if"), "if did not use scf");
+    require(entry.original().bytes().contains("cf.cond_br") &&
+                entry.original().bytes().contains("exec.dispatch"),
+            "control or fallible call did not expose its outcome");
     if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
       throw std::runtime_error(toString(std::move(e)));
   });
@@ -187,35 +195,39 @@ int main() {
                       "opaque factory or pass-through lost its logical schema");
               take(packageEntry(entry));
             });
-  cases.run("stopped branches retain valid structured continuations", [] {
-    auto entry = take(compileEntry(original(R"(module sample;
+  cases.run(
+      "stopped branches carry a terminal cause without fabricated values", [] {
+        auto entry = take(compileEntry(original(R"(module sample;
       entry fn Demo(go:bool)->bool {
         return if go {stop "abort";} else {true};
       })")));
-    if (auto e = checkHostArtifact(entry.bytes(), entry.original().interface()))
-      throw std::runtime_error(toString(std::move(e)));
-    mlir::DialectRegistry registry;
-    registerDialects(registry);
-    mlir::MLIRContext context(registry);
-    context.loadAllAvailableDialects();
-    auto module = mlir::parseSourceString<mlir::ModuleOp>(
-        entry.original().bytes(), &context);
-    require(bool(module), "stopped original failed to parse");
-    SmallVector<mlir::Operation *> continuations;
-    module->walk([&](mlir::Operation *op) {
-      if (op->getName().getStringRef() == "entry.stop") {
-        require(op->getNumResults() == 1 &&
-                    op->getNextNode()->getName().getStringRef() == "scf.yield",
-                "stop did not close its unreachable structured continuation");
-        continuations.push_back(op->getNextNode());
-      }
-    });
-    require(!continuations.empty(), "no stopped branch");
-    for (auto *continuation : continuations)
-      continuation->erase();
-    refuses(compareOriginal(entry.original().entry(), *module),
-            "target.admission");
-  });
+        if (auto e =
+                checkHostArtifact(entry.bytes(), entry.original().interface()))
+          throw std::runtime_error(toString(std::move(e)));
+        mlir::DialectRegistry registry;
+        registerDialects(registry);
+        mlir::MLIRContext context(registry);
+        context.loadAllAvailableDialects();
+        auto module = mlir::parseSourceString<mlir::ModuleOp>(
+            entry.original().bytes(), &context);
+        require(bool(module), "stopped original failed to parse");
+        SmallVector<mlir::Operation *> continuations;
+        module->walk([&](mlir::Operation *op) {
+          if (op->getName().getStringRef() == "exec.stop") {
+            require(op->getNumResults() == 1 &&
+                        op->getResult(0).getType() !=
+                            mlir::IntegerType::get(&context, 1) &&
+                        op->getNextNode()->getName().getStringRef() == "cf.br",
+                    "stop fabricated a Boolean or lost its terminal edge");
+            continuations.push_back(op->getNextNode());
+          }
+        });
+        require(!continuations.empty(), "no stopped branch");
+        for (auto *continuation : continuations)
+          continuation->erase();
+        refuses(compareOriginal(entry.original().entry(), *module),
+                "target.admission");
+      });
   for (StringRef kind :
        {"dangling", "signature", "closure", "scope", "unknown", "duplicate"})
     cases.run("Host artifact refuses " + kind, [=] {
@@ -329,7 +341,8 @@ int main() {
                         mlir::StringAttr::get(&context, printJson(body)));
       mlir::OpBuilder builder(&context);
       builder.setInsertionPointToStart(&function.getBody().front());
-      mlir::OperationState state(function.getLoc(), "entry." + operation.str());
+      mlir::OperationState state(function.getLoc(), "exec." + operation.str());
+      state.addTypes(exec::OutcomeType::get(&context, {}));
       state.addOperands(function.getArgument(0));
       state.addAttribute("descriptor",
                          builder.getStringAttr(
@@ -341,8 +354,7 @@ int main() {
       auto iface = take(json::parse(checked.interfaceJson()));
       (*iface.getAsObject())["original"] =
           toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-      refuses(readInterface(bytes, printJson(iface)),
-              operation == "require" ? "entry.operation" : "entry.reference");
+      refuses(readInterface(bytes, printJson(iface)), "target.admission");
     });
   cases.run("joint deployment binds the closed static specialization", [] {
     auto compile = [](StringRef field) {
@@ -409,7 +421,7 @@ int main() {
       if (!changed && op->getName().getStringRef() == "func.call" &&
           op->getNumOperands() && op->getNumResults() &&
           op->getParentOp()->getName().getStringRef() == "func.func") {
-        auto &block = *op->getBlock();
+        auto &block = mlir::cast<mlir::func::FuncOp>(op->getParentOp()).front();
         if (block.getNumArguments() &&
             op->getOperand(0) != block.getArgument(0)) {
           op->setOperand(0, block.getArgument(0));
@@ -490,11 +502,160 @@ int main() {
               "operation selection changed the proof descriptor or canonical "
               "wire occurrences");
     });
-  cases.run("Host loops retain actual scf carried values", [] {
+  cases.run("Host loops retain actual CFG carried values", [] {
     auto entry = take(compileEntry(original(R"(module sample;
       entry fn Identity(x:index){return x;}
       entry fn Demo(n:index){let mut sum:index=0;for _ in 0..n{sum=Identity(sum)+1;}return sum;})")));
-    require(entry.original().bytes().contains("scf.for"), "loop lost scf");
+    require(entry.original().bytes().contains("cf.cond_br") &&
+                entry.original().bytes().contains("arith.cmpi"),
+            "loop lost unsigned CFG condition");
+  });
+  cases.run("terminal failure cannot be replaced by returned false", [] {
+    auto checked = original(R"(module sample;
+      entry fn Demo(go:bool)->bool{require go;return true;})");
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto module =
+        mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+    require(bool(module), "outcome original did not parse");
+    exec::FailureOp failed;
+    module->walk([&](exec::FailureOp op) { failed = op; });
+    require(bool(failed), "missing failure carrier");
+    mlir::OpBuilder builder(failed);
+    auto value =
+        mlir::arith::ConstantIntOp::create(builder, failed.getLoc(), 0, 1);
+    auto returned = exec::ReturnOp::create(builder, failed.getLoc(),
+                                           failed.getOutcome().getType(),
+                                           mlir::ValueRange{value});
+    failed.getOutcome().replaceAllUsesWith(returned.getOutcome());
+    failed.erase();
+    require(mlir::succeeded(mlir::verify(*module)),
+            "mutation should remain well typed");
+    refuses(compareOriginal(checked.entry(), *module), "source.correspondence");
+  });
+  cases.run("unread dead control blocks are not source correspondence", [] {
+    auto checked =
+        original("module sample;entry fn Demo(x:bool)->bool{return x;}");
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto module =
+        mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+    require(bool(module), "original did not parse");
+    auto function = *module->getOps<mlir::func::FuncOp>().begin();
+    mlir::IRMapping mapping;
+    auto *dead = new mlir::Block;
+    function.getBody().push_back(dead);
+    auto &terminal = *std::next(function.getBody().begin());
+    auto argument =
+        dead->addArgument(terminal.getArgument(0).getType(), function.getLoc());
+    mapping.map(terminal.getArgument(0), argument);
+    for (auto &op : terminal)
+      dead->push_back(op.clone(mapping));
+    require(mlir::succeeded(mlir::verify(*module)),
+            "dead block should be well typed");
+    refuses(compareOriginal(checked.entry(), *module), "source.correspondence");
+  });
+  for (StringRef operation :
+       {"return", "require", "drop", "numeric", "invoke", "dispatch"})
+    cases.run("Exec formation refuses invalid " + operation, [=] {
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      std::string diagnostic;
+      mlir::ScopedDiagnosticHandler handler(&context, [&](mlir::Diagnostic &d) {
+        raw_string_ostream stream(diagnostic);
+        d.print(stream);
+        return mlir::success();
+      });
+      std::string instruction;
+      if (operation == "return")
+        instruction =
+            R"(%r = "exec.returned"(%x) : (i64) -> !exec.outcome<(i1)>)";
+      if (operation == "require")
+        instruction =
+            R"(%r = "exec.require"(%x) {descriptor = "{\22op\22:\22require\22}"} : (i64) -> !exec.outcome<>)";
+      if (operation == "drop")
+        instruction =
+            R"(%r = "exec.drop"() {descriptor = "{\22op\22:\22drop\22}"} : () -> !exec.outcome<>)";
+      if (operation == "numeric")
+        instruction =
+            R"(%r = "exec.numeric"() {descriptor = "{"} : () -> !exec.outcome<>)";
+      if (operation == "invoke")
+        instruction =
+            R"(%r = "exec.invoke"() {descriptor = "{\22op\22:\22invoke\22,\22deployment\22:\22work\22}"} : () -> !exec.outcome<>)";
+      std::string text = "module { func.func @test(%x: i64) {" + instruction +
+                         "\nfunc.return } }";
+      if (operation == "dispatch")
+        text = R"(module {func.func @test(%x: !exec.outcome<(i1)>) {
+        "exec.dispatch"(%x)[^returned, ^stopped] : (!exec.outcome<(i1)>) -> ()
+        ^returned(%bad:i64): func.return
+        ^stopped(%stop:!exec.stop): func.return
+      }})";
+      auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
+      require(!parsed && StringRef(diagnostic).contains("execution-formation"),
+              "invalid outcome accepted or wrong diagnostic: " + diagnostic);
+    });
+  for (StringRef change : {"predicate", "increment", "back-edge"})
+    cases.run("Host loop rejects changed " + change, [=] {
+      auto checked = original(R"(module sample;
+        entry fn Demo(n:index){let mut sum:index=0;for _ in 0..n{sum=sum+1;}return sum;})");
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      context.loadAllAvailableDialects();
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+      require(bool(module), "loop original did not parse");
+      auto function = *module->getOps<mlir::func::FuncOp>().begin();
+      mlir::arith::CmpIOp compare;
+      mlir::arith::AddIOp increment;
+      function.walk([&](mlir::arith::CmpIOp op) { compare = op; });
+      function.walk([&](mlir::arith::AddIOp op) { increment = op; });
+      require(compare && increment, "missing loop structure");
+      if (change == "predicate")
+        compare.setPredicate(mlir::arith::CmpIPredicate::ule);
+      else if (change == "increment")
+        increment.setOperand(1, increment.getLhs());
+      else {
+        auto edge = mlir::cast<mlir::cf::BranchOp>(
+            increment->getBlock()->getTerminator());
+        edge.setOperand(1, edge.getDest()->getArgument(1));
+      }
+      require(mlir::succeeded(mlir::verify(*module)),
+              "mutation should remain well typed");
+      refuses(compareOriginal(checked.entry(), *module),
+              "source.correspondence");
+    });
+  cases.run("Data match refuses duplicate alternatives", [] {
+    auto checked = original(R"(module sample;
+      enum Choice { First(bool), Second(bool) }
+      entry fn Demo(x:Choice)->bool{return match x {First(v)=>{v},Second(v)=>{v}};})");
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto module =
+        mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+    require(bool(module), "match original did not parse");
+    data::MatchOp match;
+    module->walk([&](data::MatchOp op) { match = op; });
+    require(bool(match), "missing sum elimination");
+    auto label = match.getAlternatives()[0];
+    match.setAlternativesAttr(mlir::ArrayAttr::get(&context, {label, label}));
+    std::string diagnostic;
+    mlir::ScopedDiagnosticHandler handler(&context, [&](mlir::Diagnostic &d) {
+      raw_string_ostream stream(diagnostic);
+      d.print(stream);
+      return mlir::success();
+    });
+    require(mlir::failed(mlir::verify(*module)) &&
+                StringRef(diagnostic).contains("data-match-formation"),
+            "duplicate alternatives accepted or wrong diagnostic: " +
+                diagnostic);
   });
   return cases.result();
 }
