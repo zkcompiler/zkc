@@ -3,6 +3,9 @@
 
 import argparse
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from support.packages import PACKAGES, selected as select_packages
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +23,7 @@ def modules(root, directory, excluded=()):
 
 
 def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS",
-             extra=()):
+             extra=(), audit_imports=()):
     excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean"}
     names = modules(root, library, excluded) + modules(root, tests, excluded)
     for directory in examples:
@@ -34,7 +37,9 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
     )
     imports += "".join(f"import {name}\n" for name in names)
     families = [library, tests] + list(examples) + list(tools)
-    audit = f"import {tests}.LibraryImports\nimport ZkcTools.DeclarationAudit\n\n"
+    audit = f"import {tests}.LibraryImports\n"
+    audit += "".join(f"import {name}\n" for name in audit_imports)
+    audit += "import ZkcTools.DeclarationAudit\n\n"
     # The widest audit names itself like the narrower ones do, so a build log
     # says which scope passed rather than leaving the broadest one as the
     # unlabelled default. Each library generated here gets its own name: two
@@ -49,15 +54,18 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
 
 # Each optional integration package: its library, its tests and its audit marker.
 INTEGRATIONS = {
-    "arklib": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
+    "security": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
+    "arklib": ("ZkcArkLib", "TestsArkLib", "ARKLIB-AUDIT-PASS"),
     "clean": ("ZkcClean", "TestsClean", "CLEAN-INTEGRATION-AUDIT-PASS"),
 }
 # Further audits of a package's whole library: the security library's registry
 # of named hypotheses, models and trusted links covers every proposition-valued
 # declaration that heads a premise of one of its theorems.
 EXTRA = {
-    "arklib": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry ZkcSecurity.Registry.audited "
+    "security": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry ZkcSecurity.Registry.audited "
                "[`ZkcSecurity] \"REGISTRY-AUDIT-PASS\"\n"],
+    "arklib": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry (ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited) "
+               "[`ZkcArkLib] \"ARKLIB-REGISTRY-AUDIT-PASS\"\n"],
 }
 
 
@@ -71,12 +79,13 @@ def main():
     args = parser.parse_args()
     outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
                        ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport",
-                        "ZkcTools/StructuredSource"], marker="CORE-AUDIT-PASS")
+                        "ZkcTools/StructuredSource", "ZkcTools/ConstructionBindings"], marker="CORE-AUDIT-PASS")
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
-    for name in selected:
+    for name in select_packages(selected)[1:]:
         library, tests, marker = INTEGRATIONS[name]
-        outputs.update(expected(ROOT / "integrations" / name, library, tests, marker=marker,
-                                extra=EXTRA.get(name, ())))
+        outputs.update(expected(PACKAGES[name][0], library, tests, marker=marker,
+                                extra=EXTRA.get(name, ()),
+                                audit_imports=("TestsSecurity.LibraryImports",) if name == "arklib" else ()))
     for path, text in outputs.items():
         if args.write:
             path.write_text(text)

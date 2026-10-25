@@ -14,8 +14,10 @@ from open_protocol import OpenSuite, returned, stopped
 def authored(suite, label, stem):
     subject = suite.authored(label, *fixture(stem))
     interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
-    assert interface["original"] == subject[2][2].removeprefix("sha256:")
-    assert interface["protocol"] == subject[2][3]
+    if not (interface["original"] == subject[2][2].removeprefix("sha256:")):
+        raise AssertionError('bridges/structured/maps.py:17: interface["original"] == subject[2][2].removeprefix("sha256:")')
+    if not (interface["protocol"] == subject[2][3]):
+        raise AssertionError('bridges/structured/maps.py:18: interface["protocol"] == subject[2][3]')
     return subject
 
 
@@ -29,7 +31,8 @@ def encoded(values):
 
 def restrict(values, coordinate):
     """Contiguous halves, with the leading coordinate fixed first."""
-    assert len(values) > 0 and len(values) % 2 == 0
+    if not (len(values) > 0 and len(values) % 2 == 0):
+        raise AssertionError('bridges/structured/maps.py:32: len(values) > 0 and len(values) % 2 == 0')
     middle = len(values) // 2
     return [(lo + (hi - lo) * coordinate) % MODULUS
             for lo, hi in zip(values[:middle], values[middle:])]
@@ -81,14 +84,16 @@ def map_site(subject):
     targets = {item[1] for item in subject[2][7] if item[0] == "map"}
     found = [row[4] for item in subject[2][7] if item[0] == "function"
              for row in item[9][1] if row[0][0] == "apply" and row[0][1] in targets]
-    assert len(found) == 1, found
+    if not (len(found) == 1):
+        raise AssertionError(found)
     return found[0]
 
 
 def local_site(subject):
     calls = [row for row in definition(subject[2], subject[2][3])[9][1]
              if row[0][0] == "local_call"]
-    assert len(calls) == 1, calls
+    if not (len(calls) == 1):
+        raise AssertionError(calls)
     return calls[0][4]
 
 
@@ -131,15 +136,18 @@ def source_variants(suite, combination):
     source = combination[0].read_text(encoding="utf-8")
     declaration = next(item for item in combination[2][7] if item[0] == "map")
     formula = declaration[4]
-    assert source.count(formula) == 2
-    assert source.count('value = "3"') == 1
+    if not (source.count(formula) == 2):
+        raise AssertionError('bridges/structured/maps.py:134: source.count(formula) == 2')
+    if not (source.count('value = "3"') == 1):
+        raise AssertionError('bridges/structured/maps.py:135: source.count(\'value = "3"\') == 1')
     variants = [
         ("renamed-formula", source.replace(formula, "renamed_formula"), 3),
         ("changed-formula", source.replace('value = "3"', 'value = "5"'), 5),
     ]
     for label, changed, offset in variants:
         subject = suite.export(label, changed, combination[2][3])
-        assert subject[2][2] != combination[2][2]
+        if not (subject[2][2] != combination[2][2]):
+            raise AssertionError('bridges/structured/maps.py:142: subject[2][2] != combination[2][2]')
         inputs = ["2", ["1", "7"], "5", ["9", "3"], ["0", "0"], "23"]
         expected = returned([encoded([2*x-5*y+offset for x, y in zip([1, 7], [9, 3])])])
         suite.case(label, lambda n=label, s=subject, i=inputs, e=expected:
@@ -229,7 +237,8 @@ def declaration_controls(suite, combination, realization):
         "map-direct-protocol-call": "structured-call-kind", "realize-output-abi": "structured-realization",
         "realize-public-helper": "structured-header", "realize-extra-field": "structured-definition",
     }
-    assert set(diagnostics) == {label for label, _ in variants}
+    if not (set(diagnostics) == {label for label, _ in variants}):
+        raise AssertionError('bridges/structured/maps.py:232: set(diagnostics) == {label for label, _ in variants}')
     for label, snapshot in variants:
         suite.case(label, lambda n=label, s=snapshot: suite.refuse_snapshot(n, s, diagnostics[n]))
 

@@ -34,7 +34,7 @@ private def stopped (reason site : String) (replies : List (Json × Json) := [])
 private def receiveBool : Json := arr [.str "receive", .str "delivery", .str "P", .str "V",
   wireType .boolean]
 private def receiveProcess (localValue : Bool) :
-    PIR.Proc (observedInterface Scalar Scalar) (OptionalValues [.boolean]) :=
+    PIR.Process (observedInterface Scalar Scalar) (OptionalValues [.boolean]) :=
   ((Participant.exchange (services := services) (Value := OpenValue)
     1 0 1 "delivery" (some localValue)).interpret observeAction).bind fun result =>
       .done (.cons result .nil)
@@ -46,7 +46,7 @@ theorem independent_receive (localValue : Bool) :
         (fun received => .done (.cons (some received) .nil)) := by
   rfl
 
-private def markedStop : PIR.Proc (observedInterface Scalar Scalar) (OptionalValues []) :=
+private def markedStop : PIR.Process (observedInterface Scalar Scalar) (OptionalValues []) :=
   .call (.mark "outer") fun _ => .call (.mark "inner.stop") fun _ => .halt .abort
 
 /-- Trace serialization is executable; this equation checks the mark transition
@@ -71,7 +71,7 @@ theorem wrong_typed_response_refused :
   rfl
 
 private def localStop (_ : Values OpenValue [.boolean]) :
-    PIR.Proc (observedInterface Scalar Scalar) (Values OpenValue []) :=
+    PIR.Process (observedInterface Scalar Scalar) (Values OpenValue []) :=
   .call (.mark "local.stop") fun _ => .halt .abort
 
 theorem owned_zero_result_stop_keeps_mark (state : ReplayState) :

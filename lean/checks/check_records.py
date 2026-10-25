@@ -8,8 +8,8 @@
    (`claims.lock.json`): stale theorem names, changed statement hashes and
    theorems with forbidden axioms fail. Qualified Lean names cited in
    `docs/status.md` and the formal documents must still exist.
-3. Render the "What is proved" table and, from subject manifests, one
-   `zkc.assurance-report/0` per subject and the subject rows; compare each
+3. Render the "What is proved" table and, from bound source requests and typed
+   receipts, one `zkc.assurance-report/0` per configured subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
    one. A report is established only with the pipeline's evidence, so the
    subject rows are compared only by a run given `--evidence`.
@@ -32,6 +32,7 @@ import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from records import controls, ledger, reports  # noqa: E402
 from records.declarations import Records, emit, forbidden_axioms  # noqa: E402
+from support.packages import selected as select_packages  # noqa: E402
 
 LEAN = HERE.parent
 ROOT = LEAN.parent
@@ -53,9 +54,13 @@ def manifests(directory):
     return found
 
 
-def compare(document, region, rendered, write, failures, notes):
+def compare(document, region, rendered, write, failures, notes, subjects=None):
     text = document.read_text()
     current = ledger.region(text, region)
+    if current is not None and subjects is not None:
+        lines = current.splitlines()
+        current = "\n".join(lines[:2] + [line for line in lines[2:]
+                            if any(line.startswith(f"| {name} |") for name in subjects)]) + "\n"
     label = f"{document.relative_to(ROOT)}#{region}"
     if current is None:
         notes.append(f"{label}: no generated region; rendering kept under the output directory")
@@ -69,27 +74,53 @@ def compare(document, region, rendered, write, failures, notes):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--integration", action="append", choices=["arklib", "clean"], default=[])
+    parser.add_argument("--integration", action="append", choices=["security", "arklib", "clean"], default=[])
     parser.add_argument("--records", type=Path, help="reuse emitted records from this directory")
     parser.add_argument("--output", type=Path, default=support.evidence.records("records", ""))
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")
+    parser.add_argument("--subject", action="append", help="render only named subjects; skip the complete subject table")
     parser.add_argument("--evidence", type=Path, help="per-subject pipeline evidence directory")
     parser.add_argument("--write", action="store_true", help="rewrite the lock and generated regions")
     parser.add_argument("--determinism", action="store_true",
                         help="emit every package twice and require identical output")
     parser.add_argument("--lake", default="lake")
+    parser.add_argument("--preflight", action="store_true",
+                        help="check dependency sources before expensive validation; emit no claims")
     args = parser.parse_args()
+    if args.subject and args.write:
+        parser.error("--write requires the complete subject selection")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    packages = ["main", *dict.fromkeys(args.integration)]
+    packages = select_packages(list(dict.fromkeys(args.integration)))
+    # Catch an unprepared or changed dependency before generating subjects or
+    # traversing declarations. The report still verifies it at the final join.
+    dependencies = []
+    if args.preflight or not args.records:
+        from support.packages import PACKAGES, check_closure
+        for package in packages:
+            directory = PACKAGES[package][0]
+            check_closure(package, directory)
+            if (directory / "lean-toolchain").read_bytes() != (LEAN / "lean-toolchain").read_bytes():
+                raise SystemExit(f"dependency preflight failed: {package} toolchain mismatch")
+        dependencies, dependency_reasons = reports.verified_dependencies(packages)
+        if dependency_reasons:
+            raise SystemExit("dependency preflight failed:\n" + "\n".join(dependency_reasons))
+    if args.preflight:
+        print(json.dumps(dict(status="pass", packages=packages, verified_dependencies=len(dependencies))))
+        return
     subject_manifests = manifests(args.manifests or SUBJECTS)
+    if args.subject:
+        wanted = set(args.subject)
+        known = {reports.load_manifest(path)["name"] for path in subject_manifests}
+        if missing := wanted - known:
+            parser.error(f"unknown subjects: {', '.join(sorted(missing))}")
+        subject_manifests = [path for path in subject_manifests if reports.load_manifest(path)["name"] in wanted]
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = list(controls.EMITTED_APPLICATIONS) if "arklib" in packages else []
+    details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "arklib" in packages else []
     for path in subject_manifests + samples:
-        names = reports.claim_names(reports.load_manifest(path))
-        for name in (names["instance"], names["application"]):
-            if name:
-                details.append(name)
+        manifest = reports.load_manifest(path)
+        evidence = reports.load_evidence(args.evidence, manifest["name"])
+        details.extend(reports.claim_details(evidence))
     failures, notes = [], []
 
     paths = {}
@@ -100,7 +131,7 @@ def main():
         lake = str(Path(support.lake.resolve(args.lake)).absolute())
         for package in packages:
             target = output / "declarations" / f"{package}.jsonl"
-            selected = [name for name in details if package == "arklib"]
+            selected = details if package in {"security", "arklib"} else []
             with (output / f"emit-{package}.log").open("w") as log:
                 result = emit(package, target, lake=lake, details=selected, log=log)
             # A signal death is a failure too, so success is the only accepted status.
@@ -148,7 +179,10 @@ def main():
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
     if subject_manifests and "arklib" in packages and args.evidence is not None:
-        compare(SUPPORT, "subject-rows", rows, args.write, failures, notes)
+        compare(SUPPORT, "subject-rows", rows, args.write, failures, notes,
+                subjects=set(args.subject) if args.subject else None)
+        if args.subject:
+            notes.append(f"subject table checked for: {', '.join(sorted(set(args.subject)))}")
     elif subject_manifests and "arklib" in packages:
         # A report is established only with the pipeline's evidence, so the rows a
         # run without it renders are not the subjects' outcomes; only a run with
@@ -163,6 +197,9 @@ def main():
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
     control_rows = controls.run()
+    receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
+    control_rows += receipt_rows
+    failures += receipt_failures
     if "arklib" in packages:
         emitted_rows, emitted_failures = controls.run_emitted(records)
         control_rows += emitted_rows

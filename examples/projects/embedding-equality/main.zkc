@@ -1,0 +1,45 @@
+module example;
+
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+
+fn embed(value: Base) -> Extension {
+  return kernel<Extension>("field.embed", value);
+}
+
+relation Equal(statement a: Base, statement b: Base) {
+  return a == b;
+}
+
+protocol EmbeddingEquality roles(P,V)
+    (a: Base @(P,V), b: Base @V, challenges: Random<Extension> @V)
+    -> (accepted: bool @V) spec {
+      target equality = Equal(in.a@V, in.b) accept out.accepted;
+    }
+{
+  let honest @P = embed(a);
+  #[site(message)] let u = send P -> V(honest);
+  #[site(challenge)] let c = challenges.draw();
+  #[site(delivery)] let delivered = send V -> P(c);
+  let left @V = u + c == embed(a) + c;
+  let right @V = u + c == embed(b) + c;
+  let accepted @V = left && right;
+  return (accepted = accepted);
+}
+
+proof Proof = EmbeddingEquality {
+  prover P;
+  verifier V;
+  public { a, b };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
+}
+
+spec ProofClaims for Proof {
+  ideal_sound: soundness@0(target.equality,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=0),
+    accept=out.accepted,stage=compiled_ideal,error=0);
+}
+verify ProofClaims.ideal_sound=fs.keyed_soundness@0();

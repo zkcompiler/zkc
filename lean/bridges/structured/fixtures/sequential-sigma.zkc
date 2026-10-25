@@ -1,0 +1,30 @@
+module example;
+use schnorr::{Schnorr};
+use sigma::{ChaumPedersen, DLogEquality};
+domain G = group("bls12-381.g1");
+domain Fr = field("bls12-381.fr");
+
+// A completeness client for fresh private sampling after a public challenge.
+// The second invocation borrows the same sampler root, with a new occurrence.
+protocol SequentialSigma roles(P,V)
+    (first_base: G @(P,V), first_point: G @(P,V),
+     second_base: G @(P,V), second_point: G @(P,V), scalar: Fr @P,
+     nonces: Random<Fr> @P, challenges: Random<Fr> @V)
+    -> (accepted: bool @V)
+    where () spec {
+      target equality = DLogEquality<G>(in.first_base@V, in.first_point@V,
+        in.second_base@V, in.second_point@V, in.scalar) accept out.accepted;
+    } {
+  let (first) = Schnorr<G> roles(P,V)(first_base, first_point, scalar,
+    nonces, challenges);
+  let (second) = ChaumPedersen<G> roles(P,V)(first_base, first_point,
+    second_base, second_point, scalar, nonces, challenges);
+  return (accepted = first && second);
+}
+
+proof Proof = SequentialSigma {
+  prover P; verifier V;
+  public {first_base, first_point, second_base, second_point};
+  accept accepted; target equality;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

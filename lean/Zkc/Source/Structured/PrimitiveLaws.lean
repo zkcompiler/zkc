@@ -150,19 +150,19 @@ theorem exec_missing (sites : SiteObservations I) (tables : ComponentTables F G 
 theorem exec_stopping_prefix (sites : SiteObservations I) (tables : Meanings F G I)
     (primitive : Primitive) (args : Values (assignment F G) primitive.arguments)
     (reason : PIR.Stop) (stops : primitive.evaluate args = .stopped reason)
-    {A : Type} (suffix : Values (assignment F G) primitive.results → PIR.Proc I A) :
+    {A : Type} (suffix : Values (assignment F G) primitive.results → PIR.Process I A) :
     (operation sites tables (.exec primitive) args .nil).bind suffix = .halt reason := by
-  simp only [operation, stops, primitiveOutcome, PIR.Proc.bind]
+  simp only [operation, stops, primitiveOutcome, PIR.Process.bind]
 
 set_option backward.isDefEq.respectTransparency false in
 /-- A primitive stop retains its preceding source site and cannot reach a suffix. -/
 theorem marked_exec_stopping_prefix (sites : SiteObservations I) (tables : Meanings F G I)
     (site : String) (primitive : Primitive) (args : Values (assignment F G) primitive.arguments)
     (reason : PIR.Stop) (stops : primitive.evaluate args = .stopped reason)
-    {A : Type} (suffix : Values (assignment F G) primitive.results → PIR.Proc I A) :
+    {A : Type} (suffix : Values (assignment F G) primitive.results → PIR.Process I A) :
     ((sites.mark site).bind fun _ => operation sites tables (.exec primitive) args .nil).bind suffix =
       (sites.mark site).bind (fun _ => .halt reason) := by
-  rw [PIR.Proc.bind_assoc]
+  rw [PIR.Process.bind_assoc]
   congr 1
   funext acknowledged
   exact exec_stopping_prefix sites tables primitive args reason stops suffix

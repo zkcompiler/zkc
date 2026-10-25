@@ -92,7 +92,7 @@ theorem componentOperation_mark (observations : SiteObservations interface)
   change strictComponent (meaning observations tables.closed) (.mark site)
     (Values.nil : Values (assignment F G) []).present .nil = _
   exact (strictComponent_adequate (meaning observations tables.closed) (.mark site) .nil .nil).trans
-    (PIR.Proc.bind_assoc (observations.mark site)
+    (PIR.Process.bind_assoc (observations.mark site)
       (fun _ => .done (Values.nil : Values (assignment F G) []))
       (fun result => .done result.present))
 
@@ -149,7 +149,7 @@ theorem ComponentTables.adequate_extend (observations : SiteObservations interfa
       rw [presentEnv]
       exact definition.body.component_present (meaning observations tables.closed) (componentOperation observations tables)
         (componentOperation_adequate observations tables adequate) args.get
-    · simp [extend, extendMeanings, invoke, name, signature, PIR.Proc.bind]
+    · simp [extend, extendMeanings, invoke, name, signature, PIR.Process.bind]
   · simp only [extend, extendMeanings]
     simp only [invoke, List.find?_cons, show (definition.helper.name == helper.name) = false from
       beq_eq_false_iff_ne.mpr name]
@@ -176,7 +176,7 @@ def payloadComponentTables (observations : SiteObservations interface) (payload 
 
 def payloadComponent (observations : SiteObservations interface) (payload : Payload)
     (inputs : Values (Component (assignment F G)) payload.entry.inputs) :
-    PIR.Proc interface (Values (Component (assignment F G)) payload.entry.outputs) :=
+    PIR.Process interface (Values (Component (assignment F G)) payload.entry.outputs) :=
   payload.entry.body.component
     (meaning observations (payloadComponentTables observations payload).closed)
     (componentOperation observations (payloadComponentTables observations payload)) inputs.get

@@ -19,7 +19,7 @@ import sys
 
 
 import check as structured
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
@@ -245,12 +245,12 @@ class Suite(structured.Suite):
     def subject(self, name, source=None, root="main"):
         folder = self.directory / name; folder.mkdir()
         if source is None:
-            flags = ["--source-format=zkc", "--entry=example::Interactive",
+            flags = ["--source-format=zkc", "--subject=schnorr::Schnorr<example::G>",
                      f"--module=example={ROOT}/examples/projects/schnorr/main.zkc",
                      f"--module=schnorr={ROOT}/libraries/protocols/sigma/schnorr/lib.zkc"]
-            source, interface = native_run(
+            source, interface_text, interface = native_subject(
                 lambda command: self.command(name+":frontend", command), self.tools["compiler"], flags)
-            self.evidence.atomic_json(folder / "interface.json", interface); root = interface["protocol"]
+            (folder / "interface.json").write_text(interface_text, encoding="utf-8"); root = interface["protocol"]
             for part in ("examples/projects/schnorr/main.zkc", "libraries/protocols/sigma/schnorr/lib.zkc"):
                 (folder / ("example.zkc" if part.startswith("examples") else "library.zkc")).write_bytes((ROOT / part).read_bytes())
         original = folder / "source.mlir"; original.write_text(source, encoding="utf-8")

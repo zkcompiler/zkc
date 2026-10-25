@@ -38,7 +38,7 @@ int zkc::runCompiler(int argc, char **argv,
            "Language (.zkc; explicit module map):\n"
            "  language-check | language-emit | language-interface | "
            "language-bundle | language-package\n"
-           "    --source-format=zkc [--entry=NAME] "
+           "    --source-format=zkc [--entry=NAME | --subject=NAME] "
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage] "
@@ -53,6 +53,10 @@ int zkc::runCompiler(int argc, char **argv,
            "    Its --declarations option reports completed public "
            "contracts.\n"
            "    --api reports public exports, types and source references.\n"
+           "    --subject selects a closed protocol/proof, excluding Host "
+           "functions.\n"
+           "    --source-claims exports requests for an explicit subject or "
+           "proof Entry.\n"
            "    --notations reports diagnostic syntax metadata, with optional\n"
            "    --notation-private and --notation-installation (check only).\n"
            "    Syntax metadata is not a native interface; named-call views\n"
@@ -92,6 +96,10 @@ int zkc::runCompiler(int argc, char **argv,
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
            "  protocol-constructed-participant FILE.mlir POLICY CANDIDATE.mlir "
+           "[--role=producer|validator] "
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
+           "  protocol-constructed-pair FILE.mlir POLICY CANDIDATE.mlir "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
@@ -120,7 +128,8 @@ int zkc::runCompiler(int argc, char **argv,
   StringRef mode(argv[1]);
   if (mode == "protocol-proof" || mode == "protocol-construct-proof" ||
       mode == "protocol-check-proof" ||
-      mode == "protocol-constructed-participant") {
+      mode == "protocol-constructed-participant" ||
+      mode == "protocol-constructed-pair") {
     if (argc < 4)
       return fail(error("native-proof-options"));
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -159,15 +168,27 @@ int zkc::runCompiler(int argc, char **argv,
       return 0;
     }
     bool exportParticipant = mode == "protocol-constructed-participant";
-    bool check = mode == "protocol-check-proof" || exportParticipant;
+    bool exportPair = mode == "protocol-constructed-pair";
+    bool check =
+        mode == "protocol-check-proof" || exportParticipant || exportPair;
     const int required = check ? 5 : 4;
     MathematicalSelectionPolicy mathematicalSelection;
+    ConstructedParticipantRole role = ConstructedParticipantRole::Validator;
+    bool roleSelected = false;
     std::set<std::string> seen;
     for (int i = required; i < argc; ++i) {
       StringRef option(argv[i]);
       if (!seen.insert(option.str()).second)
         return fail(error("native-proof-options"));
-      if (option == "--fuse-vector-reductions")
+      if (exportParticipant &&
+          (option == "--role=producer" || option == "--role=validator")) {
+        if (roleSelected)
+          return fail(error("native-proof-options"));
+        roleSelected = true;
+        role = option == "--role=producer"
+                   ? ConstructedParticipantRole::Producer
+                   : ConstructedParticipantRole::Validator;
+      } else if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
       else if (option == "--fuse-collect-fold")
         mathematicalSelection.collectFoldFusion = true;
@@ -196,9 +217,14 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
-      if (exportParticipant) {
-        auto exported = exportConstructedParticipant(
-            *original, *candidate, *source, *policy, mathematicalSelection);
+      if (exportParticipant || exportPair) {
+        auto exported =
+            exportPair
+                ? exportConstructedPair(*original, *candidate, *source, *policy,
+                                        mathematicalSelection)
+                : exportConstructedParticipant(*original, *candidate, *source,
+                                               *policy, mathematicalSelection,
+                                               role);
         if (!exported)
           return fail(exported.takeError());
         outs() << printJson(*exported) << '\n';

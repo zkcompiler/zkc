@@ -50,7 +50,7 @@ def handler (received : Bool) : Handler actions Unit Unit
   | .query _ () (.cons count (.cons flag .nil)), state =>
       ⟨.returned (if flag then count + 1 else count), state, []⟩
 
-def delivery (self : Nat) (localValue : Option Bool) : Proc actions (Option Bool) :=
+def delivery (self : Nat) (localValue : Option Bool) : Process actions (Option Bool) :=
   Participant.exchange self 0 1 "delivery" (ty := ValueSort.flag) localValue
 
 -- Sending aliases the sender's operand; it never substitutes a received value.
@@ -69,10 +69,10 @@ example (localValue : Option Bool) : delivery 2 localValue = .done none := rfl
 
 -- Sender precedence is preserved even for an exchange rejected by admission.
 example (value : Bool) :
-    (Participant.exchange 0 0 0 "self" (ty := ValueSort.flag) (some value) : Proc actions (Option Bool)) =
+    (Participant.exchange 0 0 0 "self" (ty := ValueSort.flag) (some value) : Process actions (Option Bool)) =
       .call (.send (ty := .flag) "self" 0 value) (fun _ => .done (some value)) := rfl
 
-def increment (self : Nat) (count : Option Nat) (flag : Option Bool) : Proc actions (Option Nat) :=
+def increment (self : Nat) (count : Option Nat) (flag : Option Bool) : Process actions (Option Nat) :=
   Participant.query self 0 "increment" () (.cons count (.cons flag .nil))
 
 -- Query arguments retain their heterogeneous order and the reply is a Nat.
@@ -90,7 +90,7 @@ example (count : Nat) : increment 0 (some count) none = .halt .incomplete := rfl
 
 example : increment 1 none none = .done none := rfl
 
-def checkCondition (self : Nat) (condition : Option Bool) : Proc actions Unit :=
+def checkCondition (self : Nat) (condition : Option Bool) : Process actions Unit :=
   Participant.guard self 0 condition
 
 example : checkCondition 0 (some true) = .done () := rfl
@@ -102,10 +102,10 @@ example : checkCondition 0 none = .halt .incomplete := rfl
 example (condition : Option Bool) : checkCondition 1 condition = .done () := rfl
 
 -- A rejecting or incomplete guard cannot run its suffix.
-example (next : Unit → Proc actions Nat) :
+example (next : Unit → Process actions Nat) :
     (checkCondition 0 (some false)).bind next = .halt .reject := rfl
 
-example (next : Unit → Proc actions Nat) :
+example (next : Unit → Process actions Nat) :
     (checkCondition 0 none).bind next = .halt .incomplete := rfl
 
 example {A : Type} (value : Option A) : Participant.restrict true value = value := rfl

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Semantics.Execution
+public import Zkc.Semantics.Interpretation
 
 @[expose] public section
 
@@ -10,7 +11,7 @@ An inner `Execution` stop retains its post-state and ordered events, including
 those from earlier operations. This guarantee applies when the outer monad
 produces an `Execution`. An outer `Except.error`, for example, produces no such
 record: a later exception can discard an earlier returned state and event
-prefix from the result of `Proc.runM`. This API neither recovers those fields
+prefix from the result of `Process.runM`. This API neither recovers those fields
 nor specifies rollback or persistence of effects outside `Execution`.
 
 The laws below equate meanings in the selected monad. They do not imply that
@@ -38,7 +39,7 @@ def Execution.followM (r : Execution S E A)
     let tail ← k a r.state
     pure ⟨tail.outcome, tail.state, r.events ++ tail.events⟩
 
-def Proc.runM (h : MonadHandler m I S E) : Proc I A → S → m (Execution S E A)
+def Process.runM (h : MonadHandler m I S E) : Process I A → S → m (Execution S E A)
   | .done a, s => pure ⟨.returned a, s, []⟩
   | .halt why, s => pure ⟨.stopped why, s, []⟩
   | .call o k, s => do
@@ -53,13 +54,13 @@ theorem followM_lift {n : Type → Type} [Monad n] [MonadLiftT m n]
   cases out <;> simp only [Execution.followM, monadLift_bind, monadLift_pure]
 
 theorem runM_lift {n : Type → Type} [Monad n] [MonadLiftT m n]
-    [LawfulMonadLiftT m n] (h : MonadHandler m I S E) (p : Proc I A) (s : S) :
+    [LawfulMonadLiftT m n] (h : MonadHandler m I S E) (p : Process I A) (s : S) :
     (liftM (p.runM h s) : n _) = p.runM (fun o s => liftM (h o s)) s := by
   induction p generalizing s with
-  | done a => simp only [Proc.runM, monadLift_pure]
-  | halt why => simp only [Proc.runM, monadLift_pure]
+  | done a => simp only [Process.runM, monadLift_pure]
+  | halt why => simp only [Process.runM, monadLift_pure]
   | call o k ih =>
-    simp only [Proc.runM, monadLift_bind, followM_lift]
+    simp only [Process.runM, monadLift_bind, followM_lift]
     have hk : (fun a s => (liftM ((k a).runM h s) : n _)) =
         (fun a s => (k a).runM (fun o s => liftM (h o s)) s) :=
       funext fun a => funext (ih a)
@@ -72,13 +73,13 @@ theorem followM_pure (r : Execution S E A) (k : A → S → Execution S E B) :
   cases r with | mk out s es => cases out <;> simp [Execution.followM, Execution.follow]
 
 /-- The deterministic semantics embeds exactly; it is not a second state machine. -/
-theorem runM_pure (h : Handler I S E) (p : Proc I A) (s : S) :
+theorem runM_pure (h : Handler I S E) (p : Process I A) (s : S) :
     p.runM (m := m) (fun o s => pure (h o s)) s = pure (p.run h s) := by
   induction p generalizing s with
   | done a => rfl
   | halt why => rfl
   | call o k ih =>
-    simp only [Proc.runM, Proc.run, pure_bind]
+    simp only [Process.runM, Process.run, pure_bind]
     have hk : (fun a => (k a).runM (m := m) (fun o s => pure (h o s))) =
         (fun a s => pure ((k a).run h s)) := funext fun a => funext (ih a)
     rw [hk]
@@ -100,21 +101,39 @@ theorem followM_assoc {C : Type} (r : Execution S E A)
     | stopped why => simp
     | returned b => simp [List.append_assoc]
 
-theorem runM_bind (h : MonadHandler m I S E) (p : Proc I A)
-    (k : A → Proc I B) (s : S) :
+theorem runM_bind (h : MonadHandler m I S E) (p : Process I A)
+    (k : A → Process I B) (s : S) :
     (p.bind k).runM h s =
       (p.runM h s >>= fun r => r.followM (fun a => (k a).runM h)) := by
   induction p generalizing s with
-  | done a => simp [Proc.bind, Proc.runM, Execution.followM]
-  | halt why => simp [Proc.bind, Proc.runM, Execution.followM]
+  | done a => simp [Process.bind, Process.runM, Execution.followM]
+  | halt why => simp [Process.bind, Process.runM, Execution.followM]
   | call o next ih =>
-    simp only [Proc.bind, Proc.runM, bind_assoc]
+    simp only [Process.bind, Process.runM, bind_assoc]
     congr 1
     funext r
     rw [followM_assoc]
     congr 1
     funext a t
     exact ih a t
+
+/-- Executing an operation expansion is the same as composing the handlers.
+The law preserves complete returned executions, including stops, ordered
+observations, and the actual oracle/service post-state in any lawful monad. -/
+theorem runM_interpret {J : Signature} (operations : OperationInterpretation I J)
+    (handler : MonadHandler m J S E) (process : Process I A) (state : S) :
+    (process.interpret operations).runM handler state =
+      process.runM (fun operation current => (operations operation).runM handler current) state := by
+  induction process generalizing state with
+  | done => rfl
+  | halt => rfl
+  | call operation next ih =>
+    simp only [Process.interpret, runM_bind, Process.runM]
+    congr 1
+    funext result
+    congr 1
+    funext reply final
+    exact ih reply final
 
 /-- Interpret hidden residual state by a distribution, preserving every outcome/event. -/
 def Execution.expand (η : S → m T) (r : Execution S E A) : m (Execution T E A) := do
@@ -126,13 +145,13 @@ def Execution.expand (η : S → m T) (r : Execution S E A) : m (Execution T E A
 theorem runM_expand (η : S → m T) (h : MonadHandler m I S E)
     (g : MonadHandler m I T E)
     (law : ∀ o s, (η s >>= g o) = (h o s >>= Execution.expand η))
-    (p : Proc I A) (s : S) :
+    (p : Process I A) (s : S) :
     (η s >>= p.runM g) = (p.runM h s >>= Execution.expand η) := by
   induction p generalizing s with
-  | done a => simp [Proc.runM, Execution.expand]
-  | halt why => simp [Proc.runM, Execution.expand]
+  | done a => simp [Process.runM, Execution.expand]
+  | halt why => simp [Process.runM, Execution.expand]
   | call o k ih =>
-    simp only [Proc.runM]
+    simp only [Process.runM]
     rw [← bind_assoc, law, bind_assoc, bind_assoc]
     congr 1
     funext r

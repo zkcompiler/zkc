@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Print literal typed bodies of an admitted structured unit as a Lean module.
 
-The script writes a scratch Lean file that admits the snapshot with the checker
+The script builds a scratch Lean module that admits the snapshot with the checker
 itself, materializes each checked helper body, protocol body and (for the
 closed profile) the projected root with `region_view%`, and prints them. It then
 rewrites the printed terms as `<|` chains in the style of the authored body
 modules. The output is ordinary source: `structured_views` or
 `structured_closed_views` must still admit the snapshot from it, so a printing
-or formatting error is rejected by the kernel rather than trusted.
+or formatting error is rejected by the kernel rather than trusted. Lake replays
+unchanged printer output; --fresh uses direct elaboration without replay.
 
 Usage, from the repository root inside the development shell, after building
 the data module:
@@ -30,6 +31,7 @@ import tempfile
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import ROOT, CheckFailed, Runner  # noqa: E402
+from bridges.structured import printer_build  # noqa: E402
 
 LEAN = ROOT / "lean"
 
@@ -61,6 +63,7 @@ def showTys (types : List Ty) : String := "[" ++ ", ".intercalate (types.map sho
 def showRoles (roles : List String) : String :=
   "[" ++ ", ".intercalate (roles.map fun role => "\"" ++ role ++ "\"") ++ "]"
 
+#eval IO.println "ZKC_BODY_OUTPUT_BEGIN"
 #eval IO.println s!"HELPERS {{program.payload.definitions.length}}"
 #eval for definition in program.payload.definitions do
   IO.println s!"HELPER\t{{definition.name}}\t{{match definition.kind with | .math => ".math" | .local => ".local"}}\t{{showTys definition.inputs}}\t{{showTys definition.outputs}}"
@@ -68,6 +71,7 @@ def showRoles (roles : List String) : String :=
 #eval for protocol in program.payload.protocols do
   IO.println s!"PROTOCOL\t{{protocol.name}}\t{{showRoles protocol.roles}}\t{{showTys protocol.inputs}}\t{{showTys protocol.outputs}}\t{{protocol.inputScopes}}\t{{protocol.outputScopes}}"
 {views}
+#eval IO.println "ZKC_BODY_OUTPUT_END"
 end Printed
 '''
 
@@ -169,18 +173,18 @@ def printed(output, name):
 
 def elaborate(runner, path, lake="lake"):
     """Elaborate a scratch module; on failure, show Lean's diagnostics."""
-    result = runner.run([lake, "env", "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
+    result = runner.run([lake, "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
     if result.returncode != 0:
         raise CheckFailed(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
-    return result.stdout
+    return printer_build.messages(result.stdout)
 
 
-def generate(data, namespace, closed=False, names=None, runner=None, lake="lake"):
+def generate(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False):
     """The printed bodies module of the admitted snapshot `data.snapshot`."""
-    return printed_module(data, namespace, closed, names, runner, lake)[0]
+    return printed_module(data, namespace, closed, names, runner, lake, fresh=fresh)[0]
 
 
-def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake"):
+def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False):
     """The printed bodies module and the local names of its helpers and
     protocols, in the checked program's order."""
     runner = runner or Runner()
@@ -188,10 +192,17 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
     # First pass: inventory only, to know how many bodies to materialize.
     inventory = PRINTER.format(data=data, views="")
     (ROOT / "build").mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=ROOT / "build") as scratch:
-        path = Path(scratch) / "Inventory.lean"
-        path.write_text(inventory, encoding="utf-8")
-        output = elaborate(runner, path, lake)
+    scratch = (tempfile.TemporaryDirectory(dir=ROOT / "build") if fresh else
+               printer_build.workspace(data))
+    with scratch as directory:
+        def evaluate(module, source):
+            if not fresh:
+                return printer_build.elaborate(runner, Path(directory), module, source, data, lake)
+            path = Path(directory) / f"{module}.lean"
+            path.write_text(source, encoding="utf-8")
+            return elaborate(runner, path, lake)
+
+        output = evaluate("Inventory", inventory)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
         views = []
@@ -205,9 +216,7 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
             views.append(f"def root := region_view% "
                          f"((checkClosed {data}.snapshot).toOption.get (by decide +kernel)).payload.entry.body")
         views += [f"#print Printed.{view.split()[1]}" for view in list(views)]
-        path = Path(scratch) / "Bodies.lean"
-        path.write_text(PRINTER.format(data=data, views="\n".join(views)), encoding="utf-8")
-        output = elaborate(runner, path, lake)
+        output = evaluate("Bodies", PRINTER.format(data=data, views="\n".join(views)))
     parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
              f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data}`. -/\n"
              f"namespace {namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
@@ -242,10 +251,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--check", action="store_true",
                         help="fail if the output file differs from the printed module")
+    parser.add_argument("--fresh", action="store_true", help="elaborate printers without Lake replay")
     args = parser.parse_args()
     names = dict(item.split("=", 1) for item in args.name)
     try:
-        text = generate(args.data, args.namespace, args.closed, names)
+        text = generate(args.data, args.namespace, args.closed, names, fresh=args.fresh)
     except CheckFailed as error:
         raise SystemExit(str(error))
     if args.check:

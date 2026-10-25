@@ -34,7 +34,7 @@ theorem Region.denote_letOp_values {dialect : Dialect} {interface : PIR.Signatur
       (meaning.operation op (arguments.eval before.get) (bodies.denote meaning)).bind
         fun added => next.denote meaning (added.append before).get := by
   change (meaning.operation op (arguments.eval before.get) (bodies.denote meaning)).bind _ = _
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext added
   exact congrArg (next.denote meaning) (Environment.prepend_values_get before added)
 
@@ -65,13 +65,13 @@ theorem Region.denote_letOp_call {d : Dialect} {I : PIR.Signature} (m : RegionMe
     (bodies : Regions d (d.regions op)) (next : Region d (d.results op ++ Γ) out)
     (before : Values m.Value Γ) (action : I.Op)
     (added : I.Reply action → Values m.Value (d.results op))
-    (result : I.Reply action → PIR.Proc I (Values m.Value out))
+    (result : I.Reply action → PIR.Process I (Values m.Value out))
     (operation : m.operation op (args.eval before.get) (bodies.denote m) =
       .call action (fun reply => .done (added reply)))
     (continuation : ∀ reply, next.denote m ((added reply).append before).get = result reply) :
     (Region.letOp op args bodies next).denote m before.get = .call action result := by
   rw [Region.denote_letOp_values, operation]
-  apply congrArg (PIR.Proc.call action)
+  apply congrArg (PIR.Process.call action)
   funext reply
   exact continuation reply
 

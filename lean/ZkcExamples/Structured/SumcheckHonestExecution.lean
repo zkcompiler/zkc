@@ -42,12 +42,12 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 /-- The next tape value answers a verifier query; the prover is untouched. -/
 theorem tape_query {A B : Type} (ctx : ProtocolContext) (site : String) (field : services.Op)
     (handle : Nat)
-    (prover : PIR.Proc (participantInterface F G) A) (r : F) (tape : List F)
-    (continuation : F → PIR.Proc (participantInterface F G) B) :
-    (PIR.Proc.call (Action.query site field (.cons handle .nil)) continuation).run
+    (prover : PIR.Process (participantInterface F G) A) (r : F) (tape : List F)
+    (continuation : F → PIR.Process (participantInterface F G) B) :
+    (PIR.Process.call (Action.query site field (.cons handle .nil)) continuation).run
         (network (G := G) ctx) ⟨prover, r :: tape⟩ =
       (continuation r).run (network ctx) ⟨prover, tape⟩ := by
-  simp only [PIR.Proc.run, network, peerHandler, challengeTape, PIR.Execution.follow, List.nil_append]
+  simp only [PIR.Process.run, network, peerHandler, challengeTape, PIR.Execution.follow, List.nil_append]
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- A table of positive remaining dimension has an even flat length. -/
@@ -70,8 +70,8 @@ and the prover folds at the verifier's challenge. -/
 theorem coupled_round {A B : Type} (ctx : ProtocolContext) (handle : Nat) (raw : List F)
     (count : Nat) (shape : raw.length = 2 ^ count) (point : List F)
     (remaining : point.length < count) (r : F) (tape : List F)
-    (verifier : List F × F → PIR.Proc (participantInterface F G) A)
-    (prover : List F → PIR.Proc (participantInterface F G) B) :
+    (verifier : List F × F → PIR.Process (participantInterface F G) A)
+    (prover : List F → PIR.Process (participantInterface F G) B) :
     ((SumcheckVerifierLaws.roundPresent ctx handle
         (point, (restrictPrefixValues raw point).sum)).bind verifier).run
         (network ctx) ⟨(roundHonest ctx raw count point).bind prover, r :: tape⟩ =
@@ -79,9 +79,9 @@ theorem coupled_round {A B : Type} (ctx : ProtocolContext) (handle : Nat) (raw :
         (network ctx) ⟨prover (point ++ [r]), tape⟩ := by
   have even := restricted_even raw count shape point remaining
   simp only [roundHonest, remaining, ↓reduceIte, SumcheckProverLaws.roundPresent,
-    SumcheckVerifierLaws.roundPresent, PIR.Proc.bind]
+    SumcheckVerifierLaws.roundPresent, PIR.Process.bind]
   rw [peer_receive, peer_receive]
-  simp only [honestState, List.sum_take_add_sum_drop, ↓reduceIte, PIR.Proc.bind]
+  simp only [honestState, List.sum_take_add_sum_drop, ↓reduceIte, PIR.Process.bind]
   rw [tape_query, peer_send, ← restrictValues_sum _ r even, restrictPrefixValues_append]
   rfl
 
@@ -93,8 +93,8 @@ prover's folded table. -/
 theorem coupled_rounds {A B : Type} (ctx : ProtocolContext) (handle : Nat) (raw : List F)
     (count : Nat) (shape : raw.length = 2 ^ count) (rounds : Nat) :
     ∀ (point tape : List F), point.length + rounds ≤ count → rounds ≤ tape.length →
-    ∀ (verifier : List F × F → PIR.Proc (participantInterface F G) A)
-      (prover : List F → PIR.Proc (participantInterface F G) B),
+    ∀ (verifier : List F × F → PIR.Process (participantInterface F G) A)
+      (prover : List F → PIR.Process (participantInterface F G) B),
     ((PIR.repeatN rounds (SumcheckVerifierLaws.roundPresent ctx handle)
         (point, (restrictPrefixValues raw point).sum)).bind verifier).run
         (network ctx) ⟨(PIR.repeatN rounds (roundHonest ctx raw count) point).bind prover, tape⟩ =
@@ -104,13 +104,13 @@ theorem coupled_rounds {A B : Type} (ctx : ProtocolContext) (handle : Nat) (raw 
   induction rounds with
   | zero =>
     intro point tape _ _ verifier prover
-    simp only [PIR.repeatN, PIR.Proc.bind, List.take_zero, List.append_nil, List.drop_zero]
+    simp only [PIR.repeatN, PIR.Process.bind, List.take_zero, List.append_nil, List.drop_zero]
   | succ rounds ih =>
     intro point tape fits supply verifier prover
     cases tape with
     | nil => simp at supply
     | cons r rest =>
-      simp only [PIR.repeatN, PIR.Proc.bind_assoc]
+      simp only [PIR.repeatN, PIR.Process.bind_assoc]
       rw [coupled_round ctx handle raw count shape point (by omega) r rest]
       rw [ih (point ++ [r]) rest (by simp; omega) (by simp at supply; omega)]
       simp only [List.take_succ_cons, List.drop_succ_cons, List.append_assoc, List.singleton_append]
@@ -151,14 +151,14 @@ theorem source_complete (raw : List F) (count : Nat) (shape : HasShape raw count
   change ((PIR.repeatN count (SumcheckVerifierLaws.roundPlain SumcheckSourceVerifier.childContext
     (some handle)) (some ([] : List F), some (restrictPrefixValues raw ([] : List F)).sum)).bind _).run _ _ = _
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count
-    ([], (restrictPrefixValues raw []).sum), PIR.Proc.bind_assoc,
+    ([], (restrictPrefixValues raw []).sum), PIR.Process.bind_assoc,
     coupled_rounds SumcheckSourceVerifier.childContext handle raw count rawLength count [] tape
       (by simp) supply]
   have length : ([] ++ tape.take count).length = count := by simp; omega
   have value := Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_complete table _ _
     (Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_restrict raw table decoded
       ([] ++ tape.take count) (by rw [length])) length
-  simp only [PIR.Proc.bind, length, value, and_self, decide_true]
+  simp only [PIR.Process.bind, length, value, and_self, decide_true]
   rfl
 
 /-! ### Complete Reduction root -/
@@ -197,7 +197,7 @@ theorem reduction_complete (raw : List F) (count rounds : Nat) (shape : HasShape
     change (PIR.repeatN rounds (SumcheckVerifierLaws.roundPlain reductionChild
       (some handle)) (some ([] : List F), some (restrictPrefixValues raw ([] : List F)).sum)).bind _ = _
     rw [SumcheckVerifierLaws.repeat_present reductionChild handle rounds
-      ([], (restrictPrefixValues raw []).sum), PIR.Proc.bind_assoc]
+      ([], (restrictPrefixValues raw []).sum), PIR.Process.bind_assoc]
     rfl
   rw [verifier, SumcheckProverRoots.reduction_prover raw count rounds shape bound admitted enough
       (some raw.sum) (some handle)]

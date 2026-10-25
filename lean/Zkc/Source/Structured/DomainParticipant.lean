@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.DomainComponent
 public import Zkc.Source.Structured.OpenMeaning
+public import Zkc.Source.Structured.IterationObservations
 
 @[expose] public section
 
@@ -66,8 +67,8 @@ theorem observedSitesOn_forgetSitesOn :
 
 theorem observeActionOn_forgetSitesOn (action : (participantInterfaceOn carriers).Op) :
     (observeActionOn action).interpret forgetSitesOn = participantActionsOn carriers action := by
-  simp only [observeActionOn, forgetSitesOn, participantActionsOn, PIR.Proc.interpret,
-    PIR.Proc.bind_done]
+  simp only [observeActionOn, forgetSitesOn, participantActionsOn, PIR.Process.interpret,
+    PIR.Process.bind_done]
 
 end Carriers
 
@@ -83,9 +84,11 @@ abbrev stepOn (spec : RepeatSpec) (context : ProtocolContext) (self : Nat)
     (captures : Values (Component carriers.Value) spec.captures)
     (body : RegionFunction (Component carriers.Value) I
       (.index :: (spec.state ++ spec.captures), spec.state))
-    (state : Values (Component carriers.Value) spec.state) (index : Nat) :=
-  (body (.cons (some index)
-    ((maskValues self (context.mapScopes spec.stateScopes) state).append captures))).bind
+    (state : Values (Component carriers.Value) spec.state) (index : Nat)
+    (iterations : IterationObservations I := .silent) (site : String := "") :=
+  (iterations.within (qualifyProtocolSite context.applicationPrefix site) index
+    (body (.cons (some index)
+      ((maskValues self (context.mapScopes spec.stateScopes) state).append captures)))).bind
       (fun results => .done (maskValues self (context.mapScopes spec.stateScopes) results))
 
 end Repeat
@@ -98,8 +101,9 @@ def denoteRepeatOn {carriers : Carriers} {I : PIR.Signature}
     (state : Values (Component carriers.Value) spec.state)
     (captures : Values (Component carriers.Value) spec.captures)
     (body : RegionFunction (Component carriers.Value) I
-      (.index :: (spec.state ++ spec.captures), spec.state)) :
-    PIR.Proc I (Values (Component carriers.Value) spec.state) :=
+      (.index :: (spec.state ++ spec.captures), spec.state))
+    (iterations : IterationObservations I := .silent) (site : String := "") :
+    PIR.Process I (Values (Component carriers.Value) spec.state) :=
   if (spec.roles.map context.roles).contains self then
     match count with
     | none => .halt .incomplete
@@ -107,7 +111,8 @@ def denoteRepeatOn {carriers : Carriers} {I : PIR.Signature}
       if count ≤ spec.maximum then
         let mask := maskValues self (context.mapScopes spec.stateScopes)
         Finite.execute (.elements (List.range count))
-          (Repeat.stepOn spec context self captures body) (mask state)
+          (fun state index => Repeat.stepOn spec context self captures body state index iterations site)
+          (mask state)
       else .halt .refused
   else .done (Values.absent carriers.Value spec.state)
 
@@ -120,12 +125,13 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
     (op : ProtocolOp) (args : Values (Component model.Value) op.arguments)
     (callbacks : Values (RegionFunction (Component model.Value) I) op.regions)
     (protocols : ProtocolTable model.Value I := [])
-    (context : ProtocolContext := {}) :
-    PIR.Proc I (Values (Component model.Value) op.results) :=
+    (context : ProtocolContext := {})
+    (iterations : IterationObservations I := .silent) :
+    PIR.Process I (Values (Component model.Value) op.results) :=
   match op, args with
-  | .repeat spec _, .cons count values =>
+  | .repeat spec site, .cons count values =>
     let parts := Values.split spec.state values
-    denoteRepeatOn spec context self count parts.1 parts.2 (callbacks.get .here)
+    denoteRepeatOn spec context self count parts.1 parts.2 (callbacks.get .here) iterations site
   | .calculate op allowed, args =>
     Evaluation.componentOperationOn model observations tables op args (op.calculationRegions allowed)
   | .localCall helper _ owner _, args =>
@@ -155,21 +161,23 @@ abbrev participantMeaningWithOn {I : PIR.Signature} (observations : SiteObservat
     (actions : PIR.OperationInterpretation (participantInterfaceOn model.toCarriers) I)
     (tables : Evaluation.ComponentTablesOn model.toCarriers I) (self : Nat)
     (protocols : ProtocolTable model.Value I := [])
-    (context : ProtocolContext := {}) : RegionMeaning protocolDialect I where
+    (context : ProtocolContext := {})
+    (iterations : IterationObservations I := .silent) : RegionMeaning protocolDialect I where
   Value := Component model.Value
   operation := fun op args callbacks =>
-    protocolOperationWithOn model observations actions tables self op args callbacks protocols context
+    protocolOperationWithOn model observations actions tables self op args callbacks protocols context iterations
 
 /-- One body denotation, with optional input and output masks at this context. -/
 def CheckedProtocol.denoteWithOn {I : PIR.Signature}
     (definition : CheckedProtocol) (observations : SiteObservations I)
     (actions : PIR.OperationInterpretation (participantInterfaceOn model.toCarriers) I)
     (helpers : Evaluation.ComponentTablesOn model.toCarriers I)
-    (protocols : ProtocolTable model.Value I) :
+    (protocols : ProtocolTable model.Value I)
+    (iterations : IterationObservations I := .silent) :
     ProtocolFunction model.Value I definition.signature :=
   fun context self inputs =>
     (definition.body.denote
-      (participantMeaningWithOn model observations actions helpers self protocols context)
+      (participantMeaningWithOn model observations actions helpers self protocols context iterations)
       (maskValues self (context.mapScopes definition.inputScopes) inputs).get).bind fun results =>
         .done (maskValues self (context.mapScopes definition.outputScopes) results)
 
@@ -179,8 +187,9 @@ def extendProtocolTableOn {I : PIR.Signature}
     (actions : PIR.OperationInterpretation (participantInterfaceOn model.toCarriers) I)
     (helpers : Evaluation.ComponentTablesOn model.toCarriers I)
     (captured : ProtocolTable model.Value I)
-    (definition : CheckedProtocol) : ProtocolTable model.Value I :=
-  ⟨definition.signature, definition.denoteWithOn model observations actions helpers captured⟩ :: captured
+    (definition : CheckedProtocol) (iterations : IterationObservations I := .silent) :
+    ProtocolTable model.Value I :=
+  ⟨definition.signature, definition.denoteWithOn model observations actions helpers captured iterations⟩ :: captured
 
 /-- Each named helper captures its checked prefix. -/
 def UnitPayload.tablesOn (payload : UnitPayload) : OpenTablesOn model.toCarriers :=
@@ -206,14 +215,14 @@ def UnitPayload.plainProtocolTableOn (payload : UnitPayload) :
 
 def Program.observedOn (program : Program)
     (self : Nat) (inputs : Values (Component model.Value) program.payload.entry.inputs) :
-    PIR.Proc (observedInterfaceOn model.toCarriers)
+    PIR.Process (observedInterfaceOn model.toCarriers)
       (Values (Component model.Value) program.payload.entry.outputs) :=
   invokeProtocol (program.payload.protocolTableOn model) program.payload.entry.signature {} self inputs
 
 /-- A participant is selected by its index in this root's roster. -/
 def Program.participantOn (program : Program)
     (self : Nat) (inputs : Values (Component model.Value) program.payload.entry.inputs) :
-    PIR.Proc (participantInterfaceOn model.toCarriers)
+    PIR.Process (participantInterfaceOn model.toCarriers)
       (Values (Component model.Value) program.payload.entry.outputs) :=
   (program.observedOn model self inputs).interpret forgetSitesOn
 
@@ -385,7 +394,7 @@ theorem Program.participant_eq_participantOn (program : Program) (self : Nat)
     (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
     program.participant F G self inputs = program.participantOn (ringModel F G) self inputs := by
   unfold Program.participant Program.participantOn
-  rw [← Program.observed_toOn, PIR.Proc.interpret_interchange observedToOn forgetSitesOn forgetSites
+  rw [← Program.observed_toOn, PIR.Process.interpret_interchange observedToOn forgetSitesOn forgetSites
     observedToOn_forgetSitesOn]
 
 end Uniform

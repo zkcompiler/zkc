@@ -35,6 +35,9 @@ def descriptor(value):
     if tag == "index.constant":
         record(args, 1)
         return f".indexConstant {text(args[0])}"
+    if tag == "field.embed":
+        extension, base = record(args, 2)
+        return f".fieldEmbed {text(extension)} {text(base)}"
     if tag == "exec":
         operation, binding_name, parameters = record(args, 3)
         return f".exec {text(operation)} {text(binding_name)} {seq(parameters, text)}"

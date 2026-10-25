@@ -37,7 +37,7 @@ def proverInputs (firstBase secondBase point : G) (firstScalar secondScalar : F)
 
 /-- The prover's normal form: its ordered actions and its returned tuple. -/
 def proverProcess (firstBase secondBase : G) (firstScalar secondScalar : F) (nonces : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   .call (.query firstNonceSite scalarDomain (.cons nonces .nil)) fun (firstNonce : F) =>
   .call (.query secondNonceSite scalarDomain (.cons nonces .nil)) fun (secondNonce : F) =>
@@ -80,7 +80,7 @@ def verifierInputs (firstBase secondBase point : G) (challenges : Nat) :
 
 /-- The verifier's normal form: its ordered actions and its returned tuple. -/
 def verifierProcess (firstBase secondBase point : G) (challenges : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   .call (.receive (.group groupDomain) commitmentSite 0) fun (commitment : G) =>
   .call (.query challengeSite scalarDomain (.cons challenges .nil)) fun (challenge : F) =>
@@ -176,7 +176,7 @@ theorem relation_iff (firstBase secondBase point : G) (firstScalar secondScalar 
     Relation firstBase secondBase point firstScalar secondScalar ↔ point = (firstScalar • firstBase) + (secondScalar • secondBase) := by
   unfold Relation
   rw [formula_process]
-  change (PIR.Proc.done (I := closedInterface) (.cons (decide (point = (firstScalar • firstBase) + (secondScalar • secondBase))) .nil :
+  change (PIR.Process.done (I := closedInterface) (.cons (decide (point = (firstScalar • firstBase) + (secondScalar • secondBase))) .nil :
     Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
 

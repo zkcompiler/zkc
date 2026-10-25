@@ -53,7 +53,7 @@ theorem foldTransition_unfiltered (table : HelperTable (assignment F G) interfac
     (item : assignment F G spec.domain.item) :
     foldTransition table spec arguments captures state item =
       invoke table spec.stepHelper (state.append (.cons item (arguments.append captures))) := by
-  simp [foldTransition, absent, PIR.Proc.bind, Values.get]
+  simp [foldTransition, absent, PIR.Process.bind, Values.get]
   rfl
 
 theorem foldTransition_false (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
@@ -65,7 +65,7 @@ theorem foldTransition_false (table : HelperTable (assignment F G) interface) (s
     (predicate : invoke table spec.predicateHelper (.cons item (arguments.append captures)) =
       .done (.cons false .nil)) :
     foldTransition table spec arguments captures state item = .done state := by
-  simp [foldTransition, present, predicate, PIR.Proc.bind, Values.get]
+  simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
 
 theorem foldTransition_true (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (present : spec.predicate.isEmpty = false)
@@ -77,7 +77,7 @@ theorem foldTransition_true (table : HelperTable (assignment F G) interface) (sp
       .done (.cons true .nil)) :
     foldTransition table spec arguments captures state item =
       invoke table spec.stepHelper (state.append (.cons item (arguments.append captures))) := by
-  simp [foldTransition, present, predicate, PIR.Proc.bind, Values.get]
+  simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
   rfl
 
 theorem foldTransition_predicate_stops (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
@@ -88,7 +88,7 @@ theorem foldTransition_predicate_stops (table : HelperTable (assignment F G) int
     (item : assignment F G spec.domain.item) (reason : PIR.Stop)
     (predicate : invoke table spec.predicateHelper (.cons item (arguments.append captures)) = .halt reason) :
     foldTransition table spec arguments captures state item = .halt reason := by
-  simp [foldTransition, present, predicate, PIR.Proc.bind]
+  simp [foldTransition, present, predicate, PIR.Process.bind]
 
 theorem denoteFold_empty (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (arguments : Values (assignment F G) spec.domain.inputs)
@@ -157,7 +157,7 @@ theorem denoteLoop_reference (state captures : List Ty)
   apply Finite.fold_total_on _ reference valid _ initial start
   intro current index member invariant
   obtain ⟨equation, preserved⟩ := law current index member invariant
-  exact ⟨by simp [equation, PIR.Proc.bind, Values.split_append], preserved⟩
+  exact ⟨by simp [equation, PIR.Process.bind, Values.split_append], preserved⟩
 
 theorem denoteConditionalLoop_zero (state captures : List Ty)
     (body : RegionFunction (assignment F G) interface
@@ -167,7 +167,7 @@ theorem denoteConditionalLoop_zero (state captures : List Ty)
     (captured : Values (assignment F G) captures) :
     denoteConditionalLoop state captures body lower upper initial captured = .done initial := by
   simp [denoteConditionalLoop, Nat.sub_eq_zero_of_le empty, Finite.execute,
-    Finite.Domain.admit, Finite.admitThen, Finite.fold, PIR.Proc.bind]
+    Finite.Domain.admit, Finite.admitThen, Finite.fold, PIR.Process.bind]
 
 theorem boundedAt_exact [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] (table : HelperTable (assignment F G) interface)
     (domain : String) (container : List F) (index : Nat) (value : F)
@@ -175,8 +175,8 @@ theorem boundedAt_exact [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq 
     operation observations table (.boundedAt domain) (.cons container (.cons index .nil)) .nil =
       .done (.cons value .nil) := by
   change (match container[index]? with
-    | some result => (PIR.Proc.done (Values.cons result Values.nil) : PIR.Proc interface (Values (assignment F G) [.field domain]))
-    | none => PIR.Proc.halt .refused) = _
+    | some result => (PIR.Process.done (Values.cons result Values.nil) : PIR.Process interface (Values (assignment F G) [.field domain]))
+    | none => PIR.Process.halt .refused) = _
   rw [read]
   rfl
 
@@ -186,8 +186,8 @@ theorem boundedAt_refuses [CommRing F] [AddCommGroup G] [Module F G] [DecidableE
     operation observations table (.boundedAt domain) (.cons container (.cons index .nil)) .nil =
       .halt .refused := by
   change (match container[index]? with
-    | some result => (PIR.Proc.done (Values.cons result Values.nil) : PIR.Proc interface (Values (assignment F G) [.field domain]))
-    | none => PIR.Proc.halt .refused) = _
+    | some result => (PIR.Process.done (Values.cons result Values.nil) : PIR.Process interface (Values (assignment F G) [.field domain]))
+    | none => PIR.Process.halt .refused) = _
   rw [read]
   rfl
 
@@ -216,8 +216,8 @@ theorem elements_admit (name : String) (types : List Ty) (field : String)
     (Finite.Domain.elements _)).admit = _
   simp [Finite.Domain.admit, representable]
 
-theorem stopped_bypasses_suffix {A B : Type} (reason : PIR.Stop) (next : A → PIR.Proc interface B) :
-    (PIR.Proc.halt reason : PIR.Proc interface A).bind next = .halt reason := rfl
+theorem stopped_bypasses_suffix {A B : Type} (reason : PIR.Stop) (next : A → PIR.Process interface B) :
+    (PIR.Process.halt reason : PIR.Process interface A).bind next = .halt reason := rfl
 
 section Group
 

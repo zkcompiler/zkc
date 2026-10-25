@@ -105,7 +105,7 @@ different stop reason. Suffix proof obligations never assert it executes. -/
 theorem bind_stop : Derives
     (Region.bind (.stop .reject : Region dialect [] [Ty.scalar])
       (.stop .abort : Region dialect [Ty.scalar] [Ty.boolean])) empty
-    ((Proc.halt .reject : Proc interface Scalars).bind fun _ => .halt .abort) :=
+    ((Process.halt .reject : Process interface Scalars).bind fun _ => .halt .abort) :=
   .bind (.stop _ _) (fun _ => .stop _ _)
 
 theorem bind_stop_needs_no_suffix_law (next : Region dialect [Ty.scalar] [Ty.boolean]) :
@@ -200,7 +200,7 @@ abbrev Value (_ : Unit) := Nat
 abbrev calls : Signature := ⟨Unit, fun _ => Nat⟩
 abbrev closed : Signature := ⟨Empty, Empty.elim⟩
 
-def inspect {I : Signature} (p : Proc I (Values Value [()])) : Proc I (Values Value [()]) :=
+def inspect {I : Signature} (p : Process I (Values Value [()])) : Process I (Values Value [()]) :=
   match p with
   | .call _ _ => .done vals[(1 : Nat)]
   | _ => .done vals[(0 : Nat)]

@@ -146,12 +146,22 @@ let
     python3 = python;
     source = sources.lean;
   };
+  security =
+    assert
+      lib.trim (builtins.readFile ../lean/lean-toolchain)
+      == lib.trim (builtins.readFile ../lean/security/lean-toolchain);
+    pkgs.callPackage ./security.nix {
+      inherit lean leanToolchain;
+      source = sources.security;
+      python3 = python;
+      lakeSources = lakeSourcesFor ../lean/security/lake-manifest.json;
+    };
   arklib =
     assert
       lib.trim (builtins.readFile ../lean/lean-toolchain)
       == lib.trim (builtins.readFile ../lean/integrations/arklib/lean-toolchain);
     pkgs.callPackage ./arklib.nix {
-      inherit lean leanToolchain;
+      inherit security leanToolchain;
       source = sources.arklib;
       python3 = python;
       lakeSources = lakeSourcesFor ../lean/integrations/arklib/lake-manifest.json;
@@ -165,6 +175,7 @@ in
       zkc
       libraries
       lean
+      security
       arklib
       llzk
       ;

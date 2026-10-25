@@ -476,16 +476,16 @@ subject driver does every mechanical step from it. From the repository root in
 the pinned development environment, with the compiler built (`just build`) and
 Lean set up ([development guide](../../../docs/development/README.md)):
 
-1. Write the protocol and an Entry that runs it, for example
-   `entry fn EqualityInteractive(inputs: ChaumPedersen<G>::Inputs) { return ChaumPedersen<G>::run(inputs); }` in a project module.
-2. Write the manifest: its sources (a project or a module map), the Entry under
-   `[entries] interactive`, the structured profile, and under `[generated]` the
+1. Write the protocol in a project module. Select a closed protocol application,
+   for example `sigma::ChaumPedersen<example::G>`; no host Entry wrapper is needed.
+2. Write the manifest: its sources (a project or a module map), that closed
+   application under `[entries] interactive`, the structured profile, and under `[generated]` the
    retained export (`interactive_export`, `interactive_source`), the data module
    (`interactive_data`) and, to admit the unit from printed bodies, the Bodies
    and Views modules (`interactive_bodies`, `interactive_views`), as
    [`chaum-pedersen.toml`](../../subjects/chaum-pedersen.toml) does.
 3. Run `python3 lean/bridges/subject.py --subject NAME --write`. It exports the
-   Entry, renders the data, builds it, prints the bodies and writes the Views
+   selected subject, renders the data, builds it, prints the bodies and writes the Views
    module, which admits the unit with `structured_views`; `--check` later
    requires all of them to be unchanged.
 4. Write a normal-form request, name it under `[normal_forms] request`, and
@@ -494,7 +494,7 @@ Lean set up ([development guide](../../../docs/development/README.md)):
    it to a library, as
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
-   [`ChaumPedersenSigma`](../../integrations/arklib/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
+   [`ChaumPedersenSigma`](../../security/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
    (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
    as errors: a lemma that does not use every section instance needs
    `omit [...] in`, written before its docstring.
@@ -506,6 +506,84 @@ A compiled proof Entry is added the same way with `[entries] proof` and the
 construction profile; the driver then also generates its constructed
 participant data, printed bodies and per-Entry glue
 ([construction bridge](../construction/README.md)).
+
+### Constructed pair completeness roots
+
+[`generate_component_roots.py`](generate_component_roots.py) assembles source,
+actual constructed pair, typed input ABI, whole-process views, fixed Subject,
+canonical completeness theorem and claim receipt. Its configuration lives in
+[`roots/sampled.toml`](roots/sampled.toml), separately from the subject manifests.
+The installed Sigma method proves the actual Schnorr and Schnorr AND producers
+with private draws and a shared public challenge. An additional root borrows one
+random service under two aliases before invoking Schnorr AND. A direct theorem
+selection installs the sampled-abort control and its nonzero bound through the
+same Subject, ABI and receipt printers. `SequentialSigma` composes Schnorr and
+Chaum–Pedersen through the same method, drawing its second private nonce after
+the first protocol's challenge and response.
+
+With the security dependencies built, run from the repository root:
+
+```sh
+python3 lean/bridges/structured/generate_component_roots.py \
+  --compiler build/compiler/zkc-compile
+```
+
+The driver checks ordinary generated Lean files in an isolated
+`build/lean/component-roots/lib` tree without running a Lake build. `--check`
+requires exact regeneration, `--only NAME` selects roots, and `--phase` selects
+export, assembly, proof or receipt. `--dependency-path PATH` supplies another
+prechecked dependency tree when collaborators use separate output directories;
+serialize writers to a single output tree.
+
+The `zkc.component-roots/0` descriptor requires nonempty strings `schema`,
+`model_module`, `model`, `sampling`, `field_type`, `group_type`, and
+`capabilities`, plus a nonempty `root` array. Optional top-level
+`receipt_normalization` and `theorem_normalization` values are lists of nonempty
+strings naming Lean declarations. Every root requires nonempty strings `name`,
+`source`, `entry`, `target`, and `method`, and a `modules` map from nonempty
+module names to nonempty source paths. Root names must be unique identifiers.
+
+The installed `sigma` method accepts an optional `error_expression`; it generates
+its own proof module and theorem. Optional `method_imports` names additional Lean
+modules, and `nonvacuity_law` supplies a term checked as `Nonvacuous subject` for
+the fixed generated subject. Without that term, the method proposes the default
+zero witness and must prove its admission. These hooks install mathematical
+evidence; they cannot replace the subject's relation, retained input clauses or
+input policy. `method_imports` is a list of nonempty strings and
+`nonvacuity_law` is a nonempty string. Both are refused for the `direct` method.
+The `direct` method additionally requires
+`proof_module` and permits `proof_name`, defaulting to
+`<proof_module>.compiled_ideal_complete`. Both methods default an omitted
+`error_expression` to `.natural 0`. These optional values must be nonempty
+strings. Unknown keys, missing required keys, wrong value shapes, duplicate
+names, unsupported methods and invalid selections fail before constructing the
+generator, invoking native/Lean tools or creating output directories. Validation
+includes unselected roots. A misspelled bound never activates the zero default.
+Run the focused production-entry refusal checks with
+`python3 lean/bridges/structured/component_roots_tests.py`.
+
+The security test scope also runs `security/checks/check_abi_installations.py`.
+It compiles freshly emitted ABIs and completeness proofs for ordered, permuted,
+repeated and heterogeneous selectors, empty public data, and constrained input
+policies. It refuses incorrect selector equations, clause interpretations and
+nonvacuity terms. Fully empty source rows are checked as emitted structural
+declarations; admission of a service-free pair is not added by those controls.
+
+`ZkcTools.StructuredSource.Root` owns common Subject and receipt assembly.
+`Generation.RootCompleteness` owns the common actual-pair theorem shell used by
+both maintained table roots and Sigma roots. Family extensions supply their
+mathematics and proof method; `Generation.UniformRoot` is an optional model
+presentation helper. Root configuration selects sources, nominal model,
+installed method or direct theorem and numeric error expression. It supplies no
+occurrence paths or structural proofs. Every emitted proof and receipt must
+elaborate independently.
+
+These roots use `blsScalarModel`: the source's nominal BLS scalar/group tags are
+retained, while the groups are interpreted as additive modules over the scalar
+field. Completeness concerns the actual ideal pair under the canonical honest
+sampling experiment. It establishes neither native curve realization nor a new
+discrete-log security result. Local draws use installed producer capabilities;
+they are absent from user data inputs and from the public random-oracle cache.
 
 ## Open participants
 

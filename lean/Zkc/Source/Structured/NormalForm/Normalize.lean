@@ -27,8 +27,8 @@ operation's arity, and no step unfolds a helper body or a protocol table.
   normalizer decides `owner = role` on numerals; `RosterDistinct` makes the
   participant rules agree with that decision.
 * Refusals. Anything outside the supported fragment is refused with a named
-  reason: calculations that can stop outside a Math call, undecided guard
-  conditions, laws whose pins or shapes do not match, owned calls without a law
+  reason: calculations that can stop outside a Math call, laws whose pins or
+  shapes do not match, owned calls without a law
   when calls are not kept, applications without a callee form, and the
   shared-suffix `bind` form.
 
@@ -248,8 +248,8 @@ def Signature.keeps (sig : Signature) (helper : Helper) : Bool :=
   sig.kept.any fun key => helperMatches sig.names key helper
 
 /-- Whether the operation needs the presence of its operands at this role. A
-calculation that can stop is presented only through a law on components, and a
-kept owned call takes its operands as components, so neither demands them. -/
+Math call is presented through a law on components or its exact invocation,
+and a kept owned call takes its operands as components, so neither demands them. -/
 def demanded (sig : Signature) {Δ : Scope} (role : Nat) :
     (op : ProtocolOp) → Values (Comp sig.laws Δ) op.arguments → Bool
   | .calculate op _, operands => op.total && !anyAbsent operands
@@ -546,7 +546,18 @@ def totalCalculation (sig : Signature) {Γ : List Ty} (op : Op) (total : op.tota
     | none => .error "undecided-operand"
     | some terms => next (state.push (calculation op total terms))
 
-/-- A Math call, presented by a passing law on the operands' components. -/
+/-- Keep a Math helper's exact component invocation, including optional
+inputs and outputs, effects and stops. -/
+def exactMathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands Γ helper.inputs) {Δ : Scope}
+    (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) := do
+  let rest ← next ((state.weaken (.tuple helper.outputs)).push (readComps helper.outputs))
+  pure (.math helper (lookup state.env args) rest)
+
+/-- A Math call uses a passing law when one is supplied; otherwise it keeps
+its exact invocation on components. Closed returning and stopping laws do not
+justify a component equation, so those also use the exact invocation. -/
 def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands Γ helper.inputs) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ)
     (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
@@ -561,12 +572,11 @@ def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands
           let rest ← next (state.push passed)
           pure (.byLaw entry helper rest)
         | none => .error "law-positions"
-      | .returns _ => .error "calculation-can-stop"
-      | .stops _ => .error "calculation-can-stop"
-    | none => .error "calculation-can-stop"
+      | .returns _ | .stops _ => exactMathCall sig helper args state next
+    | none => exactMathCall sig helper args state next
   else .error "calculation-can-stop"
 
-/-- A calculation: total ones as terms, Math calls through a passing law. -/
+/-- A calculation: total ones as terms, Math calls by law or exact invocation. -/
 def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operands Γ op.arguments) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ)
     (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
@@ -695,7 +705,9 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
         | .compare equality left right => do
           let rest ← next ((state.set arg (.present (.bool true))).push .nil)
           pure (.guard equality left right rest)
-        | .unknown => .error "guard-undecided"
+        | .unknown => do
+          let rest ← next ((state.set arg (.present (.bool true))).push .nil)
+          pure (.guard .boolean condition (.bool true) rest)
       | _ => .error "undecided-operand"
   | .statement .., _, _, _, state, next => next (state.push .nil)
   | .mark _, _, _, _, state, next => next (state.push .nil)

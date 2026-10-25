@@ -9,6 +9,10 @@ transports that contract to a property's conclusion under its stated assumptions
 a proved preservation law. Property conjunction combines conclusions and their
 assumptions; it never invents independent randomness or multiplies error bounds.
 
+The [checked component architecture](spec/components.md) connects generated full-process
+bindings to both honest completeness and adversarial reductions. Its canonical
+claim authority fixes the experiment before either proof method is selected.
+
 ## Package boundaries
 
 `Zkc.Semantics` defines effects, execution, refinement and continuation laws.
@@ -60,15 +64,104 @@ checked lowering rule from the constructed validator
 ([executable stage](spec/executable.md)). It depends on `Zkc.Construction`; no
 construction module depends on it.
 
-`Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
-It may use generic source semantics; source semantics may not import protocols.
-`ZkcExamples.NativePrograms` owns particular native exports and correspondence
-proofs; the library is named `ZkcExamples` so that it cannot collide with an
-upstream package's `Examples` library. `ZkcSecurity` owns optional external consumers and connection laws;
-its generic adapters do not import particular source examples. Its `Examples`
-subtree instantiates those consumers. `ZkcClean` remains a separate relation
-adapter. Module-header checks and declaration dependency audits enforce these
-boundaries, including proof bodies and generated/private declarations.
+`Zkc.Protocols` owns deterministic mathematics, execution and reusable verifier
+contracts. Adaptive tapes, causal equivalences and observation fibers live in
+`Zkc.Semantics`; their existing declaration namespaces remain available.
+Pointwise Sumcheck completeness retains its `CommSemiring` assumptions.
+`ZkcExamples` owns deterministic source clients.
+
+| Package directory | Package name | Library and test module roots | Dependencies |
+|---|---|---|---|
+| `lean/` | `zkc` | `Zkc`, `ZkcExamples`, `ZkcTools`, `Tests` | Mathlib |
+| `lean/security/` | `zkc_security` | `ZkcSecurity`, `TestsSecurity` | Core, VCVio, PolyFun, CompPoly, Mathlib |
+| `lean/integrations/arklib/` | `zkc_arklib` | `ZkcArkLib`, `TestsArkLib` | Core, security, ArkLib and coherent shared pins |
+| `lean/integrations/clean/` | `zkc_clean` | `ZkcClean`, `TestsClean`, `CleanExamples` | Core, Clean and coherent shared algebra pins |
+
+Library roots and globs are disjoint across packages, including module names
+without a source file. Module paths express ownership; declaration namespaces
+and theorem names are retained independently. Core has no forwarding imports of
+security. `checks/check_package_ownership.py` checks actual Lake resolution.
+
+`ZkcSecurity.Probability.UniformTape` owns uniform finite-tape expectation.
+`ZkcSecurity.Families.Sumcheck` owns quantitative verifier, source, common,
+committed and factor-opening results. Their deterministic counterparts remain
+in core, including full execution contracts, arbitrary causal strategies,
+states, events and stopped prefixes. No quantitative bound or malformed-input
+case is changed by the partition.
+
+Reusable VCVio execution, Sigma composition, Schnorr-family mathematics,
+Fiat–Shamir and commitment machinery belong to security. VCVio's upstream
+`Examples.Schnorr.SigmaProtocol` and `ToMathlib` modules are classified by their
+actual provider. `ZkcSecurity.Commitment.Opening` owns the reusable one-opening
+family, with its original declaration namespace; `HashChain.JointOpening`
+imports this library module. Four Sigma subjects live under security's
+`Examples.Subjects`. ArkLib Sumcheck, causal Sumcheck, FRI, GKR,
+`FiatShamir.Upstream` and the Guess/Sumcheck subjects live under `ZkcArkLib`.
+All examples and tests remain default targets of their owning package.
+
+`ZkcSecurity.Registry` contains generic schemas and endpoints.
+`ZkcArkLib.Registry` contains optional schemas. Its `reportTable` and `reportEndpoints` provide the combined
+generic and optional context when emitting declaration details; the owning entry
+lists remain disjoint. Record readers combine compatible
+entries and reject identifier or endpoint collisions. Neither registry imports
+subjects into a reusable library; package audits validate the named schemas in
+the environment containing the actual providers.
+
+## Dependency policy and retained exceptions
+
+The allowed-edge table in `ZkcTools/DeclarationAudit.lean` is shared data for
+`checks/check_library.py` and the Lean declaration audit. The source audit
+uses Lean's header parser and checks transitive imports; the declaration audit
+checks actual type and proof-body references, including private and generated
+declarations. During elaboration, the shared JSON literal becomes ordinary Lean
+data with typed module names; the policy remains reducible by the kernel. Both cover `CleanExamples` as well as all selected packages' library
+and test modules. Prefixes classify responsibilities during migration; they do
+classify dependencies independently of declaration namespaces.
+
+| Owner layer | Allowed repository layers |
+|---|---|
+| Core language/compiler | Core |
+| Probability foundation | Core, probability |
+| Deterministic families | Core, deterministic families |
+| General security | Core, deterministic families, probability, general security, security families |
+| Security families | Core, probability, deterministic families, general security, security families |
+| External security adapters | The preceding layers and other adapters |
+| Clean adapter | Core, deterministic families, Clean |
+| Subject evidence/examples | Their upstream libraries and other subjects |
+| Tests/tooling | Any repository layer |
+
+`ZkcSecurity.Realizations` owns reusable laws for concrete source implementations.
+For example, its Sumcheck helper laws accept checked body-membership evidence
+for any admitted program containing the installed library bodies. These are
+source-bound realizations, so the dependency audit assigns them the same
+boundary as subject evidence; general security and family mathematics cannot
+import them. Moving them out of `Examples` introduces no new allowed edge or
+exception. Existing underlying source-library templates remain in `ZkcExamples`
+until their separately planned migration.
+
+Mathlib/Lean foundations are available throughout; VCVio and PolyFun
+belong to generic security, ArkLib to its optional package, Clean to the Clean
+package, and CompPoly is available to the packages that require it. More specific guards preserve generic
+execution's independence from protocols/ArkLib, causal Sumcheck's independence
+from source syntax, source's independence from compiler code, and probability's
+independence from source/compiler code.
+
+Legacy violations are exact module pairs grouped by the rule they break, with
+a reason for each group. A reachable-pair exception does not authorize a new
+direct import: the table also records which pairs were direct. A new violation,
+a new direct edge, a removed owner, or an exception whose edge no longer exists
+fails the source audit. Remove obsolete entries when the corresponding module
+moves or dependency disappears. An optional package not selected for a run is
+not declared stale. The Lean audit accepts the same exact pairs but does not
+check list freshness, because a client audit may select only one module.
+
+The only retained exception is `CleanExamples` importing `TestsClean.NativeClients`.
+The former family-to-probability, generic-security-to-adapter and
+`JointOpening`-to-example exceptions have been removed. ArkLib upstream is a
+separate policy layer from VCVio/PolyFun upstream. In addition to header and
+stored-declaration checks, `check_library.py` validates exact path providers,
+coherent pins, complete default targets and package closure: core excludes
+security ecosystems, and generic security excludes ArkLib and Clean.
 
 ## Structured proof construction
 

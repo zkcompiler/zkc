@@ -286,13 +286,13 @@ theorem ClosedProjection.denote_present {inputs outputs}
       (target.denote (Evaluation.meaning (observedSites F G) tables.closed) env).bind
         fun results => .done results.present := by
   induction projection with
-  | ret refs => simp only [Region.denote, Operands.eval_present, PIR.Proc.bind]
+  | ret refs => simp only [Region.denote, Operands.eval_present, PIR.Process.bind]
   | calculate op allowed closedValues args next ih =>
     change (protocolOperation tables 0 (.calculate op allowed)
       (args.eval (fun ref => some (env ref))) .nil).bind _ = _
     rw [show args.eval (fun ref => some (env ref)) = (args.eval env).present from
       Operands.eval_present env args, calculation_present tables adequate]
-    simp only [Region.denote, PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present]
+    simp only [Region.denote, PIR.Process.bind_assoc, PIR.Process.bind, Environment.prepend_present]
     congr 1
     funext values
     exact ih _
@@ -301,7 +301,7 @@ theorem ClosedProjection.denote_present {inputs outputs}
       (args.eval (fun ref => some (env ref)))).bind _ = _
     rw [show args.eval (fun ref => some (env ref)) = (args.eval env).present from
       Operands.eval_present env args, Participant.owned_present]
-    simp only [Region.denote, PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present]
+    simp only [Region.denote, PIR.Process.bind_assoc, PIR.Process.bind, Environment.prepend_present]
     change (invoke tables.closed helper (args.eval env)).bind _ =
       (invoke tables.closed helper (args.eval env)).bind _
     congr 1
@@ -319,19 +319,19 @@ theorem ClosedProjection.denote_present {inputs outputs}
       (args.eval (fun ref => some (env ref))) .nil).bind _ = _
     rw [show args.eval (fun ref => some (env ref)) = (args.eval env).present from
       Operands.eval_present env args, operation]
-    simp only [Region.denote, PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present]
+    simp only [Region.denote, PIR.Process.bind_assoc, PIR.Process.bind, Environment.prepend_present]
     congr 1
     funext values
     exact ih _
   | mark site args next ih =>
     cases args
     simp only [Region.denote, participantMeaning, participantMeaningWith, protocolOperationWith, Evaluation.meaning,
-      Evaluation.operation, observedSites, Operands.eval, Regions.denote, PIR.Proc.bind, Environment.prepend, qualify_root]
+      Evaluation.operation, observedSites, Operands.eval, Regions.denote, PIR.Process.bind, Environment.prepend, qualify_root]
     congr 1
     funext reply
     exact ih _
   | bind body next bodyIH nextIH =>
-    simp only [Region.denote, bodyIH, PIR.Proc.bind_assoc, PIR.Proc.bind,
+    simp only [Region.denote, bodyIH, PIR.Process.bind_assoc, PIR.Process.bind,
       Environment.prepend_present, nextIH]
 
 /-- A complete one-role port scope preserves every ordered component. -/
@@ -364,8 +364,8 @@ theorem ClosedProgram.observed_projected (program : ClosedProgram)
   simp only [ProtocolContext.mapScopes_root]
   rw [program.root_projection.protocol_table_independent _ _ [], inputScopes, maskValues_single_role, env,
     program.root_projection.denote_present _ program.subject.payload.tables_adequate,
-    PIR.Proc.bind_assoc]
-  simp only [PIR.Proc.bind, outputScopes, maskValues_single_role]
+    PIR.Process.bind_assoc]
+  simp only [PIR.Process.bind, outputScopes, maskValues_single_role]
 
 /-- Forgetting internal site marks commutes with the checked projection equation.
 This retains every participant action and stop; no provider policy is assumed. -/
@@ -376,7 +376,7 @@ theorem ClosedProgram.participant_projected (program : ClosedProgram)
         (Evaluation.meaning (observedSites F G) (program.subject.payload.tables F G).closed)
         args.get).interpret forgetSites).bind fun results => .done results.present := by
   rw [Program.participant, program.observed_projected args,
-    PIR.Proc.interpret_bind]
+    PIR.Process.interpret_bind]
   rfl
 
 /-- Input transport uses the exact checked port equality, with no value conversion. -/
@@ -398,7 +398,7 @@ private theorem denote_port_transport {I : PIR.Signature} {inputs outputs ins ou
         fun results => .done (outputEq ▸ results) := by
   cases inputEq
   cases outputEq
-  exact (PIR.Proc.bind_done _).symm
+  exact (PIR.Process.bind_done _).symm
 
 theorem ClosedProgram.projectedBody_denote (program : ClosedProgram)
     (args : Values (assignment F G) program.subject.payload.entry.inputs) :
@@ -429,8 +429,8 @@ theorem ClosedProgram.participant_eq_denote (program : ClosedProgram)
     (closedLift (I := participantInterface F G)) SiteObservations.closed_interpret
     program.payload (program.closedInputs args)
   rw [program.participant_projected args,
-    program.projectedBody_denote args, PIR.Proc.interpret_bind, erased, ← lifted,
-    PIR.Proc.bind_assoc]
+    program.projectedBody_denote args, PIR.Process.interpret_bind, erased, ← lifted,
+    PIR.Process.bind_assoc]
   rfl
 
 end Zkc.Source.Structured

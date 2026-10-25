@@ -42,7 +42,7 @@ bool primitiveContract(StringRef contract) {
                           "index.mul", "index.div", "index.mod", "index.equal",
                           "index.less", "vector.empty", "vector.length",
                           "vector.sum", "vector.split", "vector.append",
-                          "vector.equal", "field.equal"},
+                          "vector.equal", "field.equal", "field.embed"},
       contract);
 }
 

@@ -1,29 +1,25 @@
-"""Select the native protocol subject of a one-call source Entry function.
+"""Export an explicitly selected closed protocol subject.
 
-These bridges compare protocol execution, not the enclosing application. Compile
-its current package and retain the exact native Run child's source and interface.
-This helper accepts no alternate carrier or source syntax.
+The compiler owns name resolution and static argument checking. A subject is
+independent of any Host Entry that invokes it; no wrapper correspondence or
+execution count is inferred from a deployment inventory.
 """
 
 import hashlib
 import json
 
 
-def native_run(execute, compiler, flags):
-    """Return authenticated source bytes and interface of exactly one Run child."""
-    package = json.loads(execute([compiler, 'language-package', *flags]))
-    assert package['format'] == 'zkc.entry/0'
-    selection = json.loads(package['interface'])
-    assert selection['selection']['kind'] == 'function'
-    host = json.loads(package['artifact'])
-    assert host['format'] == 'zkc.host/0'
-    assert len(host['deployments']) == 1, 'bridge requires exactly one native invocation'
-    deployment, = host['deployments']
-    assert deployment['operation'] == 'run'
-    child = json.loads(deployment['package'])
-    assert child['format'] == 'zkc.entry/0'
-    interface = json.loads(child['interface'])
-    assert interface['job']['kind'] == 'run'
-    source = child['original']
-    assert interface['original'] == hashlib.sha256(source.encode()).hexdigest()
-    return source, interface
+def native_subject(execute, compiler, flags):
+    """Return original bytes, exact CLI interface bytes, and its parsed view."""
+    if sum(flag.startswith('--subject=') for flag in flags) != 1 or any(
+            flag.startswith(('--entry=', '--entry-kind=')) for flag in flags):
+        raise ValueError('a protocol bridge requires one explicit --subject')
+    source = execute([compiler, 'language-emit', *flags])
+    interface_text = execute([compiler, 'language-interface', *flags])
+    interface = json.loads(interface_text)
+    if (interface.get('format') != 'zkc.language-interface/0'
+            or interface.get('job', {}).get('kind') != 'run'):
+        raise ValueError('the selected subject is not an interactive protocol')
+    if interface['original'] != hashlib.sha256(source.encode()).hexdigest():
+        raise ValueError('subject source and interface identities disagree')
+    return source, interface_text, interface

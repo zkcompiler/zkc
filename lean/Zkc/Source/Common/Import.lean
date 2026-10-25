@@ -122,7 +122,7 @@ theorem inputScopes_get (snapshot : Snapshot)
 def Imported.denote (imported : Imported) (meaning : Mathematical.Meaning language)
     (condition : meaning.Value .boolean → Bool) (self : Nat)
     (inputs : Values (fun ty => Option (meaning.Value ty)) imported.snapshot.inputs) :
-    PIR.Proc (Participant.interface Nat Ty services meaning.Value) (Option (meaning.Value imported.snapshot.result)) :=
+    PIR.Process (Participant.interface Nat Ty services meaning.Value) (Option (meaning.Value imported.snapshot.result)) :=
   (imported.program.denote meaning condition self inputs.get).bind fun value =>
     .done (Participant.restrict (decide (self ∈ imported.snapshot.outputRoles)) value)
 

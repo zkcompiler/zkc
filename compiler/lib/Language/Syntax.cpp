@@ -83,7 +83,7 @@ Error lex(const SourceBuffer &source, SourceId sourceId, Work &work,
                                    (c == '|' && text[offset] == '|') ||
                                    (c == '.' && text[offset] == '.')))
         ++offset;
-      else if (!StringRef(";,:(){}@=+-*<>[]!.#").contains(c))
+      else if (!StringRef(";,:(){}@=+-*/^<>[]!.#").contains(c))
         return failure("source.token", "unsupported source character",
                        Span{sourceId, uint32_t(begin), uint32_t(offset)});
     }
@@ -236,6 +236,12 @@ public:
           break;
         }
         output.imports.push_back(std::move(import));
+      } else if (at("spec")) {
+        if (!claimBlock(output, false))
+          break;
+      } else if (at("verify")) {
+        if (!verification(output))
+          break;
       } else if (operatorHeader() || (at("pub") && operatorHeader(1))) {
         auto binding = operatorBinding();
         if (!binding)
@@ -1087,6 +1093,182 @@ private:
     value.span.end = previousEnd;
     return true;
   }
+  bool claimWord(std::string &value) {
+    if (current().kind != TokenKind::Word)
+      return fail("source.claim.syntax", "expected a claim identifier");
+    value = text().str();
+    advance();
+    return true;
+  }
+  bool claimExpression(ClaimExpression &value, unsigned depth = 1,
+                       unsigned minimum = 0) {
+    if (depth > work.limits.expressionDepth ||
+        !accept(work.charge(1, current().span)))
+      return diagnostic ? false
+                        : fail("source.limit", "claim expression depth");
+    value.span = current().span;
+    using K = ClaimExpression::Kind;
+    if (take("-")) {
+      value.kind = K::Unary;
+      value.text = "-";
+      value.arguments.emplace_back();
+      if (!claimExpression(value.arguments.back(), depth + 1, 40))
+        return false;
+    } else if (take("(")) {
+      if (!claimExpression(value, depth + 1) || !expect(")"))
+        return false;
+    } else if (take("[")) {
+      value.kind = K::List;
+      if (!at("]"))
+        do {
+          value.arguments.emplace_back();
+          if (!claimExpression(value.arguments.back(), depth + 1))
+            return false;
+        } while (take(",") && !at("]"));
+      if (!expect("]"))
+        return false;
+    } else if (current().kind == TokenKind::Decimal) {
+      value.kind = K::Natural;
+      value.text = text().str();
+      if (value.text.size() > 1 && value.text.front() == '0')
+        return fail("source.claim.syntax", "noncanonical claim natural");
+      advance();
+    } else {
+      value.kind = K::Reference;
+      if (!claimWord(value.text))
+        return false;
+      while (take(".") || take("::")) {
+        auto separator = StringRef(source.text)
+                             .slice(tokens[cursor - 1].span.begin, previousEnd);
+        std::string part;
+        if (value.text.rfind("out.", 0) == 0 &&
+            current().kind == TokenKind::Decimal) {
+          part = text().str();
+          if (part.size() > 1 && part.front() == '0')
+            return fail("source.claim.syntax", "noncanonical projection index");
+          advance();
+        } else if (!claimWord(part))
+          return false;
+        value.text += separator.str() + part;
+        if (value.text.size() > work.limits.symbolBytes)
+          return fail("source.limit", "claim path byte limit exceeded");
+      }
+      if (take("@")) {
+        uint32_t version;
+        if (current().kind != TokenKind::Decimal ||
+            (text().size() > 1 && text().front() == '0') ||
+            text().getAsInteger(10, version))
+          return fail("source.claim.syntax",
+                      "expected uint32 registry version");
+        value.version = version;
+        advance();
+      }
+      if (take("(")) {
+        value.kind = K::Application;
+        std::set<std::string> names;
+        bool namedArgument = false;
+        if (!at(")"))
+          do {
+            std::string label;
+            if (current().kind == TokenKind::Word && look(1) == "=") {
+              if (!claimWord(label) || !expect("="))
+                return false;
+              if (!names.insert(label).second)
+                return fail("source.claim.duplicate-field",
+                            "duplicate claim argument");
+              namedArgument = true;
+            } else if (namedArgument)
+              return fail("source.claim.syntax",
+                          "positional argument follows named argument");
+            value.labels.push_back(std::move(label));
+            value.arguments.emplace_back();
+            if (!claimExpression(value.arguments.back(), depth + 1))
+              return false;
+          } while (take(",") && !at(")"));
+        if (!expect(")"))
+          return false;
+      } else if (value.version)
+        return fail("source.claim.syntax",
+                    "versioned identifier requires an application");
+    }
+    value.span.end = previousEnd;
+    while (true) {
+      unsigned precedence = at("+") || at("-")   ? 10
+                            : at("*") || at("/") ? 20
+                            : at("^")            ? 30
+                                                 : 0;
+      if (!precedence || precedence < minimum)
+        break;
+      ClaimExpression binary;
+      binary.kind = K::Binary;
+      binary.text = text().str();
+      binary.span = value.span;
+      advance();
+      binary.arguments.push_back(std::move(value));
+      binary.arguments.emplace_back();
+      if (!claimExpression(binary.arguments.back(), depth + 1, precedence + 1))
+        return false;
+      binary.span.end = previousEnd;
+      value = std::move(binary);
+      if (++depth > work.limits.expressionDepth)
+        return fail("source.limit", "claim expression depth exceeded");
+    }
+    return true;
+  }
+  bool claimBlock(SyntaxDeclaration &owner, bool inEntry) {
+    SyntaxSourceClaimBlock syntax;
+    auto &block = syntax.value;
+    block.span = current().span;
+    if (!expect("spec"))
+      return false;
+    if (inEntry) {
+      block.name = owner.name;
+      block.entry = owner.name;
+      syntax.subject.name = owner.name;
+      syntax.subject.span = block.span;
+    } else {
+      if (!name(block.name) || !expect("for") || !type(syntax.subject))
+        return false;
+      if (syntax.subject.kind != SyntaxType::Kind::Name)
+        return fail("source.claim.subject", "expected a named closed subject");
+      block.entry = syntax.subject.name;
+    }
+    if (!expect("{"))
+      return false;
+    std::set<std::string> labels;
+    while (!at("}") && !atEnd()) {
+      SourceClaim claim;
+      claim.span = current().span;
+      if (!name(claim.label))
+        return false;
+      if (!labels.insert(claim.label).second)
+        return fail("source.claim.duplicate-label",
+                    "duplicate source claim label");
+      if (!expect(":") || !claimExpression(claim.property) || !expect(";"))
+        return false;
+      claim.span.end = previousEnd;
+      if (!accept(work.count(work.operations, work.limits.operations,
+                             "claim count", claim.span)))
+        return false;
+      block.claims.push_back(std::move(claim));
+    }
+    if (!expect("}"))
+      return false;
+    block.span.end = previousEnd;
+    owner.sourceClaims.push_back(std::move(syntax));
+    return true;
+  }
+  bool verification(SyntaxDeclaration &owner) {
+    SourceVerification plan;
+    plan.span = current().span;
+    if (!expect("verify") || !name(plan.block) || !expect(".") ||
+        !name(plan.label) || !expect("=") || !claimExpression(plan.method) ||
+        !expect(";"))
+      return false;
+    plan.span.end = previousEnd;
+    owner.sourceVerifications.push_back(std::move(plan));
+    return true;
+  }
   bool specifications(SyntaxDeclaration &d) {
     if (!at("spec"))
       return true;
@@ -1560,6 +1742,8 @@ private:
       d.targetLabels = std::move(target.labels);
       if (at("{")) {
         if (!entryChoices(d))
+          return {};
+        if (at("spec") && look(1) == "{" && !claimBlock(d, true))
           return {};
       } else if (!expect(";"))
         return {};

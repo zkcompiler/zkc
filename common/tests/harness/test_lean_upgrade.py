@@ -41,12 +41,14 @@ def test_duplicate_requirement_is_not_silently_selected(tmp_path):
 @pytest.mark.parametrize("defect", [None, "missing", "mathlib", "Arklib", "Clean", "shared", "url", "toolchain"])
 def test_resolution_checks_all_packages_and_shared_dependencies(tmp_path, monkeypatch, defect):
     upgrade = load("lean_upgrade", "scripts/update-lean-pins.py")
-    main, arklib, clean = (tmp_path / name for name in ("main", "arklib", "clean"))
+    main, security, arklib, clean = (tmp_path / name for name in ("main", "security", "arklib", "clean"))
     monkeypatch.setattr(upgrade, "MAIN", main)
+    monkeypatch.setattr(upgrade, "SECURITY", main / "security")
     monkeypatch.setattr(upgrade, "INTEGRATIONS", {"Arklib": arklib, "Clean": clean})
+    monkeypatch.setattr(upgrade, "SECURITY", security)
     toolchain = "leanprover/lean4:v4.34.1"
     selected = {"mathlib": OLD, "Arklib": NEW, "Clean": NEW}
-    for directory, name in [(main, "mathlib"), (arklib, "Arklib"), (clean, "Clean")]:
+    for directory, name in [(main, "mathlib"), (security, "mathlib"), (arklib, "Arklib"), (clean, "Clean")]:
         directory.mkdir()
         (directory / "lean-toolchain").write_text(toolchain)
         revisions = {"mathlib": OLD, "batteries": OLD, name: selected[name]}
@@ -93,7 +95,7 @@ def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(tmp_path,
     main = tmp_path / "lean"
     integrations = {name: main / "integrations" / name.lower() for name in ("Arklib", "Clean")}
     toolchain = "leanprover/lean4:v4.34.1"
-    packages = {"mathlib": main, **integrations}
+    packages = {"mathlib": main, "security": main / "security", **integrations}
     for name, directory in packages.items():
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "lakefile.toml").write_text(
@@ -103,6 +105,7 @@ def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(tmp_path,
                 file.write(f'\n[[require]]\nname = "mathlib"\ngit = "https://example.invalid/mathlib"\nrev = "{OLD}"\n')
     monkeypatch.setattr(upgrade, "ROOT", tmp_path)
     monkeypatch.setattr(upgrade, "MAIN", main)
+    monkeypatch.setattr(upgrade, "SECURITY", main / "security")
     monkeypatch.setattr(upgrade, "INTEGRATIONS", integrations)
     monkeypatch.setattr(upgrade, "upstream_toolchain", lambda *_: toolchain)
     monkeypatch.setattr(upgrade, "lean_archive_hash", lambda _: "selected-hash")
@@ -145,6 +148,7 @@ def test_update_detaches_cache_links_without_modifying_shared_sources(tmp_path, 
     (packages / "missing").symlink_to(tmp_path / "absent")
     (packages / "owned").mkdir()
     monkeypatch.setattr(upgrade, "INTEGRATIONS", {"Arklib": integration})
+    monkeypatch.setattr(upgrade, "SECURITY", tmp_path / "security")
     upgrade.detach_dependency_links()
     assert (source / "source.lean").read_text() == "-- shared source\n"
     assert sorted(path.name for path in packages.iterdir()) == ["owned"]

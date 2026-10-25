@@ -197,14 +197,14 @@ prime field and for an extension alike. No rule assumes a characteristic: a
 characteristic-two prime field and an extension field without `PrimeField` are
 well-formed rows.
 
-`Catalogue.agrees` requires every exported row to equal the environment's row
-for its identity. The importer's environment is `admittedCatalogue`: the
-BLS12-381 scalar field `bls12-381.fr` with its pairing groups `bls12-381.g1`,
-`bls12-381.g2` and `bls12-381.gt`, and the service `random.bls12-381.fr/0`. The
-environment also lists the admitted sort instances: field and vector over
-`bls12-381.fr`, group over `bls12-381.g1` and that service. Every stored type,
-in all signatures, results, selected types and region signatures including
-dormant bodies, names exported rows of its sort and is an admitted instance.
+`Catalogue.agrees` requires every exported row to equal the installed row for
+its identity. `admittedCatalogue` combines `blsCatalogue` and
+`koalaBearCatalogue`: BLS12-381 scalar/group/service rows, KoalaBear, and its
+`koala-bear.ext8-binomial3` extension and random service. The installed instances
+include BLS scalar/vector/G1 and KoalaBear base/extension scalar/vector types.
+Every stored type, including dormant signatures and region results, must name
+an exported row of its sort and an installed instance. Installing a row does
+not prove its arithmetic, sampler or native implementation correct.
 
 Operations require facts of their rows. Field arithmetic, constants and
 equality require `Field`, and a constant is below the field's modulus. Group
@@ -224,7 +224,7 @@ services.
 
 `Catalogue.Justified` states the data facts that meanings rely on: the modulus
 of a field row is prime, and the modulus of a `CharacteristicNotTwo` row is not
-two. `blsCatalogue_justified` proves it for the environment, with the
+two. `blsCatalogue_justified` proves it for the BLS subcatalogue, with the
 BLS12-381 scalar modulus prime by a Lucas certificate whose modular powers the
 kernel evaluates (`blsModulus_prime`).
 
@@ -278,7 +278,17 @@ catalogue rows that admission checks.
 The evaluator over models (`Primitive.evaluateOn`, `Evaluation.operationOn`,
 `Evaluation.meaningOn`) gives each field operation the ring of its own field
 identity, each group operation the group of its own group identity and scaling
-the model's action of the named field on the named group. Helper tables,
+the model's action of the named field on the named group. The nominal operation
+`Op.fieldEmbed extension base` takes `[.field base]` to `[.field extension]`
+and applies `model.embed extension base`. Its direct descriptor is
+`["field.embed", extension, base]`. Admission calls `Catalogue.requireEmbedding`:
+the extension must have `ExtensionField` and `Field`, the base must have `Field`,
+the extension's `BaseField` member must name that exact base, and both rows must
+carry the same present modulus. Algebraic embedding laws remain separate from
+these checks. The operation is total in the operational model; normal forms
+retain its application even to a literal, without assuming a law about `embed`.
+The uniform model interprets the operation by the identity of `F`, as specified
+by its own embedding function. Helper tables,
 component tables (`ComponentTablesOn`), the participant interface and site
 observations (`participantInterfaceOn`, `ObservedActionOn`), protocol
 operations, retained repeats, protocol tables and participant views
@@ -317,7 +327,7 @@ uniform model over the BLS12-381 scalar field with its computable inverse.
 between lookup and body denotation for every actual argument tuple. It applies
 to the shared scalar/group evaluator, any effect interface and site observations.
 Binding retains ordered helper results above the caller environment. Equality
-concerns the complete `PIR.Proc`: a stopping body bypasses the suffix, and a
+concerns the complete `PIR.Process`: a stopping body bypasses the suffix, and a
 returning body runs that same suffix, including its stops. Empty result lists
 are supported. The premise is a process equation, not a totality assumption.
 The closed `Structured.inline_invoke` wrapper and `Payload.inline_body_view`
@@ -364,6 +374,16 @@ for `vector.equal`.
 | `vector_append` | `vector.append` | V, F | V |
 | `vector_equal` | `vector.equal` | V, V | B |
 | `field_equal` | `field.equal` | F, F | B |
+| `field_embed` | `field.embed` | field:base | field:extension |
+
+For `field.embed`, the sole binding argument is the extension identity. Its
+`BaseField` member selects the base, and `Catalogue.requireEmbedding` validates
+the pair, including for unused bindings. The Local `exec` descriptor lowers to
+`Op.fieldEmbed`, preserving the source observation site through the usual
+lowering. No additional primitive interpreter or wire record is introduced.
+`Construction.Calculation.fieldEmbed` maps to this same operation; constructed
+participant rendering recognizes the exact `algebra.exec.field_embed` binding
+and ordered base/extension ports.
 
 Index values are `Nat` with explicit `value < 2^64` conditions. Exec checks
 both index operands, including comparisons. Add/multiply overflow, subtraction
@@ -452,7 +472,7 @@ Math call or return. Nested Math helpers may return zero or multiple Fr scalars;
 the one-result condition applies only to the map root. Equality, selection,
 index/group operations and other fields are excluded even when unused.
 
-Both preparations use the typed `Source.Region`, `PIR.Proc` and the Math
+Both preparations use the typed `Source.Region`, `PIR.Process` and the Math
 helper table. A realization derives one `Op.invoke` with positional operands,
 followed by positional returns. A map derives one typed `Op.map` and return of
 its sole result. `MapSpec` retains the helper name, field and ordered mask; its
@@ -678,7 +698,7 @@ handler state reached at that stop; later iterations and the outer suffix do
 not execute. Zero results do not erase callback effects or stopping. Shifted
 residual iteration uses `List.range' start count` after the original count has
 been admitted, with no reset of the induction index or renewed count check.
-Interpretation and framing use the finite execution and `PIR.Proc`
+Interpretation and framing use the finite execution and `PIR.Process`
 laws. Erasing internal marks preserves the process equation while action labels
 remain externally visible.
 
@@ -749,12 +769,23 @@ relation binding or security assumption.
 body by symbolic evaluation under the participant rules above. A form lists the
 role's ordered sends, receives and queries; presence splits on an optional
 input or on a component of a returned tuple, where an operation first needs it;
-guards on decided equalities; kept helper invocations and helper laws; repeats
+guards on equalities, including arbitrary Boolean conditions compared with
+`true`; exact Math invocations on optional components; kept helper invocations
+and helper laws; repeats
 of callback regions; and callee applications at child contexts. It ends in
 returned components or a stop. Every step is structural, and a body outside the
 fragment is refused with a named reason. A form is indexed by a signature: the
 helper laws it may use, keyed by the helper's sorts and pinned to inputs or
 literals, and the callee forms it may apply, keyed by callee signature and role.
+
+A Math call can use a checked passing law on components. Otherwise `Form.math`
+invokes the exact component helper table and binds its optional output tuple.
+It neither sequences all operands before the call nor infers a law from the
+helper's name. A closed returning or stopping law is insufficient to replace
+this component invocation. Absent inputs, ignored inputs, stops and events
+therefore follow the existing component meaning. An arbitrary present Boolean
+guard uses `Equality.boolean`; false rejects and an absent condition stops as
+incomplete. No premise asserts that a helper result or received Boolean is true.
 
 `NormalForm.normalize_sound` states that when normalization returns a form
 whose law uses call their laws' own helpers (`CallsMatch`), the body's

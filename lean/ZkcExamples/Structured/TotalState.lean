@@ -103,14 +103,14 @@ private theorem process_fold (xs : List F) (a b : F) :
     set_option smartUnfolding true in
       simp only [mainBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
         Values.get, Evaluation.meaning, Evaluation.operation,
-        SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind, Environment.prepend]
+        SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Environment.prepend]
     trans (Evaluation.denoteFold (table F G) foldSpec (inputs xs a b)).bind .done
     · congr 1
       funext result
       cases result with
       | cons a rest => cases rest with
         | cons b rest => cases rest; rfl
-    · exact PIR.Proc.bind_done _
+    · exact PIR.Process.bind_done _
   exact (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
     program.payload mainBody (by rfl) (inputs xs a b)).trans bodyLaw
 
@@ -185,7 +185,7 @@ theorem process_eq_reference (xs : List F) (a b : F)
       (fun state x => outputs (G := G) (state.get (.there .here)) x) (outputs a b))
     (range_reads xs 0)
   rw [List.foldl_map] at enumeration
-  exact congrArg PIR.Proc.done (enumeration.trans (values_fold xs a b))
+  exact congrArg PIR.Process.done (enumeration.trans (values_fold xs a b))
 
 /-- Unrepresentable domain lengths exhaust before any callback. -/
 theorem process_exhausted (xs : List F) (a b : F)

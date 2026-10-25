@@ -98,7 +98,7 @@ theorem holds_iff_predicate (interpretation : RelationInterpretation imported re
     let := decidablePredicate
     constructor
     · intro same
-      have values := PIR.Proc.done.inj same
+      have values := PIR.Process.done.inj same
       have uncast := congrArg (fun value => booleanOutput ▸ value) values
       have cancel {types : List Ty} (eq : types = [.boolean])
           (values : Values (assignment F G) [.boolean]) : eq ▸ (eq.symm ▸ values) = values := by

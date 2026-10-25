@@ -5,7 +5,7 @@ name = "okamoto"
 modules = { okamoto = "lean/bridges/structured/fixtures/okamoto.zkc" }
 
 [entries]
-interactive = "okamoto::Interactive"
+interactive = "okamoto::Okamoto<okamoto::G1>"
 instantiation = "Okamoto<G1>"
 
 [profiles]

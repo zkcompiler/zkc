@@ -111,7 +111,7 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, Primitive.evaluate, pointBound, ite_true, primitiveOutcome,
+    PIR.Process.bind, Primitive.evaluate, pointBound, ite_true, primitiveOutcome,
     show 1 < indexLimit by decide +kernel, ← List.sum_eq_foldl]
   congr 1
   funext constructed
@@ -139,13 +139,13 @@ theorem evaluate_generic_body (table : Meanings F G) (laws : MapPrefixContracts.
   rw [evaluate_expansion table xs point pointBound,
     laws.tableLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
   by_cases shape : HasShape xs point.length 1
-  · simp only [shape, ite_true, PIR.Proc.bind]
+  · simp only [shape, ite_true, PIR.Process.bind]
     change (invoke table prefixHelper (prefixInputs xs point.length 1 point)).bind _ = _
     rw [laws.fixPrefix xs point.length 1 point shape vectorBound pointBound]
-    simp only [Nat.le_refl, ite_true, Nat.sub_self, PIR.Proc.bind]
+    simp only [Nat.le_refl, ite_true, Nat.sub_self, PIR.Process.bind]
     rw [laws.values]
     rfl
-  · simp only [shape, ite_false, PIR.Proc.bind]
+  · simp only [shape, ite_false, PIR.Process.bind]
 
 theorem evaluate_equation (xs point : List F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
@@ -199,7 +199,7 @@ theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : Li
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, Primitive.evaluate, checkedIndices, gateBound, leftBound, rightBound, pairBound,
+    PIR.Process.bind, Primitive.evaluate, checkedIndices, gateBound, leftBound, rightBound, pairBound,
     sumBound, and_self, ite_true, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     ← List.sum_eq_foldl]
   congr 1
@@ -254,11 +254,11 @@ theorem evaluateWiring_equation (xs gate left right : List F)
     laws.tableLaw xs _ 1 vectorBound bound (by decide +kernel)]
   have tableShape : HasShape xs (gate.length + left.length + right.length) 1 :=
     ⟨by decide, small, Nat.mod_one _, by rw [Nat.div_one, shape]⟩
-  simp only [tableShape, ite_true, PIR.Proc.bind]
+  simp only [tableShape, ite_true, PIR.Process.bind]
   change (invoke _ prefixHelper (prefixInputs xs (gate.length + left.length + right.length) 1 gate)).bind _ = _
   rw [laws.fixPrefix xs _ 1 gate tableShape vectorBound (by omega)]
   simp only [show gate.length ≤ gate.length + left.length + right.length by omega, ite_true,
-    PIR.Proc.bind]
+    PIR.Process.bind]
   have firstLength : (restrictPrefixValues xs gate).length = 2 ^ (left.length + right.length) := by
     apply restrictPrefixValues_length
     rw [shape]; congr 1; omega
@@ -277,7 +277,7 @@ theorem evaluateWiring_equation (xs gate left right : List F)
     (gate.length + left.length + right.length - gate.length) 1 left)).bind _ = _
   rw [laws.fixPrefix _ _ 1 left firstShape firstBound (by omega)]
   simp only [show left.length ≤ gate.length + left.length + right.length - gate.length by omega,
-    ite_true, PIR.Proc.bind]
+    ite_true, PIR.Process.bind]
   have secondLength : (restrictPrefixValues (restrictPrefixValues xs gate) left).length =
       2 ^ right.length := by
     apply restrictPrefixValues_length
@@ -297,7 +297,7 @@ theorem evaluateWiring_equation (xs gate left right : List F)
     (gate.length + left.length + right.length - gate.length - left.length) 1 right)).bind _ = _
   rw [laws.fixPrefix _ _ 1 right secondShape secondBound (by omega)]
   simp only [show right.length ≤ gate.length + left.length + right.length - gate.length - left.length
-    by omega, ite_true, PIR.Proc.bind]
+    by omega, ite_true, PIR.Process.bind]
   rw [laws.values]
   simp only [restrictPrefixValues_append]
   rfl
@@ -334,7 +334,7 @@ theorem map_body (table : Meanings F G) (start finish : List F) (t : F) :
         (Values.cons start (.cons finish (.cons t .nil))).get =
       (Evaluation.denoteMap table ⟨GkrSourceBodies.helper42Helper.name, "bls12-381.fr", [true, true, false]⟩
         (.cons start (.cons finish (.cons t .nil))) :
-          PIR.Proc closedInterface (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result =>
+          PIR.Process closedInterface (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result =>
       .done (.cons (result.get .here) .nil) := by
   derive_process
 
@@ -514,8 +514,8 @@ theorem fold_equation (coefficients : List F) (accumulated power point : F)
     ((Values.cons accumulated (.cons power .nil)).append (.cons point .nil)))).bind _ = _
   rw [folded]
   exact congrArg (fun result : Values (assignment F G) powerFold.state =>
-    (PIR.Proc.done (Values.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) :
-      PIR.Proc closedInterface (Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])))
+    (PIR.Process.done (Values.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) :
+      PIR.Process closedInterface (Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])))
     (powerReference_fold point coefficients accumulated power)
 
 theorem evaluateCoefficients_equation (coefficients : List F) (point : F)
@@ -529,7 +529,7 @@ theorem evaluateCoefficients_equation (coefficients : List F) (point : F)
     (.cons 0 (.cons 1 (.cons point (.cons coefficients .nil))))).bind _ = _
   rw [helper80_association.invoke unit.linked, helper80_body, fold_equation coefficients 0 1 point small,
     powerTransition_fold]
-  simp only [PIR.Proc.bind, Values.get, zero_add, one_mul]
+  simp only [PIR.Process.bind, Values.get, zero_add, one_mul]
 
 /-! ## Blocks of stacked tables -/
 
@@ -548,10 +548,10 @@ theorem denoteLoop_states {I : PIR.Signature} (state captures : List Ty)
   simp only [Evaluation.denoteLoop, Finite.execute, Finite.Domain.admit, Finite.admitThen, Nat.sub_zero]
   have folded := Finite.fold_range_state
     (fun current index => (Evaluation.invokeCallback body (.cons index (current.append captured))).bind
-      fun results => (.done (results.split state).1 : PIR.Proc I _)) states 0 count (by
+      fun results => (.done (results.split state).1 : PIR.Process I _)) states 0 count (by
         intro index _ upper
         rw [law index (by omega)]
-        simp only [PIR.Proc.bind, Values.split_append])
+        simp only [PIR.Process.bind, Values.split_append])
   simpa using folded
 
 set_option backward.isDefEq.respectTransparency false in
@@ -562,7 +562,7 @@ theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponen
   simp only [GkrSourceBodies.helper18Body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide +kernel,
+    PIR.Process.bind, Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.index] [] _ exponent _ .nil
     (fun index => .cons (2 ^ index) .nil) ?start ?law]
@@ -579,7 +579,7 @@ theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponen
     simp only [Evaluation.invokeCallback, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
       Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-      PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, checkedIndices, current, product,
+      PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices, current, product,
       show 2 < indexLimit by decide +kernel, and_self, ite_true, Values.append, Nat.pow_succ]
 
 theorem powerOfTwo_equation (exponent : Nat) (small : exponent < 64) :
@@ -735,13 +735,13 @@ theorem selectBlock_equation (xs : List F) (position bits size : Nat)
   rw [selectBlockBody_eq]
   simp only [Region.denote, meaning, Evaluation.meaning, Evaluation.operation, Operands.eval,
     Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-    SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate,
+    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
     primitiveOutcome, show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.vector "bls12-381.fr", .index] [.index] _ bits _
     (.cons position .nil)
     (fun index => .cons (block xs (position / 2 ^ (bits - index)) (size * 2 ^ (bits - index)))
       (.cons (bits - index) .nil)) ?start ?law]
-  · simp only [Nat.sub_self, pow_zero, Nat.div_one, Nat.mul_one, PIR.Proc.bind]
+  · simp only [Nat.sub_self, pow_zero, Nat.div_one, Nat.mul_one, PIR.Process.bind]
     rfl
   case start =>
     have zero : position / 2 ^ bits = 0 := Nat.div_eq_of_lt inside
@@ -785,7 +785,7 @@ theorem selectBlock_equation (xs : List F) (position bits size : Nat)
     simp only [Evaluation.invokeCallback, Values.append]
     show Region.denote (meaning F G (helpers (F := F) (G := G))) selectLoopBody _ = _
     rw [selectLoop_body]
-    simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, PIR.Proc.bind, Values.get,
+    simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, PIR.Process.bind, Values.get,
       show 1 < indexLimit by decide +kernel, show 2 < indexLimit by decide +kernel, remaining,
       remainingBound, power, powerSmall, powerPositive, positionBound, quotientBound, bitBound,
       blockLength, blockPositive, blockEven, half, and_self, ite_true, ite_false, next,
@@ -793,11 +793,11 @@ theorem selectBlock_equation (xs : List F) (position bits size : Nat)
     by_cases bit : position / 2 ^ (bits - index - 1) % 2 = 1
     · simp only [bit, decide_true, ite_true] at step ⊢
       rw [← step]
-      simp [PIR.Proc.bind, Values.get, show (1 : Nat) < indexLimit by decide +kernel]
+      simp [PIR.Process.bind, Values.get, show (1 : Nat) < indexLimit by decide +kernel]
       rfl
     · simp only [bit, decide_false, ite_false, Bool.false_eq_true] at step ⊢
       rw [← step]
-      simp [PIR.Proc.bind, Values.get, bit, bitBound]
+      simp [PIR.Process.bind, Values.get, bit, bitBound]
 
 /-! ## Helper calls of exported programs -/
 

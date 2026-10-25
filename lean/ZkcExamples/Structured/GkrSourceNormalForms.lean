@@ -237,7 +237,7 @@ abbrev verifierOutputPointSlot : Var ([.vector "bls12-381.fr", .vector "bls12-38
 /-- The verifierOutput's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierOutputProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) :
-    PIR.Proc (participantInterface F G) ((Option (List F))) :=
+    PIR.Process (participantInterface F G) ((Option (List F))) :=
   match service with
   | none =>
     .halt .incomplete
@@ -329,8 +329,8 @@ theorem verifierOutput_process
     verifierOutputFinish verifierOutputForm verifierOutput_normalized verifierOutput_lawsMatch verifierOutput_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierOutputResults (NormalForm.noCallees _) (.cons index (.cons point (.cons service .nil))) _
     (verifierOutput_environment index point service) (verifierOutput_laws index service point) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (verifierOutput_presentation ctx index point service)
-      (funext fun result => congrArg PIR.Proc.done (verifierOutput_embedding result)))
+    (congrArg₂ PIR.Process.bind (verifierOutput_presentation ctx index point service)
+      (funext fun result => congrArg PIR.Process.done (verifierOutput_embedding result)))
 
 /-- The repeat of `outputFn` at the verifierOutput on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -377,7 +377,7 @@ abbrev proverOutputPointSlot : Var ([.vector "bls12-381.fr", .vector "bls12-381.
 /-- The proverOutput's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverOutputProcess (ctx : ProtocolContext) (point : Option (List F)) :
-    PIR.Proc (participantInterface F G) ((Option (List F))) :=
+    PIR.Process (participantInterface F G) ((Option (List F))) :=
   .call (.receive (.field scalarDomain) (outputDeliverySite ctx) (ctx.roles 1)) fun (outputDelivery : F) =>
   match point with
   | none =>
@@ -459,8 +459,8 @@ theorem proverOutput_process
     proverOutputFinish proverOutputForm proverOutput_normalized proverOutput_lawsMatch proverOutput_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverOutputResults (NormalForm.noCallees _) (.cons index (.cons point (.cons service .nil))) _
     (proverOutput_environment index point service) (proverOutput_laws index service point) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (proverOutput_presentation ctx index point service)
-      (funext fun result => congrArg PIR.Proc.done (proverOutput_embedding result)))
+    (congrArg₂ PIR.Process.bind (proverOutput_presentation ctx index point service)
+      (funext fun result => congrArg PIR.Process.done (proverOutput_embedding result)))
 
 /-- The repeat of `outputFn` at the proverOutput on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -518,7 +518,7 @@ abbrev verifierCoefficientCoefficientsSlot : Var ([.vector "bls12-381.fr"] : Lis
 /-- The verifierCoefficient's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierCoefficientProcess (ctx : ProtocolContext) (coefficients : Option (List F)) :
-    PIR.Proc (participantInterface F G) ((Option (List F))) :=
+    PIR.Process (participantInterface F G) ((Option (List F))) :=
   .call (.receive (.field scalarDomain) (lineCoefficientSite ctx) (ctx.roles 0)) fun (lineCoefficient : F) =>
   match coefficients with
   | none =>
@@ -600,8 +600,8 @@ theorem verifierCoefficient_process
     verifierCoefficientFinish verifierCoefficientForm verifierCoefficient_normalized verifierCoefficient_lawsMatch verifierCoefficient_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierCoefficientResults (NormalForm.noCallees _) (.cons index (.cons coefficients (.cons line .nil))) _
     (verifierCoefficient_environment index coefficients line) (verifierCoefficient_laws index line coefficients) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (verifierCoefficient_presentation ctx index coefficients line)
-      (funext fun result => congrArg PIR.Proc.done (verifierCoefficient_embedding result)))
+    (congrArg₂ PIR.Process.bind (verifierCoefficient_presentation ctx index coefficients line)
+      (funext fun result => congrArg PIR.Process.done (verifierCoefficient_embedding result)))
 
 /-- The repeat of `coefficientFn` at the verifierCoefficient on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -645,7 +645,7 @@ theorem proverCoefficientState_masked (ctx : ProtocolContext) (self : Nat) (role
 /-- The proverCoefficient's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverCoefficientProcess (ctx : ProtocolContext) (index : Nat) (line : Option (List F)) :
-    PIR.Proc (participantInterface F G) (Unit) :=
+    PIR.Process (participantInterface F G) (Unit) :=
   match line with
   | none =>
     .halt .incomplete
@@ -727,8 +727,8 @@ theorem proverCoefficient_process
     proverCoefficientFinish proverCoefficientForm proverCoefficient_normalized proverCoefficient_lawsMatch proverCoefficient_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverCoefficientResults (NormalForm.noCallees _) (.cons index (.cons line .nil)) _
     (proverCoefficient_environment index line) (proverCoefficient_laws index line) (NormalForm.noCallees_hold _ _)).trans
-    (congrArg₂ PIR.Proc.bind (proverCoefficient_presentation ctx index line)
-      (funext fun result => congrArg PIR.Proc.done (proverCoefficient_embedding result)))
+    (congrArg₂ PIR.Process.bind (proverCoefficient_presentation ctx index line)
+      (funext fun result => congrArg PIR.Process.done (proverCoefficient_embedding result)))
 
 /-- The repeat of `coefficientFn` at the proverCoefficient on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -893,7 +893,7 @@ abbrev verifierLayerClaimSlot : Var ([.vector "bls12-381.fr", .vector "bls12-381
 /-- The verifierLayer's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierLayerProcess (ctx : ProtocolContext) (index : Nat) (add mul : Option (List F)) (selector width service : Option Nat) (point : Option (List F)) (claim : Option F) :
-    PIR.Proc (participantInterface F G) ((Option (List F)) × (Option F)) :=
+    PIR.Process (participantInterface F G) ((Option (List F)) × (Option F)) :=
   (GkrRoundsNormalForms.verifierRoundsProcess (leftContext ctx) claim width service).bind fun (leftReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   (GkrRoundsNormalForms.verifierRoundsProcess (rightContext ctx) (leftReturned.get (.there (.there (.there (.there (.there (.there .here))))))) width service).bind fun (rightReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .call (.receive (.field scalarDomain) (lineConstantSite ctx) (ctx.roles 0)) fun (lineConstant : F) =>
@@ -979,11 +979,11 @@ theorem rounds_verifierRounds_invoke (ctx : ProtocolContext) (separate : ctx.rol
   refine (rounds_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (GkrRoundsNormalForms.verifierRounds_process (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (rounds := rounds) (service := service))).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (rounds_verifierRounds_returned ctx separate out)
+  exact congrArg PIR.Process.done (rounds_verifierRounds_returned ctx separate out)
 
 /-- The verifierLayer's laws as the normalizer reads them, keyed by helper. -/
 def verifierLayerSignature : NormalForm.Signature :=
@@ -1126,8 +1126,8 @@ theorem verifierLayer_process
     verifierLayerFinish verifierLayerForm verifierLayer_normalized verifierLayer_lawsMatch verifierLayer_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierLayerResults verifierLayerCallees (.cons index (.cons point (.cons claim (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))))) _
     (verifierLayer_environment index point claim inputs add mul layers selector width service) (verifierLayer_laws index inputs add mul layers selector width service point claim) (verifierLayer_callees index point claim inputs add mul layers selector width service)).trans
-    (congrArg₂ PIR.Proc.bind (verifierLayer_presentation ctx index point claim inputs add mul layers selector width service)
-      (funext fun result => congrArg PIR.Proc.done (verifierLayer_embedding result)))
+    (congrArg₂ PIR.Process.bind (verifierLayer_presentation ctx index point claim inputs add mul layers selector width service)
+      (funext fun result => congrArg PIR.Process.done (verifierLayer_embedding result)))
 
 /-- The repeat of `layerFn` at the verifierLayer on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -1174,7 +1174,7 @@ abbrev proverLayerPointSlot : Var ([.vector "bls12-381.fr", .vector "bls12-381.f
 /-- The proverLayer's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def proverLayerProcess (ctx : ProtocolContext) (index : Nat) (inputs add mul : Option (List F)) (layers selector width : Option Nat) (point : Option (List F)) :
-    PIR.Proc (participantInterface F G) ((Option (List F))) :=
+    PIR.Process (participantInterface F G) ((Option (List F))) :=
   match add with
   | none =>
     .halt .incomplete
@@ -1254,11 +1254,11 @@ theorem rounds_proverRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles
   refine (rounds_view ctx (ctx.roles 0) _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (GkrRoundsNormalForms.proverRounds_process (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (add := add) (mul := mul) (left := left) (right := right) (rounds := rounds))).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (rounds_proverRounds_returned ctx separate out)
+  exact congrArg PIR.Process.done (rounds_proverRounds_returned ctx separate out)
 
 /-- The proverLayer's laws as the normalizer reads them, keyed by helper. -/
 def proverLayerSignature : NormalForm.Signature :=
@@ -1397,8 +1397,8 @@ theorem proverLayer_process
     proverLayerFinish proverLayerForm proverLayer_normalized proverLayer_lawsMatch proverLayer_finishes ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverLayerResults proverLayerCallees (.cons index (.cons point (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))))) _
     (proverLayer_environment index point inputs add mul layers selector width service) (proverLayer_laws index inputs add mul layers selector width service point) (proverLayer_callees index point inputs add mul layers selector width service)).trans
-    (congrArg₂ PIR.Proc.bind (proverLayer_presentation ctx index point inputs add mul layers selector width service)
-      (funext fun result => congrArg PIR.Proc.done (proverLayer_embedding result)))
+    (congrArg₂ PIR.Process.bind (proverLayer_presentation ctx index point inputs add mul layers selector width service)
+      (funext fun result => congrArg PIR.Process.done (proverLayer_embedding result)))
 
 /-- The repeat of `layerFn` at the proverLayer on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
@@ -1440,7 +1440,7 @@ theorem gkr_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Com
 
 /-- The verifier's normal form of the whole body. -/
 def verifierProcess (ctx : ProtocolContext) (inputs outputs add mul : Option (List F)) (layers selector width service : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
   (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
   (denoteRepeat (outputSpec) ctx (ctx.roles 1) width (.cons (some (emptyResults.get .here)) (.cons none .nil) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
@@ -1585,12 +1585,12 @@ theorem verifier_invoke
     iterate 9 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (verifier_process (inputs := inputs) (outputs := outputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (verifier_outputs ctx out)
+  exact congrArg PIR.Process.done (verifier_outputs ctx out)
 
 /-- The verifier's participant of the admitted unit. -/
 theorem verifier_participant
@@ -1604,7 +1604,7 @@ theorem verifier_participant
 
 /-- The prover's normal form of the whole body. -/
 def proverProcess (ctx : ProtocolContext) (inputs add mul : Option (List F)) (layers selector width : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
   (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
   (denoteRepeat (outputSpec) ctx (ctx.roles 0) width (.cons none (.cons (some (emptyResults.get .here)) .nil) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
@@ -1705,12 +1705,12 @@ theorem prover_invoke
     iterate 9 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (prover_process (inputs := inputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (ctx := ctx) (self := ctx.roles 0) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (prover_outputs ctx separate out)
+  exact congrArg PIR.Process.done (prover_outputs ctx separate out)
 
 /-- The prover's participant of the admitted unit. -/
 theorem prover_participant

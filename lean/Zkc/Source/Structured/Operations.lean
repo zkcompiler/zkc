@@ -65,6 +65,7 @@ inductive Op where
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
   | fieldMultiply (domain : String) | fieldEqual (domain : String)
+  | fieldEmbed (extension base : String)
   | groupIdentity (domain : String)
   | groupAdd (domain : String)
   | groupScale (group field : String)
@@ -89,6 +90,7 @@ def Op.arguments : Op → List Ty
   | .indexEqual => [.index, .index]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
+  | .fieldEmbed _ base => [.field base]
   | .groupAdd d | .groupEqual d => [.group d, .group d]
   | .groupScale g f => [.group g, .field f]
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => [.boolean, .boolean]
@@ -106,6 +108,7 @@ def Op.results : Op → List Ty
   | .indexConstant _ => [.index]
   | .indexEqual => [.boolean]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
+  | .fieldEmbed extension _ => [.field extension]
   | .groupIdentity d | .groupAdd d | .groupScale d _ => [.group d]
   | .fieldEqual _ | .booleanConstant _ | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .groupEqual _ => [.boolean]
@@ -132,7 +135,7 @@ def Op.helpers : Op → List Helper
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
-    .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
+    .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => []

@@ -66,7 +66,7 @@ theorem mask_returnValues (ctx : ProtocolContext) (self : Nat)
 
 def reduceDenote (maximum : Nat) (U : UnitPayload) (ctx : ProtocolContext) (self : Nat)
     (arguments : Values (Component (assignment F G)) reduceInputs) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) reduceOutputs) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) reduceOutputs) :=
   ((reduceBody maximum).denote
     (participantMeaningWith (.silent _) (participantActions F G)
       (plainHelpers U) self (U.plainProtocolTable F G) ctx)
@@ -113,7 +113,7 @@ open SumcheckVerifierLaws
 /-- The original count is admitted before any round, starting with emptyV. -/
 def admittedRounds (maximum : Nat) (ctx : ProtocolContext)
     (count service : Option Nat) (claim : Option F) :
-    PIR.Proc (participantInterface F G) (Option (List F) × Option F) :=
+    PIR.Process (participantInterface F G) (Option (List F) × Option F) :=
   match count with
   | none => .halt .incomplete
   | some count =>
@@ -189,7 +189,7 @@ theorem reduce_zero (U : UnitPayload) (bodies : Bodies U.definitions)
     simp
   rw [repeat_zero (repeatSpec maximum) ctx self _ _ _ inside]
   rw [SumcheckRoundNormalForms.verifierState_masked ctx self verifier]
-  change PIR.Proc.done (I := participantInterface F G)
+  change PIR.Process.done (I := participantInterface F G)
     (maskValues self (ctx.mapScopes reduceOutputScopes) (returnValues _)) = _
   rw [mask_returnValues ctx self verifier separate]
   rfl
@@ -218,7 +218,7 @@ theorem repeat_optional (U : UnitPayload) (bodies : Bodies U.definitions)
       simp only [admittedRounds, bounded, ↓reduceIte]
     · rw [repeat_above_maximum (repeatSpec maximum) ctx self _ _ _ count inside
         (Nat.lt_of_not_ge bounded)]
-      simp only [admittedRounds, bounded, ↓reduceIte, PIR.Proc.bind]
+      simp only [admittedRounds, bounded, ↓reduceIte, PIR.Process.bind]
 
 /-- The generated normal form of the whole body at the verifier, with its repeat
 admitted: the original count admission, the actual rounds, and the actual return
@@ -233,7 +233,7 @@ theorem verifierReduce_rounds (U : UnitPayload) (bodies : Bodies U.definitions)
   change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count (embedV (G := G) (some [], claim))
     (cap service) (bodyFn U ctx (ctx.roles 1))).bind (fun state => .done (returnValues state)) = _
   rw [repeat_optional U bodies ctx _ rfl separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
 
 /-- The complete body includes the skipped P prelude, optional count admission,
 actual callback, exact six-slot return permutation, and output ownership mask. -/
@@ -249,12 +249,12 @@ theorem reduce_optional (U : UnitPayload) (bodies : Bodies U.definitions)
   unfold reduceDenote
   rw [mask_reduceArguments ctx self verifier separate,
     prelude_expansion U bodies ctx self verifier separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind,
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind,
     mask_returnValues ctx self verifier separate]
   change (denoteRepeat (repeatSpec maximum) ctx self count (embedV (G := G) (some [], claim))
     (cap service) (bodyFn U ctx self)).bind _ = _
   rw [repeat_optional U bodies ctx self verifier separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 

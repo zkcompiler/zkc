@@ -28,10 +28,9 @@ pipeline, with no step specific to a subject:
    executable meaning predicts; check the axiom closures and proof dependencies
    the manifest's receipt names and that the runtime executes exactly the
    program the receipt names;
-7. for a manifest with a claims namespace, regenerate the subject's artifacts
-   and claims modules in the security integration and build the claims: the
-   registered endpoint applied to the subject's evidence at the type the
-   manifest claims;
+7. regenerate configured artifact/request modules and build typed Lean
+   resolution, evaluation and registered-method receipts. Source spec/verify
+   and typed Lean exports select meanings; manifests configure physical files;
 8. write a per-subject evidence record: artifact and module digests, kernel
    results, mutation outcomes, runtime summary and requested assumptions.
 
@@ -53,21 +52,21 @@ sys.path.append(str(ROOT / "scripts"))
 
 from bridges.common.lean_render import (  # noqa: E402
     ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, file_digest, now, printed_axioms,
-    regenerate, strip_header)
+    regenerate, require, strip_header)
 from bridges.construction import render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
+from bridges.pipeline.source_claims import canonical  # noqa: E402
 from bridges.structured import bodies as printer, snapshot as structured  # noqa: E402
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
 NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
-# walk lists every equation between processes (`PIR.Proc`), whether the kernel
+# walk lists every equation between processes (`PIR.Process`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
 # compiled program; the record keeps the original-side ones, and none may name
 # a compiled meaning.
 ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
-IMPORT = re.compile(r"^import\s+(\S+)\s*$", re.M)
 COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
     "Zkc.Executable.execute", "Zkc.Executable.validate", "Zkc.Executable.metered",
@@ -87,7 +86,7 @@ class Driver(Runner):
         self.output = args.output
         self.evidence = {}
         self.built = set()
-        self.registry_entries = None
+        self.registry_entries = {}
 
     # Directories, Lean and generated files.
 
@@ -99,24 +98,30 @@ class Driver(Runner):
     def lake(self, *arguments, cwd=LEAN, name, expect=0):
         return self.run([self.args.lake, *arguments], cwd=cwd, name=name, expect=expect)
 
-    def registry(self):
+    def registry(self, package="security"):
         """The assumption registry of the security integration: identifier to
-        category and statement, read from `ZkcSecurity.Registry.table`."""
-        if self.registry_entries is None:
+        category and statement, read from the selected physical package registry."""
+        if package not in self.registry_entries:
+            optional = package == "arklib"
+            module = "ZkcArkLib.Registry" if optional else "ZkcSecurity.Registry"
+            table = module + (".reportTable" if optional else ".table")
+            cwd = LEAN / "integrations/arklib" if optional else LEAN / "security"
             result = self.evaluate(
-                self.output / "Registry.lean",
-                "import ZkcSecurity.Registry\n\n"
-                "#eval for (identifier, category, _, statement) in ZkcSecurity.Registry.table do\n"
+                self.output / f"Registry-{package}.lean",
+                f"import {module}\n\n"
+                f"#eval for (identifier, category, _, statement) in {table} do\n"
                 "  IO.println s!\"ENTRY\\t{identifier}\\t{category}\\t{statement}\"\n",
-                cwd=LEAN / "integrations/arklib", name="registry")
+                cwd=cwd, name=f"registry:{package}")
             entries = {}
             for line in result.stdout.splitlines():
                 if line.startswith("ENTRY\t"):
                     _, identifier, category, statement = line.split("\t", 3)
+                    self.check(f"registry-unique:{identifier}", identifier not in entries,
+                               f"duplicate assumption registry identifier: {identifier}")
                     entries[identifier] = dict(category=category, statement=statement)
             self.check("registry-read", bool(entries), result.stdout[-400:])
-            self.registry_entries = entries
-        return self.registry_entries
+            self.registry_entries[package] = entries
+        return self.registry_entries[package]
 
     def build(self, *modules, cwd=LEAN):
         """Build Lean modules of the package at `cwd`: their kernel checks."""
@@ -126,11 +131,9 @@ class Driver(Runner):
             self.built.update((str(cwd), module) for module in wanted)
 
     def evaluate(self, path, source, *, cwd, name, expect=0):
-        """Evaluate a generated Lean file after building every module it imports, so
-        that no result it reads, a charge or a hand proof, comes from a stale build."""
+        """Lake builds the file's imports and applies its owning package options."""
         path.write_text(source, encoding="utf-8")
-        self.build(*IMPORT.findall(source), cwd=cwd)
-        return self.lake("env", "lean", path, cwd=cwd, name=name, expect=expect)
+        return self.lake("lean", path, cwd=cwd, name=name, expect=expect)
 
     def lean(self, subject, name, source, cwd=LEAN, expect=0):
         return self.evaluate(self.directory(subject) / name, source, cwd=cwd, name=f"{subject.name}:{name}",
@@ -163,7 +166,8 @@ class Driver(Runner):
             names = glue.body_names(artifacts["snapshot"], subject.get("bodies", "interactive_entry"))
             self.build(data)
             text, helpers, protocols = printer.printed_module(data, bodies, subject.get("bodies", "closed", False),
-                                                              names, self, self.args.lake)
+                                                              names, self, self.args.lake,
+                                                              fresh=self.args.fresh_bodies)
             self.generated(subject, "interactive_bodies", text, modules)
             views = subject.module_name("interactive_views")
             if views:
@@ -195,7 +199,8 @@ class Driver(Runner):
             bodies = subject.module_name("bodies")
             body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"))
             self.build(data)
-            text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake)
+            text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake,
+                                                              fresh=self.args.fresh_bodies)
             self.generated(subject, "bodies", text, modules)
             names.update(bodies=bodies, helpers=helpers, protocols=protocols)
         if admission != "views":
@@ -214,6 +219,9 @@ class Driver(Runner):
             record["artifacts"].update(program="sha256:" + digest(artifacts["program"]),
                                        package="sha256:" + digest(artifacts["package_bytes"]))
         record["proof"] = dict(entry=subject.get("entries", "proof"), policy=artifacts["policy"])
+        record["source_claims"] = artifacts["source_claims"]
+        record_accepted(record, "source-claims-artifact-binding",
+                        export_digest=artifacts["source_claims"]["native_export_digest"])
         record_accepted(record, "native-constructed-candidate")
         if subject.generated("glue"):
             record_accepted(record, "per-entry-glue", module=names["glue"])
@@ -775,27 +783,95 @@ class Driver(Runner):
 
     # The claim's generated modules in the security integration.
 
-    def claims(self, subject, entry, record):
-        """Regenerate the subject's artifacts and claims modules and build the claims,
-        whose kernel check is that the evidence has the type the manifest claims."""
-        namespace = subject.get("claims", "namespace")
-        if not namespace:
+    def claim_inventory(self, record, exports, selected_claims=()):
+        """Inventory all source nodes independently of receipt generation."""
+        inventory = {}
+        for export in exports:
+            for item in export["source_claim_inventory"]:
+                key = canonical(item["node"])
+                require(key not in inventory or inventory[key] == item,
+                        "conflicting source claim inventory")
+                inventory[key] = item
+        selected_nodes = {canonical(claim["attachment"]["node"]) for claim in selected_claims}
+        require(selected_nodes <= inventory.keys(), "selected claim absent from source inventory")
+        record["source_claim_inventory"] = [dict(item, selection=(
+            "selected" if key in selected_nodes else "unselected-subject"))
+            for key, item in inventory.items()]
+
+    def claims(self, subject, artifacts, entry, record, interactive=None):
+        """Fresh source requests, typed resolution/evaluation and genuine proofs."""
+        bound = copy.deepcopy(artifacts["source_claims"])
+        groups = {bound.get("entry"): bound["claims"][:]}
+        if interactive is not None:
+            bound["entries"] = [bound["entry"], interactive["source_claims"]["entry"]]
+            bound["claims"].extend(interactive["source_claims"]["claims"])
+            groups[interactive["source_claims"]["entry"]] = interactive["source_claims"]["claims"]
+            artifacts["interactive"] = interactive
+        selected = getattr(self.args, "claim_entry", None) or [bound.get("entry")]
+        require(all(name in groups for name in selected), "claim Entry was not compiled for this subject")
+        selected_claims = [claim for name in selected for claim in groups[name]]
+        self.claim_inventory(record, [artifacts, *([interactive] if interactive is not None else [])],
+                             selected_claims)
+        record["source_claims"] = dict(bound, entries=selected, claims=selected_claims)
+        record["source_claim_scope"] = dict(entries=selected,
+                                            selection="explicit" if getattr(self.args, "claim_entry", None)
+                                            else "proof-entry")
+        # Whole other Entries remain visible as trials, with their actual generated
+        # declarations. A separately selected report audits them independently.
+        trials = {name: dict(entry=name, claims=claims, claim_receipts=[])
+                  for name, claims in groups.items() if name not in selected and claims}
+        record["source_claim_trials"] = list(trials.values())
+        claim_entries = [name for name, claims in groups.items() for _ in claims]
+        if not subject.get("lean", "namespace"):
+            record["claim_receipts"] = [dict(
+                node=claim["attachment"]["node"], request_digest=claim["request_digest"],
+                request_declaration=None, receipt_declaration=None,
+                resolution=dict(status="open", definitions=[],
+                                diagnostic="no configured Lean registration module"),
+                attempts=[dict(status="unsupported", reason="no physical Lean generation configuration")])
+                for claim in selected_claims]
             return
         executable_namespace = subject.get("executable", "namespace") if subject.profile("executable") else None
         sources = {
-            "artifacts": evidence.artifacts_module(subject, entry, subject.module_name("glue"), executable_namespace),
-            "claims": evidence.claims_module(subject),
+            "artifacts": evidence.artifacts_module(subject, entry, subject.module_name("glue"),
+                                                   executable_namespace, artifacts),
+            "claims": evidence.claims_module(subject, bound),
         }
-        for key, text in sources.items():
+        for key, source in sources.items():
             path = subject.generated(key)
-            expected = ROOT / evidence.module_path(namespace, key.capitalize())
+            expected = subject.generated("claims").with_name(key.capitalize() + ".lean")
             self.check(f"{subject.name}:claims-path:{key}", path == expected,
-                       f"[generated] {key} must be {expected.relative_to(ROOT)}")
-            self.generated(subject, key, text, record)
-        claims_module = evidence.module_name(namespace, "Claims")
-        self.lake("build", claims_module, cwd=LEAN / "integrations/arklib", name=f"{subject.name}:claims-build")
-        record_accepted(record, "claim-application", module=claims_module,
-                        application=evidence.names(subject.data)["application"])
+                       f"[generated] {key} must be beside the subject's Claims module")
+            self.generated(subject, key, source, record)
+        module = subject.module_name("claims")
+        built = self.lake("build", module, cwd=subject.generated_package("claims"),
+                          name=f"{subject.name}:claims-build")
+        results = {}
+        for line in built.stdout.splitlines():
+            marker = "SOURCE_CLAIM_RESULT "
+            if marker in line:
+                value = json.loads(line.split(marker, 1)[1])
+                results[value["request"]] = value
+        record["claim_receipts"] = []
+        namespace = subject.get("lean", "namespace")
+        for index, claim in enumerate(bound["claims"]):
+            request = f"{namespace}.request{index}Data"
+            result = results.get(request)
+            self.check(f"{subject.name}:claim-result:{index}", result is not None,
+                       "fresh generated claim command did not emit its resolution/attempt result")
+            receipt = result.get("receipt")
+            item = dict(node=claim["attachment"]["node"], request_digest=claim["request_digest"],
+                        request_declaration=request, receipt_declaration=receipt,
+                        attempts=result.get("attempts", []))
+            if result.get("resolution"):
+                item["resolution"] = result["resolution"]
+            claim_entry = claim_entries[index]
+            if claim_entry in selected:
+                record["claim_receipts"].append(item)
+            elif claim_entry in trials:
+                trials[claim_entry]["claim_receipts"].append(item)
+            if receipt:
+                record_accepted(record, "claim-receipt", module=module, request=request, receipt=receipt)
 
     # Normal forms and the record.
 
@@ -815,16 +891,22 @@ class Driver(Runner):
                       profiles=sorted(name for name in ("structured", "construction", "executable", "scalar")
                                       if subject.profile(name)),
                       sources={name: file_digest(path) for name, path in sorted(subject.modules.items())},
-                      claims=subject.table("claims"), family=subject.table("family"))
+                      lean=subject.table("lean"))
         self.evidence[subject.name] = record
         requested = subject.get("assumptions", "requested", [])
         if requested:
-            registry = self.registry()
+            optional = any(subject.generated_package(key) == LEAN / "integrations/arklib"
+                           for key in subject.table("generated")
+                           if subject.generated(key).suffix == ".lean") or subject.get(
+                               "receipt", "security_module", "").startswith("ZkcArkLib.")
+            registry = self.registry("arklib" if optional else "security")
             unknown = [name for name in requested if name not in registry]
             self.check(f"{subject.name}:assumptions-registered", not unknown, json.dumps(unknown))
             record["requested_assumptions"] = {name: registry[name] for name in requested}
+        interactive = None
         if subject.profile("structured"):
-            self.interactive(subject, record)
+            interactive = self.interactive(subject, record)
+            self.claim_inventory(record, [interactive])
         run = None
         if subject.profile("construction"):
             artifacts, entry = self.proof(subject, record)
@@ -832,7 +914,7 @@ class Driver(Runner):
                 facts = self.executable(subject, artifacts, entry, record)
                 if self.args.runtime:
                     run = (artifacts, self.runtime(subject, artifacts, entry, facts, record))
-            self.claims(subject, entry, record)
+            self.claims(subject, artifacts, entry, record, interactive)
         if subject.profile("scalar"):
             record["scalar"] = dict(contract=subject.get("scalar", "contract"),
                                     properties=sorted(subject.get("scalar", "properties", {})))
@@ -893,7 +975,7 @@ def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do
     let isProcess ← forallTelescope info.type fun _ body => do
       let body ← whnfR body
       if body.isAppOfArity ``Eq 3 then
-        return (← whnfR (body.getArg! 0)).isAppOf ``PIR.Proc
+        return (← whnfR (body.getArg! 0)).isAppOf ``PIR.Process
       return false
     unless isProcess do continue
     let evaluated ← lambdaTelescope info.value fun _ proof =>
@@ -911,11 +993,15 @@ def main():
     mode.add_argument("--check", action="store_true", help="compare generated modules (the default)")
     mode.add_argument("--write", action="store_true", help="rewrite the generated modules the manifests own")
     parser.add_argument("--subject", action="append", help="process only the named subjects (default: all)")
+    parser.add_argument("--claim-entry", action="append",
+                        help="report whole source Entries explicitly (default: the proof Entry); "
+                             "other compiled Entries remain visible as separately scoped trials")
     parser.add_argument("--runtime", action="store_true",
                         help="run the runtime differential and record binding of executable subjects")
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--native", type=Path, default=ROOT / "target/release/zkc", help="the runtime CLI")
     parser.add_argument("--lake", default="lake")
+    parser.add_argument("--fresh-bodies", action="store_true", help="elaborate body printers without Lake replay")
     parser.add_argument("--output", type=Path, help="new or empty evidence directory")
     parser.add_argument("--list-mutations", action="store_true", help="list the generic mutation kinds and exit")
     args = parser.parse_args()

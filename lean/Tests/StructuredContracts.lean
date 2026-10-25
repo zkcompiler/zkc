@@ -428,9 +428,9 @@ private theorem residualFalse :
   have values : arguments = .cons true (.cons false .nil) := Option.some.inj read.symm
   subst arguments
   have impossible : false = true := by
-    change (PIR.Proc.done (.cons false .nil) : Closed (Values (assignment Int Int) [.boolean])) =
+    change (PIR.Process.done (.cons false .nil) : Closed (Values (assignment Int Int) [.boolean])) =
       .done (.cons true .nil) at holds
-    exact congrArg (fun values => values.get .here) (PIR.Proc.done.inj holds)
+    exact congrArg (fun values => values.get .here) (PIR.Process.done.inj holds)
   cases impossible
 
 -- Formula meaning is pinned to the actual helper: the selected boundary's
@@ -592,7 +592,7 @@ private def nonemptyFirst (arguments : Values (assignment Int Int) [.vector scal
   ∃ first rest, arguments = .cons (first :: rest) (.cons 0 .nil)
 example : partialBinding.Realizes (F := Int) (G := Int) rfl nonemptyFirst (fun _ => True) := by
   rintro arguments ⟨first, rest, rfl⟩
-  change (PIR.Proc.done (Values.cons (decide (first = first)) .nil) :
+  change (PIR.Process.done (Values.cons (decide (first = first)) .nil) :
     Closed (Values (assignment Int Int) [.boolean])) = _
   simp only [decide_true]
   rfl

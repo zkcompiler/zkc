@@ -25,7 +25,7 @@ abbrev ProverState (F : Type) := List F × Nat × Nat × List F
 /-- Exact expansion target: LOW, HIGH, the delivered challenge, then the
 actual fold and append. -/
 def roundPresent (ctx : ProtocolContext) (state : ProverState F) :
-    PIR.Proc (participantInterface F G) (ProverState F) :=
+    PIR.Process (participantInterface F G) (ProverState F) :=
   .call (.send (ty := .field "bls12-381.fr") (lowSite ctx) (ctx.roles 1)
     (state.1.take (state.1.length / 2)).sum) fun _ =>
   .call (.send (ty := .field "bls12-381.fr") (highSite ctx) (ctx.roles 1)

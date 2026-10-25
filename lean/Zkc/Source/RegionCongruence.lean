@@ -15,7 +15,7 @@ abbrev RegionOperations (dialect : Dialect) (Value : dialect.Ty → Type)
     (interface : PIR.Signature) :=
   (op : dialect.Op) → Values Value (dialect.arguments op) →
     Values (RegionFunction Value interface) (dialect.regions op) →
-      PIR.Proc interface (Values Value (dialect.results op))
+      PIR.Process interface (Values Value (dialect.results op))
 
 variable {dialect : Dialect} {interface : PIR.Signature} {Value : dialect.Ty → Type}
 

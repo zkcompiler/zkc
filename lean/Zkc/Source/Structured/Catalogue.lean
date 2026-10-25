@@ -218,6 +218,19 @@ def requireScale (catalogue : Catalogue) (group field : String) : Except String 
   if !nominal.holds "ScalarAction" then throw "structured-domain-capability"
   if nominal.member "Scalar" != some field then throw "structured-domain-member"
 
+/-- A declared base-to-extension embedding. Both carriers must be fields; the
+extension names its base and both rows carry the same characteristic. These
+catalogue checks select the operation, but its algebraic laws remain a separate
+obligation of the interpretation. -/
+def requireEmbedding (catalogue : Catalogue) (extension base : String) : Except String Unit := do
+  let extended ← catalogue.expect extension .field
+  let ground ← catalogue.expect base .field
+  if !extended.holds "ExtensionField" || !extended.holds "Field" || !ground.holds "Field" then
+    throw "structured-domain-capability"
+  if extended.member "BaseField" != some base then throw "structured-domain-member"
+  if extended.modulus.isNone || extended.modulus != ground.modulus then
+    throw "structured-domain-modulus"
+
 def findService (catalogue : Catalogue) (contract : String) : Except String Service :=
   match catalogue.services.find? (·.contract == contract) with
   | some service => .ok service
@@ -258,8 +271,28 @@ def blsCatalogue : Catalogue where
   services := [{ contract := blsRandom, sampled := blsScalar, methods := ["draw"] }]
   types := [("field", blsScalar), ("vector", blsScalar), ("group", blsGroup)]
 
-/-- The catalogue whose rows the structured importer admits. -/
-abbrev admittedCatalogue : Catalogue := blsCatalogue
+/-- Installed KoalaBear rows, with the characteristic shared by the prime field
+and its octic extension. Carrier cardinalities belong to the selected model. -/
+def koalaBearCatalogue : Catalogue where
+  nominals := [
+    { identity := "koala-bear", sort := .field, members := [],
+      capabilities := ["TwoAdicField", "Field", "CommRing", "PrimeField", "CharacteristicNotTwo"],
+      modulus := some 2130706433 },
+    { identity := "koala-bear.ext8-binomial3", sort := .field,
+      members := [("BaseField", "koala-bear")],
+      capabilities := ["IndexRandomness", "ExtensionField", "TwoAdicField", "Field",
+        "CommRing", "CharacteristicNotTwo"], modulus := some 2130706433 }]
+  services := [{ contract := "random.koala-bear.ext8-binomial3/0",
+                 sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index"] }]
+  types := [("field", "koala-bear"), ("vector", "koala-bear"),
+    ("field", "koala-bear.ext8-binomial3"), ("vector", "koala-bear.ext8-binomial3")]
+
+/-- The installed rows understood by the structured importer. Admission of a
+row or type is separate from operation support and mathematical law evidence. -/
+def admittedCatalogue : Catalogue where
+  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals
+  services := blsCatalogue.services ++ koalaBearCatalogue.services
+  types := blsCatalogue.types ++ koalaBearCatalogue.types
 
 /-- The rows a unit over this environment exports when it lists every row:
 the environment's nominal and service rows, without its admitted instances. -/

@@ -83,7 +83,7 @@ theorem proverReduce_honest (U : UnitPayload) (bodies : SumcheckUnitContracts.Bo
   rw [repeat_admitted (repeatSpec maximum) ctx (ctx.roles 0) _ _ _ rounds inside admitted,
     mask_embedP ctx (ctx.roles 0) rfl maximum,
     loop_honest U bodies ctx (ctx.roles 0) rfl separate maximum none raw count shape bound 0 rounds []]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 /-- The complete Reduce body at the prover, for present prover inputs whose
@@ -110,10 +110,10 @@ theorem reduce_prover (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U
   rw [repeat_admitted (repeatSpec maximum) ctx (ctx.roles 0) _ _ _ rounds inside admitted,
     mask_embedP ctx (ctx.roles 0) rfl maximum,
     loop_honest U bodies ctx (ctx.roles 0) rfl separate maximum none raw count shape bound 0 rounds []]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   congr 1
   funext point
-  change PIR.Proc.done (maskValues (ctx.roles 0) (ctx.mapScopes reduceOutputScopes)
+  change PIR.Process.done (maskValues (ctx.roles 0) (ctx.mapScopes reduceOutputScopes)
     (proverResults raw count point)) = _
   rw [mask_proverResults ctx (ctx.roles 0) rfl]
 

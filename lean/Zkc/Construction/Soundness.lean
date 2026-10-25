@@ -31,7 +31,7 @@ export Zkc.Transcript (mapOutcome)
 
 /-- A pure final projection commutes with the transform. -/
 theorem transform_bind_done [LawfulMonad m] {A B : Type} (context : Context)
-    (challenge : History F G → m F) (f : A → B) (process : PIR.Proc (Actions F G) A) :
+    (challenge : History F G → m F) (f : A → B) (process : PIR.Process (Actions F G) A) :
     ∀ (history : History F G) (proof : Proof F G),
       transform context challenge (process.bind fun value => .done (f value)) history proof =
         (fun result => (mapOutcome f result.1, result.2)) <$>
@@ -125,7 +125,7 @@ synchronized with `state`: the ideal continuation equals the transform of the
 interactive one. -/
 def Agree {R : Type} (state : CheckState)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R) : Prop :=
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R) : Prop :=
   ∀ env absorbed unread, Synchronized state env absorbed →
     nextIdeal env unread = transform context challenge (nextSpec env) absorbed unread
 
@@ -135,7 +135,7 @@ theorem receive_sound {R : Type} (state successor : CheckState)
     (accepted : checkStep context state ⟨.receive site schema peer ty, operands, results, body⟩ =
       .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.receive site schema peer ty, operands, results, body⟩
@@ -183,7 +183,7 @@ theorem indicesEmpty_sound {R : Type} (state successor : CheckState) (operands :
     (results : List ValueSort) (body : List Instruction)
     (accepted : checkStep context state ⟨.indicesEmpty, operands, results, body⟩ = .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.indicesEmpty, operands, results, body⟩
@@ -202,7 +202,7 @@ theorem indicesAppend_sound {R : Type} (state successor : CheckState) (operands 
     (results : List ValueSort) (body : List Instruction)
     (accepted : checkStep context state ⟨.indicesAppend, operands, results, body⟩ = .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.indicesAppend, operands, results, body⟩
@@ -224,7 +224,7 @@ theorem guard_sound {R : Type} (state successor : CheckState) (site : String) (o
     (results : List ValueSort) (body : List Instruction)
     (accepted : checkStep context state ⟨.guard site, operands, results, body⟩ = .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.guard site, operands, results, body⟩
@@ -268,7 +268,7 @@ theorem calculate_sound {R : Type} (state successor : CheckState) (calculation :
     (accepted : checkStep context state ⟨.calculate calculation, operands, results, body⟩ =
       .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.calculate calculation, operands, results, body⟩
@@ -298,7 +298,7 @@ theorem call_sound {R : Type} (state successor : CheckState) (name : String)
     (operands : List Nat) (results : List ValueSort) (body : List Instruction)
     (accepted : checkStep context state ⟨.call name, operands, results, body⟩ = .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.call name, operands, results, body⟩
@@ -326,7 +326,7 @@ theorem call_sound {R : Type} (state successor : CheckState) (name : String)
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- A delivery send is absorbed by the transform with its payload. -/
 theorem transform_sendPayload {R : Type} (site : String) (receiver : Nat) (payload : Payload F G)
-    (next : PIR.Proc (Actions F G) R) (absorbed : History F G) (unread : Proof F G) :
+    (next : PIR.Process (Actions F G) R) (absorbed : History F G) (unread : Proof F G) :
     transform context challenge (sendPayload site receiver payload next) absorbed unread =
       transform context challenge next
         (absorbed ++ [.message (context.message site context.validator receiver) payload]) unread := by
@@ -351,7 +351,7 @@ theorem observe_sound {R : Type} (state successor : CheckState) (suite : String)
     (accepted : checkStep context state ⟨.observe suite template, operands, results, body⟩ =
       .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table ⟨.observe suite template, operands, results, body⟩
@@ -399,7 +399,7 @@ theorem challenge_sound {R : Type} (state successor : CheckState) (suite field :
     (accepted : checkStep context state ⟨.challenge suite field template, operands, results, body⟩ =
       .ok successor)
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table
@@ -531,7 +531,7 @@ theorem iterate_sound (body : List Instruction) (bodyState bodyFinal : CheckStat
     (yieldSorts : yielded.map (bodyFinal.sorts[·]?) = results.map some)
     (yieldCurrent : yielded[position]? = some bodyFinal.current)
     (bodySound : ∀ {R : Type} (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-      (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R),
+      (nextSpec : List (Value F G) → PIR.Process (Actions F G) R),
       Agree context challenge bodyFinal nextIdeal nextSpec →
       Agree context challenge bodyState
         (fun start proof => idealK context challenge table body start proof nextIdeal)
@@ -539,7 +539,7 @@ theorem iterate_sound (body : List Instruction) (bodyState bodyFinal : CheckStat
     (env : List (Value F G)) (length : env.length = sorts.length) :
     ∀ {R : Type} (items : List Nat) (carried : List (Value F G)) (absorbed : History F G)
       (proof : Proof F G) (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-      (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R),
+      (nextSpec : List (Value F G) → PIR.Process (Actions F G) R),
       carried.length = results.length → transcriptAt carried position = some absorbed →
       (∀ final absorbed' unread, final.length = results.length →
         transcriptAt final position = some absorbed' →
@@ -586,13 +586,13 @@ theorem loop_sound {R : Type} (state successor : CheckState) (site : String) (ma
       .ok successor)
     (bodySound : ∀ (start final : CheckState), checkFrom context start body = .ok final →
       ∀ {R : Type} (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-        (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R),
+        (nextSpec : List (Value F G) → PIR.Process (Actions F G) R),
         Agree context challenge final nextIdeal nextSpec →
         Agree context challenge start
           (fun start proof => idealK context challenge table body start proof nextIdeal)
           (fun start => specK context handle table body start nextSpec))
     (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-    (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R)
+    (nextSpec : List (Value F G) → PIR.Process (Actions F G) R)
     (agree : Agree context challenge successor nextIdeal nextSpec) :
     Agree context challenge state
       (fun env proof => idealStep context challenge table
@@ -644,7 +644,7 @@ mutual
 theorem checkFrom_sound : ∀ (instructions : List Instruction) (state final : CheckState),
     checkFrom context state instructions = .ok final →
     ∀ {R : Type} (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-      (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R),
+      (nextSpec : List (Value F G) → PIR.Process (Actions F G) R),
       Agree context challenge final nextIdeal nextSpec →
       Agree context challenge state
         (fun env proof => idealK context challenge table instructions env proof nextIdeal)
@@ -669,7 +669,7 @@ theorem checkFrom_sound : ∀ (instructions : List Instruction) (state final : C
 theorem checkStep_sound : ∀ (instruction : Instruction) (state successor : CheckState),
     checkStep context state instruction = .ok successor →
     ∀ {R : Type} (nextIdeal : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G))
-      (nextSpec : List (Value F G) → PIR.Proc (Actions F G) R),
+      (nextSpec : List (Value F G) → PIR.Process (Actions F G) R),
       Agree context challenge successor nextIdeal nextSpec →
       Agree context challenge state
         (fun env proof => idealStep context challenge table instruction env proof nextIdeal)
@@ -681,6 +681,7 @@ theorem checkStep_sound : ∀ (instruction : Instruction) (state successor : Che
         exact receive_sound context challenge handle table state successor site schema peer ty operands
           results body accepted nextIdeal nextSpec agree
       | send site schema peer => simp [checkStep] at accepted
+      | localService port request template coordinates => simp [checkStep] at accepted
       | indicesEmpty =>
         exact indicesEmpty_sound context challenge handle table state successor operands results body
           accepted nextIdeal nextSpec agree

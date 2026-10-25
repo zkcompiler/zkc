@@ -227,6 +227,7 @@ theorem idealStep_mono {R : Type} :
               all_goals simp only [found] at holds ⊢
               all_goals first | exact continues _ _ holds | exact stops _ holds
       | send => exact stops _ holds
+      | localService => exact stops _ holds
       | unsupported => exact stops _ holds
 end
 
@@ -552,6 +553,7 @@ theorem idealStep_oracle :
                 | exact holds.elim
                 | exact ⟨_, _, holds, fun R next' => by simp only [idealStep, found]⟩
       | send => exact holds.elim
+      | localService => exact holds.elim
       | unsupported => exact holds.elim
 end
 

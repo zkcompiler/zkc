@@ -45,3 +45,13 @@ proof Proof = Okamoto<G1> {
   target knowledge;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
+
+spec ProofClaims for Proof {
+  knowledge: knowledge@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,
+    guarantee=guarantees.forking@0(challenges=cardinality(G1.Scalar),
+      cost=prover_runs(2)));
+}
+verify ProofClaims.knowledge=fs.forking@0();

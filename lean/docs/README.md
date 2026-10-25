@@ -6,6 +6,8 @@ compiler and runtime. A native export is a connection boundary, not an assertion
 that all native behavior already has a Lean model.
 
 - [Architecture](architecture.md): packages, interfaces and proof composition.
+- [Checked components](spec/components.md): shared process bindings, reference mathematics,
+  honest execution, adversarial reductions and canonical receipts.
 - [PIR semantics](spec/semantics.md): typed mathematics, participants, effects,
   observations, termination and exact refinement.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,

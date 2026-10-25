@@ -112,6 +112,13 @@ def decimalDigit : Nat → String
   | 0 => "0" | 1 => "1" | 2 => "2" | 3 => "3" | 4 => "4"
   | 5 => "5" | 6 => "6" | 7 => "7" | 8 => "8" | _ => "9"
 
+-- Materialize shared equation proofs at the definition's owner. Otherwise
+-- independent clients can realize different private matcher proofs under the
+-- same public equation name. The scoped attribute exports no global simp rule.
+section
+attribute [local simp] decimalDigit
+end
+
 /-- The canonical decimal spelling of an index below `10000`, as used in native
 service port names. It is built from literals so that kernel evaluation reduces
 it. -/
@@ -179,7 +186,7 @@ send is absorbed with its message occurrence and produces no proof data. Returns
 the outcome and the unread proof suffix. It is the generic transform at the
 context's transcript interface. -/
 def transform {A : Type} (context : Context) (challenge : History F G → m F) :
-    PIR.Proc (Actions F G) A → History F G → Proof F G → m (PIR.Outcome A × Proof F G) :=
+    PIR.Process (Actions F G) A → History F G → Proof F G → m (PIR.Outcome A × Proof F G) :=
   Transcript.transform context.interface fun preceding event => challenge (preceding ++ [event])
 
 /-- The transform is the generic transform at the context's interface. -/
@@ -200,7 +207,7 @@ theorem transform_eq_halt {A : Type} (context : Context) (challenge : History F 
 
 theorem transform_eq_receive {A : Type} (context : Context) (challenge : History F G → m F) (ty : Ty)
     (site : String) (sender : Nat)
-    (next : (Actions F G).Reply (.receive ty site sender) → PIR.Proc (Actions F G) A)
+    (next : (Actions F G).Reply (.receive ty site sender) → PIR.Process (Actions F G) A)
     (history : History F G) (proof : Proof F G) :
     transform context challenge (.call (.receive ty site sender) next) history proof =
       match proof with
@@ -220,7 +227,7 @@ theorem transform_eq_receive {A : Type} (context : Context) (challenge : History
 
 theorem transform_eq_query {A : Type} (context : Context) (challenge : History F G → m F)
     (site : String) (field : services.Op) (arguments : Values (ScalarValue F G) (services.arguments field))
-    (next : (Actions F G).Reply (.query site field arguments) → PIR.Proc (Actions F G) A)
+    (next : (Actions F G).Reply (.query site field arguments) → PIR.Process (Actions F G) A)
     (history : History F G) (proof : Proof F G) :
     transform context challenge (.call (.query site field arguments) next) history proof =
       (do
@@ -231,7 +238,7 @@ theorem transform_eq_query {A : Type} (context : Context) (challenge : History F
 
 theorem transform_eq_send {A : Type} (context : Context) (challenge : History F G → m F) {ty : Ty}
     (site : String) (receiver : Nat) (sent : ScalarValue F G ty)
-    (next : (Actions F G).Reply (.send site receiver sent) → PIR.Proc (Actions F G) A)
+    (next : (Actions F G).Reply (.send site receiver sent) → PIR.Process (Actions F G) A)
     (history : History F G) (proof : Proof F G) :
     transform context challenge (.call (.send site receiver sent) next) history proof =
       match Payload.ofValue ty sent with

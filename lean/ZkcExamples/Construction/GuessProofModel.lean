@@ -34,7 +34,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 /-- The original verifier as a participant process: receive the guess, query
 the challenge on the service `service`, deliver it to the prover, and accept
 when the guess plus the offset is the challenge. -/
-def experiment (offset : F) (service : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+def experiment (offset : F) (service : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   .call (.receive (.field fieldDomain) guessSite 0) fun guess =>
   .call (.query challengeSite fieldDomain (.cons service .nil)) fun challenge =>
   .call (.send (ty := .field fieldDomain) deliverySite 0 challenge) fun _ =>

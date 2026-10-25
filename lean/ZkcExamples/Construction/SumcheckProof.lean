@@ -171,12 +171,12 @@ theorem decision_outputs (outputs : Values (Component (assignment F G)) program.
   (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
 
 /-- The admitted root's validator process, read through its acceptance output. -/
-def process (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Proc (participantInterface F G) (Option Bool) :=
+def process (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Process (participantInterface F G) (Option Bool) :=
   (program.participant F G 1 (verifierInputs valuesValue claim rounds handle)).bind fun outputs =>
     .done (outputs.get .here)
 
 /-- The original validator, read through its acceptance output. -/
-def verifier (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+def verifier (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   (process valuesValue claim rounds handle).interpret CommonAdapter.project
 
 /-- The original validator, read through its outputs, is the verifier. -/

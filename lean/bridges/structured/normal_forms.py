@@ -460,7 +460,7 @@ def has_bind(node):
 
 def associate(node):
     """Bound processes nested under the role's outer bind need reassociation first."""
-    return ", PIR.Proc.bind_assoc" if has_bind(node) else ""
+    return ", PIR.Process.bind_assoc" if has_bind(node) else ""
 
 
 def linear_actions(node):
@@ -836,7 +836,7 @@ class Evaluator:
             proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
             proof.append(f"{pad}  ({process})")
             proof.append(f"{pad}  (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
-            proof.append(f"{pad}· refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) "
+            proof.append(f"{pad}· refine (PIR.Process.bind_done _).symm.trans (congrArg (PIR.Process.bind _) "
                          f"(funext fun {binder} => ?_))")
             cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
                             for position in range(len(results)))
@@ -1042,9 +1042,9 @@ class Evaluator:
                                                  ("guard", owner, present(condition.wire, "false"), None))
         if self.shared:
             proof.append(f"{pad}by_cases {holds} : {prop}")
-            proof.append(f"{pad}· simp only [eq_true {holds}, decide_true, ↓reduceIte, PIR.Proc.bind]")
+            proof.append(f"{pad}· simp only [eq_true {holds}, decide_true, ↓reduceIte, PIR.Process.bind]")
             proof.extend(holds_proof)
-            proof.append(f"{pad}· simp only [eq_false {holds}, decide_false, ↓reduceIte, PIR.Proc.bind]")
+            proof.append(f"{pad}· simp only [eq_false {holds}, decide_false, ↓reduceIte, PIR.Process.bind]")
             proof.extend(fails_proof)
         return If(prop, then, Halt("reject"))
 
@@ -1216,7 +1216,7 @@ class Evaluator:
             proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
             proof.append(f"{pad}· change Participant.owned {me} {me} (invoke {self.frame.closed} {helper}) "
                          f"{typed_args}.present = _")
-            proof.append(f"{pad}  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Proc.bind _) "
+            proof.append(f"{pad}  refine (Participant.owned_present _ _ _).trans (congrArg (PIR.Process.bind _) "
                          f"(funext fun {binder} => ?_))")
             cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
                             for position in range(len(results)))
@@ -1244,7 +1244,7 @@ class Evaluator:
             lemma = "denote_letOp_bind_after" if self.after() else "denote_letOp_bind"
             proof.append(f"{pad}refine NormalFormSteps.{lemma} m {op} _ _ _ _")
             proof.append(f"{pad}  ({process}) (fun {binder} => {expanded}) _{' _' if self.after() else ''} ?_ ?_")
-            proof.append(f"{pad}· refine (PIR.Proc.bind_done _).symm.trans (congrArg (PIR.Proc.bind _) "
+            proof.append(f"{pad}· refine (PIR.Process.bind_done _).symm.trans (congrArg (PIR.Process.bind _) "
                          f"(funext fun {binder} => ?_))")
             cases = "".join(f"cases {binder} with | cons value{position} {binder} => "
                             for position in range(len(results)))
@@ -1320,7 +1320,7 @@ class Step:
         if kind == "restrict":
             _, listed, value = how
             facts = "" if f"({me})" in listed.split(", ") or me in listed.split(", ") else f", Ne.symm {separate}"
-            return [f"change PIR.Proc.done (I := participantInterface F G) "
+            return [f"change PIR.Process.done (I := participantInterface F G) "
                     f"(one (F := F) (G := G) (ty := {bare_ty(value.wire, True)}) "
                     f"(Participant.restrict ([{listed}].contains ({me})) {paren(value.component())})) = _",
                     f"simp [Participant.restrict{facts}]",
@@ -1359,7 +1359,7 @@ class Step:
                     f"{paren(value.component())}).interpret (participantActions F G)).bind "
                     f"(fun value => .done (one (F := F) (G := G) (ty := {bare_ty(wire, True)}) value)) = _",
                     f"simp only [Participant.exchange, {facts}↓reduceIte, "
-                    f"PIR.Proc.interpret, participantActions, PIR.Proc.bind]",
+                    f"PIR.Process.interpret, participantActions, PIR.Process.bind]",
                     "rfl"]
         if kind == "draw":
             _, owner, site, field_name, args = how
@@ -1369,7 +1369,7 @@ class Step:
                     f"({me}) {evaluator.role_term(owner)} {evaluator.qualified_site(site)} "
                     f"{json.dumps(field_name)} {handles}).interpret (participantActions F G)).bind "
                     f"(fun value => .done (one (F := F) (G := G) (ty := .field {json.dumps(field_name)}) value)) = _",
-                    f"simp only [Participant.query, {facts}↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]",
+                    f"simp only [Participant.query, {facts}↓reduceIte, PIR.Process.interpret, PIR.Process.bind]",
                     "rfl"]
         if kind == "guard":
             _, owner, condition, fact = how
@@ -1382,7 +1382,7 @@ class Step:
                      f"(fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _"]
             if fact:
                 lines.append(f"rw [show {condition.expr} = true from {fact}]")
-            lines += [f"simp only [Participant.guard, {facts}↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]",
+            lines += [f"simp only [Participant.guard, {facts}↓reduceIte, PIR.Process.interpret, PIR.Process.bind]",
                       "rfl"]
             return lines
         raise GeneratorError(f"no side condition for {how}")
@@ -1865,7 +1865,7 @@ class Module:
             used_binders = self.binders([(names[index], value_type(entry.inputs[index])) for index in used])
             application = f"{process} {' '.join(names[index] for index in used)}".strip()
             out.append(f"/-- The {role_name}'s normal form: its ordered actions and its returned tuple. -/")
-            out.append(f"def {process} {used_binders}:\n    PIR.Proc (participantInterface F G)\n"
+            out.append(f"def {process} {used_binders}:\n    PIR.Process (participantInterface F G)\n"
                        f"      (Values (Component (assignment F G)) {program}.payload.entry.outputs) :=\n"
                        f"{text}\n")
             proof = spec.get("proof", "rfl")
@@ -2249,7 +2249,7 @@ class Module:
                    f"      .done (.cons {paren(decision_bool)} .nil) := by\n  rfl\n")
         out.append(f"theorem relation_iff {binders}:\n    Relation {argument_names} ↔ {decision_prop} := by\n"
                    f"  unfold Relation\n  rw [formula_process]\n"
-                   f"  change (PIR.Proc.done (I := closedInterface) (.cons {paren(decision_bool)} .nil :\n"
+                   f"  change (PIR.Process.done (I := closedInterface) (.cons {paren(decision_bool)} .nil :\n"
                    f"    Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _\n  simp\n")
         gets = {name: "args.get " + paren("(.there " * position + ".here" + ")" * position)
                 for position, (name, _, _, _) in enumerate(arguments)}
@@ -2675,7 +2675,7 @@ class Module:
         out.append(f"/-- The {name}'s normal form of one body run: its ordered actions, the values it\n"
                    f"computes, guards as conditionals and missing inputs as stops. -/")
         out.append(f"def {process} {process_binders}:\n"
-                   f"    PIR.Proc (participantInterface F G) ({result_type}) :=\n{text}\n")
+                   f"    PIR.Process (participantInterface F G) ({result_type}) :=\n{text}\n")
         projections = self.projections(len(slots)) if slots else []
         embedded = f"{embed} {' '.join(projections)}".strip()
         ends = f"(fun {'result' if slots else '_'} => .done ({embedded}))"
@@ -2710,7 +2710,7 @@ class Module:
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
+                   f"  simp only [{process}, PIR.Process.bind{associate(node)}]\n"
                    + script + "\n")
         if role_spec.get("fold"):
             self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
@@ -2903,8 +2903,8 @@ class Module:
                    f"    {finish_name} {form_name} {name}_normalized {name}_lawsMatch {name}_finishes ctx {distinct}\n"
                    f"    ({spec['tables']}) ({spec['protocols']}) {results_name} {processes} ({binders_value}) _\n"
                    f"    ({name}_environment {names_in_order}) ({laws_call}) {callees_call}).trans\n"
-                   f"    (congrArg₂ PIR.Proc.bind ({name}_presentation {parameter_names} ctx {names_in_order})\n"
-                   f"      (funext fun result => congrArg PIR.Proc.done ({name}_embedding result)))\n")
+                   f"    (congrArg₂ PIR.Process.bind ({name}_presentation {parameter_names} ctx {names_in_order})\n"
+                   f"      (funext fun result => congrArg PIR.Process.done ({name}_embedding result)))\n")
 
     @staticmethod
     def pattern_entry(item):
@@ -3096,7 +3096,7 @@ class Module:
         others = [other for other in range(len(protocol.roles)) if other != role]
         separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
         out.append(f"/-- The {name}'s normal form of the whole body. -/")
-        out.append(f"def {process} {process_binders}:\n    PIR.Proc (participantInterface F G)\n"
+        out.append(f"def {process} {process_binders}:\n    PIR.Process (participantInterface F G)\n"
                    f"      (Values (Component (assignment F G)) {ty_list(protocol.outputs, True)}) :=\n{text}\n")
         theorem = role_spec.get("theorem", f"{name}_process")
         if role_spec.get("proof") == "normal-form":
@@ -3127,7 +3127,7 @@ class Module:
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"
-                   f"  simp only [{process}, PIR.Proc.bind{associate(node)}]\n"
+                   f"  simp only [{process}, PIR.Process.bind{associate(node)}]\n"
                    + script + "\n")
         self.role_infos[(function, name)] = {
             "role": role, "process": process, "process_binders": [variable for variable, _ in used],
@@ -3365,11 +3365,11 @@ class Module:
                    f"  · iterate {len(function.inputs) + 1} unfold maskValues\n"
                    f"    simp [ProtocolContext.mapScopes, Participant.restrict"
                    f"{', separate, Ne.symm separate' if separate else ''}]\n"
-                   f"  refine (congrArg (fun process => PIR.Proc.bind process _)\n"
+                   f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({' '.join(theorem_arguments)})).trans ?_\n"
-                   f"  apply congrArg (PIR.Proc.bind _)\n"
+                   f"  apply congrArg (PIR.Process.bind _)\n"
                    f"  funext out\n"
-                   f"  exact congrArg PIR.Proc.done ({stem}_returned ctx{' separate' if hides else ''} out)\n")
+                   f"  exact congrArg PIR.Process.done ({stem}_returned ctx{' separate' if hides else ''} out)\n")
 
     def callee_processes(self, out, name, signature, callees, spec):
         """The callees' presented processes, by callee index, at a child context and on the
@@ -3497,12 +3497,12 @@ class Module:
                    f"    iterate {len(protocol.inputs) + 1} unfold maskValues\n"
                    f"    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]\n"
                    f"  subst self\n"
-                   f"  refine (congrArg (fun process => PIR.Proc.bind process _)\n"
+                   f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({theorem} {' '.join(named)} (ctx := ctx) (self := ctx.roles {role}) (role := rfl)\n"
                    f"      {separate})).trans ?_\n"
-                   f"  apply congrArg (PIR.Proc.bind _)\n"
+                   f"  apply congrArg (PIR.Process.bind _)\n"
                    f"  funext out\n"
-                   f"  exact congrArg PIR.Proc.done ({name}_outputs ctx{' separate' if hides else ''} out)\n")
+                   f"  exact congrArg PIR.Process.done ({name}_outputs ctx{' separate' if hides else ''} out)\n")
         if protocol.name != self.unit.entry:
             return
         root_arguments = " ".join("({} : ProtocolContext)" if variable == "ctx" else variable

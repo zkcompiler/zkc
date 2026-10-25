@@ -50,7 +50,7 @@ abbrev experiment := Zkc.Protocols.Sumcheck.Common.experiment (F := F) wiring
 
 set_option maxRecDepth 20000 in
 def verifier (coefficients : Coefficients F) (claim : F) (service : Nat) :
-    PIR.Proc (actions (F := F)) (Option Bool) :=
+    PIR.Process (actions (F := F)) (Option Bool) :=
   imported.denote (scalarMeaning F F) id 1 (verifierInputs coefficients claim service)
 
 set_option maxHeartbeats 4000000 in
@@ -59,12 +59,12 @@ theorem verifier_correspondence (coefficients : Coefficients F) (claim : F) (ser
     verifier coefficients claim service =
       experiment coefficients claim service := by
   change (imported.program.denote (scalarMeaning F F) id 1
-    (verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
-  rw [PIR.Proc.bind_done]
+    (verifierInputs coefficients claim service).get).bind PIR.Process.done = _
+  rw [PIR.Process.bind_done]
   repeat' first
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
-       rw [PIR.Proc.bind_ite]
+    | (apply PIR.Process.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
+       rw [PIR.Process.bind_ite]
        simp only [↓reduceIte])
     | rfl
     | fail_if_no_progress congr 1

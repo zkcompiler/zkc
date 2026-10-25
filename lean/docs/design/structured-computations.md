@@ -5,7 +5,7 @@
 Use `Source.Region` as the canonical Lean carrier for local structured compiler
 programs. Native MLIR remains the production representation. `Source.Dialect`
 supplies binding signatures; `RegionMeaning` supplies the operation contracts;
-`PIR.Proc` supplies ordered interactions and stopping. No external SSA framework
+`PIR.Process` supplies ordered interactions and stopping. No external SSA framework
 is a production dependency of this foundation.
 
 An implemented comparison of an owned carrier and LeanMLIR on the same native
@@ -72,7 +72,7 @@ returning leaves.
 ## Semantics and proof reuse
 
 `RegionMeaning.operation` receives evaluated operands and effectful semantic
-callbacks. Its result is `Proc interface (Values Value results)`. A callback
+callbacks. Its result is `Process interface (Values Value results)`. A callback
 accepts exactly its declared input tuple and returns its declared result tuple.
 An operation controls which callbacks execute and how often. The structural
 carrier makes no assumption that every body runs exactly once.
@@ -92,7 +92,7 @@ program. A higher-order implementation can inspect callback process shape, so
 this compatibility does not follow from the callback type. The scalar/control
 adapter supplies a proved instance through `Interpretation.regionTranslation`.
 
-Totality means the process equals an immediate `Proc.done`, without interactions
+Totality means the process equals an immediate `Process.done`, without interactions
 or a stop. `Region.Total` is a sufficient structural predicate over the same
 carrier, backed by per-operation semantic contracts and total callbacks.
 `Region.returns_of_total` proves the resulting property. Its uniform operation
@@ -232,7 +232,7 @@ Native frame entry/cleanup, affine services and instruction capacity can require
 an execution relation over actual state and observations. Those policies must not
 be silently erased by translating an abstract callback. Likewise, changing an
 admission requires a proof about its stop behavior, even for unused values.
-In particular, appending cleanup with `Proc.bind` skips it on a stop. Catching
+In particular, appending cleanup with `Process.bind` skips it on a stop. Catching
 syntactic halts still does not catch a stop produced by a handler. Native cleanup
 and its failure precedence therefore belong to the execution adapter, rather
 than an assumed meaning of lexical binding.

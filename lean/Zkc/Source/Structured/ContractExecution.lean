@@ -102,7 +102,7 @@ namespace ComponentInput
 variable {owner : ContractBinding imported}
 
 def process (input : ComponentInput owner F G) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) owner.protocol.outputs) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) owner.protocol.outputs) :=
   invokeProtocol (imported.program.payload.protocolTable F G) owner.protocol.signature
     input.context input.self input.arguments
 

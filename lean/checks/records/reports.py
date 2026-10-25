@@ -1,18 +1,19 @@
-"""Assurance reports: `zkc.assurance-report/0`, one per subject manifest.
+"""Assurance reports: `zkc.assurance-report/0`, one per compiled subject.
 
-A report records a checked application of a registered endpoint to
-artifact-indexed evidence. It is assembled from the subject manifest, the
-declaration records (with the registry and the registered endpoints), and the
-subject pipeline's evidence for the subject. The generator is fail-closed:
-anything it cannot classify or connect makes the claim `unresolved`, with the
-reason. `lean/docs/spec/assurance-report.md` specifies the format.
+Requested meanings come only from bound source claims. Typed receipt indices,
+actual proofs and their dependencies are extracted by Lean. Legacy endpoint
+helpers remain for mathematical ledger and negative-control auditing; they do
+not select requested claims for the public report builder. `lean/docs/spec/assurance-report.md` specifies the format.
 """
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import tomllib
+import uuid
 
 from .declarations import ALLOWED_AXIOMS, forbidden_axioms
 
@@ -23,7 +24,7 @@ EVIDENCE_FORMAT = "zkc.subject-evidence/0"
 ENDPOINTS = ("ideal-meaning", "executable-bytes")
 STATEMENTS = ("fixed", "adaptive")
 
-# Trusted links every claim about a covered endpoint rests on. A typed
+# Legacy endpoint audit metadata, retained for its ledger/control helpers. A typed
 # public-value binding discharges statement determination only, never the
 # native absorption of the public values, which stays assumed until a theorem
 # about native transcript bytes exists.
@@ -68,11 +69,19 @@ class Registry:
     def __init__(self, entries, endpoints):
         self.entries = entries or []
         self.endpoints = endpoints or []
-        self.by_identifier = {entry["identifier"]: entry for entry in self.entries}
+        self.by_identifier = {}
         self.by_schema = {}
         for entry in self.entries:
+            identifier = entry["identifier"]
+            if identifier in self.by_identifier:
+                raise ValueError(f"conflicting registry identifier: {identifier}")
+            self.by_identifier[identifier] = entry
+        for entry in self.entries:
             if entry.get("schema"):
-                self.by_schema.setdefault(entry["schema"], entry)
+                schema = entry["schema"]
+                if schema in self.by_schema and self.by_schema[schema] != entry:
+                    raise ValueError(f"conflicting registry schema: {schema}")
+                self.by_schema[schema] = entry
 
     def classify(self, head):
         return self.by_schema.get(head) if head else None
@@ -187,7 +196,7 @@ def validation(evidence):
 def checker(records):
     """Toolchain, dependency pins and declared compatibility patches."""
     pins, manifests, patches = {}, {}, []
-    for relative in ("lake-manifest.json", "integrations/arklib/lake-manifest.json",
+    for relative in ("lake-manifest.json", "security/lake-manifest.json", "integrations/arklib/lake-manifest.json",
                      "integrations/clean/lake-manifest.json"):
         path = LEAN / relative
         if path.exists():
@@ -327,7 +336,8 @@ def binder_reasons(record, origin):
         if binder.get("premise"):
             continue
         head = binder.get("type_head")
-        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES) or \
+        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES
+                               and binder.get("model_instance") is True) or \
                 (binder.get("binder") == "explicit" and head == "String"):
             continue
         reasons.append(f"hidden parameter: binder {position} of {origin} {record['name']} has type {head}, "
@@ -357,7 +367,7 @@ def hypotheses(record, registry):
     detail = record.get("detail") or {}
     found, discharged, reasons = [], [], []
     listed = detail.get("hypotheses")
-    if listed is None:
+    if not isinstance(listed, list):
         return found, discharged, [f"the named hypotheses of {record['name']} were not recorded"]
     named_premises = set()
     for item in listed:
@@ -581,7 +591,7 @@ def reused_reason(directory):
             "not tied to the sources the pipeline validated")
 
 
-def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+def endpoint_audit_report(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
     manifest = load_manifest(manifest_path)
     entries, endpoints = records.registry()
     registry = Registry(entries, endpoints)
@@ -632,12 +642,541 @@ def render_subjects(reports):
     lines = ["| Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |",
              "|---|---|---|---|---|---|---|"]
     for report in reports:
-        entry = report["manifest"]["entries"].get("proof", "")
-        for item in report["claims"] or [{}]:
+        default_entry = report["manifest"]["entries"].get("proof", "")
+        for item in report.get("security_claims", report["claims"]) or [{}]:
+            entry = item.get("source_entry") or ((item.get("request") or {}).get("subject") or {}).get("entry", default_entry)
             identifiers = ", ".join(f"`{row['id']}`" for row in item.get("assumptions", []))
             reason = item.get("reasons", report["reasons"])
-            verdict = item.get("outcome", report["outcome"])
+            verdict = item.get("status", item.get("outcome", report.get("status", report["outcome"])))
             note = f"{verdict}: {reason[0]}" if reason and verdict != "established" else verdict
             lines.append(f"| {report['subject']} | `{entry}` | {item.get('covered_endpoint', '')} | "
-                         f"{item.get('property', '')} | {item.get('statement', '')} | {identifiers} | {note} |")
+                         f"{item.get('property', '')} | {item.get('statement') or ''} | {identifiers} | {note} |")
     return "\n".join(lines) + "\n"
+
+
+BOUND_CLAIMS_FORMAT = "zkc.bound-source-claims/0"
+RECEIPT_TYPE = "Zkc.Claims.Receipt"
+ADMITTED_RECEIPT_TYPE = "ZkcSecurity.Claims.AdmittedReceipt"
+SECURITY_RECEIPT_TYPES = {ADMITTED_RECEIPT_TYPE, "ZkcSecurity.Claims.CanonicalReceipt",
+                          "ZkcSecurity.Claims.AuthorExtensionReceipt"}
+REQUEST_TYPE = "Zkc.Claims.Wire.Request"
+ROUTES = {"endpoint", "theorem", "derivation"}
+# The source receipt's expected obligations and product come from Lean's closed
+# authority. Legacy endpoint inventories above retain their existing consumers.
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                      allow_nan=False).encode("ascii")
+
+
+def data_digest(value):
+    return "sha256:" + hashlib.sha256(canonical(value)).hexdigest()
+
+
+def request_projection(request):
+    """Wire.Request preserves the complete native envelope, including targets."""
+    return json.loads(json.dumps(request))
+
+
+def claim_details(evidence):
+    """Declarations requested by the pipeline; not a source of meanings."""
+    return [item[key] for item in (evidence or {}).get("claim_receipts", [])
+            for key in ("request_declaration", "receipt_declaration") if item.get(key)]
+
+
+def owned_module_path(module):
+    # Module ownership follows physical providers, independently of declaration
+    # namespaces (notably ZkcSecurity declarations in ZkcArkLib modules).
+    from .declarations import PACKAGES
+    candidates = [directory / Path(*module.split(".")).with_suffix(".lean")
+                  for directory, _ in PACKAGES.values()]
+    found = [path for path in candidates if path.is_file()]
+    if len(found) != 1:
+        raise ValueError(f"owned module {module} has {len(found)} source providers")
+    return found[0]
+
+
+def verified_dependencies(packages):
+    """Read-only preflight shared with reports; never prepare dependencies."""
+    import subprocess
+    from .declarations import PACKAGES
+    verified, reasons, seen = [], [], set()
+    for package in sorted(packages):
+        if package not in PACKAGES:
+            reasons.append(f"unknown package provider: {package}")
+            continue
+        directory = PACKAGES[package][0]
+        manifest_path = directory / "lake-manifest.json"
+        if not manifest_path.is_file():
+            reasons.append(f"missing dependency manifest: {manifest_path}")
+            continue
+        manifest = json.loads(manifest_path.read_text())
+        compatibility_path = directory / "compatibility.json"
+        compatibility = json.loads(compatibility_path.read_text()) if compatibility_path.is_file() else None
+        for pin in manifest.get("packages", []):
+            if pin.get("type") != "git":
+                continue
+            source = (directory / manifest.get("packagesDir", ".lake/packages") /
+                      pin["name"].removeprefix("«").removesuffix("»")).resolve()
+            key = (str(source), pin["rev"])
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"],
+                                               text=True, stderr=subprocess.DEVNULL).strip()
+                if head != pin["rev"]:
+                    raise ValueError("HEAD differs from locked revision")
+                changed = set(subprocess.check_output(
+                    ["git", "-C", str(source), "diff", "--name-only", "-z", "HEAD"],
+                    stderr=subprocess.DEVNULL).decode().split("\0")) - {""}
+                untracked = set(subprocess.check_output(
+                    ["git", "-C", str(source), "ls-files", "--others", "--exclude-standard", "-z"],
+                    stderr=subprocess.DEVNULL).decode().split("\0")) - {""}
+                config = compatibility if compatibility and compatibility["package"] == pin["name"] else None
+                if config:
+                    if config["revision"] != pin["rev"] or sha256(directory / config["patch"]) != config["patch_sha256"]:
+                        raise ValueError("compatibility pin or patch digest differs")
+                    files = config["files"]
+                    added = {name for name, values in files.items() if values["base_sha256"] is None}
+                    if changed - files.keys() or untracked - added:
+                        raise ValueError("undeclared dependency changes")
+                    for name, values in files.items():
+                        path = source / name
+                        expected = values["patched_sha256"]
+                        if (expected is None and path.exists()) or (expected is not None and
+                                (not path.is_file() or sha256(path) != expected)):
+                            raise ValueError(f"compatibility source differs: {name}")
+                elif changed or untracked:
+                    raise ValueError("dependency source has undeclared changes")
+                verified.append({"package": pin["name"], "revision": head,
+                                 "compatibility": config})
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                reasons.append(f"unverified dependency {pin['name']}: {error}")
+    return verified, reasons
+
+
+def verified_environment(records):
+    """Verify dependencies again when assembling a report from fresh records."""
+    facts = checker(records)
+    verified, reasons = verified_dependencies(records.packages())
+    facts["verified_dependencies"] = verified
+    return facts, reasons
+
+
+def semantic_dependencies(closure, records, environment):
+    """A body-sensitive audit digest; never a replacement for type checking."""
+    modules, identities, reasons = {}, [], []
+    for item in closure:
+        if not item.get("owned"):
+            continue
+        module = item.get("module")
+        if not module:
+            reasons.append(f"dependency {item.get('name')} has no module identity")
+            continue
+        if module not in modules:
+            try:
+                path = owned_module_path(module)
+                modules[module] = {"path": str(path.relative_to(ROOT)), "sha256": sha256(path)}
+            except ValueError as error:
+                reasons.append(str(error))
+        identities.append({key: item.get(key) for key in ("name", "module", "statement")})
+    if not modules:
+        reasons.append("no owned semantic dependency modules were emitted")
+    payload = {"modules": modules, "declarations": sorted(identities, key=lambda item: item["name"]),
+               "environment": environment}
+    return {"digest": data_digest(payload), **payload}, reasons
+
+
+def module_attached(module, modules):
+    try:
+        source = owned_module_path(module).resolve()
+    except ValueError:
+        return False
+    return any((ROOT / item["path"]).resolve() == source for item in modules)
+
+
+def receipt_attribution(receipt):
+    """Optional method notes may be absent, malformed or unrecognizable."""
+    try:
+        provenance = receipt.get("provenance") or {}
+        closure = receipt.get("dependencies") or []
+        actual_names = {item.get("name") for item in receipt.get("proof_dependencies", closure)}
+        route = receipt.get("root_route")
+        declared_route = (provenance.get("root") or "").rsplit(".", 1)[-1]
+        discharger = receipt.get("discharger")
+        diagnostics = []
+        if route == "constructor" and declared_route == "theorem":
+            route = "theorem"
+        if route not in ROUTES or declared_route != route:
+            diagnostics.append("route attribution does not match the receipt constructor")
+        if not discharger or provenance.get("discharger") != discharger or discharger not in actual_names:
+            diagnostics.append("discharger attribution does not match the actual proof root")
+        if any(name not in actual_names for name in provenance.get("dependencies", [])):
+            diagnostics.append("dependency attribution is absent from the actual proof closure")
+        if receipt.get("provenance_error"):
+            diagnostics.append(receipt["provenance_error"])
+        return ("unattributed" if diagnostics else route), diagnostics
+    except (AttributeError, TypeError, ValueError) as error:
+        return "unattributed", [f"optional attribution could not be read: {error}"]
+
+
+class ReceiptTransportError(ValueError):
+    """No usable Lean decision arrived; this is never a weaker audit path."""
+
+
+def _receipt_provider_groups(payload):
+    """Keep independent provider environments independent during extraction."""
+    from .declarations import PACKAGES
+    operation = payload.get("operation")
+    records = payload.get("records") or []
+    if operation == "receipt":
+        roots = [payload.get("record"), payload.get("request_record")]
+    elif operation == "extract":
+        roots = records
+    else:
+        names = {mapping.get(key) for mapping in payload.get("mappings") or []
+                 for key in ("request_declaration", "receipt_declaration")}
+        roots = [record for record in records if record.get("name") in names]
+    selected = {}
+    for record in roots:
+        if not record:
+            continue
+        module = record.get("module")
+        if not isinstance(module, str) or not module:
+            raise ReceiptTransportError("receipt root has no provider module")
+        relative = Path(*module.split(".")).with_suffix(".lean")
+        owners = [name for name, (directory, _) in PACKAGES.items() if (directory / relative).is_file()]
+        if len(owners) != 1:
+            raise ReceiptTransportError(f"receipt provider {module} has {len(owners)} source owners")
+        selected.setdefault(owners[0], set()).add(module)
+    return selected
+
+
+def _invoke_receipt_classifier(payload, packages):
+    from .declarations import PACKAGES
+    built = subprocess.run(["lake", "build", "declaration-records"], cwd=LEAN,
+                           text=True, capture_output=True)
+    if built.returncode:
+        raise ReceiptTransportError(built.stdout + built.stderr)
+    # Lean resolves a module namespace from its first search-path provider,
+    # even when that provider lacks a particular object. Concatenating sibling
+    # paths therefore cannot safely combine independent build closures.
+    providers = []
+    for package, modules in sorted(_receipt_provider_groups(payload).items()):
+        if package not in PACKAGES:
+            raise ReceiptTransportError(f"unknown receipt provider package: {package}")
+        directory = PACKAGES[package][0]
+        search = subprocess.run(["lake", "env", "printenv", "LEAN_PATH"], cwd=directory,
+                                text=True, capture_output=True)
+        if search.returncode:
+            raise ReceiptTransportError(search.stderr.strip() or "missing provider search path")
+        paths = [str((directory / path).resolve()) for path in search.stdout.strip().split(os.pathsep) if path]
+        providers.append({"modules": sorted(modules), "search_paths": list(dict.fromkeys(paths))})
+    # This identifier binds a response to this exact invocation. It is transport
+    # metadata, never a substitute for a proof or the fresh kernel extraction.
+    payload = {**payload, "providers": providers}
+    exchange = {"nonce": uuid.uuid4().hex, "input_digest": data_digest(payload)}
+    payload = {**payload, "exchange": exchange}
+    command = ["lake", "env", str(LEAN / ".lake/build/bin/declaration-records"), "--receipt-status"]
+    result = subprocess.run(command, cwd=LEAN, input=json.dumps(payload) + "\n",
+                            text=True, capture_output=True)
+    if result.returncode:
+        raise ReceiptTransportError(result.stderr.strip() or "Lean classifier exited without an export")
+    try:
+        export = json.loads(result.stdout)
+    except (ValueError, TypeError) as error:
+        raise ReceiptTransportError(f"corrupt Lean status export: {error}") from error
+    if not isinstance(export, dict) or export.get("format") != "zkc.receipt-status/0" or export.get("authority") != "fresh-kernel-audit/0":
+        raise ReceiptTransportError("missing current Lean status export/provenance")
+    if export.get("exchange") != exchange:
+        raise ReceiptTransportError("Lean status export answers another audit invocation")
+    return export
+
+
+def _audit_payload(declarations, **fields):
+    return {"format": "zkc.receipt-audit-input/0", "headers": list(declarations.headers.values()), **fields}
+
+
+def _validate_audit(audit):
+    if (not isinstance(audit, dict) or audit.get("status") not in {"certified", "open", "incomplete"} or
+            audit.get("outcome") not in {"established", "unresolved"} or
+            any(not isinstance(audit.get(key), list) for key in ("reasons", "assumptions", "discharged", "checks")) or
+            any(not isinstance(reason, str) for reason in audit.get("reasons", [])) or
+            any(not isinstance(check, dict) or type(check.get("passed")) is not bool or
+                check.get("origin") not in {"kernel-extraction", "external-admission", "resolution"} or
+                not isinstance(check.get("reason"), str) for check in audit.get("checks", [])) or
+            any(not isinstance(row, dict) or
+                any(not isinstance(row.get(key), str) for key in ("id", "category", "discharge", "source"))
+                for field in ("assumptions", "discharged") for row in audit.get(field, [])) or
+            (audit["status"] == "certified" and (audit["reasons"] or not audit["checks"] or
+                not all(check["passed"] for check in audit["checks"]))) or
+            (audit["status"] == "certified") != (audit["outcome"] == "established")):
+        raise ReceiptTransportError("missing or corrupt Lean item status export")
+    return audit
+
+
+def _referenced_records(records, roots):
+    """Join only the supplied roots and their emitted dependency identities."""
+    names = {record["name"] for record in roots if record}
+    for record in roots:
+        proof = (((record or {}).get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+        names.update(row.get("name") for row in proof.get("dependencies") or [] if records.get(row.get("name")))
+        artifact = (proof.get("subject") or {}).get("artifacts_head")
+        if records.get(artifact):
+            names.add(artifact)
+    selected = {name: records.get(name) for name in names if records.get(name)}
+    selected.update({record["name"]: record for record in roots if record})
+    return [selected[name] for name in sorted(selected)]
+
+
+def audit_receipt(record, request_record, request, registry, records, generated_modules=None):
+    payload = _audit_payload(records, operation="receipt", record=record, request_record=request_record,
+                             request=request, records=_referenced_records(records, [record, request_record]))
+    receipt = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+    route, attribution = receipt_attribution(receipt)
+    receipt = {**receipt, "root_route": route, "attribution_diagnostics": attribution}
+    try:
+        export = _invoke_receipt_classifier(payload, records.packages())
+        audit = _validate_audit(export.get("audit"))
+    except (ReceiptTransportError, OSError) as error:
+        return receipt, [], [], [f"receipt status transport failure: {error}"]
+    return receipt, audit["assumptions"], audit["discharged"], audit["reasons"]
+
+
+def source_entry(item):
+    export = _invoke_receipt_classifier({"format": "zkc.receipt-audit-input/0",
+        "operation": "entry", "item": item}, {"main"})
+    return export["entry"], export["reasons"]
+
+
+def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
+                  environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+    roots = [records.get(mapping.get(key)) for mapping in mappings
+             for key in ("request_declaration", "receipt_declaration")]
+    selected_records = _referenced_records(records, roots)
+    attached_modules = [record["module"] for record in selected_records
+                        if module_attached(record["module"], modules)]
+    items = []
+    for item in source.get("claims", []):
+        node = (item.get("attachment") or {}).get("node")
+        candidates = [mapping for mapping in mappings if mapping.get("node") == node]
+        mapping = candidates[0] if len(candidates) == 1 else {}
+        record = records.get(mapping.get("receipt_declaration")) or {}
+        receipt = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+        dependencies, failures = semantic_dependencies(receipt.get("dependencies") or [], records, environment)
+        items.append({**item, "admitted_request_digest": data_digest(item.get("request") or {}),
+                      "semantic_dependencies": dependencies, "dependency_reasons": failures})
+    payload = _audit_payload(records, operation="scope", records=selected_records,
+        source={**source, "claims": items}, mappings=mappings, evidence=evidence or {}, validation=checks,
+        reasons=reasons, environment_reasons=environment_reasons, attached_modules=attached_modules,
+        reused_reason=reused_reason(reused_records) if reused_records is not None else None,
+        trial=trial, scope=scope, proof_entry=proof_entry,
+        validate_scope=scope is not None or proof_entry is not None)
+    export = _invoke_receipt_classifier(payload, records.packages())
+    if not isinstance(export, dict) or export.get("format") != "zkc.receipt-status/0":
+        raise ReceiptTransportError("missing or corrupt Lean scope status export")
+    rows = export.get("claims")
+    if (not isinstance(rows, list) or len(rows) != len(items) or
+            export.get("status") not in {"certified", "open", "incomplete", "no-claim"} or
+            export.get("outcome") not in {"established", "unresolved"} or
+            not isinstance(export.get("reasons"), list) or
+            any(not isinstance(reason, str) for reason in export.get("reasons", [])) or
+            (export["status"] == "certified") != (export["outcome"] == "established") or
+            export.get("audit_status") not in {"checked", "unaudited"} or
+            (export["status"] == "certified" and export["audit_status"] != "checked")):
+        raise ReceiptTransportError("missing or corrupt Lean scope status export")
+    # Check one export per requested occurrence; digest equality alone cannot
+    # distinguish two occurrences requesting the same meaning.
+    for item, row in zip(items, rows, strict=True):
+        if (not isinstance(row, dict) or row.get("node") != (item.get("attachment") or {}).get("node") or
+                row.get("request_digest") != item["admitted_request_digest"] or
+                row.get("claim_kind") not in {"canonical", "author", "generic", "reserved", "unresolved"} or
+                row.get("semantic_dependencies") != item["semantic_dependencies"]):
+            raise ReceiptTransportError("Lean status export has a wrong source/request association")
+        _validate_audit(row.get("audit"))
+    security_rows = [row for row in rows if row["claim_kind"] not in {"author", "generic"}]
+    if ((export["audit_status"] == "unaudited" and
+            any(row["audit"]["status"] == "certified" for row in rows)) or
+            (export["status"] == "certified" and (not security_rows or export["reasons"] or
+            any(row["audit"]["status"] != "certified" for row in security_rows))) or
+            (export["status"] == "no-claim" and security_rows)):
+        raise ReceiptTransportError("inconsistent Lean scope/item status exports")
+    return export, items
+
+
+def requested_claim(item, mappings, records, registry, modules, evidence, checks, connected_reasons,
+                    environment, environment_reasons, reused_records, *, _export=None):
+    if _export is None:
+        export, _ = _scope_export({"claims": [item]}, mappings, records, modules, evidence, checks,
+            connected_reasons, environment, environment_reasons, reused_records)
+        _export = export["claims"][0]
+    audit = _export["audit"]
+    request = item.get("request") or {}
+    digest = data_digest(request)
+    node = (item.get("attachment") or {}).get("node")
+    candidates = [mapping for mapping in mappings if mapping.get("node") == node]
+    mapping = candidates[0] if len(candidates) == 1 else {}
+    receipt_record = records.get(mapping.get("receipt_declaration"))
+    receipt = (((receipt_record or {}).get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+    route, attribution = receipt_attribution(receipt)
+    receipt = {**receipt, "root_route": route, "attribution_diagnostics": attribution}
+    assumptions, discharged, reasons = audit["assumptions"], audit["discharged"], audit["reasons"]
+    # Render the observation Lean audited. A second filesystem read can report
+    # a different body digest while retaining the first observation's status.
+    dependencies = _export["semantic_dependencies"]
+    entry = item.get("source_entry", (request.get("subject") or {}).get("entry"))
+    subject = request.get("subject") or {}
+    obligations = [{"identity": digest, "typed_statement_digest": data_digest(receipt.get("proposition")),
+                    "context_digest": data_digest(receipt.get("context") or []),
+                    "parameter_telescope": receipt.get("context") or [], "expected_responsibility_layer": "P",
+                    "root_route": receipt.get("root_route") or "open", "discharger": receipt.get("discharger"),
+                    "attachment": item.get("attachment")}]
+    for expected_link in (receipt.get("stage_links") or {}).get("obligations", []):
+        identifier = expected_link.get("identifier")
+        proved = next((row for row in discharged if row["id"] == identifier), None)
+        expected_link = next((row for row in (receipt.get("stage_links") or {}).get("obligations", [])
+                              if row.get("identifier") == identifier), {})
+        obligations.append({"identity": identifier, "goal": expected_link.get("goal"),
+                            "goal_identity": expected_link.get("goal_identity"),
+                            "typed_statement_digest": data_digest(expected_link.get("goal")),
+                            "context_digest": data_digest(expected_link.get("context")),
+                            "expected_responsibility_layer": expected_link.get("expected_responsibility_layer"),
+                            "root_route": "theorem" if proved else "open",
+                            "status": "certified" if proved else "open"})
+    stage_identifiers = {link.get("identifier") for link in
+                         (receipt.get("stage_links") or {}).get("obligations", [])}
+    for link in receipt.get("required_links") or []:
+        if link.get("identifier") in stage_identifiers:
+            continue
+        obligations.append({"identity": link.get("identifier"), "goal": link.get("goal"),
+            "typed_statement_digest": data_digest(link.get("goal")),
+            "context_digest": data_digest(link.get("context")),
+            "expected_responsibility_layer": link.get("expected_responsibility_layer"),
+            "root_route": "theorem" if link.get("proved") else "open",
+            "status": "certified" if link.get("proved") else "open"})
+    resolution = mapping.get("resolution") or {}
+    state, claim_kind = audit["status"], _export["claim_kind"]
+    obligations[0]["status"] = state
+    return {"request": request, "request_digest": digest, "attachment": item.get("attachment"),
+            "property": (request.get("property") or {}).get("name"),
+            "covered_endpoint": (receipt.get("stage_links") or {}).get("covered_endpoint") or subject.get("stage"),
+            "requested_stage": subject.get("stage"), "statement": None,
+            "claim_kind": claim_kind,
+            "status": state, "outcome": audit["outcome"], "audit_checks": audit["checks"],
+            "product": "author_extension" if claim_kind == "author" else
+                       (receipt.get("authority") or {}).get("product", "unresolved"), "scope": "ir-relative", "native_closure": "open",
+            "validation": checks["outcome"], "resolution": resolution, "attempts": mapping.get("attempts") or [],
+            "method_plan": item.get("method"), "receipt": receipt_record and receipt_record["name"],
+            "root_route": receipt.get("root_route"), "discharger": receipt.get("discharger"),
+            "attribution_diagnostics": receipt.get("attribution_diagnostics") or [],
+            "method_version": ((receipt.get("provenance") or {}).get("method")
+                               if isinstance(receipt.get("provenance"), dict) else None),
+            "exported_capabilities": receipt.get("exported_capabilities") or [],
+            "application_coverage": receipt.get("application_coverage"),
+            "source_entry": entry, "entry_association": item.get("entry_association"),
+            "honest_input_policy": receipt.get("honest_input_policy"),
+            "actual_dependency_declarations": receipt.get("proof_dependencies") or [],
+            "actual_receipt_dependencies": receipt.get("dependencies") or [], "obligations": obligations,
+            "checked_correspondences": [row for row in discharged if row.get("category") == "stage-link"],
+            "assumptions_by_category": {category: [row for row in assumptions if row["category"] == category]
+                                        for category in sorted({row["category"] for row in assumptions})},
+            "semantic_dependencies": dependencies, "assumptions": assumptions, "discharged": discharged,
+            "bound": {"property": receipt.get("proposition")}, "reasons": list(dict.fromkeys(reasons)),
+            "matching": {"kernel": (["registered resolution", "evaluated meaning", "receipt proof type"]
+                                    if receipt.get("indices_checked") is True else []),
+                         "frontend": ["source request association", "artifact byte digests", "source site labels"]}}
+
+
+def scope_reasons(source, scope, proof_entry=None):
+    export = _invoke_receipt_classifier({"format": "zkc.receipt-audit-input/0",
+        "operation": "scope-reasons", "source": source, "scope": scope, "proof_entry": proof_entry}, {"main"})
+    return export["reasons"]
+
+
+def report_claim_scope(source, mappings, records, registry, modules, evidence, checks, reasons,
+                       environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+    """Join/render exactly one Lean classification for every requested item."""
+    try:
+        export, _ = _scope_export(source, mappings, records, modules, evidence, checks, reasons,
+            environment, environment_reasons, reused_records, trial=trial, scope=scope, proof_entry=proof_entry)
+    except (ReceiptTransportError, OSError) as error:
+        # A failed transport has no security decision. In particular it cannot
+        # become `incomplete` by consulting a frontend resolution fallback.
+        diagnostic = f"receipt status transport failure: {error}"
+        claims = [{"request": item.get("request"), "attachment": item.get("attachment"),
+                   "claim_kind": "unresolved", "status": "transport-failure", "outcome": "unresolved",
+                   "product": "unresolved", "reasons": [diagnostic]}
+                  for item in source.get("claims", [])]
+        return {"claims": claims, "security_claims": claims, "author_claims": [], "generic_claims": [],
+                "status": "transport-failure", "outcome": "unresolved", "reasons": [diagnostic],
+                "audit_status": "transport-failure"}
+    claims = [requested_claim(item, mappings, records, registry, modules, evidence, checks,
+        reasons, environment, environment_reasons, reused_records, _export=row)
+        for item, row in zip(source.get("claims", []), export["claims"], strict=True)]
+    return {"claims": claims,
+            "security_claims": [item for item in claims if item["claim_kind"] not in {"author", "generic"}],
+            "author_claims": [item for item in claims if item["claim_kind"] == "author"],
+            "generic_claims": [item for item in claims if item["claim_kind"] == "generic"],
+            "outcome": export["outcome"], "status": export["status"], "reasons": export["reasons"],
+            "audit_status": export.get("audit_status", "checked")}
+
+
+def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+    """Build reports only from source requests and checked emitted receipts."""
+    manifest = load_manifest(manifest_path)
+    evidence = load_evidence(evidence_directory, manifest["name"])
+    modules = attached(manifest)
+    connected, connected_reasons = connection(manifest, manifest_path, modules, evidence)
+    checks = validation(evidence)
+    reasons = []
+    try:
+        entries, endpoints = records.registry()
+        registry = Registry(entries, endpoints)
+    except ValueError as error:
+        registry = Registry([], [])
+        reasons.append(str(error))
+    environment, environment_reasons = verified_environment(records)
+    if evidence is not None and evidence.get("format") != EVIDENCE_FORMAT:
+        reasons.append("unsupported pipeline evidence format")
+    if evidence is not None and evidence.get("manifest_sha256") != sha256(manifest_path):
+        reasons.append("pipeline evidence lacks this exact manifest identity")
+    source = (evidence or {}).get("source_claims") or {}
+    if source.get("format") != BOUND_CLAIMS_FORMAT:
+        reasons.append("no bound source claim export was produced")
+    scope = (evidence or {}).get("source_claim_scope")
+    common_reasons = reasons + connected_reasons
+    selected_reasons = common_reasons
+    selected = report_claim_scope(source, (evidence or {}).get("claim_receipts") or [], records, registry,
+                                  modules, evidence, checks, selected_reasons, environment,
+                                  environment_reasons, reused_records, scope=scope,
+                                  proof_entry=(manifest.get("entries") or {}).get("proof"))
+    trials = []
+    for trial in (evidence or {}).get("source_claim_trials") or []:
+        entry = trial.get("entry")
+        bound = {**source, "entry": entry, "entries": [entry], "claims": trial.get("claims") or []}
+        trial_evidence = {**(evidence or {}), "source_claims": bound}
+        trial_scope = {"entries": [entry], "selection": "explicit"}
+        mappings = trial.get("claim_receipts") or []
+        audited = report_claim_scope(bound, mappings, records, registry, modules, trial_evidence, checks,
+                                     common_reasons, environment, environment_reasons,
+                                     reused_records, trial=True, scope=trial_scope)
+        trials.append({"entry": entry, "source_claim_scope": trial_scope,
+                       "bound_claims": bound["claims"], "claim_receipts": mappings,
+                       **audited})
+    try:
+        relative = str(Path(manifest_path).resolve().relative_to(ROOT))
+    except ValueError:
+        relative = str(manifest_path)
+    products = {claim["product"] for claim in selected["security_claims"]}
+    product = next(iter(products)) if len(products) == 1 else "assurance_report"
+    return {"format": FORMAT, "subject": manifest["name"], **selected,
+            "product": product, "scope": "ir-relative", "native_closure": "open",
+            "source_claim_scope": scope, "source_claim_trials": trials,
+            "source_claim_inventory": (evidence or {}).get("source_claim_inventory", []),
+            "manifest": {"path": relative, "sha256": sha256(manifest_path),
+                "schema": manifest.get("schema"), "entries": manifest.get("entries") or {}},
+            "artifacts": {"attached": modules, "connected": connected}, "checker": environment,
+            "context": context(manifest, ledger, records, registry),
+            "allowed_axioms": list(ALLOWED_AXIOMS)}

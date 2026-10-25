@@ -34,7 +34,7 @@ theorem child_present (claim : F) (count handle : Nat) (admitted : count ≤ 4) 
     (ProtocolContext.enter {} "s3" [0, 1]) 1 rfl (by decide)]
   simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present (ProtocolContext.enter {} "s3" [0, 1]) handle count ([], claim)]
-  exact PIR.Proc.bind_assoc _ _ _
+  exact PIR.Process.bind_assoc _ _ _
 
 def assignments (raw : List F) (dimension : Nat) :=
   fixedReduction (G := G)

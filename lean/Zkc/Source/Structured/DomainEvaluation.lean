@@ -95,7 +95,7 @@ def mapRowArgumentsOn {carriers : Carriers} (field : String) : (mask : List Bool
 def mapRowOn {carriers : Carriers} {I : PIR.Signature}
     (table : HelperTable carriers.Value I) (spec : MapSpec)
     (args : Values carriers.Value spec.arguments) (index : Nat) :
-    PIR.Proc I (carriers.Field spec.field) :=
+    PIR.Process I (carriers.Field spec.field) :=
   match mapRowArgumentsOn spec.field spec.rowwise args index with
   | none => .halt .refused
   | some values => (invoke table spec.helper values).bind fun result => .done (result.get .here)
@@ -103,7 +103,7 @@ def mapRowOn {carriers : Carriers} {I : PIR.Signature}
 def denoteMapOn {carriers : Carriers} {I : PIR.Signature}
     (table : HelperTable carriers.Value I) (spec : MapSpec)
     (args : Values carriers.Value spec.arguments) :
-    PIR.Proc I (Values carriers.Value [.vector spec.field]) :=
+    PIR.Process I (Values carriers.Value [.vector spec.field]) :=
   Finite.admitThen (mapShape (mapLengthsOn spec.field spec.rowwise args)) fun length =>
     (mapRows (mapRowOn table spec args) (List.range length)).bind fun values =>
       .done (.cons values .nil)
@@ -122,9 +122,9 @@ def foldTransitionOn {carriers : Carriers} {interface : PIR.Signature}
     (captures : Values carriers.Value spec.captures)
     (state : Values carriers.Value spec.state)
     (item : carriers.Value spec.domain.item) :
-    PIR.Proc interface (Values carriers.Value spec.state) :=
+    PIR.Process interface (Values carriers.Value spec.state) :=
   let callbackArguments := Values.cons item (arguments.append captures)
-  let enabled : PIR.Proc interface (Values carriers.Value [.boolean]) :=
+  let enabled : PIR.Process interface (Values carriers.Value [.boolean]) :=
     if spec.predicate.isEmpty then .done (.cons true .nil)
     else invoke table spec.predicateHelper callbackArguments
   enabled.bind fun result =>
@@ -134,7 +134,7 @@ def foldTransitionOn {carriers : Carriers} {interface : PIR.Signature}
 def denoteFoldOn {carriers : Carriers} {interface : PIR.Signature}
     (table : HelperTable carriers.Value interface) (spec : FoldSpec)
     (values : Values carriers.Value spec.arguments) :
-    PIR.Proc interface (Values carriers.Value spec.state) :=
+    PIR.Process interface (Values carriers.Value spec.state) :=
   let (arguments, rest) := values.split spec.domain.inputs
   let (initial, captures) := rest.split spec.state
   Finite.execute (spec.domain.denoteOn arguments) (foldTransitionOn table spec arguments captures)
@@ -145,14 +145,14 @@ values and stopping, and never inspects callback process constructors. -/
 def invokeCallbackOn {carriers : Carriers} {interface : PIR.Signature} {inputs outputs : List Ty}
     (callback : RegionFunction carriers.Value interface (inputs, outputs))
     (arguments : Values carriers.Value inputs) :
-    PIR.Proc interface (Values carriers.Value outputs) := callback arguments
+    PIR.Process interface (Values carriers.Value outputs) := callback arguments
 
 def denoteLoopOn {carriers : Carriers} {interface : PIR.Signature} (state captures : List Ty)
     (body : RegionFunction carriers.Value interface
       (.index :: (state ++ captures), state ++ captures))
     (lower upper : Nat) (initial : Values carriers.Value state)
     (captured : Values carriers.Value captures) :
-    PIR.Proc interface (Values carriers.Value state) :=
+    PIR.Process interface (Values carriers.Value state) :=
   Finite.execute (.elements (List.range' lower (upper - lower)))
     (fun current index =>
       (invokeCallbackOn body (.cons index (current.append captured))).bind fun results =>
@@ -164,7 +164,7 @@ def denoteConditionalLoopOn {carriers : Carriers} {interface : PIR.Signature}
       (.index :: (state ++ captures), .boolean :: (state ++ captures)))
     (lower upper : Nat) (initial : Values carriers.Value state)
     (captured : Values carriers.Value captures) :
-    PIR.Proc interface (Values carriers.Value state) :=
+    PIR.Process interface (Values carriers.Value state) :=
   (Finite.execute (.elements (List.range' lower (upper - lower)))
     (fun (current : Bool × Values carriers.Value state) index =>
       if current.1 then
@@ -181,10 +181,12 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
     (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface) :
     (op : Op) → Values model.Value op.arguments →
     Values (RegionFunction model.Value interface) op.regions →
-    PIR.Proc interface (Values model.Value op.results)
+    PIR.Process interface (Values model.Value op.results)
   | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluateOn model.toFieldModel args)
   | .indexConstant value, .nil, .nil => .done (.cons value .nil)
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .fieldEmbed extension base, .cons value .nil, .nil =>
+      .done (.cons (model.embed extension base value) .nil)
   | .fieldConstant domain value, .nil, .nil => .done (.cons (value : model.Field domain) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
@@ -248,7 +250,7 @@ def payloadMeaningsOn (observations : SiteObservations interface) (payload : Pay
 
 def payloadDenoteOn (observations : SiteObservations interface) (payload : Payload)
     (inputs : Values model.Value payload.entry.inputs) :
-    PIR.Proc interface (Values model.Value payload.entry.outputs) :=
+    PIR.Process interface (Values model.Value payload.entry.outputs) :=
   payload.entry.body.denote
     (meaningOn model observations (payloadMeaningsOn model observations payload)) inputs.get
 

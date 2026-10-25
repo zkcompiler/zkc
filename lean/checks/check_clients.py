@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -18,17 +19,22 @@ import subprocess
 HERE = Path(__file__).resolve().parents[1]
 
 
-def check(root, output, with_arklib=False, lake="lake"):
+def check(root, output, with_arklib=False, lake="lake", with_security=False):
     lake = support.lake.resolve(lake)
     lake = str(Path(lake).absolute())
     output.mkdir(parents=True, exist_ok=False)
+    environment = dict(os.environ)
+    for key in ('LEAN_PATH', 'LEAN_SRC_PATH', 'LEAN_SYSROOT', 'LAKE_HOME'):
+        environment.pop(key, None)
     results = {}
     clients = [('main', 'Main.lean', root, 'zkc')]
+    if with_security or with_arklib:
+        clients.append(('security', 'Security.lean', root / 'security', 'zkc_security'))
     if with_arklib:
         integration = root / 'integrations/arklib'
         clients.extend([
-            ('arklib', 'ArkLib.lean', integration, 'zkc_security'),
-            ('uniform', 'UniformComposition.lean', integration, 'zkc_security'),
+            ('arklib', 'ArkLib.lean', integration, 'zkc_arklib'),
+            ('uniform', 'UniformComposition.lean', integration, 'zkc_arklib'),
         ])
     for kind, filename, upstream, dependency in clients:
         client = output / kind
@@ -57,19 +63,18 @@ def check(root, output, with_arklib=False, lake="lake"):
         packages.mkdir(parents=True)
         for package in manifest['packages']:
             if package['type'] == 'path':
-                if package['name'] == 'zkc':
-                    package['dir'] = str(root)
+                package['dir'] = str((upstream / package['dir']).resolve())
                 continue
             name = package['name'].removeprefix('«').removesuffix('»')
             (packages / name).symlink_to((upstream / '.lake/packages' / name).resolve())
         (client / 'lake-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-        lake_version = subprocess.check_output([lake, '--version'], cwd=client, text=True).strip()
+        lake_version = subprocess.check_output([lake, '--version'], cwd=client, env=environment, text=True).strip()
         lean_version = subprocess.check_output([lake, 'env', 'lean', '--version'],
-                                               cwd=client, text=True).strip()
+                                               cwd=client, env=environment, text=True).strip()
         log_path = output / f'{kind}.log'
         with log_path.open('w') as log:
             run = subprocess.run([lake, '--no-cache', 'build'], cwd=client,
-                                 stdout=log, stderr=subprocess.STDOUT)
+                                 env=environment, stdout=log, stderr=subprocess.STDOUT)
         text = log_path.read_text()
         compiled_hash = hashlib.sha256(compiled_source.read_bytes()).hexdigest()
         drift = compiled_hash != source_hash or hashlib.sha256(source.read_bytes()).hexdigest() != source_hash
@@ -84,6 +89,7 @@ def check(root, output, with_arklib=False, lake="lake"):
         if not passed:
             break
     record = {'format': 'zkc.library-clients.v0', 'clients': results,
+              'inherited_lean_paths': False,
               'status': 'pass' if all(x['status'] == 'pass' for x in results.values()) else 'fail'}
     (output / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
     return record
@@ -94,8 +100,9 @@ if __name__ == '__main__':
     parser.add_argument("--output", type=Path,
                         default=support.evidence.records("clients", ""))
     parser.add_argument('--with-arklib', action='store_true')
+    parser.add_argument('--with-security', action='store_true')
     parser.add_argument('--lake', default='lake')
     args = parser.parse_args()
-    record = check(HERE, args.output.resolve(), args.with_arklib, args.lake)
+    record = check(HERE, args.output.resolve(), args.with_arklib, args.lake, args.with_security)
     print(json.dumps(record, indent=2))
     raise SystemExit(0 if record['status'] == 'pass' else 1)

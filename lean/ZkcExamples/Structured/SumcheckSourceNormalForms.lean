@@ -100,7 +100,7 @@ theorem run_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Com
 
 /-- The verifier's normal form of the whole body. -/
 def verifierProcess (ctx : ProtocolContext) (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
   (SumcheckRoundNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) claim count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   (Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed SumcheckHelperBodies.checkHelper) (.cons raw (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun (checkReturned : Values (Component (assignment F G)) [.boolean]) =>
@@ -133,11 +133,11 @@ theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies Su
   refine (reduce_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 7 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (SumcheckRoundNormalForms.verifierReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (count := count) (service := service))).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (reduce_verifierReduce_returned ctx separate out)
+  exact congrArg PIR.Process.done (reduce_verifierReduce_returned ctx separate out)
 
 /-- The verifier's laws as the normalizer reads them, keyed by helper. -/
 def verifierSignature : NormalForm.Signature :=
@@ -244,12 +244,12 @@ theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceV
     iterate 5 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (verifier_process (bodies := bodies) (raw := raw) (claim := claim) (count := count) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (verifier_outputs ctx out)
+  exact congrArg PIR.Process.done (verifier_outputs ctx out)
 
 /-- The verifier's participant of the admitted unit. -/
 theorem verifier_participant (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)
@@ -263,7 +263,7 @@ theorem verifier_participant (bodies : SumcheckVerifierHelpers.Bodies SumcheckSo
 
 /-- The prover's normal form of the whole body. -/
 def proverProcess (ctx : ProtocolContext) (raw : List F) (rounds : Nat) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
   (SumcheckRoundNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) raw rounds rounds).bind fun (_ : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons none .nil : Values (Component (assignment F G)) [.boolean])
@@ -295,11 +295,11 @@ theorem reduce_proverReduce_invoke (bodies : SumcheckUnitContracts.Bodies Sumche
   refine (reduce_view ctx (ctx.roles 0) _ (.cons (some raw) (.cons (some rounds) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 7 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (SumcheckRoundNormalForms.proverReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (entries := raw) (count := rounds) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (enough := Nat.le_refl _))).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (reduce_proverReduce_returned ctx separate out)
+  exact congrArg PIR.Process.done (reduce_proverReduce_returned ctx separate out)
 
 /-- The prover's laws as the normalizer reads them, keyed by helper. -/
 def proverSignature : NormalForm.Signature :=
@@ -418,12 +418,12 @@ theorem prover_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews
     iterate 5 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
   subst self
-  refine (congrArg (fun process => PIR.Proc.bind process _)
+  refine (congrArg (fun process => PIR.Process.bind process _)
     (prover_process (bodies := bodies) (raw := raw) (rounds := rounds) (shape := shape) (bound := bound) (ctx := ctx) (self := ctx.roles 0) (role := rfl)
       (separate := separate) )).trans ?_
-  apply congrArg (PIR.Proc.bind _)
+  apply congrArg (PIR.Process.bind _)
   funext out
-  exact congrArg PIR.Proc.done (prover_outputs ctx separate out)
+  exact congrArg PIR.Process.done (prover_outputs ctx separate out)
 
 /-- The prover's participant of the admitted unit. -/
 theorem prover_participant (bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews.unit.definitions)

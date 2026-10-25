@@ -75,7 +75,7 @@ def operationKind : Structured.Op → String
   | .indexConstant _ => "index-constant"
   | .indexEqual => "index-equal"
   | .fieldConstant .. => "field-constant"
-  | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ | .fieldEqual _ => "field"
+  | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ | .fieldEmbed .. | .fieldEqual _ => "field"
   | .groupIdentity _ | .groupAdd _ | .groupScale .. | .groupEqual _ => "group"
   | .booleanConstant _ => "boolean-constant"
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => "boolean"

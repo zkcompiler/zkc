@@ -311,6 +311,10 @@ struct Import {
   std::vector<std::string> operators, notations, reductions;
   bool isPublic = false, indexing = false;
 };
+struct SyntaxSourceClaimBlock {
+  SourceClaimBlock value;
+  SyntaxType subject;
+};
 struct SyntaxDeclaration {
   std::optional<std::string> generated;
   Declaration::Kind kind;
@@ -360,6 +364,8 @@ struct SyntaxDeclaration {
   bool anonymous = false;
   std::optional<Span> specificationBlock;
   std::vector<SyntaxClause> specifications;
+  std::vector<SyntaxSourceClaimBlock> sourceClaims;
+  std::vector<SourceVerification> sourceVerifications;
   std::optional<SyntaxProofEntry> proof;
   std::optional<protocol::ProofFormat> proofFormat;
   std::optional<SyntaxConstruction> construction;
@@ -398,6 +404,7 @@ llvm::Error resolveNotationSyntax(std::vector<SyntaxOperator> &,
                                   NotationEnvironment &, Work &);
 llvm::Error check(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
 llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
+llvm::Error checkClosedSourceClaims(const ClosedEntry &, Work &);
 llvm::Error checkCapabilityInstallation();
 } // namespace zkc::language::detail
 

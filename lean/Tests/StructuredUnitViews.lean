@@ -11,25 +11,37 @@ set_option autoImplicit false
 namespace Tests.StructuredUnitViews
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured ServiceOrderBodies
 
-/-- A false closed equation is refused by the kernel, not assumed. -/
-example : (2 : Nat) + 2 ≠ 5 := by
-  fail_if_success have : (2 : Nat) + 2 = 5 := by kernel_rfl
-  decide
+-- A false equation must fail by type mismatch, never by exhausted resources.
+/-- error: (kernel) declaration type mismatch -/
+#guard_msgs (substring := true) in
+example : (2 : Nat) + 2 = 5 := by kernel_rfl
+
+-- This equation is true, but the kernel needs more than this budget.
+/-- error: (kernel) deterministic timeout -/
+#guard_msgs (substring := true) in
+set_option maxHeartbeats 50 in
+example : Nat.repeat Nat.succ 20000 0 = 20000 := by kernel_rfl
+
+set_option maxHeartbeats 200000 in
+set_option maxRecDepth 100000 in
+example : Nat.repeat Nat.succ 20000 0 = 20000 := by kernel_rfl
 
 /-- An equation over local variables is checked under its binders, for every
 value at once; a false one is refused. -/
 example (value : Nat) : value + 0 = value := by
   kernel_rfl
 
-example (value : Nat) : value + 1 ≠ value := by
-  fail_if_success have : value + 1 = value := by kernel_rfl
-  omega
+/-- error: (kernel) declaration type mismatch -/
+#guard_msgs (substring := true) in
+example (value : Nat) : value + 1 = value := by kernel_rfl
 
-/-- Section variables and instances are reverted too: an equation that holds
-only by a ring law, not by reduction, is refused. -/
-example {F : Type} [CommRing F] (x : F) : x + 0 = x := by
-  fail_if_success kernel_rfl
-  simp
+-- Section variables and instances are reverted too: an equation that holds
+-- only by a ring law, not by reduction, is refused.
+/-- error: (kernel) declaration type mismatch -/
+#guard_msgs (substring := true) in
+example {F : Type} [CommRing F] (x : F) : x + 0 = x := by kernel_rfl
+
+example {F : Type} [CommRing F] (x : F) : x + 0 = x := by simp
 
 example : ∀ value : Nat, value + 0 = value := by
   kernel_rfl

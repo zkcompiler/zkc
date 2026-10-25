@@ -122,7 +122,7 @@ theorem verifier_failed_challenge_send_prevents_receive :
 
 /-- A deliberately incorrect reference ignores the independently received
 response and substitutes a value satisfying the equation in this instance. -/
-def substitutedResponse : Proc interface (Values Value (Numbers 3)) :=
+def substitutedResponse : Process interface (Values Value (Numbers 3)) :=
   .call (.receive 10) fun commitment =>
     .call (.send 11 5) fun _ =>
       .call (.receive 12) fun _ =>
@@ -209,7 +209,7 @@ def repeatedBranches : Nat → Region dialect [.boolean] []
 
 theorem emptyBranch_denote (env : Environment Value [.boolean]) :
     emptyBranch.denote meaning env = .done vals[] := by
-  change (if env .here then Proc.done (vals[] : Values Value []) else Proc.done vals[]).bind _ = _
+  change (if env .here then Process.done (vals[] : Values Value []) else Process.done vals[]).bind _ = _
   split <;> rfl
 
 theorem repeatedBranches_denote (count : Nat) (env : Environment Value [.boolean]) :

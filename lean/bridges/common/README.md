@@ -20,7 +20,7 @@ hashes, the seed and source identities. `--compiler`, `--reference`, `--lean`,
 export and request beside the report. Successful temporary inputs are removed;
 the deterministic seed and checked-in fixtures reproduce them.
 
-The suite regenerates the public Schnorr Entry and an unrolled two-round
+The suite regenerates the closed Schnorr protocol and an unrolled two-round
 quadratic Sumcheck DSL fixture. It checks their complete exported snapshots and
 generated Lean constructor data. Six additional exports cover helper-based and
 algebraically rearranged implementations plus early-challenge and wrong-residual
@@ -79,13 +79,13 @@ From the repository root, after building Lean and the native compiler:
 ```sh
 python3 lean/bridges/common/verify.py \
   --module factor_openings=lean/bridges/common/fixtures/factor-openings.zkc \
-  --entry factor_openings::Horner \
+  --subject factor_openings::HornerProtocol \
   --request lean/bridges/common/requests/factor-openings.json \
   --output build/experiments/proof-request
 ```
 
 Alternatively, use `--snapshot lean/ZkcExamples/NativePrograms/fixtures/factor-horner.json`
-in place of `--module` and `--entry`. `--module NAME=PATH` is repeatable for
+in place of `--module` and `--subject`. `--module NAME=PATH` is repeatable for
 multi-module sources. `--compiler` and `--lake` select explicit tools.
 
 A successful receipt says `verified-in-model` and lists each property and its

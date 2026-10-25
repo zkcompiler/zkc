@@ -7,13 +7,10 @@ modules = { factor_openings = "lean/bridges/common/fixtures/factor-openings.zkc"
 [profiles]
 scalar = true
 
-[claims]
-properties = ["perfect-completeness", "interactive-soundness"]
-
 [scalar]
 contract = "sumcheck.public-factor-openings/0"
 namespace = "Zkc.Protocols.Sumcheck.FactorOpening"
-module = "Zkc.Protocols.Sumcheck.FactorOpening.Security"
+module = "Zkc.Protocols.Sumcheck.FactorOpening.Execution"
 binders = "(statement : Statement F) (claim : F) (service : Nat)"
 arguments = "statement claim service"
 unfold = ["experiment", "experimentWith", "terminal", "publicChecks", "value",
@@ -35,11 +32,13 @@ claim = ["claim", "field"]
 service = ["service", "service"]
 
 [scalar.properties.perfect-completeness]
+module = "ZkcSecurity.Families.Sumcheck.FactorOpening.Security"
 theorem = "perfect_completeness"
 experiment = "interactive.independent-uniform-field/0"
 premises = ["honest abstract strategy", "two independent uniform full-field coins"]
 
 [scalar.properties.interactive-soundness]
+module = "ZkcSecurity.Families.Sumcheck.FactorOpening.Security"
 theorem = "soundness"
 experiment = "interactive.independent-uniform-field/0"
 premises = ["false public sum claim", "arbitrary fixed causal strategy", "two independent uniform full-field coins"]

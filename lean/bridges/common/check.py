@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import shutil
 
-from native_entry import native_run
+from native_entry import native_subject
 from snapshot import render
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
@@ -34,7 +34,8 @@ def execute(command, ok=True, diagnostic=None):
     if result.returncode != (0 if ok else 1):
         raise AssertionError(f'{command}: exit {result.returncode}\n{result.stderr}\n{result.stdout}')
     if diagnostic is not None:
-        assert diagnostic in result.stderr.splitlines(), (command, result.stderr, diagnostic)
+        if diagnostic not in result.stderr.splitlines():
+            raise AssertionError((command, result.stderr, diagnostic))
     return result.stdout
 
 
@@ -148,7 +149,8 @@ class Suite:
         source = self.directory / 'source.mlir'
         source.write_text(text)
         data = json.loads(execute([self.args.compiler,'protocol-lean',source,'--symbol='+symbol]))
-        assert data[1] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()
+        if not (data[1] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()):
+            raise AssertionError("bridges/common/check.py:151: data[1] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()")
         exported = self.directory / 'source.json'
         exported.write_text(json.dumps(data))
         execute([self.args.lean,'check',exported])
@@ -187,12 +189,14 @@ class Suite:
                         stopped = copy.deepcopy(request)
                         stopped[3].append([action,['stop',stop]])
                         observed = self.compare(source,exported,symbol,stopped)
-                        assert observed[1] == ['stopped',stop]
+                        if not (observed[1] == ['stopped',stop]):
+                            raise AssertionError("bridges/common/check.py:190: observed[1] == ['stopped',stop]")
                     altered = copy.deepcopy(request)
                     wrong = copy.deepcopy(action)
                     wrong[1] += '-wrong-site'
                     altered[3].append([wrong,['stop','abort']])
-                    assert self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']
+                    if not (self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']):
+                        raise AssertionError("bridges/common/check.py:195: self.compare(source,exported,symbol,altered)[1] == ['stopped','refused']")
                     ty = action[3] if action[0]=='receive' else ['field',FIELD]
                     value = None if action[0]=='send' else self.value(ty)
                     request[3].append([action,['return',value]])
@@ -239,8 +243,11 @@ class Suite:
                 expected = ['returned',None] if role==0 else {
                     'honest':['returned',True], 'first-boundary':['stopped','reject'],
                     'terminal':['returned',False]}[attack]
-                assert result[1]==expected, (attack,role,result)
-                if role==1 and attack=='first-boundary': assert result[2]==3
+                if not (result[1]==expected):
+                    raise AssertionError((attack,role,result))
+                if role==1 and attack=='first-boundary':
+                    if not (result[2]==3):
+                        raise AssertionError('bridges/common/check.py:243: result[2]==3')
                 outcomes.append({'attack':attack,'role':role,'outcome':result[1]})
         return outcomes
 
@@ -258,7 +265,8 @@ class Suite:
 
     def request_formats(self):
         source, exported, _ = self.export(wrap([], [('a', 'f', [0, 1, 2])], ('a', 'f'), [0, 1, 2]))
-        assert self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]
+        if not (self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]):
+            raise AssertionError("bridges/common/check.py:261: self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]")
         controls = [
             '["zkc.common-run/0",-0,[0],[]]',
             '["zkc.common-run/0",0,[-0],[]]',
@@ -273,7 +281,8 @@ class Suite:
             path.write_text(text)
             execute([self.args.reference, source, 'main', path], ok=False, diagnostic='common-run-format')
             refusal = json.loads(execute([self.args.lean, 'run', exported, path], ok=False))
-            assert refusal == {'status': 'refused', 'code': 'common-run-json'}, refusal
+            if not (refusal == {'status': 'refused', 'code': 'common-run-json'}):
+                raise AssertionError(refusal)
         # Lexical preflight must leave string contents alone, even in an unused tail.
         self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], ['-0{}1e0']])
         return len(controls)
@@ -290,7 +299,8 @@ class Suite:
             data[8][index][1][0]='field.subtract'; exported.write_text(json.dumps(data))
             path=self.directory/'request.json'; path.write_text(json.dumps(['zkc.common-run/0',0,inputs,[]]))
             return json.loads(execute([self.args.reference,source,'main',path])) != json.loads(execute([self.args.lean,'run',exported,path]))
-        assert mismatch(body,[29,17])
+        if not (mismatch(body,[29,17])):
+            raise AssertionError('bridges/common/check.py:293: mismatch(body,[29,17])')
         # Greedy definition deletion; candidates with dangling references are
         # rejected by native admission, never treated as counterexamples.
         for line in list(body):
@@ -305,7 +315,8 @@ class Suite:
             for value in (0,1):
                 candidate=inputs.copy(); candidate[i]=value
                 if mismatch(body,candidate): inputs=candidate; break
-        assert len(body)==1 and inputs==[0,1] and mismatch(body,inputs)
+        if not (len(body)==1 and inputs==[0,1] and mismatch(body,inputs)):
+            raise AssertionError('bridges/common/check.py:308: len(body)==1 and inputs==[0,1] and mismatch(body,inputs)')
         return {'kind':'field.add-to-subtract','definitions':len(body),'inputs':inputs}
 
 
@@ -331,37 +342,43 @@ def main():
             setattr(args, name, target)
         suite=Suite(args,temporary)
         flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
-               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--entry=example::Interactive']
-        text, interface = native_run(execute, args.compiler, flags)
-        assert interface['original']==hashlib.sha256(text.encode()).hexdigest()
+               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--subject=schnorr::Schnorr<example::G>']
+        text, interface_text, interface = native_subject(execute, args.compiler, flags)
+        if not (interface['original']==hashlib.sha256(text.encode()).hexdigest()):
+            raise AssertionError("bridges/common/check.py:336: interface['original']==hashlib.sha256(text.encode()).hexdigest()")
         symbol=interface['protocol']
         data=suite.exercise(text,symbol)
         fixture=ROOT/'lean/ZkcExamples/NativePrograms/fixtures/schnorr.json'
-        assert data==json.loads(fixture.read_text()), 'Schnorr source drift: review correspondence before refreshing'
+        if not (data==json.loads(fixture.read_text())):
+            raise AssertionError('Schnorr source drift: review correspondence before refreshing')
         expected=render(data,'ZkcExamples.NativePrograms.SchnorrData')
-        assert expected==(fixture.parent.parent/'SchnorrData.lean').read_text()
+        if not (expected==(fixture.parent.parent/'SchnorrData.lean').read_text()):
+            raise AssertionError("bridges/common/check.py:342: expected==(fixture.parent.parent/'SchnorrData.lean').read_text()")
         fixture_text=(ROOT/'compiler/test/fixtures/mathematical/schnorr-services.mlir').read_text()
         suite.exercise(fixture_text)
         sumcheck_flags=['--source-format=zkc',
                         '--module=scalar_sumcheck=lean/bridges/common/fixtures/sumcheck.zkc',
-                        '--entry=scalar_sumcheck::Interactive']
-        sumcheck_text, sumcheck_interface = native_run(execute, args.compiler, sumcheck_flags)
-        assert sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()
+                        '--subject=scalar_sumcheck::Sumcheck']
+        sumcheck_text, interface_text, sumcheck_interface = native_subject(execute, args.compiler, sumcheck_flags)
+        if not (sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()):
+            raise AssertionError("bridges/common/check.py:349: sumcheck_interface['original']==hashlib.sha256(sumcheck_text.encode()).hexdigest()")
         sumcheck_symbol=sumcheck_interface['protocol']
         sumcheck_data=suite.exercise(sumcheck_text,sumcheck_symbol)
         sumcheck_fixture=fixture.with_name('sumcheck.json')
-        assert sumcheck_data==json.loads(sumcheck_fixture.read_text())
-        assert render(sumcheck_data,'ZkcExamples.NativePrograms.SumcheckData')==(fixture.parent.parent/'SumcheckData.lean').read_text()
+        if not (sumcheck_data==json.loads(sumcheck_fixture.read_text())):
+            raise AssertionError('bridges/common/check.py:353: sumcheck_data==json.loads(sumcheck_fixture.read_text())')
+        if not (render(sumcheck_data,'ZkcExamples.NativePrograms.SumcheckData')==(fixture.parent.parent/'SumcheckData.lean').read_text()):
+            raise AssertionError("bridges/common/check.py:354: render(sumcheck_data,'ZkcExamples.NativePrograms.SumcheckData')==(fixture.parent.parent/'SumcheckData.lean').read_text()")
         sumcheck_controls=suite.sumcheck(sumcheck_text,sumcheck_symbol)
         contract_controls=check_contract_forms(suite,ROOT,execute,
             {'Schnorr':(text,symbol),'Sumcheck':(sumcheck_text,sumcheck_symbol)})
         factor_controls=check_factor_forms(suite,ROOT,execute)
         algebra_sources=[]
-        for entry in ('Helpers','Expanded','AirResidual'):
+        for entry in ('WithHelper', 'Inline', 'Residual'):
             flags=['--source-format=zkc',
                    '--module=scalar_algebra=lean/bridges/common/fixtures/algebra.zkc',
-                   '--entry=scalar_algebra::'+entry]
-            algebra_text, algebra_interface = native_run(execute, args.compiler, flags)
+                   '--subject=scalar_algebra::'+entry]
+            algebra_text, interface_text, algebra_interface = native_subject(execute, args.compiler, flags)
             algebra_symbol = algebra_interface['protocol']
             suite.exercise(algebra_text,algebra_symbol)
             algebra_sources.append((algebra_text,algebra_symbol))
@@ -372,7 +389,8 @@ def main():
             for text,symbol in algebra_sources[:2]:
                 source,exported,_=suite.export(text,symbol)
                 outcomes.append(suite.compare(source,exported,symbol,['zkc.common-run/0',1,inputs,[]]))
-            assert outcomes[0]==outcomes[1], 'helper/expanded fold mismatch'
+            if not (outcomes[0]==outcomes[1]):
+                raise AssertionError('helper/expanded fold mismatch')
             variation_checks+=1
         for _ in range(args.cases):
             suite.exercise(generated(suite.rng,suite.rng.randrange(4,30)))

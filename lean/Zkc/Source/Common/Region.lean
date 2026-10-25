@@ -102,7 +102,7 @@ theorem denote_lowerCalculation (meaning : Mathematical.Meaning language)
   | letOp op args next ih => exact ih _
   | restrict scope value next ih => exact ih _
   | bind body next bodyIH nextIH =>
-      simp only [lowerCalculation, Region.denote, bodyIH, PIR.Proc.bind,
+      simp only [lowerCalculation, Region.denote, bodyIH, PIR.Process.bind,
         Mathematical.Block.evalAt]
       exact nextIH _
 
@@ -135,23 +135,23 @@ theorem Program.denote_toRegion (meaning : Mathematical.Meaning language)
   induction program with
   | ret value => rfl
   | calculate body next ih =>
-      simp only [toRegion, Region.denote, denote_lowerCalculation, PIR.Proc.bind, denote]
+      simp only [toRegion, Region.denote, denote_lowerCalculation, PIR.Process.bind, denote]
       exact ih _
   | exchange site sender receiver value next ih =>
       simp only [toRegion, Region.denote, participantMeaning, Values.singleton,
-        Operands.eval, Regions.denote, denote, PIR.Proc.bind_assoc, PIR.Proc.bind]
+        Operands.eval, Regions.denote, denote, PIR.Process.bind_assoc, PIR.Process.bind]
       congr 1
       funext received
       exact ih _
   | query site owner op args next ih =>
       simp only [toRegion, Region.denote, participantMeaning, Regions.denote, denote,
-        PIR.Proc.bind_assoc, PIR.Proc.bind]
+        PIR.Process.bind_assoc, PIR.Process.bind]
       congr 1
       funext value
       exact ih _
   | guard site owner ref next ih =>
       simp only [toRegion, Region.denote, participantMeaning, Values.singleton,
-        Operands.eval, Regions.denote, denote, PIR.Proc.bind_assoc, PIR.Proc.bind]
+        Operands.eval, Regions.denote, denote, PIR.Process.bind_assoc, PIR.Process.bind]
       congr 1
       funext reply
       exact ih _
@@ -205,7 +205,7 @@ theorem Imported.denote_toRegion (imported : Imported)
       (imported.denote meaning condition self inputs).bind
         (fun value => .done (Values.singleton value)) := by
   simp only [toRegion, Region.denote, Program.denote_toRegion, Imported.denote,
-    PIR.Proc.bind_assoc]
+    PIR.Process.bind_assoc]
   congr 1
 
 end Native

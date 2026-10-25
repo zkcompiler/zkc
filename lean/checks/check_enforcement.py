@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from support import evidence  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
 from check_library import permitted  # noqa: E402
+from support.dependencies import POLICY, audit_graph, exceptions  # noqa: E402
 
 
 def main():
@@ -21,7 +22,8 @@ def main():
         source = ('module\n/- import Wrong /- nested -/ -/\n'
                   'public import Std\nmeta import Lean\n'
                   'def text := "import Wrong"\n')
-        assert headers.imports(source) == ['Std', 'Lean']
+        if not (headers.imports(source) == ['Std', 'Lean']):
+            raise AssertionError("checks/check_enforcement.py:25: headers.imports(source) == ['Std', 'Lean']")
         for source in ('import\n', 'import /- unterminated', 'public import Std\n'):
             try:
                 headers.imports(source)
@@ -29,6 +31,18 @@ def main():
                 rows.append('malformed-header-refused')
             else:
                 raise AssertionError('invalid header was accepted')
+        # Parse a real new violating import with Lean's header parser, then run
+        # the same graph audit used for maintained source packages.
+        graph = {'Zkc.Source.NewClient': headers.imports(
+            'module\npublic import ZkcSecurity.Probability.UniformTape\n')}
+        try:
+            audit_graph(graph, ['Zkc.Source'])
+        except ValueError as error:
+            if 'forbidden dependency (core-to-probability)' not in str(error):
+                raise AssertionError(error)
+            rows.append('new-violating-import-refused')
+        else:
+            raise AssertionError('new violating import was accepted')
     rows.append('header-comments-and-modifiers')
     # Compile temporary modules independently. The ordinary Lean kernel accepts
     # axioms and sorry, so rejection must come from the maintained audit itself.
@@ -47,7 +61,8 @@ def main():
                 capture_output=True, text=True, timeout=60)
 
         result = compile_module('ZkcTools.DeclarationAudit')
-        assert result.returncode == 0, result.stdout + result.stderr
+        if not (result.returncode == 0):
+            raise AssertionError(result.stdout + result.stderr)
         cases = [
             ('ordinary', 'namespace Elsewhere\ntheorem valid : True := True.intro\nend Elsewhere\n', None),
             ('unused-axiom', 'axiom Elsewhere.unused : False\n', 'unexpected owned axiom'),
@@ -59,17 +74,21 @@ def main():
         for name, source, diagnostic in cases:
             (directory / 'Control/Subject.lean').write_text('import Lean\n' + source)
             result = compile_module('Control.Subject')
-            assert result.returncode == 0, (name, result.stdout, result.stderr)
+            if not (result.returncode == 0):
+                raise AssertionError((name, result.stdout, result.stderr))
             family = 'Missing' if name == 'empty-selection' else 'Control'
             (directory / 'Audit.lean').write_text('import Control.Subject\n'
                 'import ZkcTools.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.check [`{family}]\n')
             result = compile_module('Audit')
             if diagnostic is None:
-                assert result.returncode == 0 and 'DEPENDENCY-AUDIT-PASS' in result.stdout, result
+                if not (result.returncode == 0 and 'DEPENDENCY-AUDIT-PASS' in result.stdout):
+                    raise AssertionError(result)
             else:
-                assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
-                assert 'DEPENDENCY-AUDIT-PASS' not in result.stdout
+                if not (result.returncode > 0 and diagnostic in result.stdout):
+                    raise AssertionError((name, result))
+                if not ('DEPENDENCY-AUDIT-PASS' not in result.stdout):
+                    raise AssertionError("checks/check_enforcement.py:84: 'DEPENDENCY-AUDIT-PASS' not in result.stdout")
             rows.append(name)
         # An audit of the current module covers every theorem written so far
         # in that module, so it can replace lists of selected theorem names.
@@ -88,10 +107,13 @@ def main():
                 'run_cmd ZkcTools.DeclarationAudit.checkCurrent "CURRENT-MODULE-PASS"\n')
             result = compile_module('Local.Subject')
             if diagnostic is None:
-                assert result.returncode == 0 and 'CURRENT-MODULE-PASS' in result.stdout, (name, result)
+                if not (result.returncode == 0 and 'CURRENT-MODULE-PASS' in result.stdout):
+                    raise AssertionError((name, result))
             else:
-                assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
-                assert 'CURRENT-MODULE-PASS declarations=' not in result.stdout
+                if not (result.returncode > 0 and diagnostic in result.stdout):
+                    raise AssertionError((name, result))
+                if not ('CURRENT-MODULE-PASS declarations=' not in result.stdout):
+                    raise AssertionError("checks/check_enforcement.py:106: 'CURRENT-MODULE-PASS declarations=' not in result.stdout")
             rows.append(name)
         # The upstream boundary of a package: the library declarations its
         # declarations name directly, and explicitly named ones, exist and have
@@ -104,7 +126,8 @@ def main():
             'theorem unused : True := True.intro\n'
             'end Library\n')
         result = compile_module('Upstream.Library')
-        assert result.returncode == 0, (result.stdout, result.stderr)
+        if not (result.returncode == 0):
+            raise AssertionError((result.stdout, result.stderr))
         boundary_cases = [
             ('boundary-accepted', 'theorem Owner.uses : True := Library.clean\n', '[`Library.unused]', None),
             ('boundary-sorry', 'theorem Owner.uses : True := Library.holed\n', '[]',
@@ -118,17 +141,21 @@ def main():
             (directory / 'Owner').mkdir(exist_ok=True)
             (directory / 'Owner/Subject.lean').write_text('import Upstream.Library\n' + source)
             result = compile_module('Owner.Subject')
-            assert result.returncode == 0, (name, result.stdout, result.stderr)
+            if not (result.returncode == 0):
+                raise AssertionError((name, result.stdout, result.stderr))
             (directory / 'Audit.lean').write_text('import Owner.Subject\n'
                 'import ZkcTools.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.checkBoundary [`Owner] [`Upstream] {named} '
                 '"BOUNDARY-CONTROL-PASS"\n')
             result = compile_module('Audit')
             if diagnostic is None:
-                assert result.returncode == 0 and 'BOUNDARY-CONTROL-PASS boundary=2' in result.stdout, (name, result)
+                if not (result.returncode == 0 and 'BOUNDARY-CONTROL-PASS boundary=2' in result.stdout):
+                    raise AssertionError((name, result))
             else:
-                assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
-                assert 'BOUNDARY-CONTROL-PASS boundary=' not in result.stdout
+                if not (result.returncode > 0 and diagnostic in result.stdout):
+                    raise AssertionError((name, result))
+                if not ('BOUNDARY-CONTROL-PASS boundary=' not in result.stdout):
+                    raise AssertionError("checks/check_enforcement.py:143: 'BOUNDARY-CONTROL-PASS boundary=' not in result.stdout")
             rows.append(name)
         # The registry audit: every schema constant exists, a proposition schema
         # is proposition-valued, and every proposition-valued declaration of the
@@ -145,7 +172,8 @@ def main():
             'theorem unrelated (n : Nat) (h : n = 3) : n = n := rfl\n'
             'end Registry\n')
         result = compile_module('Registry.Subject')
-        assert result.returncode == 0, (result.stdout, result.stderr)
+        if not (result.returncode == 0):
+            raise AssertionError((result.stdout, result.stderr))
         complete = ('("registry.open", some `Registry.Open, true), '
                     '("registry.admissible", some `Registry.Admissible, true), '
                     '("registry.link", none, false)')
@@ -169,16 +197,34 @@ def main():
                 '"REGISTRY-CONTROL-PASS"\n')
             result = compile_module('Audit')
             if diagnostic is None:
-                assert result.returncode == 0 and 'REGISTRY-CONTROL-PASS' in result.stdout, (name, result)
-                assert 'premise-heads=2 registered-premise-heads=2' in result.stdout, (name, result)
+                if not (result.returncode == 0 and 'REGISTRY-CONTROL-PASS' in result.stdout):
+                    raise AssertionError((name, result))
+                if 'premise-heads=2 registered-premise-heads=2' not in result.stdout:
+                    raise AssertionError((name, result))
             else:
-                assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
-                assert 'REGISTRY-CONTROL-PASS' not in result.stdout
+                if not (result.returncode > 0 and diagnostic in result.stdout):
+                    raise AssertionError((name, result))
+                if not ('REGISTRY-CONTROL-PASS' not in result.stdout):
+                    raise AssertionError("checks/check_enforcement.py:188: 'REGISTRY-CONTROL-PASS' not in result.stdout")
             rows.append(name)
         # These fixtures test module ownership rather than declaration spelling.
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
+            ('security-upstream-arklib', 'ZkcSecurity.GuardFixture',
+             'ArkLib.GuardFixture', 'body', False),
+            ('security-optional-adapter', 'ZkcSecurity.GuardFixture',
+             'ZkcArkLib.GuardFixture', 'type', False),
+            ('security-vcvio-example-provider', 'ZkcSecurity.Families.GuardFixture',
+             'Examples.Schnorr.SigmaProtocol', 'body', True),
+            ('core-probability-body', 'Zkc.Source.GuardFixture',
+             'ZkcSecurity.Probability.GuardFixture', 'body', False),
+            ('security-example-type', 'ZkcSecurity.HashChain.GuardFixture',
+             'ZkcSecurity.Examples.GuardFixture', 'type', False),
+            ('clean-example-test-body', 'CleanExamples.GuardFixture',
+             'TestsClean.GuardFixture', 'body', False),
+            ('family-probability-rejected', 'Zkc.Protocols.Sumcheck.Verifier',
+             'ZkcSecurity.Probability.UniformTape', 'body', False),
             ('execution-protocol-body', 'ZkcSecurity.VCVio.Execution',
              'Zkc.Protocols.GuardFixture', 'body', False),
             ('execution-source-type', 'ZkcSecurity.VCVio.Execution',
@@ -186,52 +232,84 @@ def main():
             ('execution-example-body', 'ZkcSecurity.VCVio.Execution',
              'ZkcSecurity.Examples.GuardFixture', 'body', False),
             ('execution-arklib-body', 'ZkcSecurity.VCVio.Execution',
-             'ZkcSecurity.ArkLib.GuardFixture', 'body', False),
+             'ZkcArkLib.GuardFixture', 'body', False),
             ('execution-upstream-arklib-body', 'ZkcSecurity.VCVio.Execution',
              'ArkLib.GuardFixture', 'body', False),
-            ('causal-example-body', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Completion',
+            ('causal-example-body', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Completion',
              'ZkcSecurity.Examples.GuardFixture', 'body', False),
-            ('causal-source-type', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Phase',
+            ('causal-source-type', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Phase',
              'Zkc.Source.GuardFixture', 'type', False),
             ('schnorr-protocol-allowed', 'ZkcSecurity.VCVio.Schnorr',
              'Zkc.Protocols.Schnorr.Common', 'body', True),
             ('execution-semantics-allowed', 'ZkcSecurity.VCVio.Execution',
              'Zkc.Semantics.GuardFixture', 'body', True),
-            ('causal-protocol-allowed', 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal.Soundness',
+            ('causal-protocol-allowed', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Soundness',
              'Zkc.Protocols.GuardFixture', 'body', True),
         ]
         for name, owner, dependency, kind, allowed in ownership_cases:
-            assert permitted(owner, dependency) == allowed, name
+            if not (permitted(owner, dependency) == allowed):
+                raise AssertionError(name)
             path = directory.joinpath(*dependency.split('.')).with_suffix('.lean')
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('namespace GuardFixture\ndef value : Nat := 7\n'
                             'structure Token where\n  value : Nat\nend GuardFixture\n')
             result = compile_module(dependency)
-            assert result.returncode == 0, (name, result.stdout, result.stderr)
+            if not (result.returncode == 0):
+                raise AssertionError((name, result.stdout, result.stderr))
             path = directory.joinpath(*owner.split('.')).with_suffix('.lean')
             path.parent.mkdir(parents=True, exist_ok=True)
             body = ('def Elsewhere.leaked : Nat := GuardFixture.value\n' if kind == 'body'
                     else 'def Elsewhere.leaked (value : GuardFixture.Token) := value\n')
             path.write_text(f'import {dependency}\n' + body)
             result = compile_module(owner)
-            assert result.returncode == 0, (name, result.stdout, result.stderr)
+            if not (result.returncode == 0):
+                raise AssertionError((name, result.stdout, result.stderr))
             (directory / 'Audit.lean').write_text(f'import {owner}\n'
                 'import ZkcTools.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.check [`{owner}] "OWNER-GUARD-PASS" true\n')
             result = compile_module('Audit')
             if allowed:
-                assert result.returncode == 0 and 'OWNER-GUARD-PASS' in result.stdout, (name, result)
+                if not (result.returncode == 0 and 'OWNER-GUARD-PASS' in result.stdout):
+                    raise AssertionError((name, result))
             else:
-                assert result.returncode > 0 and f'forbidden {kind} dependency' in result.stdout, (name, result)
-                assert 'OWNER-GUARD-PASS' not in result.stdout
+                if not (result.returncode > 0 and f'forbidden {kind} dependency' in result.stdout):
+                    raise AssertionError((name, result))
+                if not ('OWNER-GUARD-PASS' not in result.stdout):
+                    raise AssertionError("checks/check_enforcement.py:252: 'OWNER-GUARD-PASS' not in result.stdout")
             rows.append(name)
+        # The data has one owner, but its two interpreters must also agree.
+        # Cover every layer pair, exact guards, and every retained exception.
+        representatives = [prefix + '.GuardFixture' for prefix, _ in POLICY['layers']]
+        representatives += [owner for guard in POLICY['guards'] for owner in guard['owners']]
+        representatives += ['Client']
+        pairs = sorted({(owner, dependency) for owner in representatives
+                        for dependency in representatives} | set(exceptions(POLICY)))
+        literals = ',\n'.join(f'({json.dumps(owner)}, {json.dumps(dependency)})'
+                              for owner, dependency in pairs)
+        (directory / 'Parity.lean').write_text(
+            'import ZkcTools.DeclarationAudit\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Source.GuardFixture '
+            '`ZkcSecurity.Probability.GuardFixture = false := by decide +kernel\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocols.Sumcheck.Verifier '
+            '`ZkcSecurity.Probability.UniformTape = false := by decide +kernel\n'
+            f'def pairs : List (String × String) := [{literals}]\n'
+            '#eval IO.println (Lean.toJson (pairs.map fun (owner, dependency) => '
+            'ZkcTools.DeclarationAudit.permitted owner.toName dependency.toName)).compress\n')
+        result = compile_module('Parity')
+        if not (result.returncode == 0):
+            raise AssertionError((result.stdout, result.stderr))
+        if not (json.loads(result.stdout) == [permitted(*pair) for pair in pairs]):
+            raise AssertionError('checks/check_enforcement.py:274: json.loads(result.stdout) == [permitted(*pair) for pair in pairs]')
+        rows.append(f'shared-policy-interpreter-parity-{len(pairs)}')
         executable = ROOT / '.lake/build/bin/common-source'
 
         def invoke(name, arguments, expected):
             result = subprocess.run([str(executable), *map(str, arguments)],
                                     capture_output=True, text=True, timeout=10)
-            assert result.returncode == 1 and not result.stderr, (name, result)
-            assert json.loads(result.stdout) == {'status': 'refused', 'code': expected}, (name, result)
+            if not (result.returncode == 1 and not result.stderr):
+                raise AssertionError((name, result))
+            if not (json.loads(result.stdout) == {'status': 'refused', 'code': expected}):
+                raise AssertionError((name, result))
             rows.append(name)
 
         invoke('arity', [], 'common-source-arguments')

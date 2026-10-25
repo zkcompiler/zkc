@@ -14,7 +14,6 @@ import ZkcExamples.Structured.SumcheckSourceVerifier
 import ZkcExamples.Structured.SumcheckReduceVerifier
 import Zkc.Source.Structured.RepeatLaws
 import ZkcExamples.NativePrograms.CustomProperty
-import ZkcExamples.NativePrograms.FactorHorner
 import Zkc.Specification
 import Zkc.Source.Common.Region
 import Zkc.Source.Region
@@ -28,8 +27,6 @@ import ZkcExamples.Structured.SumcheckReduceContracts
 an independently authored typed property. No external security package is needed. -/
 noncomputable def importedSourceRejects :=
   @ZkcExamples.NativePrograms.CustomProperty.imported_rejects
-noncomputable def composedSourceSoundness :=
-  @ZkcExamples.NativePrograms.FactorHorner.property_interactive_soundness
 
 /-- A downstream transformation proof uses the same contextual contract without
 importing test modules or the protocol-specific example operation vocabulary. -/
@@ -185,3 +182,7 @@ noncomputable def originalSumcheckPlainCheck :=
 
 noncomputable def originalSumcheckOptionalWidth :=
   @ZkcExamples.Structured.SumcheckSourceContracts.width_components
+
+-- The public process interface supports ordinary Lean monadic notation.
+example {I : PIR.Signature} (process : PIR.Process I Nat) :
+    (do let value ← process; pure value) = process := by simp
