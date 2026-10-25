@@ -48,9 +48,10 @@ The Schnorr family imports `VCVio.Schemes.Schnorr.SigmaProtocol`. Uniform-produc
 sampling, persistent bad states and event bounds from couplings use upstream
 VCVio results directly. Polynomial agreement uses CompPoly's root-counting
 theorem. These substitutions preserve the existing game, resource and domain
-assumptions. Upstream weakest-precondition and state-restoration results need
-separate adapters for those boundaries; upgrading a dependency does not
-establish such an adapter or extend a security claim.
+assumptions. The local [weakest-precondition adapters](spec/weakest-preconditions.md) connect
+Lean 4.35 `Std.WP` to charged rejection, pathwise cost and actual honest execution.
+Distributional state-restoration and adversary reasoning remain separate; the
+adapters do not extend a security claim.
 
 Clean's selected adapter and native example cone uses a declared compatibility
 patch at [the integration boundary](../integrations/clean/compatibility.json).
