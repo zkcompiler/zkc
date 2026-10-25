@@ -47,6 +47,11 @@ target_compile_definitions(zkc-execution_emission-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-execution_emission-test PRIVATE MLIRParser)
 
+add_zkc_test(source_execution IR source-execution)
+target_compile_definitions(zkc-source_execution-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-source_execution-test PRIVATE MLIRParser)
+
 add_zkc_test(execution_reader IR execution-reader)
 target_compile_definitions(zkc-execution_reader-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

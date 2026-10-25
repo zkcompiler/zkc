@@ -56,6 +56,14 @@ the full publication pipeline and artifact comparator still use the existing
 consumer.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
+The logical source-scoped API additionally retains ordinary helper calls,
+checks their complete acyclic closure and independently compares current actual
+callees, occurrences and ordered operands. Source helper return packaging is
+distinct from charged native completion; outlined control yields retain their
+tick. This covers the scoped helper component, not mathematical/finite requests
+or the authored-source emitter migration. See the
+[source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,

@@ -68,14 +68,25 @@ public:
 };
 class Reader {
   Operation *module;
-  bool physical;
+  bool physical, source;
   unsigned remaining = 1000000, next = 0;
   llvm::DenseSet<Operation *> active, visited;
   std::string problem;
 
 public:
-  Reader(Operation *module, bool physical)
-      : module(module), physical(physical) {}
+  Reader(Operation *module, bool physical, bool source = false)
+      : module(module), physical(physical), source(source) {}
+  bool isSource() const { return source; }
+  bool helper(func::CallOp call) {
+    auto function = dyn_cast_or_null<func::FuncOp>(
+        SymbolTable::lookupSymbolIn(module, call.getCallee()));
+    return (source && function && !function.isExternal() &&
+            function->hasAttr("runtime.origin") &&
+            !function->hasAttr("runtime.region") && call.getNumOperands() &&
+            call.getNumResults() == 1 &&
+            isa<exec::OutcomeType>(call.getResult(0).getType())) ||
+           fail("source call must select an actual ordinary scoped helper");
+  }
   bool fail(StringRef reason) {
     if (problem.empty())
       problem = reason.str();
@@ -542,6 +553,20 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
           !results(values, record.outputs))
         return false;
       body.push_back({apply.getSite().str(), std::move(record)});
+    } else if (auto call = dyn_cast<func::CallOp>(op)) {
+      program::LocalApply record;
+      auto site = call->getAttrOfType<StringAttr>("runtime.site");
+      if (!reader.helper(call) || !site ||
+          !attributes(call, {"callee", "runtime.site"}) ||
+          call.getOperand(0) != scope ||
+          !names(call.getOperands().drop_front(), record.inputs))
+        return reader.fail("source helper target, scope or occurrence");
+      record.callee = call.getCallee().str();
+      SmallVector<Value> values;
+      if (!dispatch(call.getResult(0), values) ||
+          !results(values, record.outputs))
+        return false;
+      body.push_back({site.str(), std::move(record)});
     } else if (auto literal = dyn_cast<exec::BooleanOp>(op)) {
       if (literal.getScope() != scope ||
           !attributes(literal, {"value", "site"}))
@@ -590,10 +615,19 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
           !names(release.getValues(), record.values))
         return reader.fail("invalid storage release");
       body.push_back({"", std::move(record)});
+    } else if (auto returnedValue = dyn_cast<exec::ReturnOp>(op)) {
+      program::Names values;
+      if (!reader.isSource() || regionBody || !bare(returnedValue) ||
+          !names(returnedValue.getValues(), values) ||
+          !returned(take(), returnedValue.getOutcome()) || !atEnd())
+        return reader.fail("source return must package its exact payload");
+      body.push_back({"", program::Return{std::move(values)}});
+      return checked.size() == function.getBody().getBlocks().size() ||
+             reader.fail("unchecked CFG blocks");
     } else if (auto complete = dyn_cast<exec::CompleteOp>(op)) {
       program::Names values;
-      if (complete.getScope() != scope || !bare(complete) ||
-          !names(complete.getValues(), values) ||
+      if ((reader.isSource() && !regionBody) || complete.getScope() != scope ||
+          !bare(complete) || !names(complete.getValues(), values) ||
           !returned(take(), complete.getOutcome()) || !atEnd())
         return reader.fail("native completion must retain its outcome");
       if (regionBody)
@@ -685,6 +719,11 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
   for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
     if (!visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
+  if (source) {
+    if (auto e = admitNativeLocalDefinitions(result))
+      return std::move(e);
+    return result;
+  }
   program::Participants admitted;
   admitted.stage = physical ? program::Participants::Stage::Physical
                             : program::Participants::Stage::Logical;
@@ -706,5 +745,12 @@ readExecutionDefinitions(Operation *symbolTable, bool physical) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
     return error("execution-cfg", "invalid execution definition scope");
   return Reader(symbolTable, physical).run(/*mixed=*/true);
+}
+Expected<program::LocalDefinitions>
+readSourceExecutionDefinitions(Operation *symbolTable) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+    return error("execution-cfg", "invalid source execution definition scope");
+  return Reader(symbolTable, /*physical=*/false, /*source=*/true)
+      .run(/*mixed=*/true);
 }
 } // namespace zkc::protocol

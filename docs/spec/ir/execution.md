@@ -206,6 +206,35 @@ reconstructed program; binding that program to an earlier source remains the
 source comparator's obligation. The [implementation status](../../status.md)
 records whether this profile has reached the default compilation path.
 
+## Source scoped helper profile
+
+Before ordinary helper expansion, `readSourceExecutionDefinitions` and
+`verifySourceExecutionDefinitions` inspect logical scoped functions in one
+selected symbol table. They retain actual `func.call` targets, operands and
+`runtime.site` occurrences as internal helper applications. A call borrows the
+current function's exact scope and dispatches its explicit outcome; it creates
+no child frame. Every potential helper body, including dormant definitions,
+is checked, and the internal logical admission checks the complete acyclic
+call closure. Standard symbol and function verification alone does not supply
+these execution guarantees.
+
+A source helper returns through `exec.returned` followed by `func.return`.
+Expansion removes this packaging, so it must not introduce a native return tick.
+Outlined conditional, match and iteration bodies retain `exec.complete`: their
+yield is an actual native instruction. Entering or publishing a native root
+still requires the prepared profile's charged completion. The explicit source
+API does not make plain packaging legal in that prepared profile, nor does it
+permit unresolved calls in a published native program.
+
+The independent comparison binds the actual callee, occurrence, ordered ports,
+returned payload and failure continuation to admitted logical definitions. A
+same-typed retargeting can form a different valid source graph while failing
+comparison with the earlier graph. Each comparison rereads current SSA.
+These APIs cover ordinary scoped helpers; mathematical and finite realization
+requests need their separate actual-body and domain admission. They neither
+replace language-source correspondence nor establish the default compiler
+cutover. The native record writer is not an authored-source emitter.
+
 ## Independent admission
 
 The exporter retains logical signatures and source block shape under Entry

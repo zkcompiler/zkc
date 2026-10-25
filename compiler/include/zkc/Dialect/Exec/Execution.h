@@ -19,6 +19,15 @@ readLocalExecution(mlir::ModuleOp module, bool physical);
 /// verifier.
 llvm::Expected<program::LocalDefinitions>
 readExecutionDefinitions(mlir::Operation *symbolTable, bool physical);
+/// Read logical scoped definitions before ordinary helper expansion. Direct
+/// func.call edges borrow the current scope, retain runtime.site and expose
+/// their exact outcome. Root functions package returns without a native tick;
+/// outlined control bodies still perform charged native yield. Checks every
+/// actual helper body and admits the complete acyclic closure. This component
+/// does not admit mathematical/finite realization requests or prove language
+/// source correspondence, and its result cannot be published unexpanded.
+llvm::Expected<program::LocalDefinitions>
+readSourceExecutionDefinitions(mlir::Operation *symbolTable);
 /// Independently compare current actual CFG with admitted native definitions.
 /// Allows SSA renaming; checks all actual bodies and bindings without calling
 /// the reconstruction reader or replaying emission. No source theorem is
@@ -33,5 +42,10 @@ llvm::Error
 verifyExecutionDefinitions(mlir::Operation *symbolTable,
                            const program::LocalDefinitions &expected,
                            bool physical);
+/// Independently compare the same logical source-scoped profile, including
+/// actual helper targets, occurrences, ports and every dormant definition.
+llvm::Error
+verifySourceExecutionDefinitions(mlir::Operation *symbolTable,
+                                 const program::LocalDefinitions &expected);
 } // namespace zkc::protocol
 #endif

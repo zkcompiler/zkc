@@ -69,14 +69,26 @@ public:
 };
 class Comparison {
   Operation *module;
-  bool physical;
+  bool physical, source;
   unsigned remaining = 1000000;
   llvm::DenseSet<Operation *> active, visited;
   std::map<std::string, BoundOperation> bindings;
 
 public:
-  Comparison(Operation *module, bool physical)
-      : module(module), physical(physical) {}
+  Comparison(Operation *module, bool physical, bool source = false)
+      : module(module), physical(physical), source(source) {}
+  bool isSource() const { return source; }
+  bool helper(func::CallOp call, const program::LocalApply &record) {
+    if (!source || call.getCallee() != record.callee ||
+        call.getNumResults() != 1 ||
+        !isa<exec::OutcomeType>(call.getResult(0).getType()))
+      return false;
+    auto function = dyn_cast_or_null<func::FuncOp>(
+        SymbolTable::lookupSymbolIn(module, call.getCallee()));
+    return function && !function.isExternal() &&
+           !function->hasAttr("runtime.region") &&
+           function->hasAttr("runtime.origin");
+  }
   bool charge() { return remaining && (--remaining, true); }
   bool type(Type actual, StringRef expected = {}) const {
     auto bound = encodeBoundType(actual, physical);
@@ -475,6 +487,18 @@ bool BodyComparison::run(const program::Body &expected,
           !dispatch(call.getOutcome(), outputs) ||
           !bind(outputs, record->outputs))
         return false;
+    } else if (auto record = instruction.get<program::LocalApply>()) {
+      auto call = dyn_cast_or_null<func::CallOp>(take());
+      SmallVector<Value> outputs;
+      if (!call || !attrs(call, {"callee", "runtime.site"}) ||
+          !owner.helper(call, *record) ||
+          call->getAttrOfType<StringAttr>("runtime.site") !=
+              StringAttr::get(function.getContext(), instruction.site) ||
+          call.getNumOperands() == 0 || call.getOperand(0) != scope ||
+          !inputs(call.getOperands().drop_front(), record->inputs) ||
+          !dispatch(call.getResult(0), outputs) ||
+          !bind(outputs, record->outputs))
+        return false;
     } else if (auto record = instruction.get<program::BooleanConstant>()) {
       auto value = dyn_cast_or_null<exec::BooleanOp>(take());
       SmallVector<Value> outputs;
@@ -517,11 +541,19 @@ bool BodyComparison::run(const program::Body &expected,
           instruction.get<program::Return>()
               ? instruction.get<program::Return>()->values
               : instruction.get<program::Yield>()->values;
-      auto complete = dyn_cast_or_null<exec::CompleteOp>(take());
-      if (!complete || !attrs(complete) || complete.getScope() != scope ||
-          !inputs(complete.getValues(), expectedValues) ||
-          !returns(take(), complete.getOutcome()) || !end())
-        return false;
+      if (owner.isSource() && instruction.get<program::Return>()) {
+        auto returnedValue = dyn_cast_or_null<exec::ReturnOp>(take());
+        if (!returnedValue || !attrs(returnedValue) ||
+            !inputs(returnedValue.getValues(), expectedValues) ||
+            !returns(take(), returnedValue.getOutcome()) || !end())
+          return false;
+      } else {
+        auto complete = dyn_cast_or_null<exec::CompleteOp>(take());
+        if (!complete || !attrs(complete) || complete.getScope() != scope ||
+            !inputs(complete.getValues(), expectedValues) ||
+            !returns(take(), complete.getOutcome()) || !end())
+          return false;
+      }
     } else
       return false;
   }
@@ -639,6 +671,17 @@ Error verifyExecutionDefinitions(Operation *symbolTable,
   if (auto e = admit(admitted))
     return e;
   Comparison checker(symbolTable, physical);
+  if (!checker.run(expected, /*mixed=*/true))
+    return error("execution-correspondence");
+  return Error::success();
+}
+Error verifySourceExecutionDefinitions(
+    Operation *symbolTable, const program::LocalDefinitions &expected) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+    return error("execution-correspondence-subject");
+  if (auto e = admitNativeLocalDefinitions(expected))
+    return e;
+  Comparison checker(symbolTable, /*physical=*/false, /*source=*/true);
   if (!checker.run(expected, /*mixed=*/true))
     return error("execution-correspondence");
   return Error::success();
