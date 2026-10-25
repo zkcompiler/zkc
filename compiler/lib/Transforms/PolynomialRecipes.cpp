@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -42,9 +43,9 @@ class Realizer {
       SmallVector<Attribute> args;
       for (const auto &arg : arguments)
         args.push_back(builder.getStringAttr(arg));
-      local::OperationBindingOp::create(builder, loc, name, contract,
-                                        builder.getArrayAttr(args), "",
-                                        mlir::ArrayAttr{});
+      runtime::BindingOp::create(builder, loc, name, contract,
+                                 builder.getArrayAttr(args), "",
+                                 mlir::ArrayAttr{});
       found = bindings.emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);

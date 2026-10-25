@@ -9,6 +9,7 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -585,7 +586,7 @@ module {
           else
             ++admissionLoops;
         });
-        bulk->walk([&](local::OperationBindingOp binding) {
+        bulk->walk([&](runtime::BindingOp binding) {
           reduction |= binding.getContract() == "vector.sum";
         });
         require(
@@ -660,10 +661,8 @@ module {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "isolated closure correspondence failed");
         bool addition = false, subtraction = false;
-        for (auto binding : owner(*lowered)
-                                .getBody()
-                                .front()
-                                .getOps<local::OperationBindingOp>()) {
+        for (auto binding :
+             owner(*lowered).getBody().front().getOps<runtime::BindingOp>()) {
           addition |= binding.getContract() == "field.add";
           subtraction |= binding.getContract() == "field.sub";
         }
@@ -842,15 +841,15 @@ module {
       "fixed opaque binding survives and cannot be silently repinned", [&] {
         std::string text = realization.str();
         text.insert(text.find(" func.func private"), R"mlir(
-      "local.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
     )mlir");
         auto source = parse(text, context);
         auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "pinned context prevented lowering");
-        auto pinned = SymbolTable(owner(*lowered))
-                          .lookup<local::OperationBindingOp>("pinned");
+        auto pinned =
+            SymbolTable(owner(*lowered)).lookup<runtime::BindingOp>("pinned");
         require(pinned.getImplementation() == "arkworks-msb/poly.fold",
                 "pin changed during numerical lowering");
         pinned->setAttr("implementation", StringAttr::get(&context, ""));
@@ -1389,10 +1388,8 @@ module {
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "duplicate lowering failed");
         unsigned bindings = 0;
-        for (auto binding : owner(*lowered)
-                                .getBody()
-                                .front()
-                                .getOps<local::OperationBindingOp>())
+        for (auto binding :
+             owner(*lowered).getBody().front().getOps<runtime::BindingOp>())
           bindings += binding.getContract() == "field.sub" &&
                       binding.getImplementation().empty();
         require(bindings == 1,

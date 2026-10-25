@@ -175,7 +175,7 @@ unnamed statement supplies no exact selected-target evidence. Component
 application does not turn contracts into entry statements. Its actual body and
 role substitution determine invocation bindings.
 
-Operation bindings are non-callable metadata for `local.binding`, retained and
+Operation bindings are non-callable metadata for `runtime.binding`, retained and
 checked even when unused. The exact represented native attributes are
 `sym_name`, `contract`, `arguments`, and `implementation`; no signature, body,
 visibility, or execution parameters are invented for them. Names match ASCII

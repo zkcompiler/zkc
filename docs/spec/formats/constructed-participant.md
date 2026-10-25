@@ -102,7 +102,7 @@ attribute dictionary in its sorted order as `[name, value]` pairs; a value is
 decimal]` (unsigned for unsigned integer types, otherwise signed),
 `["strings", [text, ...]]`, or `["text", printed]` for any other attribute kind.
 `binding` is `[]` without an operation binding, otherwise the referenced
-`local.binding` declaration as `[contract, [argument, ...], implementation]`.
+`runtime.binding` declaration as `[contract, [argument, ...], implementation]`.
 `operands` are references and `result-types` are printed MLIR types. `regions`
 is empty except for `protocol.loop`, whose single region is
 `[argument-types, instructions, yielded]`: the printed types of its block

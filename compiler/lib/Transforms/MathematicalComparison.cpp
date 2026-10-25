@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/APInt.h"
@@ -427,7 +428,7 @@ public:
 struct Primitive {
   StringRef contract;
   SmallVector<StringRef> parameters;
-  local::OperationBindingOp binding;
+  runtime::BindingOp binding;
 };
 // Read the actual operation and independently resolve its installed signature.
 // Explicit implementations are outside the law-replacement boundary.
@@ -435,10 +436,10 @@ std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols) {
   auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
-          ? dyn_cast_or_null<local::OperationBindingOp>(
+          ? dyn_cast_or_null<runtime::BindingOp>(
                 symbols ? symbols->lookup(reference.getValue())
                         : SymbolTable::lookupNearestSymbolFrom(&op, reference))
-          : local::OperationBindingOp();
+          : runtime::BindingOp();
   auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
   if (!binding || !binding.getImplementation().empty() || !parameters ||
       !op.getAttrOfType<StringAttr>("site") || op.getAttrs().size() != 3 ||
@@ -1083,9 +1084,8 @@ class Comparison {
     while (at && at != end && (end || !result)) {
       auto reference = at->getAttrOfType<FlatSymbolRefAttr>("binding");
       auto declaration =
-          reference
-              ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-              : local::OperationBindingOp();
+          reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                    : runtime::BindingOp();
       if (!declaration || !candidateContract(declaration.getContract()))
         break;
       uint64_t cost = 1;
@@ -1661,10 +1661,9 @@ bool hasFinitePayloadContract(Operation *cursor, SymbolTable &symbols) {
   if (!cursor)
     return false;
   auto reference = cursor->getAttrOfType<FlatSymbolRefAttr>("binding");
-  auto binding =
-      reference
-          ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-          : local::OperationBindingOp();
+  auto binding = reference
+                     ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                     : runtime::BindingOp();
   return binding && (candidateContract(binding.getContract()) ||
                      binding.getContract() == "curve.msm" ||
                      binding.getContract() == "curve.add");

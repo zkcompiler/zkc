@@ -8,6 +8,7 @@
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -20,16 +21,15 @@ namespace {
 unsigned removeAbsorption(ModuleOp module, StringRef origin) {
   auto *context = module.getContext();
   std::string helper;
-  local::OperationBindingOp binding;
+  runtime::BindingOp binding;
   module.walk([&](local::FuncOp fn) {
     fn.walk([&](Operation *op) {
       auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
       if (parameters && parameters.size() == 1 &&
           cast<StringAttr>(parameters[0]).getValue() == origin) {
         helper = fn.getSymName().str();
-        binding =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                op, op->getAttrOfType<FlatSymbolRefAttr>("binding"));
+        binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            op, op->getAttrOfType<FlatSymbolRefAttr>("binding"));
       }
     });
   });
@@ -224,8 +224,7 @@ int main(int argc, char **argv) {
       if (!ref || changed)
         return;
       auto binding =
-          SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(op,
-                                                                          ref);
+          SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(op, ref);
       if (binding &&
           binding.getContract() == "transcript.native.indexed.observe.data") {
         op->setAttr(

@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
@@ -124,9 +125,8 @@ class CodecCorrespondence {
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
-        reference
-            ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-            : local::OperationBindingOp();
+        reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                  : runtime::BindingOp();
     auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
     if (!binding || binding.getContract() != contract ||
         !binding.getArguments().empty() ||
@@ -671,7 +671,7 @@ public:
       if (!name || (!originals.contains(name.getValue()) &&
                     !(isa<local::FuncOp>(op) &&
                       allowedFunctions.contains(name.getValue())) &&
-                    !(isa<local::OperationBindingOp>(op) &&
+                    !(isa<runtime::BindingOp>(op) &&
                       allowedBindings.contains(name.getValue()))))
         return false;
     }

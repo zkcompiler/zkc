@@ -2,9 +2,9 @@
 !V = !algebra.field_vector<"bls12-381.fr">
 !M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({
  ^entry(%m:!M,%r:ui64,%xs:!V,%ignored:!V):
    %a = "data.domain_matrix_row"(%m,%r) : (!M,ui64)->!data.domain<!F>

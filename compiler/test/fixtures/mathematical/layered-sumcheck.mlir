@@ -15,13 +15,13 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="round",recipe=@product,kind="round",function_type=(!state)->!a} : ()->()
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
- "local.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @table_arity(%t:!t) -> ui64 attributes {logical_origin=["table_arity",[]]} {
    %n = "poly.exec.table_arity"(%t) {binding=@arity_kernel,parameters=[],site="arity"} : (!t)->ui64
    local.return %n : ui64
  }
- "local.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @empty_point() -> !p attributes {logical_origin=["empty_point",[]]} {
    %p = "poly.exec.empty_point"() {binding=@empty,parameters=[],site="empty"} : ()->!p
    local.return %p : !p
@@ -62,8 +62,8 @@ module { "protocol.module"() ({
    "protocol.return"(%accepted,%finished#0,%finished#1) : (i1,!p,!f)->()
  }) {sym_name="sumcheck",function_type=(ui64,!t,!t,!t,!t,!f,!rng)->(i1,!p,!f),roles=["P","V"],input_roles=[["P"],["P"],["P"],["V"],["V"],["V"],["V"]],output_roles=[["V"],["P"],["P"]]} : ()->()
 
- "local.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @equality_table(%point:!p) -> !t attributes {logical_origin=["equality_table",[]]} {
    %weights = "poly.exec.equality_weights"(%point) {binding=@weights,parameters=[],site="weights"} : (!p)->!algebra.field_vector<"bls12-381.fr">
    %table = "poly.exec.table_from_vector"(%weights) {binding=@table,parameters=[],site="table"} : (!algebra.field_vector<"bls12-381.fr">)->!t

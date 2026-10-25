@@ -8,6 +8,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -146,9 +147,9 @@ int main() {
         [&] {
           auto candidate =
               OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
-          local::OperationBindingOp binding;
+          runtime::BindingOp binding;
           algebra::CurveIdentityOp operation;
-          candidate->walk([&](local::OperationBindingOp op) {
+          candidate->walk([&](runtime::BindingOp op) {
             if (op.getContract() == "curve.identity")
               binding = op;
           });

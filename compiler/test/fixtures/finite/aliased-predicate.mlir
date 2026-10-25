@@ -2,8 +2,8 @@
 !V = !algebra.field_vector<"bls12-381.fr">
 !I = !algebra.indices
 module { "protocol.module"() ({
- "local.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V,%lo:ui64,%hi:ui64):
    %i = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
    %j = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>

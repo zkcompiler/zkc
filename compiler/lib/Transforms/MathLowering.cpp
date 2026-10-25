@@ -354,9 +354,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry
-        .insert<local::LocalDialect, algebra::AlgebraDialect,
-                kernel::KernelDialect, exec::ExecDialect, func::FuncDialect>();
+    registry.insert<runtime::RuntimeDialect, local::LocalDialect,
+                    algebra::AlgebraDialect, kernel::KernelDialect,
+                    exec::ExecDialect, func::FuncDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-math"; }
   StringRef getDescription() const final {

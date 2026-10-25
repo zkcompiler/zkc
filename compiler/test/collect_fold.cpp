@@ -1,6 +1,7 @@
 #include "../lib/Transforms/CollectFold.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "support/NumericalLoops.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <utility>
 
 using namespace mlir;
@@ -53,8 +54,7 @@ int main() {
                 !operations(collect, "algebra.exec.vector_append").empty() &&
                 !operations(fold, "local.for").empty(),
             "fixed Local collect/fold was replaced by composition");
-    auto binding =
-        SymbolTable(owner).lookup<local::OperationBindingOp>("multiply");
+    auto binding = SymbolTable(owner).lookup<runtime::BindingOp>("multiply");
     require(binding && binding.getImplementation() == "arkworks/field.mul" &&
                 same(*original, *saved),
             "fixed implementation or original source changed");

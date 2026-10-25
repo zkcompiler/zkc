@@ -14,6 +14,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/NestedContractions.h"
@@ -169,7 +170,7 @@ void pinCallbackResult(ModuleOp module) {
   auto implementation = protocol::defaultImplementation(application);
   require(bool(implementation), "missing pinned field implementation");
   OpBuilder builder(helper);
-  auto binding = local::OperationBindingOp::create(
+  auto binding = runtime::BindingOp::create(
       builder, helper.getLoc(), "pinned_sum", "field.add",
       builder.getArrayAttr({builder.getStringAttr(domain)}), *implementation,
       mlir::ArrayAttr{});

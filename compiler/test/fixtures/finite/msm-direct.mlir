@@ -3,12 +3,12 @@
 !V = !algebra.field_vector<"bls12-381.fr">
 !GS = !algebra.group_vector<"bls12-381.g1">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="generator",contract="curve.generator",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "local.binding"() {sym_name="empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "local.binding"() {sym_name="append",contract="curve.append",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="curve.add",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "local.binding"() {sym_name="equal",contract="curve.equal",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="generator",contract="curve.generator",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="append",contract="curve.append",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="curve.add",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="curve.equal",arguments=["bls12-381.g1"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%points:!GS,%scalars:!V):
    %p = "data.domain_elements"(%points) : (!GS)->!data.domain<!G>
    %s = "data.domain_elements"(%scalars) : (!V)->!data.domain<!F>

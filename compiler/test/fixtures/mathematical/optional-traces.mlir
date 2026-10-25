@@ -3,8 +3,8 @@
 !opt = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f7074696f6e616c5472616365222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226d61747269783a626c7331322d3338312e6672222c5b2235225d2c5b2234222c2236225d2c5b2233222c2237225d2c5b2230222c2238225d5d5d">
 !pair = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b22547261636550616972222c2270616972222c224f7074696f6e616c5472616365222c226e6f6e65222c5b5d2c5b2233222c2234225d2c22736f6d65222c226d61747269783a626c7331322d3338312e6672222c5b2237225d2c5b2236222c2238225d2c5b2235222c2239225d2c5b2232222c223130225d2c5b223131222c223131225d2c5b2231222c223132225d2c5b223133225d2c5b2230222c223134225d5d5d">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
  local.func @dimensions(%input:!opt) -> (ui64,ui64) attributes {logical_origin=["dimensions",[]]} {
    %dims:2 = "local.match"(%input) ({
      %zero = "algebra.exec.index_constant"() {binding=@index,parameters=["0"],site="absent"} : ()->ui64

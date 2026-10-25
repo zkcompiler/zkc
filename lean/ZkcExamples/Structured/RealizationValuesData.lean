@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.RealizationValuesData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:346181e661ce852c042463daf732929fddcafb7b2c902138fcf4cbb9cdcd2fe0"
+  source := "sha256:0a6af0cb5f3139400d975b77b5139eca5fd94c45aee6f04a3ccc0f1f153a5a83"
   entry := "s12h6d61705f6578616d706c657313h5265616c697a6556616c756573"
   domains := []
   relations := []

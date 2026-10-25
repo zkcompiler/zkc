@@ -12,6 +12,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -68,7 +69,7 @@ constexpr llvm::StringLiteral reductionFixture = R"mlir(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
  func.func private @formula(%a:!F,%b:!F,%unused:!F)->!F {
    %r = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
    func.return %r : !F
@@ -222,9 +223,8 @@ SmallVector<Operation *> callsOf(ModuleOp module, llvm::StringRef contract) {
   module.walk([&](Operation *op) {
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
-        reference
-            ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-            : local::OperationBindingOp();
+        reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                  : runtime::BindingOp();
     if (binding && binding.getContract() == contract)
       result.push_back(op);
   });
@@ -457,9 +457,8 @@ int main() {
     for (auto &op : function.getBody().front()) {
       auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
       auto binding =
-          reference
-              ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-              : local::OperationBindingOp();
+          reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                    : runtime::BindingOp();
       require(bool(binding), "guard prefix ended early");
       prefix.push_back(binding.getContract().str());
       if (binding.getContract() == "vector.length")
@@ -480,9 +479,8 @@ int main() {
     for (auto &op : changed.getBody().front()) {
       auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
       auto binding =
-          reference
-              ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-              : local::OperationBindingOp();
+          reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                    : runtime::BindingOp();
       if (binding && binding.getContract() == "vector.length" &&
           ++lengths == 3) {
         op.setOperand(0, changed.getArgument(0));
@@ -612,7 +610,7 @@ int main() {
   cases.run("late fusion preserves a pinned reduction binding", [&] {
     auto source = parseSourceString<ModuleOp>(reductionFixture, &context);
     require(bool(source), "reduction fixture refused");
-    auto binding = symbol<local::OperationBindingOp>(*source, "sum");
+    auto binding = symbol<runtime::BindingOp>(*source, "sum");
     binding.setImplementation("plonky3/vector.sum");
     MathematicalSelectionPolicy policy;
     policy.vectorReductionFusion = true;
@@ -837,7 +835,7 @@ int main() {
                             *original, *fused, {}, selections);
                       }),
                 "independent reader ignored original explicit requests");
-        symbol<local::OperationBindingOp>(*original, "sum")
+        symbol<runtime::BindingOp>(*original, "sum")
             .setImplementation("plonky3/vector.sum");
         auto pinned = take(target::proposePhysical(*original));
         auto pinnedSelected = take(pinned.cloneSelectedSubject(*original));

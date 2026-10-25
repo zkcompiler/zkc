@@ -2,8 +2,8 @@
 !V = !algebra.field_vector<"bls12-381.fr">
 !M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!M,%ys:!V,%ignored:!V,%selected:ui64):
    %x = "data.domain_matrix_column"(%xs,%selected) : (!M,ui64) -> !data.domain<!F>

@@ -186,7 +186,7 @@ def logical_inventory(source):
     require(operations.get('protocol.module') == 1, 'expected generic protocol IR')
     bindings = Counter()
     for line in source.splitlines():
-        if '"local.binding"(' in line:
+        if '"runtime.binding"(' in line:
             match = re.search(r'contract = "([^"]+)"', line)
             require(match is not None, 'binding without a printed contract')
             bindings[match[1]] += 1

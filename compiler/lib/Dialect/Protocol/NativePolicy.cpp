@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Plan/IR/PlanOps.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 using namespace llvm;
@@ -33,7 +34,7 @@ LogicalResult verifyLocalFragment(Operation *unit) {
       failed(owner->getName().verifyInvariants(owner)))
     return failure();
   for (auto &definition : owner.getBody().front())
-    if (!isa<local::OperationBindingOp, local::FuncOp>(definition) ||
+    if (!isa<runtime::BindingOp, local::FuncOp>(definition) ||
         failed(verify(&definition)))
       return failure();
   if (failed(verifyNativeLocals(owner, false)))

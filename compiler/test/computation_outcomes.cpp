@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <fstream>
 #include <sstream>
 
@@ -34,9 +35,9 @@ const char *indexed = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
    %x = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
    %y = "data.domain_indices"(%ys) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -241,9 +242,8 @@ int main() {
                     disabled.equations.reduction,
                 "policy disablement erased recognition");
         auto &op = c.helper->getRegion(0).front().front();
-        auto binding =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, op.getAttrOfType<FlatSymbolRefAttr>("binding"));
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            &op, op.getAttrOfType<FlatSymbolRefAttr>("binding"));
         require(bool(binding), "missing binding");
         binding.setImplementation("arkworks/field.add");
         require(succeeded(verify(*source)), "supported pin refused");

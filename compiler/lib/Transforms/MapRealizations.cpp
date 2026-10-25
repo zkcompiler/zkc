@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/StructuredComputation.h"
@@ -332,8 +333,7 @@ FailureOr<Value> readMapPayload(algebra::MapRealizeOp source, ValueRange inputs,
   bool optional = sum;
   for (auto *at = cursor; at && at != end; at = at->getNextNode())
     if (auto ref = at->getAttrOfType<FlatSymbolRefAttr>("binding"))
-      if (auto binding =
-              symbols.lookup<local::OperationBindingOp>(ref.getValue()))
+      if (auto binding = symbols.lookup<runtime::BindingOp>(ref.getValue()))
         optional |= protocol::numericalContract(binding.getContract());
   auto &remaining = optional ? optionalWork : requiredWork;
   auto exhaust = [&](std::optional<CapacityCause> debit = {}) {
@@ -357,9 +357,8 @@ FailureOr<Value> readMapPayload(algebra::MapRealizeOp source, ValueRange inputs,
     }
     --remaining;
     auto ref = at->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                       : runtime::BindingOp();
     SmallVector<Attribute> arguments;
     if (!boundWithoutField(contract))
       arguments.push_back(
@@ -560,8 +559,7 @@ LogicalResult expandMapRealizations(ModuleOp module, RealizationWork *work,
       declined.push_back(proposal);
       for (Operation &op : proposal.function.getBody().front())
         if (auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding"))
-          if (auto binding =
-                  symbols.lookup<local::OperationBindingOp>(ref.getValue());
+          if (auto binding = symbols.lookup<runtime::BindingOp>(ref.getValue());
               binding && protocol::numericalContract(binding.getContract()))
             declinedBindings.insert(binding);
     }

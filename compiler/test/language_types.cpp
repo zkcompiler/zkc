@@ -1132,7 +1132,7 @@ void nativeData() {
   mutation(selected, [](mlir::ModuleOp module) {
     mlir::Builder builder(module.getContext());
     module.walk([&](mlir::Operation *op) {
-      if (op->getName().getStringRef() == "local.binding" &&
+      if (op->getName().getStringRef() == "runtime.binding" &&
           op->getAttrOfType<mlir::StringAttr>("contract").getValue() ==
               "vector.sub")
         op->setAttr("contract", builder.getStringAttr("vector.add"));

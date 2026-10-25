@@ -2,12 +2,12 @@
 !r = !runtime.capability<"rng:bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @draw(%r:!r)->(!f,!r) attributes {logical_origin=["draw",[]]} {
    %sample:2 = "crypto.exec.random_draw"(%r) {binding=@random,parameters=[],site="sample"} : (!r)->(!f,!r)
    local.return %sample#0,%sample#1 : !f,!r
  }
- "local.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @prepare(%zero:i1,%x:!f,%r:!r)->(!f,!r) attributes {logical_origin=["prepare",[]]} {
    %out:2 = "local.if"(%zero,%x,%r) ({ ^retry(%a:!f,%state:!r):
      "local.yield"(%a,%state) : (!f,!r)->()

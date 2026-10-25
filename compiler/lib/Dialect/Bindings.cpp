@@ -4,6 +4,7 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringSet.h"
@@ -133,7 +134,7 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
 }
 
 Expected<protocol::OperationBinding> readBinding(Operation *op) {
-  auto declaration = dyn_cast_or_null<zkc::local::OperationBindingOp>(op);
+  auto declaration = dyn_cast_or_null<zkc::runtime::BindingOp>(op);
   if (!declaration ||
       !isa_and_nonnull<zkc::protocol_ir::ProtocolModuleOp, mlir::ModuleOp>(
           op->getParentOp()))
@@ -151,9 +152,6 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
       return error("binding-static-identity");
     values.push_back(value.getValue().str());
   }
-  auto root = dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp());
-  bool physical = root && root.getProfileAttr() &&
-                  root.getProfile() == zkc::protocol_ir::Profile::Physical;
   protocol::OperationBinding binding{name.getValue().str(),
                                      {contract.getValue().str(),
                                       std::move(values),
@@ -166,9 +164,25 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
       binding.application.physicalArguments.push_back(value.getValue().str());
     }
   }
-  if (auto e =
-          checkBindingDeclaration(binding.name, binding.application, physical))
-    return e;
+  if (auto root =
+          dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp())) {
+    bool physical = root.getProfileAttr() &&
+                    root.getProfile() == zkc::protocol_ir::Profile::Physical;
+    if (auto e = checkBindingDeclaration(binding.name, binding.application,
+                                         physical))
+      return e;
+  } else if (auto logical = checkBindingDeclaration(
+                 binding.name, binding.application, false)) {
+    // A builtin module does not select an execution stage. Formation admits
+    // either closed declaration; its consumer must check the selected stage
+    // and the actual operation ports independently.
+    if (auto physical =
+            checkBindingDeclaration(binding.name, binding.application, true)) {
+      consumeError(std::move(physical));
+      return logical;
+    }
+    consumeError(std::move(logical));
+  }
   return binding;
 }
 
@@ -231,7 +245,7 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
 } // namespace zkc::protocol
 
 namespace zkc {
-LogicalResult zkc::local::OperationBindingOp::verify() {
+LogicalResult zkc::runtime::BindingOp::verify() {
   auto binding = protocol::readBinding(*this);
   if (!binding)
     return diagnostics::emit(emitOpError(), binding.takeError());

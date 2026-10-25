@@ -33,6 +33,9 @@ int main() {
   check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
   check<zkc::local::LocalDialect>(native, "local");
   check<zkc::plan::PlanDialect>(native, "plan");
+  check<zkc::runtime::RuntimeDialect>(native, "runtime");
+  require(native.isOperationRegistered("runtime.binding"));
+  require(!native.isOperationRegistered("local.binding"));
 
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);

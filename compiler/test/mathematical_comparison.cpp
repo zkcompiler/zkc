@@ -9,6 +9,7 @@
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
 #include <fstream>
 #include <sstream>
@@ -21,10 +22,10 @@ const char *laneFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
  func.func private @formula(%x:!F,%y:!F,%c:!F)->!F {
    %a = "algebra.field_add"(%x,%y) : (!F,!F)->!F
    %b = "algebra.field_add"(%x,%y) : (!F,!F)->!F
@@ -48,9 +49,9 @@ const char *indexed = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
    %x = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
    %y = "data.domain_indices"(%ys) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -125,9 +126,8 @@ Operation *bound(ModuleOp module, StringRef functionName, StringRef contract) {
   SymbolTable symbols(&module.getBody()->front());
   for (Operation &op : function(module, functionName).getBody().front()) {
     auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                       : runtime::BindingOp();
     if (binding && binding.getContract() == contract)
       return &op;
   }
@@ -173,9 +173,9 @@ Value emitBound(ModuleOp module, OpBuilder &builder, StringRef contract,
   {
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&unit.getRegion(0).front());
-    local::OperationBindingOp::create(builder, module.getLoc(), name, contract,
-                                      builder.getStrArrayAttr({"bls12-381.fr"}),
-                                      "", mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, module.getLoc(), name, contract,
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
+                               mlir::ArrayAttr{});
   }
   OperationState state(module.getLoc(), protocol::boundOperationName(contract));
   state.addOperands(inputs);
@@ -200,7 +200,7 @@ void pruneAddedBindings(ModuleOp before, ModuleOp after) {
   SymbolTable original(&before.getBody()->front());
   auto &unit = after.getBody()->front().getRegion(0).front();
   for (auto binding :
-       llvm::make_early_inc_range(unit.getOps<local::OperationBindingOp>())) {
+       llvm::make_early_inc_range(unit.getOps<runtime::BindingOp>())) {
     if (original.lookup(binding.getSymName()))
       continue;
     bool used = false;
@@ -215,8 +215,8 @@ void pruneAddedBindings(ModuleOp before, ModuleOp after) {
 std::string largeOrderedFold(bool calls, bool total = false) {
   std::string text = fixture("sum");
   text = edit(text, " \"data.domain\"()", R"mlir(
- "local.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"())mlir");
   std::string body;
   std::vector<std::string> layer;
@@ -596,7 +596,7 @@ int main() {
     auto module = parseSourceString<ModuleOp>(laneFixture, &context);
     require(bool(module), "fixture refused");
     SymbolTable symbols(&module->getBody()->front());
-    auto binding = symbols.lookup<local::OperationBindingOp>("mul");
+    auto binding = symbols.lookup<runtime::BindingOp>("mul");
     binding->setAttr("implementation", StringAttr::get(&context, "explicit"));
     require(!compareMap(*module),
             "explicit binding was rewritten by a field law");
@@ -610,7 +610,7 @@ int main() {
     auto module = parseSourceString<ModuleOp>(laneFixture, &context);
     require(bool(module), "fixture refused");
     SymbolTable symbols(&module->getBody()->front());
-    auto binding = symbols.lookup<local::OperationBindingOp>("mul");
+    auto binding = symbols.lookup<runtime::BindingOp>("mul");
     binding->setAttr(
         "arguments",
         ArrayAttr::get(&context, {StringAttr::get(&context, "bn254.fr")}));

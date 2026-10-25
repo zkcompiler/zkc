@@ -11,6 +11,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
@@ -86,9 +87,9 @@ class RecipeReader {
         op->getOperands() != inputs || !charge(1 + inputs.size()))
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding = reference ? dyn_cast_or_null<local::OperationBindingOp>(
+    auto binding = reference ? dyn_cast_or_null<runtime::BindingOp>(
                                    symbols.lookup(reference.getValue()))
-                             : local::OperationBindingOp();
+                             : runtime::BindingOp();
     auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!binding || binding.getContract() != contract ||
@@ -806,8 +807,7 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
   for (auto &definition : owner.getBody().front()) {
     if (&definition == target.getOperation())
       continue;
-    if (!isa<local::OperationBindingOp>(definition) ||
-        !used.contains(&definition))
+    if (!isa<runtime::BindingOp>(definition) || !used.contains(&definition))
       return finish(false);
   }
   auto *cursor = &target.getBody().front().front();

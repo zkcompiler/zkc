@@ -4,7 +4,6 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -310,7 +309,7 @@ public:
     for (const auto &binding : model.bindings) {
       const auto &app = binding.application;
       builder.setInsertionPointToEnd(module->getBody());
-      OperationState state(builder.getUnknownLoc(), "local.binding");
+      OperationState state(builder.getUnknownLoc(), "runtime.binding");
       state.addAttribute("sym_name", builder.getStringAttr(binding.name));
       state.addAttribute("contract", builder.getStringAttr(app.contract));
       state.addAttribute("arguments", strings(builder, app.arguments));
@@ -557,7 +556,7 @@ writeLocalExecution(MLIRContext &context,
     return std::move(e);
   context.loadDialect<func::FuncDialect, arith::ArithDialect,
                       cf::ControlFlowDialect, exec::ExecDialect,
-                      runtime::RuntimeDialect, local::LocalDialect>();
+                      runtime::RuntimeDialect>();
   return Writer(context, physical, definitions.bindings.size())
       .run(definitions);
 }

@@ -17,6 +17,7 @@
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -773,9 +774,9 @@ class Emitter {
       return found->second;
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&module.getBody().front());
-    auto operation = local::OperationBindingOp::create(
-        builder, module.getLoc(), fresh(), contract, parameters, "",
-        mlir::ArrayAttr{});
+    auto operation =
+        runtime::BindingOp::create(builder, module.getLoc(), fresh(), contract,
+                                   parameters, "", mlir::ArrayAttr{});
     symbols.insert(operation);
     auto ref = FlatSymbolRefAttr::get(operation);
     bindings.try_emplace(key, ref);
@@ -1490,7 +1491,7 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
           checkType(type);
     for (auto attr : op->getAttrs())
       attr.getValue().walk([&](Type type) { checkType(type); });
-    if (auto binding = dyn_cast<local::OperationBindingOp>(op)) {
+    if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
       if (binding.getContract().starts_with("transcript.")) {
         auto *effects = protocol::operationContracts(binding.getContract());
         auto arguments = binding.getArguments();
@@ -1733,7 +1734,7 @@ class ParticipantExporter {
       return json::Array{};
     Operation *declaration = symbols.lookup(symbol.getValue());
     if (!declaration ||
-        declaration->getName().getStringRef() != "local.binding")
+        declaration->getName().getStringRef() != "runtime.binding")
       return error("constructed-participant-binding");
     auto contract = declaration->getAttrOfType<StringAttr>("contract");
     auto arguments = declaration->getAttrOfType<ArrayAttr>("arguments");

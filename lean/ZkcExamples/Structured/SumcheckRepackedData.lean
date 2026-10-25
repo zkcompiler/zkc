@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.SumcheckRepackedData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:d2d68f610b57dc4d0d7efa4534c2b2d8bb3b135585823299fc864b7791444d85"
+  source := "sha256:a539e04a4935dcbe884bfc8761ba23ff120df2a90ed2d95419edafa7ab911c72"
   entry := "zkl_cf3586ba980b617860654dacf2506dd277a78d1dcf5b84bcc6376225e7fe4f45"
   domains := [⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain", [.vector "bls12-381.fr"], .elements 0⟩]
   relations := [⟨"zkl_11c80248216cbe579879aabc5c6f64d5f465a4db68261d6da29eab7c94d7679c", .publicDef, "zkc.language.formula/0", "zkl_11c80248216cbe579879aabc5c6f64d5f465a4db68261d6da29eab7c94d7679c", "2c4b933d7a6995f34b80f29d1478e98e81ee53f22c19789c1c06958fba515a0f", [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.boolean], ["parameter", "parameter", "parameter", "statement"], some ("zkf_654a0e58b11e83f398996b9e830df00890bec0f8dc08a65c5750d6d9c759b643")⟩]

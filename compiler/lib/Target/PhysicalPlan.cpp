@@ -10,6 +10,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Target/Selection.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -1277,7 +1278,7 @@ public:
       locate(failureLocation, &op);
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
-      if (!isa<zkc::local::OperationBindingOp>(op))
+      if (!isa<zkc::runtime::BindingOp>(op))
         continue;
       auto binding = readBinding(&op);
       if (!binding)
@@ -1509,7 +1510,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       return error("binding-duplicate-selection");
   std::map<std::string, std::string> originalPins;
   for (auto declaration :
-       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
+       root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
     auto binding = readBinding(declaration);
     if (!binding)
@@ -1587,9 +1588,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     // discovery, rather than cloning the complete source just to pin it.
     auto preparedRoot =
         cast<zkc::protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
-    for (auto declaration : preparedRoot.getBody()
-                                .front()
-                                .getOps<zkc::local::OperationBindingOp>())
+    for (auto declaration :
+         preparedRoot.getBody().front().getOps<zkc::runtime::BindingOp>())
       for (const auto &[name, implementation] : selections)
         if (declaration.getSymName() == name)
           declaration.setImplementation(implementation);
@@ -1686,7 +1686,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         // original attributes; physical choices carry the requested pins.
         for (auto declaration : candidateRoot.getBody()
                                     .front()
-                                    .getOps<zkc::local::OperationBindingOp>()) {
+                                    .getOps<zkc::runtime::BindingOp>()) {
           auto original = originalPins.find(declaration.getSymName().str());
           if (original != originalPins.end())
             declaration.setImplementation(original->second);
@@ -2002,13 +2002,13 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-duplicate-selection");
   std::set<std::string> symbols;
   for (auto &op : root.getBody().front())
-    if (!isa<zkc::local::OperationBindingOp>(op))
+    if (!isa<zkc::runtime::BindingOp>(op))
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
   std::map<std::string, BindingIndex> originals;
   size_t declarationIndex = 0;
   for (auto declaration :
-       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
+       root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
     if (declarationIndex >= plan.bindings.size())
       return error("binding-plan-coverage");

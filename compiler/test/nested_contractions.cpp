@@ -10,6 +10,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/NestedContractions.h"
@@ -365,7 +366,7 @@ int main() {
   for (StringRef implementation : {"field.add", "field.mul"})
     cases.run("explicit implementation fallback " + implementation, [&] {
       auto original = clone(*source);
-      auto binding = cast<local::OperationBindingOp>(
+      auto binding = cast<runtime::BindingOp>(
           lookup(*original, implementation == "field.add" ? "add" : "mul"));
       auto info = protocol::readBinding(binding);
       require(bool(info), "binding unavailable");

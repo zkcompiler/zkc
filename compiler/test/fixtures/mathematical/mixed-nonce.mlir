@@ -1,6 +1,6 @@
 module { "protocol.module"() ({
-"local.binding"() {sym_name="binding_commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"local.binding"() {sym_name="binding_respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
 local.func @commit(%bases: !algebra.group_vector<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) attributes {logical_origin=["commit", []]} {
 %v:2 = "crypto.exec.curve_commit"(%bases, %nonce) {binding=@binding_commit, parameters=[], site="commit"} : (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)
 local.return %v#0, %v#1 : !algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">

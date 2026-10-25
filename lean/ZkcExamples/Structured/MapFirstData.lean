@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.MapFirstData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:bf31b697d8ba8ba489c6e2c72830dbad699f1b3b0ec8cade1491ae778e253f74"
+  source := "sha256:1980665ccdca1136ce3d1f90412bc15a7d03e0bebfece28dd9720c8c8a8d977c"
   entry := "s12h6d61705f6578616d706c65735h4669727374"
   domains := []
   relations := []

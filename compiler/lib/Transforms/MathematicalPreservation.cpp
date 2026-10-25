@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -174,7 +175,7 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
     for (auto &op : after->getRegion(0).front())
       if ((targetHelpers.contains(&op) ||
            isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-               local::OperationBindingOp>(op)) &&
+               runtime::BindingOp>(op)) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
@@ -182,7 +183,7 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   for (auto &op : before->getRegion(0).front()) {
     if (!sourceHelpers.contains(&op) &&
         !isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-             local::OperationBindingOp>(op))
+             runtime::BindingOp>(op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);

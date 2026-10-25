@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.PrimitiveSequenceData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:7eb31447be7b43ae8629196b308f35afda5c9ef78c4828ada6f2d562aae5928d"
+  source := "sha256:0f1bd1f33ae4b24829d16eba0c6fd43ba1f5dff002be6ec3f3449a6316fb1a58"
   entry := "s18h7072696d69746976655f6578616d706c65738h53657175656e6365"
   domains := []
   relations := []

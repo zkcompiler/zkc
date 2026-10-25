@@ -4,11 +4,11 @@
 !packet = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b22416e6e6f756e63656d656e74222c227265636f7264222c2267726f75703a626c7331322d3338312e6731222c224261746368222c226e6f6e65222c5b5d2c5b2234222c2235225d2c22706c61696e222c22766563746f723a626c7331322d3338312e6672222c5b2238225d2c5b2237222c2239225d2c227363616c6564222c226669656c643a626c7331322d3338312e6672222c5b2238222c223132225d2c5b223131222c223133225d2c5b2236222c223130222c223134225d2c5b2233222c223135225d2c5b2232222c223136225d2c5b2231222c223137225d2c5b223138225d2c5b2230222c223139225d5d5d">
 module {
 "protocol.module"() ({
-"local.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="multiply",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="multiply",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
 local.func @inspect(%mode:!mode) -> (ui64,!f,ui64) attributes {logical_origin=["inspect",[]]} {
  %result:3 = "local.match"(%mode) ({
    %n = "algebra.exec.index_constant"() {binding=@index,parameters=["0"],site="count_1"} : ()->ui64

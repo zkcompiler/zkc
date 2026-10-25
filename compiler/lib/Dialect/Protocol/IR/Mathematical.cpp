@@ -16,6 +16,7 @@
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
@@ -574,7 +575,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
                    op)) {
       // The descriptor and finite closure were checked before any liveness.
     } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
-                   local::OperationBindingOp, mlir::ModuleOp, poly::RecipeOp,
+                   runtime::BindingOp, mlir::ModuleOp, poly::RecipeOp,
                    poly::RealizeOp>(op)) {
       // Kernel already checked its owned closure; whole Local admission below
       // checks even unused executable definitions.

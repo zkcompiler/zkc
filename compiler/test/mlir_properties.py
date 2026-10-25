@@ -48,7 +48,7 @@ def reject_both(label, text, code=UNKNOWN, export="protocol-export"):
 source = (ROOT / "compiler/test/fixtures/mathematical/local-execution.mlir").read_text()
 for mode, options, families in (
     ("mathematical", [], (
-        ("protocol.module", "profile"), ("local.binding", "contract"),
+        ("protocol.module", "profile"), ("runtime.binding", "contract"),
         ("protocol.func", "sym_name"), ("protocol.local_call", "callee"),
         ("algebra.exec.field_add", "binding"), ("local.if", "site"))),
     ("physical", ["--zkc-participant-pipeline"], (

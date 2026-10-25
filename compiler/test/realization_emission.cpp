@@ -5,6 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -214,7 +215,7 @@ int main() {
           cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
       OpBuilder builder(&context);
       builder.setInsertionPointToStart(&sourceUnit.getBody().front());
-      auto pinned = local::OperationBindingOp::create(
+      auto pinned = runtime::BindingOp::create(
           builder, sourceUnit.getLoc(), prefix.str() + "0", "field.add",
           builder.getArrayAttr({builder.getStringAttr(field.getDomain())}),
           "arkworks/field.add", mlir::ArrayAttr{});
@@ -230,9 +231,9 @@ int main() {
       RealizationEmitter emitter(unit, prefix);
       // Other producer work may add symbols after emitter construction.
       builder.setInsertionPointToStart(&unit.getBody().front());
-      local::OperationBindingOp::create(
-          builder, unit.getLoc(), prefix.str() + "2", "index.constant",
-          builder.getArrayAttr({}), "", mlir::ArrayAttr{});
+      runtime::BindingOp::create(builder, unit.getLoc(), prefix.str() + "2",
+                                 "index.constant", builder.getArrayAttr({}), "",
+                                 mlir::ArrayAttr{});
       auto helper = cast<local::FuncOp>(
           SymbolTable::lookupSymbolIn(unit, prefix.str() + "1"));
       builder.setInsertionPoint(helper.getBody().front().getTerminator());

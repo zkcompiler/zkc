@@ -10,6 +10,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/DenseSet.h"
@@ -958,7 +959,7 @@ public:
       auto name = op.getAttrOfType<StringAttr>("sym_name");
       if (!name || !names.insert(name.getValue()).second)
         return error("structured-reference-symbol");
-      if (isa<local::OperationBindingOp>(op)) {
+      if (isa<runtime::BindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-reference-capacity", "bindings");
         if (auto failure = binding(op))
@@ -975,7 +976,7 @@ public:
       if (auto visibility = op.getAttrOfType<StringAttr>("sym_visibility"))
         if (visibility != "private" && visibility != "public")
           return error("structured-reference-unsupported", "visibility");
-      if (isa<local::OperationBindingOp>(op))
+      if (isa<runtime::BindingOp>(op))
         continue;
       if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (++relations > 128)

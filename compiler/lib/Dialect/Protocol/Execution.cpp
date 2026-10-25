@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Relation/IR/Assets.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Json.h"
@@ -681,7 +682,7 @@ public:
     SmallVector<LocalRealization> realizations(kernelRealizations);
 
     for (auto &op : root->getRegion(0).front()) {
-      if (isa<zkc::local::OperationBindingOp>(op)) {
+      if (isa<zkc::runtime::BindingOp>(op)) {
         if (!attributes(&op, {"sym_name", "contract", "arguments",
                               "implementation", "physical_arguments"}))
           return error(problem);
@@ -770,7 +771,7 @@ public:
       }
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
-      if (isa<zkc::local::OperationBindingOp>(op)) {
+      if (isa<zkc::runtime::BindingOp>(op)) {
         if (!attributes(&op, {"sym_name", "contract", "arguments",
                               "implementation", "physical_arguments"}))
           return error("binding-attribute");

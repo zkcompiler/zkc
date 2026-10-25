@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<i1>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!S):
    %d = "data.domain_elements"(%xs) : (!S)->!data.domain<i1>
    "data.domain_yield"(%d) : (!data.domain<i1>)->()

@@ -364,8 +364,8 @@ void importedArithmetic(MLIRContext &context) {
   auto imported = mlir::parseSourceString<ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
  local.func @Arithmetic(%x:!F,%y:!F)->(!F,!F) attributes {logical_origin=["Arithmetic",[]]} {
    %sum = "algebra.exec.field_add"(%x,%y) {binding=@add,site="add_site",parameters=[]} : (!F,!F)->!F
    %product = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,site="mul_site",parameters=[]} : (!F,!F)->!F
@@ -438,9 +438,9 @@ void importedProduct(MLIRContext &context) {
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="other",contract="vector.product",arguments=["bn254.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="other",contract="vector.product",arguments=["bn254.fr"],implementation=""} : ()->()
  local.func @Product(%xs:!V)->!F attributes {logical_origin=["Product",[]]} {
    %result = "algebra.exec.vector_product"(%xs) {binding=@product,site="product_site",parameters=[]} : (!V)->!F
    local.return %result : !F

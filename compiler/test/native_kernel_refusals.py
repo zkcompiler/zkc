@@ -11,7 +11,7 @@ def fixture(contract, domain, operation, inputs, result, parameters):
     types = ','.join(inputs)
     roles = json.dumps([['P']] * len(inputs))
     return f'''module {{ "protocol.module"() ({{
-    "local.binding"() {{sym_name="kernel",contract="{contract}",arguments=["{domain}"],implementation=""}} : ()->()
+    "runtime.binding"() {{sym_name="kernel",contract="{contract}",arguments=["{domain}"],implementation=""}} : ()->()
     local.func @Work({arguments})->{result} attributes {{logical_origin=["Work",[]]}} {{
       %r = "{operation}"({operands}) {{binding=@kernel,site="kernel",parameters={json.dumps(parameters)}}} : ({types})->{result}
       local.return %r : {result}

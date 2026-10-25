@@ -21,13 +21,13 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="round",recipe=@product,kind="round",function_type=(!state)->!a} : ()->()
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
- "local.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @table_arity(%t:!t) -> ui64 attributes {logical_origin=["table_arity",[]]} {
    %n = "poly.exec.table_arity"(%t) {binding=@arity_kernel,parameters=[],site="arity"} : (!t)->ui64
    local.return %n : ui64
  }
- "local.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @empty_point() -> !p attributes {logical_origin=["empty_point",[]]} {
    %p = "poly.exec.empty_point"() {binding=@empty,parameters=[],site="empty"} : ()->!p
    local.return %p : !p
@@ -37,10 +37,10 @@ module { "protocol.module"() ({
    local.return %out : !p
  }
 
- "local.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  local.func @commit(%k:!pk,%t:!t) -> (!c,!o) attributes {logical_origin=["commit",[]]} {
    %r:2 = "commitment.exec.polynomial_commit"(%k,%t) {binding=@commit_kernel,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
    local.return %r#0,%r#1 : !c,!o

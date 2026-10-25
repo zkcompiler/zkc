@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -193,6 +194,64 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("scoped execution needs no Local dialect", [] {
+    DialectRegistry registry;
+    registry.insert<algebra::AlgebraDialect, data::DataDialect,
+                    runtime::RuntimeDialect>();
+    MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto expected = nested(true);
+    auto emitted = take(protocol::writeLocalExecution(context, expected, true));
+    auto actual = take(protocol::readLocalExecution(*emitted, true));
+    if (auto e = protocol::verifyLocalExecution(*emitted, expected, true))
+      throw std::runtime_error(llvm::toString(std::move(e)));
+    require(encoded(actual, true) == encoded(expected, true),
+            "Runtime-only binding path changed execution records");
+    require(!context.getLoadedDialect("local"),
+            "execution loaded the removed binding owner");
+  });
+  cases.run(
+      "physical conversion declarations retain their selected ports", [&] {
+        auto source = physical("field:bls12-381.fr");
+        std::string target = "field:bls12-381.fr@blst/fr";
+        program::LocalDefinitions expected;
+        expected.bindings.push_back({"convert",
+                                     {"representation.convert",
+                                      {"field:bls12-381.fr"},
+                                      "native/representation.convert",
+                                      {source, target}}});
+        expected.functions.push_back(
+            {"convert_field",
+             {{"x", source}},
+             {target},
+             {{"convert", program::Operation{"convert", {}, {"x"}, {"y"}}},
+              {"", program::Return{{"y"}}}},
+             program::LogicalOrigin{"convert_field", {}}});
+        auto emitted =
+            take(protocol::writeLocalExecution(context, expected, true));
+        auto actual = take(protocol::readLocalExecution(*emitted, true));
+        require(encoded(actual, true) == encoded(expected, true),
+                "physical conversion lost its exact layout endpoints");
+        if (auto e = protocol::verifyLocalExecution(*emitted, expected, true))
+          throw std::runtime_error(llvm::toString(std::move(e)));
+        refuses(protocol::readLocalExecution(*emitted, false),
+                "binding-conversion");
+        auto binding = *emitted->getOps<runtime::BindingOp>().begin();
+        Builder builder(&context);
+        binding.setPhysicalArgumentsAttr(
+            builder.getStrArrayAttr({target, source}));
+        require(succeeded(verify(*emitted)),
+                "reversed endpoints should remain individually well formed");
+        auto reread = protocol::readLocalExecution(*emitted, true);
+        require(!reread,
+                "reader accepted reversed endpoints after its first read");
+        llvm::consumeError(reread.takeError());
+        auto rejected =
+            protocol::verifyLocalExecution(*emitted, expected, true);
+        require(bool(rejected),
+                "reversed physical layout endpoints were accepted");
+        llvm::consumeError(std::move(rejected));
+      });
   auto check = [&](const program::LocalDefinitions &model, StringRef name) {
     auto emitted = protocol::writeLocalExecution(context, model, true);
     if (!emitted)

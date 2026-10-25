@@ -6,6 +6,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/MathematicalWork.h"
 #include "llvm/ADT/STLExtras.h"
@@ -25,7 +26,7 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
     if (mlir::isa<local::FuncOp>(declaration))
       ++entries;
     else
-      require(mlir::isa<local::OperationBindingOp>(declaration),
+      require(mlir::isa<runtime::BindingOp>(declaration),
               "Kernel recipe output retained a source declaration");
   }
   require(entries == 1, "Kernel recipe output must have one Local entry");

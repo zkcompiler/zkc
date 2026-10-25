@@ -1,5 +1,5 @@
 module { "protocol.module"() ({
-"local.binding"() {sym_name="binding_inverse", contract="field.inverse", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_inverse", contract="field.inverse", arguments=["bls12-381.fr"], implementation=""} : () -> ()
 local.func @inverse(%x: !algebra.field<"bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">) attributes {logical_origin=["inverse", []]} {
 %v = "algebra.exec.field_inverse"(%x) {binding=@binding_inverse, parameters=[], site="inverse"} : (!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
 local.return %v : !algebra.field<"bls12-381.fr">

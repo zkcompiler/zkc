@@ -185,7 +185,7 @@ class Emitter {
       }
       mlir::OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(definitions);
-      if (!make("local.binding", {}, {},
+      if (!make("runtime.binding", {}, {},
                 {text("sym_name", name), text("contract", contract),
                  attr("arguments", strings(arguments)),
                  text("implementation", "")}))

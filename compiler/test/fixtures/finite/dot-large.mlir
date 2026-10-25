@@ -1,8 +1,8 @@
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!V,%ys:!V,%ignored:!V):
    %x = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
@@ -21,8 +21,8 @@ module { "protocol.module"() ({
    %r = local.apply @fold(%xs,%ys,%zs,%init) {site="fold"} : (!V,!V,!V,!F)->!F
    local.return %r : !F
  }
- "local.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @large(%xs:!V,%factor:!F,%init:!F) -> !F attributes {logical_origin=["large",[]]} {
    %n = "algebra.exec.vector_length"(%xs) {binding=@length,parameters=[],site="length"} : (!V)->ui64
    %ys = "algebra.exec.vector_fill"(%factor,%n) {binding=@fill,parameters=[],site="fill"} : (!F,ui64)->!V

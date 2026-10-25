@@ -349,7 +349,7 @@ commands.run(
 
 # A changed supporting local definition must fail correspondence even when
 # every composed participant body is unchanged.
-local = f""""local.binding"() {{sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""}} : ()->()
+local = f""""runtime.binding"() {{sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""}} : ()->()
 local.func @unused() -> {F} attributes {{logical_origin=["unused",[]]}} {{
  %c="algebra.exec.field_constant"() {{binding=@constant,parameters=["0"],site="constant"}} : ()->{F}
  local.return %c : {F}

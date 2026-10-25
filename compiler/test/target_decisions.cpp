@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Protocol.h"
 #include <tuple>
 #include <type_traits>
@@ -39,8 +40,8 @@ void reject(Error error, StringRef code) {
 }
 std::string layouts(bool fixed = true) {
   auto text = mathematicalFixture(R"(
-"local.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"local.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )",
                                   "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T", R"(
 %x = "poly.exec.fold"(%a,%r) {binding=@msb,site="first",parameters=[]} : (!T,!F)->!T
@@ -59,8 +60,8 @@ local.return %q : !T
 std::string contractions(bool group = false) {
   auto text =
       mathematicalFixture(R"(
-"local.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )",
                           "%w:!V,%f:!V,%v:!A", "%w,%f,%v", "!V,!V,!A", "!R", R"(
 %mapped = "algebra.exec.vector_mul"(%f,%v) {binding=@map,site="map",parameters=[]} : (!V,!A)->!A
@@ -90,7 +91,7 @@ local.return %b : !R
 std::string arithmetic(std::string identity = "bls12-381.fr") {
   return "!F = !algebra.field<\"" + identity + "\">\n" +
          mathematicalFixture(
-             "\"local.binding\"() "
+             "\"runtime.binding\"() "
              "{sym_name=\"add\",contract=\"field.add\",arguments=[\"" +
                  identity + "\"],implementation=\"\"} : ()->()",
              "%a:!F,%b:!F", "%a,%b", "!F,!F", "!F", R"(
@@ -103,8 +104,8 @@ std::string orderedCrossings() {
   return R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )" + mathematicalFixture(R"(
-"local.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
-"local.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
 )",
                          "%a:!T,%b:!T,%allowed:i1", "%a,%b,%allowed",
                          "!T,!T,i1", "!F", R"(
@@ -119,7 +120,7 @@ std::string nestedLayouts() {
   return R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )" + mathematicalFixture(R"(
-"local.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )",
                          "%a:!T,%r:!F,%condition:i1", "%a,%r,%condition",
                          "!T,!F,i1", "!T", R"(
@@ -306,7 +307,7 @@ int main() {
                            &module->getBody()->front())
                            .getBody()
                            .front()
-                           .getOps<zkc::local::OperationBindingOp>())
+                           .getOps<zkc::runtime::BindingOp>())
           declarations += op.getContract() == "table.relayout";
         require(declarations == 2,
                 "two direct declarations shared by four uses");
@@ -869,14 +870,12 @@ local.return %result : !R)";
                        builder.getArrayAttr({builder.getStringAttr("Fold"),
                                              builder.getArrayAttr({})}));
         root.getBody().front().push_back(clone);
-      } else if (isa<zkc::local::OperationBindingOp>(operation)) {
+      } else if (isa<zkc::runtime::BindingOp>(operation)) {
         root.getBody().front().push_back(operation.clone());
       }
     }
-    auto binding = *root.getBody()
-                        .front()
-                        .getOps<zkc::local::OperationBindingOp>()
-                        .begin();
+    auto binding =
+        *root.getBody().front().getOps<zkc::runtime::BindingOp>().begin();
     for (unsigned i = 4; i < 4092; ++i) {
       auto *clone = binding->clone();
       clone->setAttr("sym_name",
@@ -1053,8 +1052,7 @@ local.return %result : !R)";
       "selection refusal preserves declaration location and metadata", [&] {
         auto module = take(executableFixture(arithmetic(), context));
         auto location = FileLineColLoc::get(&context, "selection.mlir", 2, 3);
-        module->walk(
-            [&](zkc::local::OperationBindingOp op) { op->setLoc(location); });
+        module->walk([&](zkc::runtime::BindingOp op) { op->setLoc(location); });
         auto before = printed(*module);
         bool located = false, identified = false;
         ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {

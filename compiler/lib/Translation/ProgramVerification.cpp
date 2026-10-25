@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -138,7 +139,7 @@ class ArtifactCorrespondence {
             !inputs(r->inputs) || !outputs(r->outputs))
           return false;
         auto declaration =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
+            SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
                 &op, application.getBindingAttr());
         if (!declaration ||
             application.getImplementation() != declaration.getImplementation())
@@ -315,7 +316,7 @@ public:
                    text(&op, "sym_name").str();
       if (!charge())
         return false;
-      if (auto b = dyn_cast<local::OperationBindingOp>(op)) {
+      if (auto b = dyn_cast<runtime::BindingOp>(op)) {
         if (binding == program.bindings.size())
           return false;
         const auto &expected = program.bindings[binding++];

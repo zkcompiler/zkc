@@ -49,9 +49,9 @@ constexpr StringLiteral capacityFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="numerical",contract="numerical.sum",arguments=["bls12-381.fr","0"],implementation=""} : ()->()
- "local.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
- "local.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks/poly.fold"} : ()->()
+ "runtime.binding"() {sym_name="numerical",contract="numerical.sum",arguments=["bls12-381.fr","0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+ "runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks/poly.fold"} : ()->()
  local.func @work(%table:!T,%rows:ui64,%a:!F)->!T attributes {logical_origin=["work",[]]} {
    local.return %table : !T
  }

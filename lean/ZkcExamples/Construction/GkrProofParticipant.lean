@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.GkrProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:a9feac4ae3f74db950a326c5162314676f0175ce6e9f6ae5134c96319d2fc8cc"
-  candidate := "sha256:68774cf26b59dae1d6dcfd56f149d991116a39542b5cc20343107c1bc8e2203b"
+  source := "sha256:3f1c2d7f3615a96a832253c39b99a12e226e4c97032fdfd5eb03caab0be0637d"
+  candidate := "sha256:01c6aa6a5e84ec14c97c8a6bf7198b98b9258ab8190159a346e511edcded646c"
   policy := ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3, 4, 5, 6], [("label_6f7574707574", "label_6f75747075745f64656c6976657279_0"), ("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0"), ("label_6c696e655f6368616c6c656e6765", "label_6c696e655f64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data .index, .data .index, .data .index, .transcript "merlin3.bls12-381.fr64be/0"]

@@ -1,10 +1,10 @@
 module {
 "protocol.module"() ({
-"local.binding"() {sym_name="empty", contract="curve.empty", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"local.binding"() {sym_name="append", contract="curve.append", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"local.binding"() {sym_name="at", contract="curve.at", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"local.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"local.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="empty", contract="curve.empty", arguments=["bls12-381.g1"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="append", contract="curve.append", arguments=["bls12-381.g1"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="at", contract="curve.at", arguments=["bls12-381.g1"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
 local.func @nonce_commit(%g: !algebra.group<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) attributes {logical_origin=["nonce_commit", []]} {
 %empty = "algebra.exec.group_empty"() {binding=@empty, parameters=[], site="empty"} : () -> !algebra.group_vector<"bls12-381.g1">
 %bases = "algebra.exec.group_append"(%empty, %g) {binding=@append, parameters=[], site="append"} : (!algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !algebra.group_vector<"bls12-381.g1">

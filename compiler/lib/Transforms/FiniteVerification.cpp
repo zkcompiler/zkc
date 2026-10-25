@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -81,9 +82,8 @@ class Reader {
     if (!op)
       return {};
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                       : runtime::BindingOp();
     auto params = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!binding || !params || !site || op->getAttrs().size() != 3 ||

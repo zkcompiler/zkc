@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.GkrSourceData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:a9feac4ae3f74db950a326c5162314676f0175ce6e9f6ae5134c96319d2fc8cc"
+  source := "sha256:3f1c2d7f3615a96a832253c39b99a12e226e4c97032fdfd5eb03caab0be0637d"
   entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2"
   domains := [⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩, ⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain", [.vector "bls12-381.fr"], .elements 0⟩]
   relations := []

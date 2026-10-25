@@ -3,7 +3,7 @@
 !g2 = !algebra.group<"bn254.g2">
 !gt = !algebra.group<"bn254.gt">
 module { "protocol.module"() ({
-"local.binding"() {sym_name="field_from_index",contract="field.from_index",arguments=["bn254.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="field_from_index",contract="field.from_index",arguments=["bn254.fr"],implementation=""} : ()->()
 
 local.func @count_scalar(%count:ui64)->(!f) attributes {logical_origin=["count_scalar",[]]} {
   %scalar = "algebra.exec.field_from_index"(%count) {binding=@field_from_index,parameters=[],site="scalar"} : (ui64)->(!f)

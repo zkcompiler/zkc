@@ -1,6 +1,6 @@
 module { "protocol.module"() ({
-"local.binding"() {sym_name="binding_make", contract="resource_unit.create", arguments=["Slot.A"], implementation=""} : () -> ()
-"local.binding"() {sym_name="binding_consume", contract="resource_unit.consume", arguments=["Slot.A"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_make", contract="resource_unit.create", arguments=["Slot.A"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_consume", contract="resource_unit.consume", arguments=["Slot.A"], implementation=""} : () -> ()
 local.func @make() -> (!runtime.capability<"resource_unit:Slot.A">) attributes {logical_origin=["make", []]} {
 %u = "local.exec.resource_unit_create"() {binding=@binding_make, parameters=[], site="make"} : () -> !runtime.capability<"resource_unit:Slot.A">
 local.return %u : !runtime.capability<"resource_unit:Slot.A">

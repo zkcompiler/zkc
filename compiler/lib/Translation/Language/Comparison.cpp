@@ -1216,7 +1216,7 @@ public:
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
           return error("source.correspondence", "duplicate relation symbol");
-      } else if (op.getName().getStringRef() == "local.binding") {
+      } else if (op.getName().getStringRef() == "runtime.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
         if (!attributes(
                 op, {"sym_name", "contract", "arguments", "implementation"}) ||

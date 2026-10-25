@@ -22,9 +22,9 @@ def mathematical_source(family, control="direct"):
 !A = !algebra.{"group_vector" if group else "field_vector"}<"{identity}">
 !R = {result}
 module {{ "protocol.module"() ({{
-  "local.binding"() {{sym_name="map", contract="{producer}", arguments=["{identity}"], implementation=""}} : () -> ()
-  "local.binding"() {{sym_name="reduce", contract="{reduction}", arguments=["{identity}"], implementation=""}} : () -> ()
-  "local.binding"() {{sym_name="guard", contract="control.require", arguments=[], implementation=""}} : () -> ()
+  "runtime.binding"() {{sym_name="map", contract="{producer}", arguments=["{identity}"], implementation=""}} : () -> ()
+  "runtime.binding"() {{sym_name="reduce", contract="{reduction}", arguments=["{identity}"], implementation=""}} : () -> ()
+  "runtime.binding"() {{sym_name="guard", contract="control.require", arguments=[], implementation=""}} : () -> ()
   local.func @Work({arguments}) -> (!R, !R) attributes {{logical_origin=["Work", []]}} {{
     %weighted = "algebra.exec.{map_op}"(%factors, %values) {{binding=@map, site="weighted", parameters=[]}} : (!V, !A) -> !A
     %first = "algebra.exec.{reduce_op}"(%left, %weighted) {{binding=@reduce, site="first", parameters=[]}} : (!V, !A) -> !R
@@ -58,7 +58,7 @@ module {{ "protocol.module"() ({{
     else:
         source = source.replace(
             "  local.func @Work",
-            '  "local.binding"() {sym_name="constant", contract="index.constant", arguments=[], implementation=""} : () -> ()\n  local.func @Work',
+            '  "runtime.binding"() {sym_name="constant", contract="index.constant", arguments=[], implementation=""} : () -> ()\n  local.func @Work',
         )
         start = source.index("    %weighted =")
         end = source.index("    local.return %first, %second : !R, !R", start)

@@ -60,7 +60,7 @@ def stopped(reason='refused', site='primitive'):
 
 def binding(contract, name='operation', implementation=''):
     arguments = [] if contract.startswith('index.') else ['bls12-381.fr']
-    return ('"local.binding"() {sym_name=' + json.dumps(name) + ',contract=' + json.dumps(contract) +
+    return ('"runtime.binding"() {sym_name=' + json.dumps(name) + ',contract=' + json.dumps(contract) +
             ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + '} : ()->()')
 
 

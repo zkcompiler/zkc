@@ -3,8 +3,8 @@
 // This schedule must parse with ordinary MLIR verification enabled, including
 // the isolated Local bound-admission frames inside the standard function.
 module {
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="subtract",contract="field.sub",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="subtract",contract="field.sub",arguments=["bls12-381.fr"],implementation=""} : ()->()
  func.func @evaluate(%lower:ui64,%upper:ui64,%first:!F,%second:!F,%factor:!F,%bias:!F)->(!F,!F)
  attributes {logical_origin=["evaluate",[]]} {
    "local.for"(%lower,%lower) ({ ^lower_check(%i:ui64):

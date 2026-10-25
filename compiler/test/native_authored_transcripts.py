@@ -23,7 +23,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]), ("_release", ["
         name = 'openvm_early' + suffix
         source = (fixtures / 'authored-openvm.mlir').read_text()
         source = source.replace(' local.func @search',
-            ' "local.binding"() {sym_name="not",contract="bool.not",arguments=[],implementation=""} : ()->()\n local.func @search')
+            ' "runtime.binding"() {sym_name="not",contract="bool.not",arguments=[],implementation=""} : ()->()\n local.func @search')
         source = source.replace('"local.yield"(%next#0,%next#1,%state,%width,%choices) : (ui64,i1,!words,ui64,!words)->()',
             '''%again = "algebra.exec.bool_not"(%next#1) {binding=@not,parameters=[],site="continue"} : (i1)->i1
      "local.condition"(%again,%next#0,%next#1,%state,%width,%choices) : (i1,ui64,i1,!words,ui64,!words)->()''')

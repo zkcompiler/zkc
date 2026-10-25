@@ -17,6 +17,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -91,9 +92,9 @@ public:
       SmallVector<Attribute> arguments;
       for (auto &argument : application.arguments)
         arguments.push_back(builder.getStringAttr(argument));
-      local::OperationBindingOp::create(
-          builder, location, name, application.contract,
-          builder.getArrayAttr(arguments), "", mlir::ArrayAttr{});
+      runtime::BindingOp::create(builder, location, name, application.contract,
+                                 builder.getArrayAttr(arguments), "",
+                                 mlir::ArrayAttr{});
       found = bindings.emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);
@@ -806,7 +807,7 @@ void executableCandidate(mlir::ModuleOp candidate, func::FuncOp working,
   for (auto &declaration : make_early_inc_range(*candidate.getBody())) {
     if (&declaration == owner.getOperation())
       continue;
-    if (isa<local::OperationBindingOp>(declaration))
+    if (isa<runtime::BindingOp>(declaration))
       declaration.moveBefore(output);
     else
       declaration.erase();

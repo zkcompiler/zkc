@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -64,7 +65,7 @@ class NumericalBodyReader {
   ComputationDiagnostic &diagnostic;
   SymbolTableCollection symbols;
   llvm::DenseSet<Operation *> active;
-  llvm::DenseMap<Operation *, local::OperationBindingOp> bindings;
+  llvm::DenseMap<Operation *, runtime::BindingOp> bindings;
   OpBuilder builder;
   bool charge(Operation *op) {
     return consumeComputationWork(
@@ -150,8 +151,7 @@ class NumericalBodyReader {
       result.sources[copy] = &op;
       if (auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding")) {
         auto binding =
-            symbols.lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, reference);
+            symbols.lookupNearestSymbolFrom<runtime::BindingOp>(&op, reference);
         if (!binding)
           return failure();
         auto &retained = bindings[binding];
@@ -161,7 +161,7 @@ class NumericalBodyReader {
           auto *declaration = binding->clone();
           SymbolTable table(*result.storage);
           table.insert(declaration);
-          retained = cast<local::OperationBindingOp>(declaration);
+          retained = cast<runtime::BindingOp>(declaration);
         }
         copy->setAttr("binding",
                       FlatSymbolRefAttr::get(retained.getSymNameAttr()));

@@ -16,7 +16,7 @@ using State = protocol::AlgorithmExpansionState;
 using Record = protocol::detail::AlgorithmExpansionRecord;
 using Access = protocol::detail::AlgorithmStateAccess;
 constexpr StringLiteral ordinary = R"mlir(module { "protocol.module"() ({
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
  local.func @leaf(%x:i1,%y:i1)->i1 attributes {logical_origin=["leaf",[]]} {
    %r = "algebra.exec.bool_and"(%x,%y) {binding=@and,parameters=[],site="combine"} : (i1,i1)->i1
    local.return %r : i1
@@ -36,7 +36,7 @@ constexpr StringLiteral ordinary = R"mlir(module { "protocol.module"() ({
  }) {sym_name="main",function_type=(i1,i1)->i1,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })mlir";
 constexpr StringLiteral retained = R"mlir(
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
  func.func private @formula(%a:!F,%b:!F)->!F {
    %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
    func.return %p : !F
@@ -66,7 +66,7 @@ constexpr StringLiteral retained = R"mlir(
  }
 )mlir";
 constexpr StringLiteral callbacks = R"mlir(
- "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %items = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%items) : (!data.domain<!F>)->()

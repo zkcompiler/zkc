@@ -242,7 +242,7 @@ with case("collect-fold preparation choice is explicit even without an eligible 
 field = '!algebra.field<"bls12-381.fr">'
 vector = '!algebra.field_vector<"bls12-381.fr">'
 fusable = f'''
- "local.binding"() {{sym_name="vf_sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="vf_sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""}} : ()->()
  func.func private @vf_mul(%x:{field},%y:{field})->{field} {{
    %r = "algebra.field_multiply"(%x,%y) : ({field},{field})->{field}
    func.return %r : {field}

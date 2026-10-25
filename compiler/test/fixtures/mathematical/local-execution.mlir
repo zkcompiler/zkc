@@ -1,7 +1,7 @@
 module {
 "protocol.module"() ({
-  "local.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-  "local.binding"() {sym_name="require", contract="control.require", arguments=[], implementation=""} : () -> ()
+  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+  "runtime.binding"() {sym_name="require", contract="control.require", arguments=[], implementation=""} : () -> ()
   local.func @leaf(%x: !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr"> attributes {logical_origin=["leaf", []]} {
     %v = "algebra.exec.field_add"(%x, %x) {binding=@add, parameters=[], site="twice"} : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
     local.return %v : !algebra.field<"bls12-381.fr">

@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
 using namespace mlir;
@@ -119,7 +120,7 @@ func::FuncOp scheduledFunction(mlir::ModuleOp module) {
           !returned->getAttrs().empty())
         return {};
       function = fn;
-    } else if (isa<local::OperationBindingOp>(op)) {
+    } else if (isa<runtime::BindingOp>(op)) {
       auto contract = op.getAttrOfType<StringAttr>("contract");
       auto implementation = op.getAttrOfType<StringAttr>("implementation");
       auto arguments = op.getAttrOfType<ArrayAttr>("arguments");
@@ -466,7 +467,7 @@ consumeSchedule(mlir::ModuleOp source, uint64_t &remaining,
       builder, source.getLoc(), protocol_ir::Profile::Exec);
   owner.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&owner.getBody().front());
-  for (auto binding : source.getBody()->getOps<local::OperationBindingOp>())
+  for (auto binding : source.getBody()->getOps<runtime::BindingOp>())
     builder.clone(*binding.getOperation());
   auto output =
       local::FuncOp::create(builder, function.getLoc(), function.getSymName(),
@@ -584,8 +585,8 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
   if (!target || target->getAttrDictionary() != function->getAttrDictionary() ||
       !target.getBody().hasOneBlock())
     return failure();
-  auto before = schedule.getBody()->getOps<local::OperationBindingOp>();
-  auto after = owner.getBody().front().getOps<local::OperationBindingOp>();
+  auto before = schedule.getBody()->getOps<runtime::BindingOp>();
+  auto after = owner.getBody().front().getOps<runtime::BindingOp>();
   if (std::distance(before.begin(), before.end()) !=
       std::distance(after.begin(), after.end()))
     return failure();
@@ -597,7 +598,7 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
   for (auto &op : owner.getBody().front())
     if (isa<local::FuncOp>(op))
       ++functions;
-    else if (!isa<local::OperationBindingOp>(op))
+    else if (!isa<runtime::BindingOp>(op))
       return failure();
   IRMapping values;
   values.map(function.getArguments(), target.getArguments());
@@ -645,7 +646,7 @@ LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
   });
   for (auto &op : *schedule.getBody())
     if (&op != function.getOperation() &&
-        (!isa<local::OperationBindingOp>(op) || !used.contains(&op)))
+        (!isa<runtime::BindingOp>(op) || !used.contains(&op)))
       return finish(false);
   uint64_t standalone = 1000000, standaloneBytes = 16 * 1024 * 1024;
   auto &remaining = limits.sharedContext ? *limits.sharedContext : standalone;

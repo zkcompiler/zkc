@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Refusal.h"
 
@@ -40,7 +41,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   for (const auto &decision : plan.bindings) {
     if (decision.purpose == target::BindingPurpose::Original) {
       auto declaration =
-          cast<zkc::local::OperationBindingOp>(work[*decision.declaration]);
+          cast<zkc::runtime::BindingOp>(work[*decision.declaration]);
       declaration.setImplementation(
           decision.binding.application.implementation);
       declaration.setPhysicalArgumentsAttr(
@@ -52,7 +53,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
     SmallVector<Attribute> arguments;
     for (const auto &argument : binding.application.arguments)
       arguments.push_back(builder.getStringAttr(argument));
-    zkc::local::OperationBindingOp::create(
+    zkc::runtime::BindingOp::create(
         builder, work[decision.location]->getLoc(), binding.name,
         binding.application.contract, builder.getArrayAttr(arguments),
         binding.application.implementation,

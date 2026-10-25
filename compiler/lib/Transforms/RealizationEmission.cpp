@@ -2,6 +2,7 @@
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -34,10 +35,9 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
     SmallVector<Attribute> arguments;
     for (const auto &argument : application.arguments)
       arguments.push_back(builder.getStringAttr(argument));
-    local::OperationBindingOp::create(
-        builder, location, name, application.contract,
-        builder.getArrayAttr(arguments), application.implementation,
-        mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, location, name, application.contract,
+                               builder.getArrayAttr(arguments),
+                               application.implementation, mlir::ArrayAttr{});
     found = bindings.emplace(std::move(key), name).first;
   }
   return FlatSymbolRefAttr::get(builder.getContext(), found->second);

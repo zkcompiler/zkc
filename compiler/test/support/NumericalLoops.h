@@ -5,6 +5,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 namespace zkc::test::loops {
@@ -57,13 +58,13 @@ inline mlir::func::FuncOp helper(mlir::ModuleOp unit, llvm::StringRef name) {
   require(bool(result), "missing numerical helper");
   return result;
 }
-inline local::OperationBindingOp primitiveBinding(mlir::Operation *user) {
+inline runtime::BindingOp primitiveBinding(mlir::Operation *user) {
   // Schedules declare bindings in builtin modules; executable fragments use
   // Protocol owners. Resolve in the user's lexical symbol table in both cases.
   auto *owner = mlir::SymbolTable::getNearestSymbolTable(user);
   auto reference = user->getAttrOfType<mlir::FlatSymbolRefAttr>("binding");
   require(owner && reference, "missing primitive binding reference");
-  auto result = mlir::dyn_cast_or_null<local::OperationBindingOp>(
+  auto result = mlir::dyn_cast_or_null<runtime::BindingOp>(
       mlir::SymbolTable::lookupSymbolIn(owner, reference));
   require(bool(result), "missing actual primitive binding");
   return result;

@@ -36,7 +36,9 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 Logical variants use Data-owned types; runtime capabilities and exact physical
 representation wrappers use Runtime-owned types. Their independent binding
 adapters preserve current native descriptors and installation checks. Local and
-Plan own no value types. See [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
+Plan own no value types. Runtime also owns the shared `runtime.binding`
+declaration used by logical and physical ordered execution. See
+[native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
 
 Runtime scope/transfer formation, flat-CFG ownership and scoped native instruction
 emission/reconstruction are available as compiler APIs. The reconstruction reader checks

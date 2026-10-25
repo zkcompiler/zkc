@@ -12,6 +12,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -104,10 +105,9 @@ algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols,
     return {};
   }
   auto reference = sum->getAttrOfType<FlatSymbolRefAttr>("binding");
-  auto binding =
-      reference
-          ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-          : local::OperationBindingOp();
+  auto binding = reference
+                     ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                     : runtime::BindingOp();
   auto field = cast<algebra::FieldType>(sum->getResult(0).getType());
   if (!binding || binding.getContract() != "vector.sum" ||
       !binding.getImplementation().empty() ||
@@ -202,7 +202,7 @@ public:
         if (emitted.insert(name).second) {
           OpBuilder::InsertionGuard position(builder);
           builder.setInsertionPointToStart(&root.getBody().front());
-          local::OperationBindingOp::create(
+          runtime::BindingOp::create(
               builder, map.getLoc(), name, contract,
               arguments(root.getContext(), contract, field.getDomain()), "",
               mlir::ArrayAttr{});
@@ -337,7 +337,7 @@ class Correspondence {
           return nullptr;
       }
       auto name = names.get(contract, field.getDomain());
-      auto binding = candidateSymbols.lookup<local::OperationBindingOp>(name);
+      auto binding = candidateSymbols.lookup<runtime::BindingOp>(name);
       if (!binding || binding.getContract() != contract ||
           !binding.getImplementation().empty() ||
           binding.getArguments() !=
@@ -394,9 +394,9 @@ class Correspondence {
     for (unsigned i = 0; i != guards + 1; ++i) {
       auto *actual = &*cursor;
       auto ref = actual->getAttrOfType<FlatSymbolRefAttr>("binding");
-      auto binding = ref ? candidateSymbols.lookup<local::OperationBindingOp>(
-                               ref.getValue())
-                         : local::OperationBindingOp();
+      auto binding =
+          ref ? candidateSymbols.lookup<runtime::BindingOp>(ref.getValue())
+              : runtime::BindingOp();
       if (!binding || (i == guards && binding.getContract() != "vector.dot") ||
           !primitive(binding.getContract(), actual->getOperands(),
                      actual->getNumResults() ? actual->getResult(0).getType()

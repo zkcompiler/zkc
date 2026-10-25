@@ -30,8 +30,8 @@ std::string chain(bool residentInitial = true, bool executionControls = false) {
 !G = !algebra.group<"bls12-381.g1">
 )" + mathematicalFixture(
           R"(
-"local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
-"local.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
 )",
           executionControls
               ? "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64,%allowed:i1,%t:!F"
@@ -494,7 +494,7 @@ module { "protocol.module"() ({
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
 )" + mathematicalFixture(R"(
-"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )",
                          "%s:!V,%g:!GS", "%s,%g", "!V,!GS", "!G", R"(
 %out = "algebra.exec.group_msm"(%s,%g) {binding=@msm,site="msm",parameters=[]} : (!V,!GS)->!G
@@ -515,9 +515,9 @@ local.return %out : !G
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" + mathematicalFixture(R"(
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
 )",
                          "%a:!F,%b:!F", "%a,%b", "!F,!F", "!S", R"(
 %x = "algebra.exec.field_add"(%a,%b) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
@@ -550,9 +550,9 @@ local.return %packed : !S
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 )" + mathematicalFixture(R"(
-"local.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul"} : ()->()
-"local.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum"} : ()->()
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul"} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum"} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
 )",
                          "%a:!V,%b:!V,%x:!F", "%a,%b,%x", "!V,!V,!F", "!F", R"(
 %product = "algebra.exec.vector_mul"(%a,%b) {binding=@mul,site="mul",parameters=[]} : (!V,!V)->!V
@@ -579,7 +579,7 @@ local.return %out : !F
 !G = !algebra.group<"bls12-381.g1">
 )" +
             mathematicalFixture(R"(
-"local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
 )",
                                 "%g:!G,%s:!F", "%g,%s", "!G,!F", "!G", R"(
 %x = "algebra.exec.group_scale"(%g,%s) {binding=@scale,site="initial",parameters=[]} : (!G,!F)->!G

@@ -3,7 +3,6 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -539,7 +538,7 @@ bool Comparison::run(const program::LocalDefinitions &expected) {
   for (Operation &op : *module.getBody()) {
     if (!charge() || ++definitions > 4096)
       return false;
-    if (auto declaration = dyn_cast<local::OperationBindingOp>(op)) {
+    if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
       if (binding == expected.bindings.size() ||
           !attrs(declaration, {"sym_name", "contract", "arguments",
                                "implementation", "physical_arguments"}))

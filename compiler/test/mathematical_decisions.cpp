@@ -30,9 +30,9 @@ constexpr llvm::StringLiteral fusionFixture =
     R"mlir(!F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
  func.func private @formula(%a:!F,%b:!F,%unused:!F,%s:!F)->!F {
    %dead = "algebra.field_add"(%s,%s) : (!F,!F)->!F
    %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F

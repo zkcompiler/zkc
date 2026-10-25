@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
@@ -113,9 +114,9 @@ const char *indexed = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
    %x = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
    %y = "data.domain_indices"(%ys) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -395,7 +396,7 @@ int main() {
           if (pinned) {
             module->walk(
                 [&](kernel::CallOp call) { call->removeAttr("policy"); });
-            module->walk([&](local::OperationBindingOp binding) {
+            module->walk([&](runtime::BindingOp binding) {
               if (binding.getSymName() == "mul")
                 binding->setAttr(
                     "implementation",

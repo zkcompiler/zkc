@@ -72,7 +72,7 @@ for fixture in ['attempt-abandonment', 'attempt-abandonment-silent']:
 
 for i, suite in enumerate(SUITES):
     with case(f'long discarded prefix and shorter completion suite {i}'):
-        helper = ''' "local.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+        helper = ''' "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
  local.func @count(%retry:i1)->ui64 attributes {logical_origin=["count",[]]} {
    %n = "local.if"(%retry) ({
      %two = "algebra.exec.index_constant"() {binding=@index,parameters=["2"],site="two"} : ()->ui64

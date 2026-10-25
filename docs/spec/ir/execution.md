@@ -136,6 +136,15 @@ authority: the reader checks the actual callee, arguments and body recursively.
 The profile requires `no_inline` and refuses recursive outlining, unconsumed
 blocks, unknown operations or attributes, and unchecked region definitions.
 
+`runtime.binding` declares the logical operation contract, static arguments and
+selected implementation/physical arguments. Both logical and physical profiles
+use this one declaration. Its name is resolved within the actual symbol table;
+the declaration alone grants no installed authority, timing permission or
+invocation success. Installation still checks the complete potential closure,
+and reached execution checks current operands, policy, custody and allowances.
+The Func/CF execution writer, reader and independent comparison require no Local
+dialect registration.
+
 The reached instruction boundaries are:
 
 | Operation | Native obligation |

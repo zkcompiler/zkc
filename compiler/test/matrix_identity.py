@@ -37,7 +37,7 @@ def digest(field, matrix):
 def source(field, parameters):
     return f'''!M = !algebra.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
- "local.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
  local.func @Check(%m:!M)->i1 attributes {{logical_origin=["Check",[]]}} {{
    %ok = "algebra.exec.matrix_identity_check"(%m) {{binding=@check,parameters={json.dumps(parameters, ensure_ascii=False)},site="check"}} : (!M)->i1
    local.return %ok : i1

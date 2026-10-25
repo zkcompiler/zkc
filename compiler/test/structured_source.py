@@ -254,7 +254,7 @@ with case('guard-native-verification-precedes-export-profile'):
 
 
 with case('unused-unsupported-provider-declaration'):
-    binding = '"local.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
+    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
     export(simple(binding), 'structured-source-binding')
 
 with case('unsupported-collect'):
@@ -301,7 +301,7 @@ with case('field-embedding-retains-nominal-binding-and-ports'):
     base, extension = 'koala-bear', 'koala-bear.ext4-binomial3'
     base_type, extension_type = f'!algebra.field<"{base}">', f'!algebra.field<"{extension}">'
     declarations = f'''
-"local.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
+"runtime.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
 local.func @embed_helper(%x:{base_type}) -> {extension_type}
     attributes {{logical_origin=["embed_helper",[]]}} {{
   %y = "algebra.exec.field_embed"(%x) {{binding=@embed,parameters=[],site="embedding"}} : ({base_type})->{extension_type}

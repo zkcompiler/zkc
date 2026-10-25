@@ -172,7 +172,7 @@ OwningOpRef<ModuleOp> materializedCopy(ModuleOp source,
 
 std::string scalarSource() {
   return mathematicalFixture(R"mlir(
-"local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
 )mlir",
                              "%a:i1,%b:i1,%unused:i1,%other:i1",
                              "%a,%b,%unused,%other", "i1,i1,i1,i1", "i1",
@@ -189,7 +189,7 @@ std::string conversionSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + mathematicalFixture(R"mlir(
-"local.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )mlir",
                              "%a:!T,%b:!T,%r:!F", "%a,%b,%r", "!T,!T,!F", "!T",
                              R"mlir(
@@ -676,7 +676,7 @@ int main() {
           auto text = R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + mathematicalFixture(R"mlir(
-"local.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
 )mlir",
                              "%table:!T", "%table", "!T", "!F", R"mlir(
 %result = "poly.exec.product_sum"(%table,%table) {binding=@product,site="product",parameters=[]} : (!T,!T)->!F

@@ -1,11 +1,11 @@
 // Candidate search uses immutable trials and checks the chosen witness on live state.
 !words = !algebra.indices
 module { "protocol.module"() ({
- "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
  local.func @same(%a:!words,%b:!words)->i1 attributes {logical_origin=["same",[]]} {
    %n = "algebra.exec.indices_length"(%a) {binding=@length,parameters=[],site="n"} : (!words)->ui64
    %m = "algebra.exec.indices_length"(%b) {binding=@length,parameters=[],site="m"} : (!words)->ui64
@@ -27,24 +27,24 @@ module { "protocol.module"() ({
    }) {site="compare"} : (i1,!words,!words,ui64)->i1
    local.return %result : i1
  }
- "local.binding"() {sym_name="binding_init",contract="external.openvm.init",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_init",contract="external.openvm.init",arguments=[],implementation=""} : ()->()
  local.func @init()->(!words) attributes {logical_origin=["init",[]]} {
    %v = "crypto.exec.openvm_init"() {binding=@binding_init,parameters=[],site="step"} : ()->(!words)
    local.return %v : !words
  }
- "local.binding"() {sym_name="binding_observe",contract="external.openvm.observe",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_observe",contract="external.openvm.observe",arguments=[],implementation=""} : ()->()
  local.func @observe(%a0:!words,%a1:!words)->(!words) attributes {logical_origin=["observe",[]]} {
    %v = "crypto.exec.openvm_observe"(%a0,%a1) {binding=@binding_observe,parameters=[],site="step"} : (!words,!words)->(!words)
    local.return %v : !words
  }
- "local.binding"() {sym_name="binding_check",contract="external.openvm.check_witness",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_check",contract="external.openvm.check_witness",arguments=[],implementation=""} : ()->()
  local.func @check(%a0:!words,%a1:ui64,%a2:ui64)->(!words,i1) attributes {logical_origin=["check",[]]} {
    %v:2 = "crypto.exec.openvm_check_witness"(%a0,%a1,%a2) {binding=@binding_check,parameters=[],site="step"} : (!words,ui64,ui64)->(!words,i1)
    local.return %v#0,%v#1 : !words,i1
  }
- "local.binding"() {sym_name="ext",contract="external.openvm.sample_ext",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="bits",contract="external.openvm.sample_bits",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="scalar",contract="external.openvm.sample",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="ext",contract="external.openvm.sample_ext",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="bits",contract="external.openvm.sample_bits",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="scalar",contract="external.openvm.sample",arguments=[],implementation=""} : ()->()
  local.func @samples(%state:!words,%width:ui64)->(!words,ui64,ui64) attributes {logical_origin=["samples",[]]} {
    %ext:2 = "crypto.exec.openvm_sample_ext"(%state) {binding=@ext,parameters=[],site="extension"} : (!words)->(!words,!words)
    %bits:2 = "crypto.exec.openvm_sample_bits"(%ext#0,%width) {binding=@bits,parameters=[],site="bits"} : (!words,ui64)->(!words,ui64)

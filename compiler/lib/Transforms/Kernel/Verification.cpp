@@ -5,6 +5,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -79,10 +80,10 @@ class Checker {
       if (!site || site.getValue() != *expected)
         break;
       auto reference = end->getAttrOfType<FlatSymbolRefAttr>("binding");
-      auto binding = reference
-                         ? targetSymbols.lookup<local::OperationBindingOp>(
-                               reference.getValue())
-                         : local::OperationBindingOp();
+      auto binding =
+          reference
+              ? targetSymbols.lookup<runtime::BindingOp>(reference.getValue())
+              : runtime::BindingOp();
       if (!binding ||
           (policy.numericalExpressions == NumericalExpressionMode::VectorOnly &&
            protocol::numericalContract(binding.getContract())))
@@ -315,7 +316,7 @@ public:
                                                consumedHelpers.contains(&op))))
         continue;
       while (next != candidate.getBody().front().end()) {
-        auto binding = dyn_cast<local::OperationBindingOp>(*next);
+        auto binding = dyn_cast<runtime::BindingOp>(*next);
         if (!binding || sourceSymbols.lookup(binding.getSymName()))
           break;
         ++next;
@@ -336,7 +337,7 @@ public:
         // Requests constrain replacement in the pinned mathematical subject;
         // the retained final Local declaration keeps the original attributes.
         Operation *expected = &op;
-        if (auto binding = dyn_cast<local::OperationBindingOp>(op))
+        if (auto binding = dyn_cast<runtime::BindingOp>(op))
           expected = originalDeclarations.lookup(binding.getSymName());
         if (!expected ||
             !OperationEquivalence::isEquivalentTo(
@@ -345,7 +346,7 @@ public:
       }
     }
     while (next != candidate.getBody().front().end()) {
-      auto binding = dyn_cast<local::OperationBindingOp>(*next++);
+      auto binding = dyn_cast<runtime::BindingOp>(*next++);
       if (!binding || sourceSymbols.lookup(binding.getSymName()))
         return refuse(candidate, "unexpected extra declaration");
     }
@@ -397,8 +398,7 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
     }
     pinned = cast<mlir::ModuleOp>(original->clone());
     auto root = cast<protocol_ir::ProtocolModuleOp>(pinned->getBody()->front());
-    for (auto binding :
-         root.getBody().front().getOps<local::OperationBindingOp>())
+    for (auto binding : root.getBody().front().getOps<runtime::BindingOp>())
       for (const auto &[name, implementation] : selections)
         if (binding.getSymName() == name)
           binding.setImplementation(implementation);

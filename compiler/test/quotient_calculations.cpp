@@ -6,6 +6,7 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -128,7 +129,7 @@ int main() {
         product->setAttr("site", builder.getStringAttr("unrelated"));
       } else {
         auto owner = zkc::test::kernelRecipeOutput(*changed);
-        auto binding = SymbolTable(owner).lookup<local::OperationBindingOp>(
+        auto binding = SymbolTable(owner).lookup<runtime::BindingOp>(
             product->getAttrOfType<FlatSymbolRefAttr>("binding").getValue());
         if (mutation == "contract") {
           auto *difference = first(*changed, "poly.exec.quotient_subtract");

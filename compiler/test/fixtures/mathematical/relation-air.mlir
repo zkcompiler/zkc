@@ -4,17 +4,17 @@
 !trace = !data.sequence<!v>
 !config = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b226578616d706c652f6169722d646174612f4c696e656172526563757272656e6365222c22636f656666696369656e7473222c226669656c643a626c7331322d3338312e6672222c5b2232222c2232225d2c5b2231222c2233225d2c5b2234225d2c5b2230222c2235225d5d5d">
 module { "protocol.module"() ({
-"local.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="index_less",contract="index.less",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="field_mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"local.binding"() {sym_name="field_add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index_less",contract="index.less",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="field_mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="field_add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
 relation.declare @relation {kind="external",key="example/air-data",revision="0",signature=(!config,!v,!trace)->i1,purposes=["parameter","statement","witness"]}
 local.func @validate(%configuration:!config,%public:!v,%trace:!trace)->i1 attributes {logical_origin=["validate",[]]} {
 %accepted = "local.match"(%configuration,%public,%trace) ({ ^parameters(%alpha:!f,%beta:!f,%inputs:!v,%rows:!trace):

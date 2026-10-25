@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Protocol.h"
@@ -60,7 +61,7 @@ std::string source(StringRef contract, StringRef domain,
   }
   body += "local.return " + result + " : " + output + "\n";
   return aliases + mathematicalFixture(
-                       "\"local.binding\"() {sym_name=\"work\",contract=\"" +
+                       "\"runtime.binding\"() {sym_name=\"work\",contract=\"" +
                            contract.str() + "\",arguments=[\"" + domain.str() +
                            "\"],implementation=\"" + implementation.str() +
                            "\"} : ()->()",
@@ -87,7 +88,7 @@ public:
 };
 void fillDeclarations(ModuleOp module) {
   auto root = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-  auto bindings = root.getBody().front().getOps<local::OperationBindingOp>();
+  auto bindings = root.getBody().front().getOps<runtime::BindingOp>();
   auto original = *bindings.begin();
   for (unsigned i = llvm::range_size(bindings); i < 4096; ++i) {
     auto *binding = original->clone();
@@ -277,10 +278,10 @@ int main(int argc, char **argv) {
 !F = !algebra.field<"bls12-381.fr">
 !I = !algebra.indices
 )" + mathematicalFixture(
-                  R"("local.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
+                  R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
                       std::string(fixed ? "blst/resident/curve.scale" : "") +
                       R"("} : ()->()
-"local.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
                   joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I"
                          : "%g:!G,%s:!F,%t:!T,%i:!I",
                   joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
@@ -313,12 +314,12 @@ local.return %out : !T)",
 !F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.group<"bls12-381.g2">>
 )" + mathematicalFixture(
-              R"("local.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
+              R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
                   std::string(fixed ? "blst/resident/curve.scale" : "") +
                   R"("} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
               "%g:!G,%s:!F", "%g,%s", "!G,!F", "ui64", R"(
 %p = "algebra.exec.group_scale"(%g,%s) {binding=@work,site="scale",parameters=[]} : (!G,!F)->!G
 %empty = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
@@ -410,7 +411,7 @@ local.return %n : ui64)",
         source("curve.scale", "bls12-381.g2", {}, 2), context));
     auto root = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
     auto original =
-        *root.getBody().front().getOps<local::OperationBindingOp>().begin();
+        *root.getBody().front().getOps<runtime::BindingOp>().begin();
     auto *alias = original->clone();
     alias->setAttr("sym_name", StringAttr::get(&context, "alias"));
     root.getBody().front().push_back(alias);

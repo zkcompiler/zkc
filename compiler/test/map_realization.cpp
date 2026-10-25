@@ -3,6 +3,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -37,9 +38,8 @@ SmallVector<std::pair<std::string, Operation *>> actions(ModuleOp module,
   SmallVector<std::pair<std::string, Operation *>> result;
   for (auto &op : function(module, name).getBody().front()) {
     auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                       : runtime::BindingOp();
     result.emplace_back(binding ? binding.getContract().str()
                                 : op.getName().getStringRef().str(),
                         &op);
@@ -272,7 +272,7 @@ module { "protocol.module"() ({
     auto ref = nth(module, "mapped", contract)
                    ->getAttrOfType<FlatSymbolRefAttr>("binding");
     return SymbolTable(&module.getBody()->front())
-        .lookup<local::OperationBindingOp>(ref.getValue());
+        .lookup<runtime::BindingOp>(ref.getValue());
   };
   mutation(
       "bind vector arithmetic in another field",
@@ -313,9 +313,9 @@ module { "protocol.module"() ({
   mutation("add an unused binding", [&](ModuleOp module) {
     OpBuilder builder(&module.getBody()->front().getRegion(0).front(),
                       module.getBody()->front().getRegion(0).front().begin());
-    local::OperationBindingOp::create(
-        builder, module.getLoc(), "extra", "vector.add",
-        builder.getStrArrayAttr({"koala-bear"}), "", mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, module.getLoc(), "extra", "vector.add",
+                               builder.getStrArrayAttr({"koala-bear"}), "",
+                               mlir::ArrayAttr{});
   });
 
   // Formation refuses while parsing. A `defended` refusal is also refused by

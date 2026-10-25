@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -43,7 +44,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
   func.return %v : !F
 }
 local.realize @realized = @difference : (!F,!F)->!F
-"local.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )mlir",
                              "%table:!T,%other:!T,%a:!F,%b:!F",
                              "%table,%other,%a,%b", "!T,!T,!F,!F", "!T", R"mlir(
@@ -119,8 +120,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"local.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"local.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )mlir",
                              "%table:!T,%other:!T,%a:!F,%b:!F",
                              "%table,%other,%a,%b", "!T,!T,!F,!F", "!F", R"mlir(
@@ -141,7 +142,7 @@ module @difference attributes {exec.computation} {
     func.return %v : !F
   }
 }
-"local.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
 )mlir",
                              "%a:!F,%b:!F,%enabled:i1", "%a,%b,%enabled",
                              "!F,!F,i1", "!F", R"mlir(
@@ -215,7 +216,7 @@ void addUnchangedContext(ModuleOp module, unsigned count) {
   auto root = owner(module);
   builder.setInsertionPointToEnd(&root.getBody().front());
   OperationState binding(module.getLoc(),
-                         local::OperationBindingOp::getOperationName());
+                         runtime::BindingOp::getOperationName());
   binding.addAttribute("sym_name", builder.getStringAttr("context_add"));
   binding.addAttribute("contract", builder.getStringAttr("field.add"));
   binding.addAttribute("arguments", builder.getStrArrayAttr({"bls12-381.fr"}));
@@ -473,8 +474,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
-"local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )mlir",
                               "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
                               "!V,!GS,!F,!F", "!G", R"mlir(
@@ -675,9 +676,8 @@ local.return %scaled : !G
         // substitution remains admitted and must fail correspondence.
         auto reference = subtract->getAttrOfType<FlatSymbolRefAttr>("binding");
         require(bool(reference), "physical subtraction lost its binding");
-        auto binding =
-            SymbolTable(owner(*candidate))
-                .lookup<local::OperationBindingOp>(reference.getValue());
+        auto binding = SymbolTable(owner(*candidate))
+                           .lookup<runtime::BindingOp>(reference.getValue());
         require(bool(binding), "physical subtraction binding did not resolve");
         binding->setAttr("contract", StringAttr::get(&context, "field.add"));
         binding->setAttr("implementation",
@@ -923,7 +923,7 @@ local.return %scaled : !G
           take(validatePhysical(*module, plan));
           auto selected = take(plan.cloneSelectedSubject(*module));
           auto retained = SymbolTable(owner(*selected))
-                              .lookup<local::OperationBindingOp>("context_add");
+                              .lookup<runtime::BindingOp>("context_add");
           require(retained && retained.getImplementation().empty(),
                   "temporary requests changed retained source declarations");
           auto changed = first<local::BoolConstantOp>(*selected);
@@ -1049,12 +1049,12 @@ local.return %scaled : !G
           auto selected = take(checked.cloneSelectedSubject(*module));
           SymbolTable symbols(owner(*selected));
           Operation *call = nullptr;
-          local::OperationBindingOp binding;
+          runtime::BindingOp binding;
           selected->walk([&](Operation *op) {
             auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
             auto declaration =
-                ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-                    : local::OperationBindingOp();
+                ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                    : runtime::BindingOp();
             if (declaration && declaration.getContract() == "numerical.sum") {
               call = op;
               binding = declaration;
@@ -1299,7 +1299,7 @@ local.return %scaled : !G
             loop |= isa<local::LocalForOp>(op);
             if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
               if (auto binding =
-                      symbols.lookup<local::OperationBindingOp>(ref.getValue()))
+                      symbols.lookup<runtime::BindingOp>(ref.getValue()))
                 native |= binding.getContract() == "numerical.sum" ||
                           binding.getContract() == "numerical.map";
           });
@@ -1310,41 +1310,40 @@ local.return %scaled : !G
           frozen.check(*module);
         });
   }
-  cases.run("one final Local subject composes structured maps and Kernel calls",
-            [&] {
-              auto module = executable(mixedMapSource(), context);
-              FrozenInput frozen(*module);
-              CountingCatalog catalog;
-              auto plan = take(proposePhysical(*module, catalog));
-              auto selected = take(plan.cloneSelectedSubject(*module));
-              bool map = false, sum = false;
-              selected->walk([&](Operation *op) {
-                require(!mathematical::isComputationUnit(op) &&
-                            !isa<kernel::CallOp, algebra::MapRealizeOp,
-                                 local::ApplyOp, func::FuncOp>(op),
-                        "mixed final subject retained source work");
-                auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-                auto binding =
-                    ref ? SymbolTable(owner(*selected))
-                              .lookup<local::OperationBindingOp>(ref.getValue())
-                        : local::OperationBindingOp();
-                if (binding) {
-                  map |= binding.getContract() == "numerical.map";
-                  sum |= binding.getContract() == "numerical.sum";
-                }
-              });
-              require(map && sum &&
-                          succeeded(mathematical::verifyNumericalLowering(
-                              *module, *selected)),
-                      "mixed retained body lost one numerical family");
-              auto checked = take(validatePhysical(*module, plan, catalog));
-              auto queries = catalog.queryCount();
-              frozen.check(*module);
-              accept(materializePhysical(*module, checked));
-              admitPhysical(*module);
-              require(catalog.queryCount() == queries,
-                      "mixed materialization searched again");
-            });
+  cases.run(
+      "one final Local subject composes structured maps and Kernel calls", [&] {
+        auto module = executable(mixedMapSource(), context);
+        FrozenInput frozen(*module);
+        CountingCatalog catalog;
+        auto plan = take(proposePhysical(*module, catalog));
+        auto selected = take(plan.cloneSelectedSubject(*module));
+        bool map = false, sum = false;
+        selected->walk([&](Operation *op) {
+          require(!mathematical::isComputationUnit(op) &&
+                      !isa<kernel::CallOp, algebra::MapRealizeOp,
+                           local::ApplyOp, func::FuncOp>(op),
+                  "mixed final subject retained source work");
+          auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+          auto binding = ref ? SymbolTable(owner(*selected))
+                                   .lookup<runtime::BindingOp>(ref.getValue())
+                             : runtime::BindingOp();
+          if (binding) {
+            map |= binding.getContract() == "numerical.map";
+            sum |= binding.getContract() == "numerical.sum";
+          }
+        });
+        require(map && sum &&
+                    succeeded(mathematical::verifyNumericalLowering(*module,
+                                                                    *selected)),
+                "mixed retained body lost one numerical family");
+        auto checked = take(validatePhysical(*module, plan, catalog));
+        auto queries = catalog.queryCount();
+        frozen.check(*module);
+        accept(materializePhysical(*module, checked));
+        admitPhysical(*module);
+        require(catalog.queryCount() == queries,
+                "mixed materialization searched again");
+      });
   cases.run(
       "a fixed conversion endpoint permits its automatic peer to change", [&] {
         auto module = executable(fixedPeerSource(), context);

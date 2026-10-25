@@ -3,11 +3,11 @@
 !f = !algebra.field<"bls12-381.fr">
 !rng = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
  local.func @same(%a:!words,%b:!words)->i1 attributes {logical_origin=["same",[]]} {
    %n = "algebra.exec.indices_length"(%a) {binding=@length,parameters=[],site="n"} : (!words)->ui64
    %m = "algebra.exec.indices_length"(%b) {binding=@length,parameters=[],site="m"} : (!words)->ui64
@@ -29,11 +29,11 @@ module { "protocol.module"() ({
    }) {site="compare"} : (i1,!words,!words,ui64)->i1
    local.return %result : i1
  }
- "local.binding"() {sym_name="init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @prepare(%seed:!words,%context:!words,%rng:!rng)->(!words,i1,!rng) attributes {logical_origin=["prepare",[]]} {
    %draw:2 = "crypto.exec.random_draw"(%rng) {binding=@random,parameters=[],site="prefix_draw"} : (!rng)->(!f,!rng)
    %state = "crypto.exec.monero_init"(%seed) {binding=@init,parameters=[],site="init"} : (!words)->!words

@@ -113,7 +113,7 @@ module { "protocol.module"() ({
 # remains an explicit local operation even when its result is unused.
 probe = '''!s = !data.sequence<ui64>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
  local.func @checked(%s:!s,%i:ui64)->ui64 attributes {logical_origin=["checked",[]]} {
    %unused = "data.exec.sequence_at"(%s,%i) {binding=@at,parameters=[],site="at"} : (!s,ui64)->ui64
    local.return %i : ui64

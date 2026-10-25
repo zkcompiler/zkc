@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -109,9 +110,8 @@ class TranscriptCorrespondence {
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
-        reference
-            ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-            : local::OperationBindingOp();
+        reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                  : runtime::BindingOp();
     auto strings = [](ArrayAttr a, ArrayRef<std::string> b) {
       if (!a || a.size() != b.size())
         return false;
@@ -739,7 +739,7 @@ public:
         continue;
       if (isa<local::FuncOp>(op) && checkedHelpers.count(name))
         continue;
-      if (isa<local::OperationBindingOp>(op) && bindings.count(name))
+      if (isa<runtime::BindingOp>(op) && bindings.count(name))
         continue;
       return false;
     }

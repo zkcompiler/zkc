@@ -7,6 +7,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -21,9 +22,9 @@ using State = protocol::AlgorithmExpansionState;
 constexpr StringLiteral fixture = R"mlir(!F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
  func.func private @formula(%a:!F,%b:!F,%unused:!F,%s:!F)->!F {
    %dead = "algebra.field_add"(%s,%s) : (!F,!F)->!F
    %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
@@ -66,8 +67,7 @@ Operation *nth(ModuleOp module, StringRef contract, unsigned index = 0,
     if (!reference)
       return;
     auto binding =
-        SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-            op, reference);
+        SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(op, reference);
     if (binding && binding.getContract() == contract && index-- == 0)
       found = op;
   });
@@ -243,14 +243,14 @@ int main() {
         scalar ? "fusion preserves trailing unused scalar arithmetic"
                : "fusion preserves trailing unused vector arithmetic",
         [&] {
-          auto text =
-              edit(fixture, " func.func private @formula",
-                   std::string(
-                       " \"local.binding\"() {sym_name=\"tail\",contract=\"") +
-                       (scalar ? "field.add" : "vector.add") +
-                       "\",arguments=[\"koala-bear\"],implementation=\"\"} : "
-                       "()->()\n"
-                       " func.func private @formula");
+          auto text = edit(
+              fixture, " func.func private @formula",
+              std::string(
+                  " \"runtime.binding\"() {sym_name=\"tail\",contract=\"") +
+                  (scalar ? "field.add" : "vector.add") +
+                  "\",arguments=[\"koala-bear\"],implementation=\"\"} : "
+                  "()->()\n"
+                  " func.func private @formula");
           text = edit(
               text,
               "   %r = local.apply @reduce(%v) {site=\"reduce\"} : "
@@ -344,9 +344,8 @@ int main() {
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(
         &m.getBody()->front().getRegion(0).front());
-    local::OperationBindingOp::create(
-        builder, m.getLoc(), "extra", "control.require",
-        builder.getArrayAttr({}), "", mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, m.getLoc(), "extra", "control.require",
+                               builder.getArrayAttr({}), "", mlir::ArrayAttr{});
   });
   cases.run("retained call mutation", [&] {
     auto candidate = copy(*retained);
@@ -690,8 +689,8 @@ int main() {
     finish(*candidate, state);
   });
   const std::string empty = edit(fixture, " \"protocol.func\"", R"(
- "local.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation=""} : ()->()
  local.func @empty(%s:!F)->!F attributes {logical_origin=["empty",[]]} {
    %zero = "algebra.exec.index_constant"() {binding=@index,parameters=["0"],site="zero"} : ()->ui64
    %a = "algebra.exec.vector_fill"(%s,%zero) {binding=@fill,parameters=[],site="first"} : (!F,ui64)->!V

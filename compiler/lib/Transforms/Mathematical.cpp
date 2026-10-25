@@ -22,6 +22,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
@@ -626,7 +627,7 @@ public:
       if (mapHelpers.contains(&op) || isa<algebra::MapRealizeOp>(op) ||
           (hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
           isa<zkc::relation::DeclareOp, mlir::ModuleOp, zkc::local::FuncOp,
-              zkc::local::OperationBindingOp>(op)) {
+              zkc::runtime::BindingOp>(op)) {
         auto *copy = builder.clone(op);
         // Participant projection does not retain the original Math closure or
         // transport declaration contracts. Its statement manifest keeps only
@@ -1059,7 +1060,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   for (auto &op : unit.getBody().front())
     if (mapHelpers.contains(&op) ||
         isa<algebra::MapRealizeOp, mlir::ModuleOp, zkc::local::FuncOp,
-            zkc::local::OperationBindingOp>(op))
+            zkc::runtime::BindingOp>(op))
       snapshotBuilder.clone(op);
   unsigned remainingHelpers = realizedHelperOperationLimit;
   uint64_t helperIndices = 1000000;
@@ -1146,9 +1147,9 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   void getDependentDialects(DialectRegistry &registry) const final {
     // Preparation can form numerical units and realize partial Local work even
     // when the source has no Algebra operations or types.
-    registry
-        .insert<local::LocalDialect, kernel::KernelDialect, exec::ExecDialect,
-                algebra::AlgebraDialect, func::FuncDialect>();
+    registry.insert<runtime::RuntimeDialect, local::LocalDialect,
+                    kernel::KernelDialect, exec::ExecDialect,
+                    algebra::AlgebraDialect, func::FuncDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1239,9 +1240,10 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
            "programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<zkc::protocol_ir::ProtocolDialect, zkc::local::LocalDialect,
-                    zkc::kernel::KernelDialect, exec::ExecDialect,
-                    zkc::algebra::AlgebraDialect, func::FuncDialect>();
+    registry.insert<runtime::RuntimeDialect, zkc::protocol_ir::ProtocolDialect,
+                    zkc::local::LocalDialect, zkc::kernel::KernelDialect,
+                    exec::ExecDialect, zkc::algebra::AlgebraDialect,
+                    func::FuncDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

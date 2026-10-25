@@ -13,7 +13,7 @@ open Zkc.Construction
 
 def participant : Participant where
   source := "sha256:b07ac7f943334c086d86ee4eafb72049bd6d5d480ab1d6185b18ffe22d17e084"
-  candidate := "sha256:bf9172d12c58a197510da62d4173f7edc353a6ebec109e9eb06b03e9ccf62528"
+  candidate := "sha256:5722361e51560cf6aedba7113d7ad79d922ea6d87b736c33c4c61dd70c9568d6"
   policy := ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [4], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]

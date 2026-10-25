@@ -3,6 +3,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -31,8 +32,7 @@ Operation *primitive(local::FuncOp function, StringRef contract,
     if (!binding)
       return;
     auto declaration =
-        SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-            op, binding);
+        SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(op, binding);
     if (declaration && declaration.getContract() == contract && index-- == 0)
       result = op;
   });
@@ -45,7 +45,7 @@ void run(ModuleOp module, std::unique_ptr<Pass> pass) {
   require(succeeded(manager.run(module)), "fixture pass refused");
 }
 constexpr StringLiteral algorithm = R"mlir(module { "protocol.module"() ({
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
  local.func @identity(%x:i1) -> i1 attributes {logical_origin=["identity",[]]} { return %x : i1 }
  local.func @both(%x:i1,%y:i1) -> i1 attributes {logical_origin=["both",[]]} {
    %a = apply @identity(%x) {site="first"} : (i1)->i1

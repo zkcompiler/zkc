@@ -81,12 +81,6 @@ def LocalConditionOp
   let arguments = (ins AnyType:$condition, Variadic<AnyType>:$inputs);
 }
 
-def OperationBindingOp : Op<LocalDialect, "binding", [Symbol]> {
-  let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
-    ArrayAttr:$arguments, StrAttr:$implementation,
-    OptionalAttr<ArrayAttr>:$physical_arguments);
-  let hasVerifier = 1;
-}
 
 // An endpoint guard remains an ordered occurrence until execution binding.
 // The containing closed profile owns placement; Local does not depend on it.

@@ -6,6 +6,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -315,7 +316,7 @@ int main() {
     auto function = callee(calculations(module)[1]);
     auto &first = function.getBody().front().front();
     FlatSymbolRefAttr binding;
-    module.walk([&](local::OperationBindingOp op) {
+    module.walk([&](runtime::BindingOp op) {
       if (op.getContract() == "bool.or")
         binding = FlatSymbolRefAttr::get(&context, op.getSymName());
     });
@@ -344,9 +345,9 @@ int main() {
   mutation("untracked binding declaration", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
     OpBuilder builder(function);
-    local::OperationBindingOp::create(
-        builder, function.getLoc(), "unused_binding", "bool.and",
-        builder.getArrayAttr({}), "", mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, function.getLoc(), "unused_binding",
+                               "bool.and", builder.getArrayAttr({}), "",
+                               mlir::ArrayAttr{});
   });
   mutation("generated logical origin", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
@@ -362,7 +363,7 @@ int main() {
         auto unit =
             cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
         auto templateFunction = callee(calculations(*bound)[1]);
-        bound->walk([&](local::OperationBindingOp binding) {
+        bound->walk([&](runtime::BindingOp binding) {
           unit.getBody().front().push_back(binding->clone());
         });
         auto authored = cast<local::FuncOp>(templateFunction->clone());
@@ -413,16 +414,16 @@ int main() {
         cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(&unit.getBody().front());
-    local::OperationBindingOp::create(builder, unit.getLoc(), "authored_and",
-                                      "bool.and", builder.getArrayAttr({}), "",
-                                      mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, unit.getLoc(), "authored_and",
+                               "bool.and", builder.getArrayAttr({}), "",
+                               mlir::ArrayAttr{});
     require(succeeded(verify(*original)), "authored binding lost formation");
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());
     auto logicalCandidate = copy(*candidate);
     run(*candidate, kernel::createLowerKernelsPass());
-    local::OperationBindingOp generated;
-    candidate->walk([&](local::OperationBindingOp binding) {
+    runtime::BindingOp generated;
+    candidate->walk([&](runtime::BindingOp binding) {
       if (binding.getContract() == "bool.and" &&
           binding.getSymName() != "authored_and")
         generated = binding;

@@ -63,7 +63,7 @@ template <typename... InputDialects> std::string project(StringRef source) {
   std::string result;
   withSource<InputDialects...>(source, [&](ModuleOp module, MLIRContext &) {
     runChecked(module, protocol::createProjectProtocolPass(false),
-               {"local", "algebra"});
+               {"local", "algebra", "runtime"});
     llvm::raw_string_ostream stream(result);
     module.print(stream);
   });
@@ -192,7 +192,8 @@ int main() {
                 auto pass = projection
                                 ? protocol::createProjectProtocolPass(false)
                                 : protocol::createPrepareProtocolPass(false);
-                runChecked(module, std::move(pass), {"local", "algebra"});
+                runChecked(module, std::move(pass),
+                           {"local", "algebra", "runtime"});
                 require(
                     context.getLoadedDialect<algebra::AlgebraDialect>() &&
                         count(module, "algebra.exec.index_constant") &&
@@ -267,7 +268,7 @@ int main() {
                       !count(module, "data.exec.sequence_append"),
                   "sequence recipes ran during formation");
           runChecked(module, kernel::createLowerKernelsPass(),
-                     {"local", "algebra", "data"});
+                     {"local", "algebra", "data", "runtime"});
           require(count(module, "data.exec.sequence_empty") &&
                       count(module, "data.exec.sequence_append") &&
                       !count(module, "data.sequence_append"),
@@ -304,7 +305,7 @@ int main() {
                       !count(module, "local.for"),
                   "finite raw closure was not retained");
           runChecked(module, kernel::createLowerKernelsPass(),
-                     {"local", "algebra", "data", "func"});
+                     {"local", "algebra", "data", "func", "runtime"});
           require(count(module, "local.for") &&
                       count(module, "algebra.exec.field_array_from_vector") &&
                       !count(module, "algebra.finite_collect") &&

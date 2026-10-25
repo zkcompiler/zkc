@@ -68,7 +68,7 @@ vector_physical = commands.verified(vector, None, '--zkc-project-protocol', '--z
 assert 'vector:bls12-381.fr' in commands.source('protocol-export', vector_physical)
 commands.verified(vector.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
 # Generate resource-transition variants for execution by mixed_native.rs.
-draw = source.replace('  local.func @leaf', '  "local.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n  local.func @leaf', 1)
+draw = source.replace('  local.func @leaf', '  "runtime.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n  local.func @leaf', 1)
 draw = draw.replace('    local.return %v, %resource :', '    %sample:2 = "crypto.exec.random_draw"(%resource) {binding=@draw, parameters=[], site="draw"} : (!runtime.capability<"rng:bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)\n    local.return %v, %sample#1 :')
 stop_after = '\n'.join(line for line in draw.splitlines() if 'site="before_work"' not in line and 'callee=@check' not in line)
 stop_after = stop_after.replace('    %sent = protocol.exchange', '    protocol.guard %go {owner="P", site="before_work"}\n    %sent = protocol.exchange')

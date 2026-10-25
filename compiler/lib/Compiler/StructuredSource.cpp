@@ -12,6 +12,7 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringExtras.h"
@@ -1374,7 +1375,7 @@ public:
             declaration.getFormulaAttr()
                 ? json::Value(declaration.getFormulaAttr().getValue())
                 : json::Value(nullptr)});
-      } else if (isa<local::OperationBindingOp>(op)) {
+      } else if (isa<runtime::BindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-source-limit");
         if (auto e = attributes(

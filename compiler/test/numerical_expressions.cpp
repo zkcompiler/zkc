@@ -8,6 +8,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -47,11 +48,11 @@ Operation *operation(ModuleOp module, StringRef contract) {
   });
   return result;
 }
-local::OperationBindingOp binding(Operation *op) {
+runtime::BindingOp binding(Operation *op) {
   require(op != nullptr, "missing numerical call");
   auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
   require(bool(reference), "missing numerical binding reference");
-  return cast<local::OperationBindingOp>(
+  return cast<runtime::BindingOp>(
       SymbolTable::lookupNearestSymbolFrom(op, reference));
 }
 std::string expression(Operation *op) {
@@ -109,8 +110,8 @@ constexpr StringLiteral localFoldText = R"mlir(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -646,11 +647,11 @@ int main(int argc, char **argv) {
                         "\"koala-bear\"],implementation=\"plonky3/field.mul\"");
       if (pin == 2) {
         text =
-            replaceText(text, " \"local.binding\"()",
-                        " \"local.binding\"() "
+            replaceText(text, " \"runtime.binding\"()",
+                        " \"runtime.binding\"() "
                         "{sym_name=\"dead\",contract=\"field.add\",arguments=["
                         "\"koala-bear\"],implementation=\"plonky3/field.add\"} "
-                        ": ()->()\n \"local.binding\"()");
+                        ": ()->()\n \"runtime.binding\"()");
         text = replaceText(text, "   local.return %r : !F",
                            "   %dead = \"algebra.exec.field_add\"(%x,%x) "
                            "{binding=@dead,parameters=[],site=\"dead\"} : "

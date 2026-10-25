@@ -1,16 +1,16 @@
 "builtin.module"() ({
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.empty", implementation = "", sym_name = "zkl_binding_10"}> : () -> ()
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "field.equal", implementation = "", sym_name = "zkl_binding_9"}> : () -> ()
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.equal", implementation = "", sym_name = "zkl_binding_8"}> : () -> ()
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.sum", implementation = "", sym_name = "zkl_binding_7"}> : () -> ()
-    "local.binding"() <{arguments = [], contract = "index.sub", implementation = "", sym_name = "zkl_binding_6"}> : () -> ()
-    "local.binding"() <{arguments = [], contract = "index.mod", implementation = "", sym_name = "zkl_binding_5"}> : () -> ()
-    "local.binding"() <{arguments = [], contract = "index.div", implementation = "", sym_name = "zkl_binding_4"}> : () -> ()
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.append", implementation = "", sym_name = "zkl_binding_3"}> : () -> ()
-    "local.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "zkl_binding_2"}> : () -> ()
-    "local.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "zkl_binding_1"}> : () -> ()
-    "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", implementation = "", sym_name = "zkl_binding_0"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.empty", implementation = "", sym_name = "zkl_binding_10"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.equal", implementation = "", sym_name = "zkl_binding_9"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.equal", implementation = "", sym_name = "zkl_binding_8"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.sum", implementation = "", sym_name = "zkl_binding_7"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.sub", implementation = "", sym_name = "zkl_binding_6"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.mod", implementation = "", sym_name = "zkl_binding_5"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.div", implementation = "", sym_name = "zkl_binding_4"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.append", implementation = "", sym_name = "zkl_binding_3"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "zkl_binding_2"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "zkl_binding_1"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", implementation = "", sym_name = "zkl_binding_0"}> : () -> ()
     "protocol.func"() <{contracts = [], function_type = (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, ui64) -> (!algebra.field_vector<"bls12-381.fr">, ui64, ui64, ui64, !algebra.field<"bls12-381.fr">, i1, i1, !algebra.field_vector<"bls12-381.fr">), input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], origin = ["primitive_examples::Sequence", []], output_roles = [["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"]], roles = ["role00000000"], sym_name = "s18h7072696d69746976655f6578616d706c65738h53657175656e6365"}> ({
     ^bb0(%arg3: !algebra.field_vector<"bls12-381.fr">, %arg4: !algebra.field<"bls12-381.fr">, %arg5: ui64):
       %12:8 = "protocol.local_call"(%arg3, %arg4, %arg5) <{callee = @s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279, role = "role00000000", site = "s0"}> : (!algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, ui64) -> (!algebra.field_vector<"bls12-381.fr">, ui64, ui64, ui64, !algebra.field<"bls12-381.fr">, i1, i1, !algebra.field_vector<"bls12-381.fr">)

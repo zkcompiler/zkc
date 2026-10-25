@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -24,7 +25,7 @@ const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
@@ -671,13 +672,13 @@ int main(int argc, char **argv) {
                   refusesIR(text, context, "polynomial-formation");
               });
   cases.run("domain argument must have native encoding", [&] {
-    auto text = replace(source, " \"local.binding\"()", R"mlir(
+    auto text = replace(source, " \"runtime.binding\"()", R"mlir(
  "data.domain"() ({
  ^entry(%p:!poly.polynomial<"bls12-381.fr",1>,%lo:ui64,%hi:ui64):
    %d = "data.domain_range"(%lo,%hi) : (ui64,ui64)->!data.domain<ui64>
    "data.domain_yield"(%d) : (!data.domain<ui64>)->()
  }) {sym_name="bad_domain",sym_visibility="private",function_type=(!poly.polynomial<"bls12-381.fr",1>,ui64,ui64)->!data.domain<ui64>} : ()->()
- "local.binding"())mlir");
+ "runtime.binding"())mlir");
     refusesIR(text, context, "finite-domain");
   });
   for (StringRef name : {"dot", "collect"})
@@ -720,9 +721,9 @@ int main(int argc, char **argv) {
         after->walk([&](Operation *op) {
           auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
           auto binding =
-              ref ? dyn_cast_or_null<local::OperationBindingOp>(
+              ref ? dyn_cast_or_null<runtime::BindingOp>(
                         SymbolTable::lookupNearestSymbolFrom(op, ref))
-                  : local::OperationBindingOp();
+                  : runtime::BindingOp();
           if (binding && binding.getContract() == "control.require")
             last = op;
         });
@@ -778,8 +779,8 @@ int main(int argc, char **argv) {
    func.return %x : i1
  }
 )mlir";
-    refusesIR(replace(source, " \"local.binding\"()",
-                      std::string(helper) + " \"local.binding\"()"),
+    refusesIR(replace(source, " \"runtime.binding\"()",
+                      std::string(helper) + " \"runtime.binding\"()"),
               context, "finite-bound");
   });
   cases.run("shifted index does not inherit bound", [&] {
@@ -871,8 +872,8 @@ int main(int argc, char **argv) {
    func.return %b : i1
  }
 )mlir";
-    auto text = replace(source, " \"local.binding\"()",
-                        helpers + " \"local.binding\"()");
+    auto text = replace(source, " \"runtime.binding\"()",
+                        helpers + " \"runtime.binding\"()");
     require(bool(parseSourceString<ModuleOp>(text, &context)),
             "returned constructor extent refused");
     refusesIR(replace(text, "func.return %t :", "func.return %s :"), context,

@@ -10,6 +10,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Language.h"
@@ -169,7 +170,7 @@ program::Participants sourceProgram(MLIRContext &context, StringRef source,
   auto original = take(language::emitOriginal(closed, context));
   auto module = take(executableFixture(original, context));
   SmallVector<std::pair<std::string, std::string>> selections;
-  module->walk([&](local::OperationBindingOp binding) {
+  module->walk([&](runtime::BindingOp binding) {
     auto contract = binding->getAttrOfType<StringAttr>("contract").getValue();
     auto *entry =
         installedImplementations().preferred(contract, "halo2curves-axiom");

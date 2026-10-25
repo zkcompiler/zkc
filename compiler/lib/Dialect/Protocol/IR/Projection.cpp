@@ -10,6 +10,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -111,9 +112,9 @@ struct MetadataVerifier {
       }
       auto binding = op.getAttrOfType<FlatSymbolRefAttr>("binding");
       auto declaration =
-          binding ? tables.lookupNearestSymbolFrom<local::OperationBindingOp>(
-                        &op, binding)
-                  : local::OperationBindingOp();
+          binding
+              ? tables.lookupNearestSymbolFrom<runtime::BindingOp>(&op, binding)
+              : runtime::BindingOp();
       if (transition || !declaration)
         return refuse(record, "invalid inserted transcript helper");
       auto contract = declaration.getContract();
@@ -1021,7 +1022,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
       continue;
     }
     if (isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, local::FuncOp,
-            mlir::ModuleOp, local::OperationBindingOp>(declaration))
+            mlir::ModuleOp, runtime::BindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;

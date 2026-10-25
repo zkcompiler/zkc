@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
@@ -48,9 +49,8 @@ class RecipeCorrespondence {
     if (!op)
       return {};
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto declaration =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto declaration = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                           : runtime::BindingOp();
     SmallVector<std::string> arguments;
     if (!contract.starts_with("index.") && contract != "control.require")
       arguments.push_back(domain.str());

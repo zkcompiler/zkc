@@ -3,8 +3,8 @@
 !I = !algebra.indices
 !M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%matrix:!M):
    %d = "data.domain_matrix_coordinates"(%matrix) {order="column_major"} : (!M)->!data.domain<ui64,ui64>
    "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()

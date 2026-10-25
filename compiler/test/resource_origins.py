@@ -199,7 +199,7 @@ with case('successor chains are work, not nesting'):
     for i in range(80):
         body.append(draw.format(i,previous))
         previous=f'%v{i}#1'
-    text=source('\n'.join(body)+f'\nlocal.return {previous} : !s').replace(' local.func @step', '"local.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()\n local.func @step')
+    text=source('\n'.join(body)+f'\nlocal.return {previous} : !s').replace(' local.func @step', '"runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()\n local.func @step')
     commands.source('protocol-bundle', text)
     commands.source('protocol-bundle', text.replace('local.return %v79#1', 'local.return %s'), refuses='interactive-resource-reuse')
 

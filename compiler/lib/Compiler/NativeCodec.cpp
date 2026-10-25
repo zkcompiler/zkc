@@ -2,6 +2,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -47,9 +48,9 @@ class CodecEmitter {
   FlatSymbolRefAttr binding(StringRef contract) {
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&module.getBody().front());
-    auto op = local::OperationBindingOp::create(
-        builder, module.getLoc(), fresh(), contract, builder.getArrayAttr({}),
-        "", mlir::ArrayAttr{});
+    auto op = runtime::BindingOp::create(builder, module.getLoc(), fresh(),
+                                         contract, builder.getArrayAttr({}), "",
+                                         mlir::ArrayAttr{});
     symbols.insert(op);
     return FlatSymbolRefAttr::get(op);
   }

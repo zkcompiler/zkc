@@ -4,16 +4,16 @@
 !ms = !data.sequence<!m>
 !vs = !data.sequence<!v>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="at",contract="sequence.at",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="vector",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="sequence.length",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="vlength",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="vector",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="vlength",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @evaluate(%matrices:!ms,%rows:!vs,%columns:!vs)->(!f,i1) attributes {logical_origin=["evaluate",[]]} {
    %n = "data.exec.sequence_length"(%matrices) {binding=@length,parameters=[],site="count"} : (!ms)->ui64
    %nr = "data.exec.sequence_length"(%rows) {binding=@vlength,parameters=[],site="rows"} : (!vs)->ui64

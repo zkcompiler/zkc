@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
@@ -22,7 +23,7 @@ class PhysicalCorrespondence {
   llvm::DenseMap<unsigned, const target::BindingDecision *> originals;
   size_t remaining = 1000000;
   bool charge() { return remaining && (--remaining, true); }
-  bool binding(local::OperationBindingOp op,
+  bool binding(runtime::BindingOp op,
                const protocol::OperationBinding &expected) {
     if (!op || op.getSymName() != expected.name ||
         op.getContract() != expected.application.contract ||
@@ -60,7 +61,7 @@ class PhysicalCorrespondence {
   }
   bool skipBindings(Block &block, Block::iterator &cursor) {
     while (cursor != block.end()) {
-      auto op = dyn_cast<local::OperationBindingOp>(*cursor);
+      auto op = dyn_cast<runtime::BindingOp>(*cursor);
       if (!op)
         break;
       auto found = added.find(op.getSymName());
@@ -119,7 +120,7 @@ class PhysicalCorrespondence {
                                       protocol_ir::Profile::Physical));
       if (decision.functionType)
         attributes.set("function_type", TypeAttr::get(decision.functionType));
-      if (isa<local::OperationBindingOp>(source)) {
+      if (isa<runtime::BindingOp>(source)) {
         auto index = indices.lookup(source);
         auto selected = originals.lookup(index);
         if (!selected)

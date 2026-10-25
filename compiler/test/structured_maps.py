@@ -196,7 +196,7 @@ native_negatives = {
     'realize-premise': realized.replace('->!V {\n   func.return', '->!V attributes {data.preconditions=[#data.index_bound<1,0,0>]} {\n   func.return'),
     'map-symbol-collision': mapped.replace('algebra.map_realize @mapped', 'algebra.map_realize @work'),
     'binding-preparation-collision': mapped.replace(' local.func @work',
-        ' "local.binding"() {sym_name="mapped",contract="index.add",arguments=[],implementation=""} : ()->()\n local.func @work'),
+        ' "runtime.binding"() {sym_name="mapped",contract="index.add",arguments=[],implementation=""} : ()->()\n local.func @work'),
     'realize-symbol-collision': realized.replace('local.realize @realized', 'local.realize @work'),
     'map-cycle': mapped.replace('%r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F', '%r = func.call @square(%x) : (!F)->!F'),
     'realize-cycle': realized.replace('   func.return %xs', '   %again = func.call @value(%xs,%dimension,%width) : (!V,ui64,ui64)->!V\n   func.return %again'),

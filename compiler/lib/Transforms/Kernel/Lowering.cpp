@@ -10,6 +10,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
@@ -64,9 +65,8 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     // only in this private workspace; nominal domains and source units remain
     // unchanged. Original fixed bindings are never reused or modified.
     StringMap<std::string> renamed;
-    SmallVector<local::OperationBindingOp> bindings;
-    for (auto binding :
-         output.getBody().front().getOps<local::OperationBindingOp>()) {
+    SmallVector<runtime::BindingOp> bindings;
+    for (auto binding : output.getBody().front().getOps<runtime::BindingOp>()) {
       NamedAttrList signature(binding->getAttrs());
       signature.erase("sym_name");
       auto key = signature.getDictionary(owner.getContext());
@@ -198,6 +198,7 @@ proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
                       mlir::ModuleOp prepared) {
   source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
   source.getContext()->getOrLoadDialect<local::LocalDialect>();
+  source.getContext()->getOrLoadDialect<runtime::RuntimeDialect>();
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
@@ -280,9 +281,10 @@ struct LowerKernelsPass
       : PassWrapper(other), trace(other.trace),
         fallbackPolicy(other.fallbackPolicy) {}
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<local::LocalDialect, algebra::AlgebraDialect,
-                    kernel::KernelDialect, exec::ExecDialect, func::FuncDialect,
-                    scf::SCFDialect, arith::ArithDialect>();
+    registry.insert<runtime::RuntimeDialect, local::LocalDialect,
+                    algebra::AlgebraDialect, kernel::KernelDialect,
+                    exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
+                    arith::ArithDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-kernels"; }
   StringRef getDescription() const final {

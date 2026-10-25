@@ -2,14 +2,14 @@
 !v = !algebra.field_vector<"bls12-381.fr">
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="split",contract="vector.split",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="dot",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="scale",contract="vector.scale",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="vector.length_check",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="at",contract="vector.at",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="split",contract="vector.split",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="dot",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="scale",contract="vector.scale",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="vector.length_check",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="vector.at",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
 
  local.func @cross_terms(%a:!v,%b:!v) -> (!f,!f) attributes {logical_origin=["cross_terms",[]]} {
    %aSplit:2 = "algebra.exec.vector_split"(%a) {binding=@split,parameters=[],site="splitA"} : (!v)->(!v,!v)

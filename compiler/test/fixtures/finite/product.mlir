@@ -2,7 +2,7 @@
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>

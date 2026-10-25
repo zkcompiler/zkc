@@ -512,7 +512,7 @@ int main() {
   });
   cases.run("guards stay ordered and zero-trip control is conservative", [&] {
     auto module = parse(R"mlir(
- "local.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
  local.func private @guarded(%ok:i1,%i:ui64,%xs:!S)->!S attributes {
    logical_origin=["guarded",[]]
  } {

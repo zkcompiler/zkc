@@ -11,6 +11,7 @@
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include "llvm/ADT/DenseSet.h"
@@ -465,9 +466,8 @@ class CandidateReader {
     cursor = cursor->getNextNode();
     auto reference = operation->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
-        reference
-            ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-            : local::OperationBindingOp();
+        reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                  : runtime::BindingOp();
     auto params = operation->getAttrOfType<ArrayAttr>("parameters");
     if (!binding || !params || operation->getAttrs().size() != 3 ||
         !operation->getAttrOfType<StringAttr>("site") ||

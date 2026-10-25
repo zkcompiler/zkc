@@ -6,6 +6,7 @@
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -302,7 +303,7 @@ int main(int argc, char **argv) {
         for (auto binding : kernelRecipeOutput(*mutated)
                                 .getBody()
                                 .front()
-                                .getOps<local::OperationBindingOp>()) {
+                                .getOps<runtime::BindingOp>()) {
           if (binding.getContract() == "field_array.at") {
             binding->setAttr("arguments",
                              builder.getStrArrayAttr({"bls12-381.fr", "3"}));
@@ -415,7 +416,7 @@ int main(int argc, char **argv) {
     auto function = realized(module);
     auto *returned = &function.getBody().front().back();
     OpBuilder builder(function);
-    local::OperationBindingOp::create(
+    runtime::BindingOp::create(
         builder, function.getLoc(), "partial_inverse", "field.inverse",
         builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
     builder.setInsertionPoint(returned);
@@ -445,9 +446,9 @@ int main(int argc, char **argv) {
   mutation("unused binding inserted", [&](ModuleOp module) {
     auto function = realized(module);
     OpBuilder builder(function);
-    local::OperationBindingOp::create(
-        builder, function.getLoc(), "extra", "field.add",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
+    runtime::BindingOp::create(builder, function.getLoc(), "extra", "field.add",
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
+                               mlir::ArrayAttr{});
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
     program::LocalDefinitions empty;

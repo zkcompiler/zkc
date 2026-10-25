@@ -1,8 +1,8 @@
 !F = !algebra.field<"bls12-381.fr">
 // Independently authored expected executable for authored-schedule.mlir.
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="subtract",contract="field.sub",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="subtract",contract="field.sub",arguments=["bls12-381.fr"],implementation=""} : ()->()
  local.func @evaluate(%lower:ui64,%upper:ui64,%first:!F,%second:!F,%factor:!F,%bias:!F)->(!F,!F)
  attributes {logical_origin=["evaluate",[]]} {
    %r:2 = "local.for"(%lower,%upper,%first,%second,%factor,%bias) ({

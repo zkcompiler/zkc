@@ -50,7 +50,7 @@ void domainControls(mlir::MLIRContext &context) {
   auto module = parseSourceString<ModuleOp>(R"(
 !T = !envelope.value<!algebra.field<"koala-bear">,4>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
  local.func @Keep(%x:!T)->!T attributes {logical_origin=["Keep",[]]} {
    %y = "envelope.keep"(%x) {binding=@keep,site="keep",parameters=[]} : (!T)->!T
    local.return %y : !T
@@ -118,7 +118,7 @@ int main() {
   auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
  local.func @Sum(%x:!F,%y:!F,%z:!F)->!F attributes {logical_origin=["Sum",[]]} {
    %a = "algebra.exec.field_add"(%x,%y) {binding=@add,site="first",parameters=[]} : (!F,!F)->!F
    %b = "algebra.exec.field_add"(%a,%z) {binding=@add,site="second",parameters=[]} : (!F,!F)->!F

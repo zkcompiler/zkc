@@ -2,11 +2,11 @@
 !words = !algebra.indices
 !rounds = !data.sequence<!words>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
  local.func @same(%a:!words,%b:!words)->i1 attributes {logical_origin=["same",[]]} {
    %n = "algebra.exec.indices_length"(%a) {binding=@length,parameters=[],site="n"} : (!words)->ui64
    %m = "algebra.exec.indices_length"(%b) {binding=@length,parameters=[],site="m"} : (!words)->ui64
@@ -28,18 +28,18 @@ module { "protocol.module"() ({
    }) {site="compare"} : (i1,!words,!words,ui64)->i1
    local.return %result : i1
  }
- "local.binding"() {sym_name="binding_init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
  local.func @init(%a0:!words)->(!words) attributes {logical_origin=["init",[]]} {
    %v = "crypto.exec.monero_init"(%a0) {binding=@binding_init,parameters=[],site="step"} : (!words)->(!words)
    local.return %v : !words
  }
- "local.binding"() {sym_name="binding_update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
  local.func @update(%a0:!words,%a1:!words)->(!words,!words) attributes {logical_origin=["update",[]]} {
    %v:2 = "crypto.exec.monero_update"(%a0,%a1) {binding=@binding_update,parameters=[],site="step"} : (!words,!words)->(!words,!words)
    local.return %v#0,%v#1 : !words,!words
  }
- "local.binding"() {sym_name="round_at",contract="sequence.at",arguments=["indices"],implementation=""} : ()->()
- "local.binding"() {sym_name="empty",contract="indices.empty",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="round_at",contract="sequence.at",arguments=["indices"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="indices.empty",arguments=[],implementation=""} : ()->()
  local.func @round(%rounds:!rounds,%i:ui64)->!words attributes {logical_origin=["round",[]]} {
    %word = "data.exec.sequence_at"(%rounds,%i) {binding=@round_at,parameters=[],site="word"} : (!rounds,ui64)->!words
    local.return %word : !words

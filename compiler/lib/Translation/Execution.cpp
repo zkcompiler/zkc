@@ -6,7 +6,6 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -625,7 +624,7 @@ Expected<program::LocalDefinitions> Reader::run() {
   for (Operation &op : *module.getBody()) {
     if (++definitions > 4096)
       return error("execution-cfg", "definition limit");
-    if (auto binding = dyn_cast<local::OperationBindingOp>(op)) {
+    if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
       if (!attributes(binding, {"sym_name", "contract", "arguments",
                                 "implementation", "physical_arguments"}))
         return error("execution-cfg", "unknown binding attribute");

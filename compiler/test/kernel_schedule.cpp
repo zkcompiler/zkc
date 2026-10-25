@@ -4,6 +4,7 @@
 #include "support/NumericalLoops.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -289,9 +290,9 @@ module { "protocol.module"() ({
       StringRef expected;
       if (placement == "primitive") {
         builder.setInsertionPointToStart(&owner.getBody().front());
-        local::OperationBindingOp::create(builder, owner.getLoc(), "combine",
-                                          "bool.and", builder.getArrayAttr({}),
-                                          "", mlir::ArrayAttr{});
+        runtime::BindingOp::create(builder, owner.getLoc(), "combine",
+                                   "bool.and", builder.getArrayAttr({}), "",
+                                   mlir::ArrayAttr{});
         auto endpoint = *owner.getBody()
                              .front()
                              .getOps<protocol_ir::ParticipantOp>()
@@ -501,7 +502,7 @@ module { "protocol.module"() ({
         builder.clone(*add)->setAttr("site", builder.getStringAttr("extra"));
       } else {
         auto binding = SymbolTable(kernelRecipeOutput(*candidate))
-                           .lookup<local::OperationBindingOp>("add");
+                           .lookup<runtime::BindingOp>("add");
         binding->setAttr("arguments", builder.getStrArrayAttr({"bn254.fr"}));
       }
       if (mutation != "nominal domain")

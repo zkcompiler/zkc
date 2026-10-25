@@ -17,8 +17,8 @@ for group in (False, True):
 !v = !algebra.field_vector<"{scalar}">
 !a = !algebra.{"group_vector" if group else "field_vector"}<"{domain}">
 module {{ "protocol.module"() ({{
- "local.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation=""}} : ()->()
- "local.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation=""}} : ()->()
  local.func @contract(%w:!v,%x:!v,%f:!v,%v:!a)->(!r,!r) attributes {{logical_origin=["contract",[]]}} {{
   %mapped = "algebra.exec.{map_op}"(%f,%v) {{binding=@map,site="map",parameters=[]}} : (!v,!a)->!a
   %first = "algebra.exec.{reduce_op}"(%w,%mapped) {{binding=@reduce,site="first",parameters=[]}} : (!v,!a)->!r

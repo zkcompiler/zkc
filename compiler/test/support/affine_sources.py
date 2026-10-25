@@ -19,7 +19,7 @@ module { "protocol.module"() ({
 
 
 def unit_source(body):
-    binding = '"local.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Slot.A"],implementation=""} : ()->()'
+    binding = '"runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Slot.A"],implementation=""} : ()->()'
     return source(body).replace('rng:bls12-381.fr', 'resource_unit:Slot.A').replace(' local.func @step', binding+'\n local.func @step')
 
 

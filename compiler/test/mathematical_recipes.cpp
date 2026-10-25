@@ -6,6 +6,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
@@ -85,10 +86,10 @@ int main() {
     text.insert(
         body, "   %two = \"algebra.exec.field_constant\"() "
               "{binding=@constant,parameters=[\"2\"],site=\"two\"} : ()->!F\n");
-    auto binding = text.find(" \"local.binding\"");
+    auto binding = text.find(" \"runtime.binding\"");
     require(binding != std::string::npos, "missing binding insertion point");
     text.insert(binding,
-                " \"local.binding\"() {sym_name=\"constant\","
+                " \"runtime.binding\"() {sym_name=\"constant\","
                 "contract=\"field.constant\",arguments=[\"bls12-381.fr\"],"
                 "implementation=\"\"} : ()->()\n");
     auto operands = text.find("(%x,%x)");
@@ -339,9 +340,8 @@ int main() {
     auto c = computation(*module);
     auto &operation = c.helper->getRegion(0).front().front();
     auto binding = operation.getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto declaration =
-        SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-            &operation, binding);
+    auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        &operation, binding);
     require(bool(declaration), "missing scalar binding");
     declaration.setImplementation("arkworks/field.add");
     require(succeeded(verify(*module)),
@@ -359,7 +359,7 @@ int main() {
                 succeeded(finite::verifyRealizations(*module, *candidate)),
             "pinned ordered fallback failed independent checking");
     bool retained = false;
-    candidate->walk([&](local::OperationBindingOp op) {
+    candidate->walk([&](runtime::BindingOp op) {
       retained |= op.getContract() == "field.add" &&
                   op.getImplementation() == "arkworks/field.add";
     });
@@ -384,7 +384,7 @@ int main() {
                 "nested equation missing");
         Operation *add = view->nested[0].payload.back();
         auto declaration =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
+            SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
                 add, add->getAttrOfType<FlatSymbolRefAttr>("binding"));
         declaration.setImplementation("arkworks/field.add");
         require(succeeded(verify(*module)), "nested pin is not admitted");
@@ -408,7 +408,7 @@ int main() {
     };
     replace("module { \"protocol.module\"() ({",
             R"mlir(module { "protocol.module"() ({
- "local.binding"() {sym_name="get",contract="curve.get",arguments=["bls12-381.g1"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="get",contract="curve.get",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )mlir");
     replace(
         R"mlir(%p = "data.domain_elements"(%points) : (!GS)->!data.domain<!G>)mlir",

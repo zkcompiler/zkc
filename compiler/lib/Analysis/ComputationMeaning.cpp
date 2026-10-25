@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -14,10 +15,9 @@ namespace {
 std::optional<protocol::BindingApplication> semanticBinding(Operation *op) {
   auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
   auto declaration =
-      reference
-          ? SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                op, reference)
-          : local::OperationBindingOp();
+      reference ? SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      op, reference)
+                : runtime::BindingOp();
   if (!declaration || !declaration.getContractAttr() ||
       !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
     return std::nullopt;
