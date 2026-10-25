@@ -1,0 +1,58 @@
+module example;
+use table_relation::{Query, CheckMembership, CheckRead};
+use zkc::vector::{Vector};
+use zkc::sequence::{Sequence};
+domain F = field("koala-bear");
+
+entry fn Membership(table: Vector<F>, values: Vector<F>, active: Sequence<bool>) {
+  let queries = table_relation::selected_queries(values, active);
+  return CheckMembership<F>::run(CheckMembership<F>::Inputs {
+    P: CheckMembership<F>::Inputs::P {},
+    V: CheckMembership<F>::Inputs::V {table: table, queries: queries}
+  });
+}
+entry fn Direct(table: Vector<F>, values: Vector<F>, active: Sequence<bool>) -> bool {
+  return table_relation::membership(table, table_relation::selected_queries(values, active));
+}
+entry fn IndexedRead(table: Vector<F>, position: index, value: F) {
+  return CheckRead<F>::run(CheckRead<F>::Inputs {
+    P: CheckRead<F>::Inputs::P {},
+    V: CheckRead<F>::Inputs::V {table: table, position: position, value: value}
+  });
+}
+
+// An existing AIR reciprocal residual consumes the same explicit values as the
+// retained Membership application. It is only one verifier equation; its
+// acceptance is deliberately exposed separately from the exact predicate.
+protocol Compare roles(P,V)
+    (table: Vector<F> @V, queries: Sequence<Query<F>> @V, gamma: F @V,
+     reciprocals: Vector<F> @V) -> (membership: bool @V, interaction: bool @V)
+    where () spec { target selected_rows = table_relation::Membership<F>(in.table, in.queries) accept out.membership; }
+{
+  require zkc::vector::length(table) == 2;
+  require zkc::sequence::length(queries) == 2;
+  require zkc::vector::length(reciprocals) == 4;
+  let first = zkc::sequence::get(queries, 0);
+  let second = zkc::sequence::get(queries, 1);
+  require first.active && second.active;
+  let a = zkc::vector::get(reciprocals, 0);
+  let b = zkc::vector::get(reciprocals, 1);
+  let c = zkc::vector::get(reciprocals, 2);
+  let d = zkc::vector::get(reciprocals, 3);
+  let left = zkc::vector::get(table, 0);
+  let right = zkc::vector::get(table, 1);
+  let interaction = air::interaction::reciprocal_residual<F>(1, a, gamma, first.value) == 0
+    && air::interaction::reciprocal_residual<F>(1, b, gamma, second.value) == 0
+    && air::interaction::reciprocal_residual<F>(1, c, gamma, left) == 0
+    && air::interaction::reciprocal_residual<F>(1, d, gamma, right) == 0
+    && a + b == c + d;
+  return (membership = table_relation::check_membership(table, queries), interaction = interaction);
+}
+entry fn InteractionControl(table: Vector<F>, values: Vector<F>, active: Sequence<bool>,
+                            gamma: F, reciprocals: Vector<F>) {
+  let queries = table_relation::selected_queries(values, active);
+  return Compare::run(Compare::Inputs {
+    P: Compare::Inputs::P {},
+    V: Compare::Inputs::V {table: table, queries: queries, gamma: gamma, reciprocals: reciprocals}
+  });
+}

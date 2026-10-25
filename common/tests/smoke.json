@@ -31,6 +31,10 @@
     "projects": ["eip4844"],
     "cases": ["test_kzg_eip4844.py::test_setup_constants_and_admission"]
   },
+  "table": {
+    "projects": ["table"],
+    "cases": ["test_table_relations.py"]
+  },
   "spongefish": {
     "projects": ["schnorr/spongefish"],
     "cases": ["test_source_transcript.py::test_source_transcript_vector_and_decode_effect_order[flags0-False]"]
