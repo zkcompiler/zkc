@@ -71,8 +71,7 @@ private theorem elaborated (endpoint : Semantics) (application : String) :
       Wire.TargetRef.matches, cardinality, request, model, checkCapabilities,
       soundnessParameters, decodeSoundnessParameters, requireExactSoundness, relationChecked,
       show artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl,
-      Registry.lookup, ModelContext.parameter, ModelContext.resolveApplication,
-      soundnessParameters, decodeSoundnessParameters, requireExactSoundness] <;> rfl
+      Registry.lookup, ModelContext.parameter, ModelContext.resolveApplication]
 
 private noncomputable def registry (endpoint : Semantics) (application : String) :=
   properties (F := F) (G := G) (art := artifacts) (endpoint := endpoint) (modelRegistry endpoint application)
