@@ -19,5 +19,12 @@ llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 writeLocalExecution(mlir::MLIRContext &context,
                     const program::LocalDefinitions &definitions,
                     bool physical);
+/// Independently compare current actual CFG with admitted native definitions.
+/// Allows SSA renaming; checks all actual bodies and bindings without calling
+/// the reconstruction reader or replaying emission. No source theorem is
+/// implied.
+llvm::Error verifyLocalExecution(mlir::ModuleOp module,
+                                 const program::LocalDefinitions &expected,
+                                 bool physical);
 } // namespace zkc::protocol
 #endif

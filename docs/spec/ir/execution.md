@@ -171,8 +171,18 @@ an earlier successful read is not a cached validation grant. Bounds are 4,096
 definitions, 64 active outlined bodies and one million inspected operations,
 in addition to independent native model limits.
 
-Reconstruction is separate from source correspondence and decoded-artifact
-comparison. A well-formed same-typed arithmetic change yields a different
+The local comparison API takes independently admitted native definitions and
+compares their records against current actual SSA. It checks exact bindings,
+full ports, origins, instructions, occurrences, values and CFG/scope transitions,
+including all potential outlined bodies. It follows the expected records without
+calling the reconstruction reader or replaying emission. SSA names may change;
+operand order, capture association, constants and terminal causes may not.
+Every invocation checks current bodies, so prior success grants no mutation cache.
+This local boundary does not compare participant, service or entry declarations;
+the complete artifact consumer must also check those owners.
+
+Reconstruction and local record comparison remain separate from retained source
+correspondence and complete decoded-artifact comparison. A well-formed same-typed arithmetic change yields a different
 reconstructed program; binding that program to an earlier source remains the
 source comparator's obligation. The [implementation status](../../status.md)
 records whether this profile has reached the default compilation path.

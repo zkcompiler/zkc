@@ -45,9 +45,11 @@ cleanup, carry transport and logical/represented ports, then independently
 admits the native model. Generated nested control is compared with baseline
 artifacts through the existing VM, including exact results, stops, origins,
 frame effects, installation and budget observations. These bounded controls are
-not a native correspondence theorem. These APIs are not yet the default executable
-Local-control path; the pipeline and independent artifact comparator still use
-the existing consumer.
+not a native correspondence theorem. A separate record-directed comparator
+checks current SSA against admitted native local definitions without reader or
+emitter replay. These APIs are not yet the default executable Local-control path;
+the full publication pipeline and artifact comparator still use the existing
+consumer.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a

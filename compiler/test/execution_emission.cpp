@@ -198,6 +198,8 @@ int main(int argc, char **argv) {
     if (!emitted)
       throw std::runtime_error(llvm::toString(emitted.takeError()));
     require(succeeded(verify(**emitted)), "generated module formation");
+    if (auto error = protocol::verifyLocalExecution(**emitted, model, true))
+      throw std::runtime_error(llvm::toString(std::move(error)));
     auto read = protocol::readLocalExecution(**emitted, true);
     if (!read)
       throw std::runtime_error(llvm::toString(read.takeError()));
@@ -330,6 +332,30 @@ int main(int argc, char **argv) {
                     "interactive-json-depth");
         }
       });
+  cases.run("represented variant alternative is independently bound", [&] {
+    auto model = nested(true);
+    auto emitted = take(protocol::writeLocalExecution(context, model, true));
+    auto &body = model.functions[0].body[0].get<program::For>()->body;
+    body[0].get<program::VariantConstruct>()->alternative = "right";
+    auto error = protocol::verifyLocalExecution(*emitted, model, true);
+    require(bool(error), "changed alternative escaped independent comparison");
+    require(namesIdentifier(llvm::toString(std::move(error)),
+                            "execution-correspondence"),
+            "wrong variant comparison refusal");
+  });
+  cases.run("unused native literal value is independently bound", [&] {
+    auto model = nested(true);
+    auto &body = model.functions[0].body;
+    body.insert(body.begin(),
+                {"literal", program::BooleanConstant{"unused", true}});
+    auto emitted = take(protocol::writeLocalExecution(context, model, true));
+    body.front().get<program::BooleanConstant>()->value = false;
+    auto error = protocol::verifyLocalExecution(*emitted, model, true);
+    require(bool(error), "changed literal escaped independent comparison");
+    require(namesIdentifier(llvm::toString(std::move(error)),
+                            "execution-correspondence"),
+            "wrong literal comparison refusal");
+  });
   for (StringRef name : {"execution-conditional", "execution-loop"})
     cases.run(name, [&] {
       auto file = llvm::MemoryBuffer::getFile(
