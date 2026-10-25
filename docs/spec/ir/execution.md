@@ -120,6 +120,58 @@ parent/frame nesting, source association, reached operation identity, resource
 equivalence, or native correspondence. Those remain obligations of the complete
 executable-profile reader and its independent artifact comparison.
 
+## Scoped native instruction profile
+
+The local execution reconstruction API reads a bounded Func/CF profile into
+the existing native program model. A function takes one borrowed Runtime scope
+before its native arguments and returns one explicit outcome. Root functions
+retain their logical origin in `runtime.origin`; private outlined region bodies
+carry a unit `runtime.region` marker. The marker supplies no body or execution
+authority: the reader checks the actual callee, arguments and body recursively.
+The profile requires `no_inline` and refuses recursive outlining, unconsumed
+blocks, unknown operations or attributes, and unchecked region definitions.
+
+The reached instruction boundaries are:
+
+| Operation | Native obligation |
+|---|---|
+| `exec.apply` | Tick and invoke the exact binding with its actual parameters and ports, returning the admitted outcome. The declaration owns selection; the call does not duplicate an implementation name. |
+| `exec.boolean` / `exec.variant` | Tick, construct and bind an ordinary native value; variant construction uses the exact selected alternative payload. |
+| `exec.test` | Tick and inspect the native Boolean before ordinary CF chooses an arm. |
+| `exec.range` | Tick and check both native bounds and saturating range length, including empty and inverted ranges, before exposing two i64 counters. |
+| `runtime.iteration` | Charge the reached iteration and allocate its native induction value at the current coordinate before child entry. |
+| `exec.match` | Tick, inspect the native variant and validate the selected payload before entry. Its branch interface produces the payload or stop and forwards actual captures. |
+| `exec.complete` | Perform the native return/yield instruction's tick and expose its exact return-or-stop outcome. Plain `exec.returned` packaging cannot replace this instruction. |
+| `exec.reject` | Perform the native stop instruction's tick and expose its actual cause, including a prior tick failure. |
+| `runtime.release_bindings` | Release admitted ordinary bindings with the existing no-tick storage accounting. Independent native admission rejects affine release and subsequent reads. |
+
+Conditional and variant arms explicitly acquire a child scope, call their actual
+outlined body, exit that scope with the body's exact outcome and accept the
+resulting transfer into the actual parent. Their final ordinary branch carries
+only those accepted values to the join. Variant payload types have one Data
+owner shared by construction, dispatch and the current control consumer.
+
+The loop profile checks actual Arith comparison and increment operands, one-step
+advancement, initial borrowing, iteration/callee arguments, the success-only
+carry replacement, failure release and final parent handoff. A conditional loop
+inspects the newly returned transfer after releasing its predecessor. The false
+edge reaches final handoff without another increment or iteration. These checks
+reconstruct existing native `for` and `for_while` records; they do not install an
+Arith interpreter or give an arbitrary CFG native execution semantics.
+
+Reconstruction admits all returned native definitions and bindings at the
+explicit logical or physical stage. It retains physical representations and
+checks every potential region body. It rereads current SSA on each invocation;
+an earlier successful read is not a cached validation grant. Bounds are 4,096
+definitions, 64 active outlined bodies and one million inspected operations,
+in addition to independent native model limits.
+
+Reconstruction is separate from source correspondence and decoded-artifact
+comparison. A well-formed same-typed arithmetic change yields a different
+reconstructed program; binding that program to an earlier source remains the
+source comparator's obligation. The [implementation status](../../status.md)
+records whether this profile has reached the default compilation path.
+
 ## Independent admission
 
 The exporter retains logical signatures and source block shape under Entry

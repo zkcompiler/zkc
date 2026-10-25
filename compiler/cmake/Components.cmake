@@ -172,6 +172,7 @@ add_zkc_component(IR
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
   lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
+  lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
@@ -181,6 +182,7 @@ add_zkc_component(IR
   lib/Dialect/Kernel/IR/Kernel.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
+  lib/Dialect/Data/IR/Variant.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
@@ -236,6 +238,7 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Resources.cpp
 )
 add_zkc_component(Translation
+  lib/Translation/Execution.cpp
   lib/Translation/Entry.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp

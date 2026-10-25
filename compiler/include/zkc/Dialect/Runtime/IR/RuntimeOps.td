@@ -49,6 +49,15 @@ def Runtime_TakeConditionOp : Op<RuntimeDialect, "take_condition"> {
   let results = (outs ExecOutcome:$outcome);
   let hasVerifier = 1;
 }
+def Runtime_IterationOp : Op<RuntimeDialect, "iteration"> {
+  let arguments = (ins RuntimeScope:$parent, I64:$coordinate, StrAttr:$site);
+  let results = (outs ExecOutcome:$outcome);
+  let hasVerifier = 1;
+}
+def Runtime_ReleaseBindingsOp : Op<RuntimeDialect, "release_bindings"> {
+  let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$values);
+  let hasVerifier = 1;
+}
 def PrepareQuotientMatrixOp : BoundOp<RuntimeDialect, "prepare_quotient_matrix", [OpQuotientPrepareMatrix]>;
 def QuotientMatvecOp : BoundOp<RuntimeDialect, "quotient_matvec", [OpQuotientMatvec]>;
 #endif

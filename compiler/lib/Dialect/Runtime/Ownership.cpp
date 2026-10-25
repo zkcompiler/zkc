@@ -77,6 +77,9 @@ LogicalResult verifyScopeOwnership(func::FuncOp function) {
         if (isa<func::ReturnOp>(op) && !live.empty())
           return refuse(&op, "return bypasses scope or transfer cleanup");
       } else if (isa<EnterScopeOp, BorrowTransferOp, TransferValuesOp,
+                     IterationOp, ReleaseBindingsOp, exec::ApplyOp,
+                     exec::CompleteOp, exec::BooleanOp, exec::RejectOp,
+                     exec::TestOp, exec::RangeOp, exec::VariantOp,
                      exec::FailureOp>(op)) {
         // These operations borrow their input ownership. Their type verifiers
         // exclude nested handles in ordinary value payloads.

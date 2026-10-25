@@ -118,4 +118,25 @@ LogicalResult TakeConditionOp::verify() {
     return refuse(*this, "conditional transfer must preserve the exact carry");
   return success();
 }
+LogicalResult IterationOp::verify() {
+  auto payload = getOutcome().getType().getPayload();
+  if (getSite().empty() || payload.size() != 1 || !payloadTypes(payload))
+    return refuse(*this, "iteration requires its native index result");
+  auto bound = protocol::encodeBoundType(payload.front(),
+                                         isa<RepresentedType>(payload.front()));
+  if (!bound) {
+    llvm::consumeError(bound.takeError());
+    return refuse(*this, "iteration index type");
+  }
+  if (bound->kind != "index")
+    return refuse(*this, "iteration requires its native index result");
+  return success();
+}
+LogicalResult ReleaseBindingsOp::verify() {
+  if (!payloadTypes(getValues().getTypes()))
+    return refuse(*this, "storage release requires admitted value bindings");
+  // The executable reader also rejects affine values and later reads. This
+  // operation cannot independently establish last use or external uniqueness.
+  return success();
+}
 } // namespace zkc::runtime

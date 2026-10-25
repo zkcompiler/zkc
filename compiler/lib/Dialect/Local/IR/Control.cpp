@@ -2,6 +2,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
@@ -48,33 +49,6 @@ LogicalResult localRegion(Operation *op, Region &region, TypeRange inputs,
                                "local-control-capture-forwarding");
   return success();
 }
-// Both construction and matching materialize the same flattened payload.
-Expected<SmallVector<Type>>
-variantPayloadTypes(const protocol::BoundType &bound,
-                    const protocol::VariantDescriptor &descriptor,
-                    unsigned alternative, MLIRContext *context) {
-  SmallVector<Type> types;
-  size_t offset = 0;
-  for (unsigned i = 0; i < alternative; ++i)
-    offset += descriptor.alternatives[i].payload.size();
-  for (auto [i, leaf] :
-       enumerate(descriptor.alternatives[alternative].payload)) {
-    auto parsed = protocol::parseBoundType(leaf, false);
-    if (!parsed)
-      return parsed.takeError();
-    if (!bound.representation.empty()) {
-      if (!bound.physicalChildren ||
-          offset + i >= bound.physicalChildren->size())
-        return zkc::error("binding-representation");
-      parsed = (*bound.physicalChildren)[offset + i];
-    }
-    auto type = protocol::decodeBoundType(context, *parsed);
-    if (!type)
-      return zkc::error("variant-type");
-    types.push_back(type);
-  }
-  return types;
-}
 } // namespace
 LogicalResult zkc::local::VariantInjectOp::verify() {
   auto bound = protocol::encodeBoundType(
@@ -92,9 +66,8 @@ LogicalResult zkc::local::VariantInjectOp::verify() {
   });
   if (arm == descriptor->alternatives.end())
     return diagnostics::emit(emitOpError(), "variant-alternative");
-  auto expected = variantPayloadTypes(
-      *bound, *descriptor, std::distance(descriptor->alternatives.begin(), arm),
-      getContext());
+  auto expected =
+      data::variantPayloadTypes(getOutput().getType(), getAlternative());
   if (!expected)
     return diagnostics::emit(emitOpError(), expected.takeError());
   if (getOperandTypes() != TypeRange(*expected))
@@ -121,7 +94,7 @@ LogicalResult zkc::local::LocalMatchOp::verifyRegions() {
     auto label = dyn_cast<StringAttr>(getAlternatives()[i]);
     if (!label || label.getValue() != arm.label)
       return diagnostics::emit(emitOpError(), "local-match-arm");
-    auto inputs = variantPayloadTypes(*bound, *descriptor, i, getContext());
+    auto inputs = data::variantPayloadTypes(getOperand(0).getType(), arm.label);
     if (!inputs)
       return diagnostics::emit(emitOpError(), inputs.takeError());
     llvm::append_range(*inputs, getOperands().drop_front().getTypes());

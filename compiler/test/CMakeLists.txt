@@ -37,6 +37,11 @@ target_compile_definitions(zkc-runtime_scopes-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-runtime_scopes-test PRIVATE MLIRParser)
 
+add_zkc_test(execution_reader Translation execution-reader)
+target_compile_definitions(zkc-execution_reader-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-execution_reader-test PRIVATE MLIRParser)
+
 add_zkc_test(structured_computation Transforms structured-computation)
 mlir_target_link_libraries(zkc-structured_computation-test PRIVATE MLIRParser)
 
