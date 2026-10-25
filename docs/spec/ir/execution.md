@@ -184,6 +184,18 @@ scope position. Domain and capture premises are discharged against this
 occurrence's actual operands; successor arguments do not inherit entry facts by
 position. Exact fixed collection cardinality uses the same actual domain.
 
+Source adapters call the selected ordinary source helper with the borrowed
+scope and an explicit `runtime.site`. They package the callback result with
+`exec.returned`; this is not a charged region completion. Contextually packed
+product items use an actual match with a private identity region, charged
+`exec.complete`, scope exit and transfer acceptance. Collected products use
+`exec.variant`. Source-array materialization remains a mathematical function
+invoked through `exec.compute`. Independent adapter comparison checks these
+operations, actual ports, outlined bodies and dispatch edges; it does not
+replace ordinary helper-body correspondence or whole-definition admission.
+Delegated CFG operations count against the shared source work and operation
+limits.
+
 The operations implement `SymbolUserOpInterface`. They have no loop region or
 induction argument and do not implement `LoopLikeOpInterface`. Their adapted
 callback signatures do not implement ordinary `CallOpInterface`. They advertise

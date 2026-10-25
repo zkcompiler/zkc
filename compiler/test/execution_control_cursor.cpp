@@ -1,8 +1,8 @@
-#include "../lib/Dialect/Exec/ControlCursor.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -12,7 +12,7 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
-void consumeReturned(exec::detail::ControlCursor &cursor) {
+void consumeReturned(exec::ControlCursor &cursor) {
   require(isa_and_nonnull<exec::ReturnOp>(cursor.take()) &&
               isa_and_nonnull<func::ReturnOp>(cursor.take()) && cursor.atEnd(),
           "unexpected source return shape");
@@ -39,7 +39,7 @@ int main() {
         auto module = parse();
         auto function = module->lookupSymbol<func::FuncOp>("sum");
         unsigned remaining = 20;
-        exec::detail::ControlCursor cursor(function, remaining);
+        exec::ControlCursor cursor(function, remaining);
         require(cursor.enter(&function.front()), "entry refused");
         auto *peeked = cursor.peek();
         auto invocation = dyn_cast_or_null<exec::ApplyOp>(cursor.take());
@@ -59,8 +59,7 @@ int main() {
     auto module = parse();
     auto function = module->lookupSymbol<func::FuncOp>("sum");
     unsigned remaining = 1;
-    exec::detail::ControlCursor first(function, remaining),
-        second(function, remaining);
+    exec::ControlCursor first(function, remaining), second(function, remaining);
     require(first.enter(&function.front()) && second.enter(&function.front()),
             "entry refused");
     require(first.take() && remaining == 0 && !second.take() && !first.take(),
@@ -70,7 +69,7 @@ int main() {
     auto module = parse();
     auto function = module->lookupSymbol<func::FuncOp>("sum");
     unsigned remaining = 20;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(!cursor.enter(
                 &module->lookupSymbol<func::FuncOp>("identity").front()) &&
                 cursor.enter(&function.front()) &&
@@ -84,7 +83,7 @@ int main() {
         auto other = cast<exec::ApplyOp>(
             module->lookupSymbol<func::FuncOp>("difference").front().front());
         unsigned remaining = 20;
-        exec::detail::ControlCursor cursor(function, remaining);
+        exec::ControlCursor cursor(function, remaining);
         require(cursor.enter(&function.front()) && cursor.take(),
                 "entry refused");
         SmallVector<Value> payload;
@@ -104,7 +103,7 @@ int main() {
     failed.erase();
     require(succeeded(verify(*module)), "formed failure mutation refused");
     unsigned remaining = 20;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "entry refused");
     auto invocation = cast<exec::ApplyOp>(cursor.take());
     SmallVector<Value> payload;
@@ -123,7 +122,7 @@ int main() {
     func::ReturnOp::create(builder, function.getLoc(), argument);
     require(succeeded(verify(*module)), "formed unreachable block refused");
     unsigned remaining = 20;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "entry refused");
     auto invocation = cast<exec::ApplyOp>(cursor.take());
     SmallVector<Value> payload;
@@ -133,7 +132,7 @@ int main() {
     require(!cursor.complete(), "unvisited block escaped the owned inventory");
   });
 
-  auto finish = [&](exec::detail::ControlCursor &cursor, ValueRange values) {
+  auto finish = [&](exec::ControlCursor &cursor, ValueRange values) {
     auto completion = dyn_cast_or_null<exec::CompleteOp>(cursor.take());
     auto returned = dyn_cast_or_null<func::ReturnOp>(cursor.take());
     return completion && completion.getValues() == values && returned &&
@@ -144,7 +143,7 @@ int main() {
     auto module = parseFixture("conditional");
     auto function = module->lookupSymbol<func::FuncOp>("work");
     unsigned remaining = 1000, checked = 0;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "missing entry");
     SmallVector<Value> outputs;
     require(cursor.conditional(
@@ -168,7 +167,7 @@ int main() {
                 auto module = parseFixture("conditional");
                 auto function = module->lookupSymbol<func::FuncOp>("work");
                 unsigned remaining = 1000, checked = 0;
-                exec::detail::ControlCursor cursor(function, remaining);
+                exec::ControlCursor cursor(function, remaining);
                 require(cursor.enter(&function.front()), "missing entry");
                 SmallVector<Value> outputs;
                 require(!cursor.conditional(
@@ -187,7 +186,7 @@ int main() {
     auto module = parseFixture("conditional");
     auto function = module->lookupSymbol<func::FuncOp>("work");
     unsigned remaining = 1000;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "missing entry");
     SmallVector<Value> outputs;
     require(!cursor.conditional(
@@ -204,7 +203,7 @@ int main() {
           auto module = parseFixture("loop");
           auto function = module->lookupSymbol<func::FuncOp>("loop");
           unsigned remaining = 1000, checked = 0;
-          exec::detail::ControlCursor cursor(function, remaining);
+          exec::ControlCursor cursor(function, remaining);
           require(cursor.enter(&function.front()), "missing entry");
           SmallVector<Value> outputs;
           bool accepted = cursor.loop(
@@ -225,7 +224,7 @@ int main() {
     auto module = parseFixture("loop");
     auto function = module->lookupSymbol<func::FuncOp>("loop");
     unsigned remaining = 1000;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "missing entry");
     SmallVector<Value> outputs;
     require(!cursor.loop(
@@ -239,7 +238,7 @@ int main() {
     auto module = parseFixture("loop");
     auto function = module->lookupSymbol<func::FuncOp>("loop");
     unsigned remaining = 1000;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "missing entry");
     SmallVector<Value> outputs;
     require(!cursor.loop(
@@ -263,7 +262,7 @@ int main() {
         });
         require(succeeded(verify(*module)), "formed cleanup mutation refused");
         unsigned remaining = 1000;
-        exec::detail::ControlCursor cursor(function, remaining);
+        exec::ControlCursor cursor(function, remaining);
         require(cursor.enter(&function.front()), "missing entry");
         SmallVector<Value> outputs;
         require(!cursor.loop(
@@ -277,7 +276,7 @@ int main() {
     auto module = parseFixture("match");
     auto function = module->lookupSymbol<func::FuncOp>("select");
     unsigned remaining = 1000, checked = 0;
-    exec::detail::ControlCursor cursor(function, remaining);
+    exec::ControlCursor cursor(function, remaining);
     require(cursor.enter(&function.front()), "missing entry");
     SmallVector<Value> outputs;
     require(cursor.match(
@@ -300,7 +299,7 @@ int main() {
                 auto module = parseFixture("match");
                 auto function = module->lookupSymbol<func::FuncOp>("select");
                 unsigned remaining = 1000, checked = 0;
-                exec::detail::ControlCursor cursor(function, remaining);
+                exec::ControlCursor cursor(function, remaining);
                 require(cursor.enter(&function.front()), "missing entry");
                 SmallVector<Value> outputs;
                 require(!cursor.match(
@@ -328,7 +327,7 @@ int main() {
             operationCount += block.getOperations().size();
           for (bool enough : {true, false}) {
             unsigned remaining = operationCount - (enough ? 0 : 1);
-            exec::detail::ControlCursor cursor(function, remaining);
+            exec::ControlCursor cursor(function, remaining);
             require(cursor.enter(&function.front()), "missing entry");
             SmallVector<Value> outputs;
             auto body = [](func::CallOp, unsigned) { return true; };

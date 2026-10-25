@@ -229,4 +229,8 @@ void ScopedExecutionBuilder::complete(ValueRange values) {
   auto *complete = make("exec.complete", result, scoped(values));
   make("func.return", {}, complete->getResults());
 }
+void ScopedExecutionBuilder::returned(ValueRange values) {
+  auto *returned = make("exec.returned", result, values);
+  make("func.return", {}, returned->getResults());
+}
 } // namespace zkc::protocol::detail

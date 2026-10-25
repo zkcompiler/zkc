@@ -1,4 +1,4 @@
-#include "ControlCursor.h"
+#include "zkc/Dialect/Exec/ControlCursor.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -6,7 +6,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::exec::detail {
+namespace zkc::exec {
 namespace {
 bool attrs(Operation *op, ArrayRef<StringRef> names = {}) {
   return op && llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
@@ -303,4 +303,4 @@ bool ControlCursor::loop(Value lower, Value upper, ValueRange seeds,
   append_range(results, outputs);
   return true;
 }
-} // namespace zkc::exec::detail
+} // namespace zkc::exec

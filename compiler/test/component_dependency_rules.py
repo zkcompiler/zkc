@@ -109,7 +109,7 @@ def move_source(text, source, destination):
         lines.append(f"{name}|{links}|{interface}|{';'.join(items)}")
     return "\n".join(lines) + "\n"
 
-for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp"):
+for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp", "lib/Dialect/Exec/ControlCursor.cpp"):
     rejects(f"mandatory IR source cannot move to optional translation: {source}", manifest,
             lambda text, source=source: move_source(text, source, "ZkcTranslation"),
             "mandatory component ownership")

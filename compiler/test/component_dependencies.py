@@ -157,6 +157,7 @@ def main():
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
         "lib/Dialect/Kernel/IR/Kernel.cpp": "ZkcIR",
@@ -177,7 +178,6 @@ def main():
     }
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
-    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ControlCursor.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/ScopedExecution.h", ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}

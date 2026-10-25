@@ -1,8 +1,8 @@
-#include "ControlCursor.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
@@ -42,7 +42,7 @@ class BodyComparison {
   Comparison &owner;
   func::FuncOp function;
   Value scope;
-  exec::detail::ControlCursor control;
+  exec::ControlCursor control;
   llvm::DenseSet<Value> bound;
   llvm::StringMap<Value> names;
   bool enter(Block *block) { return control.enter(block); }

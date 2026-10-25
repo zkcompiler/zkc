@@ -40,6 +40,8 @@ public:
   // Charged native completion. Source helper return packaging has a different
   // meaning and must not call this as an implementation shortcut.
   void complete(mlir::ValueRange values);
+  // Ordinary source helper packaging does not perform a native completion.
+  void returned(mlir::ValueRange values);
 
 private:
   mlir::OpBuilder &builder;
