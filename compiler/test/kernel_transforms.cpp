@@ -107,8 +107,8 @@ void expectRefusal(mlir::ModuleOp candidate, StringRef code,
   require(failed(check()), "mutated correspondence was accepted");
   require(diagnostic, "refusal lost its diagnostic identifier");
 }
-OwningOpRef<mlir::ModuleOp> exec(mlir::ModuleOp source,
-                                 MathematicalSelectionPolicy policy = {}) {
+OwningOpRef<mlir::ModuleOp>
+formExecutable(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {}) {
   auto result = copy(source);
   run(*result, protocol::createProjectProtocolPass(false, policy));
   run(*result, protocol::createLowerMathPass(policy));
@@ -143,7 +143,7 @@ int main() {
   Cases cases;
   cases.run("direct Kernel recipe output retains the immutable source", [&] {
     auto original = parse(demanded, context);
-    auto logical = exec(*original);
+    auto logical = formExecutable(*original);
     auto unit = numericalUnit(*logical);
     auto entry = mathematical::getComputationEntry(unit);
     OpBuilder builder(&context);
@@ -390,7 +390,7 @@ module {
         require(succeeded(kernel::verifyKernelClosure(
                     owner(*source), original, numericalUnit(*prepared))),
                 "exact closure with entry rename failed");
-        auto logical = exec(*prepared, {false, false});
+        auto logical = formExecutable(*prepared, {false, false});
         require(bool(numericalEntry(*logical)),
                 "Kernel did not survive projection/lower-math");
         auto lowered = copy(*logical);
@@ -448,7 +448,7 @@ module {
   cases.run(
       "actual Local recipe same-type operand permutation is refused", [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
         auto &op =
@@ -463,7 +463,7 @@ module {
       });
   cases.run("independent lowering rejects a changed numerical root site", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto lowered = copy(*logical);
     require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
     auto &op = localFunction(*lowered, "realized").getBody().front().front();
@@ -527,7 +527,7 @@ module {
           "finite/total-predicate.mlir"})
       cases.run(Twine(optimize ? "optimized " : "ordered ") + name, [&] {
         auto source = fixture(context, name);
-        auto logical = exec(*source, {optimize, false});
+        auto logical = formExecutable(*source, {optimize, false});
         auto entry = numericalEntry(*logical);
         require(
             entry.front().front().getName().getStringRef().contains("finite"),
@@ -546,7 +546,7 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source, {optimize, false});
+          auto logical = formExecutable(*source, {optimize, false});
           auto lowered = copy(*logical);
           require(succeeded(kernel::lowerKernels(*lowered, {!optimize, false})),
                   "finite policy lowering failed");
@@ -574,7 +574,7 @@ module {
         builder.create(product);
         require(succeeded(verify(*source)),
                 "unused product source not admitted");
-        auto logical = exec(*source, {true, false});
+        auto logical = formExecutable(*source, {true, false});
         auto bulk = copy(*logical);
         require(succeeded(kernel::lowerKernels(*bulk)), "bulk control failed");
         unsigned admissionLoops = 0, traversals = 0;
@@ -611,7 +611,7 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source);
+          auto logical = formExecutable(*source);
           logical->walk(
               [](kernel::CallOp call) { call->removeAttr("policy"); });
           auto lowered = copy(*logical);
@@ -628,7 +628,7 @@ module {
       "isolated units resolve identical private names independently", [&] {
         auto source =
             fixture(context, "structured-source/realization-finite.mlir");
-        auto logical = exec(*source, {false, false});
+        auto logical = formExecutable(*source, {false, false});
         OpBuilder builder(numericalUnit(*logical));
         auto second = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
@@ -711,7 +711,7 @@ module {
   cases.run(
       "checked polynomial math stays numerical until explicit lowering", [&] {
         auto source = fixture(context, "mathematical/helper-realization.mlir");
-        auto logical = exec(*source, {false, false});
+        auto logical = formExecutable(*source, {false, false});
         require(bool(numericalEntry(*logical)),
                 "polynomial realization did not form a unit");
         auto lowered = copy(*logical);
@@ -723,7 +723,7 @@ module {
   cases.run(
       "dormant owned units are checked and removed without execution", [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         OpBuilder builder(numericalUnit(*logical));
         auto dormant = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
@@ -745,7 +745,7 @@ module {
       });
   cases.run("exact readback expands authored standard helper calls", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto entry = numericalEntry(*logical);
     OpBuilder builder(entry);
     auto helper = cast<func::FuncOp>(builder.clone(*entry.getOperation()));
@@ -768,7 +768,7 @@ module {
       "raw authored polynomial entry lowers through checked normalization",
       [&] {
         auto source = fixture(context, "mathematical/helper-realization.mlir");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto original =
             SymbolTable(owner(*source)).lookup<func::FuncOp>("polynomial");
         auto entry = numericalEntry(*logical);
@@ -831,7 +831,7 @@ module {
       ++count;
     });
     require(count == 2, "repeated calls lost numerical work");
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto lowered = copy(*logical);
     require(succeeded(kernel::lowerKernels(*lowered)),
             "repeated call realization failed");
@@ -845,7 +845,7 @@ module {
       "local.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
     )mlir");
         auto source = parse(text, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "pinned context prevented lowering");
@@ -877,7 +877,7 @@ module {
                 "formation replaced the original helper body");
         require(isa<func::CallOp>(numericalEntry(*prepared).front().front()),
                 "formation expanded the raw helper call");
-        auto logical = exec(*prepared);
+        auto logical = formExecutable(*prepared);
         require(isa<func::CallOp>(numericalEntry(*logical).front().front()),
                 "projection erased the raw helper call");
         auto lowered = copy(*logical);
@@ -994,7 +994,7 @@ module {
   cases.run(
       "mixed helper concrete work is not replayed across action cuts", [&] {
         auto source = fixture(context, "kernel/mixed-helper-cuts.mlir");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         unsigned differences = 0;
         logical->walk([&](Operation *op) {
           differences +=
@@ -1022,7 +1022,7 @@ module {
         auto normalized = kernel::prepareKernelLowering(*source);
         require(bool(normalized) && succeeded(verify(*normalized)),
                 "original forwarding wrapper normalization failed");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         require(succeeded(verify(*logical)),
                 "projected authored forwarding wrapper was refused");
         auto lowered = copy(*logical);
@@ -1041,7 +1041,7 @@ module {
             " numerical inputs",
         [&] {
           auto source = fixture(context, "kernel/shared-polynomial.mlir");
-          auto logical = exec(*source);
+          auto logical = formExecutable(*source);
           SmallVector<local::CallOp> invocations;
           logical->walk([&](protocol_ir::ParticipantOp participant) {
             participant.walk(
@@ -1149,7 +1149,7 @@ module {
         "standard call metadata survives concrete port growth " + Twine(ports),
         [&] {
           auto source = fixture(context, "kernel/shared-polynomial.mlir");
-          auto logical = exec(*source);
+          auto logical = formExecutable(*source);
           logical->walk([&](kernel::CallOp call) {
             auto empty = DictionaryAttr::get(&context);
             if (ports & 1)
@@ -1251,7 +1251,7 @@ module {
         });
         require(polynomial, "original-source polynomial helper was normalized "
                             "before formation");
-        auto logical = exec(*prepared);
+        auto logical = formExecutable(*prepared);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "original-source raw Kernel failed");
@@ -1265,7 +1265,7 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source, {true, false});
+          auto logical = formExecutable(*source, {true, false});
           auto lowered = copy(*logical);
           require(succeeded(kernel::lowerKernels(*lowered)),
                   "bulk fixture failed");
@@ -1294,7 +1294,7 @@ module {
   });
   cases.run("an extra concrete recipe cannot be replayed", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto lowered = copy(*logical);
     require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
     auto function = localFunction(*lowered, "realized");
@@ -1311,7 +1311,7 @@ module {
   cases.run(
       "concrete work cannot move from before to after a source guard", [&] {
         auto source = fixture(context, "kernel/shared-polynomial.mlir");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         local::FuncOp wrapper;
         logical->walk([&](local::FuncOp function) {
           if (llvm::any_of(
@@ -1368,7 +1368,7 @@ module {
       "equivalent unpinned recipe bindings share one imported declaration",
       [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         OpBuilder builder(numericalUnit(*logical));
         auto secondUnit = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
@@ -1425,7 +1425,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir",
                             context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "alias capture lowering failed");

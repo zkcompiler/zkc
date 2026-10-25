@@ -38,6 +38,12 @@ representation wrappers use Runtime-owned types. Their independent binding
 adapters preserve current native descriptors and installation checks. Local and
 Plan own no value types. See [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
 
+Runtime scope/transfer formation and the flat-CFG ownership checker are available
+as compiler APIs, with success, cleanup and conditional-carry refusal controls.
+They are not yet the default executable Local-control path; whole-profile
+reconstruction and artifact correspondence still use the existing consumer.
+See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,

@@ -67,6 +67,59 @@ The selected branch interfaces expose CFG edges; they do not license reordering
 an invocation. See the upstream [side-effect rationale](https://mlir.llvm.org/docs/Rationale/SideEffectsAndSpeculation/)
 and [control-flow interface](https://mlir.llvm.org/docs/Interfaces/#branchopinterface).
 
+## Runtime scope and transfer views
+
+`!runtime.scope` denotes an active execution scope. A function's scope arguments
+are borrowed; `runtime.enter_scope` produces an acquired child scope through an
+explicit outcome. Entry performs the existing preflight, reservation, backend
+entry and body-scope opening. Failed entry acquires no caller cleanup obligation;
+a failure after partial acquisition discharges it inside entry.
+
+An entry retains its source site and one origin kind: `function` with the actual
+callee, `conditional` with `then` or `else`, `iteration` with its current i64
+coordinate, or `match` with the selected alternative. The enclosing executable
+reader binds these facts to actual calls, branches and checked bounds. Ordinary
+helper expansion and numerical realization do not acquire a frame merely
+because a standard function call represents them.
+
+`runtime.exit_scope` consumes an acquired scope and the body's explicit outcome.
+For success, it pins returned backing, closes body bindings, and attempts backend
+exit in that order. Failed exit releases the hold and withholds the payload.
+For a stopped body it closes bindings and appends any failed cleanup to the
+existing primary cause. Successful exit returns one
+`!runtime.transfer<(T...)>` inside the outcome. Parent binding is separate from
+exit; root publication follows its existing reservation contract.
+
+A transfer retains an ordered tuple at one logical or represented stage.
+`runtime.borrow_transfer` packages initial values already owned by the parent
+without new allocation, retain or frame. `runtime.transfer_values` exposes its
+payload while that transfer remains live. `runtime.accept_transfer` binds the
+values into the parent before releasing their temporary hold, consuming the
+transfer even on refusal. `runtime.release_transfer` consumes it without
+publication. Borrowed initial transfers have no temporary pin to release.
+
+`runtime.take_condition` consumes a transfer's leading Boolean and exposes an
+ordinary i1 decision plus the remaining transfer. Failed inspection releases
+the remaining carry. A loop holds the previous carry until the next body exits
+successfully, then releases it before inspecting the new condition. Each failed
+body path releases the previous carry before unwinding its parent. CF operand
+transport itself creates no retained parent binding.
+
+These types are execution views, not native carrier descriptors or authority
+grants. The scope-ownership analysis follows actual `BranchOpInterface` mappings
+on flat CFGs, including outcome-produced arguments. It requires matching live
+ownership at joins, one consumption of returned or released transfers, no
+consumption of borrowed scopes, and no abandoned ownership at return. It checks
+every block and refuses graphs exceeding its analysis limit of one million
+operations. Scope and transfer types are not MLIR TokenLike types.
+Calls use the borrowed-scope contract; executable admission must check every
+potential callee. A successful function-local check is not a closure check.
+
+Shape and ownership checks alone do not establish payload-borrow lifetime,
+parent/frame nesting, source association, reached operation identity, resource
+equivalence, or native correspondence. Those remain obligations of the complete
+executable-profile reader and its independent artifact comparison.
+
 ## Independent admission
 
 The exporter retains logical signatures and source block shape under Entry

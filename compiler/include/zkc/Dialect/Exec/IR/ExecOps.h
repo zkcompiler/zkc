@@ -6,9 +6,7 @@
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
-#include "zkc/Dialect/Exec/IR/ExecDialect.h"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Exec/IR/execTypes.h.inc"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Exec/IR/execOps.h.inc"
 #endif
