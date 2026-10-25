@@ -64,6 +64,8 @@ pub struct Checked {
     pub capture: String,
     pub installation: String,
     pub entries: Vec<Entry>,
+    /// Compiler-owned diagnostics only; these entries do not authorize claims.
+    pub source_claim_inventory: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -456,4 +458,35 @@ struct Invocation {
     diagnostics: Option<String>,
     diagnostics_truncated: bool,
     observation: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Checked;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn checked_inventory_is_required_and_preserved_without_weakening_the_envelope() {
+        let baseline = json!({
+            "capture": "capture", "installation": "installation", "entries": [],
+            "source_claim_inventory": [{"label": "sound", "node": {"kind": "source-claim"}}]
+        });
+        let checked: Checked = serde_json::from_value(baseline.clone()).unwrap();
+        assert_eq!(serde_json::to_value(checked).unwrap(), baseline);
+
+        let mut missing = baseline.clone();
+        missing
+            .as_object_mut()
+            .unwrap()
+            .remove("source_claim_inventory");
+        assert!(serde_json::from_value::<Checked>(missing).is_err());
+        for invalid in [Value::Null, json!({}), json!("inventory")] {
+            let mut changed = baseline.clone();
+            changed["source_claim_inventory"] = invalid;
+            assert!(serde_json::from_value::<Checked>(changed).is_err());
+        }
+        let mut unknown = baseline;
+        unknown["unrecognized"] = json!([]);
+        assert!(serde_json::from_value::<Checked>(unknown).is_err());
+    }
 }
