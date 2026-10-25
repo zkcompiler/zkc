@@ -145,6 +145,16 @@ and reached execution checks current operands, policy, custody and allowances.
 The Func/CF execution writer, reader and independent comparison require no Local
 dialect registration.
 
+The standalone API accepts a closed, attribute-free builtin module. The
+`readExecutionDefinitions` and `verifyExecutionDefinitions` APIs instead select
+one actual symbol table inside an enclosing profile. They inspect every immediate
+Runtime binding and Func definition, including dormant roots and outlined bodies;
+all direct symbols must be unique before lookup. Calls resolve in that selected
+table. Other declarations and enclosing stage/protocol associations remain the
+caller's responsibility. These APIs verify the owned operations without invoking
+the enclosing operation's region verifier recursively. Acceptance therefore does
+not establish formation or admission of the entire enclosing module.
+
 The reached instruction boundaries are:
 
 | Operation | Native obligation |

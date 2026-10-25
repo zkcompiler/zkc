@@ -1,13 +1,14 @@
+#include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Refusal.h"
-#include "zkc/Translation/Execution.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include <map>
@@ -67,14 +68,14 @@ public:
   bool run(const program::Body &, ArrayRef<std::string> arguments);
 };
 class Comparison {
-  ModuleOp module;
+  Operation *module;
   bool physical;
   unsigned remaining = 1000000;
   llvm::DenseSet<Operation *> active, visited;
   std::map<std::string, BoundOperation> bindings;
 
 public:
-  Comparison(ModuleOp module, bool physical)
+  Comparison(Operation *module, bool physical)
       : module(module), physical(physical) {}
   bool charge() { return remaining && (--remaining, true); }
   bool type(Type actual, StringRef expected = {}) const {
@@ -134,10 +135,11 @@ public:
   }
   bool call(func::CallOp call, const program::Body &expected,
             ArrayRef<std::string> arguments) {
-    return body(module.lookupSymbol<func::FuncOp>(call.getCallee()), expected,
-                arguments, true);
+    return body(dyn_cast_or_null<func::FuncOp>(
+                    SymbolTable::lookupSymbolIn(module, call.getCallee())),
+                expected, arguments, true);
   }
-  bool run(const program::LocalDefinitions &expected);
+  bool run(const program::LocalDefinitions &expected, bool mixed = false);
 };
 bool BodyComparison::enter(Block *block) {
   if (!block || block->getParent() != &function.getBody() ||
@@ -525,7 +527,7 @@ bool BodyComparison::run(const program::Body &expected,
   }
   return end() && checked.size() == function.getBody().getBlocks().size();
 }
-bool Comparison::run(const program::LocalDefinitions &expected) {
+bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
   for (const auto &binding : expected.bindings) {
     auto signature = resolveBinding(binding.application, physical);
     if (!signature) {
@@ -535,7 +537,7 @@ bool Comparison::run(const program::LocalDefinitions &expected) {
     bindings.emplace(binding.name, std::move(*signature));
   }
   unsigned binding = 0, root = 0, definitions = 0;
-  for (Operation &op : *module.getBody()) {
+  for (Operation &op : module->getRegion(0).front()) {
     if (!charge() || ++definitions > 4096)
       return false;
     if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
@@ -557,8 +559,11 @@ bool Comparison::run(const program::LocalDefinitions &expected) {
       continue;
     }
     auto function = dyn_cast<func::FuncOp>(op);
-    if (!function)
+    if (!function) {
+      if (mixed)
+        continue;
       return false;
+    }
     if (function->getAttrOfType<UnitAttr>("runtime.region"))
       continue;
     if (root == expected.functions.size())
@@ -598,7 +603,7 @@ bool Comparison::run(const program::LocalDefinitions &expected) {
   }
   if (binding != expected.bindings.size() || root != expected.functions.size())
     return false;
-  for (auto function : module.getOps<func::FuncOp>())
+  for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
     if (!visited.contains(function))
       return false;
   return true;
@@ -618,6 +623,23 @@ Error verifyLocalExecution(ModuleOp module,
     return e;
   Comparison checker(module, physical);
   if (!checker.run(expected))
+    return error("execution-correspondence");
+  return Error::success();
+}
+Error verifyExecutionDefinitions(Operation *symbolTable,
+                                 const program::LocalDefinitions &expected,
+                                 bool physical) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+    return error("execution-correspondence-subject");
+  program::Participants admitted;
+  admitted.stage = physical ? program::Participants::Stage::Physical
+                            : program::Participants::Stage::Logical;
+  admitted.bindings = expected.bindings;
+  admitted.functions = expected.functions;
+  if (auto e = admit(admitted))
+    return e;
+  Comparison checker(symbolTable, physical);
+  if (!checker.run(expected, /*mixed=*/true))
     return error("execution-correspondence");
   return Error::success();
 }

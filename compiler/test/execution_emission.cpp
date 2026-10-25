@@ -1,8 +1,11 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -252,6 +255,127 @@ int main(int argc, char **argv) {
                 "reversed physical layout endpoints were accepted");
         llvm::consumeError(std::move(rejected));
       });
+  auto mixed = [&](const program::LocalDefinitions &expected) {
+    auto module = take(protocol::writeLocalExecution(context, expected, true));
+    Builder builder(&context);
+    module->setSymNameAttr(builder.getStringAttr("protocol"));
+    auto mathematics = ModuleOp::create(builder.getUnknownLoc(), "mathematics");
+    module->getBody()->push_back(mathematics);
+    return module;
+  };
+  auto acceptedDefinitions = [&](ModuleOp module,
+                                 const program::LocalDefinitions &expected) {
+    auto actual = take(protocol::readExecutionDefinitions(module, true));
+    require(encoded(actual, true) == encoded(expected, true),
+            "mixed scope changed execution records");
+    if (auto e = protocol::verifyExecutionDefinitions(module, expected, true))
+      throw std::runtime_error(llvm::toString(std::move(e)));
+  };
+  auto refusedDefinitions = [&](Operation *scope,
+                                const program::LocalDefinitions &expected) {
+    auto actual = protocol::readExecutionDefinitions(scope, true);
+    require(!actual, "mixed reader accepted invalid execution definitions");
+    llvm::consumeError(actual.takeError());
+    auto error = protocol::verifyExecutionDefinitions(scope, expected, true);
+    require(bool(error),
+            "mixed comparison accepted invalid execution definitions");
+    llvm::consumeError(std::move(error));
+  };
+  cases.run(
+      "mixed symbol table preserves the complete execution inventory", [&] {
+        auto expected = nested(true);
+        auto module = mixed(expected);
+        require(succeeded(verify(*module)), "mixed module formation");
+        acceptedDefinitions(*module, expected);
+        refuses(protocol::readLocalExecution(*module, true), "execution-cfg");
+        auto error = protocol::verifyLocalExecution(*module, expected, true);
+        require(bool(error), "closed profile accepted a mixed scope");
+        llvm::consumeError(std::move(error));
+      });
+  cases.run("mixed definitions do not claim to verify other declarations", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    auto mathematics = *module->getOps<ModuleOp>().begin();
+    mathematics->setAttr("sym_visibility",
+                         Builder(&context).getStringAttr("invalid"));
+    // The enclosing profile owns this malformed sibling. Owned Func and Runtime
+    // definitions can still be inspected without recursively verifying it.
+    acceptedDefinitions(*module, expected);
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(verify(*module)),
+            "malformed sibling must fail full verification");
+  });
+  cases.run("mixed lookup rejects collisions with other declarations", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    acceptedDefinitions(*module, expected);
+    auto mathematics = *module->getOps<ModuleOp>().begin();
+    mathematics.setSymNameAttr(Builder(&context).getStringAttr("work"));
+    refusedDefinitions(module->getOperation(), expected);
+  });
+  cases.run("mixed execution rechecks actual same-typed operands", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    acceptedDefinitions(*module, expected);
+    exec::ApplyOp selected;
+    module->walk([&](exec::ApplyOp op) {
+      if (!selected)
+        selected = op;
+    });
+    require(selected && selected->getNumOperands() == 3,
+            "missing binary application");
+    auto first = selected->getOperand(1);
+    selected->setOperand(1, selected->getOperand(2));
+    selected->setOperand(2, first);
+    require(succeeded(verify(*module)),
+            "same-typed mutation must remain well formed");
+    auto actual = take(protocol::readExecutionDefinitions(*module, true));
+    require(encoded(actual, true) != encoded(expected, true),
+            "reader ignored changed actual operands");
+    auto error = protocol::verifyExecutionDefinitions(*module, expected, true);
+    require(bool(error), "comparison ignored changed actual operands");
+    llvm::consumeError(std::move(error));
+  });
+  cases.run("dormant functions remain owned by the selected scope", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    auto root = module->lookupSymbol<func::FuncOp>("work");
+    auto dormant = cast<func::FuncOp>(root->clone());
+    dormant.setName("dormant");
+    module->getBody()->push_back(dormant);
+    require(succeeded(verify(*module)), "dormant root formation");
+    auto actual = take(protocol::readExecutionDefinitions(*module, true));
+    require(actual.functions.size() == 2, "dormant root was omitted");
+    auto error = protocol::verifyExecutionDefinitions(*module, expected, true);
+    require(bool(error), "comparison omitted an extra dormant root");
+    llvm::consumeError(std::move(error));
+    dormant->removeAttr("runtime.origin");
+    refusedDefinitions(module->getOperation(), expected);
+  });
+  cases.run("outlined call cannot escape the selected symbol table", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    acceptedDefinitions(*module, expected);
+    func::CallOp selected;
+    module->walk([&](func::CallOp call) {
+      if (!selected)
+        selected = call;
+    });
+    require(bool(selected), "missing outlined call");
+    auto callee = module->lookupSymbol<func::FuncOp>(selected.getCallee());
+    auto mathematics = *module->getOps<ModuleOp>().begin();
+    callee->moveBefore(mathematics.getBody(), mathematics.getBody()->end());
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    refusedDefinitions(module->getOperation(), expected);
+  });
+  cases.run("execution definition scope must be an actual symbol table", [&] {
+    auto expected = nested(true);
+    auto module = mixed(expected);
+    refusedDefinitions(nullptr, expected);
+    refusedDefinitions(module->lookupSymbol<func::FuncOp>("work"), expected);
+  });
   auto check = [&](const program::LocalDefinitions &model, StringRef name) {
     auto emitted = protocol::writeLocalExecution(context, model, true);
     if (!emitted)

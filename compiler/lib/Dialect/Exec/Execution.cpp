@@ -1,4 +1,5 @@
-#include "zkc/Translation/Execution.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
@@ -66,14 +67,15 @@ public:
   bool run(ArrayRef<std::string> arguments, program::Body &body);
 };
 class Reader {
-  ModuleOp module;
+  Operation *module;
   bool physical;
   unsigned remaining = 1000000, next = 0;
   llvm::DenseSet<Operation *> active, visited;
   std::string problem;
 
 public:
-  Reader(ModuleOp module, bool physical) : module(module), physical(physical) {}
+  Reader(Operation *module, bool physical)
+      : module(module), physical(physical) {}
   bool fail(StringRef reason) {
     if (problem.empty())
       problem = reason.str();
@@ -160,12 +162,13 @@ public:
   }
   bool region(func::CallOp call, ArrayRef<std::string> names,
               program::Body &result) {
-    auto function = module.lookupSymbol<func::FuncOp>(call.getCallee());
+    auto function = dyn_cast_or_null<func::FuncOp>(
+        SymbolTable::lookupSymbolIn(module, call.getCallee()));
     return (function && function.isPrivate() &&
             body(function, names, result, true)) ||
            fail("region body must be an actual private function");
   }
-  Expected<program::LocalDefinitions> run();
+  Expected<program::LocalDefinitions> run(bool mixed = false);
 };
 
 bool BodyReader::block(Block *next) {
@@ -616,12 +619,10 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
   }
   return reader.fail("missing native completion");
 }
-Expected<program::LocalDefinitions> Reader::run() {
+Expected<program::LocalDefinitions> Reader::run(bool mixed) {
   program::LocalDefinitions result;
-  if (!module || failed(verify(module)) || !module->getAttrs().empty())
-    return error("execution-cfg", "expected a verified local execution module");
   unsigned definitions = 0;
-  for (Operation &op : *module.getBody()) {
+  for (Operation &op : module->getRegion(0).front()) {
     if (++definitions > 4096)
       return error("execution-cfg", "definition limit");
     if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
@@ -638,8 +639,11 @@ Expected<program::LocalDefinitions> Reader::run() {
       continue;
     }
     auto function = dyn_cast<func::FuncOp>(op);
-    if (!function)
+    if (!function) {
+      if (mixed)
+        continue;
       return error("execution-cfg", "unexpected execution definition");
+    }
     if (function->getAttrOfType<UnitAttr>("runtime.region"))
       continue;
     auto origin = function->getAttrOfType<ArrayAttr>("runtime.origin");
@@ -678,7 +682,7 @@ Expected<program::LocalDefinitions> Reader::run() {
     }
     result.functions.push_back(std::move(record));
   }
-  for (auto function : module.getOps<func::FuncOp>())
+  for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
     if (!visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
   program::Participants admitted;
@@ -693,6 +697,14 @@ Expected<program::LocalDefinitions> Reader::run() {
 } // namespace
 Expected<program::LocalDefinitions> readLocalExecution(ModuleOp module,
                                                        bool physical) {
+  if (!module || failed(verify(module)) || !module->getAttrs().empty())
+    return error("execution-cfg", "expected a verified local execution module");
   return Reader(module, physical).run();
+}
+Expected<program::LocalDefinitions>
+readExecutionDefinitions(Operation *symbolTable, bool physical) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+    return error("execution-cfg", "invalid execution definition scope");
+  return Reader(symbolTable, physical).run(/*mixed=*/true);
 }
 } // namespace zkc::protocol

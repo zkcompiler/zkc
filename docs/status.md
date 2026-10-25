@@ -49,7 +49,9 @@ artifacts through the existing VM, including exact results, stops, origins,
 frame effects, installation and budget observations. These bounded controls are
 not a native correspondence theorem. A separate record-directed comparator
 checks current SSA against admitted native local definitions without reader or
-emitter replay. These APIs are not yet the default executable Local-control path;
+emitter replay. Both checks can inspect the complete immediate execution
+inventory inside a mixed symbol table; its other declarations and stage remain
+the enclosing profile's responsibility. These APIs are not yet the default executable Local-control path;
 the full publication pipeline and artifact comparator still use the existing
 consumer.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
