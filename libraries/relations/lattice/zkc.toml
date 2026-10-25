@@ -1,0 +1,7 @@
+format = "zkc.project/0"
+
+[modules]
+"lattice" = "lib.zkc"
+
+[dependencies]
+"polynomial" = "../../core/polynomial"

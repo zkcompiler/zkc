@@ -145,4 +145,14 @@ def RealizeOp : Op<PolynomialDialect, "realize", [Symbol, DeclareOpInterfaceMeth
                        StrAttr:$kind, TypeAttrOf<FunctionType>:$function_type);
   let hasVerifier = 1;
 }
+// Partial ordered realizations of the negacyclic quotient contracts.
+def QuotientAddOp : BoundOp<PolynomialDialect, "exec.quotient_add", [OpQuotientAdd]>;
+def QuotientSubtractOp : BoundOp<PolynomialDialect, "exec.quotient_subtract", [OpQuotientSubtract]>;
+def QuotientMultiplyOp : BoundOp<PolynomialDialect, "exec.quotient_multiply", [OpQuotientMultiply]>;
+def QuotientNormWithinOp : BoundOp<PolynomialDialect, "exec.quotient_norm_within", [OpQuotientNormWithin]>;
+def QuotientProjectOp : BoundOp<PolynomialDialect, "exec.quotient_project", [OpQuotientProject]>;
+def QuotientNTTOp : BoundOp<PolynomialDialect, "exec.quotient_ntt", [OpQuotientNTT]>;
+def QuotientINTTOp : BoundOp<PolynomialDialect, "exec.quotient_intt", [OpQuotientINTT]>;
+def QuotientPointwiseOp : BoundOp<PolynomialDialect, "exec.quotient_pointwise", [OpQuotientPointwise]>;
+
 #endif

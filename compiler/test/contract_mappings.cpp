@@ -33,6 +33,14 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
+    {"quotient.add", "poly.exec.quotient_add"},
+    {"quotient.subtract", "poly.exec.quotient_subtract"},
+    {"quotient.multiply", "poly.exec.quotient_multiply"},
+    {"quotient.norm_within", "poly.exec.quotient_norm_within"},
+    {"quotient.project", "poly.exec.quotient_project"},
+    {"quotient.ntt", "poly.exec.quotient_ntt"},
+    {"quotient.intt", "poly.exec.quotient_intt"},
+    {"quotient.pointwise", "poly.exec.quotient_pointwise"},
     {"transcript.observe", "crypto.exec.transcript_observe"},
     {"transcript.challenge", "crypto.exec.transcript_challenge"},
     {"transcript.index", "crypto.exec.transcript_index"},

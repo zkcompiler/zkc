@@ -34,7 +34,7 @@ premises. A law alone does not prove that a C++ checker or Rust kernel realizes 
 |---|---|
 | Values and domains | [Values](domains/values.md), [vectors](domains/vectors.md), [permutations](domains/permutations.md): typed algebra, contractions, representations and cryptographic permutations |
 | Shape and bounds | [Mathematical facts](domains/mathematical-facts.md): exact subjects, scoped premises, cardinality and bounded derivation |
-| Polynomial meaning | [Tables and polynomials](domains/polynomials.md), [shared ring expressions](domains/ring-expressions.md): formal substitution, polynomial SSA and recipe lowering |
+| Polynomial meaning | [Tables and polynomials](domains/polynomials.md), [negacyclic quotient rings](domains/quotient-rings.md), [shared ring expressions](domains/ring-expressions.md): formal substitution, polynomial SSA and recipe lowering |
 | Ordered execution | [Exec outcomes](ir/execution.md): return/stop propagation, Data values and independently checked Func/CF structure |
 | Relations and authentication | [Constraints](domains/constraints.md), [relation bundles](domains/relation-bundles.md), [oracles](domains/oracles.md), [relation terminals](relations.md): imported assets, multi-table relations, binding and explicit terminal checks |
 | Representation | [Complete results](realization/representations.md), [codecs](realization/codecs.md), [artifacts](realization/artifacts.md): source comparison, wire admission and retained authority |

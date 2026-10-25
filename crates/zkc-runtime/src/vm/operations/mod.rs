@@ -13,6 +13,7 @@ pub(super) mod numerical;
 mod oracle;
 mod pcs;
 mod poly;
+mod quotient;
 mod random;
 mod relation;
 mod representation;
@@ -455,6 +456,7 @@ pub(super) fn standard_registry() -> Registry {
         &oracle::CONTRIBUTION,
         &pcs::CONTRIBUTION,
         &poly::CONTRIBUTION,
+        &quotient::CONTRIBUTION,
         &random::CONTRIBUTION,
         &relation::CONTRIBUTION,
         &representation::CONTRIBUTION,

@@ -66,6 +66,11 @@ Retained pointwise maps and selected sums now use a private
 with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
 readback and execution through the current native handlers. General tensor
 transforms and writable-buffer ownership are outside this profile.
+Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
+negacyclic arithmetic, exact centered norms and natural-order transforms through
+ordered native contracts. Coefficient and evaluation values have distinct kernel
+APIs; evaluation operations retain the exact basis. These arithmetic capabilities
+do not provide a complete signature verifier.
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and
