@@ -115,6 +115,14 @@ return the original state. Total Algebra inputs, items, captures and results obe
 the total-data policy. Declaration-specific Local admission does not weaken the
 existing total `local.realize` or `algebra.map_realize` signatures.
 
+Callback port inspection retains the actual definition, entry arguments and
+ordered state/item/domain/capture partitions. It does not assert that a callback
+has one return expression, establish totality, or admit its body. Expression
+analysis separately requires a checked single-block return or stop view. A CFG
+can have an inspectable entry ABI without an expression view; same-numbered
+successor arguments are not entry formals. Both views are borrowed observations
+of the current subject and must be rebuilt after mutation.
+
 Collection results are field vectors, group vectors, indices, immutable sequences,
 or fixed field arrays with a proven exact cardinality. Filtering cannot justify
 an exact fixed result size without additional evidence.

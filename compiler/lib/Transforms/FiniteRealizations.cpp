@@ -393,7 +393,7 @@ class Realizer {
   }
 
   SmallVector<Value> apply(CallbackRole role, CallbackValues actuals) {
-    auto callback = readCallback(computation, role);
+    auto callback = readCallbackABI(computation, role);
     if (failed(callback)) {
       failedHelper = true;
       return {};

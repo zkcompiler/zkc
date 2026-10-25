@@ -227,13 +227,13 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
                   ComputationDiagnostic &diagnostic) {
   // The original ABI has already been checked. This standard function is only
   // owned SSA storage; it does not change the partial callback's contract.
-  auto helper = dyn_cast<local::FuncOp>(callback.symbol);
+  auto helper = dyn_cast<local::FuncOp>(callback.abi.symbol);
   if (!helper || callback.exit != CallbackExit::Return)
     return {};
   auto result = std::make_shared<ComputationBody>();
   result->storage = mlir::ModuleOp::create(helper.getLoc());
   result->helper = func::FuncOp::create(helper.getLoc(), helper.getSymName(),
-                                        callback.signature);
+                                        callback.abi.signature);
   result->helper.setPrivate();
   if (auto premises = helper->getAttr("data.preconditions"))
     result->helper->setAttr("data.preconditions", premises);
@@ -243,20 +243,20 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
   auto &body = result->helper.front();
   auto *terminator = &body.back();
   ValueRange arguments = body.getArguments();
-  if (arguments.size() != callback.body->getNumArguments() ||
+  if (arguments.size() != callback.abi.entry->getNumArguments() ||
       !isa<func::ReturnOp>(terminator) ||
       terminator->getNumOperands() != callback.returned.size())
     return {};
   unsigned position = 0;
   for (ValueRange segment :
-       {callback.formals.state, callback.formals.items, callback.formals.domain,
-        callback.formals.captures})
+       {callback.abi.formals.state, callback.abi.formals.items,
+        callback.abi.formals.domain, callback.abi.formals.captures})
     for (Value original : segment) {
       if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
                                   &diagnostic.outcome))
         return {};
       auto formal = dyn_cast<BlockArgument>(original);
-      if (!formal || formal.getOwner() != callback.body ||
+      if (!formal || formal.getOwner() != callback.abi.entry ||
           formal.getArgNumber() != position || position >= arguments.size() ||
           original.getType() != arguments[position].getType() ||
           result->callbackValues.lookup(original) != arguments[position])
@@ -275,9 +275,9 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
   }
   // Preserve symbol/signature/role/exit as observations of the source callback.
   // Only body-relative references move to the checked positional SSA view.
-  auto formals = callback.formals;
-  callback.body = &body;
-  callback.formals = {
+  auto formals = callback.abi.formals;
+  callback.abi.entry = &body;
+  callback.abi.formals = {
       arguments.take_front(formals.state.size()),
       arguments.slice(formals.state.size(), formals.items.size()),
       arguments.slice(formals.state.size() + formals.items.size(),
@@ -637,7 +637,7 @@ public:
           return std::nullopt;
       }
     }
-    auto &body = *callback->body;
+    auto &body = *callback->abi.entry;
     ComputationView result;
     result.computation = c;
     result.numericalBody = std::move(numericalBody);
@@ -697,7 +697,7 @@ public:
                              .size();
         for (unsigned i = 0; i < count; ++i) {
           if (!charge(1 + pendingAxis.path.size()) ||
-              result.items.size() >= callback->formals.items.size())
+              result.items.size() >= callback->abi.formals.items.size())
             return std::nullopt;
           Axis axis;
           axis.identity = {result.occurrencePath, iteration.operation,
@@ -709,14 +709,14 @@ public:
                                      ? i
                                      : extentAxis(iteration.operation);
           }
-          result.items.push_back({position,
-                                  callback->formals.items[result.items.size()],
-                                  static_cast<unsigned>(result.axes.size())});
+          result.items.push_back(
+              {position, callback->abi.formals.items[result.items.size()],
+               static_cast<unsigned>(result.axes.size())});
           result.axes.push_back(std::move(axis));
         }
       }
     }
-    if (result.items.size() != callback->formals.items.size())
+    if (result.items.size() != callback->abi.formals.items.size())
       return std::nullopt;
     auto actual = [&](unsigned input) -> Value {
       return occurrence && input < occurrence->getNumOperands()
@@ -726,9 +726,9 @@ public:
     // Reorder checked callback formals into the entry ABI. Positions remain
     // distinct even when an occurrence passes one actual more than once.
     SmallVector<Value> entryFormals;
-    append_range(entryFormals, callback->formals.domain);
-    append_range(entryFormals, callback->formals.state);
-    append_range(entryFormals, callback->formals.captures);
+    append_range(entryFormals, callback->abi.formals.domain);
+    append_range(entryFormals, callback->abi.formals.state);
+    append_range(entryFormals, callback->abi.formals.captures);
     auto entry = partitionEntry(c, entryFormals);
     if (failed(entry) || (occurrence && !isDeclaration(occurrence) &&
                           failed(partitionEntry(c, occurrence->getOperands()))))
@@ -797,26 +797,27 @@ public:
       return true;
     };
     if (c.predicate) {
-      if (!charge(1 + callback->signature.getNumInputs()))
+      if (!charge(1 + callback->abi.signature.getNumInputs()))
         return std::nullopt;
       auto predicate = readCallback(c, CallbackRole::Predicate);
       if (failed(predicate))
         return std::nullopt;
-      auto environment = bindCallback(*predicate, {{},
-                                                   callback->formals.items,
-                                                   callback->formals.domain,
-                                                   callback->formals.captures});
+      auto environment =
+          bindCallback(predicate->abi, {{},
+                                        callback->abi.formals.items,
+                                        callback->abi.formals.domain,
+                                        callback->abi.formals.captures});
       if (failed(environment))
         return std::nullopt;
       result.predicateTerminator = predicate->terminator;
       llvm::DenseMap<Value, Value> predicateBindings;
       for (auto [formal, source] :
-           zip(predicate->body->getArguments(), environment->actuals)) {
+           zip(predicate->abi.entry->getArguments(), environment->actuals)) {
         result.predicateArguments.push_back({formal, source});
         Value resolved = bindings.lookup(source);
         predicateBindings[formal] = resolved ? resolved : source;
       }
-      if (!readPayload(*predicate->body, result.predicatePayload,
+      if (!readPayload(*predicate->abi.entry, result.predicatePayload,
                        predicateBindings))
         return std::nullopt;
       append_range(result.predicateResults, predicate->returned);

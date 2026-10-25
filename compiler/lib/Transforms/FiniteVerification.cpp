@@ -344,7 +344,7 @@ class Reader {
   SmallVector<Value> invoke(CallbackRole role, CallbackValues actuals) {
     // Reconstruct from this reader's immutable source and actual candidate
     // values. No selected producer environment participates in correspondence.
-    auto callback = readCallback(c, role);
+    auto callback = readCallbackABI(c, role);
     if (failed(callback)) {
       fail();
       return {};
@@ -397,7 +397,7 @@ class Reader {
         consumerEnv.push_back(value == composition->collected ? value
                                                               : rest[next++]);
       auto &consumer = composition->consumer;
-      auto callback = readCallback(consumer, CallbackRole::Step);
+      auto callback = readCallbackABI(consumer, CallbackRole::Step);
       if (failed(callback)) {
         fail();
         return {};

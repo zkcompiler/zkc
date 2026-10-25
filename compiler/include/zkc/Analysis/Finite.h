@@ -26,27 +26,34 @@ struct CallbackValues {
 };
 // Borrowed, checked views; rebuild after changing the source subject. These
 // describe only the ABI, not helper closure admission or expression meaning.
-struct CallbackView {
+struct CallbackABI {
   mlir::Operation *symbol;
-  mlir::Block *body;
+  mlir::Block *entry;
   mlir::FunctionType signature;
   CallbackRole role;
   CallbackValues formals;
+};
+// A stronger, single-block expression view. This view cannot describe a
+// general ordered CFG; callers needing only ports use CallbackABI instead.
+struct CallbackView {
+  CallbackABI abi;
   mlir::Operation *terminator;
   CallbackExit exit;
   mlir::ValueRange returned;
 };
 struct CallEnvironment {
-  CallbackView callback;
+  CallbackABI callback;
   // Complete formal order. Aliased actuals retain distinct formal positions.
   llvm::SmallVector<mlir::Value> actuals;
   mlir::FailureOr<mlir::Value> lookup(mlir::BlockArgument formal) const;
 };
 mlir::FailureOr<EntryValues> partitionEntry(const Computation &computation,
                                             mlir::ValueRange actuals);
+mlir::FailureOr<CallbackABI> readCallbackABI(const Computation &computation,
+                                             CallbackRole role);
 mlir::FailureOr<CallbackView> readCallback(const Computation &computation,
                                            CallbackRole role);
-mlir::FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
+mlir::FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
                                               CallbackValues actuals);
 mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);

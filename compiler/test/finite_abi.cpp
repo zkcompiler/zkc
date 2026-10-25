@@ -1,3 +1,5 @@
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -62,7 +64,7 @@ int main() {
     auto c = describeSymbol("fold");
     auto callback = readCallback(c, CallbackRole::Step);
     require(succeeded(callback), "step ABI refused");
-    const auto &f = callback->formals;
+    const auto &f = callback->abi.formals;
     require(f.state.size() == 2 && f.items.size() == 2 &&
                 f.domain.size() == 2 && f.captures.size() == 2,
             "partition mismatch");
@@ -72,10 +74,10 @@ int main() {
     require(succeeded(entry) && entry->initialState[0] == f.state[0] &&
                 entry->captures[1] == f.captures[1],
             "entry order changed");
-    auto env = bindCallback(*callback, {entry->initialState, f.items,
-                                        entry->domain, entry->captures});
+    auto env = bindCallback(callback->abi, {entry->initialState, f.items,
+                                            entry->domain, entry->captures});
     require(succeeded(env), "binding refused");
-    for (auto formal : callback->body->getArguments())
+    for (auto formal : callback->abi.entry->getArguments())
       require(*env->lookup(formal) == formal, "same type collapsed a position");
     require(callback->exit == CallbackExit::Return &&
                 callback->returned[0] == f.state[1] &&
@@ -86,9 +88,10 @@ int main() {
     auto c = describeSymbol("fold");
     auto callback = readCallback(c, CallbackRole::Step);
     require(succeeded(callback), "step ABI refused");
-    auto f = callback->formals;
+    auto f = callback->abi.formals;
     SmallVector<Value> repeated{f.state[0], f.state[0]};
-    auto env = bindCallback(*callback, {f.state, f.items, repeated, repeated});
+    auto env =
+        bindCallback(callback->abi, {f.state, f.items, repeated, repeated});
     require(succeeded(env) && env->actuals.size() == 8, "aliases collapsed");
     require(*env->lookup(cast<BlockArgument>(f.domain[0])) == f.state[0] &&
                 *env->lookup(cast<BlockArgument>(f.captures[1])) ==
@@ -103,17 +106,21 @@ int main() {
     auto step = readCallback(c, CallbackRole::Step);
     auto predicate = readCallback(c, CallbackRole::Predicate);
     require(succeeded(step) && succeeded(predicate), "callback refused");
-    auto f = step->formals;
-    auto env = bindCallback(*predicate, {{}, f.items, f.domain, f.captures});
+    auto f = step->abi.formals;
+    auto env =
+        bindCallback(predicate->abi, {{}, f.items, f.domain, f.captures});
     require(succeeded(env) && env->actuals.front() == f.items[0] &&
-                predicate->formals.state.empty(),
+                predicate->abi.formals.state.empty(),
             "predicate got state");
-    require(failed(bindCallback(*predicate, f)), "predicate accepted state");
-    require(failed(bindCallback(*step, {{}, f.items, f.domain, f.captures})),
-            "step accepted missing state");
+    require(failed(bindCallback(predicate->abi, f)),
+            "predicate accepted state");
+    require(
+        failed(bindCallback(step->abi, {{}, f.items, f.domain, f.captures})),
+        "step accepted missing state");
     SmallVector<Value> wrong{predicate->returned[0], f.domain[1]};
-    require(failed(bindCallback(*predicate, {{}, f.items, wrong, f.captures})),
-            "nominal type mismatch accepted");
+    require(
+        failed(bindCallback(predicate->abi, {{}, f.items, wrong, f.captures})),
+        "nominal type mismatch accepted");
     require(failed(partitionEntry(c, f.items)),
             "entry arity mismatch accepted");
     SmallVector<Value> wrongEntry{f.domain[0],   f.domain[1],
@@ -125,9 +132,9 @@ int main() {
   cases.run("collect item is distinct from collection result", [&] {
     auto c = describeSymbol("collect");
     auto body = readCallback(c, CallbackRole::Body);
-    require(succeeded(body) && body->formals.state.empty() &&
-                body->returned[0] == body->formals.items[1] &&
-                body->signature.getResult(0) != c.signature.getResult(0),
+    require(succeeded(body) && body->abi.formals.state.empty() &&
+                body->returned[0] == body->abi.formals.items[1] &&
+                body->abi.signature.getResult(0) != c.signature.getResult(0),
             "collect item treated as collection state");
     require(failed(readCallback(c, CallbackRole::Step)),
             "collect accepted step");
@@ -145,10 +152,79 @@ int main() {
     c = describeSymbol("zero");
     auto fresh = readCallback(c, CallbackRole::Step);
     require(succeeded(fresh) && fresh->exit == CallbackExit::Return &&
-                fresh->returned.empty() && fresh->symbol != callback->symbol,
+                fresh->returned.empty() &&
+                fresh->abi.symbol != callback->abi.symbol,
             "reread retained stale helper or lost empty return");
     require(succeeded(mlir::verify(*module)),
             "replacement did not remain admitted");
+  });
+  cases.run("ABI inspection does not weaken finite body admission", [&] {
+    auto c = describeSymbol("fold");
+    auto callback = readCallback(c, CallbackRole::Step);
+    require(succeeded(callback), "original callback refused");
+    auto *terminator = callback->terminator;
+    SmallVector<Value> original(terminator->getOperands());
+    terminator->setOperands(ValueRange{});
+    bool inspectable = succeeded(readCallbackABI(c, CallbackRole::Step));
+    bool expressionRefused = failed(readCallback(c, CallbackRole::Step));
+    std::string diagnostic;
+    bool admissionRefused;
+    {
+      ScopedDiagnosticHandler handler(&context, [&](Diagnostic &value) {
+        diagnostic += value.str();
+        return success();
+      });
+      admissionRefused = failed(finite::verify(c.operation));
+    }
+    terminator->setOperands(original);
+    require(inspectable && expressionRefused && admissionRefused &&
+                namesIdentifier(diagnostic, "finite-formation"),
+            "inspectable ports granted malformed-body admission");
+  });
+  cases.run("CFG ABI does not imply a single returned expression", [&] {
+    auto c = describeSymbol("fold");
+    auto original = readCallbackABI(c, CallbackRole::Step);
+    require(succeeded(original), "original ABI refused");
+    auto helper =
+        func::FuncOp::create(module->getLoc(), "cfg_step", original->signature);
+    helper.setPrivate();
+    module->getBody()->push_back(helper);
+    auto *entry = helper.addEntryBlock();
+    auto *tail = new Block();
+    helper.getBody().push_back(tail);
+    for (Type type : original->signature.getInputs())
+      tail->addArgument(type, helper.getLoc());
+    OpBuilder builder(&context);
+    builder.setInsertionPointToEnd(entry);
+    cf::BranchOp::create(builder, helper.getLoc(), tail, entry->getArguments());
+    builder.setInsertionPointToEnd(tail);
+    func::ReturnOp::create(
+        builder, helper.getLoc(),
+        ValueRange{tail->getArgument(1), tail->getArgument(6)});
+    require(succeeded(mlir::verify(helper)), "CFG fixture is malformed");
+    c.total = true;
+    c.helper = helper;
+    auto abi = readCallbackABI(c, CallbackRole::Step);
+    require(succeeded(abi) && abi->entry == entry &&
+                abi->formals.state[0] == entry->getArgument(0),
+            "CFG entry ABI refused or guessed from a successor");
+    require(failed(readCallback(c, CallbackRole::Step)),
+            "CFG was treated as one returned expression");
+    auto env = bindCallback(*abi, abi->formals);
+    require(succeeded(env) &&
+                *env->lookup(entry->getArgument(0)) == entry->getArgument(0) &&
+                failed(env->lookup(tail->getArgument(0))),
+            "same-numbered successor became an entry formal");
+    // ABI formation is not body, closure or totality admission. A current
+    // expression view must inspect the actual terminator even in one block.
+    entry->back().erase();
+    tail->erase();
+    builder.setInsertionPointToEnd(entry);
+    func::ReturnOp::create(builder, helper.getLoc(), ValueRange{});
+    require(succeeded(readCallbackABI(c, CallbackRole::Step)) &&
+                failed(readCallback(c, CallbackRole::Step)),
+            "ABI granted an invalid returned-expression view");
+    helper.erase();
   });
   return cases.result();
 }

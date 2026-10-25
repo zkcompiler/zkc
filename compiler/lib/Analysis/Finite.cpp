@@ -162,7 +162,7 @@ auto domainEvidence(const Computation &c, EvidenceWork &work, Query query) {
 }
 LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
                                 EvidenceWork &work) {
-  auto callback = readCallback(c, role);
+  auto callback = readCallbackABI(c, role);
   if (failed(callback))
     return failure();
   auto *helper = callback->symbol;
@@ -192,8 +192,8 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
       invariants[formal] = actual;
   }
   auto actual = [&](unsigned param) -> Value {
-    return param < callback->body->getNumArguments()
-               ? invariants.lookup(callback->body->getArgument(param))
+    return param < callback->entry->getNumArguments()
+               ? invariants.lookup(callback->entry->getArgument(param))
                : Value();
   };
   for (auto attr : attrs) {
@@ -432,7 +432,8 @@ FailureOr<EntryValues> partitionEntry(const Computation &c,
                      actuals.slice(c.arguments, c.states),
                      actuals.drop_front(c.arguments + c.states)};
 }
-FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
+FailureOr<CallbackABI> readCallbackABI(const Computation &c,
+                                       CallbackRole role) {
   if (!entryShape(c) || (role == CallbackRole::Step && c.collect) ||
       (role == CallbackRole::Body && !c.collect))
     return failure();
@@ -442,7 +443,7 @@ FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
                            : StringAttr();
   if (!type || !visibility || visibility.getValue() != "private" ||
       (c.total ? !isa<func::FuncOp>(helper) : !isa<local::FuncOp>(helper)) ||
-      helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+      helper->getNumRegions() != 1 || helper->getRegion(0).empty())
     return failure();
   auto &body = helper->getRegion(0).front();
   auto items =
@@ -468,26 +469,32 @@ FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
       type.getResults() != ArrayRef<Type>(outputs) || body.empty() ||
       !sameTypes(body.getArguments(), inputs))
     return failure();
-  auto *terminator = &body.back();
-  bool stop = !c.total && isa<local::StopOp>(terminator);
-  if (!stop && ((c.total ? !isa<func::ReturnOp>(terminator)
-                         : !isa<local::ReturnOp>(terminator)) ||
-                !sameTypes(terminator->getOperands(), outputs)))
-    return failure();
   ValueRange formals = body.getArguments();
+  return CallbackABI{helper,
+                     &body,
+                     type,
+                     role,
+                     {formals.take_front(states),
+                      formals.slice(states, items.size()),
+                      formals.slice(states + items.size(), c.arguments),
+                      formals.drop_front(states + items.size() + c.arguments)}};
+}
+FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
+  auto abi = readCallbackABI(c, role);
+  if (failed(abi) || !abi->entry->getParent()->hasOneBlock())
+    return failure();
+  auto *terminator = &abi->entry->back();
+  bool stop = !c.total && isa<local::StopOp>(terminator);
+  if (!stop &&
+      ((c.total ? !isa<func::ReturnOp>(terminator)
+                : !isa<local::ReturnOp>(terminator)) ||
+       !sameTypes(terminator->getOperands(), abi->signature.getResults())))
+    return failure();
   return CallbackView{
-      helper,
-      &body,
-      type,
-      role,
-      {formals.take_front(states), formals.slice(states, items.size()),
-       formals.slice(states + items.size(), c.arguments),
-       formals.drop_front(states + items.size() + c.arguments)},
-      terminator,
-      stop ? CallbackExit::Stop : CallbackExit::Return,
+      *abi, terminator, stop ? CallbackExit::Stop : CallbackExit::Return,
       stop ? ValueRange{} : ValueRange(terminator->getOperands())};
 }
-FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
+FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
                                         CallbackValues actuals) {
   CallEnvironment result{callback, {}};
   for (auto [formal, actual] :
@@ -502,7 +509,7 @@ FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
   return result;
 }
 FailureOr<Value> CallEnvironment::lookup(BlockArgument formal) const {
-  if (!formal || formal.getOwner() != callback.body ||
+  if (!formal || formal.getOwner() != callback.entry ||
       formal.getArgNumber() >= actuals.size())
     return failure();
   return actuals[formal.getArgNumber()];
@@ -539,6 +546,8 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
   if (failed(describe(op, c, nullptr, &symbols)))
     return failure();
   auto inputs = c.signature.getInputs();
+  // The current total/Local profile additionally requires its existing body
+  // shape. An inspectable ABI alone must not weaken finite admission.
   auto callback =
       readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
   if (failed(callback) ||
@@ -566,7 +575,7 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
       return refuse(op, "finite result policy");
   }
   EvidenceWork work(op);
-  if (failed(helperAssumptions(c, callback->role, work)) ||
+  if (failed(helperAssumptions(c, callback->abi.role, work)) ||
       (c.predicate &&
        failed(helperAssumptions(c, CallbackRole::Predicate, work))))
     return failure();
@@ -845,7 +854,7 @@ public:
     for (unsigned i = 0; i < c.arguments; ++i)
       admission.set(i);
     auto callback =
-        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+        readCallbackABI(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
     if (failed(callback))
       return failure();
     llvm::DenseMap<Value, BitVector> dependencies;
@@ -862,13 +871,13 @@ public:
     for (Value formal : callback->formals.items)
       dependencies[formal] = admission;
     SmallVector<BitVector> args;
-    for (Value formal : callback->body->getArguments())
+    for (Value formal : callback->entry->getArguments())
       args.push_back(dependencies.lookup(formal));
     if (c.predicate) {
       const Summary *predicate;
       if (failed(helper(c.predicate, predicate)))
         return failure();
-      auto predicateABI = readCallback(c, CallbackRole::Predicate);
+      auto predicateABI = readCallbackABI(c, CallbackRole::Predicate);
       if (failed(predicateABI))
         return failure();
       auto binding = bindCallback(*predicateABI, {{},
