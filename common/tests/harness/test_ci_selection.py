@@ -33,7 +33,7 @@ def check_output(output, expected):
     assert len(lines) == 3 and lines[2].startswith('smoke=')
     checks = lines[2].removeprefix('smoke=').split()
     assert checks == ([f'.#checks.x86_64-linux.smoke-{name}' for name in
-                       ['eip4844', 'fri', 'gkr', 'monero', 'schnorr', 'sigma', 'spongefish', 'stark', 'sumcheck']]
+                       ['eip4844', 'fri', 'gkr', 'monero', 'schnorr', 'sigma', 'spongefish', 'stark', 'sumcheck', 'table']]
                       if expected else [])
 
 

@@ -9,6 +9,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [Sigma compositions](sigma/README.md) | Schnorr AND with a shared challenge and Chaum–Pedersen with a shared witness, interactive and noninteractive |
 | [Sumcheck](sumcheck/README.md) | Public-table multilinear Sumcheck, [composition](sumcheck/composed/README.md), and a [product expression](sumcheck/product/README.md) with extension-field challenges |
 | [GKR](gkr/README.md) | Layered arithmetic circuits with public wiring: degree-two Sumcheck per layer and the line reduction |
+| [Exact tables](table/README.md) | Retained membership and indexed-read relations, direct evaluation and a separate AIR reciprocal control |
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |
 | [Committed opening](committed-opening/README.md) | One Keccak row commitment, one index request on a hash-chain transcript and an authenticated terminal opening |
 | [Fibonacci](fibonacci/README.md) | One STARK protocol applied to Clean and Plonky3 AIRs |

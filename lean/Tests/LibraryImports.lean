@@ -140,6 +140,7 @@ import Zkc.Semantics.Observation
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
 import Zkc.Semantics.StateInterpretation
+import Zkc.Semantics.TableRelation
 import Zkc.Semantics.WeakestPrecondition
 import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
@@ -425,6 +426,7 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import Tests.TableRelation
 import Tests.TargetElaboration
 import Tests.TransportReduction
 import ZkcExamples.Construction.ChaumPedersenProof

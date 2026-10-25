@@ -1,10 +1,11 @@
 #include "zkc/Translation/Entry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Dialect/Entry/IR/EntryOps.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
@@ -410,23 +411,31 @@ mlir::Type nativeType(mlir::MLIRContext *context, const json::Value &schema) {
     return mlir::IntegerType::get(context, 1);
   if (kind == "Index" || kind == "index")
     return mlir::IntegerType::get(context, 64);
-  return entry::ValueType::get(context, printJson(schema));
+  return data::ValueType::get(context, printJson(schema));
 }
 class Writer {
   mlir::OpBuilder builder;
   mlir::Location location;
+  mlir::Region *functionBody = nullptr;
+  mlir::Block *failure = nullptr;
   using Environment = std::map<int64_t, mlir::Value>;
   mlir::Operation *make(StringRef name, mlir::TypeRange types,
                         mlir::ValueRange inputs,
                         ArrayRef<mlir::NamedAttribute> attrs = {},
-                        unsigned regions = 0) {
+                        ArrayRef<mlir::Block *> successors = {}) {
     mlir::OperationState state(location, name);
     state.addTypes(types);
     state.addOperands(inputs);
     state.addAttributes(attrs);
-    for (unsigned i = 0; i < regions; ++i)
-      state.addRegion()->push_back(new mlir::Block);
+    state.addSuccessors(successors);
     return builder.create(state);
+  }
+  mlir::Block *block(mlir::TypeRange types = {}) {
+    auto *result = new mlir::Block;
+    functionBody->push_back(result);
+    for (auto type : types)
+      result->addArgument(type, location);
+    return result;
   }
   SmallVector<mlir::Type> types(const json::Array &values) {
     SmallVector<mlir::Type> result;
@@ -447,19 +456,15 @@ class Writer {
     for (auto [v, n] : zip(values, native))
       env.emplace(*v.getAsObject()->getInteger("id"), n);
   }
-  void body(const json::Value &value, mlir::Block &block, Environment env,
-            mlir::ValueRange incoming = {},
-            StringRef terminator = "func.return",
-            mlir::TypeRange continuation = {}) {
-    auto &b = *value.getAsObject();
-    auto &args = *b.getArray("arguments");
-    if (incoming.empty()) {
-      for (auto type : types(args))
-        block.addArgument(type, location);
-      bind(args, block.getArguments(), env);
-    } else
-      bind(args, incoming, env);
-    builder.setInsertionPointToEnd(&block);
+  void branch(mlir::Block *target, mlir::ValueRange values = {}) {
+    mlir::cf::BranchOp::create(builder, location, target, values);
+  }
+  void body(const json::Value &value, mlir::Block *start, Environment env,
+            mlir::ValueRange incoming, mlir::Block *continuation,
+            exec::OutcomeType resultType) {
+    const auto &b = *value.getAsObject();
+    bind(*b.getArray("arguments"), incoming, env);
+    builder.setInsertionPointToEnd(start);
     for (const auto &v : *b.getArray("operations")) {
       const auto &op = *v.getAsObject();
       auto name = *op.getString("op");
@@ -472,64 +477,98 @@ class Writer {
       auto attr = builder.getNamedAttr(
           "descriptor",
           builder.getStringAttr(printJson(json::Object(descriptor))));
-      mlir::Operation *actual;
-      if (name == "call") {
-        actual = make(
-            "func.call", outputs, inputs,
-            {builder.getNamedAttr(
-                "callee", mlir::FlatSymbolRefAttr::get(
-                              builder.getContext(), *op.getString("callee")))});
-      } else if (name == "if") {
-        actual = make("scf.if", outputs, mlir::ValueRange(inputs).take_front(),
-                      {}, 2);
-        actual->setAttr("entry.descriptor", builder.getStringAttr(printJson(
-                                                json::Object(descriptor))));
-        for (unsigned i = 0; i < 2; ++i) {
-          mlir::OpBuilder::InsertionGuard guard(builder);
-          body((*op.getArray("regions"))[i], actual->getRegion(i).front(), env,
-               mlir::ValueRange(inputs).drop_front(), "scf.yield", outputs);
-        }
+      SmallVector<mlir::Value> values;
+      if (name == "if") {
+        auto *next = block(outputs), *yes = block(), *no = block();
+        mlir::cf::CondBranchOp::create(builder, location, inputs[0], yes,
+                                       mlir::ValueRange{}, no,
+                                       mlir::ValueRange{});
+        body((*op.getArray("regions"))[0], yes, env,
+             ArrayRef(inputs).drop_front(), next, resultType);
+        body((*op.getArray("regions"))[1], no, env,
+             ArrayRef(inputs).drop_front(), next, resultType);
+        builder.setInsertionPointToEnd(next);
+        append_range(values, next->getArguments());
       } else if (name == "for") {
-        auto step =
-            mlir::arith::ConstantIntOp::create(builder, location, 1, 64);
-        SmallVector<mlir::Value> loopInputs{inputs[0], inputs[1], step};
-        append_range(loopInputs,
-                     mlir::ValueRange(inputs).slice(2, outputs.size()));
-        actual = make(
-            "scf.for", outputs, loopInputs,
-            {builder.getNamedAttr("unsignedCmp", builder.getUnitAttr())}, 1);
-        actual->setAttr("entry.descriptor", builder.getStringAttr(printJson(
-                                                json::Object(descriptor))));
-        auto &region = actual->getRegion(0).front();
-        region.addArgument(builder.getI64Type(), location);
-        for (auto t : outputs)
-          region.addArgument(t, location);
-        SmallVector<mlir::Value> incoming(region.getArguments());
-        append_range(incoming,
-                     mlir::ValueRange(inputs).drop_front(2 + outputs.size()));
-        mlir::OpBuilder::InsertionGuard guard(builder);
-        body((*op.getArray("regions"))[0], region, env, incoming, "scf.yield",
-             outputs);
+        SmallVector<mlir::Type> carriedTypes{builder.getI64Type()};
+        append_range(carriedTypes, outputs);
+        auto *next = block(outputs), *header = block(carriedTypes),
+             *iteration = block(), *latch = block(outputs);
+        SmallVector<mlir::Value> initial{inputs[0]};
+        append_range(initial, ArrayRef(inputs).slice(2, outputs.size()));
+        branch(header, initial);
+        builder.setInsertionPointToEnd(header);
+        auto condition = mlir::arith::CmpIOp::create(
+            builder, location, mlir::arith::CmpIPredicate::ult,
+            header->getArgument(0), inputs[1]);
+        mlir::cf::CondBranchOp::create(builder, location, condition, iteration,
+                                       mlir::ValueRange{}, next,
+                                       header->getArguments().drop_front());
+        SmallVector<mlir::Value> incoming(header->getArguments());
+        append_range(incoming, ArrayRef(inputs).drop_front(2 + outputs.size()));
+        body(op.getArray("regions")->front(), iteration, env, incoming, latch,
+             resultType);
+        builder.setInsertionPointToEnd(latch);
+        auto one = mlir::arith::ConstantIntOp::create(builder, location, 1, 64);
+        auto successor = mlir::arith::AddIOp::create(
+            builder, location, header->getArgument(0), one);
+        SmallVector<mlir::Value> advanced{successor};
+        append_range(advanced, latch->getArguments());
+        branch(header, advanced);
+        builder.setInsertionPointToEnd(next);
+        append_range(values, next->getArguments());
+      } else if (name == "match") {
+        auto *next = block(outputs);
+        SmallVector<mlir::Block *> arms;
+        for (const auto &arm : *op.getArray("regions"))
+          arms.push_back(
+              block(types(*arm.getAsObject()->getArray("arguments"))));
+        SmallVector<mlir::Attribute> names;
+        for (const auto &name : *op.getArray("alternatives"))
+          names.push_back(builder.getStringAttr(*name.getAsString()));
+        make(
+            "data.match", {}, inputs,
+            {builder.getNamedAttr("alternatives", builder.getArrayAttr(names))},
+            arms);
+        for (auto [arm, target] : zip(*op.getArray("regions"), arms))
+          body(arm, target, env, target->getArguments(), next, resultType);
+        builder.setInsertionPointToEnd(next);
+        append_range(values, next->getArguments());
       } else if (name == "stop") {
-        actual = make("entry.stop", continuation, {}, {attr});
-        make(terminator, {}, actual->getResults());
+        auto *stop = make(
+            "exec.stop", exec::StopType::get(builder.getContext()), {},
+            {builder.getNamedAttr(
+                "reason", builder.getStringAttr(*op.getString("reason")))});
+        branch(failure, stop->getResults());
         return;
+      } else if (name == "construct" || name == "unpack" || name == "project") {
+        auto *actual = make("data." + name.str(), outputs, inputs, {attr});
+        append_range(values, actual->getResults());
       } else {
-        // Match remains a typed payload-eliminating region boundary.
-        actual = make("entry." + name.str(), outputs, inputs, {attr},
-                      name == "match" ? op.getArray("regions")->size() : 0);
-        if (name == "match")
-          for (auto [i, arm] : enumerate(*op.getArray("regions"))) {
-            mlir::OpBuilder::InsertionGuard guard(builder);
-            body(arm, actual->getRegion(i).front(), env, {}, "entry.yield",
-                 outputs);
-          }
+        auto outcome = exec::OutcomeType::get(builder.getContext(), outputs);
+        mlir::Operation *actual;
+        if (name == "call")
+          actual = make(
+              "func.call", outcome, inputs,
+              {builder.getNamedAttr("callee", mlir::FlatSymbolRefAttr::get(
+                                                  builder.getContext(),
+                                                  *op.getString("callee")))});
+        else
+          actual = make("exec." + name.str(), outcome, inputs, {attr});
+        auto *next = block(outputs);
+        make("exec.dispatch", {}, actual->getResults(), {}, {next, failure});
+        builder.setInsertionPointToEnd(next);
+        append_range(values, next->getArguments());
       }
-      // Source-local block structure and captures are retained as schema data;
-      // executable operands/results always come from the actual SSA.
-      bind(*op.getArray("results"), actual->getResults(), env);
+      bind(*op.getArray("results"), values, env);
     }
-    make(terminator, {}, operands(*b.getArray("returns"), env));
+    auto values = operands(*b.getArray("returns"), env);
+    if (continuation)
+      branch(continuation, values);
+    else {
+      auto *outcome = make("exec.returned", resultType, values);
+      make("func.return", {}, outcome->getResults());
+    }
   }
 
 public:
@@ -540,12 +579,14 @@ public:
     module->setAttr("entry.root", builder.getStringAttr(root));
     for (const auto &f : plan.functions) {
       builder.setInsertionPointToEnd(module.getBody());
-      auto &signature = *f.getAsObject()->getObject("signature");
+      const auto &signature = *f.getAsObject()->getObject("signature");
       SmallVector<mlir::Type> inputs;
       for (const auto &p : *signature.getArray("parameters"))
-        inputs.push_back(nativeType(&*builder.getContext(),
-                                    *p.getAsObject()->get("schema")));
-      auto result = nativeType(builder.getContext(), *signature.get("result"));
+        inputs.push_back(
+            nativeType(builder.getContext(), *p.getAsObject()->get("schema")));
+      auto result = exec::OutcomeType::get(
+          builder.getContext(),
+          {nativeType(builder.getContext(), *signature.get("result"))});
       auto function = mlir::func::FuncOp::create(
           builder, location, *signature.getString("symbol"),
           builder.getFunctionType(inputs, {result}));
@@ -553,9 +594,14 @@ public:
                                                json::Object(signature))));
       function->setAttr("entry.body", builder.getStringAttr(printJson(
                                           *f.getAsObject()->get("body"))));
-      auto &block = function.getBody().emplaceBlock();
-      body(*f.getAsObject()->get("body"), block, {}, {}, "func.return",
-           function.getResultTypes());
+      functionBody = &function.getBody();
+      auto *entryBlock = block(inputs);
+      failure = block(exec::StopType::get(builder.getContext()));
+      builder.setInsertionPointToEnd(failure);
+      auto *stopped = make("exec.failed", result, failure->getArguments());
+      make("func.return", {}, stopped->getResults());
+      body(*f.getAsObject()->get("body"), entryBlock, {},
+           entryBlock->getArguments(), nullptr, result);
     }
     return module;
   }
@@ -648,6 +694,10 @@ namespace {
 class SSAReader {
   const Limits &limits;
   uint64_t count = 0;
+  mlir::Region *region = nullptr;
+  mlir::Region::iterator nextBlock;
+  mlir::Block *failure = nullptr;
+  exec::OutcomeType resultType;
   using Environment = std::map<int64_t, mlir::Value>;
   bool bind(const json::Array &values, mlir::ValueRange native,
             Environment &env) {
@@ -676,21 +726,65 @@ class SSAReader {
     }
     return true;
   }
-  bool body(const json::Value &shape, mlir::Block &block, Environment env,
-            mlir::ValueRange incoming = {},
-            StringRef terminator = "func.return", unsigned depth = 0) {
-    if (depth > limits.callDepth)
+  std::optional<SmallVector<mlir::Type>> types(const json::Array &values) {
+    SmallVector<mlir::Type> result;
+    for (const auto &v : values) {
+      auto *o = v.getAsObject();
+      if (!o || !o->get("schema"))
+        return std::nullopt;
+      auto type = nativeType(region->getContext(), *o->get("schema"));
+      if (!type)
+        return std::nullopt;
+      result.push_back(type);
+    }
+    return result;
+  }
+  mlir::Block *takeBlock(mlir::TypeRange types = {}) {
+    if (nextBlock == region->end())
+      return nullptr;
+    auto *block = &*nextBlock++;
+    return block->getArgumentTypes() == types ? block : nullptr;
+  }
+  static bool bare(mlir::Operation *op) {
+    return op->getDiscardableAttrDictionary().empty();
+  }
+  static bool branch(mlir::Operation *op, mlir::Block *target,
+                     mlir::ValueRange values) {
+    auto branch = mlir::dyn_cast<mlir::cf::BranchOp>(op);
+    return branch && bare(op) && branch.getDest() == target &&
+           branch.getDestOperands() == values;
+  }
+  static bool conditional(mlir::Operation *op, mlir::Value condition,
+                          mlir::Block *yes, mlir::Block *no,
+                          mlir::ValueRange noArgs = {}) {
+    auto branch = mlir::dyn_cast<mlir::cf::CondBranchOp>(op);
+    return branch && bare(op) && !branch.getBranchWeights() &&
+           branch.getCondition() == condition && branch.getTrueDest() == yes &&
+           branch.getFalseDest() == no &&
+           branch.getTrueDestOperands().empty() &&
+           branch.getFalseDestOperands() == noArgs;
+  }
+  bool body(const json::Value &shape, mlir::Block *start, Environment env,
+            mlir::ValueRange incoming, mlir::Block *continuation,
+            unsigned depth = 0) {
+    if (depth > limits.callDepth || !start)
       return false;
     auto *b = shape.getAsObject();
     if (!b || b->size() != 3 || !b->getArray("arguments") ||
-        !b->getArray("operations") || !b->getArray("returns"))
+        !b->getArray("operations") || !b->getArray("returns") ||
+        !bind(*b->getArray("arguments"), incoming, env))
       return false;
-    auto actualArgs = incoming.empty() ? block.getArguments() : incoming;
-    if (!bind(*b->getArray("arguments"), actualArgs, env))
-      return false;
-    auto cursor = block.begin();
+    auto *current = start;
+    auto cursor = current->begin();
+    auto take = [&]() -> mlir::Operation * {
+      return cursor == current->end() ? nullptr : &*cursor++;
+    };
+    auto advance = [&](mlir::Block *next) {
+      current = next;
+      cursor = current->begin();
+    };
     for (const auto &value : *b->getArray("operations")) {
-      if (++count > limits.operations || cursor == block.end())
+      if (++count > limits.operations)
         return false;
       auto *o = value.getAsObject();
       if (!o || !o->getString("op") || !o->getArray("operands") ||
@@ -704,114 +798,180 @@ class SSAReader {
           return false;
         data.push_back(env.at(*i));
       }
-      mlir::Operation *step = &*cursor++;
-      if (name == "for") {
-        auto constant = mlir::dyn_cast<mlir::arith::ConstantIntOp>(step);
-        if (!constant || constant.value() != 1 || cursor == block.end() ||
-            !constant.getType().isInteger(64) || step->getAttrs().size() != 1)
-          return false;
-        auto stepValue = step->getResult(0);
-        step = &*cursor++;
-        if (step->getNumOperands() != 3 + o->getArray("results")->size() ||
-            step->getOperand(2) != stepValue)
-          return false;
-      }
+      auto outputTypes = types(*o->getArray("results"));
+      if (!outputTypes)
+        return false;
+      auto *step = take();
+      if (!step)
+        return false;
+      SmallVector<mlir::Value> values;
       json::Object descriptor(*o);
       descriptor.erase("operands");
       descriptor.erase("results");
       descriptor.erase("regions");
-      if (name == "call") {
-        auto call = mlir::dyn_cast<mlir::func::CallOp>(step);
-        if (!call || call.getCallee() != o->getString("callee") ||
+      if (name == "if") {
+        auto *arms = o->getArray("regions");
+        auto *next = takeBlock(*outputTypes), *yes = takeBlock(),
+             *no = takeBlock();
+        if (!next || !yes || !no || !arms || arms->size() != 2 ||
+            data.empty() || !conditional(step, data.front(), yes, no) ||
+            cursor != current->end())
+          return false;
+        if (!body((*arms)[0], yes, env, ArrayRef(data).drop_front(), next,
+                  depth + 1) ||
+            !body((*arms)[1], no, env, ArrayRef(data).drop_front(), next,
+                  depth + 1))
+          return false;
+        advance(next);
+        append_range(values, next->getArguments());
+      } else if (name == "for") {
+        auto *arms = o->getArray("regions");
+        if (!arms || arms->size() != 1 ||
+            data.size() < 2 + outputTypes->size() ||
+            o->getInteger("carried") != int64_t(outputTypes->size()))
+          return false;
+        SmallVector<mlir::Type> headerTypes{
+            mlir::IntegerType::get(region->getContext(), 64)};
+        append_range(headerTypes, *outputTypes);
+        auto *next = takeBlock(*outputTypes), *header = takeBlock(headerTypes),
+             *iteration = takeBlock(), *latch = takeBlock(*outputTypes);
+        if (!next || !header || !iteration || !latch)
+          return false;
+        SmallVector<mlir::Value> initial{data.front()};
+        append_range(initial, ArrayRef(data).slice(2, outputTypes->size()));
+        if (!branch(step, header, initial) || cursor != current->end() ||
+            header->getOperations().size() != 2)
+          return false;
+        auto compare = mlir::dyn_cast<mlir::arith::CmpIOp>(header->front());
+        if (!compare || !bare(compare) ||
+            compare.getPredicate() != mlir::arith::CmpIPredicate::ult ||
+            compare.getLhs() != header->getArgument(0) ||
+            compare.getRhs() != data[1] ||
+            !conditional(&header->back(), compare.getResult(), iteration, next,
+                         header->getArguments().drop_front()))
+          return false;
+        SmallVector<mlir::Value> incoming(header->getArguments());
+        append_range(incoming,
+                     ArrayRef(data).drop_front(2 + outputTypes->size()));
+        if (!body(arms->front(), iteration, env, incoming, latch, depth + 1) ||
+            latch->getOperations().size() != 3)
+          return false;
+        auto one = mlir::dyn_cast<mlir::arith::ConstantIntOp>(latch->front());
+        auto add =
+            mlir::dyn_cast<mlir::arith::AddIOp>(*std::next(latch->begin()));
+        if (!one || !bare(one) || one.value() != 1 ||
+            !one.getType().isInteger(64) || !add || !bare(add) ||
+            add.getOverflowFlags() != mlir::arith::IntegerOverflowFlags::none ||
+            add.getLhs() != header->getArgument(0) ||
+            add.getRhs() != one.getResult())
+          return false;
+        SmallVector<mlir::Value> advanced{add.getResult()};
+        append_range(advanced, latch->getArguments());
+        if (!branch(&latch->back(), header, advanced))
+          return false;
+        advance(next);
+        append_range(values, next->getArguments());
+      } else if (name == "match") {
+        auto match = mlir::dyn_cast<data::MatchOp>(step);
+        auto *arms = o->getArray("regions");
+        auto *names = o->getArray("alternatives");
+        auto *next = takeBlock(*outputTypes);
+        if (!match || !next || !arms || !names ||
+            names->size() != arms->size() ||
+            match.getArms().size() != arms->size() ||
+            match.getAlternatives().size() != names->size() ||
+            step->getAttrs().size() != 1 ||
             !inputs(*o->getArray("operands"), step->getOperands(), env) ||
-            step->getAttrs().size() != 1)
+            cursor != current->end())
           return false;
-      } else if (name == "if" || name == "for") {
-        if (step->getName().getStringRef() !=
-                (name == "if" ? "scf.if" : "scf.for") ||
-            !step->getAttrOfType<mlir::StringAttr>("entry.descriptor") ||
-            step->getAttrOfType<mlir::StringAttr>("entry.descriptor")
-                    .getValue() != printJson(json::Object(descriptor)))
-          return false;
-        if (step->getAttrs().size() != (name == "if" ? 1 : 2) ||
-            (name == "for" &&
-             !step->getAttrOfType<mlir::UnitAttr>("unsignedCmp")))
-          return false;
-        auto *regions = o->getArray("regions");
-        if (!regions || regions->size() != step->getNumRegions() ||
-            data.empty())
-          return false;
-        if (name == "if" && (step->getNumOperands() != 1 ||
-                             data.front() != step->getOperand(0)))
-          return false;
-        if (name == "for" &&
-            (data.size() < 2 + step->getNumResults() ||
-             step->getOperand(0) != data[0] || step->getOperand(1) != data[1]))
-          return false;
-        for (auto [i, region] : enumerate(step->getRegions())) {
-          if (!hasSingleElement(region))
+        SmallVector<mlir::Block *> blocks;
+        for (auto [i, arm] : enumerate(*arms)) {
+          auto *a = arm.getAsObject();
+          if (!a || !a->getArray("arguments"))
             return false;
-          SmallVector<mlir::Value> incoming;
-          if (name == "if")
-            append_range(incoming, ArrayRef(data).drop_front());
-          else {
-            append_range(incoming, region.front().getArguments());
-            append_range(incoming,
-                         ArrayRef(data).drop_front(2 + step->getNumResults()));
-            for (unsigned j = 0; j < step->getNumResults(); ++j)
-              if (step->getOperand(j + 3) != data[j + 2])
-                return false;
-          }
-          if (!body((*regions)[i], region.front(), env, incoming, "scf.yield",
-                    depth + 1))
+          auto ts = types(*a->getArray("arguments"));
+          auto *block = ts ? takeBlock(*ts) : nullptr;
+          if (!block || match.getArms()[i] != block ||
+              !(*names)[i].getAsString() ||
+              mlir::cast<mlir::StringAttr>(match.getAlternatives()[i])
+                      .getValue() != *(*names)[i].getAsString())
+            return false;
+          blocks.push_back(block);
+        }
+        for (auto [arm, block] : zip(*arms, blocks))
+          if (!body(arm, block, env, block->getArguments(), next, depth + 1))
+            return false;
+        advance(next);
+        append_range(values, next->getArguments());
+      } else if (name == "stop") {
+        auto stop = mlir::dyn_cast<exec::StopOp>(step);
+        auto *edge = take();
+        return stop && edge && stop.getReason() == o->getString("reason") &&
+               step->getAttrs().size() == 1 && data.empty() &&
+               outputTypes->empty() &&
+               &value == &b->getArray("operations")->back() &&
+               b->getArray("returns")->empty() &&
+               branch(edge, failure, stop->getResults()) &&
+               cursor == current->end();
+      } else {
+        bool ordinary =
+            name == "construct" || name == "unpack" || name == "project";
+        if (name == "call") {
+          auto call = mlir::dyn_cast<mlir::func::CallOp>(step);
+          if (!call || call.getCallee() != o->getString("callee") ||
+              step->getAttrs().size() != 1)
+            return false;
+        } else {
+          auto attr = step->getAttrOfType<mlir::StringAttr>("descriptor");
+          if (step->getName().getStringRef() !=
+                  (ordinary ? "data." : "exec.") + name.str() ||
+              !attr || attr.getValue() != printJson(json::Object(descriptor)) ||
+              step->getAttrs().size() != 1)
             return false;
         }
-      } else {
-        if (step->getName().getStringRef() != "entry." + name.str() ||
-            !step->getAttrOfType<mlir::StringAttr>("descriptor") ||
-            step->getAttrOfType<mlir::StringAttr>("descriptor").getValue() !=
-                printJson(json::Object(descriptor)) ||
-            !inputs(*o->getArray("operands"), step->getOperands(), env) ||
-            step->getAttrs().size() != 1)
+        if (step->getNumRegions() || step->getNumSuccessors() ||
+            !inputs(*o->getArray("operands"), step->getOperands(), env))
           return false;
-        if (name == "match") {
-          auto *regions = o->getArray("regions");
-          if (!regions || regions->size() != step->getNumRegions())
+        if (ordinary)
+          append_range(values, step->getResults());
+        else {
+          if (name != "call" && name != "numeric" && name != "invoke" &&
+              name != "require" && name != "drop")
             return false;
-          for (auto [i, region] : enumerate(step->getRegions()))
-            if (!hasSingleElement(region) ||
-                !body((*regions)[i], region.front(), env, {}, "entry.yield",
-                      depth + 1))
-              return false;
-        } else if (step->getNumRegions())
-          return false;
+          auto *edge = take();
+          auto dispatch = mlir::dyn_cast_or_null<exec::DispatchOp>(edge);
+          auto *next = takeBlock(*outputTypes);
+          if (!dispatch || !next || step->getNumResults() != 1 ||
+              step->getResult(0).getType() !=
+                  exec::OutcomeType::get(region->getContext(), *outputTypes) ||
+              dispatch.getOutcome() != step->getResult(0) || !bare(edge) ||
+              dispatch.getReturned() != next ||
+              dispatch.getStopped() != failure || cursor != current->end())
+            return false;
+          advance(next);
+          append_range(values, next->getArguments());
+        }
       }
-      if (name == "stop") {
-        auto parent = block.getParentOp();
-        mlir::TypeRange continuation = parent->getResultTypes();
-        if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(parent))
-          continuation = function.getResultTypes();
-        if (!o->getArray("results")->empty() ||
-            !b->getArray("returns")->empty() ||
-            step->getResultTypes() != continuation || cursor == block.end())
-          return false;
-        auto &last = *cursor++;
-        return cursor == block.end() &&
-               last.getName().getStringRef() == terminator &&
-               last.getAttrs().empty() && last.getNumResults() == 0 &&
-               last.getNumRegions() == 0 &&
-               last.getOperands() == step->getResults();
-      }
-      if (!bind(*o->getArray("results"), step->getResults(), env))
+      if (!bind(*o->getArray("results"), values, env))
         return false;
     }
-    if (cursor == block.end())
+    auto *last = take();
+    if (!last)
       return false;
-    auto &last = *cursor++;
-    return cursor == block.end() &&
-           last.getName().getStringRef() == terminator &&
-           last.getAttrs().empty() &&
-           inputs(*b->getArray("returns"), last.getOperands(), env);
+    if (continuation) {
+      auto edge = mlir::dyn_cast<mlir::cf::BranchOp>(last);
+      return edge && bare(last) && edge.getDest() == continuation &&
+             inputs(*b->getArray("returns"), edge.getDestOperands(), env) &&
+             cursor == current->end();
+    }
+    auto returned = mlir::dyn_cast<exec::ReturnOp>(last);
+    auto *end = take();
+    auto ret = mlir::dyn_cast_or_null<mlir::func::ReturnOp>(end);
+    return returned && ret && bare(last) && bare(end) &&
+           returned.getOutcome().getType() == resultType &&
+           inputs(*b->getArray("returns"), returned.getValues(), env) &&
+           ret.getOperands() == returned->getResults() &&
+           cursor == current->end();
   }
 
 public:
@@ -823,7 +983,7 @@ public:
           function->getAttrOfType<mlir::StringAttr>("entry.signature");
       auto shape = function->getAttrOfType<mlir::StringAttr>("entry.body");
       if (!signature || !shape || function->getAttrs().size() != 4 ||
-          function.getBody().empty() || !hasSingleElement(function.getBody()))
+          function.getBody().empty())
         return error("source.correspondence", "invalid Host function");
       auto s = json::parse(signature.getValue()),
            b = json::parse(shape.getValue());
@@ -836,11 +996,16 @@ public:
           sig->getString("symbol") != function.getSymName() ||
           !sig->getArray("parameters") || !sig->get("result") ||
           function.getNumArguments() != sig->getArray("parameters")->size() ||
-          function.getFunctionType().getNumResults() != 1 ||
-          function.getFunctionType().getResult(0) !=
-              nativeType(module.getContext(), *sig->get("result")))
+          function.getFunctionType().getNumResults() != 1)
         return error("source.correspondence",
                      "Host signature differs from SSA");
+      auto payload = nativeType(module.getContext(), *sig->get("result"));
+      if (!payload)
+        return error("source.correspondence", "invalid Host result schema");
+      resultType = exec::OutcomeType::get(module.getContext(), {payload});
+      if (function.getFunctionType().getResult(0) != resultType)
+        return error("source.correspondence",
+                     "Host result must expose its outcome");
       for (auto [arg, p] :
            zip(function.getArguments(), *sig->getArray("parameters")))
         if (!p.getAsObject() || !p.getAsObject()->get("schema") ||
@@ -848,9 +1013,23 @@ public:
                                         *p.getAsObject()->get("schema")))
           return error("source.correspondence",
                        "Host parameter differs from SSA");
-      if (!body(*b, function.getBody().front(), {}))
+      region = &function.getBody();
+      nextBlock = std::next(region->begin());
+      failure = takeBlock(exec::StopType::get(module.getContext()));
+      if (!failure || failure->getOperations().size() != 2)
+        return error("source.correspondence", "missing terminal outcome block");
+      auto failed = mlir::dyn_cast<exec::FailureOp>(failure->front());
+      auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(failure->back());
+      if (!failed || !ret || !bare(failed) || !bare(ret) ||
+          failed.getStop() != failure->getArgument(0) ||
+          failed.getOutcome().getType() != resultType ||
+          ret.getOperands() != failed->getResults())
         return error("source.correspondence",
-                     "Host body differs from actual scoped SSA");
+                     "terminal stop was not propagated");
+      if (!body(*b, &region->front(), {}, function.getArguments(), nullptr) ||
+          nextBlock != region->end())
+        return error("source.correspondence",
+                     "Host body differs from actual control flow and outcomes");
       functions.push_back(
           json::Object{{"signature", std::move(*s)}, {"body", std::move(*b)}});
     }
@@ -907,11 +1086,12 @@ Expected<HostAnalysis> analyzeHostOriginal(const ClosedEntry &entry,
     report.operations += checked->operations;
     append_range(report.locations, checked->locations);
   }
-  module.walk([&](mlir::Operation *op) {
-    if (op->getName().getDialectNamespace() == "entry" ||
-        mlir::isa<mlir::scf::IfOp, mlir::scf::ForOp>(op))
-      ++report.operations;
-  });
+  // Nested numerical modules already contributed their checked operations.
+  for (auto function : module.getOps<mlir::func::FuncOp>())
+    function.walk([&](mlir::Operation *op) {
+      if (op != function.getOperation())
+        ++report.operations;
+    });
   return HostAnalysis{std::move(plan->calculations), std::move(*actual),
                       std::move(report)};
 }

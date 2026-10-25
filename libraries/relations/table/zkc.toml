@@ -1,0 +1,9 @@
+format = "zkc.project/0"
+
+[modules]
+table_relation = "lib.zkc"
+
+[dependencies]
+collections = "../../core/collections"
+primitive-collections = "../../core/primitives/collections"
+traversal = "../../core/traversal"

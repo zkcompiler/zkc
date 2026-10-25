@@ -329,11 +329,12 @@ Host operations cover product/variant construction and projection, unpacking,
 static Entry calls, numerical calculations, native invocations, if/match/for,
 require, drop and explicit stop. Every potential region and static reference is
 admitted before execution. Retained helpers form an acyclic static graph.
-The retained original uses standard `func` and `scf` control. Its `entry.stop`
-operation never returns; typed SSA results close only the immediate unreachable
-return/yield required by the enclosing region. The correspondence reader checks
-that exact continuation. These results do not construct data or execution authority;
-the executable Host stop has no results and bypasses the continuation.
+The retained original uses standard `func` and `cf` control with explicit
+[Exec outcomes](../ir/execution.md). Ordinary nominal construction belongs to
+Data. Every fallible call exposes a returned payload or terminal stop;
+`exec.dispatch` propagates the stop through the actual CFG. The independent
+reader checks the complete graph, actual operands and continuation arguments.
+The executable Host stop has no ordinary results and bypasses the suffix.
 Operation argument/result signatures, complete variant coverage, region captures
 and loop-carried values must agree; a reference cannot select a structurally
 similar deployment with a different generated identity.
