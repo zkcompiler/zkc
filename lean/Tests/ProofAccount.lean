@@ -23,7 +23,7 @@ theorem proof : 3 = 3 := reuse 3 rfl
 end auxiliary
 theorem auxiliary : 3 = 3 := auxiliary.proof
 
-meta def expectRefusal {m : Type → Type} [Monad m] [MonadExceptOf Exception m]
+meta def expectRefusal {α : Type} {m : Type → Type} [Monad m] [MonadExceptOf Exception m]
     [MonadLiftT BaseIO m] (label reason : String) (action : m α) : m Unit := do
   let refused ← try
     let _ ← action

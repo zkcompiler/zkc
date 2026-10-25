@@ -751,6 +751,7 @@ import ZkcExamples.Structured.UnitStateData
 import ZkcExamples.StructuredPrograms
 import ZkcTools.CommonSource.Reference
 import ZkcTools.JsonSupport
+import ZkcTools.ProofAccount
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bindings.Callbacks
 import ZkcTools.StructuredSource.Bindings.Calls
