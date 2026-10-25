@@ -120,13 +120,12 @@ discharge count admission; they do not make excess counts executable.
 
 ## Probability interpretation
 
-The owning optional manifests pin VCVio to
-`d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0`.
+The owning optional manifests select the exact VCVio revision recorded in the
+[dependency baseline](../dependencies.md).
 In `VCVio/OracleComp/Constructions/SampleableType/Basic.lean`, the
 `SampleableType.evalDist_selectElem_eq_uniform` field certifies the sampler's
 uniform measure; `SampleableType.evalDist_uniformSample` exports that law.
-`SampleableType/NativeMeasure.lean` derives singleton and finite-event counting
-laws. The [dependency baseline](../dependencies.md) records the tested pins.
+`SampleableType/Measure.lean` derives singleton and finite-event counting laws.
 
 A symbolic service name does not confer its law on another handler.
 Imported-root bounds add exact exported-snapshot association and source
