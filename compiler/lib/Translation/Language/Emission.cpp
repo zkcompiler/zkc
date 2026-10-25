@@ -1,4 +1,5 @@
 #include "DataPreconditions.h"
+#include "EmissionBudget.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
@@ -35,6 +36,7 @@ class Emitter {
   ArrayRef<Declaration> declared;
   const Limits &limits;
   mlir::MLIRContext &context;
+  EmissionBudget budget;
   mlir::OpBuilder builder;
   mlir::Location location;
   StringRef declaration;
@@ -47,7 +49,7 @@ class Emitter {
   std::map<std::pair<std::string, std::vector<bool>>, std::string> maps;
   std::set<std::string> symbols;
   Error failure = Error::success();
-  uint64_t operations = 0, siteOrdinal = 0, remaining;
+  uint64_t siteOrdinal = 0, remaining;
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
       failure = value.takeError();
@@ -71,7 +73,7 @@ class Emitter {
                         mlir::ValueRange inputs,
                         ArrayRef<mlir::NamedAttribute> attrs,
                         unsigned regions = 0) {
-    if (++operations > limits.operations) {
+    if (!budget.allows(1)) {
       failure = error("source.limit", "emitted operation limit exceeded");
       return nullptr;
     }
@@ -674,12 +676,11 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
         if (packed && packed->product) {
-          if (packed->flat->leaves.size() > limits.operations - operations) {
+          if (!budget.allows(packed->flat->leaves.size())) {
             failure = error("source.limit",
                             "total sequence projection operation limit");
             return false;
           }
-          operations += packed->flat->leaves.size();
           auto decoded =
               take(emitUnpack(builder, location, *packed, result.front(),
                               PackingMode::Mathematical, site + "_unpack"));
@@ -702,7 +703,7 @@ class Emitter {
           if (!packed)
             return false;
           if (local->contract == "sequence.append") {
-            if (packed->product && ++operations > limits.operations) {
+            if (!budget.allows(packed->product ? 1 : 0)) {
               failure =
                   error("source.limit", "emitted operation limit exceeded");
               return false;
@@ -727,8 +728,7 @@ class Emitter {
           return false;
         result = std::move(*emitted);
         if (packed && local->contract == "sequence.at") {
-          operations += packed->product ? 2 : 0;
-          if (operations > limits.operations) {
+          if (!budget.allows(packed->product ? 2 : 0)) {
             failure = error("source.limit", "emitted operation limit exceeded");
             return false;
           }
@@ -767,12 +767,11 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
       } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
-        auto emitted =
-            take(emitFinite(project, source, *finite,
-                            source.values[op.results.front().index].type,
-                            values, builder, location, *definitions, layouts,
-                            "finite_" + decl.symbol + "_" + site, site, limits,
-                            operations, remaining));
+        auto emitted = take(emitFinite(
+            project, source, *finite,
+            source.values[op.results.front().index].type, values, builder,
+            location, *definitions, layouts,
+            "finite_" + decl.symbol + "_" + site, site, budget, remaining));
         if (!emitted)
           return false;
         result = std::move(*emitted);
@@ -1173,9 +1172,10 @@ public:
           const Limits &limits, ArrayRef<Declaration> selected = {})
       : project(project),
         declared(selected.empty() ? project.declarations() : selected),
-        limits(limits), context(context), builder(&context),
-        location(builder.getUnknownLoc()), layouts(project, limits),
-        module(mlir::ModuleOp::create(location)), remaining(limits.work) {
+        limits(limits), context(context), budget(limits.operations),
+        builder(&context, &budget), location(builder.getUnknownLoc()),
+        layouts(project, limits), module(mlir::ModuleOp::create(location)),
+        remaining(limits.work) {
     for (const auto &decl : declared)
       if ((decl.body || (decl.relation && decl.origin)) &&
           decl.parameters.empty()) {
@@ -1338,6 +1338,8 @@ public:
       if (!make("relation.declare", {}, {}, attributes))
         return std::move(failure);
     }
+    if (!budget.allows())
+      return error("source.limit", "emitted operation limit exceeded");
     return std::move(module);
   }
   Expected<std::string> run() {

@@ -50,6 +50,9 @@ target_compile_definitions(zkc-execution_control_cursor-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-execution_control_cursor-test PRIVATE MLIRParser)
 
+add_zkc_test(source_emission_budget Translation source-emission-budget)
+mlir_target_link_libraries(zkc-source_emission_budget-test PRIVATE MLIRParser)
+
 add_zkc_test(execution_emission Translation execution-emission)
 target_compile_definitions(zkc-execution_emission-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

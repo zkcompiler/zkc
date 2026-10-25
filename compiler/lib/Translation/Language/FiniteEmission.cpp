@@ -1,4 +1,5 @@
 #include "DataPreconditions.h"
+#include "EmissionBudget.h"
 #include "Finite.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -20,8 +21,8 @@ class FiniteEmitter {
   Layouts &layouts;
   std::string prefix;
   StringRef site;
-  const Limits &limits;
-  uint64_t &operations, &remaining;
+  EmissionBudget &budget;
+  uint64_t &remaining;
   Error failure = Error::success();
   std::vector<Types> itemTypes;
   std::vector<unsigned> bodyPorts, predicatePorts;
@@ -42,13 +43,12 @@ class FiniteEmitter {
     remaining -= count;
     return true;
   }
-  bool count(uint64_t size = 1) {
-    if (size > limits.operations - std::min(operations, limits.operations)) {
+  bool canInsert(uint64_t size = 1) {
+    if (!budget.allows(size)) {
       failure =
           error("source.limit", "finite translation operation limit exceeded");
       return false;
     }
-    operations += size;
     return true;
   }
   mlir::NamedAttribute text(StringRef name, StringRef value) {
@@ -62,7 +62,7 @@ class FiniteEmitter {
                         mlir::ValueRange operands,
                         ArrayRef<mlir::NamedAttribute> attributes = {},
                         bool region = false) {
-    if (!count())
+    if (!canInsert())
       return nullptr;
     mlir::OperationState state(location, name);
     state.addTypes(results);
@@ -171,7 +171,7 @@ class FiniteEmitter {
       if (!charge(size + input.size()))
         return {};
       for (uint64_t i = 0; i < size; ++i) {
-        if (!count(packed->product ? 1 : 0))
+        if (!canInsert(packed->product ? 1 : 0))
           return {};
         auto item = take(emitPack(builder, location, *packed,
                                   block.getArguments().slice(i * width, width),
@@ -346,8 +346,8 @@ class FiniteEmitter {
             domainOperands[node.operands.front().index].getType())) {
       auto packed = take(layouts.packed(node.item));
       if (!packed ||
-          !count(packed->product ? (local ? 2 : packed->flat->leaves.size())
-                                 : 0))
+          !canInsert(packed->product ? (local ? 2 : packed->flat->leaves.size())
+                                     : 0))
         return {};
       return take(
           emitUnpack(builder, location, *packed, inputs.front(),
@@ -452,7 +452,7 @@ class FiniteEmitter {
       return false;
     Values result(call->getResults());
     if (packed) {
-      if (!count(packed->product ? 1 : 0))
+      if (!canInsert(packed->product ? 1 : 0))
         return false;
       auto value = take(emitPack(
           builder, location, *packed, result,
@@ -470,11 +470,11 @@ public:
                 ArrayRef<Values> values, mlir::OpBuilder &builder,
                 mlir::Location location, mlir::Block &definitions,
                 Layouts &layouts, StringRef prefix, StringRef site,
-                const Limits &limits, uint64_t &operations, uint64_t &remaining)
+                EmissionBudget &budget, uint64_t &remaining)
       : project(project), finite(finite), resultType(resultType),
         values(values), builder(builder), location(location),
         definitions(definitions), layouts(layouts), prefix(prefix), site(site),
-        limits(limits), operations(operations), remaining(remaining),
+        budget(budget), remaining(remaining),
         local(source.mode == Body::Mode::Local) {
     (void)!!failure;
   }
@@ -539,11 +539,11 @@ emitFinite(const ClosedEntry &project, const Body &source,
            const FiniteComputation &finite, const Type &resultType,
            ArrayRef<SmallVector<mlir::Value>> values, mlir::OpBuilder &builder,
            mlir::Location location, mlir::Block &definitions, Layouts &layouts,
-           StringRef prefix, StringRef site, const Limits &limits,
-           uint64_t &operations, uint64_t &remaining) {
+           StringRef prefix, StringRef site, EmissionBudget &budget,
+           uint64_t &remaining) {
   return FiniteEmitter(project, source, finite, resultType, values, builder,
-                       location, definitions, layouts, prefix, site, limits,
-                       operations, remaining)
+                       location, definitions, layouts, prefix, site, budget,
+                       remaining)
       .run();
 }
 } // namespace zkc::language
