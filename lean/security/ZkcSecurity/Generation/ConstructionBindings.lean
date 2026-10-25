@@ -46,7 +46,8 @@ def nominalSimp (layout : Layout) : String :=
     "ProtocolContext.enter", "qualifyProtocolSite", "roleSubstitution",
     "SumcheckVerifierLaws.lowSite", "SumcheckVerifierLaws.highSite", "SumcheckVerifierLaws.challengeSite",
     "SumcheckVerifierLaws.deliverySite", "Context.message", "Context.query", "Context.role",
-    "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw"])
+    "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw",
+    "Occurrence.round_label", "Occurrence.challenge_label", "Occurrence.delivery_label"])
 
 def routes (layout : Layout) (index : Nat) : String := Id.run do
   let occurrence := occurrenceName index
