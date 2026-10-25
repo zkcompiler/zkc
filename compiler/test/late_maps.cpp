@@ -111,7 +111,7 @@ std::string identityCaptureFixture(llvm::StringRef control) {
   std::string text = R"mlir(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
-!tag = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
+!tag = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
 module { "protocol.module"() ({
  func.func private @identity(%x:!F)->!F { func.return %x : !F }
  algebra.map_realize @mapped = @identity [true] : (!V)->!V

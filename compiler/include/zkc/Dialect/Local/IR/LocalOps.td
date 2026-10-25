@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_LOCAL_IR_LOCALOPS_TD
 
 include "zkc/Dialect/Types.td"
+include "zkc/Dialect/Local/IR/LocalDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
@@ -24,7 +25,7 @@ class LocalControlOp<string name> : Op<LocalDialect, name,
 def LocalForOp : LocalControlOp<"for"> {
   let description = [{
     Operands are lower, upper, initial carried values (one per result), then
-    non-affine captures. Bounds are bound index values (ui64 or plan.data), not
+    non-affine captures. Bounds are bound index values (ui64 or runtime.represented), not
     host MLIR index values. Evaluate bounds once and iterate [lower, upper) by
     one; inverted or equal bounds yield initial values. Runtime bounds and
     iteration limits apply before entering a body; no unsigned subtraction wraps.

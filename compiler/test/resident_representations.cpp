@@ -574,7 +574,7 @@ local.return %out : !F
                            {{"none", {}}, {"some", {"field:bls12-381.fr"}}}});
         require(bool(variant), "variant fixture");
         auto source =
-            "!Tag = !local.variant<\"" + *variant + "\">\n" +
+            "!Tag = !data.variant<\"" + *variant + "\">\n" +
             R"(!F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
 )" +

@@ -368,7 +368,7 @@ public:
       return success();
     }
     if (isa<data::GetOp, data::IsOp>(op)) {
-      auto type = cast<local::VariantType>(op->getOperand(0).getType());
+      auto type = cast<data::VariantType>(op->getOperand(0).getType());
       auto descriptor = protocol::decodeVariant(type.getDescriptor());
       if (!descriptor)
         return failure();

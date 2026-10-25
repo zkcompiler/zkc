@@ -770,7 +770,8 @@ class Proposer {
       notify(value);
     };
     auto aggregate = [&](Type type) {
-      auto logical = encodeBoundType(type, isa<zkc::plan::DataType>(type));
+      auto logical =
+          encodeBoundType(type, isa<zkc::runtime::RepresentedType>(type));
       if (!logical) {
         consumeError(logical.takeError());
         return false;
@@ -949,7 +950,7 @@ class Proposer {
                 container = type;
                 break;
               }
-          if (container && isa<zkc::plan::DataType>(container)) {
+          if (container && isa<zkc::runtime::RepresentedType>(container)) {
             auto selected = encodeBoundType(container, true);
             if (!selected)
               return selected.takeError();
@@ -958,7 +959,7 @@ class Proposer {
           }
           auto signature = resolveBinding(app, true);
           if (!signature) {
-            if (!container || !isa<zkc::plan::DataType>(container)) {
+            if (!container || !isa<zkc::runtime::RepresentedType>(container)) {
               consumeError(signature.takeError());
               continue;
             }
@@ -1037,7 +1038,7 @@ class Proposer {
         auto previousOutputs = d.outputs;
         bool loop = isa<zkc::local::LocalForOp>(op),
              match = isa<zkc::local::LocalMatchOp>(op);
-        if (match && !isa<zkc::plan::DataType>(
+        if (match && !isa<zkc::runtime::RepresentedType>(
                          valuePort(op->getOperand(0), plan, indices)))
           continue;
         unsigned offset = loop ? 2 : 1;
@@ -2388,7 +2389,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     // Explicit diagonal implementations also require all-uses preflight; they
     // do not have to be automatic, freshly cloned contraction groups.
     for (auto type : decision.outputs)
-      if (auto physical = dyn_cast<zkc::plan::DataType>(type))
+      if (auto physical = dyn_cast<zkc::runtime::RepresentedType>(type))
         if (isDiagonalRepresentation(physical.getRepresentation())) {
           auto uses = checkAllUses(op, plan, indices, failureLocation);
           if (!uses)

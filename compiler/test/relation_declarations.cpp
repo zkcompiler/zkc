@@ -15,7 +15,8 @@ using namespace zkc;
 int main() {
   DialectRegistry registry;
   registry.insert<relation::RelationDialect, algebra::AlgebraDialect,
-                  local::LocalDialect, data::DataDialect, func::FuncDialect>();
+                  local::LocalDialect, data::DataDialect,
+                  runtime::RuntimeDialect, func::FuncDialect>();
   MLIRContext context(registry), otherContext(registry);
   std::string refusal;
   auto handler = [&](Diagnostic &diagnostic) {
@@ -110,7 +111,7 @@ relation.declare @predicate {
                      std::vector<protocol::VariantAlternative> arms) {
     auto encoded = protocol::encodeVariant({name.str(), std::move(arms)});
     require(bool(encoded), "variant fixture failed");
-    return "!local.variant<\"" + encoded.value_or("") + "\">";
+    return "!data.variant<\"" + encoded.value_or("") + "\">";
   };
   const std::string record =
       variant("RelationData",
@@ -167,7 +168,7 @@ relation.declare @predicate {
   for (const auto &type : std::vector<std::string>{
            "i64", "tensor<2x2x" + fieldType + ">", "memref<2xi1>",
            "!algebra.fixed_vector<" + fieldType + ", 3>",
-           "!local.capability<\"rng:bls12-381.fr\">",
+           "!runtime.capability<\"rng:bls12-381.fr\">",
            variant("HiddenResource",
                    {{"None", {}}, {"Some", {"rng:bls12-381.fr"}}}),
            variant("HiddenKey",

@@ -395,12 +395,12 @@ int main() {
             "computation-entry"},
            {"affine port",
             "module @unit attributes {exec.computation} {func.func "
-            "@a(%r:!local.capability<\"rng:bls12-381.fr\">) {func.return}}",
+            "@a(%r:!runtime.capability<\"rng:bls12-381.fr\">) {func.return}}",
             "computation-entry"},
            {"dormant resource helper",
             "module @unit attributes {exec.computation} {func.func @a() "
             "{func.return} func.func "
-            "private @r(%r:!local.capability<\"rng:bls12-381.fr\">) "
+            "private @r(%r:!runtime.capability<\"rng:bls12-381.fr\">) "
             "{func.return}}",
             "mathematical-formation"},
            {"entry preconditions",
@@ -583,11 +583,11 @@ int main() {
   });
   cases.run("Kernel admission preserves affine Local state validation", [&] {
     rejects(profileUnit("protocol", work.str() + R"mlir(
-      local.func @unused(%x:!F,%resource:!local.capability<"rng:bls12-381.fr">)
-          -> (!local.capability<"rng:bls12-381.fr">,!local.capability<"rng:bls12-381.fr">)
+      local.func @unused(%x:!F,%resource:!runtime.capability<"rng:bls12-381.fr">)
+          -> (!runtime.capability<"rng:bls12-381.fr">,!runtime.capability<"rng:bls12-381.fr">)
           attributes {logical_origin=["unused",[]]} {
         %v = kernel.call @numbers::@entry(%x) {site="math"} : (!F)->!F
-        local.return %resource,%resource : !local.capability<"rng:bls12-381.fr">,!local.capability<"rng:bls12-381.fr">
+        local.return %resource,%resource : !runtime.capability<"rng:bls12-381.fr">,!runtime.capability<"rng:bls12-381.fr">
       }
     )mlir"),
             "interactive-resource-reuse", context);

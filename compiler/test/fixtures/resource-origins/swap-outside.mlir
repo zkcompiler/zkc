@@ -1,4 +1,4 @@
-!s = !local.capability<"rng:bls12-381.fr">
+!s = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
  local.func @swap(%a:!s,%b:!s,%lo:ui64,%hi:ui64) -> (!s,!s) attributes {logical_origin=["swap",[]]} {
   %next:2 = "local.for"(%lo,%hi,%a,%b) ({ ^body(%i:ui64,%x:!s,%y:!s):

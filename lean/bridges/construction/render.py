@@ -37,7 +37,7 @@ def nat(value, limit=1 << 20):
 def sort(value):
     """Return (Lean term, logical kind) for an exported MLIR type string."""
     require(isinstance(value, str), "type must be a string")
-    match = re.fullmatch(r'!local\.capability<"transcript:([^"\\]+)">', value)
+    match = re.fullmatch(r'!runtime\.capability<"transcript:([^"\\]+)">', value)
     if match:
         return f".transcript {text(match[1])}", ("transcript", match[1])
     if value == "!algebra.indices":

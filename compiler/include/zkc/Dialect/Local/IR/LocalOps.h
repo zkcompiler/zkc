@@ -11,7 +11,9 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/BoundOperations.h"
-#include "zkc/Dialect/Local/IR/LocalTypes.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Local/IR/LocalDialect.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #include "zkc/Interfaces/PreparationCallable.h"
 #define GET_OP_CLASSES

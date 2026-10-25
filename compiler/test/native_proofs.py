@@ -206,7 +206,7 @@ with case('constructed validator export checks the candidate first'):
     assert names.count('crypto.exec.indexed_transcript_challenge') == 1
     assert names.count('crypto.exec.indexed_transcript_observe_data') == 3
     sorts = exported[5] + [ty for instruction in exported[7] for ty in instruction[4]]
-    assert sorts[exported[8][-1]].startswith('!local.capability<"transcript:')
+    assert sorts[exported[8][-1]].startswith('!runtime.capability<"transcript:')
     candidate_path.write_text(changed)
     commands.run([compiler, 'protocol-constructed-participant', source_path, policy_path, candidate_path],
                  refuses='native-proof-correspondence')

@@ -27,7 +27,7 @@ spec = importlib.util.spec_from_file_location("constructed_participant", HERE / 
 renderer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(renderer)
 
-TRANSCRIPT = '!local.capability<"transcript:merlin3.bls12-381.fr64be/0">'
+TRANSCRIPT = '!runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">'
 FIELD = '!algebra.field<"bls12-381.fr">'
 INDICES = "!algebra.indices"
 

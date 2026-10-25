@@ -78,7 +78,7 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
 
   auto admitted = [&](Type type) {
     if (physical) {
-      auto selected = dyn_cast<plan::DataType>(type);
+      auto selected = dyn_cast<runtime::RepresentedType>(type);
       if (!selected)
         return false;
       type = selected.getLogical();
@@ -156,7 +156,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
   auto logical = [&](Type type) -> Type {
     if (!physical)
       return type;
-    auto selected = dyn_cast<plan::DataType>(type);
+    auto selected = dyn_cast<runtime::RepresentedType>(type);
     return selected ? selected.getLogical() : Type{};
   };
   unsigned remaining = 100000;
@@ -194,7 +194,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
         auto policy = types.get(logical(type));
         bool representation = true;
         if (physical && algebra::isFieldArray(logical(type))) {
-          auto selected = cast<plan::DataType>(type);
+          auto selected = cast<runtime::RepresentedType>(type);
           representation =
               selected.getRepresentation() == "arkworks.field-array/0";
         }

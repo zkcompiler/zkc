@@ -4,7 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
-#include "zkc/Dialect/Plan/IR/PlanTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/Json.h"
 using namespace mlir;
 using namespace llvm;
@@ -15,7 +15,7 @@ namespace {
 // profile owns vocabulary placement; their local invariants do not depend on
 // a particular callable or on the control operations surrounding the frame.
 Type localLogical(Type type) {
-  if (auto physical = dyn_cast<zkc::plan::DataType>(type))
+  if (auto physical = dyn_cast<zkc::runtime::RepresentedType>(type))
     return physical.getLogical();
   return type;
 }
@@ -78,7 +78,8 @@ variantPayloadTypes(const protocol::BoundType &bound,
 } // namespace
 LogicalResult zkc::local::VariantInjectOp::verify() {
   auto bound = protocol::encodeBoundType(
-      getOutput().getType(), isa<zkc::plan::DataType>(getOutput().getType()));
+      getOutput().getType(),
+      isa<zkc::runtime::RepresentedType>(getOutput().getType()));
   if (!bound) {
     consumeError(bound.takeError());
     return diagnostics::emit(emitOpError(), "variant-type");
@@ -103,7 +104,7 @@ LogicalResult zkc::local::VariantInjectOp::verify() {
 LogicalResult zkc::local::LocalMatchOp::verifyRegions() {
   if (getNumOperands() < 1)
     return diagnostics::emit(emitOpError(), "variant-type");
-  bool physical = isa<zkc::plan::DataType>(getOperand(0).getType());
+  bool physical = isa<zkc::runtime::RepresentedType>(getOperand(0).getType());
   auto bound = protocol::encodeBoundType(getOperand(0).getType(), physical);
   if (!bound) {
     consumeError(bound.takeError());

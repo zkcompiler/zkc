@@ -261,7 +261,7 @@ with case('unsupported-collect'):
     export((fixtures / 'finite/total-collect.mlir').read_text(), 'structured-source-operation')
 
 with case('unsupported-affine-helper-signature'):
-    helper = 'local.func @resource(%s:!local.capability<"rng:bls12-381.fr">) -> !local.capability<"rng:bls12-381.fr"> attributes {logical_origin=["resource",[]]} { local.return %s : !local.capability<"rng:bls12-381.fr"> }'
+    helper = 'local.func @resource(%s:!runtime.capability<"rng:bls12-381.fr">) -> !runtime.capability<"rng:bls12-381.fr"> attributes {logical_origin=["resource",[]]} { local.return %s : !runtime.capability<"rng:bls12-381.fr"> }'
     export(simple(helper), 'structured-source-type')
 
 with case('other-installed-identities-export-their-rows'):

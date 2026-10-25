@@ -28,6 +28,21 @@ required by its consumer. A storage width, argument position or shared external
 name does not establish those laws. A profile that identifies two values through
 a quotient or representation relation states that relation explicitly.
 
+## Native MLIR value owners
+
+Data owns `!data.variant<descriptor>`, the exact nominal sum and its ordered
+logical payload types. Runtime owns `!runtime.capability<kind>` and
+`!runtime.represented<logical, representation, [children]>`. The latter retains
+the logical type, exact installed representation and any selected child
+layouts; equal machine widths do not make two represented types equivalent.
+Its parser and independent binding adapter check the complete descriptor.
+
+A capability type names a logical resource kind. It grants no issuance,
+custody, setup, timing or invocation authority; those remain checks of the
+active runtime and installed implementation. These types neither introduce a
+new native carrier schema nor change the accepted wire language. Generic local
+control and compiler candidate selection do not own value types.
+
 ## Local Boolean operations
 
 `bool.not : bool → bool` returns Boolean negation. `bool.or` and `bool.and`
@@ -386,7 +401,7 @@ Slot selection must preserve exact nominal equality and inequality; truncation
 or an unchecked hash collision assumption does not establish that relation.
 The physical spelling is `resource_unit:D@logical.resource_unit/0`. Its empty
 payload is distinct from runtime bookkeeping for ownership and identity. MLIR
-uses `!local.capability<"resource_unit:D">` and the existing physical data wrapper.
+uses `!runtime.capability<"resource_unit:D">` and the existing physical data wrapper.
 No byte wire encoding is installed, including for the empty payload.
 
 The closed logical operations have one static slot argument `D`, no attributes,

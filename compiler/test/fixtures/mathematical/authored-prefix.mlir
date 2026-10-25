@@ -1,7 +1,7 @@
 // A returned retry skips a local suffix but still reaches the later send.
 !words = !algebra.indices
 !f = !algebra.field<"bls12-381.fr">
-!rng = !local.capability<"rng:bls12-381.fr">
+!rng = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
  "local.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()

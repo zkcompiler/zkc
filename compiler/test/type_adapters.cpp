@@ -114,7 +114,7 @@ int main() {
     return RankedTensorType::get({ShapedType::kDynamic}, element);
   };
   // These expectations are independent of adapter dispatch and freeze the
-  // native carriers, including the two commitment dialects.
+  // native carriers and their semantic owners.
   std::vector<std::pair<std::string, Type>> nativeCases{
       {"bool", IntegerType::get(&context, 1)},
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
@@ -136,13 +136,13 @@ int main() {
       {"point:" + field, zkc::poly::PointType::get(&context, field)},
       {"round:" + field, zkc::poly::QuadraticType::get(&context, field)},
       {"rng:" + field,
-       zkc::local::CapabilityType::get(&context, "rng:" + field)},
+       zkc::runtime::CapabilityType::get(&context, "rng:" + field)},
       {"nonce:" + field,
-       zkc::local::CapabilityType::get(&context, "nonce:" + field)},
+       zkc::runtime::CapabilityType::get(&context, "nonce:" + field)},
       {"transcript:" + transcript,
-       zkc::local::CapabilityType::get(&context, "transcript:" + transcript)},
+       zkc::runtime::CapabilityType::get(&context, "transcript:" + transcript)},
       {"resource_unit:Guard",
-       zkc::local::CapabilityType::get(&context, "resource_unit:Guard")},
+       zkc::runtime::CapabilityType::get(&context, "resource_unit:Guard")},
   };
   for (StringRef kind :
        {"commitment", "proof", "opening_state", "prover_key", "verifier_key"})
@@ -160,12 +160,12 @@ int main() {
     require(bool(descriptor), "variant fixture refused");
     auto bound = take(parseBoundType(*descriptor, false));
     require(decodeBoundType(&context, bound) ==
-                zkc::local::VariantType::get(&context, *descriptor),
+                zkc::data::VariantType::get(&context, *descriptor),
             "variant native carrier changed");
     roundTrip(context, bound, false);
     roundTrip(context, take(defaultRepresentation(bound)), true);
     nativeCases.emplace_back(
-        *descriptor, zkc::local::VariantType::get(&context, *descriptor));
+        *descriptor, zkc::data::VariantType::get(&context, *descriptor));
   });
   cases.run("resource unit physical wrapper", [&] {
     roundTrip(context,
@@ -226,9 +226,20 @@ int main() {
     MLIRContext fresh;
     fresh.loadDialect<zkc::algebra::AlgebraDialect>();
     auto bound = take(defaultRepresentation({"field", field, {}}));
-    require(!decodeBoundType(&fresh, bound), "unloaded plan dialect accepted");
-    require(!fresh.getLoadedDialect("plan"), "plan dialect was initialized");
+    require(!decodeBoundType(&fresh, bound),
+            "unloaded runtime dialect accepted");
+    require(!fresh.getLoadedDialect("runtime"),
+            "runtime dialect was initialized");
   });
+  for (StringRef spelling : {"!local.capability<\"resource_unit:Guard\">",
+                             "!local.variant<\"invalid\">", "!local.opaque",
+                             "!plan.data<i1, \"logical.bool/0\">"})
+    cases.run("retired value owner: " + spelling, [&] {
+      ScopedDiagnosticHandler silence(&context,
+                                      [](Diagnostic &) { return success(); });
+      require(!parseType(spelling, &context),
+              "retired type spelling retained a compatibility parser");
+    });
   cases.run(
       "shared commitment owner preserves polynomial and vector carriers", [&] {
         MLIRContext fresh;
@@ -275,8 +286,8 @@ int main() {
       {"field as PCS object",
        zkc::commitment::PolynomialObjectType::get(&context, field, "field")},
       {"field as capability",
-       zkc::local::CapabilityType::get(&context, "field:" + field)},
-      {"variant prefix", zkc::local::VariantType::get(&context, "invalid:")},
+       zkc::runtime::CapabilityType::get(&context, "field:" + field)},
+      {"variant prefix", zkc::data::VariantType::get(&context, "invalid:")},
       {"signless index", IntegerType::get(&context, 64)},
       {"signed index", IntegerType::get(&context, 64, IntegerType::Signed)},
       {"unsigned boolean",
@@ -316,8 +327,8 @@ int main() {
     });
   }
   auto logical = zkc::algebra::FieldType::get(&context, field);
-  auto physical =
-      zkc::plan::DataType::get(&context, logical, "arkworks.fr/0", {});
+  auto physical = zkc::runtime::RepresentedType::get(&context, logical,
+                                                     "arkworks.fr/0", {});
   cases.run("field-array domain and length identity", [&] {
     auto empty = zkc::algebra::FieldArrayType::get(&context, field, 0);
     auto array = zkc::algebra::FieldArrayType::get(&context, field, 4);
@@ -365,22 +376,22 @@ int main() {
             "binding-logical-type-at-physical-stage");
   });
   cases.run("nested physical wrapper", [&] {
-    refuses(encodeBoundType(zkc::plan::DataType::get(&context, physical,
-                                                     "arkworks.fr/0", {}),
+    refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
+                                &context, physical, "arkworks.fr/0", {}),
                             true),
             "binding-type");
   });
   cases.run("wrapped noncanonical tensor", [&] {
     auto tensor = RankedTensorType::get({2}, logical);
-    refuses(encodeBoundType(zkc::plan::DataType::get(
+    refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
                                 &context, tensor, "arkworks.fr-vector/0", {}),
                             true),
             "binding-type");
   });
   for (StringRef representation : {"", "uninstalled", "arkworks.g1/0"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {
-      refuses(encodeBoundType(zkc::plan::DataType::get(&context, logical,
-                                                       representation, {}),
+      refuses(encodeBoundType(zkc::runtime::RepresentedType::get(
+                                  &context, logical, representation, {}),
                               true),
               "binding-representation");
     });
@@ -389,8 +400,8 @@ int main() {
         zkc::commitment::PolynomialObjectType::get(&context, oracle, "proof");
     auto representation = take(defaultRepresentation({"proof", oracle, {}}));
     refuses(encodeBoundType(
-                zkc::plan::DataType::get(&context, object,
-                                         representation.representation, {}),
+                zkc::runtime::RepresentedType::get(
+                    &context, object, representation.representation, {}),
                 true),
             "binding-type");
   });

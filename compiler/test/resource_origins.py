@@ -181,7 +181,7 @@ with case('match payload roots are not inferred from aggregate construction'):
       %out = "local.match"(%box) ({ ^arm(%payload:!s):
         "local.yield"(%payload) : (!s)->()
       }) {alternatives=["box"],site="match"} : (!box)->!s
-      local.return %out : !s''').replace('module {', f'!box = !local.variant<"{tag}">\nmodule {{', 1)
+      local.return %out : !s''').replace('module {', f'!box = !data.variant<"{tag}">\nmodule {{', 1)
     commands.source('protocol-bundle', outside(text))
     refuse_root(text)
 

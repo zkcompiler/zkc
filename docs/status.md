@@ -33,6 +33,11 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Execution foundation
 
+Logical variants use Data-owned types; runtime capabilities and exact physical
+representation wrappers use Runtime-owned types. Their independent binding
+adapters preserve current native descriptors and installation checks. Local and
+Plan own no value types. See [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,

@@ -1,5 +1,5 @@
 !f = !algebra.field<"bls12-381.fr">
-!r = !local.capability<"rng:bls12-381.fr">
+!r = !runtime.capability<"rng:bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()

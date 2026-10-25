@@ -38,7 +38,7 @@ bool supportedPreservationEdge(protocol_ir::Profile before,
   return false;
 }
 Type logicalType(Type type) {
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     return physical.getLogical();
   return type;
 }

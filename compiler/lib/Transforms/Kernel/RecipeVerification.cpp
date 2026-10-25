@@ -348,7 +348,7 @@ class RecipeReader {
     if (isa<data::GetOp, data::IsOp>(source)) {
       auto target = dyn_cast_or_null<local::LocalMatchOp>(cursor);
       auto descriptor = protocol::decodeVariant(
-          cast<local::VariantType>(source->getOperand(0).getType())
+          cast<data::VariantType>(source->getOperand(0).getType())
               .getDescriptor());
       if (!target || !descriptor || target.getOperands() != inputs ||
           target.getNumRegions() != descriptor->alternatives.size() ||

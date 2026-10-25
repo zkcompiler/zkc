@@ -3,6 +3,14 @@
 include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Data/IR/DataDialect.td"
 include "zkc/Interfaces/Collection.td"
+include "zkc/Dialect/TypeBindings.td"
+def VariantSyntax : ZKC_SpecialType<"variant">;
+def Variant : TypeDef<DataDialect, "Variant"> {
+  let mnemonic = "variant";
+  let summary = "nominal sum with an exact closed logical payload descriptor";
+  let parameters = (ins StringRefParameter<"Canonical complete logical descriptor">:$descriptor);
+  let assemblyFormat = "`<` $descriptor `>`";
+}
 def Bytes : TypeDef<DataDialect, "Bytes",
     [DeclareTypeInterfaceMethods<CollectionTypeInterface>]> {
   let mnemonic = "bytes";

@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
                   : R"(%p = "algebra.exec.group_scale"(%g,%s) {binding=@work,site="scale",parameters=[]} : (!G,!F)->!G
 )";
           auto text =
-              R"(!T = !local.capability<"transcript:merlin3.bls12-381.fr64be/0">
+              R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
 !G = !algebra.group<"bls12-381.g2">
 !F = !algebra.field<"bls12-381.fr">
 !I = !algebra.indices

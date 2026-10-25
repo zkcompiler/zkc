@@ -1,5 +1,5 @@
-!s = !local.capability<"rng:bls12-381.fr">
-!u = !local.capability<"resource_unit:Slot.A">
+!s = !runtime.capability<"rng:bls12-381.fr">
+!u = !runtime.capability<"resource_unit:Slot.A">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Slot.A"],implementation=""} : ()->()
  local.func @never() attributes {logical_origin=["never",[]]} {

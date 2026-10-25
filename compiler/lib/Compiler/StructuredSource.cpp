@@ -148,7 +148,7 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
       return element.takeError();
     return json::Array{"sequence", std::move(*element)};
   }
-  if (auto product = dyn_cast<local::VariantType>(type)) {
+  if (auto product = dyn_cast<data::VariantType>(type)) {
     auto descriptor = decodeVariant(product.getDescriptor());
     if (!descriptor || descriptor->alternatives.size() != 1)
       return error("structured-source-product");

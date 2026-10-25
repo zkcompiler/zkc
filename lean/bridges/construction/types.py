@@ -95,7 +95,7 @@ def data_type(spelling, depth=0):
         return ["vector" if match[1] == "field_vector" else match[1], match[2]]
     if spelling.startswith("!data.sequence<") and spelling.endswith(">"):
         return ["sequence", data_type(spelling[15:-1], depth + 1)]
-    match = re.fullmatch(r'!local\.variant<"(variant:[0-9a-f]+)">', spelling)
+    match = re.fullmatch(r'!data\.variant<"(variant:[0-9a-f]+)">', spelling)
     if match:
         return descriptor(product_tree(match[1]), depth + 1)
     require(False, "unsupported constructed data type")

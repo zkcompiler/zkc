@@ -237,10 +237,11 @@ int main() {
                  kernel::KernelDialect, func::FuncDialect>(
           logical, [&](ModuleOp candidate, MLIRContext &fresh) {
             require(!fresh.getLoadedDialect<algebra::AlgebraDialect>() &&
-                        !fresh.getLoadedDialect<plan::PlanDialect>(),
+                        !fresh.getLoadedDialect<plan::PlanDialect>() &&
+                        !fresh.getLoadedDialect<runtime::RuntimeDialect>(),
                     "Kernel fixture unexpectedly loaded physical dialects");
             runChecked(candidate, protocol::createSelectPhysicalPass(),
-                       {"algebra", "plan"});
+                       {"algebra", "plan", "runtime"});
             require(count(candidate, "plan.apply") == 1 &&
                         !count(candidate, "algebra.exec.bool_and") &&
                         !computationCount(candidate) &&

@@ -664,7 +664,7 @@ public:
           for (const auto &site : rule.sites)
             rules[site] = &rule;
     } else {
-      stateTypes.push_back(local::CapabilityType::get(
+      stateTypes.push_back(runtime::CapabilityType::get(
           candidate.getContext(), "transcript:" + policy.suite));
     }
     for (const auto &invocation : invocations) {

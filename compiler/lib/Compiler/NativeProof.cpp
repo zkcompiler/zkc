@@ -967,8 +967,8 @@ public:
     if (record.getInterfaces().size() != 1)
       return error("native-proof-entry");
     auto original = cast<DictionaryAttr>(record.getInterfaces()[0]);
-    auto stateType = local::CapabilityType::get(module.getContext(),
-                                                "transcript:" + policy.suite);
+    auto stateType = runtime::CapabilityType::get(module.getContext(),
+                                                  "transcript:" + policy.suite);
     SmallVector<Type> stateTypes;
     if (plan)
       stateTypes = plan->state;
@@ -1467,7 +1467,7 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   bool allowed = false;
   auto checkType = [&](Type type) {
     type.walk([&](Type nested) {
-      if (auto cap = dyn_cast<local::CapabilityType>(nested))
+      if (auto cap = dyn_cast<runtime::CapabilityType>(nested))
         transcript |=
             cap.getKind().starts_with("transcript:") &&
             (!allowed || cap.getKind() != "transcript:" + policy.suite);

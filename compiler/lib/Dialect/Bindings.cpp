@@ -91,7 +91,7 @@ Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
         return {};
       children.push_back(decoded);
     }
-  return type_adapters::loadedType<zkc::plan::DataType>(
+  return type_adapters::loadedType<zkc::runtime::RepresentedType>(
       ctx, result, t.representation, children);
 }
 
@@ -100,7 +100,7 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
     return error("binding-type");
   Type original = type;
   std::string rep;
-  if (auto data = dyn_cast<zkc::plan::DataType>(type)) {
+  if (auto data = dyn_cast<zkc::runtime::RepresentedType>(type)) {
     if (!physical)
       return error("binding-physical-type-at-logical-stage");
     rep = data.getRepresentation().str();
@@ -112,7 +112,8 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
     return result.takeError();
   if (physical) {
     std::vector<BoundType> children;
-    for (auto child : cast<zkc::plan::DataType>(original).getChildren()) {
+    for (auto child :
+         cast<zkc::runtime::RepresentedType>(original).getChildren()) {
       auto encoded = encodeBoundType(child, true);
       if (!encoded)
         return encoded.takeError();

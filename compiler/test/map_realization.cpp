@@ -662,7 +662,8 @@ module { "protocol.module"() ({
   // affine value inside a repeat. Preparation-time declarations have no body
   // yet and only data ports, so both kinds are admitted there.
   cases.run("preparation callables inside an affine local body", [&] {
-    constexpr StringLiteral body = R"(!s = !local.capability<"rng:bls12-381.fr">
+    constexpr StringLiteral body =
+        R"(!s = !runtime.capability<"rng:bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({

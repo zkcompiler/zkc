@@ -246,8 +246,9 @@ int main() {
   cases.run("unclassified native types", [&] {
     for (Type type :
          {Type(IntegerType::get(&context, 32)),
-          Type(local::OpaqueType::get(&context, "arbitrary")),
-          Type(local::CapabilityType::get(&context, "uninstalled:any"))})
+          Type(OpaqueType::get(StringAttr::get(&context, "uninstalled"),
+                               "arbitrary")),
+          Type(runtime::CapabilityType::get(&context, "uninstalled:any"))})
       require(!mathematical::nativeTypePolicy(type),
               "unclassified type acquired permission");
   });
@@ -274,7 +275,7 @@ int main() {
           {"Type" + std::to_string(i),
            {{"Values", std::vector<std::string>(128, "bool")}}});
       require(bool(spelling), "budget fixture failed");
-      return local::VariantType::get(&context, *spelling);
+      return data::VariantType::get(&context, *spelling);
     };
     auto repeated = make(0);
     for (unsigned i = 0; i != 100000; ++i)

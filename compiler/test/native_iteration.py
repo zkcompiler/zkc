@@ -60,7 +60,7 @@ with case('recipe carrier includes unused scalar expressions'):
     for options in [(), ('--no-simplify',)]:
         commands.source('protocol-bundle', changed, *options, refuses='polynomial-formation')
 with case('exact affine roots through zero or many iterations'):
-    affine = '''!r = !local.capability<"rng:bls12-381.fr">
+    affine = '''!r = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%n:ui64,%a:!r,%b:!r):
    %out:2 = "protocol.repeat"(%n,%a,%b) ({ ^body(%i:ui64,%left:!r,%right:!r):
@@ -95,7 +95,7 @@ with case('typed Groth16 proof product retains nominal group fields'):
     proof = descriptor('Groth16Proof', [('proof', ['group:bn254.g1', 'group:bn254.g2', 'group:bn254.g1'])])
     source = f'''!g1 = !algebra.group<"bn254.g1">
 !g2 = !algebra.group<"bn254.g2">
-!proof = !local.variant<"{proof}">
+!proof = !data.variant<"{proof}">
 module {{ "protocol.module"() ({{
  "protocol.func"() ({{ ^entry(%a:!g1,%b:!g2,%c:!g1):
    %p = "data.make"(%a,%b,%c) {{alternative="proof"}} : (!g1,!g2,!g1)->!proof

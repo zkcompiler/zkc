@@ -36,7 +36,7 @@ bool portType(Type type, NativeTypePolicies &types) {
   return policy && policy->protocolPort;
 }
 Type logicalType(Type type) {
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     return physical.getLogical();
   return type;
 }
@@ -98,7 +98,7 @@ struct MetadataVerifier {
         return failure();
       if (auto release = dyn_cast<plan::ReleaseOp>(op)) {
         if (any_of(release.getOperands(), [&](Value value) {
-              return isa<local::CapabilityType>(logicalType(value.getType()));
+              return isa<runtime::CapabilityType>(logicalType(value.getType()));
             }))
           return refuse(record, "invalid inserted transcript helper");
         continue;
@@ -274,8 +274,8 @@ struct MetadataVerifier {
       if (hostRoot) {
         auto capability =
             stateTypes.size() == 1
-                ? dyn_cast<local::CapabilityType>(stateTypes.front())
-                : local::CapabilityType();
+                ? dyn_cast<runtime::CapabilityType>(stateTypes.front())
+                : runtime::CapabilityType();
         if (!capability || !capability.getKind().starts_with("transcript:") ||
             protocol::nativeChallengeField(capability.getKind().drop_front(11))
                 .empty())

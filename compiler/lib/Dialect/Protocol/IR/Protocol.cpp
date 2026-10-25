@@ -136,7 +136,7 @@ LogicalResult zkc::protocol_ir::ProtocolLoopOp::verifyRegions() {
       getParameter() || !getCount().empty())
     return diagnostics::emit(emitOpError(), "interactive-loop-count");
   Type type = getInputs().front().getType();
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     type = physical.getLogical();
   if (!type.isUnsignedInteger(64))
     return diagnostics::emit(emitOpError(), "interactive-loop-count");
@@ -224,7 +224,7 @@ LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
     return diagnostics::emit(emitOpError(), "interactive-return-type", detail);
   };
   Type condition = getCondition().getType();
-  if (auto wrapper = dyn_cast<plan::DataType>(condition))
+  if (auto wrapper = dyn_cast<runtime::RepresentedType>(condition))
     condition = wrapper.getLogical();
   if (!condition.isSignlessInteger(1))
     return reject("conditional completion requires a Boolean condition");
@@ -261,7 +261,7 @@ LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
   SmallVector<Type> affine;
   for (Type type : expected) {
     auto logical = type;
-    if (auto wrapper = dyn_cast<plan::DataType>(logical))
+    if (auto wrapper = dyn_cast<runtime::RepresentedType>(logical))
       logical = wrapper.getLogical();
     auto policy = policies.get(logical);
     if (!policy)

@@ -15,14 +15,24 @@ def fixture():
     policy = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "suite",
               ["1"], ["0"], [], "zkc.framed/0", ""]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
-             ["i1", "!local.capability<\"transcript:suite\">"],
-             ["!local.capability<\"transcript:suite\">"], [], [1], []]
+             ["i1", "!runtime.capability<\"transcript:suite\">"],
+             ["!runtime.capability<\"transcript:suite\">"], [], [1], []]
     validator = deepcopy(child)
     validator[4] = "validator"
     return [pair.FORMAT, child, validator]
 
 
 class PairReader(unittest.TestCase):
+    def test_transcript_type_has_one_runtime_owner(self):
+        self.assertEqual(pair.participant.sort('!runtime.capability<"transcript:suite">')[1],
+                         ("transcript", "suite"))
+        for spelling in ['!local.capability<"transcript:suite">',
+                         '!runtime.capability<"rng:suite">',
+                         '!runtime.capability<"transcript:suite"> trailing']:
+            with self.subTest(spelling=spelling), self.assertRaisesRegex(
+                    ValueError, "unsupported exported type"):
+                pair.participant.sort(spelling)
+
     def test_exact_envelope(self):
         data = fixture()
         self.assertEqual(pair.decode(data, expected=deepcopy(data)), tuple(data[1:]))

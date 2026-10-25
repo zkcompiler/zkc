@@ -11,7 +11,6 @@
 #include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
-#include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Interfaces/Mathematical.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Data/IR/dataOps.h.inc"

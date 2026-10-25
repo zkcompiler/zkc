@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
     plan.services.assign(selected.services.begin(), selected.services.end());
     plan.nativeBase = true;
     plan.state.push_back(
-        local::CapabilityType::get(&context, "transcript:" + selected.suite));
+        runtime::CapabilityType::get(&context, "transcript:" + selected.suite));
     if (auto error = zkc::detail::verifyNativeTranscript(
             *projected, *candidate, selected, events, &plan))
       throw std::runtime_error(toString(std::move(error)));

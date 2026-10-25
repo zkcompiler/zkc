@@ -6,7 +6,6 @@ include "zkc/Dialect/Base.td"
 def PlanDialect : ZKCDialect {
   let name = "plan";
   let cppNamespace = "::zkc::plan";
-  let useDefaultTypePrinterParser = 1;
 }
 
 #endif

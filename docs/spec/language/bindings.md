@@ -70,7 +70,7 @@ atomic constructors check their explicit admitted identity sets.
 A physical type adds one outer `@representation`. That representation must
 support the complete logical application, including every nested type and natural
 argument. Missing support is a physical-selection refusal, not a malformed
-logical type. MLIR retains both parts in `!plan.data<logical, representation>`;
+logical type. MLIR retains both parts in `!runtime.represented<logical, representation>`;
 domain-owned logical MLIR types preserve their static arguments before planning.
 The [nominal collection types](../ir/iteration.md) map directly to the existing
 `vector:F`, `groups:G`, `indices`, `matrix:F` and `field_array<F,N>` constructors.

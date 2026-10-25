@@ -147,7 +147,8 @@ module { "protocol.module"() ({
                     take(encodeBoundType(xs.getType(), false)))) == physical &&
                 take(encodeBoundType(physicalType, true)) == physical &&
                 decodeBoundType(&context, logical) == vector &&
-                cast<plan::DataType>(physicalType).getLogical() == vector,
+                cast<runtime::RepresentedType>(physicalType).getLogical() ==
+                    vector,
             "value evidence changed logical or physical encoding");
   });
   return cases.result();

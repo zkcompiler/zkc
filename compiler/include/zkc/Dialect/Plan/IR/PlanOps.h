@@ -10,7 +10,8 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/BoundOperations.h"
-#include "zkc/Dialect/Plan/IR/PlanTypes.h"
+#include "zkc/Dialect/Plan/IR/PlanDialect.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Plan/IR/planOps.h.inc"

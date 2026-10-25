@@ -3,7 +3,7 @@
 !g = !algebra.group<"bls12-381.g1">
 !fs = !algebra.field_vector<"bls12-381.fr">
 !gs = !algebra.group_vector<"bls12-381.g1">
-!r = !local.capability<"rng:bls12-381.fr">
+!r = !runtime.capability<"rng:bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
   "local.binding"() {sym_name="random_draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()

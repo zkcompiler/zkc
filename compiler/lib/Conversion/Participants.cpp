@@ -22,6 +22,7 @@ LogicalResult lowerPhysical(
   if (stats)
     *stats = {};
   module.getContext()->getOrLoadDialect<zkc::plan::PlanDialect>();
+  module.getContext()->getOrLoadDialect<zkc::runtime::RuntimeDialect>();
   if (failed(verify(module)))
     return failure();
   if (!llvm::hasSingleElement(*module.getBody()))
@@ -75,7 +76,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
            "role programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<zkc::plan::PlanDialect>();
+    registry.insert<zkc::plan::PlanDialect, zkc::runtime::RuntimeDialect>();
     kernel::createLowerKernelsPass()->getDependentDialects(registry);
   }
   void runOnOperation() final {

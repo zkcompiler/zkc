@@ -1,7 +1,7 @@
 """Small source builder for exact resource-origin composition controls."""
 
 def source(body):
-    return '''!s = !local.capability<"rng:bls12-381.fr">
+    return '''!s = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
  local.func @step(%s:!s,%go:i1,%lo:ui64,%hi:ui64) -> !s attributes {logical_origin=["step",[]]} {
  BODY

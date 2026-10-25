@@ -134,7 +134,7 @@ with case("total operations and checked indexing"):
         assert "native/sequence.at" in json.loads(bundle)["candidate"]
         (OUT / f"checked{suffix}.bundle").write_text(bundle)
 with case("affine element rejected at type formation"):
-    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!local.capability<"rng:bls12-381.fr">>'),
+    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<"rng:bls12-381.fr">>'),
                       refuses="copyable and discardable")
 with case("complete MLIR sequence type obeys structural depth"):
     element = "ui64"

@@ -240,7 +240,7 @@ local.return %n : ui64
 )";
   auto variant = *encodeVariant(
       {"Inferred", {{"none", {}}, {"some", {"sequence<field:bls12-381.fr>"}}}});
-  return "!Tag = !local.variant<\"" + variant + "\">\n" +
+  return "!Tag = !data.variant<\"" + variant + "\">\n" +
          R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" +
@@ -664,7 +664,7 @@ local.return %n : ui64
         *encodeVariant({"IndependentPayloads",
                         {{"left", {"sequence<field:bls12-381.fr>"}},
                          {"right", {"sequence<field:bls12-381.fr>"}}}});
-    auto source = "!Tag = !local.variant<\"" + variant + "\">\n" + R"(
+    auto source = "!Tag = !data.variant<\"" + variant + "\">\n" + R"(
 !F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" +
@@ -1032,7 +1032,7 @@ local.return %out : !A
                           take(parseBoundType("fixed_vector<field:bls12-381.fr,"
                                               "2>@blst/fixed-vector[blst/fr]",
                                               true))}));
-        auto source = "!Tag = !local.variant<\"" + variant + "\">\n" +
+        auto source = "!Tag = !data.variant<\"" + variant + "\">\n" +
                       R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>
@@ -1362,7 +1362,7 @@ local.return %out : !F
     auto origin = take(encodeNativeOriginTemplate(
         "main", {}, {"message", "Round", "response", "response", "P", "V"}));
     auto source =
-        R"(!T = !local.capability<"transcript:merlin3.bls12-381.fr64be/0">
+        R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !I = !algebra.indices
 )" + mathematicalFixture(

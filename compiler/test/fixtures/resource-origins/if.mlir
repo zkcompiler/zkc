@@ -1,4 +1,4 @@
-!s = !local.capability<"rng:bls12-381.fr">
+!s = !runtime.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({
  local.func @step(%s:!s,%go:i1,%lo:ui64,%hi:ui64) -> !s attributes {logical_origin=["step",[]]} {
  %next = "local.if"(%go,%s) ({ ^yes(%a:!s):
